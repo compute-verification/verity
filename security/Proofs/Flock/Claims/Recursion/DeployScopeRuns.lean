@@ -192,16 +192,16 @@ theorem run_decides (hacc : (run H P (V IV st) x ω r).out = .acc) {s : ℕ} (hs
 
 /-- **The compiled verifier refuses an accepted run out of scope**: on an accepted run, the setup's checks accept the
 inner shape `x` carries, and every V* session's decision is on a record that samples every unit of its population
-(`RecScope.fullDrawOk`, hence `DrawRecord.Full` by `RecScope.fullDrawOk_iff`). -/
+(`RecScope.fullSampleOk`, hence `DrawRecord.Full` by `RecScope.fullSampleOk_iff`). -/
 theorem run_acc_scope (hacc : (run H P (V IV st) x ω r).out = .acc) :
     ∃ xr, readX x = some xr ∧ RecScope.accepts (readOf xr) = true ∧
       ∀ s < nS x, ∃ i f, i < (run H P (V IV st) x ω r).msgs.length ∧
-        DecidesAt IV st x r (run H P (V IV st) x ω r).msgs i s f ∧ RecScope.fullDrawOk xr.shape f.record = true := by
+        DecidesAt IV st x r (run H P (V IV st) x ω r).msgs i s f ∧ RecScope.fullSampleOk xr.shape f.record = true := by
   obtain ⟨as', ha⟩ := stepWith_acc H P x ω _ _ _ _ _ hacc
   obtain ⟨xr, hx, -, -⟩ := acc_parse (IV := IV) (st := st) H ha
   have hd : ∀ s < nS x, ∃ i f, i < (run H P (V IV st) x ω r).msgs.length ∧
       DecidesAt IV st x r (run H P (V IV st) x ω r).msgs i s f ∧ RecScope.accepts (readOf xr) = true ∧
-        RecScope.fullDrawOk xr.shape f.record = true := by
+        RecScope.fullSampleOk xr.shape f.record = true := by
     intro s hs
     obtain ⟨i, f, hi, ⟨j, xO, as'', cs'', ins, spec, sts, link, c₁, mids, hr, hO⟩, hn⟩ :=
       run_decides H IV st x P ω r hacc hs
@@ -227,11 +227,11 @@ sample (`DrawRecord.Full`). -/
 theorem run_acc_full (hacc : (run H P (V IV st) x ω r).out = .acc) :
     ∀ s < nS x, ∃ i f, i < (run H P (V IV st) x ω r).msgs.length ∧
       DecidesAt IV st x r (run H P (V IV st) x ω r).msgs i s f ∧
-        ∃ e, RecScope.recordDrawOf f.record = some e ∧ e.Full := by
+        ∃ e, RecScope.recordSampleOf f.record = some e ∧ e.Full := by
   obtain ⟨xr, -, -, hall⟩ := run_acc_scope H IV st x P ω r hacc
   intro s hs
   obtain ⟨i, f, hi, hD, hf⟩ := hall s hs
-  exact ⟨i, f, hi, hD, (RecScope.fullDrawOk_iff xr.shape f.record).1 hf⟩
+  exact ⟨i, f, hi, hD, (RecScope.fullSampleOk_iff xr.shape f.record).1 hf⟩
 
 /-- **An accepted run is in scope with its records**: what the compiled verifier reads of `x` with the records each
 V* session decided on (`RecScope.toStmt`, at `readOf` with those records) is in `InScope`. -/
@@ -248,7 +248,7 @@ theorem run_acc_inScope_records (hacc : (run H P (V IV st) x ω r).out = .acc) :
   cases hx'
   have hdn : RecScope.dense xr.shape = true := ((RecScope.inScope_iff hacc').1 hin).2
   have hch : ∀ s : Fin (nS x), ∃ f : Final, ∃ i, i < (run H P (V IV st) x ω r).msgs.length ∧
-      DecidesAt IV st x r (run H P (V IV st) x ω r).msgs i s f ∧ RecScope.fullDrawOk xr.shape f.record = true := by
+      DecidesAt IV st x r (run H P (V IV st) x ω r).msgs i s f ∧ RecScope.fullSampleOk xr.shape f.record = true := by
     intro s
     obtain ⟨i, f, hi, hD, hf⟩ := hall s s.isLt
     exact ⟨f, i, hi, hD, hf⟩

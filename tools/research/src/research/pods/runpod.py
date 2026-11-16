@@ -61,9 +61,12 @@ import threading
 import time
 import tomllib
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Any, Callable
+
+from .. import settings
 
 REST = "https://rest.runpod.io/v1"
 CONFIG = Path.home() / ".runpod" / "config.toml"
@@ -104,22 +107,22 @@ def _config() -> dict[str, Any]:
         with CONFIG.open("rb") as handle:
             return tomllib.load(handle)
     except FileNotFoundError:
-        key = os.environ.get("RUNPOD_API_KEY")
+        key = settings.get("RUNPOD_API_KEY")
         if key:
             return {"apikey": key, "apiurl": GRAPHQL}
         raise PodError(f"no RunPod API config at {CONFIG} and RUNPOD_API_KEY is not set") from None
 
 
 def _env_dir() -> Path:
-    return Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state") / "research" / "runpod"
+    return Path(settings.get("XDG_STATE_HOME") or Path.home() / ".local" / "state") / "research" / "runpod"
 
 
 def ssh_key() -> Path:
     """The private key file: `SSH_KEY` when it exists, else `RUNPOD_SSH_KEY_B64` written once (mode 600, named by its content
     hash so a rotated secret gets a new file).  Neither set: `SSH_KEY`, so ssh names the missing file as before, except on a Cursor
     VM that injects the secret this shell lost (`research.secret_hint`, spelled out: this file runs standalone on a pod)."""
-    b64 = os.environ.get("RUNPOD_SSH_KEY_B64")
-    if not SSH_KEY.is_file() and not b64 and "RUNPOD_SSH_KEY_B64" in os.environ.get("CLOUD_AGENT_INJECTED_SECRET_NAMES", "").split(","):
+    b64 = settings.get("RUNPOD_SSH_KEY_B64")
+    if not SSH_KEY.is_file() and not b64 and "RUNPOD_SSH_KEY_B64" in settings.get("CLOUD_AGENT_INJECTED_SECRET_NAMES", "").split(","):
         raise PodError("RUNPOD_SSH_KEY_B64 not in this shell though this VM injects it: rerun from a fresh tmux login shell")
     if SSH_KEY.is_file() or not b64:
         return SSH_KEY
@@ -131,10 +134,10 @@ def ssh_key() -> Path:
         raw += b"\n"
     path = _env_dir() / f"ssh-key-{hashlib.sha256(raw).hexdigest()[:16]}"
     try:
-        if path.read_bytes() == raw and (path.stat().st_mode & 0o077) == 0:
+        if path.exists() and path.read_bytes() == raw and (path.stat().st_mode & 0o077) == 0:
             return path
-    except OSError:
-        pass
+    except OSError as e:
+        print(f"runpod: {path} unread, so it is written again ({type(e).__name__})", file=sys.stderr)
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     tmp = path.with_name(f".{path.name}.tmp-{os.getpid()}-{threading.get_ident()}")     # threads of one process resolve it at once
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
@@ -185,7 +188,7 @@ def _request(method: str, path: str, body: dict[str, Any] | None = None) -> Any:
             raise no_key from None
         return door.api(method, path, body, no_key=str(no_key))
     data = json.dumps(body).encode() if body is not None else None
-    request = urllib.request.Request(
+    request = urllib.request.Request(  # noqa: S310 (REST, a literal https URL)
         f"{REST}{path}",
         data=data,
         method=method,
@@ -197,7 +200,7 @@ def _request(method: str, path: str, body: dict[str, Any] | None = None) -> Any:
     )
     pod_id = path[len("/pods/"):].split("/", 1)[0] if path.startswith("/pods/") else None
     try:
-        with urllib.request.urlopen(request, timeout=120) as response:
+        with urllib.request.urlopen(request, timeout=120) as response:  # noqa: S310 (REST, a literal https URL)
             raw = response.read()
             _note_call("rest", method, path, getattr(response, "status", None), getattr(response, "headers", None))
     except urllib.error.HTTPError as error:
@@ -216,7 +219,9 @@ def _request(method: str, path: str, body: dict[str, Any] | None = None) -> Any:
 
 def _graphql(query: str) -> Any:
     cfg = _config()
-    request = urllib.request.Request(
+    if (scheme := urllib.parse.urlsplit(cfg["apiurl"]).scheme) not in ("http", "https"):
+        raise PodError(f"the RunPod config's apiurl is not an http or https URL (scheme {scheme!r})")
+    request = urllib.request.Request(  # noqa: S310 (http or https, checked above)
         f"{cfg['apiurl']}?api_key={cfg['apikey']}",
         data=json.dumps({"query": query}).encode(),
         headers={
@@ -226,7 +231,7 @@ def _graphql(query: str) -> Any:
     )
     what = ".".join(re.findall(r"[A-Za-z_]\w*", query)[:2]) or "?"       # `myself.pods`, `myself.clientBalance`, `pod.input`
     try:
-        with urllib.request.urlopen(request, timeout=60) as response:
+        with urllib.request.urlopen(request, timeout=60) as response:  # noqa: S310 (http or https, checked above)
             raw = response.read()
             _note_call("graphql", "POST", what, getattr(response, "status", None), getattr(response, "headers", None))
     except urllib.error.HTTPError as error:

@@ -31,11 +31,12 @@ printed and posted to #agent-alerts, so a spec change never lands unseen.
 from __future__ import annotations
 
 import json
-import os
 import re
 import subprocess
 import sys
 from pathlib import Path
+
+from . import settings
 
 RECORD = "lean-audit.json"
 #: characters of one DM; past it the message ends with the compare link, which holds the rest
@@ -155,10 +156,10 @@ def _trust(doc: dict) -> tuple[list[str], dict[str, str], dict[str, dict[str, st
     t = doc.get("trust") if isinstance(doc.get("trust"), dict) else {}
     base = t.get("base") if isinstance(t.get("base"), dict) else {}
     extra = t.get("extra") if isinstance(t.get("extra"), dict) else {}
-    gap = doc.get("trust_gap") if isinstance(doc.get("trust_gap"), dict) else {}
+    trust_gaps = doc.get("trust_gap") if isinstance(doc.get("trust_gap"), dict) else {}
     return ([x for x in doc.get("deployed") or [] if isinstance(x, str)], {p: str(w) for p, w in base.items()},
             {g: {p: str(w) for p, w in ps.items()} for g, ps in extra.items() if isinstance(ps, dict)},
-            {g: sorted(x for x in ps if isinstance(x, str)) for g, ps in gap.items() if isinstance(ps, list)})
+            {g: sorted(x for x in ps if isinstance(x, str)) for g, ps in trust_gaps.items() if isinstance(ps, list)})
 
 
 def _renames(olds: dict[str, dict], news: dict[str, dict], guarantees: dict[str, str]) -> dict[str, str]:
@@ -462,9 +463,10 @@ def web(repo: Path, remote: str) -> str | None:
 
 
 def _is_record(path: str) -> bool:
-    """Whether ``path`` is a package's record. The audit's own directory holds none: a `lean-audit.json` there is a fixture
-    of its tests, in whatever form the test needs, and a layout move that renames one says nothing about the spec."""
-    return (path == RECORD or path.endswith("/" + RECORD)) and not path.startswith(AUDIT_DIR)
+    """Whether ``path`` is a package's record. The audit's own directory and the tests (the root's `tests/`) hold none: a
+    `lean-audit.json` there is a fixture of a test, in whatever form the test needs, and a layout move that renames one says
+    nothing about the spec."""
+    return (path == RECORD or path.endswith("/" + RECORD)) and not path.startswith((AUDIT_DIR, "tests/"))
 
 
 def _records_changed(repo: Path, old: str, new: str) -> list[tuple[str, str]]:
@@ -525,7 +527,7 @@ def alert(repo: Path, old: str, new: str, *, remote: str = "origin", prs: list[i
 
     try:
         text = message(repo, old, new, web(repo, remote), prs)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 (an unread record is told in the DM: the push has happened)
         text = (f"A change landed on main ({old[:9]}..{new[:9]}), and reading its `lean-audit.json` records failed: "
                 f"{type(e).__name__}: {e}")
     if text is None:
@@ -535,19 +537,19 @@ def alert(repo: Path, old: str, new: str, *, remote: str = "origin", prs: list[i
         who = human_entry(reg, "daniel")
         if not who:
             raise SlackError("the Slack registry names no Daniel with a slack_user")
-        api = api if api is not None else Slack(os.environ.get("SLACK_BOT_TOKEN"))
+        api = api if api is not None else Slack(settings.get("SLACK_BOT_TOKEN"))
         api.call("chat.postMessage", channel=who["slack_user"], text=text, username="research merge", unfurl_links=False)
         log(f"research merge: the spec change went to Daniel as a DM ({len(text)} characters)")
         return True
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 (a failed DM is printed and posted, never raised: the push has happened)
         why = (f"research merge: a spec change landed on main ({old[:12]}..{new[:12]}), and the DM to Daniel failed: "
                + (str(e) if isinstance(e, SlackError) else f"{type(e).__name__}: {e}"))
         print(why, file=sys.stderr)
         try:
-            api = api if api is not None else Slack(os.environ.get("SLACK_BOT_TOKEN"))
+            api = api if api is not None else Slack(settings.get("SLACK_BOT_TOKEN"))
             api.call("chat.postMessage", channel=((reg or {}).get("channels") or {})["agent-alerts"]["id"],
                      text=why + "\n\n" + text[:LIMIT // 2], username="research merge", unfurl_links=False)
-        except Exception as e2:
+        except Exception as e2:  # noqa: BLE001 (the caller still has its own steps after a landing to run)
             print(f"research merge: posting that to #agent-alerts failed too: {type(e2).__name__}: {e2}", file=sys.stderr)
         return False
 

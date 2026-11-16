@@ -15,14 +15,17 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 from dataclasses import dataclass
 from typing import Any
 
 from verity_vllm.config import option, workload_arg
+from verity_vllm.log import init_logger
+from verity_vllm.pipeline.cli import write
 from verity_vllm.query.manifest.verify import verify
 
 __all__ = ["Options", "main"]
+
+logger = init_logger(__name__)
 
 
 def _load(p: str) -> Any:
@@ -72,19 +75,16 @@ class Options:
 
 
 def main(a: Options) -> int:
-    def log(s):
-        print(s, file=sys.stderr, flush=True)
-
     used = _load(a.manifest)
     from verity_vllm.pipeline.manifest import taps_of
     rebuilt = rebuild(program=a.program, workload=a.workload, fixture=a.fixture, programs_root=a.programs_root, workload_digest=a.workload_digest,
                       rank=a.rank, ranks=a.ranks, profile=a.profile, norm_scales=a.norm_scales,
-                      taps=taps_of(a.router_softmax, a.vocab_range), query=a.query, log=log)
+                      taps=taps_of(a.router_softmax, a.vocab_range), query=a.query, log=logger.info)
     rec = verify(used, rebuilt, manifest_path=a.manifest)
     if a.out:
         os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
         with open(a.out, "w") as f:
             json.dump(rec, f, indent=1)
-    print(json.dumps(rec, indent=1))
-    print(f"[manifest] VERIFY {'OK: the manifest of record' if rec['ok'] else 'FAIL: ' + rec['why']}")
+    write(json.dumps(rec, indent=1))
+    write(f"[manifest] VERIFY {'OK: the manifest of record' if rec['ok'] else 'FAIL: ' + rec['why']}")
     return 0 if rec["ok"] else 1

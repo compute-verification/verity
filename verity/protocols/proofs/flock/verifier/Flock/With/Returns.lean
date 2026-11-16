@@ -1,13 +1,14 @@
-/-
+module
+
+public import Flock.With.Hashes
+public import Flock.Statement
+
+/-!
 `Returns x P`: every value the verdict `x` returns satisfies `P`, with its rules for `pure`, `throw`, `bind`, branches and
 `Array.mapM`, and the facts a setup's `pure` closes on: a scheme the registry found has its id's registry scheme
 (`MerkleScheme.Named`). `returns_walk` (`Flock.With.ReturnsWalk`) walks a do block with them; `Flock.With.Deployed` uses it
 on the verifier's setups.
 -/
-module
-
-public import Flock.With.Hashes
-public import Flock.Statement
 
 @[expose] public section
 

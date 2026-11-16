@@ -15,7 +15,7 @@ When something gets in your way (a wrong command, a clumsy step, a check that fa
 first of sections 1 to 4 that applies. Four habits:
 
 - **Fix the kind, not the case:** make the incident's kind impossible or loud.
-- **Twice by hand makes a tool:** a `research` command, or a line in one.
+- **Twice makes a tool:** a step by hand, or a slip (AGENTS.md).
 - **What you learn goes where the next agent meets it:** a check, else a tool's default or message, else a skill.
 - **Look ahead:** rehearse what will stall next, before it does.
 
@@ -151,10 +151,10 @@ Protocols and claims:
 
 - Credit and every report of computation are in AND gates (tentative). 𝓜's resources appear only inside
   exclusion, which reports in AND gates. Whoever finds a reason this is wrong floats it at once.
-- Credit of declared size, values certified, is a statement about values (sampled proofs'). Compute credit (Dither's)
-  also needs values that read live noise and SAK's lower bound, so SAK is a premise of compute credit as well as of
-  exclusion. SAK is over noised operands only, never prover-chosen ones (pinned weights, served activations, un-noised
-  outputs), and an un-noised call earns no compute credit.
+- Credit of declared size, values certified, is a statement about values (SPOT's). Compute credit (Dither's;
+  PoUW's bar is T1–T3) also needs values that read live noise and SAK's lower bound, so SAK is a premise of compute
+  credit as well as of exclusion. SAK is over noised operands only, never prover-chosen ones (pinned weights,
+  served activations, un-noised outputs), and an un-noised call earns no compute credit.
 - A workload is what a datacenter runs over a monitoring period (its Programs, their inputs and placement), at
   every scale; workloads compose, and "row" never names one.
 - A demo shows that the code works, so it runs fast: it samples one or two proof blocks, or whatever keeps it quick.
@@ -163,9 +163,9 @@ Protocols and claims:
 - Network accounting is two things for each execution block. First, its consistency with the network certificates: its
   committed inputs and outputs are what they say crossed the wire, pass or fail, with no sampling requirement. Second,
   from SPOT, its transfers' covert capacity, in three terms reported apart: side channels, the timing channel (which the
-  network certifier mostly fixes) and what SPOT fails to check; at full sampling only the first two remain.
-- The network certifier is one device on each AI server's uplink, whose one code run under one `trusted-host` gives
-  both the cells and the records (`security/Definitions/NetworkCertifier/Tap.lean`). No statement
+  network attester mostly fixes) and what SPOT fails to check; at full sampling only the first two remain.
+- The network attester is one device on each AI server's uplink, whose one code run under one `trusted-device` gives
+  both the cells and the records (`security/Definitions/Certifier/Tap.lean`). No statement
   ties them by a premise or trusts them separately.
 - `WitnessPathPrivate c` is the per-channel premise, beside the per-party and site premises. The imprint key is a key
   class of its own: an onsite device's root, set over the cable once per device, then a SHA-512 ratchet.
@@ -189,7 +189,6 @@ Protocols and claims:
   are for the whole node. PoUB treats the developer's resources as one pool (conservation, no identity
   assumption), claims 0.15% over a 10-minute monitoring period with every window at most 1%, and never changes the
   model's logits.
-- PoUW's bar is T1–T3, not Dither or SAK; the lead (`verity/pouw/v2`) is next (`verity/protocols/accounting/pouw/verifier/README.md`).
 - PoUW's guarantees, and only PoUW's, may rest on random-oracle assumptions for SHA-512
   (`StraightLineExtraction`, Compose's `SeedExtractedAt`), each a named `Prop` the lock lists. Flock's
   knowledge soundness keeps the collision form.
@@ -202,7 +201,7 @@ Protocols and claims:
   refusal modelled the same way. A free parameter whose adversarial values break a proof is closed by a side condition
   decidable at any literal instantiation, discharged by computation at use, never a listed assumption.
 - Harm is read at a replay block's footprint (GLOSSARY.md, "Two-stage design"), and compute credit charges it whole.
-- The end goal is sampled proofs through recursion with hidden unit circuits and a hidden partition; the auditor
+- The end goal is SPOT through recursion with hidden unit circuits and a hidden partition; the auditor
   checks only padded counts. One key per protecting party, sampled once at setup from the OS before anything else, public
   and a constant in V\*; hm96's pinned key stays only where a key is wired into a circuit, as a named exception. Salts
   are sampled from the OS, not expanded by a PRG, but the lead keys its instances under one window key (`Hash.Keyed`).

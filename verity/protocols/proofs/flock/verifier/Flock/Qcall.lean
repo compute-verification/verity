@@ -1,4 +1,13 @@
-/-
+module
+
+public import Std.Data.HashMap
+public import Flock.Program
+public import Flock.Partition
+public import Flock.Canon
+public import Flock.Hash
+public import Flock.JsonParse
+
+/-!
 `Flock.Partition`: `Q_call` v1 (core's `verity/ir/PROTOCOL.md` §11, `verity.ir.cut`'s "Q_call v1", `partition_object.CallPartition`)
 over the verifier's own copy of the program (`Flock.Program`): each Call's gates (`CallGates`), its cut (`call_units`), owners and
 derived committed set, and its cut checked as `partition_object.verify` checks it (`check_call_cut`: the invariant with recomputes
@@ -9,14 +18,6 @@ Definition's own gates follow at `L` (its parameter leaves), and a gate's local 
 when its primitive has parameters; Input gates and constants are inputs, in no unit and outside the committed set. Every operand of
 every gate is read: no wiring, no constant folding, no wide fan-in rule.
 -/
-module
-
-public import Std.Data.HashMap
-public import Flock.Program
-public import Flock.Partition
-public import Flock.Canon
-public import Flock.Hash
-public import Flock.JsonParse
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -504,7 +505,7 @@ def claimedUnits (P : Prog) (calls : Array Call) (t : String) (indices : Array N
     if members != 1 then throw s!"unit {i} is {members} activations of {t}, not a whole activation of it"
   return s!"{pop} units; the statement's {indices.size} units are whole activations of {t}"
 
-/-- `flock-verify qcall-program DESCRIPTOR [X] [--full] [--program-digest HEX]`: `Q_call` v1 at X (default 32) on the program,
+/-- `verity-verify-proof qcall-program DESCRIPTOR [X] [--full] [--program-digest HEX]`: `Q_call` v1 at X (default 32) on the program,
 as `test_qcall_vectors.evaluation` writes it; with `--full`, each Call's gates and every unit's `locate`; `--program-digest`: the
 object names that program instead of this one. Also the root's input nodes with their binding times. With `--template T --units
 i,j,…`: instead, whether the units are whole activations of T, as a Flock statement's finding checks them (`claimedUnits`). One
@@ -541,7 +542,7 @@ def cmd (args : List String) : IO UInt32 := do
   IO.println s!"QCALLPROGRAM {line.compress}"
   return (if (line.getObjValAs? Bool "ok").toOption.getD false then 0 else 1)
 
-/-- `flock-verify input-ids ID...`: per id, its binding time and width (`Program.inputId?`), or null. One `INPUTID` line. -/
+/-- `verity-verify-proof input-ids ID...`: per id, its binding time and width (`Program.inputId?`), or null. One `INPUTID` line. -/
 def inputIdsCmd (ids : List String) : IO UInt32 := do
   let out := ids.toArray.map fun i => Json.arr #[Json.str i, match inputId? i with
     | some (b, w) => Json.arr #[Json.str b, Lean.toJson w]

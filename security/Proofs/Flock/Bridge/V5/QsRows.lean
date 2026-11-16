@@ -20,8 +20,8 @@ gates (`HiddenExec.rowOfHP_ne_none_of_io`), and a public gate is a commit string
 * `qs_vbP_le_split`: `Q_s ≤ k_d · r + 2 + (|bad|/|Ω|) · n · r` for any sampling design, `r = n_p + pubBits` with
   `n_p = c.ports.size`, where every sample outside `bad` holds at most `k_d` proof blocks.
 * `qs_vbP_execSel_le`: at the deployed sample under a sampling design on strata that samples `k_d` proof blocks
-  (`LawOn`: subset, stratified or work), on a uniform byte source (A3) that holds the stages' first reads
-  (`firstRead law n` bytes), `Q_s ≤ k_d · r + 2 + k_d · 2⁻⁶⁴ · n · r`: the sample holds at most `k_d` proof blocks
+  (`SamplingDesignOn`: subset, stratified or work), on a uniform byte source (A3) that holds the stages' first reads
+  (`firstRead samplingDesign n` bytes), `Q_s ≤ k_d · r + 2 + k_d · 2⁻⁶⁴ · n · r`: the sample holds at most `k_d` proof blocks
   unless it runs out of bytes (`execSel_card_le`), with probability at most `k_d · 2⁻⁶⁴` (`execSel_error_le`).
 -/
 
@@ -41,7 +41,7 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Disc
   FlockSoundness.Discharge.Composed
 
 variable {n mPts : ℕ} {Reg : Type} {I : Inputs} {own : Option ByteArray} {dj : Finset (Fin n) → Lean.Json}
-  {S₀ : Finset (Fin n)} {d₀ : Lean.Json} {y₀ : DrawSetupZHJP (inputsJ I 0) own mPts S₀ d₀}
+  {S₀ : Finset (Fin n)} {d₀ : Lean.Json} {y₀ : SampleSetupZHJP (inputsJ I 0) own mPts S₀ d₀}
   {ht : I.tags.typed = false} {c : Flock.Circuit} {hc : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c}
   {hscope : Discharge.Layout.scopeOkH c = true} {hU : Built c.unit} {pi : Flock.HmIn.Ports}
   {hpi : Flock.HmIn.parse c = .ok pi} {pub : Flock.Public}
@@ -142,7 +142,7 @@ theorem card_pubGates_le (u : Fin n) :
 `r = c.ports.size + pubBits c hU pi` the rows and the public gates of a proof block: a sample outside `bad` holds at
 most `k_d` proof blocks, each of whose wires sits at one of its rows, at one of its public gates or at the zero's or the
 constant's gate (`vbP_pos_io`); a sample in `bad` holds at most all `n`. -/
-theorem qs_vbP_le_split (L : FlockSoundness.Audit.Law n) (kd : ℕ) (bad : Finset L.Ω)
+theorem qs_vbP_le_split (L : FlockSoundness.Audit.SamplingDesign n) (kd : ℕ) (bad : Finset L.Ω)
     (hgood : ∀ ω, ω ∉ bad → (L.draw ω).card ≤ kd) :
     ∑ p : (vbP dj y₀ ht hc hscope hU hpi hpub (Reg := Reg)).Pos,
         (Fintype.card (ΩcZ execArith ((keyProgP c pi hU n).partition (Discharge.Layout.outsOfP c hU n pi))
@@ -176,28 +176,28 @@ theorem qs_vbP_le_split (L : FlockSoundness.Audit.Law n) (kd : ℕ) (bad : Finse
 
 /-- **`Q_s ≤ k_d · r + 2 + k_d · 2⁻⁶⁴ · n · r` at the deployed sample under a sampling design on strata**,
 `r = c.ports.size + pubBits c hU pi`: under a design that samples `k_d` proof blocks from strata of sizes `ns`
-(`LawOn`: subset, stratified or work), on a uniform byte source (A3) that holds the stages' first reads
-(`firstRead law n` bytes), the sample holds at most `k_d` proof blocks (`execSel_card_le`) unless it runs out of bytes,
+(`SamplingDesignOn`: subset, stratified or work), on a uniform byte source (A3) that holds the stages' first reads
+(`firstRead samplingDesign n` bytes), the sample holds at most `k_d` proof blocks (`execSel_card_le`) unless it runs out of bytes,
 with probability at most `k_d · 2⁻⁶⁴` (`execSel_error_le`). -/
 theorem qs_vbP_execSel_le {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : FlockSoundness.Assumptions.UniformRandomBytes Lb src)
-    {law : Flock.Draw.Law} {ns : List ℕ} {kd : ℕ} (hlaw : LawOn law ns kd) (hns : ns.sum = n)
-    (hLb : firstRead law n ≤ Lb 0) :
+    {samplingDesign : Flock.Draw.SamplingDesign} {ns : List ℕ} {kd : ℕ} (hlaw : SamplingDesignOn samplingDesign ns kd) (hns : ns.sum = n)
+    (hLb : firstRead samplingDesign n ≤ Lb 0) :
     ∑ p : (vbP dj y₀ ht hc hscope hU hpi hpub (Reg := Reg)).Pos,
         (Fintype.card (ΩcZ execArith ((keyProgP c pi hU n).partition (Discharge.Layout.outsOfP c hU n pi))
           (planZHJP dj y₀) (tabZHJP dj y₀) (vbP dj y₀ ht hc hscope hU hpi hpub (Reg := Reg))
-          (execSel (n := n) src law n) p) : ℝ) / Fintype.card (execSel (n := n) src law n).Ω ≤
+          (execSel (n := n) src samplingDesign n) p) : ℝ) / Fintype.card (execSel (n := n) src samplingDesign n).Ω ≤
       ((kd : ℝ) * ((c.ports.size + pubBits c hU pi : ℕ) : ℝ) + 2) +
         (kd : ℝ) * (2 ^ 64 : ℝ)⁻¹ * ((n : ℝ) * ((c.ports.size + pubBits c hU pi : ℕ) : ℝ)) := by
   classical
   have hbad : ((Finset.univ.filter fun ω : Ω => ¬ ∃ units read,
-      Spot.Draw.drawUnits law n (Properties.Spot.bytesOf (src ω 0)) = .ok (units, read)).card : ℝ) /
+      Spot.Draw.sampleUnits samplingDesign n (Properties.Spot.bytesOf (src ω 0)) = .ok (units, read)).card : ℝ) /
       Fintype.card Ω ≤ (kd : ℝ) * (2 ^ 64 : ℝ)⁻¹ :=
     card_div_le_of_prCoin_le _ kd (execSel_error_le src hA3 hlaw hns hLb)
   have h := qs_vbP_le_split (dj := dj) (y₀ := y₀) (ht := ht) (hc := hc) (hscope := hscope) (hU := hU) (hpi := hpi)
-    (hpub := hpub) (Reg := Reg) (execSel (n := n) src law n) kd
+    (hpub := hpub) (Reg := Reg) (execSel (n := n) src samplingDesign n) kd
     (Finset.univ.filter fun ω : Ω => ¬ ∃ units read,
-      Spot.Draw.drawUnits law n (Properties.Spot.bytesOf (src ω 0)) = .ok (units, read))
+      Spot.Draw.sampleUnits samplingDesign n (Properties.Spot.bytesOf (src ω 0)) = .ok (units, read))
     (fun ω hω => execSel_card_le src hlaw ω (by
       by_contra h0
       exact hω (Finset.mem_filter.2 ⟨Finset.mem_univ _, h0⟩)))

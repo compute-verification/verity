@@ -45,9 +45,9 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.circuits.defs import bind
-from verity.definitions.registry import act as _ACT
-from verity.definitions.registry import cublas_bf16, ll_bf16
-from verity.definitions.registry import moe as _MOE
+from verity_vllm.definitions.registry import act as _ACT
+from verity_vllm.definitions.registry import cublas_bf16, ll_bf16
+from verity_vllm.definitions.registry import moe as _MOE
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns import (
@@ -314,7 +314,7 @@ class MoEFusedSharedExpertsFp8(MoEFusedExpertsFp8):
             if isinstance(r, Unsupported):
                 return r
             parts += r
-        gate = self._gate(node, ctx, sc, hidden, hint)
+        gate = self._scope_gate(node, ctx, sc, hidden, hint)
         if isinstance(gate, Unsupported):
             return gate
         parts.append(gate)
@@ -389,7 +389,7 @@ class MoEFusedSharedExpertsFp8(MoEFusedExpertsFp8):
                     attribution=tuple(ctx.start.rows), pattern=self.name, roots=(None, bname))
         return [(sc.router.id, c)]
 
-    def _gate(self, node, ctx, sc: _Scope, hidden: ViewDesc, hint) -> tuple[int, Compute] | Unsupported:
+    def _scope_gate(self, node, ctx, sc: _Scope, hidden: ViewDesc, hint) -> tuple[int, Compute] | Unsupported:
         """The router gate: the in-scope `aten.mm.dtype` (cuBLAS), or, with no mm, the cuteDSL kernel bound by the empty it fills."""
         C, ra = self.config, bound_args(sc.router)
         bias: Any = ra.get("bias")   # None where the router binds none, which `_router` has refused
@@ -420,10 +420,11 @@ class MoEFusedSharedExpertsFp8(MoEFusedExpertsFp8):
                 return unsupported(node, f"the {'w2' if routed else 'w13'} launch's A is not written by the routed "
                                          f"{'SiLU output' if routed else 'input'} quant", writer=s.quant.id)
             try:
-                c = launch.triton.constexprs
+                tr: Any = launch.triton   # as the log recorded it: `_fused` has passed its tile, integers where the target reads one
+                c = tr.constexprs
                 spec = T.moe_expert_fp8_gemm_spec(tp, E, K, N, G, s.KB, bool(c.get("SWAP_AB")),
                                                   BM=c.get("BLOCK_SIZE_M"), BN=c.get("BLOCK_SIZE_N"),
-                                                  WARPS=launch.triton.num_warps, routed=routed)
+                                                  WARPS=tr.num_warps, routed=routed)
             except T.UnregisteredTarget as e:
                 return unsupported(node, f"target has no registered block-FP8 fused-MoE binding: {e}")
             launched[routed] = (s, r[2], spec)
@@ -490,7 +491,7 @@ class MoEFusedSharedExpertsFp8(MoEFusedExpertsFp8):
 def served_gate_spec(tp, K: int, N: int, M: int, tier: str) -> tuple[Any, tuple[str, ...]] | None:
     """The Build's gate Definition (`vllm_bindings.bf16_gemm.LlBf16GemmRule` / `CublasRouterRule`) at (K, N, M) on `tier`, or None
     when vLLM dispatches another tier there, the cuBLAS shape and M have no captured route, or the target is not the H200 default."""
-    from verity.definitions.registry import bf16_gemm_check
+    from verity_vllm.definitions.registry import bf16_gemm_check
 
     if tuple(tp.compute_capability) != (9, 0) or tp.batch_invariant:
         return None

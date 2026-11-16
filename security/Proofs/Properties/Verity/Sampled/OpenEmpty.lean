@@ -15,7 +15,7 @@ after the leaf was committed. The opening's class at those coins (`OpeningAt.cla
 hash that releases them, and `openEmpty` is the probability that it is empty.
 
 * **At an hm96 leaf** (`FiberMisses`, `fiberMisses_le`): a leaf `H(x(ω) + M·y, c(y))` of uniform coins `ω` and salt
-  `y`, a release `P ω`, and live coins `u` whose bits `bits u` have the release's law. `fiberMisses_le` bounds by `2·δ₁`
+  `y`, a release `P ω`, and live coins `u` whose bits `bits u` have the release's sampling design. `fiberMisses_le` bounds by `2·δ₁`
   the probability that no coins and salt with the leaf's hash release `bits u`. That is T1's bound twice. T1 makes the
   leaf ideal, so the event no longer reads the coins, and `bits u` may be swapped for the release `P ω`. T1 on the
   complement then makes the leaf real again, where the leaf's own coins and salt release `P ω`.
@@ -27,7 +27,7 @@ hash that releases them, and `openEmpty` is the probability that it is empty.
   no round with the sampled round's leaf is released as `bits` (`OpeningAt.classOf_nonempty`). At a node that every sample
   `d₀` of one leaf (its nonce, key, stream, round and count) describes, `openEmpty` averaged over the sample is at most
   `2·δ₁`.
-* **The round's law** (`avg_take`, `opened_eq_roundBits`, `avg_opened_roundBits`): a sample's first `m` coins of a
+* **The round's sampling design** (`avg_take`, `opened_eq_roundBits`, `avg_opened_roundBits`): a sample's first `m` coins of a
   block of at least `m` are released as the bits (`roundBits`) of the `m` challenges they encode, so they have the sampling design
   of a round's `m` live challenges as bits.
 -/
@@ -233,7 +233,7 @@ structure AtLeaf (o : OpeningAt E g') (ν key : ByteArray) (s r n : ℕ) {block 
   round_eq : (o.p.2 : ℕ) = r
   count_eq : o.n = n
   block_eq : o.T.spec.block = block
-  draw_eq : HEq (o.T.sample.2 o.p.1 o.p.2) d₀
+  sample_eq : HEq (o.T.sample.2 o.p.1 o.p.2) d₀
 
 /-- **The empty class misses at the leaf**: where the play ends in a close that records its log and `o` describes the
 node at the sample `d₀`'s leaf, an empty class at `bits` means no sample with `d₀`'s leaf has its first `n` coins `bits`
@@ -269,7 +269,7 @@ theorem openEmpty_avg_le {β : Type} {lg : β → List Release} {E : List Releas
         (FlockSoundness.ZK.prCoin_prod_split _).symm
     _ ≤ 2 * δ₁ := treeMisses_le ν key s r n bits hT1 hlaw
 
-/-! ## The round's law -/
+/-! ## The round's sampling design -/
 
 variable (e : 𝔽 ≃ (Fin 128 → Bool))
 
@@ -283,7 +283,7 @@ theorem opened_eq_roundBits {block m : ℕ} (hm : m ≤ block) (d : TreeDraw blo
   rw [hr, TreeDraw.opened, ← Fin.ofFn_take_eq_take_ofFn hm]
   rfl
 
-/-- **A sample's first `m` coins have a round's law**: in a block of at least `m` coins, a uniform sample's first `m` coins
+/-- **A sample's first `m` coins have a round's sampling design**: in a block of at least `m` coins, a uniform sample's first `m` coins
 are released as the bits of `m` uniform live challenges (`opened_eq_roundBits`). -/
 theorem avg_opened_roundBits {block m : ℕ} (hm : m ≤ block) (G : List Bool → ℝ≥0∞) :
     avg (fun ω : Fin block → Fin 128 → Bool => G (TreeDraw.opened (ω, fun _ => false) m)) =

@@ -2,7 +2,7 @@
 
 A permanent scheme beside frame-v3 (:mod:`..merkle`), selectable by backends.  Spec: ``PROTOCOL.md``
 beside this file.  Conformance vectors: ``vectors.json`` beside it, which
-``adapters/vllm/tests/commitments/vectors.py`` renders from this module.  This module is the plain reference: stdlib ``hashlib``
+``tests/adapters/vllm/tests/commitments/vectors.py`` renders from this module.  This module is the plain reference: stdlib ``hashlib``
 only, no fast paths; every byte below is what the integration and its CUDA kernels hash.
 
 The tree rule (pairs ``node``, an odd trailing child ``lift``, zero leaves ``empty``) and the id leaf are the ones
@@ -17,6 +17,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
+from verity.commitments import domains
 from verity.commitments.identity import identity_digest, identity_digest_sha512
 from verity.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
 from verity.commitments.scheme import LeafLayout, Path
@@ -87,17 +88,17 @@ NAME = "vllm-v1"
 NAME_SHA512 = "vllm-v1-sha512"
 NAMES = {"sha256": NAME, "sha512": NAME_SHA512}
 
-POS_LEAF_TAG = b"verity/pos-leaf/v0"
+POS_LEAF_TAG = domains.POS_LEAF.encode()
 FA2H_TAG = 0x68326166  # b"fa2h" read as a little-endian u32
 FA2H_VERSION = 7
 FA2H_KIND_CHUNK = 1
 
-SEMANTIC_ROOT_TAG = b"verity/semantic-root/v0"
-STEP_ROOT_TAG = b"verity/fa2c/root/v0"
-RUN_ROOT_TAG = b"verity/cmt-integ/run-root/v0"
-WEIGHTS_ROOT_TAG = b"verity/cmt-integ/weights-root/v0"
-STREAM_ROOT_TAG = b"verity/fa2-hidden/root/v7"
-THREAD_ROOT_TAG = b"verity/fa2-hidden/thread-root/v7"
+SEMANTIC_ROOT_TAG = domains.SEMANTIC_ROOT.encode()
+STEP_ROOT_TAG = domains.FA2C_ROOT.encode()
+RUN_ROOT_TAG = domains.CMT_INTEG_RUN_ROOT.encode()
+WEIGHTS_ROOT_TAG = domains.CMT_INTEG_WEIGHTS_ROOT.encode()
+STREAM_ROOT_TAG = domains.FA2_HIDDEN_ROOT.encode()
+THREAD_ROOT_TAG = domains.FA2_HIDDEN_THREAD_ROOT.encode()
 
 _U32 = 1 << 32
 _U64 = 1 << 64
@@ -578,7 +579,7 @@ def id_leaf_layout(canonical_id: str, dtype: str, shape: Sequence[int], nbytes: 
 
 Domain = SemanticDomain | StepDomain | StreamDomain | ThreadDomain
 
-DOMAIN_DIGEST_TAG = "verity/vllm-v1/domain/v1"
+DOMAIN_DIGEST_TAG = domains.VLLM_V1_DOMAIN
 _DOMAIN_KIND = {SemanticDomain: "semantic", StepDomain: "step", StreamDomain: "stream", ThreadDomain: "thread"}
 
 

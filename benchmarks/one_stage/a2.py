@@ -1,16 +1,16 @@
 """One-stage audit, run A2: A1 with the serving commit taken from serving itself. vllm-serving-commit commits the Llama-3.2-1B row's RoPE
-heads at serving time in the circuit prover's row format and hands over the registration, the verifier's public file,
+heads at serving time in the circuit prover's row format and hands over the docket, the verifier's public file,
 the prover's file and the unit index; nothing else changes.
 
-    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm:<tree>/catalog:<tree>/kernels:<tree>/experimental \\
+    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm:<tree>/adapters/torch:<tree>/catalog:<tree>/kernels:<tree>/experimental \\
       python benchmarks/one_stage/a2.py --served DIR --template-set DIR --m0-pythonpath PATH --bin flock-circuit \\
-      --lean flock-verify --out DIR [--k 256] [--delta 2^-20]
+      --lean verity-verify-proof --out DIR [--k 256] [--delta 2^-20]
 
 * **`--served DIR`** holds `registration.json`, `pub-N.bin`, `inst-N.bin` (rows and salts: the prover's only) and
   `index.json`. `--template-set` is any input set of the template, for the verifier's own lowering.
 * **The verifier's own copies.** It builds the population program and the partition itself, recomputes every served
   domain (`registration.window_domain`) from the record's program, partition and `window.run`, composes the bound circuit
-  itself and holds the public file's pin and bindings to it. N is taken from the registration (the served index); the
+  itself and holds the public file's pin and bindings to it. N is taken from the docket (the served index); the
   verifier doesn't yet derive it from the row's program, and the audit record says so.
 * **`--unbind`.** After checking serving's files as received (R1-R6, the pin, the bindings), the session runs on the
   verifier's own re-headered copies for the circuit prover's unbound statement (no `units.classes`, the unbound
@@ -29,6 +29,7 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+COMPOSE = HERE.parents[1] / "benchmarks" / "one_stage" / "compose_circuit.py"
 sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
@@ -36,7 +37,7 @@ import r2_population as R2  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity_flock.input_sets import InputSet  # noqa: E402
 from verity_flock import circuit as FC  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import audit, draw as D, partition as P, registration as R, verifier as V  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import audit, draw as D, partition as P, docket as R, verifier as V  # noqa: E402
 
 
 def unbound_copy(st: dict, header: dict, n: int, a, out: Path) -> tuple[dict, dict]:
@@ -46,7 +47,7 @@ def unbound_copy(st: dict, header: dict, n: int, a, out: Path) -> tuple[dict, di
     it hasn't."""
     ub = out / "unbound"
     ub.mkdir(parents=True, exist_ok=True)
-    p = a0.run([sys.executable, str(HERE / "compose_circuit.py"), "--input-set", a.template_set, "--out", str(ub / "circuit.txt")],
+    p = a0.run([sys.executable, str(COMPOSE), "--input-set", a.template_set, "--out", str(ub / "circuit.txt")],
                out / "compose-unbound.log", {"PYTHONPATH": a.unbound_m0_pythonpath or a.m0_pythonpath})
     made = json.loads(p.stdout.strip().splitlines()[-1])
     pin = made["pin"]
@@ -88,7 +89,7 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
     rec = json.loads((served / "registration.json").read_text())
     n = int(rec["population"])
-    law = D.parse_design(f"subset:{a.k}")
+    sampling_design = D.parse_design(f"subset:{a.k}")
     template = InputSet.open(a.template_set).subcircuit.definition()
     program = P.population_program(template, n)
     query = P.template_instance_query(template)
@@ -102,7 +103,7 @@ def main() -> int:
     # the verifier's own circuit, bound to its own partition and program
     st_dir = out / "stage"
     st_dir.mkdir(parents=True, exist_ok=True)
-    p = a0.run([sys.executable, str(HERE / "compose_circuit.py"), "--input-set", a.template_set, "--out", str(st_dir / "circuit.txt"),
+    p = a0.run([sys.executable, str(COMPOSE), "--input-set", a.template_set, "--out", str(st_dir / "circuit.txt"),
                 "--partition", P.digest(part), "--program", part["program"]], out / "compose.log", {"PYTHONPATH": a.m0_pythonpath})
     mine = json.loads(p.stdout.strip().splitlines()[-1])
     for name in (f"pub-{n}.bin", f"inst-{n}.bin"):
@@ -121,12 +122,12 @@ def main() -> int:
     header = a0.public_header(st_dir, n)
     fv = header["frame_v3"]
 
-    # registration: R1-R6 against the verifier's own copies, the served domains recomputed
+    # docket: R1-R6 against the verifier's own copies, the served domains recomputed
     run_id = rec.get("window", {}).get("run", "")
     want = {port: {"leaves": leaves, "domain": R.window_domain(part["program"], P.digest(part), port, schema, leaves, run_id)}
             for port, (schema, leaves) in a0.ports(st["meta"], n).items()}
     leaf_layer = a0.sha512_file(st_dir / f"pub-{n}.bin")
-    checks = {"registration": V.check(rec, program, query, law, a0.SCHEME, want, leaf_layer=leaf_layer, partition=part).to_json(),
+    checks = {"registration": V.check(rec, program, query, sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer, partition=part).to_json(),
               "public": V.matches_public(rec, header["scheme"], fv["roots"], fv["domain_ids"], header["instances"]).to_json(),
               "circuit": {"ok": header.get("circuit_sha512") == mine["pin"], "codes": [] if header.get("circuit_sha512") == mine["pin"] else ["pin"],
                           "detail": {"public": header.get("circuit_sha512"), "verifier": mine["pin"]}},
@@ -149,7 +150,7 @@ def main() -> int:
     t = time.time()
     record, live = a0.session(a.bin, st, n, f"subset:{a.k}", a.port, out / "session")
     summary["session_s"] = round(time.time() - t, 1)
-    result = a0.audit_session(rec, receipt, st, header, law, record, live, a.lean, a.lean, out / "session", a.delta)
+    result = a0.audit_session(rec, receipt, st, header, sampling_design, record, live, a.lean, a.lean, out / "session", a.delta)
     result["checks_before_draw"] = checks
     result["n_from"] = "registration (the served index); the verifier does not yet derive N from the served row's program"
     (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True))
@@ -159,22 +160,22 @@ def main() -> int:
     nl = body.index(b"\n") + 1
     flipped = body[:nl] + bytes([body[nl] ^ 1]) + body[nl + 1:]
     import hashlib
-    v = V.check(rec, program, query, law, a0.SCHEME, want, leaf_layer=hashlib.sha512(flipped).hexdigest(), partition=part)
+    v = V.check(rec, program, query, sampling_design, a0.SCHEME, want, leaf_layer=hashlib.sha512(flipped).hexdigest(), partition=part)
     neg["public-file-b||c-byte-flipped (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = V.check(rec, program, query, law, a0.SCHEME,
+    v = V.check(rec, program, query, sampling_design, a0.SCHEME,
                 {p_: {**w, "domain": R.window_domain(part["program"], P.digest(part), p_, s_, w["leaves"], run_id + "-other")}
                  for p_, w, s_ in ((p_, w, a0.ports(st["meta"], n)[p_][0]) for p_, w in want.items())}, leaf_layer=leaf_layer,
                 partition=part)
     neg["domains-of-another-run (R3)"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = V.check(rec, R2.program([(template, n)], mixed=False), query, law, a0.SCHEME, want, leaf_layer=leaf_layer, partition=part)
+    v = V.check(rec, R2.program([(template, n)], mixed=False), query, sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer, partition=part)
     neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
     draw = (record or {}).get("unit_draw") or {"law": "subset", "population": n, "k": a.k, "units": list(range(a.k))}
-    v = V.check_draw({**draw, "units": draw["units"][:-1] + [n]}, rec, law)
+    v = V.check_draw({**draw, "units": draw["units"][:-1] + [n]}, rec, sampling_design)
     neg["draw-outside-the-partition"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = V.check(dict(rec, leaf_layer=None), program, query, law, a0.SCHEME, want, leaf_layer=leaf_layer, partition=part)
+    v = V.check(dict(rec, leaf_layer=None), program, query, sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer, partition=part)
     neg["registration-null-leaf-layer (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
     if "registration" in result:
-        neg.update(a0.audit_negatives(result, law, a.delta, (live or {}).get("roots") or {}))
+        neg.update(a0.audit_negatives(result, sampling_design, a.delta, (live or {}).get("roots") or {}))
     (out / "negatives.json").write_text(json.dumps(neg, indent=1, sort_keys=True))
 
     summary["audit"] = {k: result.get(k) for k in ("accepted", "complete", "wrong_units", "checks")}

@@ -41,7 +41,7 @@ import Proofs.Flock.Claims.Complete.ZkTables.Scope
 /-!
 # A rep's rank check from the source, at coins that show no refusal
 
-`Flock.Firewall.Finish.repCut_fw` asks (`hpiop`) that the rank check pass at the rounds the source's zerocheck and lincheck
+`Flock.ZkServer.Finish.repCut_fw` asks (`hpiop`) that the rank check pass at the rounds the source's zerocheck and lincheck
 leave, answered by `asksCut`. Those rounds carry the coins of the sends they made, whatever the masked values, so the
 check reads the claim points at the coins from the rep's first send; where every table admits the opened coins, no
 refusal shows (`not_refused_of_admits`), so the check passes there.

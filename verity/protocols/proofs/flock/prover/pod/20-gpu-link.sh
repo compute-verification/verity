@@ -4,6 +4,8 @@
 # env: MODE=all|build|selftest|serve|prove  VUS="8 64" (selftest) SESS_VUS=4096 RUNS=3 VERIFIER=host:port (prove; empty =
 #      a loopback verifier process) LISTEN=0.0.0.0:7300 SESSIONS=N (serve) OPERATOR=lane  GPU=1 (0: CPU-only build)  SM=90
 #      DRV (the driver's major version; set, a GPU build runs no nvidia-smi, as beside another lane's GPU work)
+#      FLOCK_CUDA_LINEINFO=1 (the device code with its line table, for a listing with source lines; the cubin then names
+#      the tree's path, so it differs by where the tree sits)
 set -uxo pipefail
 SRC=$(pwd); SM=${SM:-90}; MODE=${MODE:-all}; GPU=${GPU:-1}
 W=${FLOCK_WORK:-/workspace}/flock-gpu-link; F=$W/flock; O=${RESEARCH_RUN_DIR:-/tmp/fgl}/out; mkdir -p $W $O
@@ -31,7 +33,8 @@ cd $F && git checkout -q b684b12 && git checkout -q -- . && rm -rf crates/flock-
 git apply $SRC/verity/protocols/proofs/flock/prover/flock-link-b684b12.patch && git apply $SRC/verity/protocols/proofs/flock/prover/flock-gpu-link-b684b12.patch || exit 1
 cp -r $SRC/verity/protocols/proofs/flock/prover/live crates/flock-live
 grep -q '"crates/flock-live"' Cargo.toml || sed -i 's|    "crates/flock-transcript",|    "crates/flock-transcript",\n    "crates/flock-live",|' Cargo.toml
-FEAT=; if [ "$GPU" = 1 ]; then SM=$SM CUDA=$C13 python3 $SRC/verity/protocols/proofs/flock/prover/cuda_chunk_patch.py || exit 1; FEAT="--features gpu"; fi
+LI=; [ "${FLOCK_CUDA_LINEINFO:-0}" = 1 ] && LI=--lineinfo
+FEAT=; if [ "$GPU" = 1 ]; then SM=$SM CUDA=$C13 python3 $SRC/verity/protocols/proofs/flock/prover/cuda_chunk_patch.py $LI || exit 1; FEAT="--features gpu"; fi
 cargo build --release -p flock-live $FEAT --bin flock-gpu-link --bin flock-pure-gpu -j $TH > $O/build.txt 2>&1 || { tail -40 $O/build.txt; exit 1; }
 B=$F/target/release/flock-gpu-link; sha256sum $B $F/target/release/flock-pure-gpu | tee $O/binary.sha256
 [ "$MODE" = build ] && exit 0

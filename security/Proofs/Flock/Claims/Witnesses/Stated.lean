@@ -39,7 +39,7 @@ import Proofs.Flock.Claims.ZK.Indexed
 /-!
 # Each claim fails somewhere, stated over the spec
 
-The lock's `claims` section (`Security/lean-audit.json`) names a theorem `C_fails` for each claim `C`: past its `∀`
+The lock's `claims` section (`security/lean-audit.json`) names a theorem `C_fails` for each claim `C`: past its `∀`
 and `∃` binders it is `¬ C …`, so `C` is not true of everything. A guarantee's statement reads only the spec, so each
 quantifies (`∃`) over the toy instance it fails at, and its proof is the toy witness of `Witnesses.Shared`, `Flock`,
 `Sampling` or `SamplingGeneric`. A record whose decoder's columns are words of bits takes the zero word as an instance

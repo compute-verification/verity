@@ -116,7 +116,7 @@ import dither_manifest as MF
 import dither_one as DO
 import forms as F
 import h1c as H1CM
-import j10r_ws as JWS
+import verity.protocols.experimental.dither.prover.j10r_ws as JWS
 from dither_a import auto_j
 from dither_fused import CM, CO, H1R, Call, Dom, Tab, unwords, words
 
@@ -400,7 +400,7 @@ class SoWindow(DO.DitherState):
         """An execution phase opens at step s (its first, s0): its coins (made beforehand by `prepare`, else now), the salt coin
         opened after the execution phase's root, the execution-phase round (round 0) over the B tables' roots, and the round pipe; under -we
         its last step (`end_at`): the layout's (R rounds: R - 2 steps), or an `arm_end` execution phase's."""
-        from verity.protocols.accounting.pouw.prover.circuit import h1tile as HT
+        from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1tile as HT
         t0 = time.perf_counter()
         self.HT = HT
         self.clean_from = None
@@ -631,8 +631,8 @@ class SoWindow(DO.DitherState):
         t_final = time.perf_counter()
         mroot = MF.manifest_root(W, self.k, self.open_root, s0, s1, list(self.pipe.roots[:i_f + 1]))
         t_mf = time.perf_counter()
-        draw, draw_at = self.pipe.draw(mroot)
-        t_draw = time.perf_counter()
+        sample, sample_at = self.pipe.draw(mroot)
+        t_sample = time.perf_counter()
         late = None
         if withheld is not None:
             late = self.pipe.send(MF.late_root(W, tail[-1], withheld))
@@ -648,7 +648,7 @@ class SoWindow(DO.DitherState):
             rows = torch.cat(self.mf_chunks)[:n].numpy() if self.mf_chunks else None
             rec = {"k": self.k, "fault": self.end_fault, "s0": s0, "s1": s1, "tail": tail, "rr": rr,
                    "final_leaves": leaves, "withheld": withheld, "i_f": i_f, "late_index": late, "mroot": mroot,
-                   "draw": draw, "draw_at": draw_at, "pipe": self.pipe, "coins": self.coins, "open_root": self.open_root,
+                   "sample": sample, "sample_at": sample_at, "pipe": self.pipe, "coins": self.coins, "open_root": self.open_root,
                    "salt_open": self.salt_open, "rows": rows, "disp_at": self.disp_at, "salt_of": self.salt_of,
                    "cap_at": self.cap_at, "b_roots": self.b_roots}
         if self.end_name is not None:
@@ -671,8 +671,8 @@ class SoWindow(DO.DitherState):
              "split_ms": {"tail_units": 1e3 * (t_units - t0), "spill_sync": 1e3 * (t_spill - t_units),
                           "tail_sync": 1e3 * (t_sync - t_spill),
                           "receipt_tail_roots": 1e3 * (t_rr - t_sync), "final_round": 1e3 * (t_final - t_rr),
-                          "manifest_root": 1e3 * (t_mf - t_final), "draw_coin": 1e3 * (t_draw - t_mf),
-                          "close": 1e3 * (t_close - t_draw), "record": 1e3 * (t_end - t_close)}}
+                          "manifest_root": 1e3 * (t_mf - t_final), "draw_coin": 1e3 * (t_sample - t_mf),
+                          "close": 1e3 * (t_close - t_sample), "record": 1e3 * (t_end - t_close)}}
         e["amortized_ms_per_step"] = e["end_ms"] / n
         self.ends.append(e)
         if live and settings.get(MANIFEST_ENV):
@@ -2309,22 +2309,22 @@ def check_end(win: SoWindow, name: str, lib_h1o: str) -> dict:
     step's receipts against h1r v1 under its coin's salt, `rehashed_calls`' A tables and receipt tables rehashed; under -we
     three steps opened from its spill (`open_spill`).  Under fault_tail and fault_late_receipt, ``conforming`` holds
     when it is refused exactly where its fault is."""
-    from verity.protocols.accounting.pouw.prover.circuit import h1tile as HT
+    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1tile as HT
     rec = win.end_recs.get(name)
     if rec is None or rec.get("rows") is None or "last" not in rec:
         return {"which": name, "ok": False, "complete": False, "why": f"no ended execution phase {name!r} with its rows"}
     pipe, com, rows, kinds = rec["pipe"], rec["coins"].commitment, rec["rows"], win.round_kinds
     W, L, D, key, t = win.window, win.L, win.depth, win.key, win.t
-    s0, s1, i_f, li, draw_at = rec["s0"], rec["s1"], rec["i_f"], rec["late_index"], rec["draw_at"]
+    s0, s1, i_f, li, sample_at = rec["s0"], rec["s1"], rec["i_f"], rec["late_index"], rec["sample_at"]
     nr, L8, n, caps = len(kinds), 8 * L, s1 - s0, rec["cap_at"]
     doc: dict = {"which": name, "fault": rec["fault"], "complete": True, "window": rec["k"], "s0": s0, "steps": n,
                  "depth": D, "tail": rec["tail"], "final_index": i_f, "late_index": li}
     mroot = MF.manifest_root(W, rec["k"], rec["open_root"], s0, s1, list(pipe.roots[:i_f + 1]))
     salt_why = CO.Ch.live_reason(com, rec["salt_open"], CO.Wd.SALT, 0, rec["open_root"])
-    draw_why = CO.Ch.live_reason(com, rec["draw"], CO.Wd.DRAW, 0, mroot)
+    sample_why = CO.Ch.live_reason(com, rec["sample"], CO.Wd.DRAW, 0, mroot)
     coins = {"source": rec["coins"].source, "salt_after_window_root": salt_why is None, "salt_reason": salt_why,
              "rounds_reason": CO.Wd.rounds_reason(com, pipe.roots, pipe.openings),
-             "draw_after_manifest_root": draw_why is None and mroot == rec["mroot"], "draw_reason": draw_why,
+             "draw_after_manifest_root": sample_why is None and mroot == rec["mroot"], "draw_reason": sample_why,
              "rounds_cover_steps": i_f == n + 1 and len(rows) == n}
     coins["ok"] = bool(coins["salt_after_window_root"] and coins["rounds_reason"] is None
                        and coins["draw_after_manifest_root"] and coins["rounds_cover_steps"])
@@ -2346,9 +2346,9 @@ def check_end(win: SoWindow, name: str, lib_h1o: str) -> dict:
         i = s - s0 + 1
         ri = i + D - 1 if s + D - 1 < s1 else i_f
         got, disp, sent = pipe.got_at.get(i), rec["disp_at"].get(s), pipe.sent_at.get(ri)
-        if not (got is not None and disp is not None and sent is not None and got <= disp <= sent < draw_at):
+        if not (got is not None and disp is not None and sent is not None and got <= disp <= sent < sample_at):
             order_bad.append(s)
-    after = sorted(i for i, x in pipe.sent_at.items() if x >= draw_at)
+    after = sorted(i for i, x in pipe.sent_at.items() if x >= sample_at)
     salts_bad = []
     for s, salt in rec["salt_of"].items():
         o = pipe.opening(s - s0 + 1, wait=False)
@@ -2360,7 +2360,7 @@ def check_end(win: SoWindow, name: str, lib_h1o: str) -> dict:
     tail_bad = [j for j, a, b in zip(tail, want_leaves, rec["final_leaves"]) if a != b]
     final_ok = MF.final_root(W, tail, rec["final_leaves"]) == pipe.roots[i_f]
     late_steps = [j for j, a in zip(tail, want_leaves)
-                  if li is not None and MF.late_root(W, j, a) == pipe.roots[li] and pipe.sent_at[li] >= draw_at]
+                  if li is not None and MF.late_root(W, j, a) == pipe.roots[li] and pipe.sent_at[li] >= sample_at]
     # the last step: its receipts (the units' last output) against h1r v1 on its ring slot's A under its coin's salt
     last, s, i = rec["last"], s1 - 1, n
     o, m = pipe.opening(i, wait=False), last["m"]
@@ -2368,7 +2368,7 @@ def check_end(win: SoWindow, name: str, lib_h1o: str) -> dict:
     a_rows = [unwords(rows[n - 1][8 * w:8 * w + 8]) for w in range(L)]
     a_bad, rr_bad = [], []
     t_cpu = time.perf_counter()
-    rehash = rehashed_calls(L, rec["draw"].coin)
+    rehash = rehashed_calls(L, rec["sample"].coin)
     a_cpu = DO.a_roots_cpu(win, s, rehash, lambda v: last["a"][v].cpu().numpy(), lambda v: last["sa"][v].cpu().numpy())
     for w in rehash:
         if a_cpu[w] != a_rows[w]:
@@ -2380,7 +2380,7 @@ def check_end(win: SoWindow, name: str, lib_h1o: str) -> dict:
         rrows = CM.receipt_rows(last["receipts"][o_:o_ + units * nw].view(units, nw).cpu().numpy().view(np.uint32))
         if CM.levels(rd, [CM.leaf(rd, key, f"r/{s}/{w}", u, bytes(rrows[u]))[0] for u in range(units)])[-1][0] != rr[s][w]:
             rr_bad.append(w)
-    doc["rehashed"] = {"calls": len(rehashed_calls(L, rec["draw"].coin)), "cpu_s": round(time.perf_counter() - t_cpu, 2)}
+    doc["rehashed"] = {"calls": len(rehashed_calls(L, rec["sample"].coin)), "cpu_s": round(time.perf_counter() - t_cpu, 2)}
     sd = DA.SIDE[0] if DA.SIDE else None
     if getattr(sd, "j10r", False):
         import j10r_so as JS
@@ -2424,13 +2424,13 @@ def check_end(win: SoWindow, name: str, lib_h1o: str) -> dict:
     return doc
 
 
-def rehashed_calls(L: int, coin: bytes, drawn: int = 8) -> list[int]:
+def rehashed_calls(L: int, coin: bytes, sampled: int = 8) -> list[int]:
     """The last step's calls whose A table and receipt table `check_end` rehashes on the CPU: the first and last layers'
-    four (every linear's shape) and `drawn` the sampling coin picks: at most 16 of Llama 3.1 8B's 128, an eighth of rehashing
+    four (every linear's shape) and `sampled` the sampling coin picks: at most 16 of Llama 3.1 8B's 128, an eighth of rehashing
     them all (under DO.A_STEP_ENV the A side is every K's table, so all 128 calls' rows)."""
     h = hashlib.sha512(b"verity/kernels-int12/end-rehash/v1" + coin).digest()
     return sorted({*range(min(4, L)), *range(max(0, L - 4), L),
-                   *(int.from_bytes(h[8 * j:8 * j + 8], "big") % L for j in range(drawn))})
+                   *(int.from_bytes(h[8 * j:8 * j + 8], "big") % L for j in range(sampled))})
 
 
 def open_spill(win: SoWindow, rec: dict, kinds: tuple) -> dict | None:
@@ -2450,7 +2450,7 @@ def open_spill(win: SoWindow, rec: dict, kinds: tuple) -> dict | None:
     doc: dict = {"mode": sp["mode"], "what": SPILLS[sp["mode"]], "held_steps": len(sp["steps"]), "steps": s1 - s0}
     if not held or len(sp["steps"]) != s1 - s0:
         return {**doc, "ok": False, "why": "the spill holds not every step of the execution phase, or none uncaptured"}
-    h = hashlib.sha512(b"verity/kernels-int12/spill-open/v1" + rec["draw"].coin).digest()
+    h = hashlib.sha512(b"verity/kernels-int12/spill-open/v1" + rec["sample"].coin).digest()
     steps = sorted({held[0], held[int.from_bytes(h[:8], "big") % len(held)], held[-1]})
     ai, zi, L8 = kinds.index("a-step"), kinds.index("z-step"), 8 * L
     out = []
@@ -2558,6 +2558,6 @@ def write_manifest(win: SoWindow, rec: dict, out_dir: str) -> dict:
                      "commitment": coins.commitment.to_json(), "salt_coin": rec["salt_open"].to_json(),
                      "rounds": [{"round": i, "root": pipe.roots[i].hex(), "opening": pipe.opening(i, wait=False).to_json()}
                                 for i in range(i_f + 1)],
-                     "draw_coin": rec["draw"].to_json(), "draw_after": rec["mroot"].hex()}}
+                     "draw_coin": rec["sample"].to_json(), "draw_after": rec["mroot"].hex()}}
     return MF.write(out_dir, coins.session.id if coins.session else f"k{rec['k']}", doc, rows.tobytes(),
                     tempfile.gettempdir())

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """`python3 oom_order.py [--runs DIR ...] [--ramlock DIR] [--log FILE] [--dry-run]`: order the kernel OOM killer's picks on a
-shared node by each live run's memory use against its research.mem reservation, until reservations are caps.
+shared node by each live run's memory use against its research.mem reservation, until reservations are limits.
 
 A reservation (`research run --mem-gb`, a check slot's mem=; research.mem's files in RAMLOCK) only gates admission: the kernel
 picks its victim by size alone, so a run inside its reservation is OOM-killed as the node's largest process beside runs far over
@@ -36,7 +36,7 @@ import argparse
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 RUNS = (Path("/workspace/research/runs"), Path("/workspace/jobs/runs"))
@@ -45,8 +45,8 @@ LOG = Path("/workspace/monitoring/oom-order.jsonl")
 PROC = Path("/proc")
 GB = 1e9                          # research.mem's GB
 OVER, SPAN, WITHIN, MAX = 500, 500, 0, 1000
-#: a run under a reservation marked "priority": true (a train check's slot) ranks this much lower, so a research job
-#: growing back into its reservation is killed before a train: landing comes first
+#: a run under a reservation marked "priority": true (a candidate's check's slot) ranks this much lower, so a research job
+#: growing back into its reservation is killed before a candidate's check: landing comes first
 PRIORITY = 500
 DISABLED = -1000
 #: a run's runner (`python3 -m research run`), in its run's scope but never one of its processes (nor its session's sshd)
@@ -54,13 +54,14 @@ RUNNER = b"-m\0research\0run\0"
 
 
 def clock() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _json(p: Path) -> dict:
     try:
         d = json.loads(p.read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"oom_order: {p} unread, read as empty ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return {}
     return d if isinstance(d, dict) else {}
 
@@ -84,7 +85,8 @@ def reservations(ramlock: Path) -> list[dict]:
         d = _json(f)
         try:
             gb = float(d["gb"])
-        except (KeyError, TypeError, ValueError):
+        except (KeyError, TypeError, ValueError) as e:
+            print(f"oom_order: {f.name} has no amount of memory, so it reserves none ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         out.append({"file": f.name, "gb": gb, "run_id": d.get("run_id"), "pid": d.get("pid") if isinstance(d.get("pid"), int) else None,
                     "priority": d.get("priority") is True})
@@ -92,9 +94,12 @@ def reservations(ramlock: Path) -> list[dict]:
 
 
 def _read(p: Path) -> bytes | None:
+    """``p``'s bytes; None once its process has exited, or when unreadable, which is said."""
     try:
         return p.read_bytes()
-    except OSError:
+    except OSError as e:
+        if p.parent.exists():
+            print(f"oom_order: {p} unread, so its process is left out ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
 
 
@@ -111,7 +116,8 @@ def scan(proc: Path = PROC) -> dict[int, dict]:
         try:
             pgid = int(stat[stat.rindex(b")") + 2:].split()[2])
             cur = int(adj)
-        except (ValueError, IndexError):
+        except (ValueError, IndexError) as err:
+            print(f"oom_order: pid {e} left out, its stat or oom_score_adj doesn't parse ({err})", file=sys.stderr, flush=True)
             continue
         rss = 0
         for ln in status.splitlines():
@@ -189,10 +195,9 @@ def apply(plans: list[dict], procs: dict[int, dict], proc: Path = PROC, dry_run:
                 if not dry_run:
                     (proc / str(pid) / "oom_score_adj").write_text(str(p["adj"]))
                 moved.append([pid, cur])
-            except (FileNotFoundError, ProcessLookupError):
-                pass
             except OSError as e:
-                errors.append(f"{pid}: {type(e).__name__}: {e}")
+                if (proc / str(pid)).exists():
+                    errors.append(f"{pid}: {type(e).__name__}: {e}")
         if moved or errors:
             out.append({"at_utc": clock().strftime("%Y-%m-%dT%H:%M:%SZ"), "run": p["run"], "use_gb": round(p["use"] / GB, 1),
                         "reserved_gb": round(p["reserved"] / GB, 1), "adj": p["adj"], "set": moved, "dry_run": dry_run,

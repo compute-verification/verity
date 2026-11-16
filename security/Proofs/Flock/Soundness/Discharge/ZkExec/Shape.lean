@@ -19,7 +19,7 @@ import Proofs.Flock.Soundness.Discharge.ZkLink.Inh
 import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.Refine.Ligerito
 import Proofs.Flock.Soundness.Refine.Opening
-public import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOkJson
+public import Proofs.Flock.Soundness.Discharge.ZkLink.SampleOkJson
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Inh
 public import Proofs.Flock.Soundness.Discharge.ZkLink.M1
 public import Proofs.Flock.Soundness.Discharge.ZkLink.One
@@ -40,7 +40,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkLink.AccZ
 public import Proofs.Flock.Soundness.Discharge.ZkLink.SessionZ
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
 public import Proofs.Flock.Soundness.Discharge.ZkLink.TablesAt
-public import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOk
+public import Proofs.Flock.Soundness.Discharge.ZkLink.SampleOk
 
 /-!
 # The static shape of a compiled `--zk` rep
@@ -225,7 +225,7 @@ def ligPadShape (F K D : Type) (sch : Schedule) (e t : ℕ) : List Kind :=
         .msg K :: .msg (Fin t → K) :: tailShape F K D sch lv₀ rest))
 
 omit [DecidableEq F] [Fintype K] [DecidableEq K] in
-theorem drawK_exact (A : Arith F K) : Exact (drawK A) [.coin (Fin 2 → F)] :=
+theorem sampleK_exact (A : Arith F K) : Exact (drawK A) [.coin (Fin 2 → F)] :=
   Exact.draw_bind fun _ => .ret _
 
 omit [DecidableEq F] [Fintype K] [DecidableEq K] in
@@ -234,20 +234,20 @@ theorem foldRoundsZK_exact (A : Arith F K) {np e : ℕ} (P : Pads0 np e) :
   | 0, _, _, _ => .ret _
   | 1, _, _, q => by
       unfold foldRoundsZK foldShapeZ
-      exact Exact.bind_one (drawK_exact A) fun _ => .ret _
+      exact Exact.bind_one (sampleK_exact A) fun _ => .ret _
   | k + 2, j, _, q => by
       unfold foldRoundsZK foldShapeZ
-      refine Exact.bind_one (drawK_exact A) fun r => Exact.recv_bind fun msg => ?_
+      refine Exact.bind_one (sampleK_exact A) fun r => Exact.recv_bind fun msg => ?_
       rw [← List.append_nil (foldShapeZ F K (k + 1))]
       exact Exact.bind (foldRoundsZK_exact A P (k + 1) _ _ _) fun _ => .ret _
 
 omit [DecidableEq F] [Fintype K] [DecidableEq K] in
-theorem drawKs_exact (A : Arith F K) : ∀ e, Exact (drawKs A e) (List.replicate e (.coin (Fin 2 → F)))
+theorem sampleKs_exact (A : Arith F K) : ∀ e, Exact (sampleKs A e) (List.replicate e (.coin (Fin 2 → F)))
   | 0 => .ret _
   | e + 1 => by
-      unfold drawKs
+      unfold sampleKs
       rw [List.replicate_succ, ← List.append_nil (List.replicate e _)]
-      exact Exact.bind_one (drawK_exact A) fun _ => Exact.bind (drawKs_exact A e) fun _ => .ret _
+      exact Exact.bind_one (sampleK_exact A) fun _ => Exact.bind (sampleKs_exact A e) fun _ => .ret _
 
 omit [DecidableEq F] [Fintype K] [DecidableEq K] in
 theorem queryAndBatchPadC_exact (A : Arith F K) (r : ℕ) (lv : Level) (col : List F → ℕ → K) (start : ℕ)
@@ -300,7 +300,7 @@ theorem ligeritoPadZC_on (A : Arith F K) {np e : ℕ} (P : Pads0 np e) (sch : Sc
   · refine ExactOn.draw_bind fun _ => ExactOn.recv_bind fun _ => ExactOn.draw_bind fun _ =>
       ExactOn.recv_bind fun _ => ?_
     refine ExactOn.bind_exact (foldRoundsZK_exact A P _ _ _ _) fun _ => ExactOn.recv_bind fun _ => ?_
-    refine ExactOn.bind_exact (drawKs_exact A e) fun _ => ExactOn.recv_bind fun _ => ExactOn.recv_bind fun _ => ?_
+    refine ExactOn.bind_exact (sampleKs_exact A e) fun _ => ExactOn.recv_bind fun _ => ExactOn.recv_bind fun _ => ?_
     exact ExactOn.bind_ret (ligTailC_on A r sch t c₀ e b lv₀ rest _ _ _ _ _ _) fun _ h => h
 
 omit [Fintype K] in

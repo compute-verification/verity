@@ -42,8 +42,8 @@ skipped its `rep` requests. Neither is a prefix of the model's last message.
 
 namespace Claims.ZKServer.Relay
 
-open _root_.Flock.Firewall.Session
-open _root_.Flock.Firewall hiding State
+open _root_.Flock.ZkServer.Session
+open _root_.Flock.ZkServer hiding State
 open _root_.Flock (V SessionSpec Stmt)
 
 /-- **A link message's roots** at the setup `spec`: its tables' level-0 roots (`FlockDeploy.linkOf`), each named by its
@@ -280,7 +280,7 @@ theorem stepK_setup {hold : Bool} {spec : SessionSpec} {sts : Array Stmt} {st : 
 
 /-- **The session's plan is the setup's** once its `Hello` left. -/
 def PlanOk (spec : SessionSpec) (sts : Array Stmt) (S : State) : Prop :=
-  S.sent = true → S.plan = _root_.Flock.Firewall.Session.planOf spec sts
+  S.sent = true → S.plan = _root_.Flock.ZkServer.Session.planOf spec sts
 
 theorem planOk_keeps {spec : SessionSpec} {sts : Array Stmt} {S S' : State} (h : PlanOk spec sts S) (hk : Keeps S S') :
     PlanOk spec sts S' := fun hs => hk.2.2.2.2.2.trans (h (hk.2.2.1.symm.trans hs))

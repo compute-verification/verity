@@ -2,7 +2,7 @@
 held as words of one field (`wt.cu` built at -DWT_RECEIPT=1: the fused decode, sketch-sha512 at k_s = 16 or 64
 (`--rows`) and the FP8 MMA, then the step's receipt tree, `reader.cu`'s), and a bf16 KV cache that fills the
 rest of the GPU's memory at `--batch` sequences,
-held as words of the same field and decoded inside attention (`benchmarks/word_codec/kv.cu`'s `kv_attn`); the step's new tokens' KV is encoded (`step.cu`'s
+held as words of the same field and decoded inside attention (`verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu`'s `kv_attn`); the step's new tokens' KV is encoded (`step.cu`'s
 `kv_append`, all layers in one launch on a second stream, beside the step). Where kv.cu runs form 13
 the KV carries the same receipts: each token-layer is one of the store's registered 4 KiB chunks (store-order/v0),
 attention is `kv_attn`'s form 13, which sketches the words it decodes under the pass's signs (`kv_rc_pass`, from
@@ -61,12 +61,14 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/resource_accounting/memory/poub/prover/codec_tensor/reader.py").parent))
 
 import bench as BW  # noqa: E402
 import sketch_receipt as SR  # noqa: E402
 import sketching as SKT  # noqa: E402
 
 sys.path.insert(0, str(HERE.parent / "word_codec"))
+sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv_bench.py").parent))
 import kv as K  # noqa: E402
 import kv_bench as KB  # noqa: E402
 import kv_exhaust as KE  # noqa: E402
@@ -832,8 +834,9 @@ def write_result(res: dict, out_dir: Path, libs) -> None:
     for a, v in res.get("times", {}).items():
         ms.append({"name": f"{a}_s", "value": v, "unit": "s"})
     for k, row in res.get("model", {}).get("k", {}).items():
-        for name in ("step_over_plain", "d", "weights", "weights_decode", "weights_receipt", "weights_commit",
-                     "attention", "attention_receipt", "append_async"):
+        ms.append({"name": f"memory-accounting/codec-tensor.k{k}-step-over-plain", "value": row["step_over_plain"], "unit": "1"})
+        for name in ("d", "weights", "weights_decode", "weights_receipt", "weights_commit", "attention", "attention_receipt",
+                     "append_async"):
             ms.append({"name": f"k{k}_{name}", "value": row[name], "unit": "1"})
     rel = os.path.relpath(out_dir, run_dir)
     files = [f"{rel}/step.json", f"{rel}/step.log"] + ([f"{rel}/step-points.json"] if "model" in res else [])

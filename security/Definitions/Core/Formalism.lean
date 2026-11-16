@@ -12,7 +12,7 @@ public import Definitions.Core.RegisteredCircuit
 # The working draft's model: Boolean circuits, `(c, k)`-partitions and local description length
 
 The model of the working draft "Distinguishing inference from frontier training" (§3 and §4), on core's one circuit
-type `Verity.Circuit` and its one `Partition`. Every statement about training, NCI and the accounting envelopes is to be
+type `Verity.Circuit` and its one `Partition`. Every statement about training, the inference-only policy and the accounting envelopes is to be
 stated on these objects.
 
 * A **Boolean circuit** (`Circuit.Boolean`) is a circuit whose every gate holds one bit and whose every operation gate
@@ -24,7 +24,7 @@ stated on these objects.
 * The **AND count** `C.andSize S` (`andSize`) is the number of AND gates (`IsAnd`: an operation gate whose function is
   not affine over GF(2)) among `S`, and `C.andSize C.computed` is the circuit's multiplicative complexity, the gates
   Flock pays for. Credit and reporting count `andSize`; Theorem 3 and the `(c, k)`-partition count `size`.
-* **Credit** (`creditSize lower d`) is the AND count of the registered declared circuit under one public lowering,
+* **Credit** (`creditSize lower d`) is the AND count of the registered circuit under one public lowering,
   pinned at registration.
 * The **committed registered circuit** `R` (`Committed`) is the committed trace, the values the developer committed in
   the execution phase, with the registered circuit (`Verity.RegisteredCircuit`) and the committed values of `θ`'s gates. Its
@@ -102,7 +102,7 @@ noncomputable def andSize (C : Circuit) (S : Finset (Fin C.N)) : ℕ := (S.filte
 
 end Circuit
 
-/-- **Credit**: the AND count of the registered declared circuit `d` under the one public lowering `lower`, pinned at
+/-- **Credit**: the AND count of the registered circuit `d` under the one public lowering `lower`, pinned at
 registration, never the prover's own lowering. Each credit record carries `lower`'s digest. -/
 noncomputable def creditSize (lower : RegisteredCircuit → Circuit) (d : RegisteredCircuit) : ℕ :=
   (lower d).andSize Finset.univ
@@ -119,7 +119,7 @@ structure Partition.IsCK (d : RegisteredCircuit) {B : ℕ} (P : Partition d.D B)
   card : ∀ u, (P.gates u).card ≤ c
   reads : ∀ u, (d.unregistered (P.gates u)).card ≤ k
 
-/-- **The size ratio** of `B` inference blocks of budget `c` relative to a reference circuit of size `T₀`: `c · B / T₀`,
+/-- **The size ratio** of `B` inference blocks of budget `c` relative to a reference training algorithm of size `T₀`: `c · B / T₀`,
 each inference block priced at `c` gates. -/
 noncomputable def slowdown (c B : ℕ) (T₀ : ℝ) : ℝ := ((c * B : ℕ) : ℝ) / T₀
 

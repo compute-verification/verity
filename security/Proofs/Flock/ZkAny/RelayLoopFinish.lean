@@ -20,10 +20,10 @@ past no `Finish`, so only what the relay read there is the model's. Here is `env
 
 namespace Claims.ZKServer.Relay
 
-open _root_.Flock.Firewall.Session
-open _root_.Flock.Firewall hiding State
+open _root_.Flock.ZkServer.Session
+open _root_.Flock.ZkServer hiding State
 open _root_.Flock (SessionSpec Stmt)
-open _root_.Flock.Firewall.Frames (Sessions)
+open _root_.Flock.ZkServer.Frames (Sessions)
 
 /-- **The `Finish`'s slot comes after the `Hello` left.** -/
 theorem slot_finish {S : State} {P : Placed} (h : slot S P = some .finish) : S.sent = true := by

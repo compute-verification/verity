@@ -194,16 +194,16 @@ class IndependentReference:
 
 
 _HAWKEYE = ("verity/circuits/silicon/hawkeye/PIN.json", "benchmarks/numerical/python/verity_numerical/reference/hawkeye_close.py",
-            "benchmarks/numerical/tests/reference/test_hawkeye_close.py")
+            "tests/benchmarks/numerical/reference/test_hawkeye_close.py")
 INDEPENDENT_REFERENCES: dict[str, tuple[IndependentReference, ...]] = {
     "sm80.mma.m16n8k16.bf16": (
         IndependentReference("hawkeye-source-close", "simulator", _HAWKEYE, note="Hawkeye's pinned A100 simulator, ported source-close"),
         IndependentReference("veritor-tc-total-a100-specials", "second-harness",
-                             ("verity/circuits/ops/tests/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz",),
+                             ("tests/verity/circuits/ops/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz",),
                              replay="a100/mma_special", note="veritor's tc-total A100 captures (31,290 structured cases) replayed by tc_probe"),
     ),
     "sm89.mma.m16n8k16.bf16": (
-        IndependentReference("veritor-golden-ada-bf16", "second-harness", ("verity/circuits/ops/tests/fixtures/golden/ada_bf16_m16n8k16.json",),
+        IndependentReference("veritor-golden-ada-bf16", "second-harness", ("tests/verity/circuits/ops/fixtures/golden/ada_bf16_m16n8k16.json",),
                              replay="golden/ada_bf16_m16n8k16.json", note="veritor gpu/tensor-core-semantics RTX 4090 golden records"),
         IndependentReference("hawkeye-source-close", "simulator", _HAWKEYE),
     ),
@@ -212,14 +212,14 @@ INDEPENDENT_REFERENCES: dict[str, tuple[IndependentReference, ...]] = {
     ),
     "sm90.wgmma.m64n8k16.bf16": (
         IndependentReference("veritor-h100-wgmma-bf16", "second-compiled-path",
-                             ("verity/circuits/ops/tests/fixtures/tc-hopper-2026-09-07/special.reduced.json.gz",
-                              "verity/circuits/ops/tests/fixtures/tc-hopper-2026-09-07/summary.json"),
+                             ("tests/verity/circuits/ops/fixtures/tc-hopper-2026-09-07/special.reduced.json.gz",
+                              "tests/verity/circuits/ops/fixtures/tc-hopper-2026-09-07/summary.json"),
                              replay="tc-hopper-2026-09-07/special.reduced",
                              note="veritor: Triton tl.dot -> wgmma m64n128k16 (HGMMA.64x128x16), 307,281,920 words; its 44,046 records "
                                   "(14 families, non-finite included) replayed by tc_probe --replay-capture"),
     ),
     "sm89.mma.m16n8k32.e4m3": (
-        IndependentReference("veritor-golden-ada-e4m3", "second-harness", ("verity/circuits/ops/tests/fixtures/golden/ada_e4m3_m16n8k32.json",),
+        IndependentReference("veritor-golden-ada-e4m3", "second-harness", ("tests/verity/circuits/ops/fixtures/golden/ada_e4m3_m16n8k32.json",),
                              replay="golden/ada_e4m3_m16n8k32.json", note="veritor gpu/tensor-core-semantics RTX 4090 golden records"),
         IndependentReference("hawkeye-hopper-fp8", "simulator", _HAWKEYE, note="Hawkeye's Hopper FP8 simulator does not describe Ada (D10)"),
     ),
@@ -877,16 +877,16 @@ def d_class(entry: dict) -> str:
 #: Input sets identified by a recipe digest pinned in the bench contract rather than by a repo fixture manifest (the FP8 Ada
 #: set is seeded: uniform finite E4M3 bytes from ``FP8_ADA_INSTANCES_SEED``).  target name -> the contract constant prefix; the
 #: constants ``<PREFIX>_INSTANCES_{DATASET,TIER,DIGEST}`` must all exist for the set to count.
-CONTRACT_INSTANCE_SETS: dict[str, str] = {
+CONTRACT_INPUT_SETS: dict[str, str] = {
     "fp8-ada-mma-draft/2026-09-22": "FP8_ADA",
     "fp8-hopper-wgmma-draft/2026-09-22": "FP8_HOPPER",
     "nvfp4-sm120-mma-draft/2026-09-22": "NVFP4",
 }
 
 
-def _contract_instance_sets(subject: Subject, contract: Any | None = None) -> list[DatasetIdentity]:
-    """The subject's contract-pinned input sets (``CONTRACT_INSTANCE_SETS``); ``contract`` overrides the module (tests)."""
-    prefixes = [p for name, p in CONTRACT_INSTANCE_SETS.items() if name in subject.names]
+def _contract_input_sets(subject: Subject, contract: Any | None = None) -> list[DatasetIdentity]:
+    """The subject's contract-pinned input sets (``CONTRACT_INPUT_SETS``); ``contract`` overrides the module (tests)."""
+    prefixes = [p for name, p in CONTRACT_INPUT_SETS.items() if name in subject.names]
     if not prefixes:
         return []
     if contract is None:
@@ -1127,7 +1127,7 @@ def assess(target_name: str, store: Any, *, repo: str | os.PathLike[str] | None 
     all_entries = [e for e in _load_discrepancies(repo_path) if e.get("profile") in subject.names]
     d_entries = [e for e in all_entries if d_class(e) == "numerics"]      # model vs hardware words: these gate the levels
     binding_entries = [e for e in all_entries if d_class(e) == "binding"]  # which kernels/shapes realise the chain: dossier caveats
-    datasets = _datasets_for(subject, repo_path) + _contract_instance_sets(subject)
+    datasets = _datasets_for(subject, repo_path) + _contract_input_sets(subject)
 
     # ---- HYPOTHESIS ----
     c = Criterion("H1", "HYPOTHESIS", "a model is registered for the instruction", subject.model is not None)
@@ -1359,16 +1359,16 @@ def assess(target_name: str, store: Any, *, repo: str | os.PathLike[str] | None 
         c.missing.append(f"negative set: {best_n} rejected mutations recorded (need {NEGATIVES_MIN}); extend the negative tier and re-run the checker sweep")
     if datasets and not edge:
         if all(ds.contract for ds in datasets):
-            c.missing.append("the instance set is a seeded recipe pinned by contract digest with no corner families: freeze a fixture manifest with edge families "
+            c.missing.append("the input set is a seeded recipe pinned by contract digest with no corner families: freeze a fixture manifest with edge families "
                              "(or add a corner tier to the recipe) so the honest set includes them")
         else:
             c.missing.append("the frozen honest set has no edge (corner) families in its manifest")
     if not datasets and subject.target is not None:
-        c.missing.append(f"no frozen instance set (fixtures/*/v*/manifest.json with target.profile = {subject.name}, or a contract-pinned recipe digest in "
-                         f"CONTRACT_INSTANCE_SETS) whose edge families the honest set must include")
+        c.missing.append(f"no frozen input set (fixtures/*/v*/manifest.json with target.profile = {subject.name}, or a contract-pinned recipe digest in "
+                         f"CONTRACT_INPUT_SETS) whose edge families the honest set must include")
     criteria.append(c)
 
-    c = Criterion("Td", "TRUSTED", "hardware-in-the-loop: the frozen instance set (a repo fixture manifest or a contract-pinned recipe digest) re-executed "
+    c = Criterion("Td", "TRUSTED", "hardware-in-the-loop: the frozen input set (a repo fixture manifest or a contract-pinned recipe digest) re-executed "
                   "on the anchor with 0 mismatches", False)
     for ds in datasets:
         covered: dict[str, EvidenceRef] = {}
@@ -1412,8 +1412,8 @@ def assess(target_name: str, store: Any, *, repo: str | os.PathLike[str] | None 
         if all(t in covered for t in ds.honest_tiers):
             c.passed = True
     if not datasets:
-        c.missing.append(f"no frozen instance set to re-execute on {anchor}: freeze one (fixtures/<dataset>/v<k>/manifest.json with target.profile = {subject.name}, "
-                         f"or pin a recipe digest in the bench contract and list it in CONTRACT_INSTANCE_SETS), then `tc_probe --replay-instances` on the anchor "
+        c.missing.append(f"no frozen input set to re-execute on {anchor}: freeze one (fixtures/<dataset>/v<k>/manifest.json with target.profile = {subject.name}, "
+                         f"or pin a recipe digest in the bench contract and list it in CONTRACT_INPUT_SETS), then `tc_probe --replay-instances` on the anchor "
                          f"labelled family=frozen-instances")
     criteria.append(c)
 

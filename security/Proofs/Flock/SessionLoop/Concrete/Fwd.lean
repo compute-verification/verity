@@ -10,15 +10,17 @@ public meta import Lean
 
 `fwd_walk [rules] block [consts]` proves `m = r` for a computation `m : Except ε γ`, `r` usually `.ok ?v`, by stepping
 through `m` in order: a `let` goes into the context (a value with a free variable of the goal is substituted instead,
-after the rules rewrite it; a `let` applied to arguments, as a state computation run on its state, takes them under it),
-a jump to a join point takes the join point's body, a bind's computation is evaluated (by a
-rule, by the kernel's `whnf`, or by walking it), an `if` takes the branch its condition decides, a `match` the branch its
-discriminants' values select, and the walk ends at `pure a`, with `?v := a`. Where no rule applies to a term the kernel
-can't evaluate, its projections of constructor applications are reduced; a condition still undecided reduces a subterm,
-under a sort the kernel can't reduce, whose weak-head form is a constructor application, and failing that a `match` in
-it whose discriminants evaluate to constructors. Each step's proof is a term the kernel rechecks; nothing is unfolded into
-both arms of a branch. A constant in `block`, or one whose definition reads one, or a term whose reduction would force
-`Array.qsort`, is never handed to the kernel's `whnf`: its application is unfolded and walked instead.
+after the rules rewrite it; a `let` applied to arguments, a state's computation for one, takes them into its body), a
+jump to a join point takes the join point's body, a bind's computation is evaluated (by a rule, by the kernel's `whnf`,
+or by walking it), an `if` takes the branch its condition decides, a `match` the branch its discriminants' values
+select, and the walk ends at `pure a`, with `?v := a`. A value outside `Except` that no rule or `whnf` gives takes the
+same steps (a local function's body, an `if`, a `match`). Where no rule applies to a term the kernel can't evaluate, its
+projections of constructor applications are reduced. A condition the kernel doesn't decide is rewritten, β-reduced and
+its matches reduced first; one still undecided reduces a subterm, under a sort the kernel can't reduce, whose weak-head
+form is a constructor application, and failing that a `match` in it whose discriminants evaluate to constructors. Each
+step's proof is a term the kernel rechecks; nothing is unfolded into both arms of a branch. A constant in `block`, or one
+whose definition reads one, or a term whose reduction would force `Array.qsort`, is never handed to the kernel's `whnf`:
+its application is unfolded and walked instead.
 -/
 
 namespace Fwd
@@ -149,9 +151,10 @@ meta partial def ctorVal? (s : Expr) : MetaM (Option Expr) := do
     return none
   | _ => return none
 
-/-- `e` with each projection of a constructor application, let-bound or in place, replaced by its field,
-definitionally. -/
-meta def projReduceAll (e : Expr) : MetaM Expr :=
+/-- `e` with each projection of a let-bound constructor application replaced by its field, definitionally; with `all`,
+in a closed `e` too. -/
+meta def projReduce (e : Expr) (all := false) : MetaM Expr := do
+  if !all && !e.hasFVar then return e
   Meta.transform e (post := fun e => do
     match e with
     | .proj sn i s =>
@@ -172,20 +175,15 @@ meta def projReduceAll (e : Expr) : MetaM Expr :=
       unless v.getAppNumArgs == ci.numParams + ci.numFields do return .continue
       return .visit (mkAppN (v.getArg! (ci.numParams + info.i)) (args.extract (info.numParams + 1) args.size)))
 
-/-- `e` with each projection of a let-bound constructor application replaced by its field, definitionally. -/
-meta def projReduce (e : Expr) : MetaM Expr := do
-  if !e.hasFVar then return e
-  projReduceAll e
-
 /-- `(e', e = e')` by `projReduce`, `none` if it changes nothing. -/
 meta def projStep (e : Expr) : MetaM (Option (Expr × Expr)) := do
   let e' ← projReduce e
   if e' == e then return none
   return some (e', ← hint (← mkEqRefl e) (← mkEq e e'))
 
-/-- `(e', e = e')` by `projReduceAll`, `none` if it changes nothing. -/
+/-- `(e', e = e')` by `projReduce` with `all`, `none` if it changes nothing. -/
 meta def projAllStep (e : Expr) : MetaM (Option (Expr × Expr)) := do
-  let e' ← projReduceAll e
+  let e' ← projReduce e (all := true)
   if e' == e then return none
   return some (e', ← hint (← mkEqRefl e) (← mkEq e e'))
 
@@ -272,6 +270,19 @@ meta partial def closeSide (mv : MVarId) : M Bool := do
       if ← kdefeq a' b' then
         mv.assign (← mkEqTrans pa (← mkEqSymm pb))
         return true
+      let a2 ← projReduce (← zetaReduce a) (all := true)
+      let b2 ← projReduce (← zetaReduce b) (all := true)
+      if (a2 != a || b2 != b) && (← kdefeq a2 b2) then
+        mv.assign (← hint (← mkEqRefl a) t)
+        return true
+  if !t.hasMVar && (← exprTainted t) then
+    let t2 ← projReduce (← zetaReduce t) (all := true)
+    if t2 != t && !(← exprTainted t2) then
+      if let some inst ← (synthInstance? (mkApp (mkConst ``Decidable) t2)) then
+        let d ← kwhnf (mkApp2 (mkConst ``Decidable.decide) t2 inst)
+        if d.isConstOf ``Bool.true then
+          mv.assign (← hint (mkApp3 (mkConst ``of_decide_eq_true) t2 inst (← mkEqRefl (mkConst ``Bool.true))) t)
+          return true
   if !t.hasMVar && !(← exprTainted t) then
     if let some inst ← (synthInstance? (mkApp (mkConst ``Decidable) t)) then
       let d ← kwhnf (mkApp2 (mkConst ``Decidable.decide) t inst)
@@ -485,7 +496,52 @@ meta partial def evalVal (x : Expr) : M (Expr × Expr) := do
     let (w, q) ← evalVal x2
     return (w, ← mkEqTrans p q)
   if isExcept then return ← walkIt ()
+  if x'.getAppFn.isFVar then
+    if let some v ← x'.getAppFn.fvarId!.getValue? then
+      let x2 := (v.betaRev x'.getAppRevArgs).headBeta
+      let (w, q) ← evalVal x2
+      return (w, ← mkEqTrans (← hint (← mkEqRefl x) (← mkEq x x2)) q)
+  if x'.isAppOfArity ``ite 5 || x'.isAppOfArity ``dite 5 then
+    let c := x'.getArg! 1
+    let inst := x'.getArg! 2
+    let (pos, hc) ← decideCond c inst
+    let lα := x'.getAppFn.constLevels!
+    let α := x'.getArg! 0
+    let t := x'.getArg! 3
+    let e := x'.getArg! 4
+    let (x2, p) ← if x'.isAppOfArity ``ite 5 then
+        if pos then pure (t, mkAppN (mkConst ``if_pos lα) #[c, inst, hc, α, t, e])
+        else pure (e, mkAppN (mkConst ``if_neg lα) #[c, inst, hc, α, t, e])
+      else
+        if pos then pure (t.beta #[hc], mkAppN (mkConst ``dif_pos lα) #[c, inst, hc, α, t, e])
+        else pure (e.beta #[hc], mkAppN (mkConst ``dif_neg lα) #[c, inst, hc, α, t, e])
+    let (w, q) ← evalVal x2
+    return (w, ← mkEqTrans p q)
+  if let some (x2, p) ← matchReduce x then
+    let (w, q) ← evalVal x2
+    return (w, ← mkEqTrans p q)
   throwError "fwd: no value for{indentExpr x}"
+
+/-- The constructor application `d` with each field of an `Except` type evaluated (`evalVal`), through nested
+constructor applications, and `d = d'`; none where no field is. -/
+meta partial def evalFields (d : Expr) : M (Option (Expr × Expr)) := do
+  let .const c _ := d.getAppFn | return none
+  let some (.ctorInfo ci) := (← getEnv).find? c | return none
+  let mut cur := d
+  let mut pf : Option Expr := none
+  for j in [ci.numParams:d.getAppNumArgs] do
+    let a ← instantiateMVars (cur.getArg! j)
+    let ty ← inferType a
+    let ctor ← isCtorApp a
+    let exc := (← whnfR ty).isAppOfArity ``Except 2
+    let r ← if ctor then evalFields a else if exc then some <$> evalVal a else pure none
+    let some (v, h) := r | continue
+    let args := cur.getAppArgs
+    let motive ← withLocalDeclD `y ty fun y => mkLambdaFVars #[y] (mkAppN cur.getAppFn (args.set! j y))
+    let q ← mkCongrArg motive h
+    cur := mkAppN cur.getAppFn (args.set! j v)
+    pf := some (← match pf with | some p => mkEqTrans p q | none => pure q)
+  return pf.map fun p => (cur, p)
 
 /-- Walk the goal `m = r` to its end. -/
 meta partial def walk (g0 : MVarId) : M Unit := do
@@ -544,6 +600,9 @@ meta partial def step (g : MVarId) : M (Option MVarId) := do
         | none => g.replaceTargetDefEq tgt
       let (_, g2) ← g1.intro1P
       return some g2
+  if let .letE n t v b nd := lhs.getAppFn then
+    let args := lhs.getAppArgs.map (·.liftLooseBVars 0 1)
+    return some (← g.replaceTargetDefEq (eqT (.letE n t v (mkAppN b args) nd) rhs))
   let fn := lhs.getAppFn
   if fn.isFVar then
     if let some v ← fn.fvarId!.getValue? then
@@ -600,7 +659,20 @@ meta partial def step (g : MVarId) : M (Option MVarId) := do
         mi := { mi with discrs := mi.discrs.set! i v }
         cur := mi.toExpr
         pf := some (← match pf with | some q => mkEqTrans q c | none => pure c)
-    match ← reduceMatcher? cur with
+    let mut red ← reduceMatcher? cur
+    unless (red matches .reduced _) do
+      for i in [0:mi.discrs.size] do
+        let d ← instantiateMVars mi.discrs[i]!
+        if let some (v, hd) ← evalFields d then
+          let m0 := mi
+          let motive ← withLocalDeclD `y (← inferType d) fun y =>
+            mkLambdaFVars #[y] ({ m0 with discrs := m0.discrs.set! i y }).toExpr
+          let c ← mkCongrArg motive hd
+          mi := { mi with discrs := mi.discrs.set! i v }
+          cur := mi.toExpr
+          pf := some (← match pf with | some q => mkEqTrans q c | none => pure c)
+      red ← reduceMatcher? cur
+    match red with
     | .reduced e =>
       match pf with
       | some p => return ← next p e
@@ -649,6 +721,30 @@ meta partial def step (g : MVarId) : M (Option MVarId) := do
   let why ← taintReason lhs
   throwError "fwd: stuck at{indentExpr lhs}\ntainted by {why}"
 
+/-- `e` with each `match` whose discriminants the kernel takes to constructors replaced by the branch they select,
+definitionally. -/
+meta partial def matchReduce (e : Expr) : M (Option (Expr × Expr)) := do
+  let e' ← Meta.transform e (pre := fun x => do
+    let some mi ← matchMatcherApp? x | return .continue
+    let mut ds := #[]
+    for d in mi.discrs do
+      if d.hasLooseBVars || (← exprTainted d) then return .continue
+      let v ← kwhnf d
+      unless ← isCtorApp v do return .continue
+      ds := ds.push v
+    match ← reduceMatcher? { mi with discrs := ds }.toExpr with
+    | .reduced r => return .visit r.headBeta
+    | _ => return .continue)
+  let e' ← Core.betaReduce e'
+  if e' == e then return none
+  return some (e', ← hint (← mkEqRefl e) (← mkEq e e'))
+
+/-- `e` with every β-redex reduced, definitionally. -/
+meta partial def betaStep (e : Expr) : M (Option (Expr × Expr)) := do
+  let e' ← Core.betaReduce e
+  if e' == e then return none
+  return some (e', ← hint (← mkEqRefl e) (← mkEq e e'))
+
 /-- Decide `c`: a hypothesis, a rule, or the kernel. -/
 meta partial def decideCond (c inst : Expr) : M (Bool × Expr) := do
   let c ← instantiateMVars c
@@ -687,9 +783,13 @@ meta partial def decideCond (c inst : Expr) : M (Bool × Expr) := do
       | some s => pure (some s)
       | none => match ← rewriteIn cur with
         | some s => pure (some s)
-        | none => match ← normStep cur with
+        | none => match ← betaStep cur with
           | some s => pure (some s)
-          | none => matchStep cur
+          | none => match ← matchReduce cur with
+            | some s => pure (some s)
+            | none => match ← normStep cur with
+              | some s => pure (some s)
+              | none => matchStep cur
     let some (c2, p) := s | break
     pc := some (← match pc with | some q => mkEqTrans q p | none => pure p)
     cur := c2

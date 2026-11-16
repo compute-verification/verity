@@ -24,6 +24,7 @@ from verity_vllm.correspondence.reader_for_acquire import (
     AcquireCorrespondence,
     RuntimeTree,
 )
+from verity_vllm.log import write
 from verity_vllm.records.schema_ids import CALL_BOUNDARIES_GATE_SCHEMA
 
 CALL_BOUNDARIES_SCHEMA = CALL_BOUNDARIES_GATE_SCHEMA
@@ -82,7 +83,7 @@ def main(a: CallBoundariesOptions) -> int:
     rec["seconds"] = round(time.perf_counter() - t0, 1)
     if a.out:
         Path(a.out).write_text(json.dumps(rec, indent=1) + "\n")
-    print(call_boundaries_line(rec), flush=True)
+    write(call_boundaries_line(rec))
     return 0 if rec["pass"] else 1
 
 

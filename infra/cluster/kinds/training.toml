@@ -7,7 +7,7 @@
 # (training_slowdown/sandbox.py), as a user other than root, who holds no capability to undo them; on a node that
 # refuses the namespaces, or as root, the job fails before it trains, with the reason.
 #
-# A job's time: the kind caps none. What ends a run is its own --max-min, through the lease. A config that states
+# A job's time: the kind limits none. What ends a run is its own --max-min, through the lease. A config that states
 # `budget.minutes` asks for its own (from the budget), and where that passes max_wall_min the queue warns and refuses
 # nothing, as for every rule on a kind (infra/cluster/src/cluster/kinds.py); max_wall_min is the time of a job whose
 # config states none.

@@ -19,8 +19,8 @@ public import Proofs.Flock.Claims.Bridge.Transports
 
 /-! The run-to-live-game bridge: the coin distribution (`Coins`), the public-coin verifier of a game and its run path by path
 (`OfGame`), the transport of `Claims.run`'s probabilities to the live game's (`Transport`), and Flock's live session as
-that verifier, with the transport at it (`Live`), and that verifier deciding by flock-verify `--zk`, chained to the old
-transfer (`LiveZk`), and by plain flock-verify, chained to the old salted transfer (`LivePlain`). `Committed`: `--zk`'s
+that verifier, with the transport at it (`Live`), and that verifier deciding by verity-verify-proof `--zk`, chained to the old
+transfer (`LiveZk`), and by plain verity-verify-proof, chained to the old salted transfer (`LivePlain`). `Committed`: `--zk`'s
 coins committed at `Hello` and opened round by round are within the coin tree's hiding distance `δ_hide` of coins flipped
 after each message, and `Hm96Tree` bounds it by `2 k δ₁` from `Hm96Hiding`. `Custody`: `Deploy.V --zk`'s custody checks
 make the last message's record a record of the run's live outcome (`RecordsLiveZKJ`), so its accepting runs are the old

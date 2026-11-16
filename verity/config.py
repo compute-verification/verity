@@ -4,10 +4,11 @@
     format = "verity/config/v0"
     protocols = ["sampled-proofs", "pouw", "inference-only"]    the subprotocols, by their names
     [workload]  name, params                         the computation audited, and its public shape
-    [service]   law                                  the proof system's selection law (no ε, δ or threshold)
+    [service]   law                                  the proof system's sampling design (no ε, δ or threshold)
     [program]   commit                               the commit of the auditor-trusted code the parties run
     [params."<id>"]                                  a listed subprotocol's public structural parameters
     [[party]]   name, machine, principal             machine: `local`, or a name `verity run --on` gives
+    [[pin]]     party, protocol, scheme, key-sha512  an auditor's device key, optional: see below
     [[channel]] from, to, messages, after            after: the messages sent before this channel's
 
 A file states only its choices: a subprotocol's parameters and the workload's default to what the subprotocol or the
@@ -15,17 +16,27 @@ workload declares (``default_params``), and `check` returns the configuration wi
 covers, so stating a default changes no hash.
 
 The subprotocols a configuration lists that the composite takes (a `Component`'s ``product``) are exactly one
-composite's (`COMPOSITES`): onsite's, or remote's (sampled proofs, the inference-only policy and Pearl+'s run verdict,
-``pearl-plus``). Protocol soundness covers only those two, and `check` refuses any set that is no composite's
+composite's (`COMPOSITES`): onsite's, or remote's (SPOT, the inference-only policy and Pearl+'s run verdict,
+``pearl-plus``). Protocol soundness covers only those two. `check` also reads onsite's two smaller sets, each a
+deployment with an id of its own (`UNACCEPTED`), which `verity run` doesn't run yet, and refuses any other set
 (``composite``), H1's development composite's among them.
 
 What a protocol declares (`Component`: its id, the workload hooks it needs, the subprotocols it requires, its parties and
 channels as its manifest's `Role`s and `Channel`s, the parties that must share a machine, its parameters' schema and the
-service laws it runs under) and what a workload declares (`Workload`: the hooks it provides, its parties as `Role`s, its
-parameters' schema) are handed in by the caller: this module imports no protocol and no workload. `check` refuses by
+sampling designs it runs under) and what a workload declares (`Workload`: the hooks it provides, its parties as `Role`s,
+its parameters' schema) are handed in by the caller: this module imports no protocol and no workload. `check` refuses by
 name (`verity.channel.Refused`) an unknown key or version, a subprotocol whose requirements aren't listed or whose
 needs the workload doesn't provide, a set of subprotocols that is no composite's, a party or channel other than the
 declared ones, and a placement the declarations forbid.
+
+A pin is the key the auditor pinned for one of its devices: the party as the configuration names it (never a host,
+which the deploy bindings hold), the listed subprotocol whose sessions the key signs (one party may hold a key for each),
+the signature scheme's id (`SCHEMES`) and the SHA-512 of the public key, 128 lowercase hex digits. `check` refuses by name
+a malformed hash (``pin-hash``), an unknown scheme (``pin-scheme``), a party the configuration doesn't list
+(``pin-party``) or that isn't the auditor's (``pin-principal``), a subprotocol that isn't listed or doesn't declare the
+party (``pin-protocol``), and a second pin of one party for one subprotocol (``repeated-pin``). The checked
+configuration holds its pins sorted by party and subprotocol, and no ``pin`` key when the file states none, so a
+configuration without pins hashes as one of a format without them would. The pins are inside what the hash covers.
 
 The canonical form is canonical JSON of the checked configuration (sorted keys, no whitespace, UTF-8, no float), and its
 hash is SHA-512 of that form without the transport-only fields (`TRANSPORT`: a party's address and listen port, and
@@ -48,19 +59,31 @@ from verity.channel import Refused
 FORMAT = "verity/config/v0"
 #: the transport-only fields, by table: hashed out, so that they can change without changing the configuration
 TRANSPORT = {"party": ("address", "listen"), "channel": ("dial",)}
-TOP = ("channel", "format", "params", "party", "program", "protocols", "service", "workload")
-#: the top-level keys a file must state: the rest default (``params``: each subprotocol's own)
+TOP = ("channel", "format", "params", "party", "pin", "program", "protocols", "service", "workload")
+#: the top-level keys a file must state: the rest default (``params``: each subprotocol's own; ``pin``: none)
 REQUIRED = ("channel", "format", "party", "program", "protocols", "service", "workload")
 PARTY = ("machine", "name", "principal", *TRANSPORT["party"])
+PIN = ("key-sha512", "party", "protocol", "scheme")
 CHANNEL = ("after", "from", "messages", "to", *TRANSPORT["channel"])
+#: the signature schemes a pinned key may be of, by id: LMS over SHA-512 (`verity.commitments.domains`'s
+#: ``LMS_SHA512_N64_W1_H20``, which this module doesn't load)
+SCHEMES = ("lms-sha512/n64-w1-h20/v0",)
+#: the principal whose devices a pin may name
+AUDITOR = "auditor"
 LOCAL = "local"
 #: the composites, by id: the subprotocols each composes, by name (`Core.Composites.ofIds`): onsite and remote (v1,
 #: Pearl+'s run verdict its work), the only two protocol soundness covers
 COMPOSITES = {"verity/onsite/v0": ("bandwidth", "certifier", "inference-only", "pous", "pouw", "sampled-proofs",
                                     "wipe"),
               "verity/remote/v1": ("inference-only", "pearl-plus", "sampled-proofs")}
+#: onsite's two smaller sets, by id (`demos/onsite_network.toml`, `demos/onsite_compute.toml`): each a deployment of its
+#: own with its own claim, so that an accepted one is never read as onsite. No composite `Core.Composites.ofIds` accepts
+#: is one, so `check` reads and hashes them and `verity run` runs neither (`NotImplementedError`)
+UNACCEPTED = {"verity/onsite-network/v0": ("certifier", "sampled-proofs", "wipe"),
+              "verity/onsite-compute/v0": ("certifier", "inference-only", "pouw", "sampled-proofs", "wipe")}
 _COMMIT = re.compile(r"[0-9a-f]{40}")
 _NAME = re.compile(r"[a-z][a-z0-9-]*")
+_SHA512 = re.compile(r"[0-9a-f]{128}")
 
 
 def _no_params(params: Mapping[str, Any]) -> dict[str, Any]:
@@ -72,7 +95,7 @@ def _no_params(params: Mapping[str, Any]) -> dict[str, Any]:
 @dataclass(frozen=True)
 class Component:
     """What a protocol declares for a configuration. ``params`` checks its parameters (the file's, over
-    ``default_params``) and returns them normalized; ``law`` refuses a service law the subprotocol can't run under
+    ``default_params``) and returns them normalized; ``sampling_design`` refuses a sampling design the subprotocol can't run under
     (raising `Refused`), given its checked parameters; ``product``: whether the composite takes it (`COMPOSITES`)."""
 
     name: str
@@ -85,8 +108,8 @@ class Component:
     product: bool = True
     params: Callable[[Mapping[str, Any]], dict[str, Any]] = _no_params
     default_params: Mapping[str, Any] = field(default_factory=dict)
-    law: Callable[[str, Mapping[str, Any]], None] | None = None
-    default_law: str | None = None
+    sampling_design: Callable[[str, Mapping[str, Any]], None] | None = None
+    default_sampling_design: str | None = None
 
 
 @dataclass(frozen=True)
@@ -221,10 +244,10 @@ def check(cfg: Mapping[str, Any], components: Mapping[str, Component],
     params = {c.id: c.params({**c.default_params, **_table(f"[params.\"{c.id}\"]", given.get(c.id, {}))})
               for c in listed}
     _keys("[service]", cfg["service"], ("law",), ("law",))
-    law = _str("service.law", cfg["service"]["law"])
+    sampling_design = _str("service.law", cfg["service"]["law"])
     for c in listed:
-        if c.law is not None:
-            c.law(law, params[c.id])
+        if c.sampling_design is not None:
+            c.sampling_design(sampling_design, params[c.id])
     _keys("[program]", cfg["program"], ("commit",), ("commit",))
     if not _COMMIT.fullmatch(str(cfg["program"]["commit"])):
         raise Refused("commit", f"[program] commit is a 40-hex git commit, not {cfg['program']['commit']!r}")
@@ -233,20 +256,23 @@ def check(cfg: Mapping[str, Any], components: Mapping[str, Component],
     except ValueError as e:
         raise Refused("declaration", str(e)) from None
     got = _parties(cfg["party"], parties)
+    pins = _pins(cfg.get("pin", []), got, listed)
     links = _channels(cfg["channel"], channels)
     for c in listed:
         for a, b in c.colocated:
             if got[a]["machine"] != got[b]["machine"]:
                 raise Refused("placement", f"{c.name} runs {a} and {b} on one machine, not on {got[a]['machine']} and "
                                            f"{got[b]['machine']}")
-    return {**dict(cfg), "protocols": list(names), "params": params, "workload": {"name": wname, "params": wparams},
-            "party": list(got.values()), "channel": links}
+    out = {**{k: v for k, v in cfg.items() if k != "pin"}, "protocols": list(names), "params": params,
+           "workload": {"name": wname, "params": wparams}, "party": list(got.values()), "channel": links}
+    return {**out, "pin": pins} if pins else out
 
 
 def composite(names: Sequence[str], components: Mapping[str, Component]) -> str:
-    """The id of the composite the listed subprotocols ``names`` make (`COMPOSITES`), or `Refused` (``composite``)."""
+    """The id of the composite the listed subprotocols ``names`` make (`COMPOSITES`), or of onsite's smaller set they are
+    (`UNACCEPTED`), or `Refused` (``composite``)."""
     taken = sorted(n for n in names if components[n].product)
-    for cid, want in COMPOSITES.items():
+    for cid, want in {**COMPOSITES, **UNACCEPTED}.items():
         if taken == sorted(want):
             return cid
     covered = " and ".join(f"{c} ({', '.join(w)})" for c, w in COMPOSITES.items())
@@ -284,6 +310,36 @@ def _parties(entries: Any, declared_parties: Mapping[str, Role]) -> dict[str, di
     if missing := sorted(set(declared_parties) - set(got)):
         raise Refused("missing-party", ", ".join(missing))
     return got
+
+
+def _pins(entries: Any, parties: Mapping[str, Mapping[str, Any]], listed: Sequence[Component]) -> list[dict]:
+    """The pins (module docstring) checked against the configuration's ``parties`` and the ``listed`` subprotocols,
+    sorted by party and subprotocol."""
+    if not isinstance(entries, list):
+        raise Refused("type", "[[pin]] is an array of tables")
+    declares = {c.name: {r.name for r in c.parties} for c in listed}
+    got: dict[tuple[str, str], dict] = {}
+    for i, p in enumerate(entries):
+        _keys(f"[[pin]] {i}", p, PIN, PIN)
+        party, protocol = _str(f"[[pin]] {i} party", p["party"]), _str(f"[[pin]] {i} protocol", p["protocol"])
+        if party not in parties:
+            raise Refused("pin-party", f"{party}: the configuration has no such party (its parties: "
+                                       f"{', '.join(parties)})")
+        if (principal := parties[party]["principal"]) != AUDITOR:
+            raise Refused("pin-principal", f"{party} is the {principal}'s: a pin is a key of the {AUDITOR}'s device")
+        if party not in declares.get(protocol, ()):
+            raise Refused("pin-protocol", f"{party}'s key for {protocol}: no listed subprotocol of that name declares "
+                                          f"{party} (those that do: "
+                                          f"{', '.join(n for n, ps in declares.items() if party in ps) or 'none'})")
+        if (party, protocol) in got:
+            raise Refused("repeated-pin", f"{party} for {protocol}")
+        if p["scheme"] not in SCHEMES:
+            raise Refused("pin-scheme", f"{party} for {protocol}: scheme {p['scheme']!r} (known: {', '.join(SCHEMES)})")
+        if not isinstance(p["key-sha512"], str) or not _SHA512.fullmatch(p["key-sha512"]):
+            raise Refused("pin-hash", f"{party} for {protocol}: key-sha512 is a public key's SHA-512 in 128 lowercase "
+                                      f"hex digits, not {p['key-sha512']!r}")
+        got[party, protocol] = dict(p)
+    return [got[k] for k in sorted(got)]
 
 
 def _channels(entries: Any, declared_channels: Mapping[tuple[str, str], Channel]) -> list[dict]:
@@ -335,8 +391,8 @@ def digest(cfg: Mapping[str, Any]) -> str:
 def new(workload: str, protocols: Sequence[str], components: Mapping[str, Component],
         workloads: Mapping[str, Workload], commit: str, machine: str = LOCAL) -> dict[str, Any]:
     """A configuration of ``protocols`` on ``workload`` that states only its choices: every declared party on
-    ``machine``, the declared channels, and the first default law of a listed subprotocol that every listed subprotocol
-    runs under; parameters are left to their defaults. Refused by name like `check`, which it passes."""
+    ``machine``, the declared channels, and the first default sampling design of a listed subprotocol that every listed
+    subprotocol runs under; parameters are left to their defaults. Refused by name like `check`, which it passes."""
     if unknown := [n for n in protocols if n not in components]:
         raise Refused("unknown-protocol", f"{', '.join(unknown)} (known: {', '.join(components)})")
     if workload not in workloads:
@@ -347,9 +403,9 @@ def new(workload: str, protocols: Sequence[str], components: Mapping[str, Compon
         parties, channels = declared(listed, w)
     except ValueError as e:
         raise Refused("declaration", str(e)) from None
-    law = next((d for d in (c.default_law for c in listed) if d and _runs_under(d, listed)), "")
+    sampling_design = next((d for d in (c.default_sampling_design for c in listed) if d and _runs_under(d, listed)), "")
     cfg = {"format": FORMAT, "protocols": list(protocols), "workload": {"name": workload},
-           "service": {"law": law}, "program": {"commit": commit},
+           "service": {"law": sampling_design}, "program": {"commit": commit},
            "party": [{"name": p, "machine": machine, "principal": r.principal} for p, r in parties.items()],
            "channel": [{"from": c.sender, "to": c.receiver, "messages": list(c.messages),
                         **({"after": list(c.after)} if c.after else {})} for c in channels.values()]}
@@ -357,11 +413,11 @@ def new(workload: str, protocols: Sequence[str], components: Mapping[str, Compon
     return cfg
 
 
-def _runs_under(law: str, listed: Sequence[Component]) -> bool:
+def _runs_under(sampling_design: str, listed: Sequence[Component]) -> bool:
     try:
         for c in listed:
-            if c.law is not None:
-                c.law(law, c.params(dict(c.default_params)))
+            if c.sampling_design is not None:
+                c.sampling_design(sampling_design, c.params(dict(c.default_params)))
     except Refused:
         return False
     return True
@@ -399,11 +455,12 @@ def render(cfg: Mapping[str, Any], header: Sequence[str] = ()) -> str:
         _render_table(lines, k, cfg[k])
     for pid, p in cfg.get("params", {}).items():
         _render_table(lines, f"params.{_bare(pid)}", p)
-    for k in ("party", "channel"):
-        for e in cfg[k]:
+    for k in ("party", "pin", "channel"):
+        for e in cfg.get(k, []):
             lines += ["", f"[[{k}]]", *(f"{_bare(f)} = {_value(v)}" for f, v in e.items())]
     return "\n".join(lines) + "\n"
 
 
-__all__ = ["CHANNEL", "COMPOSITES", "FORMAT", "LOCAL", "PARTY", "REQUIRED", "TOP", "TRANSPORT", "Component", "Workload",
-           "canonical", "check", "composite", "declared", "digest", "hashed", "new", "parse", "render"]
+__all__ = ["AUDITOR", "CHANNEL", "COMPOSITES", "FORMAT", "LOCAL", "PARTY", "PIN", "REQUIRED", "SCHEMES", "TOP",
+           "TRANSPORT", "UNACCEPTED", "Component", "Workload", "canonical", "check", "composite", "declared", "digest",
+           "hashed", "new", "parse", "render"]

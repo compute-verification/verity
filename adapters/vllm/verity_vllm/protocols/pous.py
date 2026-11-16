@@ -1,32 +1,34 @@
 """POUS as a protocol option: the served model's linear weights held only as ``C* = P2-Enc(W, salt)`` at P2's registered
-point (``p2-16448/v4``), decoded at every use, and each period's audit of what is held (`verity.protocols.accounting.pous.verifier.period`),
+point (``p2-16448/v4``), decoded at every use, and each period's audit of what is held (`verity.protocols.resource_accounting.memory.pous.verifier.period`),
 with the memory challenger a party of its own on the challenger host
-(`verity.protocols.accounting.pous.device.challenger_party`).
+(`verity.protocols.resource_accounting.memory.pous.attester.challenger_party`). The store, its commitment, encode and decode, and the
+period are PoUS's prover's (`verity.protocols.resource_accounting.memory.pous.prover.weight_store`); this module finds the weights in
+vLLM's model, attaches the decode to its layers and holds the option.
 
 * **W** is the weight of every ``LinearBase`` layer as the engine holds it (int8 [N, K] on the ``int8_exact`` target),
   deduplicated by storage, in module order and named by its first holder, in the store's frozen layout
-  (`benchmarks/pous/p2_v1/store.py`): each tensor from a block boundary over ⌈size / payload⌉ blocks, its last block zero
+  (`verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/store.py`): each tensor from a block boundary over ⌈size / payload⌉ blocks, its last block zero
   past its end, and ``W`` zero to whole segments of the point's ``2^16`` blocks (`TensorLayout.of_ranges`).  Scales,
   embeddings and norms are not in ``W``.  These are the tensors the Commit registers, read through `weights_view` while
   released.
 * **Commit** (`commit_weights`, the composition's first phase, model untouched): ``setup.commit(params, W)`` before any
   salt exists, recorded in the composition record's ``weights``.
 * **Install**, in order: the same commitment recomputed, refused if the weights changed since; the salt
-  ``setup.draw_salt(source, commitment)``, ``source`` the auditor's coin flipped after the commitment (``salt_source``);
-  ``C*`` encoded a segment at a time (`store.GpuEncoder`, ``libp2v1.so`` on the weights' GPU, which checks its own decode
-  of the whole segment; `store.CpuEncoder` on the CPU), two blocks of each segment held to ``W`` by the reference decode,
-  and ``C*`` held as one [blocks, block_bytes] uint8 tensor on the weights' device; the memory challenger's table of it
-  and the root over that table (`VerifierKey.from_row_digests`).  Then, through the option's tagged `Hooks`: the
-  plaintext released (a service whose stop restores ``W`` decoded from ``C*``), each layer's ``quant_method.apply``
-  wrapped (the layer's weight decoded from ``C*`` into a fresh buffer, by the store's load
-  `p2_v1.load.EncodedRows.decode_into` on the GPU, refusing what the reference refuses, or the scheme's codec on the CPU,
+  ``setup.sample_salt(source, commitment)``, ``source`` the auditor's coin flipped after the commitment
+  (``salt_source``); ``C*`` encoded a segment at a time (`store.GpuEncoder`, ``libp2v1.so`` on the weights' GPU, which
+  checks its own decode of the whole segment; `store.CpuEncoder` on the CPU), two blocks of each segment held to ``W``
+  by the reference decode, and ``C*`` held as one [blocks, block_bytes] uint8 tensor on the weights' device; the memory
+  challenger's table of it and the root over that table (`VerifierKey.from_row_digests`).  Then, through the option's
+  tagged `Hooks`: the plaintext released (a service whose stop restores ``W`` decoded from ``C*``), each layer's
+  ``quant_method.apply`` wrapped (the layer's weight decoded from ``C*`` into a fresh buffer, by the store's load
+  `p2_store.load.EncodedRows.decode_into` on the GPU, refusing what the reference refuses, or the scheme's codec on the CPU,
   and the inner ``apply`` called with a proxy layer holding it), and the prover started last.  Uninstall runs newest
   first: prover, wrappers, then ``W`` restored; ``C*`` is freed after.
-* **The period** (`PousOption.audit`, `PousOption.leg`): `period.audit` of what setup published, the prover answering
+* **The period** (`PousOption.audit`, `PousOption.subprotocol`): `period_prover.audit` of what setup published, the prover answering
   each index from ``C*`` where it is held, and the verifier's answer: setup's own inputs tied to the run (`period.tie`,
   the public-encoder check of ``C*``), the run's check, and the bits an accepted run certifies (`period.certify`: 0 at a
-  point no certificate covers).  In `PousOption.leg` the memory challenger runs at ``period.json``'s ``challenger_host``
-  (`challenger_session.side_of`) and the Lean answers where the period's tools name it.
+  point no certificate covers).  In `PousOption.subprotocol` the memory challenger runs at ``period.json``'s ``challenger_host``
+  (`side_of`, which the caller that starts the run hands in) and the Lean answers where the period's tools name it.
 * **Composition:** installed after PoUW and around it, so PoUW's GEMM consumes the decoded weight.  An option that
   keeps a weight-derived copy resident across forwards is the selector's to refuse (``keeps_weight_copy``); POUS keeps
   only ``C*``.
@@ -35,7 +37,8 @@ with the memory challenger a party of its own on the challenger host
 
 Settings: ``salt_source`` (the auditor's coin: its hex, a callable of the commitment, or ``{"command": argv}``, a process
 that reads ``{"commitment", "manifest"}`` as one JSON line and prints ``{"source": HEX}``), ``p2_lib`` (``libp2v1.so``'s
-directory, built for the card by the store's ``benchmarks/pous/p2_v1/Makefile``; weights on a GPU need it) and
+directory, built for the card by the store's ``verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/Makefile``; weights on a GPU
+need it) and
 ``experimental`` (P2 is; `schemes.p2.EXPERIMENTAL` says why).
 
 Not here yet: TP (each rank's shard), the head and the embedding (not ``LinearBase``), and a setup case that scales:
@@ -44,41 +47,32 @@ period.
 """
 from __future__ import annotations
 
-import hashlib
-import importlib
-import importlib.machinery
-import importlib.util
-import json
-import secrets
-import subprocess
-import sys
-import time
 from collections.abc import Callable, Hashable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity_vllm import config
+from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
+
 from verity_vllm.protocols.interface import Context, Option, Target
 
 NAME = "pous"
 DEFAULT_SCHEME = "p2-16448/v4"
 SETTINGS = ("salt_source", "p2_lib", "experimental")
 COVERS = "linears"
-#: P2's encoded weights store, loaded as the package ``p2_v1``: ``store.py``, which POUS encodes with, ``load.py``, its
-#: decode at use on the GPU, and its CUDA library's wrapper.
-P2_V1 = config.ROOT.parent.parent / "benchmarks/pous/p2_v1"
 
 
 def schemes() -> tuple[str, ...]:
-    from verity.protocols.accounting.pous.verifier import schemes as pous_schemes
+    from verity.protocols.resource_accounting.memory.pous.verifier import (
+        schemes as pous_schemes,
+    )
     return tuple(sorted(pous_schemes.REGISTRY))
 
 
 def _source_refusal(source: Any) -> str | None:
     """Why ``salt_source`` can't give the auditor's coin, or None."""
     if source is None:
-        return ("no salt_source: the salt is setup.draw_salt(source, commitment), the source the auditor's coin drawn after "
+        return ("no salt_source: the salt is setup.sample_salt(source, commitment), the source the auditor's coin drawn after "
                 "the commitment (its hex, a callable of the commitment, or {'command': argv})")
     if callable(source):
         return None
@@ -94,7 +88,9 @@ def _source_refusal(source: Any) -> str | None:
 
 
 def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
-    from verity.protocols.accounting.pous.verifier import schemes as pous_schemes
+    from verity.protocols.resource_accounting.memory.pous.verifier import (
+        schemes as pous_schemes,
+    )
 
     out, own = [], ctx.settings_of(NAME)
     stray = sorted(set(own) - set(SETTINGS))
@@ -119,39 +115,6 @@ def linear_types() -> tuple[type, ...]:
     """The layer types whose weights POUS encodes, from vLLM (imported here, never at import time)."""
     from vllm.model_executor.layers.linear import LinearBase
     return (LinearBase,)
-
-
-def _base(scheme: str) -> Any:
-    """The point's geometry at one segment: the registered scheme's (its width, prime and ``2^16`` blocks a segment)."""
-    from verity.protocols.accounting.pous.verifier import schemes as pous_schemes
-    return pous_schemes.get(scheme).params
-
-
-def _package(name: str, directory: Path) -> None:
-    """``directory`` as the package ``name``, loaded once from its files, so its modules import one another as they do in
-    their own tree while ``sys.path`` stays as it is."""
-    if name in sys.modules:
-        return
-    init = directory / "__init__.py"
-    if init.exists():
-        spec = importlib.util.spec_from_file_location(name, init, submodule_search_locations=[str(directory)])
-    else:
-        spec = importlib.machinery.ModuleSpec(name, None, is_package=True)
-        spec.submodule_search_locations = [str(directory)]
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    try:
-        if spec.loader is not None:
-            spec.loader.exec_module(module)
-    except BaseException:
-        del sys.modules[name]
-        raise
-
-
-def _p2(module: str) -> Any:
-    """``store`` or ``load``, a module of `P2_V1` (as ``p2_v1.store``, ``p2_v1.load``)."""
-    _package("p2_v1", P2_V1)
-    return importlib.import_module(f"p2_v1.{module}")
 
 
 # --- the weights ------------------------------------------------------------------------------------------------------------
@@ -185,213 +148,16 @@ def _plaintext(entry: str, model: Any) -> tuple[list[tuple[str, Any]], dict[int,
     return layers, names, tensors
 
 
-def _flat(t: Any) -> Any:
-    import torch
-    return t.detach().reshape(-1).view(torch.uint8)
-
-
-def _layout(scheme: str, tensors: Mapping[str, Any]) -> Any:
-    """The store's frozen layout over ``tensors``: each from a block boundary, in order (`p2_v1/store.py`'s ``build``)."""
-    from verity.protocols.accounting.pous.verifier.layout import TensorLayout
-
-    base = _base(scheme)
-    pb, block, ranges = base.payload_bytes, 0, []
-    for name, t in tensors.items():
-        size = t.numel() * t.element_size()
-        ranges.append((name, block * pb, size))
-        block += -(-size // pb)
-    return TensorLayout.of_ranges(base, ranges)
-
-
-def _segment(layout: Any, flats: Mapping[str, Any], s: int) -> bytes:
-    """Segment ``s`` of ``W``: each tensor's bytes that fall in it at their place, zeros elsewhere."""
-    seg = layout.params.segment_bytes
-    lo, hi = s * seg, (s + 1) * seg
-    out = bytearray(seg)
-    for p in layout.tensors:
-        a, b = max(lo, p.offset), min(hi, p.offset + p.size)
-        if a < b:
-            out[a - lo:b - lo] = flats[p.name][a - p.offset:b - p.offset].cpu().numpy().tobytes()
-    return bytes(out)
-
-
-def _commit(scheme: str, tensors: Mapping[str, Any]) -> tuple[Any, bytes]:
-    """``W``'s layout and the commitment to it (no salt exists yet), ``W`` streamed a segment at a time."""
-    from verity.protocols.accounting.pous.verifier import setup
-
-    layout = _layout(scheme, tensors)
-    flats = {n: _flat(t) for n, t in tensors.items()}
-    return layout, setup.commit(layout.params, (_segment(layout, flats, s) for s in range(layout.params.segments)))
-
-
-def _layout_digest(layout: Any) -> str:
-    return hashlib.sha256(json.dumps(layout.manifest(), sort_keys=True).encode()).hexdigest()
-
-
 def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
     """Phase 1 of a composition: the commitment to the plaintext ``W`` of record, with the model untouched and before any
     salt exists (`setup.commit`).  `install` refuses weights that no longer match it."""
     _, _, tensors = _plaintext(f"{NAME}:{scheme}", target.model)
-    layout, commitment = _commit(scheme, tensors)
+    layout, commitment = ws.commit(scheme, tensors)
     return {"scheme": scheme, "covers": COVERS, "tensors": len(tensors), "bytes": sum(p.size for p in layout.tensors),
-            "commitment": commitment.hex(), "layout": _layout_digest(layout)}
-
-
-def _source(entry: str, setting: Any, commitment: bytes, params: Any) -> tuple[bytes, str]:
-    """The auditor's coin for the salt, sampled after ``commitment``, and how it came."""
-    if callable(setting):
-        return bytes(setting(commitment)), "callable"
-    if isinstance(setting, str):
-        return bytes.fromhex(setting), "settings"
-    line = json.dumps({"commitment": commitment.hex(), "manifest": params.manifest()}, sort_keys=True) + "\n"
-    p = subprocess.run([str(a) for a in setting["command"]], input=line, capture_output=True, text=True)
-    if p.returncode != 0:
-        raise RuntimeError(f"{entry}: the salt source's command exited {p.returncode}: {p.stderr.strip()[-400:]}")
-    return bytes.fromhex(json.loads(p.stdout.strip().splitlines()[-1])["source"]), "command"
+            "commitment": commitment.hex(), "layout": ws.layout_digest(layout)}
 
 
 # --- the encoded store ---------------------------------------------------------------------------------------------------
-
-@dataclass(eq=False)
-class _Store:
-    """``C*`` on the weights' device (``rows``, block ``i`` its row ``i``), the point, the layout, what setup published
-    and the memory challenger's table of ``C*``."""
-
-    point: Any
-    layout: Any
-    commitment: bytes
-    salt: bytes
-    salt_source: str
-    rows: Any
-    digests: bytes
-    root: bytes
-    encode: dict[str, Any] = field(default_factory=dict)
-    staged: Any = None
-
-    @property
-    def params(self) -> Any:
-        return self.point.params
-
-    def published(self) -> Any:
-        from verity.protocols.accounting.pous.verifier import run as R
-        return R.Setup(self.params.blocks, self.commitment, self.root, self.salt)
-
-    def block(self, i: int) -> bytes:
-        if self.rows is None:
-            raise RuntimeError("C* is freed")
-        if not 0 <= i < self.params.blocks:
-            raise IndexError(f"block {i} is outside C*'s {self.params.blocks}")
-        return self.rows[i].cpu().numpy().tobytes()
-
-    def segments(self) -> list[list[bytes]]:
-        """``C*`` segment by segment, as setup sends it."""
-        host, n = self.rows.cpu().numpy(), self.params.blocks_per_segment
-        return [[host[s * n + v].tobytes() for v in range(n)] for s in range(self.params.segments)]
-
-    def held(self) -> Any:
-        """`period.EncodedStore` of what this setup left: the setup case is built from ``C*`` as held now."""
-        from verity.protocols.accounting.pous.verifier import period
-        return period.EncodedStore(self.point, self.published(), _Blocks(self), self.digests,
-                                   period.setup_case(self.params, self.commitment, self.salt, self.segments()))
-
-    def decode_cpu(self, offset: int, size: int) -> bytes:
-        """``W`` bytes ``[offset, offset + size)`` by the scheme's codec, from the segments they fall in; refused when a
-        block isn't a codeword or the range's last block is nonzero past it."""
-        from verity.protocols.accounting.pous.verifier.schemes.p2 import decode_segment
-
-        q = self.params
-        n, pb, seg = q.blocks_per_segment, q.payload_bytes, q.segment_bytes
-        end = -(-(offset + size) // pb) * pb
-        s0, s1 = offset // seg, -(-end // seg)
-        data = b"".join(decode_segment(q, None, self.salt, s, [self.block(s * n + v) for v in range(n)])
-                        for s in range(s0, s1))
-        lo = offset - s0 * seg
-        if any(data[lo + size:end - s0 * seg]):
-            raise ValueError(f"the block holding W byte {offset + size - 1} is nonzero past the tensor's end")
-        return data[lo:lo + size]
-
-    def free(self) -> None:
-        self.rows = self.staged = None
-
-
-class _Blocks:
-    """``C*``'s blocks as `period.EncodedStore` reads them, from where they are held."""
-
-    def __init__(self, store: _Store) -> None:
-        self.store = store
-
-    def __len__(self) -> int:
-        return self.store.params.blocks
-
-    def __getitem__(self, i: int) -> bytes:
-        return self.store.block(i)
-
-
-def _encode(layout: Any, tensors: Mapping[str, Any], commitment: bytes, salt: bytes, salt_source: str,
-            lib: str | None) -> _Store:
-    """``C*`` of ``W`` under ``salt`` on the weights' device, each segment's encode checked (module docstring)."""
-    import torch
-
-    from verity.protocols.accounting.pous.device import memory_challenger as mc
-    from verity.protocols.accounting.pous.verifier import period
-    from verity.protocols.accounting.pous.verifier import run as R
-    from verity.protocols.accounting.pous.verifier.schemes.p2 import expand_prefix
-    from verity.protocols.accounting.pous.verifier.verifier import DIGEST_BYTES, VerifierKey
-
-    S = _p2("store")
-    q = layout.params
-    n, nb, pb = q.blocks_per_segment, q.block_bytes, q.payload_bytes
-    device = next(iter(tensors.values())).device
-    if device.type == "cuda":
-        if not lib:
-            raise ValueError("the weights are on a GPU and no p2_lib names libp2v1.so's directory "
-                             "(benchmarks/pous/p2_v1/Makefile builds it)")
-        enc = S.GpuEncoder(q, salt, str(lib), torch.cuda.current_device() if device.index is None else device.index)
-    else:
-        enc = S.CpuEncoder(q, salt)
-    prefix, flats = expand_prefix(q, salt), {name: _flat(t) for name, t in tensors.items()}
-    rows = torch.empty(q.blocks, nb, dtype=torch.uint8, device=device)
-    digests, device_s, t0 = bytearray(), 0.0, time.perf_counter()
-    for s in range(q.segments):
-        w_seg = _segment(layout, flats, s)
-        c_seg, extra = enc.encode(s, w_seg)
-        device_s += extra.get("encode_s", 0.0)
-        for j in S.spot_blocks(salt, s, n):
-            if S.decode_block(q, prefix, s * n + j, c_seg[j * nb:(j + 1) * nb]) != w_seg[j * pb:(j + 1) * pb]:
-                raise RuntimeError(f"segment {s} block {j}: the reference decode of C* is not W's payload")
-        rows[s * n:(s + 1) * n].copy_(torch.frombuffer(bytearray(c_seg), dtype=torch.uint8).view(n, nb))
-        digests += b"".join(mc.block_digest(c_seg[i * nb:(i + 1) * nb]) for i in range(n))
-    encode_s = time.perf_counter() - t0
-    root = VerifierKey.from_row_digests(q, salt, [bytes(digests[DIGEST_BYTES * i:DIGEST_BYTES * (i + 1)])
-                                                  for i in range(q.blocks)]).root
-    timing = {"encoder": extra.get("encoder"), "device": extra.get("device", str(device)), "wall_s": round(encode_s, 3),
-              "device_encode_s": round(device_s, 3), "root_s": round(time.perf_counter() - t0 - encode_s, 3),
-              "blocks_per_s": round(q.blocks / encode_s, 1) if encode_s else None}
-    return _Store(R.Point(q, period.K, period.LIMIT_NS), layout, commitment, salt, salt_source, rows, bytes(digests), root,
-                  timing)
-
-
-def _decoder(store: _Store, lib: str | None) -> Callable[[Any, Any], None]:
-    """``decode(placement, out)``: the placed tensor's bytes from ``C*`` into ``out`` (flat uint8, on ``C*``'s device)."""
-    import torch
-
-    if store.rows.device.type == "cuda":
-        from verity.protocols.accounting.pous.verifier.schemes.p2 import expand_prefix
-
-        Ld = _p2("load")
-        store.staged = Ld.EncodedRows(Ld.StoreLayout(store.params, (), expand_prefix(store.params, store.salt)), store.rows, 0,
-                                str(lib))
-
-        def decode(p: Any, out: Any) -> None:
-            store.staged.decode_into(p.offset, p.size, out, end=True)
-            store.staged.check()
-        return decode
-
-    def decode_host(p: Any, out: Any) -> None:
-        if p.size:
-            out.copy_(torch.frombuffer(bytearray(store.decode_cpu(p.offset, p.size)), dtype=torch.uint8))
-    return decode_host
-
 
 class _Proxy:
     """The layer the inner ``apply`` sees: the decoded weight, and every other attribute the layer's own."""
@@ -406,10 +172,10 @@ class _Proxy:
 
 @dataclass(eq=False)
 class PousOption(Option):
-    """The installed option: `answer` is the prover's reply to a challenge, `audit` and `leg` a period's audit of what it
+    """The installed option: `answer` is the prover's reply to a challenge, `audit` and `subprotocol` a period's audit of what it
     holds; ``weights()`` (`Option.decoded`) is the released plaintext decoded from ``C*``."""
 
-    store: _Store | None = None
+    store: ws.Store | None = None
     names: dict[int, str] = field(default_factory=dict)
     answered: int = 0
     periods: int = 0
@@ -418,69 +184,31 @@ class PousOption(Option):
         if self.closed or self.store is None:
             raise RuntimeError(f"{self.name} is closed: its prover is stopped")
         self.answered += 1
-        return self.store.block(index)
+        return ws.answer(self.store, index)
 
     def prover(self, blocks: Sequence[bytes]) -> Callable[[int], bytes]:
-        """`period.Prover`: each index answered from ``C*`` where it is held (``blocks`` is the same store)."""
+        """`period_prover.Prover`: each index answered from ``C*`` where it is held (``blocks`` is the same store)."""
         return self.answer
 
     def audit(self, node: str, coins: bytes, **kw: Any) -> Any:
-        """`period.audit` of this setup on ``node`` under the auditor's ``coins``; ``kw`` as `period.audit`'s (the prover
-        by default this option's)."""
-        from verity.protocols.accounting.pous.verifier import period
-
+        """`weight_store.audit` of this setup on ``node`` under the auditor's ``coins``; ``kw`` as `period_prover.audit`'s (the
+        prover by default this option's)."""
         if self.closed or self.store is None:
             raise RuntimeError(f"{self.name} is closed: nothing is held to audit")
         kw.setdefault("prover", self.prover)
-        return period.audit(node, self.store.held(), coins, **kw)
+        return ws.audit(self.store, node, coins, **kw)
 
-    def leg(self, period_dir: str | Path, node: str, out: str | Path, *, schemes: Mapping[str, Any] | None = None,
-            protocol: str | None = None) -> dict[str, Any]:
-        """One period's PoUS of what this option holds, as `period.leg` runs it for a node's records: the memory
-        challenger at ``period.json``'s ``challenger_host`` (`challenger_session.side_of`, its side's key and session log
-        in ``pous-challenger`` beside the periods when it is this node), fresh coins, and the Lean's answer where the
-        period's tools name ``pous-run-protocol`` (and, at the first period, ``pous-setup``), which must agree with the
-        Python's.  Writes ``out/pous.case.json``, ``out/pous.json`` and, at the first period, ``out/pous-setup.case.json``;
-        returns the answer, its profile carrying where each party ran (`challenger_session.placement`).  ``schemes`` and
-        ``protocol`` are the signatures the verifier accepts and the id it answers under (a test signer's in tests)."""
-        from verity.protocols.accounting.pous.device import challenger_session as CS
-        from verity.protocols.accounting.pous.device import memory_challenger as mc
-        from verity.protocols.accounting.pous.verifier import period
+    def subprotocol(self, period_dir: str | Path, node: str, out: str | Path, *, side_of: Callable[..., Any],
+            schemes: Mapping[str, Any] | None = None, protocol: str | None = None) -> dict[str, Any]:
+        """One period's PoUS of what this option holds (`weight_store.subprotocol`), the first this option's ``fresh``."""
 
-        doc = json.loads((Path(period_dir) / "period.json").read_text())
-        tools = doc.get("tools", {})
-        party = CS.side_of(doc, node, Path(period_dir).parent / "pous-challenger")
-        where = CS.placement(node, party.host)
-        fresh, answered = self.periods == 0, self.answered
-        t = time.monotonic()
-        got = self.audit(node, secrets.token_bytes(64), party=party, schemes=mc.SCHEMES if schemes is None else schemes,
-                         protocol=period.PROTOCOL if protocol is None else protocol)
-        seconds = round(time.monotonic() - t, 2)
-        self.periods += 1
-        answer, lean = got.answer, {}
-        if "pous-run-protocol" in tools:
-            lean["run"] = period.serve(tools["pous-run-protocol"], [got.case])[0]
-            if {k: v for k, v in lean["run"].items() if k != "reason"} != {k: v for k, v in answer.items() if k != "reason"}:
-                raise RuntimeError(f"pous-run-protocol answered {lean['run']}, the Python {answer}")
-            answer = lean["run"]
-        if fresh and "pous-setup" in tools:
-            lean["setup"] = period.serve(tools["pous-setup"], [got.setup_case])[0]
-            if lean["setup"]["verdict"] != "accept":
-                raise RuntimeError(f"pous-setup refused the setup the Python accepted: {lean['setup']}")
-        if answer["profile"] is not None:
-            answer = answer | {"profile": answer["profile"] | {"placement": where}}
-        out = Path(out)
-        out.mkdir(parents=True, exist_ok=True)
-        (out / "pous.case.json").write_text(json.dumps(got.case, sort_keys=True))
-        if fresh:
-            (out / "pous-setup.case.json").write_text(json.dumps(got.setup_case, sort_keys=True))
-        q = self.store.params
-        (out / "pous.json").write_text(json.dumps({
-            "answer": answer, "blocks": q.blocks, "eps": str(got.eps), "lean": lean, "placement": where,
-            "rounds_answered": self.answered - answered, "s_bits": got.public("s_bits"), "seconds": seconds,
-            "setup": {"fresh": fresh, "encode": self.store.encode if fresh else None}, "w_bytes": q.w_bytes},
-            sort_keys=True, indent=1))
-        return answer
+        def audited(node: str, coins: bytes, **kw: Any) -> Any:
+            got = self.audit(node, coins, **kw)
+            self.periods += 1
+            return got
+
+        return ws.subprotocol(self.store, period_dir, node, out, audit=audited, side_of=side_of, fresh=self.periods == 0,
+                      answered=lambda: self.answered, schemes=schemes, protocol=protocol)
 
 
 def _qualnames(entry: str, model: Any, layers: list[tuple[str, Any]], names: dict[int, str]) -> dict[str, list[str]]:
@@ -507,9 +235,10 @@ def _wrapper(names: Mapping[int, str], decoded: Callable[[str], Any]) -> Callabl
 
 def install(scheme: str, target: Target) -> PousOption:
     import torch
-
-    from verity.protocols.accounting.pous.verifier import period, setup
-    from verity.protocols.accounting.pous.verifier.schemes import p2 as P2
+    from verity.protocols.resource_accounting.memory.pous.verifier import period, setup
+    from verity.protocols.resource_accounting.memory.pous.verifier.schemes import (
+        p2 as P2,
+    )
 
     entry = f"{NAME}:{scheme}"
     own = target.context.settings_of(NAME)
@@ -518,20 +247,20 @@ def install(scheme: str, target: Target) -> PousOption:
         raise ValueError(f"{entry}: {why}")
     layers, names, tensors = _plaintext(entry, target.model)
     qualnames = _qualnames(entry, target.model, layers, names)
-    layout, commitment = _commit(scheme, tensors)
+    layout, commitment = ws.commit(scheme, tensors)
     committed = target.weight_commitments.get(entry)
     if committed is not None and committed.get("commitment") != commitment.hex():
         raise ValueError(f"{entry}: the weights changed after the composition committed to them (commit_weights)")
-    source, how = _source(entry, own["salt_source"], commitment, layout.params)
-    store = _encode(layout, tensors, commitment, setup.draw_salt(source, commitment), how, own.get("p2_lib"))
-    decode = _decoder(store, own.get("p2_lib"))
+    source, how = ws.salt_from(entry, own["salt_source"], commitment, layout.params)
+    store = ws.encode(layout, tensors, commitment, setup.sample_salt(source, commitment), how, own.get("p2_lib"))
+    decode = ws.decoder(store, own.get("p2_lib"))
     meta = {name: (tuple(t.shape), t.dtype) for name, t in tensors.items()}
     device = store.rows.device
 
     def tensor(name: str) -> Any:
         shape, dtype = meta[name]
         out = torch.empty(shape, dtype=dtype, device=device)
-        decode(layout.placement(name), _flat(out))
+        decode(layout.placement(name), ws.flat(out))
         return out
 
     def plaintext() -> dict[str, Any]:
@@ -564,13 +293,13 @@ def install(scheme: str, target: Target) -> PousOption:
     q = store.params
     opt.commits = {"scheme": scheme, "commitment": commitment.hex(), "salt": store.salt.hex(),
                    "storage_root": store.root.hex(), "blocks": q.blocks, "segments": q.segments,
-                   "layout": _layout_digest(layout)}
+                   "layout": ws.layout_digest(layout)}
     cert, gaps = period.gaps(store.point)
     opt.details = {"salt_source": how, "layers": len(layers), "tensors": len(meta),
                    "tensor_bytes": sum(p.size for p in layout.tensors),
                    "used_blocks": sum(-(-p.size // q.payload_bytes) for p in layout.tensors), "blocks": q.blocks,
                    "c_star_bytes": q.blocks * q.block_bytes, "device": str(device), "encode": store.encode,
-                   "decode": "p2_v1.load (libp2v1.so)" if device.type == "cuda" else "schemes.p2, CPU",
+                   "decode": "p2_store.load (libp2v1.so)" if device.type == "cuda" else "schemes.p2, CPU",
                    "certifies": period.certify(store.point), "certificate": None if cert is None else cert.theorem,
                    "gaps": gaps, "experimental": P2.EXPERIMENTAL}
     return opt

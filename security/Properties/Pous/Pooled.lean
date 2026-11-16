@@ -24,7 +24,7 @@ any one under the device model, so `PeriodHeld` bounds each window whatever came
 * `PooledShortLog_honest`: its premises hold at an honest pooled period, and its count condition at one `δ'`.
 * `PooledShortLog_nontrivial`: a verifier that accepts every window (`acceptAll`) fails its conclusion.
 
-`FixedBefore` is a named assumption (`pous-ring-device`, `trusted-host`): the memory challenger releases each
+`FixedBefore` is a named assumption (`pous-ring-device`, `trusted-device`): the memory challenger releases each
 window's capacity coins only after that window's commitment is in. `δ'` is `δ_PoUS`, the failure probability of PoUS
 over a monitoring period, a public deployment parameter that no component publishes.
 -/
@@ -39,18 +39,18 @@ open scoped ENNReal
 
 set_option exponentiation.threshold 20000
 
-/-- `pous-ring-device` and `trusted-host`, per monitoring period: **each window is fixed before its capacity coins**. At
+/-- `pous-ring-device` and `trusted-device`, per monitoring period: **each window is fixed before its capacity coins**. At
 the period's capacity coins `x`, window `u`'s joint run `r u x`, its audit `P u x` and the other audits' coins `o u x`
 read only the earlier windows' coins `x i`, `i < u`.
 
 The memory challenger enforces it. Window `u`'s capacity coins are flipped on the auditor's device, which runs its stated
-code on a host the prover doesn't control (`trusted-host`), and are released only after the window's commitment is in:
+code on a host the prover doesn't control (`trusted-device`), and are released only after the window's commitment is in:
 each index after the previous answer, the coin root only after the last answer and the signature (`pous-ring-device`:
 the coins flipped online, after the server's state is fixed). So nothing fixed for window `u` reads its own coins, while
 the earlier windows' coins are out by then and may be read. -/
-def FixedBefore {U : ℕ} {ι α ΩW ΩQ : Type} [Fintype α] {d : Fin U → Accounting.Device ι}
+def FixedBefore {U : ℕ} {ι α ΩW ΩQ : Type} [Fintype α] {d : Fin U → ResourceAccounting.Device ι}
     (r : (u : Fin U) → (Fin U → (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) →
-      Accounting.Run (d u) α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+      ResourceAccounting.Run (d u) α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
     (P : Fin U → (Fin U → (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) → Audits ΩW ΩQ)
     (o : Fin U → (Fin U → (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) → ΩW × ΩQ) : Prop :=
   (∀ u x x', (∀ i, i < u → x i = x' i) → r u x = r u x') ∧
@@ -59,9 +59,9 @@ def FixedBefore {U : ℕ} {ι α ΩW ΩQ : Type} [Fintype α] {d : Fin U → Acc
 
 /-- Window `u` is accepted with no break in its data while its capacity account held fewer than `S · len` bit-ticks
 (`PeriodHeld`'s event), at the period's capacity coins `x`. -/
-def ShortAccepted {U : ℕ} {ι α ΩW ΩQ : Type} [Fintype α] {d : Fin U → Accounting.Device ι}
+def ShortAccepted {U : ℕ} {ι α ΩW ΩQ : Type} [Fintype α] {d : Fin U → ResourceAccounting.Device ι}
     (r : (u : Fin U) → (Fin U → (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) →
-      Accounting.Run (d u) α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+      ResourceAccounting.Run (d u) α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
     (P : Fin U → (Fin U → (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) → Audits ΩW ΩQ)
     (o : Fin U → (Fin U → (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) → ΩW × ΩQ) (S : ℝ)
     (u : Fin U) (x : Fin U → (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) : Prop :=
@@ -90,9 +90,9 @@ free parameter of this statement, which holds at every `δ' > 0` (a smaller `δ'
 publishes it. -/
 def PooledShortLog : Prop :=
   ∀ D Q L : ℕ, Pous.P2.Assumptions.P2RingAuditSecure D Q L →
-    ∀ (U : ℕ) (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] (d : Fin U → Accounting.Device ι)
+    ∀ (U : ℕ) (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] (d : Fin U → ResourceAccounting.Device ι)
       (r : (u : Fin U) → (Fin U → (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) →
-        Accounting.Run (d u) α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+        ResourceAccounting.Run (d u) α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
       (P : Fin U → (Fin U → (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) → Audits ΩW ΩQ)
       (o : Fin U → (Fin U → (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) → ΩW × ΩQ)
       (τ : Fin U → (Fin U → (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) → Strategy ΩW ΩQ)

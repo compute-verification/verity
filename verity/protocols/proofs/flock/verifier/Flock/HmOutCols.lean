@@ -1,12 +1,13 @@
-/-
+module
+
+public import Flock.Circuit
+
+/-!
 `HmOut.delta`'s output columns made once. `HmOut.outCol` (`Flock/HmRow.lean`) compiles at three arguments, so `delta`'s
 `let col := outCol c` rebuilds its tables at every column it reads: an array of the circuit's output words, filled by a
 fold over every unit's leaves, once per output bit. `deltaWith` is `delta`'s body on the tables made once, given what it
 reads from `HmRow.lean`; `HmRow.lean`'s `@[csimp]` lemma `HmOut.delta_eq_fast` makes compiled code run it.
 -/
-module
-
-public import Flock.Circuit
 
 @[expose] public section
 

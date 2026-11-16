@@ -37,3 +37,8 @@ def tenant() -> str:
 def jump() -> str | None:
     """USER@HOST a machine registered at a private address (10.*) is reached through, $FLEET_JUMP; no file holds it."""
     return os.environ.get("FLEET_JUMP") or None
+
+
+def card_daily_usd() -> float:
+    """The card's daily spend, in USD, the loop warns at 80% of: $FLEET_CARD_DAILY_USD; unset or empty, 0 (no warning)."""
+    return float(os.environ.get("FLEET_CARD_DAILY_USD") or 0)

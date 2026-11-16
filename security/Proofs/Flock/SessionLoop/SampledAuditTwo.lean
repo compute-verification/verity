@@ -26,7 +26,7 @@ conjunct of `Loop.ZkAnyAt` (`SessionLoopZKAnyDeployed`), and `ideal_hm96_stream`
 
 The released bytes here are the session loop's messages (`ZKOut`), not the held relay's frames (`ZKOutRelay`), which
 are what reaches the auditor. The interior registration here is one of the stream's, under the boundary's key. The
-value service's interior commits (`Flock.Firewall.Salts.interiorAnswer`) put it in a stream of its own, under a key of
+value service's interior commits (`Flock.ZkServer.Salts.interiorAnswer`) put it in a stream of its own, under a key of
 its own. `Flock.Guarantees.SampledAuditTwoChosenAnyRelayDeployed` covers that interior and those frames, at a
 first-stage sample the auditor chooses.
 -/

@@ -3,9 +3,10 @@
 
 [[metric]]
 id = "benchmarks/prover-gpus-per-serving-gpu"
-title = "GLM-5.3 under SPOT[Flock] at its sampling plan of record: prover GPUs for each serving GPU"
+title = "Prover GPUs per serving GPU"
 owner = "benchmarks"
 unit = "prover GPUs a serving GPU"
+axis = "GPUs proving for each GPU serving GLM-5.3, under SPOT at its chosen sampling plan."
 better = "lower"
 command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run --extra torch-cpu python benchmarks/prove/run.py --system spot --workload glm53"
 every = "7d"
@@ -13,9 +14,10 @@ goal = "benchmarks/proof-system-performance"
 
 [[metric]]
 id = "benchmarks/prover-gpus-per-serving-gpu-at-record"
-title = "GLM-5.3 at the exfiltration run of record's design (the planner's world year at 10% of total compute): prover GPUs for each serving GPU, modeled"
+title = "Prover GPUs per serving GPU, modeled"
 owner = "benchmarks"
 unit = "prover GPUs a serving GPU"
+axis = "GPUs proving for each GPU serving GLM-5.3, modeled at the design the exfiltration capacity assumes."
 better = "lower"
 command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run --extra torch-cpu python benchmarks/prove/run.py --system spot --workload glm53"
 every = "7d"
@@ -24,9 +26,10 @@ tags = ["modeled"]
 
 [[metric]]
 id = "benchmarks/prover-gpu-seconds-per-token"
-title = "GLM-5.3 under SPOT[Flock] at its sampling plan of record: prover GPU-seconds for each served token"
+title = "Prover GPU-seconds per token"
 owner = "benchmarks"
 unit = "prover GPU-seconds a served token"
+axis = "GPU-seconds of proving for each token GLM-5.3 serves, under SPOT."
 better = "lower"
 command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run --extra torch-cpu python benchmarks/prove/run.py --system spot --workload glm53"
 every = "7d"
@@ -34,9 +37,10 @@ goal = "benchmarks/proof-system-performance"
 
 [[metric]]
 id = "benchmarks/lean-verifier-seconds-per-token"
-title = "GLM-5.3 under SPOT[Flock] at its sampling plan of record: the Lean verifier's seconds for each served token"
+title = "Verifier seconds per token"
 owner = "benchmarks"
 unit = "Lean verifier seconds a served token"
+axis = "Seconds the Lean verifier spends on each token GLM-5.3 serves, under SPOT."
 better = "lower"
 command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run --extra torch-cpu python benchmarks/prove/run.py --system spot --workload glm53"
 every = "7d"
@@ -44,10 +48,49 @@ goal = "benchmarks/proof-system-performance"
 
 [[metric]]
 id = "benchmarks/proof-bytes-per-token"
-title = "GLM-5.3 under SPOT[Flock] at its sampling plan of record: proof bytes for each served token"
+title = "Proof bytes per token"
 owner = "benchmarks"
 unit = "proof bytes a served token"
+axis = "Bytes of proof for each token GLM-5.3 serves, under SPOT."
 better = "lower"
 command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run --extra torch-cpu python benchmarks/prove/run.py --system spot --workload glm53"
 every = "7d"
 goal = "benchmarks/proof-system-performance"
+
+# `run.py layers`'s three: under each, the Flock layer (member "flock"), the zero-knowledge layer (member "zero
+# knowledge") and last the sampling layer with no member, the metric's own reading (benchmarks/prove/README.md's "The
+# proof benchmark by layer"). The runs named are each layer's run of record: served runs of layer 0's 880 RoPE heads of
+# Llama 3.2 1B int8, from commits not on main, until runs from a clone of main replace them.
+[[metric]]
+id = "benchmarks/proof-layer-prover-seconds"
+title = "Prover time a sampled block"
+owner = "benchmarks"
+unit = "s a proof block"
+axis = "Seconds Flock's prover spends on each sampled proof block of Llama 3.2 1B's served blocks, with zero knowledge at the sampling plan as served, with the Flock and zero-knowledge layers listed beside it as members."
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run --extra torch-cpu python benchmarks/prove/run.py layers --flock r20261115-230754-7a96 --zk r20261115-222836-b5bc --sampling r20261115-232508-db1d"
+every = "7d"
+goal = "proofs/layers-in-one-table"
+
+[[metric]]
+id = "benchmarks/proof-layer-lean-seconds"
+title = "Verifier time a sampled block"
+owner = "benchmarks"
+unit = "s a proof block"
+axis = "Seconds the Lean verifier spends on each sampled proof block of Llama 3.2 1B's served blocks, with zero knowledge at the sampling plan as served, with the Flock and zero-knowledge layers listed beside it as members."
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run --extra torch-cpu python benchmarks/prove/run.py layers --flock r20261115-230754-7a96 --zk r20261115-222836-b5bc --sampling r20261115-232508-db1d"
+every = "7d"
+goal = "proofs/layers-in-one-table"
+
+[[metric]]
+id = "benchmarks/proof-layer-proof-bytes"
+title = "Proof size a sampled block"
+owner = "benchmarks"
+unit = "bytes a proof block"
+axis = "Bytes of proof for each sampled proof block of Llama 3.2 1B's served blocks, with zero knowledge at the sampling plan as served, with the Flock and zero-knowledge layers listed beside it as members."
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run --extra torch-cpu python benchmarks/prove/run.py layers --flock r20261115-230754-7a96 --zk r20261115-222836-b5bc --sampling r20261115-232508-db1d"
+every = "7d"
+goal = "proofs/layers-in-one-table"
+

@@ -17,7 +17,7 @@ from pathlib import Path
 
 
 def miss(units: int, bad: int, s: int) -> float:
-    """The chance that s distinct draws of `units` miss all `bad` of them."""
+    """The chance that s distinct samples of `units` miss all `bad` of them."""
     if bad > units - min(s, units):
         return 0.0
     return math.exp(sum(math.log1p(-bad / (units - k)) for k in range(min(s, units))))
@@ -124,7 +124,7 @@ def main() -> int:
             print(json.dumps(rows, indent=1))
         for t in rows:
             print(f"skip 2^{t['log2_fraction']:.0f}: {t['rejected']}/{t['sessions']} rejected, predicted "
-                  f"{t['predicted_rejected']:.2f} ± {t['sd']:.2f} (z = {t['z']:.2f}); draws on dropped "
+                  f"{t['predicted_rejected']:.2f} ± {t['sd']:.2f} (z = {t['z']:.2f}); samples on dropped "
                   f"{t['draws_on_dropped']}/{t['draws']} against {t['expected_on_dropped']:.1f} expected; "
                   f"{t['other_failures']} rejected otherwise")
         return 0
@@ -142,7 +142,7 @@ def main() -> int:
               f"gamma(spec)={h['gamma_spec']} rejected_on_dropped={h['rejected_on_dropped']}")
     for t in r["skip"]:
         print(f"skip 2^{t['log2_fraction']:.0f} ({t['dropped_blocks']} blocks): {t['accepted']}/{t['sessions']} accepted, "
-              f"expected {t['expected_accepted']:.2f} ± {t['sd']:.2f}; draws on dropped {t['draws_on_dropped']}/{t['draws']} "
+              f"expected {t['expected_accepted']:.2f} ± {t['sd']:.2f}; samples on dropped {t['draws_on_dropped']}/{t['draws']} "
               f"= {t['hit_rate']:.3g} (F = {t['fraction']:.3g}); every rejection on a dropped block: "
               f"{t['rejections_all_on_dropped']}")
     return 0

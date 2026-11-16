@@ -15,9 +15,9 @@ set_option Elab.async false
 # The sampled proof blocks' returned outputs: the population's
 
 A sampled statement's outputs are `HmRow.drawn`'s: instance `r`'s `nOut` output words are proved unit `D.proved[r]`'s in
-the registered population's public file (`drawn_outputs`), which holds `n · nOut` words, each below `2^16`
+the registered population's public file (`sampled_outputs`), which holds `n · nOut` words, each below `2^16`
 (`loadPublic_outputs`). So at a proved unit's slot, region "out"'s output `j` of the slot's leaf is the population's
-(`outVal_drawn`), and a satisfying witness holds its bits at the slot's output columns (`out_drawn`; at a sampled proof block's
+(`outVal_sampled`), and a satisfying witness holds its bits at the slot's output columns (`out_sampled`; at a sampled proof block's
 site in its table's accepted statement, `out_site`).
 -/
 
@@ -28,8 +28,8 @@ open Flock Refine Model
 -- `walk_step` down the unfolded do-block that puts the sample in the population's header, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- **`HmRow.drawn`'s outputs**: the proved units' `nOut` output words, unit by unit. -/
-theorem drawn_outputs {c : Circuit} {pop pub : Public} {d : Lean.Json} (h : HmRow.drawn c pop d = .ok pub) :
-    ∃ D, Draw.UnitDraw.ofJson d = .ok D ∧ pub.outputs =
+theorem sampled_outputs {c : Circuit} {pop pub : Public} {d : Lean.Json} (h : HmRow.drawn c pop d = .ok pub) :
+    ∃ D, Draw.UnitSample.ofJson d = .ok D ∧ pub.outputs =
       D.proved.foldl (fun acc u => acc ++ pop.outputs.extract (u * c.outWords) (u * c.outWords + c.outWords)) #[] := by
   unfold HmRow.drawn at h
   dsimp only at h
@@ -72,15 +72,15 @@ theorem getD_lt_of_forall {a : Array ℕ} {B : ℕ} (h : ∀ x ∈ a, x < B) (hB
 /-- **Region "out"'s output at a proved unit's slot is the population's**: at block `o` and unit slot `k` whose instance
 `o · c.g + k / upv` is proved, output `j` of the slot's leaf (an output word below `nOut`) is proved unit
 `D.proved[o · c.g + k / upv]`'s in the population. -/
-theorem outVal_drawn {c : Circuit} {pop pub : Public} {d : Lean.Json} {D : Draw.UnitDraw}
-    (h : HmRow.drawn c pop d = .ok pub) (hD : Draw.UnitDraw.ofJson d = .ok D)
+theorem outVal_sampled {c : Circuit} {pop pub : Public} {d : Lean.Json} {D : Draw.UnitSample}
+    (h : HmRow.drawn c pop d = .ok pub) (hD : Draw.UnitSample.ofJson d = .ok D)
     (hsz : pop.outputs.size = pop.n * c.outWords) (hlt : ∀ u ∈ D.proved, u < D.population)
     {o k j : ℕ} (hr : o * c.g + k / c.upv < D.proved.size)
     (hlo : (c.leavesOut.getD (k % c.upv) #[])[j]! < c.outWords) :
     outVal c pub o k j =
       pop.outputs.getD (D.proved[o * c.g + k / c.upv] * c.outWords + (c.leavesOut.getD (k % c.upv) #[])[j]!) 0 := by
-  obtain ⟨D', hD', hpopn, hn, -, -⟩ := drawn_spec h
-  obtain ⟨D'', hD'', hout⟩ := drawn_outputs h
+  obtain ⟨D', hD', hpopn, hn, -, -⟩ := sampled_spec h
+  obtain ⟨D'', hD'', hout⟩ := sampled_outputs h
   rw [hD] at hD' hD''
   cases hD'
   cases hD''
@@ -98,11 +98,11 @@ the registered population's public file: in an untyped circuit whose unit return
 `k` (below `2^⌊log₂ count⌋`) whose instance `o · c.g + k / upv` is proved, the bit at column `16 j + t` of the slot's
 returned-output group is bit `t` of the population's output word `lo[j]` of unit `D.proved[o · c.g + k / upv]`, for the
 leaf's outputs `lo` (words below `nOut`, `hlo`), under `out_pinned`'s conditions on the output group. -/
-theorem out_drawn {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
+theorem out_sampled {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
     {tables : List (String × ByteArray)} {d : Lean.Json} {partition : Option Lean.Json} {program : Option ByteArray}
     {st : Stmt} (h : Stmt.setupH tags circuitFile publicFile coins tables (some d) partition program = .ok st)
     {pop : Public} (hpop : HmRow.loadPublic tags st.c publicFile = .ok pop)
-    {D : Draw.UnitDraw} (hD : Draw.UnitDraw.ofJson d = .ok D) (hlt : ∀ u ∈ D.proved, u < D.population)
+    {D : Draw.UnitSample} (hD : Draw.UnitSample.ofJson d = .ok D) (hlt : ∀ u ∈ D.proved, u < D.population)
     (L : FlockSoundness.Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
     (hregs : ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs)
     (ho : st.c.outNet = st.c.unitNet) (hty : st.c.typed = none)
@@ -118,13 +118,13 @@ theorem out_drawn {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Co
     bit ((L.model regs).block z o (inBlockOr st.c.kLog (outAddr st.c k j t))) =
       (pop.outputs.getD (D.proved[o.val * st.c.g + k / st.c.upv] * st.c.outWords +
         (st.c.leavesOut.getD (k % st.c.upv) #[])[j]!) 0).testBit t := by
-  obtain ⟨pop', hpop', hdr⟩ := setupH_drawn h
+  obtain ⟨pop', hpop', hdr⟩ := setupH_sampled h
   rw [hpop] at hpop'
   cases hpop'
   obtain ⟨hsz, h16⟩ := loadPublic_outputs hpop
-  rw [← outVal_drawn hdr hD hsz hlt hr (hlo j hj)]
+  rw [← outVal_sampled hdr hD hsz hlt hr (hlo j hj)]
   refine out_pinned L regs hregs (setupH_regions h) ho hty hz o hk hk2 hw hb (fun j' hj' => ?_) hfit hj ht
-  rw [outVal_drawn hdr hD hsz hlt hr (hlo j' hj')]
+  rw [outVal_sampled hdr hD hsz hlt hr (hlo j' hj')]
   exact getD_lt_of_forall h16 (Nat.two_pow_pos _) _
 
 variable {T : Model.Statement}
@@ -155,7 +155,7 @@ theorem out_site (a : Placed.Accepted T) {pop : Public} {o : Fin (2 ^ T.nbl)} {g
   dsimp only at hd hregs hpop hu hm hdv hk hk2 hw hb hlo hfit hj ho hty hu' ⊢
   subst hd
   obtain ⟨hr, rfl⟩ := Array.getElem?_eq_some_iff.1 hu
-  have := out_drawn h hpop hD hlt (setupH_layout ht' h) regs hregs ho hty hz o hk hk2 (by rw [hdv]; exact hr) hw
+  have := out_sampled h hpop hD hlt (setupH_layout ht' h) regs hregs ho hty hz o hk hk2 (by rw [hdv]; exact hr) hw
     (by rw [hm]; exact hb) (by rw [hm]; exact hlo) (by rw [hm]; exact hfit) (by rw [hm]; exact hj) ht
   simp only [hm, hdv] at this
   exact this

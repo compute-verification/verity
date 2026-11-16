@@ -10,9 +10,9 @@ sample them, so that the misses of a monitoring period's windows multiply. `Comp
 boundary trace, which the extractor outputs after it has seen the judged run's coins; this file is about the committed
 ones.
 
-1. **The footprint at values** (`wrongInAt`, `footprintAt`): `wrongIn` and `footprint` read a witness only through its
+1. **The footprint at values** (`incorrectInAt`, `footprintAt`): `incorrectIn` and `footprint` read a witness only through its
    values (`Wit.val`); these read the boundary values themselves, so a trace with no openings has a footprint.
-   `wrongAtBoundaryAt`: the replay blocks wrong at their boundary under those values, each holding an incorrect proof
+   `incorrectAtBoundaryAt`: the replay blocks wrong at their boundary under those values, each holding an incorrect proof
    block at every interior. It reads the boundary values only.
 2. **The committed traces.** The boundary's is `Compiled.regVal`: at each gate, what the run's extractions open there
    under the statement's roots most often, over the run's coins and the extractor's; it reads the statement, the prover
@@ -41,32 +41,32 @@ namespace Claims.Sampling
 
 open Classical in
 /-- **The incorrect proof blocks of cell `(ρ, t)` at boundary values `val` and interior values `ι`**: each is incorrect
-on replay block `ρ`'s values, its boundary's `val` and its interior's `ι` (`Prog.refIn` at the replay block). `wrongIn`
+on replay block `ρ`'s values, its boundary's `val` and its interior's `ι` (`Prog.refIn` at the replay block). `incorrectIn`
 is its case at a witness's values, `val = w.val H Cm s`. -/
-noncomputable def wrongInAt (s : AuditStatement) (Pt Pρ : Partition) (val : ℕ → Option Bool) (ρ t : ℕ)
+noncomputable def incorrectInAt (s : AuditStatement) (Pt Pρ : Partition) (val : ℕ → Option Bool) (ρ t : ℕ)
     (ι : ℕ → Bool) : Finset ℕ :=
   (cell Pt Pρ ρ t).filter fun v => ¬ ∃ u r, Pt.blocks[v]? = some u ∧ Pρ.blocks[ρ]? = some r ∧
     s.prog.Correct (s.prog.refIn r val ι) u
 
 /-- **The footprint at boundary values `val`** and interior values `ι`, one interior per replay block: cell `(ρ, t)`'s
-incorrect proof blocks (`wrongInAt`). `footprint` is its case at a witness's values. -/
+incorrect proof blocks (`incorrectInAt`). `footprint` is its case at a witness's values. -/
 noncomputable def footprintAt (s : AuditStatement) (Pt Pρ : Partition) (val : ℕ → Option Bool) (ι : ℕ → ℕ → Bool)
     (ρ t : ℕ) : ℕ :=
-  (wrongInAt s Pt Pρ val ρ t (ι ρ)).card
+  (incorrectInAt s Pt Pρ val ρ t (ι ρ)).card
 
 open Classical in
 /-- **The replay blocks wrong at their boundary** under boundary values `val`: each holds an incorrect proof block at
 every interior, so no interior committed after the first stage's coins hides it from the second stage. -/
-noncomputable def wrongAtBoundaryAt (s : AuditStatement) (Pt Pρ : Partition) (val : ℕ → Option Bool) : Finset ℕ :=
+noncomputable def incorrectAtBoundaryAt (s : AuditStatement) (Pt Pρ : Partition) (val : ℕ → Option Bool) : Finset ℕ :=
   (Finset.range Pρ.blocks.length).filter fun ρ =>
-    ∀ i : ℕ → Bool, ∃ t < Pt.strata.length, (wrongInAt s Pt Pρ val ρ t i).Nonempty
+    ∀ i : ℕ → Bool, ∃ t < Pt.strata.length, (incorrectInAt s Pt Pρ val ρ t i).Nonempty
 
 end Claims.Sampling
 
 namespace Claims.SamplingGeneric
 
 open Claims
-open Claims.Sampling (AuditStatement Partition InScopeTwo forkOn ownLog wrongInAt footprintAt wrongAtBoundaryAt)
+open Claims.Sampling (AuditStatement Partition InScopeTwo forkOn ownLog incorrectInAt footprintAt incorrectAtBoundaryAt)
 
 namespace CompiledTwo
 
@@ -91,13 +91,13 @@ open Classical in
 /-- **The committed interior** of replay block `ρ` at the prover's tape `ω` and the run's coins `r`, a definition nobody
 runs: at gate `g`, the value the extractions open there under `ρ`'s interior roots most often (`iopensAt`), over the
 second stage's coins and the extractor's coins, at `r`'s coins off the second stage (`true` on a tie, and where none
-opens `g`). It reads the statement, the prover, `ω` and `r` off `stage2` only, so the prover fixes it after the first
+opens `g`). It reads the statement, the prover, `ω` and `r` off `secondStage` only, so the prover fixes it after the first
 stage's coins and before the second stage's. -/
 noncomputable def iregVal (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (r : Fin (L.V.k x) → Coin) (ρ g : ℕ) : Bool :=
   let p : Bool → ℝ := fun b =>
     Pr fun ec : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
-      L.iopensAt H P x ω (forkOn (L.stage2 x) r ec.1) ec.2 ρ g = some b
+      L.iopensAt H P x ω (forkOn (L.secondStage x) r ec.1) ec.2 ρ g = some b
   decide (p false ≤ p true)
 
 /-! ## 3. The committed incorrect set -/
@@ -115,7 +115,7 @@ noncomputable def FregTwo (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type}
     match L.partition s, L.two s with
     | some Pt, some d =>
       (Finset.range d.part.blocks.length ×ˢ Finset.range Pt.strata.length).biUnion fun p =>
-        wrongInAt s Pt d.part (L.regVal H P x ω) p.1 p.2 (L.iregVal H P x ω r p.1)
+        incorrectInAt s Pt d.part (L.regVal H P x ω) p.1 p.2 (L.iregVal H P x ω r p.1)
     | _, _ => ∅
 
 /-! ## 4. The error -/
@@ -134,20 +134,20 @@ noncomputable def BconfTwo (H : Msg → Msg) (L : CompiledTwo Coin A) : FinderFa
       ne := ⟨(Classical.arbitrary _, fun _ => default, (fun _ => default, Classical.arbitrary _),
         (fun _ => default, Classical.arbitrary _))⟩
       out := fun q =>
-        findColl (ownLog H (run H P L.V x q.1) (L.runExt x s (forkOn (L.stage2 x) q.2.1 q.2.2.1.1)
-            (run H P L.V x q.1 (forkOn (L.stage2 x) q.2.1 q.2.2.1.1)).seen q.2.2.1.2) ++
-          ownLog H (run H P L.V x q.1) (L.runExt x s (forkOn (L.stage2 x) q.2.1 q.2.2.2.1)
-            (run H P L.V x q.1 (forkOn (L.stage2 x) q.2.1 q.2.2.2.1)).seen q.2.2.2.2))
+        findColl (ownLog H (run H P L.V x q.1) (L.runExt x s (forkOn (L.secondStage x) q.2.1 q.2.2.1.1)
+            (run H P L.V x q.1 (forkOn (L.secondStage x) q.2.1 q.2.2.1.1)).seen q.2.2.1.2) ++
+          ownLog H (run H P L.V x q.1) (L.runExt x s (forkOn (L.secondStage x) q.2.1 q.2.2.2.1)
+            (run H P L.V x q.1 (forkOn (L.secondStage x) q.2.1 q.2.2.2.1)).seen q.2.2.2.2))
       cost := fun q =>
-        (run H P L.V x q.1 (forkOn (L.stage2 x) q.2.1 q.2.2.1.1)).pLog.length +
-          (run H P L.V x q.1 (forkOn (L.stage2 x) q.2.1 q.2.2.1.1)).vLog.length +
-          (run H P L.V x q.1 (forkOn (L.stage2 x) q.2.1 q.2.2.2.1)).pLog.length +
-          (run H P L.V x q.1 (forkOn (L.stage2 x) q.2.1 q.2.2.2.1)).vLog.length +
-          ((L.runExt x s (forkOn (L.stage2 x) q.2.1 q.2.2.1.1)
-            (run H P L.V x q.1 (forkOn (L.stage2 x) q.2.1 q.2.2.1.1)).seen q.2.2.1.2).eval H
+        (run H P L.V x q.1 (forkOn (L.secondStage x) q.2.1 q.2.2.1.1)).pLog.length +
+          (run H P L.V x q.1 (forkOn (L.secondStage x) q.2.1 q.2.2.1.1)).vLog.length +
+          (run H P L.V x q.1 (forkOn (L.secondStage x) q.2.1 q.2.2.2.1)).pLog.length +
+          (run H P L.V x q.1 (forkOn (L.secondStage x) q.2.1 q.2.2.2.1)).vLog.length +
+          ((L.runExt x s (forkOn (L.secondStage x) q.2.1 q.2.2.1.1)
+            (run H P L.V x q.1 (forkOn (L.secondStage x) q.2.1 q.2.2.1.1)).seen q.2.2.1.2).eval H
               (run H P L.V x q.1)).2.1 +
-          ((L.runExt x s (forkOn (L.stage2 x) q.2.1 q.2.2.2.1)
-            (run H P L.V x q.1 (forkOn (L.stage2 x) q.2.1 q.2.2.2.1)).seen q.2.2.2.2).eval H
+          ((L.runExt x s (forkOn (L.secondStage x) q.2.1 q.2.2.2.1)
+            (run H P L.V x q.1 (forkOn (L.secondStage x) q.2.1 q.2.2.2.1)).seen q.2.2.2.2).eval H
               (run H P L.V x q.1)).2.1 }
 
 /-- **The committed form's error at two stages**: `Compiled.εreg`'s four terms and the committed interior's binding
@@ -186,12 +186,12 @@ def HeadlineTwo (H : Msg → Msg) (L : CompiledTwo Coin A) : Prop :=
 /-- **The miss at the replay blocks wrong at the committed boundary**: on a statement in scope whose first stage
 catches each replay block at rate `r₁` and whose second stage samples each cell at rate `r₂`, at every prover and tape,
 the run's sample holds no proof block of the committed incorrect set with probability at most `(1 − r₁·r₂)^{|W|}`, `W`
-the replay blocks wrong at the committed boundary trace (`wrongAtBoundaryAt`), which the tape fixes before any coin. -/
+the replay blocks wrong at the committed boundary trace (`incorrectAtBoundaryAt`), which the tape fixes before any coin. -/
 def MissTwo (H : Msg → Msg) (L : CompiledTwo Coin A) (r₁ r₂ : ℝ) : Prop :=
   ∀ x s Pt d, L.Scope x → L.parse x = some s → L.partition s = some Pt → L.two s = some d →
     d.FirstRate r₁ → d.SecondRate Pt r₂ → ∀ (Ω : Type) (P : Prover Ω) (ω : Ω),
       Pr (fun r : Fin (L.V.k x) → Coin => ∀ u ∈ L.checked x r, u ∉ L.FregTwo H P x ω r) ≤
-        (1 - r₁ * r₂) ^ (wrongAtBoundaryAt s Pt d.part (L.regVal H P x ω)).card
+        (1 - r₁ * r₂) ^ (incorrectAtBoundaryAt s Pt d.part (L.regVal H P x ω)).card
 
 end CompiledTwo
 
@@ -202,13 +202,13 @@ def CompilerKSRegTwo : Prop :=
     (H : Msg → Msg), A.KS H → L.commit.Binds H → L.Sessions H → L.KSRegTwo H
 
 /-- **The two-stage miss bound**: every compiled two-stage verifier that meets the contract meets
-`CompiledTwo.MissTwo` at all rates `0 ≤ r₁ ≤ 1` and `0 ≤ r₂ ≤ 1`, from its draw laws (`replayDraws`, `secondDraws`). -/
+`CompiledTwo.MissTwo` at all rates `0 ≤ r₁ ≤ 1` and `0 ≤ r₂ ≤ 1`, from its sampling designs (`replaySamples`, `secondSamples`). -/
 def CompilerMissTwo : Prop :=
   ∀ (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (L : CompiledTwo Coin A)
     (H : Msg → Msg), L.Sessions H → ∀ r₁ r₂ : ℝ, 0 ≤ r₁ → r₁ ≤ 1 → 0 ≤ r₂ → r₂ ≤ 1 → L.MissTwo H r₁ r₂
 
 /-- **The two-stage headline from the committed form**: every compiled two-stage verifier that meets the contract and
-`CompiledTwo.KSRegTwo` meets `CompiledTwo.HeadlineTwo`, by its draw laws and the best interiors. -/
+`CompiledTwo.KSRegTwo` meets `CompiledTwo.HeadlineTwo`, by its sampling designs and the best interiors. -/
 def CompilerHeadlineTwo : Prop :=
   ∀ (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (L : CompiledTwo Coin A)
     (H : Msg → Msg), L.Sessions H → L.KSRegTwo H → L.HeadlineTwo H

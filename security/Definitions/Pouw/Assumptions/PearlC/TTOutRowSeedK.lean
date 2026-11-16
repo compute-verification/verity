@@ -19,16 +19,16 @@ namespace Pouw.PearlC
 
 variable {Q R S : Type}
 
-/-- **(C2) with the honest kernel's `W_ref`:** `pearlCProtocolDevRev1RowCap` with `W_ref` at `wrefDevRev1K d c`. -/
-noncomputable def pearlCProtocolDevRev1KRowCap (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ c : ℚ) :
+/-- **(C2) with the honest kernel's `W_ref`:** `pearlCProtocolDevRev1RowInertBound` with `W_ref` at `wrefDevRev1K d c`. -/
+noncomputable def pearlCProtocolDevRev1KRowInertBound (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ c : ℚ) :
     Protocol Q R S :=
-  { pearlCProtocolDevRev1RowCap d sem ρ with Wref := fun L u => (wrefDevRev1K d c (L.shape u) : ℝ) }
+  { pearlCProtocolDevRev1RowInertBound d sem ρ with Wref := fun L u => (wrefDevRev1K d c (L.shape u) : ℝ) }
 
-/-- **(C2)'s tiles with the honest kernel's `W_ref`:** `pearlCTilesDevRev1RowCap` with `W_ref` and the credited rows'
+/-- **(C2)'s tiles with the honest kernel's `W_ref`:** `pearlCTilesDevRev1RowInertBound` with `W_ref` and the credited rows'
 `W_ref` at `wrefDevRev1K d c`. -/
-noncomputable def pearlCTilesDevRev1KRowCap (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ c : ℚ) :
+noncomputable def pearlCTilesDevRev1KRowInertBound (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ c : ℚ) :
     TileRules Q R S :=
-  { pearlCTilesDevRev1RowCap d sem ρ with
+  { pearlCTilesDevRev1RowInertBound d sem ρ with
     Wref := fun L g =>
       let tl := auditTiling 64 64 L
       let sh := L.shape (tl.unit g)
@@ -38,17 +38,17 @@ noncomputable def pearlCTilesDevRev1KRowCap (d : PearlCDevice) (sem : PearlCSem 
       let sh := L.shape (tl.unit g)
       ((wrefDevRev1K d c sh * tileShare sh (sem.passRows sh act (tl.rows g)) (tl.cols g) : ℚ) : ℝ) }
 
-/-- **(C2) at a wider row cap with the honest kernel's `W_ref`:** `pearlCProtocolDevRev1RowCapAt` with `W_ref` at
+/-- **(C2) at a wider row cap with the honest kernel's `W_ref`:** `pearlCProtocolDevRev1RowInertBoundAt` with `W_ref` at
 `wrefDevRev1K d c`. -/
-noncomputable def pearlCProtocolDevRev1KRowCapAt (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ ρr c : ℚ) :
+noncomputable def pearlCProtocolDevRev1KRowInertBoundAt (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ ρr c : ℚ) :
     Protocol Q R S :=
-  { pearlCProtocolDevRev1RowCapAt d sem ρ ρr with Wref := fun L u => (wrefDevRev1K d c (L.shape u) : ℝ) }
+  { pearlCProtocolDevRev1RowInertBoundAt d sem ρ ρr with Wref := fun L u => (wrefDevRev1K d c (L.shape u) : ℝ) }
 
-/-- **(C2)'s tiles at a wider row cap with the honest kernel's `W_ref`:** `pearlCTilesDevRev1RowCapAt` with `W_ref` and
+/-- **(C2)'s tiles at a wider row cap with the honest kernel's `W_ref`:** `pearlCTilesDevRev1RowInertBoundAt` with `W_ref` and
 the credited rows' `W_ref` at `wrefDevRev1K d c`. -/
-noncomputable def pearlCTilesDevRev1KRowCapAt (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ ρr c : ℚ) :
+noncomputable def pearlCTilesDevRev1KRowInertBoundAt (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ ρr c : ℚ) :
     TileRules Q R S :=
-  { pearlCTilesDevRev1RowCapAt d sem ρ ρr with
+  { pearlCTilesDevRev1RowInertBoundAt d sem ρ ρr with
     Wref := fun L g =>
       let tl := auditTiling 64 64 L
       let sh := L.shape (tl.unit g)

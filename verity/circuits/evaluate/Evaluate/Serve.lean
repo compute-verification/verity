@@ -14,7 +14,7 @@ or its bytes as a JSON string; `inputs` holds one argument per parameter of the 
 integer words in leaf order or `{"table": <name>}` for a registered table the evaluator computes (`Evaluate.Arg`), which keeps
 a table of 2^28 words out of the request (`Evaluate.evaluate`). An `input` not of this form is rejected too.
 
-It also serves two readings of the decoded Program, each the Lean declaration a Python class of `verity.ml.circuits` mirrors:
+It also serves two readings of the decoded Program, each the Lean declaration a Python class of `verity.circuits` mirrors:
 `gate` (`Flock.Program.Gate`, `layout.Gate`) and `partition` (`Flock.Extract.Partition`, `partition_object.Partition`).
 -/
 

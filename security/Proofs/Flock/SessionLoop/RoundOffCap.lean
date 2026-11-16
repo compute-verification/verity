@@ -18,7 +18,7 @@ namespace Claims.ZKServer
 
 open Claims Claims.ZKMal
 open _root_.Flock (V F128 SessionSpec)
-open _root_.Flock.Firewall.Finish (Tab)
+open _root_.Flock.ZkServer.Finish (Tab)
 
 namespace Loop
 
@@ -30,8 +30,8 @@ theorem cap_zcBind {src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × 
     (r : Fin 2) {tb : Tab} {hi : Array ByteArray} (h : realOf src x w (ν, t) (2 * j.val + r.val) = .ok (tb, hi)) :
     tb.cm0.cap = FlockComplete.layerOf (fun a b => _root_.Flock.Sha512.hash (a ++ b)) (Masked.lv0 x j).d
       (Masked.swSrcE x C w v t j.val).leaf0 ((Masked.lv0 x j).d - (Masked.lv0 x j).cap) := by
-  rw [(Level0Src.realOf_cm0 hS ν t j r h).2, _root_.Flock.Firewall.Link.layer_eq]
-  refine _root_.Flock.Firewall.Link.layerOf_congr _ _ (fun q hq => ?_) _
+  rw [(Level0Src.realOf_cm0 hS ν t j r h).2, _root_.Flock.ZkServer.Link.layer_eq]
+  refine _root_.Flock.ZkServer.Link.layerOf_congr _ _ (fun q hq => ?_) _
   rw [show Masked.swSrcE x C w v t j.val =
       Masked.tabSrcCut Masked.PE x (Masked.czExe Masked.PE x C) (Masked.swCutE x C w v t) j.val from rfl,
     Masked.tabSrcCut_leaf0 _ _ j.isLt]

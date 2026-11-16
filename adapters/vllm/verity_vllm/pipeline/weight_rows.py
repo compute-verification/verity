@@ -18,8 +18,8 @@ from typing import Any
 import numpy as np
 
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-from verity.commitments.windows import interface as IF
-from verity.commitments.windows import rows as CS
+from verity.commitments.periods import interface as IF
+from verity.commitments.periods import rows as CS
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.pipeline.serving_templates import SLICES, _bind, template
 from verity_vllm.pipeline.slice_rows import dims

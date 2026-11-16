@@ -10,9 +10,9 @@ side by side; it is not a package.
 | File | What it is | Named by |
 |---|---|---|
 | `boot.sh` | Puts the guard on a VM whatever branch is checked out: it writes `.cursor/hooks.json` where the branch tracks none, copies origin/main's guard out of the checkout, runs `install.sh`, and starts `oom_watch.py` and the tmux session the VM keeps (`kept_session.py start`). | The Cloud Agent environment's start, on every boot; the team skill; `infra/cursor` |
-| `hook.sh` | `hook.sh NAME` runs origin/main's copy of the hook NAME on Cursor's event, so a branch cut before a guard landed still runs it. | `.cursor/hooks.json`, for every hook |
-| `shell_hook.py` | The shell hook. It refuses a command that would print secrets (the environment, a key or env file, or any process's full command line, whatever it is piped into), a local build or unselected test run, a call that would block more than 20 minutes, a branch switch that belongs to another agent, a push to verity or infra that updates `main`, `checked`, `next` or another agent's branch, a `git` in a checkout of verity or infra that names an author or committer of its own, a `git config --global` that writes the machine's identity, a command that leaves an author's or committer's name set in the shell (`export GIT_AUTHOR_NAME=...`), and a `tmux kill-server` or `tmux kill-session` that would end the VM's tmux server or the session it keeps; each rule also reads what the command has another program run: what tmux types into a pane (`send-keys`) or starts (`new-session`, `new-window`, `split-window`, `respawn-pane`, `run-shell` and the like), and what `bash -c`, `env`, `xargs`, `eval`, `watch`, `nohup`, `setsid` or `timeout` runs. A script file's contents are not read. A listing that another machine runs over `ssh` or `research pods ssh` is refused unfiltered and passes when piped straight into a `grep` that keeps only matching lines. It delivers a waiting inbox message by refusing the next command once. | `hook.sh`; the root's tests |
-| `pre_push.py` | git's `pre-push` hook: the branch rule a typed push meets, applied to every branch a push updates, so a push from a script or a child process meets it too. It judges a push to `compute-verification/verity` or `compute-verification/infra`, the repositories whose `main`, `checked` and `next` drive lands, by an agent's process (one with `CURSOR_CONVERSATION_ID`, which every agent's shell sets and its children inherit): refused when it updates `main`, `checked` or `next`, or a branch registered to another agent (`worktree_guard.py hand` hands one over); an unregistered branch passes. A push without that id (a person's, the queue's) and one to any other repository (the notes, whose `main` every agent's `research notes sync` pushes, a fork, a node) are not judged. It then runs the hook the push would have run without it. | `install.sh` writes `/usr/local/lib/agent-guard/hooks/pre-push`, which `git_guard.sh` sets as `core.hooksPath` for every `git push`, through `--no-verify` and a caller's own `core.hooksPath` |
+| `hook.sh` | `hook.sh NAME` runs the hook NAME on Cursor's event with origin/main's Slack registry. `.cursor/hooks.json` runs only `/opt/agent-guard/hook.sh`, the copy boot.sh puts there from origin/main at boot, which runs the hook beside it, so no file of the checkout runs whatever branch is checked out. Without that copy a Cursor cloud VM (`/exec-daemon`) refuses every call but the shell command that reruns origin/main's boot.sh, which the refusal names; a machine with neither (a desktop agent's laptop) runs origin/main's committed copy out of git, never the working tree's. Both hooks.json and hook.sh fix PATH to `/usr/local/bin:/usr/bin:/bin` (root's directories), unset PYTHON\*, GIT_\*, ENV, BASH_ENV, CDPATH, LD_\* and the git guard's switches, and run `/usr/bin/python3 -E -S`, so neither the caller's PATH (a checkout's `.venv/bin`) nor a variable can make the guard run a file of the checkout. The copy is as old as the VM's last boot. | `.cursor/hooks.json`, for every hook |
+| `shell_hook.py` | The shell hook. It refuses a command that would print secrets (the environment, a key or env file, or any process's full command line, whatever it is piped into), a local build or unselected test run, a call that would block more than 20 minutes, a branch switch that belongs to another agent, a push to verity or infra that updates `main`, `checked`, `next` or another agent's branch, a `git` in a checkout of verity or infra that names an author or committer of its own, a `git config --global` that writes the machine's identity, a command that leaves an author's or committer's name set in the shell (`export GIT_AUTHOR_NAME=...`), one that leaves `PYTHONPATH` or `RESEARCH_AT_CHECKOUT` set in the agent's own shell, and a `tmux kill-server` or `tmux kill-session` that would end the VM's tmux server or the session it keeps; each rule but the one for `PYTHONPATH` also reads what the command has another program run: what tmux types into a pane (`send-keys`) or starts (`new-session`, `new-window`, `split-window`, `respawn-pane`, `run-shell` and the like), and what `bash -c`, `env`, `xargs`, `eval`, `watch`, `nohup`, `setsid` or `timeout` runs. A script file's contents are not read. A listing that another machine runs over `ssh` or `research pods ssh` is refused unfiltered and passes when piped straight into a `grep` that keeps only matching lines. It delivers a waiting inbox message by refusing the next command once. It tells an agent whose turn runs on another model than it was launched on, by refusing that turn's first command once (the model rule, below), and refuses every command of a worker's turn on Fable 5.2 (the Fable rule, below). | `hook.sh`; the root's tests |
+| `pre_push.py` | git's `pre-push` hook: the branch rule a typed push meets, applied to every branch a push updates, so a push from a script or a child process meets it too. It judges a push to `compute-verification/verity` or `compute-verification/platform` (or its old name, `infra`), the repositories whose `main`, `checked` and `next` drive lands, by an agent's process (one with `CURSOR_CONVERSATION_ID`, which every agent's shell sets and its children inherit): refused when it updates `main`, `checked` or `next`, or a branch registered to another agent (`worktree_guard.py hand` hands one over); an unregistered branch passes. A push without that id (a person's, the queue's) and one to any other repository (the notes, whose `main` every agent's `research notes sync` pushes, a fork, a node) are not judged. It then runs the hook the push would have run without it. | `install.sh` writes `/usr/local/lib/agent-guard/hooks/pre-push`, which `git_guard.sh` sets as `core.hooksPath` for every `git push`, through `--no-verify` and a caller's own `core.hooksPath` |
 | `kept_session.py` | The tmux session a VM keeps, `vm-secrets`, so that its tmux server never ends: the server's environment holds the secrets it started with, and a shell that lost them takes them back from it. `start` starts it; the shell hook's rule against ending it is here too. | `boot.sh`; the shell hook; `research doctor`, whose `secrets` check names the session |
 | `procs.py` | This machine's processes, with each command line's token-like runs cut out: what the shell hook's refusal of a listing points to, beside `ps -eo pid,etimes,comm` and `pgrep -l`. | The shell hook's refusal |
 | `inbox.py` | Messages to a running agent, on this VM or another. | The team skill; `research digest` |
@@ -30,9 +30,39 @@ which `install.sh` puts ahead of the system's), and `settings.py` (every environ
 The event log (`settings.record_event`; `$AGENT_GUARD_EVENT_LOG`, default `/tmp/agent-guard-events.jsonl`) holds one line
 for each run of the shell, Task and stop hooks: when, which hook, the event's name, its conversation id and tool name, the
 payload's key names, and of the payload's other values only `model` and `generation_id` (the turn's id), each where the
-payload has it as a string, cut at 64 characters; never the command, a path or an address. Past about 4 MB it is renamed
-to `.1` and started again. `inbox.py check`, `selftest` and `guard` read from it whether a shell hook has run for an agent,
-and `inbox.py turns` the model each of an agent's turns names there. Each VM's log is its own.
+payload has it as a string, cut at 64 characters; never the command, a path or an address. The model rule adds a line
+for each turn it settles: the event `model_refusal` or `model_ok`, with the turn's id, its model and the launch model
+(`launch_model`). Past about 4 MB it is renamed to `.1` and started again. `inbox.py check`, `selftest` and `guard` read
+from it whether a shell hook has run for an agent, and `inbox.py turns` the model each of an agent's turns names there.
+Each VM's log is its own.
+
+The model rule (`shell_hook.model_reason`) tells an agent whose turn runs on another model than it was launched on. A
+turn an agent's own timer or a subscription starts can take another model than its launcher named, and nothing in the
+turn says so. The launch model is the model the agent's first turn in this machine's event log names
+(`settings.launch_model`). Models are compared by family, never by effort (`settings.model_family`: `claude-fable-5-2`
+of `claude-fable-5-2-xhigh`), so a lead moved to another effort is not told. In a turn whose commands name another
+family, the first command the hook would otherwise pass is refused, once, with the turn's model, the launch model and
+the two ways on: hand the turn's job to a child started with `Task` and `claude-opus-5-5-high` (or
+`claude-sonnet-5-5-high` for a fully specified task; never Fable 5.2), local, so that it runs on this machine and has
+the checkout; or end the turn and be
+resumed by the lead, which keeps the launch model. The rest of the turn's commands pass, so the agent can read its
+notes, start the child and push: it is told, not locked out. `AGENT_GUARD_MODEL_OK=1` in that first command passes it
+and settles the turn the same way, for a lead that has decided the turn stays on its model. Never refused: an agent
+whose turns all name one family; a turn whose payload names no model or no turn; a local session, whose id has no
+`bc-`; and an agent with no launch model on record (its first line in the log names no turn, or its first turn names
+no model). The log is one machine's. Where it starts after the agent's launch (it rotated the launch out, or a wake
+or a resume put the agent on a new machine, which holds none of its earlier turns), the first turn it holds stands
+for the launch: the rule refuses nothing in that turn, and a refusal in a later one names the model on record and
+says to go by the brief where the brief names another.
+
+The Fable rule (`shell_hook.fable_reason`): no worker runs Fable 5.2; a worker runs `claude-opus-5-5-high`, or
+`claude-sonnet-5-5-high` for a fully specified task. In a cloud worker's turn whose payload names Fable 5.2 at any effort
+(`claude-fable-5-2-*`), every command is refused, each time, saying to end the turn, say what started it, and be resumed
+by the lead or launched again naming `claude-opus-5-5-high`. A lead is an agent that holds a handle in the Slack registry
+(a `holder`), or has the id `infra/cursor/launch_coordinator.py` gives a registered handle at a generation from 1 to 50
+(`task_hook.leads`); every other agent, a lead's child included, is a worker. Never refused: a lead's turn at any effort,
+a turn whose payload names no model, a local session, and every turn while the registry can't be read (which the hook
+says on stderr). A worker launched on Fable is not told, by the model rule, that its other turns run on another model.
 
 A checkout belongs to the first agent that runs git in it, and the stamp outlives the agent. `worktree_guard.py reclaim
 DIR` gives the checkout holding DIR, and every branch registered to its owner, to the VM's coordinator once that owner
@@ -51,7 +81,25 @@ short of either, nothing is taken back. A worker whose turn ended over two hours
 The push rules, typed (`worktree_guard.py`) or in `pre_push.py`, cover the queue's two repositories alone
 (`worktree_guard.queue_remote`: their GitHub URLs exactly, in https, ssh or scp form, with or without `.git` and a credential;
 `AGENT_GUARD_PUSH_REMOTES` names others in their place). The registry is the VM's own and names a branch without its
-repository. The typed rule reads a push's words as git does (options anywhere, by any prefix, with their values; git's
+repository. `pre_push.py` reads the commits such a push adds as well, whatever made them: it refuses one that adds a
+commit whose committer is not the checkout's configured identity (`git config user.name` and `git config user.email`
+where the push runs), or whose author is neither that identity nor one that already authors a commit on the remote's
+`main` as the checkout last fetched it (`refs/remotes/REMOTE/main`, read only once an author differs). So a commit
+carried from a real author the remote has (a cherry-pick, a rebase) passes, while a name nobody has seen on `main`, and
+a made-up address however many commits `main` holds under it (a domain with no dot, or one under `invalid`, `test`,
+`example`, `localhost` or `local`), or the checkout's own address under another name, is refused. The refusal names the commits; for another author's commits it says to carry them by a merge (`git merge
+<their-branch-or-commit>`), the first push of an author's own commits being theirs, and for made-up names taken from
+git's environment or a tool it gives the `filter-branch` that writes again, in only the commits it names by sha (at most
+`MENDED`, the next refusal naming the rest), each committer that is not the checkout's and each made-up author under the
+checkout's identity, and leaves every other commit and name as it was. A push adds what
+the remote lacks as the checkout knows it, the commits reachable from what it pushes and from no remote-tracking ref of
+that remote, so a merge of the remote's `main` adds the merge alone and `git fetch` comes first where a ref is stale; a
+push that adds commits from a checkout with no configured identity, or whose commits git can't list, is refused too.
+Where a node made the commits, the run that made them names this checkout's identity, as `tools/move/README.md` shows.
+One other identity passes (`OTHERS`), the queue's own: `research queue cross` makes a crossing's commits under it and
+pushes them with the caller's git, so an agent's crossing meets this rule, and a test of research's holds the entry to
+the queue's definition. A head crossed by hand under any other name is refused.
+The typed rule reads a push's words as git does (options anywhere, by any prefix, with their values; git's
 own `-C`, `-c` and the like), and places a push by three things only: the directory the hook is handed, git's own `-C`,
 and a URL or path given as its repository. It follows no `cd`: a `cd`, `pushd` or `popd` anywhere in the command, run
 or not, leaves the push unplaced unless its own `-C` is absolute (`cd /tmp && git -C /abs/checkout push ...` runs in
@@ -93,6 +141,18 @@ it (`-c user.name=NAME -c user.email=ADDRESS`), and that `unset GIT_AUTHOR_NAME 
 GIT_COMMITTER_EMAIL` clears one the shell holds. The names ahead of one command pass this rule and are judged by the one
 above, where that git runs; `unset`, a read (`echo "$GIT_AUTHOR_NAME"`) and an `export` of any other variable
 (`GIT_AUTHOR_DATE`) pass.
+
+A variable left set changes which code every later command of the shell runs too: `PYTHONPATH` which Python every
+`python3` and `research` imports, `RESEARCH_AT_CHECKOUT` whether `research` re-executes from origin/main's code. The hook
+refuses a command that leaves one of these set in the agent's own shell (`shell_hook.kept_code_reason`, the names in its
+`CODE_VARIABLES`), read by the same `shell_keeps` as the identity rule, with one difference: it reads only the commands
+that run in that shell (`own_shell`), never in doubt, since the harm is only in the shell that persists. What a carrier
+runs (`bash -lc`, `research run -- ...`, `ssh`, a tmux pane), a subshell, a pipeline's member, a command substitution, a
+script file and a text the hook can't split pass, and so does a file the shell sources (`. FILE`, `source FILE`, a
+startup file such as `.bashrc`), though its export does stay in the shell: the hook reads no file's contents, so that
+form is not covered. An `eval` and a `{ ...; }` body are the shell's own. The refusal says to put the name on the one
+command (`PYTHONPATH=DIR python3 ...`) or run it in a subshell, and that `unset PYTHONPATH RESEARCH_AT_CHECKOUT` clears
+one the shell holds.
 
 The rule for a `git` that names an identity places a command by the directory the hook is handed and git's own `-C`, and, alone among the rules, follows a
 plain `cd` (`shell_hook.cd_dirs`): `cd CHECKOUT && git ...` is judged in CHECKOUT and `cd SCRATCH && git ...` in SCRATCH.
@@ -142,7 +202,7 @@ python3 tools/agent-guard/worktree_guard.py reclaim DIR            a coordinator
 python3 tools/agent-guard/worktree_guard.py list                   each registered branch's owner
 python3 tools/agent-guard/oom_watch.py scan                        the OOM kills still in the kernel's buffer
 tmux new-session -d -s vm-secrets                                  the session this VM keeps, by hand (boot starts it)
-uv run tools/verity/check/suites.py tools/agent-guard              its tests
+uv run tools/check/suites.py tools/agent-guard              its tests
 ~~~
 
 A heavy command the shell hook refuses runs under `research run --on auto` instead.

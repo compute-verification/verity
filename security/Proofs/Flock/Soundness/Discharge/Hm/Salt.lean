@@ -1,8 +1,3 @@
-/-
-The salt digest `c = SHA-512(salt_prefix ‖ y)` of `hm96-sha512/v1` as the hm96 circuit computes it: from the salt
-prefix's midstate (`saltMid`), over the salt's 24 big-endian words and the fixed padding of a 320-byte message
-(`saltTail`).
--/
 module
 
 public import Mathlib.Data.List.GetD
@@ -27,6 +22,12 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
+
+/-!
+The salt digest `c = SHA-512(salt_prefix ‖ y)` of `hm96-sha512/v1` as the hm96 circuit computes it: from the salt
+prefix's midstate (`saltMid`), over the salt's 24 big-endian words and the fixed padding of a 320-byte message
+(`saltTail`).
+-/
 
 @[expose] public section
 

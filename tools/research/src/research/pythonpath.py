@@ -29,6 +29,7 @@ import posixpath
 import secrets
 import shutil
 import subprocess
+import sys
 import tomllib
 from pathlib import Path
 from typing import Callable
@@ -42,7 +43,8 @@ def _toml(read: Reader, path: str) -> dict:
         return {}
     try:
         return tomllib.loads(text)
-    except tomllib.TOMLDecodeError:
+    except tomllib.TOMLDecodeError as e:
+        print(f"pythonpath: a pyproject.toml did not parse, read as empty ({e})", file=sys.stderr, flush=True)
         return {}
 
 
@@ -112,9 +114,12 @@ def import_roots_dir(tree: Path | str) -> dict:
     t = Path(tree)
 
     def read(rel: str) -> str | None:
+        if not (t / rel).exists():
+            return None
         try:
             return (t / rel).read_text()
-        except OSError:
+        except OSError as e:
+            print(f"pythonpath: {t / rel} unread ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             return None
 
     def dirs() -> list[str]:
@@ -150,7 +155,8 @@ def workspace_root(path: Path | str) -> Path:
             continue
         try:
             doc = tomllib.loads((d / "pyproject.toml").read_text())
-        except (OSError, tomllib.TOMLDecodeError):
+        except (OSError, tomllib.TOMLDecodeError) as e:
+            print(f"pythonpath: {d / 'pyproject.toml'} unread, so {d} is not a workspace root ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         if "workspace" in ((doc.get("tool") or {}).get("uv") or {}):
             return d
@@ -232,10 +238,13 @@ def shim_packages(d: str | os.PathLike[str], root: str | os.PathLike[str]) -> li
     """The packages of `d` when it is a shim of `root` (what `shim_dir(root, packages)` builds: a directory of links, each to `root`'s
     entry of its name), sorted; None for anything else.  The shim is not under `root`, but what it imports is."""
     tree = os.path.realpath(root)
+    if not os.path.isdir(d):
+        return None
     try:
         names = sorted(os.listdir(d))
         links = all(os.path.islink(p := os.path.join(d, n)) and os.path.realpath(p) == os.path.join(tree, n) for n in names)
-    except OSError:
+    except OSError as e:
+        print(f"pythonpath: {d} unlisted, so it is no shim ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
     return names if names and links else None
 

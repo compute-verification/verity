@@ -25,21 +25,21 @@ from __future__ import annotations
 
 import calendar
 import json
-import os
 import re
+import subprocess
 import sys
 import time
 from pathlib import Path
 from typing import Any, Callable
 
-from .. import remote
+from .. import remote, settings
 from ..store import preserved as P
 from ..store.local import LocalStore
 
 
 
 def drain_log_path() -> Path:
-    return Path(os.environ.get("RESEARCH_DRAIN_LOG", Path.home() / ".research" / "pods" / "drain.log"))
+    return Path(settings.get("RESEARCH_DRAIN_LOG", Path.home() / ".research" / "pods" / "drain.log"))
 
 
 POD_ID_RE = re.compile(r"[a-z0-9]{12,20}")      # runpod ids; a typo'd machine name must not become a terminate call
@@ -61,16 +61,17 @@ def probe_hostname(pod_id: str | None, timeout: int = 30) -> str | None:
     """The container hostname of a RUNNING pod (best effort, read-only; None when unreachable)."""
     if not pod_id:
         return None
-    try:
-        from . import runpod
+    from . import runpod
 
+    try:
         pod = runpod.get(pod_id)
         tgt = runpod.ssh_target(pod) if pod and (pod.get("desiredStatus") or "").upper() == "RUNNING" else None
         if tgt is None:
             return None
         r = remote.ssh_run(remote.ssh_argv(*tgt), ["hostname"], timeout=timeout)
         return r.stdout.decode(errors="replace").strip() or None if r.returncode == 0 else None
-    except Exception:  # noqa: BLE001
+    except (runpod.PodError, OSError, ValueError, subprocess.SubprocessError) as e:
+        print(f"research pods: pod {pod_id}'s hostname unread ({type(e).__name__}: {e})", file=sys.stderr)
         return None
 
 
@@ -90,7 +91,8 @@ def attempts_on(st: LocalStore, machine: str | None, pod_id: str | None = None, 
     for aid, mj in st.index.sql("SELECT id, manifest_json FROM attempts"):
         try:
             doc = json.loads(mj)
-        except ValueError:
+        except ValueError as e:
+            print(f"drain: attempt {aid}'s manifest is not JSON, so it is not matched ({e})", file=sys.stderr)
             continue
         ex, conds, cost = doc.get("execution") or {}, doc.get("conditions") or {}, doc.get("cost") or {}
         if machine:
@@ -110,7 +112,8 @@ def ended_epoch(st: LocalStore, ids: list[str]) -> dict[str, float]:
     def epoch(utc: str | None) -> float | None:
         try:
             return calendar.timegm(time.strptime(utc[:19], "%Y-%m-%dT%H:%M:%S")) if utc else None
-        except ValueError:
+        except ValueError as e:
+            print(f"drain: time {utc[:40]!r} does not parse, read as none ({e})", file=sys.stderr)
             return None
 
     want, out = set(ids), {}
@@ -119,7 +122,8 @@ def ended_epoch(st: LocalStore, ids: list[str]) -> dict[str, float]:
             continue
         try:
             end = ((json.loads(mj) or {}).get("execution") or {}).get("end_utc")
-        except ValueError:
+        except ValueError as e:
+            print(f"drain: attempt {aid}'s manifest is not JSON, so its end is its start plus wall time ({e})", file=sys.stderr)
             end = None
         s = epoch(start)
         if (t := epoch(end) or (s + wall if s is not None and wall else s)) is not None:

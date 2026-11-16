@@ -9,7 +9,7 @@ wholly inside one block. Each is defined for an arbitrary Boolean circuit and a 
 A circuit is a Program in `verity-ir/descriptor/v1` (`verity/circuits/PROTOCOL.md`) in the Boolean profile (§9),
 read through its canonical layout (§6): a `verity.circuits.program.Program`, or `codec.decode_program`'s result. It is
 the format the inference-only policy's check reads gate by gate
-(`verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/Check.lean`) and `Nci.Cover.Circuit` formalizes (`security/Definitions/Nci/Cover.lean`, `BitView.lean`), and the one the served workloads lower
+(`verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyCheck/Check.lean`) and `Slowdown.Cover.Circuit` formalizes (`security/Definitions/Slowdown/Cover.lean`, `BitView.lean`), and the one the served workloads lower
 to on bits. A word circuit has no per-product gates (one tensor-core step gate computes 16 products), so s_× and
 whole-in-block are defined only on the Boolean lowering; `ops.NotSeparable` refuses a word op.
 
@@ -22,7 +22,7 @@ fan-in is read at. `references.GEMM_PRODUCTS` is the GEMMs' products: each lane 
 `Gemm`, fan-in at each `GemmCoordinate`.
 
 - m(p), product p's subcircuit: the gates of its activation that read lane k's operands and nothing else
-  (`ops.OpShape`). They are disjoint, nonempty and computed, as `Nci.Cover.MulBlocks` requires.
+  (`ops.OpShape`). They are disjoint, nonempty and computed, as `Slowdown.Cover.MulBlocks` requires.
 - |𝒥| (`products`), s_× (`s_x`): the products, and the fewest gates in any m(p).
 - a_out: the most counted products any one activation value (a gate) feeds. Constants are counted apart
   (`constant_leaves`).
@@ -39,7 +39,7 @@ summaries can't count exactly (one value bound to two activation leaves above th
 
 ## The min-cut bound's work
 
-`work.read(program, k)` reads off a word Program what `min_cut.bound` takes of a circuit at a policy's k: |C| in
+`work.read(program, k)` reads off a word Program what `min_cut.slowdown_of` takes of a circuit at a policy's k: |C| in
 Boolean gates (each primitive at its registered Boolean version's, `work.boolean_gates`), every product with its dims,
 each operand's kind, rate, source bits and β, the charged products' MACs N and output wires O, and the arrays they
 multiply, which give F. The rules are the training benchmark's reading of a trace (`capture.products`' rates,
@@ -55,7 +55,9 @@ beside the circuit. A gather's rows by the batch stay a gather's rows until one 
 a constant whose rows (or columns) differ, as a causal mask's do, through one-to-one ops and products by distinct rows.
 The rule rests on one premise, `SHARED_PREFIX`'s (`training_slowdown.work.P_BATCH`): past each row's first
 position, no two positions of the batch hold
-equal words. Its limits: a Program with no scan has no bound; the rule doesn't reach a softmax's backward or a table
+equal words. The point's second sample, word by word (`points`), meets `P_BATCH` by the construction of its tokens
+wherever a batch holds no more positions than the least table has rows, so it shows a specific operand's rows are not equal by an identity of the circuit (the attention's output plus -1 times
+itself is 0 for every input); that the served data meets `P_BATCH` stays the premise it is today. Its limits: a Program with no scan has no bound; the rule doesn't reach a softmax's backward or a table
 the Program doesn't state (a rope table), so dQ·Wq and dK·Wk stay gathered; and a dense step, a batch of values into
 linear layers, is charged nothing, since two rows of values may be equal, as two tokens may, and a product of its rows
 by a shared weight would then read one pair of values twice. A carried word's rows are distinct only where they are θ's
@@ -63,19 +65,34 @@ by a shared weight would then read one pair of values twice. A carried word's ro
 shift or a rounding to a narrower float (`work.ROUNDINGS`) whatever else it reads, as a weight's update does, and by a
 multiply or a divide only where every other argument is one no input reaches, one word every member of every enclosing
 batch reads, or one whose own rows are shown distinct (a weight times a weight); any other carried rows may repeat, and
-a multiply by a stated 0 reaches nothing. One more premise holds the reading below the work, its parts each held as a
-fact by a test: θ's rows differ at every width a rounding reads them, and a word no input reaches is nonzero; an update
-that can't change a weight or cancels it for a reason no constant shows (W plus z plus -1 times z) still makes θ′ and
-keeps its rows distinct; a weight combined with its own words still counts as a weight with distinct rows, though the
-combination may make its rows equal whatever the weight: cancelled against itself (M plus -1 times M; a multiplier v
-plus -1 times v, v registered or carried), or times its own rows in another order (M times swap(M), whose two rows are
-equal for every M), so the looked-up rows plus such an array are charged as weights though they repeat with the
-tokens; so does one word every member of every batch reads as a multiplier (a learning rate, a
-decay, an input's or computed from inputs, taken as nonzero); and two nodes that compute rows from one array's words
-into two arrays give each distinct rows.
-`work.bound(work, c)` is the most blocks over its
-sub-works, through the calculator's `min_cut` at each sub-work's least β, none from `HEAD_K` on. The module docstring
-has the rules and which way each moves the bound; the training benchmark's `tests/test_program_reading.py` holds a
+a multiply by a stated 0 reaches nothing. Each charged operand whose rows these rules show distinct or specific is
+tested at a point (`points.check`): the Program evaluated once, θ's words generic (four binades about 2^-3, every sign)
+and every input's one positive word repeated, as a malicious developer may choose, and an operand specific and not distinct at a
+second point in the same pass, every input's words sampled on their own (an input that reaches a lookup's token,
+found by that use, as a permutation of its least table's rows, and every other as θ's are but positive), its rows
+compared across every activation whose other operand is the same there, and refused (`work.RepeatedRows`) where two
+rows are equal at enough points to hold 64 sampled bits a row, compared by their words with a row's two zeros one word
+at every width, so two rows that are one inf are equal, or where a row holds a NaN, which no comparison shows
+distinct. A row whose words are all zero at its point, whatever their signs, is left out of the comparison, and none
+of the MACs that read it is charged (`Tally.share`): a product by a zero row is zero, so it is no work (W plus -1
+times W, times a stated ±1, is charged nothing). A product's share left uncharged is the sum of its operands' zero
+shares, at most 1, so no MAC that reads a zero row is charged however the rows pair; where both operands hold zero
+rows it can leave out more than reads them, so N only falls. So a weight combined with its own words whose rows are equal and not
+zero whatever the weight is refused: cancelled against itself (M plus -1 times M; W times v plus -1 times v), or
+times its own rows in another order (M times
+swap(M)), and so is a weight times a difference of an input's words. The pass is about one evaluation of the step,
+where the reading is in the description's size. One more premise holds the reading below the work, its parts each
+held as a fact by a test: θ's rows differ at every width a rounding reads them, and a word no input reaches is
+nonzero; rows the point never makes equal count as distinct: an update that cancels for a reason no constant shows
+(W plus z plus -1 times z), one word every member of every batch reads as a multiplier (a learning rate, a decay, an
+input's or computed from inputs, taken as nonzero), inputs fitted to the weights, a circuit that tests its own
+weights against a stated constant, rows equal only where an input's word is negative, and rows equal only at values
+a malicious developer found by trying circuits against the point's seed, which is public (SHA-512 of the Program's digest); and
+two nodes that compute rows from one array's words into two arrays give each
+distinct rows.
+`work.bound(work, c)` hands the charged products (`work.products`: MACs at `keep`, outputs at most 16 bits) to the
+calculator's `min_cut.slowdown_of`, which chooses the sub-work, none from `HEAD_K` on. The module docstring
+has the rules and which way each moves the bound; `tests/benchmarks/training_slowdown/test_program_reading.py` holds a
 training loop's reading beside its trace's, never above it.
 
 ## Interface
@@ -88,32 +105,33 @@ m = measure(layer(configs()["qwen25-1b5"][0]), GEMM_PRODUCTS)
 m.products, m.s_x, m.a_out, m.a_in        # 46792704, 681, 17920, 1536
 ```
 
-## Reference circuits
+## Reference layers
 
 `references.layer(C, T)` is one b1 layer (σ(`LayerPre_v1`), the Boolean `Attention_v3`, σ(`LayerPost_v1`)) at T
 positions; `references.configs()` lists the served configurations and two shapes with no served workload (Qwen2.5-7B,
-Llama-3.1-405B), labeled as constructed, whose shapes are benchmarks/rho's (its `models.toml`, read through
-`rho.instances.models`). The circuits are forward layers: the Programs declare no training (backward, optimizer)
+Llama-3.1-405B), labeled as constructed, whose shapes are benchmarks/slowdown's (its `models.toml`, read through
+`slowdown.instances.models`). The circuits are forward layers: the Programs declare no training (backward, optimizer)
 circuit.
 
     uv run --extra torch-cpu verity bench circuit_properties [--models NAME,...] [--T T] [--out DIR]
 
-measures each and sets a_out, a_in and |𝒥| per position beside benchmarks/rho's `fanout`, `legs` and layer products
-(its `models.toml` row, and `derived_fanout` / `derived_legs` of the config's matrices), checks whole-in-block under
+measures each and sets a_out, a_in and |𝒥| per position beside benchmarks/slowdown's `fanout`, `fanin` and layer products
+(its `models.toml` row, and `derived_fanout` / `derived_fanin` of the config's matrices), checks whole-in-block under
 `Blocks.by_root` and a cut at the middle gate, and writes `properties.json`.
 
 ## What it reads, what it writes and what loads it
 
-The package reads `verity.circuits` (Programs, the canonical layout) and `verity.definitions` (the Boolean GEMM and
+The package reads `verity.circuits` (Programs, the canonical layout) and `verity_vllm.definitions` (the Boolean GEMM and
 the served b1 Definitions on bits). For a model's shapes it loads the slowdown calculator where it sits, with
-`benchmarks/rho` put on `sys.path`: `rho.instances`, and `rho.params` for the registry, which
+`benchmarks/slowdown` put on `sys.path`: `slowdown.instances`, and `slowdown.params` for the registry, which
 loads the inference-only policy's calibrations (`benchmarks/nci/calibrations.json`). The suite
 names what it reads of both among its `inputs`.
 
-The runner prints one JSON line a circuit and, with `--out DIR` (or `$OUT`), writes `DIR/properties.json`; without
-either it writes no file.
+The runner prints one JSON line a circuit and, with `--out DIR` (or `$OUT`), writes `DIR/properties.json`, and on a
+run of every configuration also the least s_× of its circuits into the run's result, under the metric `metrics.toml`
+declares (`run.write_metric`); without either it writes no file.
 
 The training benchmark's suite loads `work` by path, to hold it beside its own reading. What it measured of a training step (`s_×`, `a_out`, `a_in`) sits in
-`benchmarks/rho/data/circuits.toml` as data, each number with its source.
+`benchmarks/slowdown/data/circuits.toml` as data, each number with its source.
 
-The suite: `uv run tools/verity/check/suites.py benchmarks/circuit_properties`.
+The suite: `uv run tools/check/suites.py benchmarks/circuit_properties`.

@@ -43,7 +43,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 # The sampling extractor's rerun programs: reruns, own calls, and what they return
 
 The claims block's extractor `E` (`Definitions.Claims.Sampling`) is built of `ofOC`, `flatMapRP`, `waitAccC` and
-`checkRevealed`. These are their laws, on every run.
+`checkRevealed`. These are their sampling designs, on every run.
 
 * `ofOC_runs`, `flatMapRP_runs`, `waitAccC_runs_eq`: their reruns. `ownLog_bind`, `ownLog_flatMapRP`, `ownLog_ofOC`,
   `ownLog_of_noHash`: their own `H` calls.

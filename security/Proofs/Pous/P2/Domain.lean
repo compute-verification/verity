@@ -29,7 +29,7 @@ import Proofs.Pous.TrackA.A3Prime
 # The abstract model `m1p` on `[0, p)`: `Meets` for `Pous.m1p`, at any payload width `b`
 
 P2 permutes `Z_p` with `p = 2^w − c₀`, not `Bits w`. The abstract model `Pous.m1p B w p b`
-(`Security/Definitions/Pous/Model/M1p.lean`) samples `B` independent uniform permutations of `Fin p`; they act on
+(`security/Definitions/Pous/Model/M1p.lean`) samples `B` independent uniform permutations of `Fin p`; they act on
 `w`-bit strings through the numeric value and fix the tail `[p, 2^w)`. Each block carries `b` payload bits,
 zero-extended to `w` bits. These are theorems about `m1p` at P2's parameters, not about the concrete P2's
 square–mask–square maps. This file proves, with no hypothesis beyond what the rows discharge:
@@ -50,14 +50,14 @@ The route:
    responder's output is read mod `p`. The bound does not depend on `b`.
 3. `PousP2p.gammaP_le`: `2^(w·g) ≤ 2·p^g` when `p ≥ 2^w − c` and `2·B·c ≤ 2^w` (Bernoulli), so `gammaP` is at most
    A2's bound on `Bits w` with one more state bit. The certificate machinery of
-   `Security/Proofs/Pous/P2/Rows.lean` then applies at `S + 1` (`meets_m1p_of_row`); `S = ⌊(18/19)·B·w⌋` does not
+   `security/Proofs/Pous/P2/Rows.lean` then applies at `S + 1` (`meets_m1p_of_row`); `S = ⌊(18/19)·B·w⌋` does not
    depend on `b` either.
 4. `m1p` is correct (`b ≤ w`, `p ≤ 2^w`), `|C| = B·w ≥ n = B·b`, and within the `21/20` space bound
    (`20·w ≤ 21·b`). No payload and no code block lies in the tail (`pad_lt`, `m1p_code`), and the code blocks are
    uniform on `[0, p)` (`m1p_code_uniform`).
 
-The generic count (`PousGen`) is `Security/Proofs/Pous/P2/Count.lean`, the certificate
-plumbing (`PousP2`, up to `meets_m1_of_row`) is `Security/Proofs/Pous/P2/Rows.lean`, and
+The generic count (`PousGen`) is `security/Proofs/Pous/P2/Count.lean`, the certificate
+plumbing (`PousP2`, up to `meets_m1_of_row`) is `security/Proofs/Pous/P2/Rows.lean`, and
 A3′ is `PousTrackA.a3_prime_lam`. This module's own part is `PousP2p`.
 -/
 

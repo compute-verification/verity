@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# vy-nebius-1's replacement: n1 stops at its deadline; its CPU work (two train slots, Lean slots, lean's
+# vy-nebius-1's replacement: n1 stops at its deadline; its CPU work (two candidate slots, Lean slots, lean's
 # cache publisher, the merge mirror, research runs at nice 19) goes to vy-nebius-cpu-4/5, and its GPU and Kueue services retire.
 #
 #   n1_replacement.sh [plan] [PATH]     print every live step in order, each command as it is to be run; runs nothing
@@ -9,7 +9,7 @@
 #                                       n1's custody backlog and the data on n1 nothing else holds
 #
 # PATH is where the nodes come from, each a list of nodes below (NODES_<PATH>):
-#   now       two 192vcpu-768gb nodes (cpu-1's shape: one full train slot each), in regions whose quota has room today
+#   now       two 192vcpu-768gb nodes (cpu-1's shape: one full candidate slot each), in regions whose quota has room today
 #   quota     two 256vcpu-1024gb nodes (cpu-2's shape) in us-central1, once Nebius quota request C291564672 is granted
 #   reattach  one 192vcpu-768gb node in uk-south2 that boots on n1's data disk as it is (vy-nebius-1-data: hf, runs, usage, Lean
 #             caches, nothing copied); needs n1's VM and cpu-1's deleted after their stop, for the disk, 192 vCPU and two IPv4s
@@ -52,7 +52,7 @@ launch_env() {  # NAME REGION PROJECT PRESET RATE DATA_GIB DATA_TYPE DATA_DISK
        "NEBIUS_IMAGE_FAMILY=ubuntu24.04-driverless NEBIUS_DATA_GIB=$6 NEBIUS_DATA_TYPE=$7 NEBIUS_RATE_USD_PER_HOUR=$5$disk"
 }
 
-slot_line() {  # PRESET: the train slot's line, as on the live node of that shape
+slot_line() {  # PRESET: the candidate slot's line, as on the live node of that shape
   case $1 in
     192vcpu-768gb) echo "b 54-191 only=trains mem=560   # one full check (peak ~584G) in the 700G user slice, as on cpu-1" ;;
     256vcpu-1024gb) echo "t 4-171 only=trains mem=560   # one full check, as on cpu-2; research runs at nice 19 on the rest" ;;
@@ -64,7 +64,7 @@ plan() {
   names=$(printf '%s\n' "$NODES" | cut -d' ' -f1 | tr '\n' ' ')
   read -r first _ <<< "$NODES"
   quota_note=""
-  [ "$path" != quota ] || quota_note=$'\n    On 1024 GB nodes, give cpu-4/5 their own user-slice and session caps too (cpu-1\'s 700G and 600G are for 755 GB).'
+  [ "$path" != quota ] || quota_note=$'\n    On 1024 GB nodes, give cpu-4/5 their own user-slice and session limits too (cpu-1\'s 700G and 600G are for 755 GB).'
   cat <<EOF
 # n1's replacement, path "$path": ${names}from $REF
 # Each step: who runs it, about how long, then the commands. Steps marked (coordinator) spend or create.
@@ -86,27 +86,30 @@ EOF
   done <<< "$NODES"
   cat <<EOF
 
-L2  (infra, 15 min) a PR: drop \`staged\` from [nodes.$first]$( [ "$names" = "$first " ] || echo " and the others'") in deploy.toml; add each node's line
-    to pods/nebius/peers (outside uk-south2 a node has no private address there: its public IP, port 22 open to all); mark it ready.
-    Until it lands, install from the PR's pushed head (--ref origin/BRANCH): install reads that commit's own deploy.toml.$quota_note
+L2  (infra, 15 min) a PR: drop \`staged\` from [nodes.$first]$( [ "$names" = "$first " ] || echo " and the others'") in deploy.toml; mark it ready.
+    No file takes a node's address: /etc/vy/peers is made at each install from the register of machines, where L1's --register
+    put the node. Until it lands, install from the PR's pushed head (--ref origin/BRANCH): install reads that commit's own deploy.toml.$quota_note
 
-L3  (infra, 5 min a node) install every entry, then prepare the check pod:
+L3  (infra, 5 min a node) the peers' key, then every entry (the node's own /etc/vy/peers among them, and the key taken from each
+    machine it names), then every other node's list, then prepare the check pod:
 EOF
   for n in $names; do
+    echo "    research pods ssh vy-nebius-2 -- 'tar -C ~/.ssh -cf - vy-cluster vy-cluster.pub' | research pods ssh $n -- 'umask 077; tar -C ~/.ssh -xf -'   # peers' key and its .pub, node to node: copied, never printed"
     echo "    research deploy install $n --by infra --ref $REF --apply"
     echo "    research pods ssh $n -- 'cd /etc/systemd/system && for t in vy-*.timer; do sudo systemctl enable --now \$t; done'   # install enables none"
-    echo "    research pods ssh vy-nebius-2 -- 'tar -C ~/.ssh -cf - vy-cluster vy-cluster.pub' | research pods ssh $n -- 'umask 077; tar -C ~/.ssh -xf -'   # peers' key and its .pub, node to node: copied, never printed"
-    echo "    research pods ssh $n -- 'echo from=\\\"IPS\\\" \$(cat ~/.ssh/vy-cluster.pub) >> ~/.ssh/authorized_keys'   # IPS: each node's egress (curl ifconfig.me)"
-    echo "    research run --on $n --project verity --source . --cwd source -- bash tools/verity/check/pod_setup.sh"
+  done
+  echo "    research deploy roll /etc/vy/peers --by infra --ref $REF           # a dry run: the machines each node's list names now and after"
+  echo "    research deploy roll /etc/vy/peers --by infra --ref $REF --apply   # every node takes the key from the new one, then each node's list, one at a time"
+  for n in $names; do
+    echo "    research run --on $n --project verity --source . --cwd source -- bash tools/check/pod_setup.sh"
   done
   echo
-  echo "L4  (infra, 2 min a node) the slot files, one train slot a node, Lean slots on $first (cpu-1's form):"
+  echo "L4  (infra, 2 min a node) the slot files, one candidate slot a node, Lean slots on $first (cpu-1's form):"
   while read -r n r p pre rate gib typ disk; do
     echo "    research pods ssh $n -- 'printf \"%s\\n\" \"# NAME CPUS [windows=FILE] [lead=MIN] [only=trains] [mem=GB]: check slots slot.py takes (infra)\" \"$(slot_line "$pre")\" > /workspace/research/locks/slots'"
   done <<< "$NODES"
   cat <<EOF
     research pods ssh $first -- 'printf "%s\n" "# NAME N: Lean audit slots (tools/check/lean_slot.py), n1s moved here (INF-57)" "check 3" "audit 2" "build 3" > /workspace/research/locks/lean-slots'
-    and every node's /etc/vy/peers from L2's file: research deploy install NODE --by infra --ref $REF --apply on each live node.
 
 L5  (infra for lean, 10 min, then the first build ~40 min in the background) lean's cache publisher on $first: its R2 key goes
     root to root, never through a terminal (it is 401 until lean's re-carded key lands; copy it after):
@@ -118,7 +121,7 @@ L6  (ci, 10 min) the merge mirror beside lean's sandbox: seed the bare repositor
 
 L7  (ci, 2 min) drive's machines: \`research queue drive --on ...\` gains $(echo "$names" | sed 's/ $//; s/ /,/g') and loses $N1 (before 13:00Z, n1's drain).
 
-L8  (infra, 13:00Z-14:30Z) n1 drains: no new check (L7), Kueue admits nothing after 13:00Z (drain_s), the running trains end;
+L8  (infra, 13:00Z-14:30Z) n1 drains: no new check (L7), Kueue admits nothing after 13:00Z (drain_s), the running candidates' checks end;
     \`research queue status\` shows nothing on $N1.
 
 L9  (infra, ~20 min, from 14:00Z) n1's custody to backlog 0, then once more after the last run ends:

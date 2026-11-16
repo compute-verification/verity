@@ -12,7 +12,7 @@ over the statements of the reference prover's sessions at `x` (`Reference.sessEr
 `Reference.complete_of_sessions` with the record's facts. What remains, each a hypothesis:
 
 * `hF : Claims.Flock.Complete H (deployZk rel)`: Flock's masked completeness, of `ZkTables.honestPR` at `ZkTables.δc H`.
-* `DrawFixed` (`Sampling.Session`) and `DrawSlots` (`Sampling.Select.DrawLaw`), the sampled verifier's, as for KS: the
+* `SampleFixed` (`Sampling.Session`) and `DrawSlots` (`Sampling.Select.SampleDesign`), the sampled verifier's, as for KS: the
   checked units' sessions are in the second stage and the sample doesn't read them; the sample is `Slots.select`'s, so it
   checks at most the statement's proof blocks (`checkedLe_of_slots`).
 * `Framed`: the reference prover's router (`step`) reads the sampled verifier's framing: at coins that check `u`, a
@@ -153,7 +153,7 @@ set_option synthInstance.maxSize 1024 in
 `1 − δc H x`, `c.sessions x` times the largest `ZkTables.δc H` over its sessions' statements, from Flock's masked
 completeness and the facts the module docstring lists. -/
 theorem complete_deploy (H : Msg → Msg) (hF : Claims.Flock.Complete H (FlockDeploy.deployZk rel))
-    (hfix : DrawFixed (deploy rel c)) (hslots : DrawSlots (deploy rel c)) (hframe : Framed c H)
+    (hfix : SampleFixed (deploy rel c)) (hslots : DrawSlots (deploy rel c)) (hframe : Framed c H)
     (haccept : AcceptsFramed c H) (hscope : SessionsScope c H) (hwit : SessionWit rel c H)
     (hsess : SessionSlots c H) : Complete H (deploy rel c) :=
   complete_of_sessions H (deploy rel c) hF hfix (checkedLe_of_slots _ hslots)

@@ -1,6 +1,6 @@
 """The prover of a serving node (run.sh's SERVE=node): the registered store is every engine's weights arena
 (`engine.py`, one vLLM engine a GPU) where it is served, read in place by `device.py`'s whole-node pass, beside an
-optional host tier of zero filler: the store `remote_bandwidth.store` lays out from the checkpoint, which `--model-dir`
+optional host tier of zero filler: the store `poub.store` lays out from the checkpoint, which `--model-dir`
 checks.
 
 ~~~text
@@ -37,13 +37,14 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/resource_accounting/memory/poub/prover/remote_session/prover.py").parent))
 sys.path.insert(0, str(HERE.parents[1]))
 
-from verity.protocols.accounting.poub.verifier import store as rstore  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier import store as rstore  # noqa: E402
 
 import device  # noqa: E402
 import store_layout  # noqa: E402
-from verity.protocols.accounting.poub.verifier.session import wire  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier.session import wire  # noqa: E402
 from engine import IpcHandle, write_json  # noqa: E402
 from prover import ProverSide, parse_plan  # noqa: E402
 
@@ -51,7 +52,7 @@ BLOCK = device.BLOCK
 
 
 def held_to_checkpoint(model_dir: Path, exports: list[dict], statuses: list[dict], workers: int) -> dict:
-    """Each engine's arena held to the one `remote_bandwidth.store.arena` lays out from the checkpoint in `model_dir`: its
+    """Each engine's arena held to the one `poub.store.arena` lays out from the checkpoint in `model_dir`: its
     weights' chunks, its entries (name, offset, bytes) and its plain SHA-256s a GiB, else RuntimeError with why. So a
     store a verifier with `--model` would refuse is refused here, before the hello."""
     arena = rstore.arena_of(model_dir)
@@ -219,12 +220,10 @@ def main() -> int:
                          "--overlap-openings`), so the verifier checks while the session runs")
     ap.add_argument("--model-dir", type=Path, metavar="DIR",
                     help="the checkpoint the engines serve: before the hello each engine's arena is held to the one "
-                         "`remote_bandwidth.store` lays out from it (`held_to_checkpoint`), the store a verifier with --model "
-                         "binds the registration to")
+                         "`poub.store` lays out from it (`held_to_checkpoint`)")
     ap.add_argument("--layout-workers", type=int, default=16, help="--model-dir's hashing processes")
-    ap.add_argument("--seed-payload-key", action="store_true",
-                    help="tests only: salt the payload tree with the device's own key, from --seed, not the "
-                         "verifier's, which a verifier with --model refuses")
+    ap.add_argument("--rows", type=int, default=None, choices=device.rb.ROWS,
+                    help="the registration's sketch rows k_s, sent in the hello (default: the receipt kind's, 16)")
     device.add_arguments(ap)
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
@@ -261,9 +260,9 @@ def main() -> int:
         conn = wire.connect(host_, int(port))
         p = ProverSide(conn, backend, a.node.encode(), parse_plan(a.plan), seed=a.seed,
                        warmup_ns=round(a.warmup_ms * 1e6), defer_openings=not a.overlap_openings,
-                       seed_payload_key=a.seed_payload_key, log=log)
+                       log=log)
         out["overlap_openings"] = a.overlap_openings
-        cal = p.register()
+        cal = p.register(rows=a.rows)
         log(f"node: registered, calibration {json.dumps(cal)}")
         out.update({"calibration": cal, "gates": backend.gates, "calibration_trace": backend.calibration_trace,
                     "registration": wire.registration_json(p.registration), "sessions": []})

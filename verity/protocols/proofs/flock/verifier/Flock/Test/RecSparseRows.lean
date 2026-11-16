@@ -1,13 +1,14 @@
-/-
+module
+
+public import Flock.RecSparse
+meta import Flock.RecSparse
+
+/-!
 `RecSparse.check` on a unit named `rec-sparse/n2-e6-s0-t1` with rec-sparse's input and output bits there: the statement's
 first rows must be `ports` at their widths, `h` (512 words) first and `v` last (`out` follows), and every copy must read
 their words in order. Each is refused before the net is built; the honest rows and leaves, as `rec_sparse.statement`
 composes them, pass both checks, at one copy or two.
 -/
-module
-
-public import Flock.RecSparse
-meta import Flock.RecSparse
 
 @[expose] public section
 

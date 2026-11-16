@@ -52,13 +52,13 @@ open FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge FlockSoundness
 theorem bitsOf_eq : Flock.RecOpen.bitsOf = bitsOf := rfl
 theorem shaMsg_eq : Flock.RecOpen.shaMsg = shaMsg := rfl
 theorem blockAt_eq : Flock.RecOpen.blockAt = blockAt := rfl
-theorem shaBlock_eq : Flock.RecOpen.shaBlock = shaBlock := rfl
+theorem shaChunk_eq : Flock.RecOpen.shaChunk = shaChunk := rfl
 
 theorem shaBlocks_eq (msg : List Lin) (n : ℕ) :
     ∀ k st, Flock.RecOpen.shaBlocks msg n k st = shaBlocks msg n k st := by
   induction n with
   | zero => intro k st; rfl
-  | succ n ih => intro k st; simp only [Flock.RecOpen.shaBlocks, shaBlocks, shaBlock_eq, blockAt_eq, ih]
+  | succ n ih => intro k st; simp only [Flock.RecOpen.shaBlocks, shaBlocks, shaChunk_eq, blockAt_eq, ih]
 
 theorem shaFrom_eq (cv : List (BitVec 64)) (bits : List Lin) (pre : ℕ) :
     Flock.RecOpen.shaFrom cv bits pre = shaFrom cv bits pre := by

@@ -5,7 +5,7 @@ public import Definitions.Core.Expand
 /-!
 # The bit-level expansion's guarantees
 
-A multi-bit circuit (NCI's check, the sampled-proof templates, any `w > 1` declaration) reaches the working draft's
+A multi-bit circuit (the inference-only check, the sampled-proof templates, any `w > 1` declaration) reaches the working draft's
 Boolean model through `Circuit.expand`: the expansion computes the circuit bit for bit on every input, is Boolean when
 every computed gate of positive width reads a gate of positive width, has as many gates as the circuit has bits, and a
 partition's proof blocks keep their sizes in bits and read at most the bits they read before.

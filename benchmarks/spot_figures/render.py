@@ -44,7 +44,7 @@ NAMES = {"two-stage": "Two-stage, width-stratified", "two-stage-uniform": "Two-s
          "two-stage-patterns": "Served patterns, width-stratified",
          "two-stage-patterns-uniform": "Served patterns, uniform",
          "one-stage": "One-stage, dot-product blocks", "request": "Request-level",
-         "layer_of_token": "Deferred interiors, a layer of a token"}
+         "layer_of_token": "Interior commitments, a layer of a token"}
 REFERENCE_STYLE = {"solid": "-", "dashed": (0, (4, 3))}
 VERTICAL = "#E69F00"
 #: a reference line this far above the headline curves' top is named at the top of the axis instead of stretching it

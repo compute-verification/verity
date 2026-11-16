@@ -2,7 +2,7 @@ module
 
 public import Proofs.Properties.Verity.Sampled.Assembled
 public import Proofs.Flock.Claims.JsonNorm
-public import Proofs.Properties.Challenger.CanonRead
+public import Proofs.Flock.Claims.CanonWf
 public import Proofs.Properties.Challenger.Coins
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
@@ -13,17 +13,17 @@ import all Init.Data.Ord.String
 Clause (i) of `MovesOf`: the record v2 reads in an accepted play decodes (`Exec.recordDraw`) to the session's sample file
 (`Live.dj`) at the proof blocks the play's sample selects.
 
-* **v2's hold** (`DrawHeld`): wherever composite `k` accepted what the prover sent as a `same` composition
+* **v2's hold** (`SampleHeld`): wherever composite `k` accepted what the prover sent as a `same` composition
   (`Verity.SameAccepts`) and v2 drew `units` over `n` units there (`Drew`), the units are ascending below `n`
   (`unitsAscending`) and the record's `unit_draw` is the subset sample of those units,
-  `UnitDraw.toJson ⟨.subset units.size, n, units, #[]⟩` (`recordDrawn`): v2 accepts only a subset record sample
-  (`recordDraw_subset`), whatever law it drew by. `Sampled/Held.lean` proves it for every composite (`drawHeld`), from
-  the record sample's population and units (`drawHeld_of`).
-* **The record half** (`recordDraw_of_drew`): where `DrawHeld` holds, `k` accepted, v2 drew `units`, and the session's
-  law and population are v2's, the record decodes to the session's sample file, the subset print of `kd` units
-  (`Live.dj`), at the proof blocks `units` names: v2 drew `kd` units (`Flock.Bridge.drawUnits_size`), and the sample file
-  at the units' proof blocks is `UnitDraw.toJson ⟨.subset kd, n, units, #[]⟩` (`drawOf_filter`).
-* **`norm` fixes a subset sample's file** (`norm_toJson_subset`), as `DrawHeld`'s proof reads it.
+  `UnitSample.toJson ⟨.subset units.size, n, units, #[]⟩` (`recordSampled`): v2 accepts only a subset record sample
+  (`recordSample_subset`), whatever sampling design it drew by. `Sampled/Held.lean` proves it for every composite (`sampleHeld`), from
+  the record sample's population and units (`sampleHeld_of`).
+* **The record half** (`recordSample_of_drew`): where `SampleHeld` holds, `k` accepted, v2 drew `units`, and the session's
+  sampling design and population are v2's, the record decodes to the session's sample file, the subset print of `kd` units
+  (`Live.dj`), at the proof blocks `units` names: v2 drew `kd` units (`Flock.Bridge.sampleUnits_size`), and the sample file
+  at the units' proof blocks is `UnitSample.toJson ⟨.subset kd, n, units, #[]⟩` (`sampleOf_filter`).
+* **`norm` fixes a subset sample's file** (`norm_toJson_subset`), as `SampleHeld`'s proof reads it.
 * **v2's coins fit `MAX_COINS` frames** (`coins_size_le`): v2's evidence holds its segment's openings within `LIMITS`
   (`Properties.Challenger.Limits.evidenceOf_within`), and the coins v2 reads are one frame per opening
   (`challengerStream_ok`).
@@ -38,15 +38,15 @@ Clause (i) of `MovesOf`: the record v2 reads in an accepted play decodes (`Exec.
   the family answering the digest takes a written coin: a node is `FreshAt` the play's close only at the release its
   outputs' logs show there (`FreshAt.release`, `LogsAt.unique`), the close reaching only outputs at its log
   (`reaches_finish`).
-* **The record's sample from the first stop** (`recordDraw_firstStop`, `MovesOf`'s clause (i)): at the sample-coupled coin
+* **The record's sample from the first stop** (`recordSample_firstStop`, `MovesOf`'s clause (i)): at the sample-coupled coin
   map, an output a play reaches from the first stop has the fill's releases, then nothing or an opening, as its log.
   Where every release of the sample's family precedes every opening, the play's coins of the family are those releases'
-  (`freshCoins_of_stopTail`), and `recordDraw_of_coins` gives the record's sample.
-* **The record's sample from the sample's coins** (`recordDraw_of_coins`): in an accepted play whose log v2 read is the
+  (`freshCoins_of_stopTail`), and `recordSample_of_coins` gives the record's sample.
+* **The record's sample from the sample's coins** (`recordSample_of_coins`): in an accepted play whose log v2 read is the
   device's, wherever the play's coins of the sample's family and the sample's coins agree (`CoinsAgree`: one list
   starts the other), the record decodes to the session's sample file at the sample. v2's coins start the play's
-  (`logged_draw_v2`) and fit the sample's (`coins_size_le`), so they start the sample's bytes, and the sample is v2's
-  units (`draw_of_drew`).
+  (`logged_sample_v2`) and fit the sample's (`coins_size_le`), so they start the sample's bytes, and the sample is v2's
+  units (`sample_of_drew`).
 -/
 
 @[expose] public section
@@ -699,26 +699,27 @@ theorem freshCoins_of_stopTail {label : String} {after : ByteArray} {L log' : Li
 
 /-! ## The record's sample -/
 
-/-- **The units are ascending below `n`**: `UnitDraw.ofJson`'s check of a sample's units. -/
+/-- **The units are ascending below `n`**: `UnitSample.ofJson`'s check of a sample's units. -/
 def unitsAscending (n : ℕ) (units : Array ℕ) : Bool :=
   (List.range units.size).all fun i => units[i]! < n && (i == 0 || units[i - 1]! < units[i]!)
 
 /-- **The record's sample is the one v2 drew**: the units are ascending below `n`, and the record's `unit_draw`
 (`Flock.Witness.recordDraw`) is the sample of `units` under the sampling design `L` over `n` units. -/
-def recordDrawn (L : Flock.Draw.Law) (n : ℕ) (units : Array ℕ) (record : String) : Prop :=
+def recordSampled (L : Flock.Draw.SamplingDesign) (n : ℕ) (units : Array ℕ) (record : String) : Prop :=
   unitsAscending n units = true ∧
-    Flock.Witness.recordDraw record = some (Flock.Draw.UnitDraw.toJson ⟨L, n, units, #[]⟩)
+    Flock.Witness.recordDraw record = some (Flock.Draw.UnitSample.toJson ⟨L, n, units, #[]⟩)
 
 /-- **v2 holds the record's sample to its own** in what composite `k` accepts: wherever `k` accepted what the prover sent
-as a `same` composition and v2 drew `units` over `n` units there (`Drew`, under the verifier's law), the record v2
-reads there is the `.subset` print of those units (`recordDrawn` at `.subset units.size`), the member's share of the
-window's sample; the bound is the verifier's law's, from v1's window check. Without the acceptance, the record
+as a `same` composition on parameters that name no members (`OneStatement`) and v2 drew `units` over `n` units there
+(`Drew`, under the verifier's sampling design), the record v2 reads there is the `.subset` print of those units
+(`recordSampled` at `.subset units.size`), the member's share of the window's sample; the bound is the verifier's
+sampling design's, from v1's window check. Without the acceptance, the record
 `sentRecord` finds by id can be another entry's than the case `Drew` reads in order. -/
-def DrawHeld (k : Verity.Registration.Composite) : Prop :=
-  ∀ s dr L n ξ units record, Verity.SameAccepts k s → Drew k s dr L n ξ units → sentRecord s = some record →
-    recordDrawn (.subset units.size) n units record
+def SampleHeld (k : Verity.Registration.Composite) : Prop :=
+  ∀ s dr L n ξ units record, Verity.SameAccepts k s → Drew k s dr L n ξ units → OneStatement s.params →
+    sentRecord s = some record → recordSampled (.subset units.size) n units record
 
-theorem exec_recordDraw (record : String) :
+theorem exec_recordSample (record : String) :
     FlockSoundness.Discharge.Exec.recordDraw record = Flock.Witness.recordDraw record :=
   rfl
 
@@ -747,7 +748,7 @@ theorem unitsAscending_spec {n : ℕ} {units : Array ℕ} (h : unitsAscending n 
     simpa using far d i (by simpa using h₂)
 
 /-- **The verifier's own sample of the proof blocks an ascending sample names** is that sample. -/
-theorem drawOf_filter {n : ℕ} {units : Array ℕ} (h : unitsAscending n units = true) (L : Flock.Draw.Law) :
+theorem sampleOf_filter {n : ℕ} {units : Array ℕ} (h : unitsAscending n units = true) (L : Flock.Draw.SamplingDesign) :
     FlockSoundness.Discharge.ZkLink.drawOf L n (Finset.univ.filter fun u : Fin n => u.val ∈ units) =
       ⟨L, n, units, #[]⟩ := by
   obtain ⟨hlt, hs⟩ := unitsAscending_spec h
@@ -764,28 +765,6 @@ theorem drawOf_filter {n : ℕ} {units : Array ℕ} (h : unitsAscending n units 
     (List.toFinset_sort (· ≤ ·) (hs.imp ne_of_lt)).2 (hs.imp le_of_lt)
   simp only [FlockSoundness.Discharge.ZkLink.drawOf, himg, hsort, Array.toArray_toList]
 
-open Properties.Challenger.CanonRead (sortedKeys_arr sortedKeys_obj increasing_iff) in
-/-- **A well-formed value's objects hold their keys in order.** -/
-theorem sortedKeys_of_wf : ∀ j : Json, Claims.Json.Wf j → _root_.Spot.sortedKeys j = true := by
-  refine FlockDeploy.json_ind (fun _ => by simp [_root_.Spot.sortedKeys])
-    (fun _ _ => by simp [_root_.Spot.sortedKeys]) (fun _ _ => by simp [_root_.Spot.sortedKeys])
-    (fun _ _ => by simp [_root_.Spot.sortedKeys]) ?_ ?_
-  · intro a ih hw
-    cases hw with
-    | arr h => exact sortedKeys_arr.2 fun x hx => ih x hx (h x hx)
-  · intro m ih hw
-    cases hw with
-    | obj hm h =>
-      refine sortedKeys_obj.2 ⟨?_, fun p hp => ?_⟩
-      · rw [Std.TreeMap.Raw.toList_toArray, increasing_iff, List.pairwise_map]
-        exact (Std.TreeMap.Raw.ordered_keys_toList hm).imp fun hlt => compareOfLessAndEq_eq_lt.1 hlt
-      · have hp' : p ∈ m.toList := by
-          rw [← Std.TreeMap.Raw.toList_toArray]
-          exact Array.mem_toList_iff.2 hp
-        refine ih p hp' (h p.1 p.2 ?_)
-        rw [Std.TreeMap.Raw.get?_eq_getElem?]
-        exact (Std.TreeMap.Raw.mem_toList_iff_getElem?_eq_some hm).1 hp'
-
 /-! ## `norm` fixes a subset sample's file -/
 
 theorem norm_arr_of {a : Array Json} (h : ∀ x ∈ a, Flock.norm x = x) : Flock.norm (.arr a) = .arr a := by
@@ -801,8 +780,8 @@ theorem norm_nats (a : Array ℕ) :
 
 /-- **`norm` fixes a subset sample's file.** -/
 theorem norm_toJson_subset (k pop : ℕ) (units cl : Array ℕ) :
-    Flock.norm (Flock.Draw.UnitDraw.toJson ⟨.subset k, pop, units, cl⟩) =
-      Flock.Draw.UnitDraw.toJson ⟨.subset k, pop, units, cl⟩ := by
+    Flock.norm (Flock.Draw.UnitSample.toJson ⟨.subset k, pop, units, cl⟩) =
+      Flock.Draw.UnitSample.toJson ⟨.subset k, pop, units, cl⟩ := by
   have h : ∀ a b c d : Json, Flock.norm (Json.mkObj [("law", a), ("population", b), ("k", c), ("units", d)]) =
       Json.mkObj [("law", Flock.norm a), ("population", Flock.norm b), ("k", Flock.norm c), ("units", Flock.norm d)] :=
     fun _ _ _ _ => rfl
@@ -812,24 +791,24 @@ theorem norm_toJson_subset (k pop : ℕ) (units cl : Array ℕ) :
   rfl
 
 /-- **The record's sample is the session's sample file at v2's units**: where v2 holds the record's sample to its own
-(`DrawHeld`), composite `k` accepted what the prover sent, v2 drew `units` under the sampling design `L` over `n` units there, and
-the session's law and population are `L` and `n`, the record v2 reads decodes to the session's sample file at the proof
-blocks `units` names. v2 drew the session's `kd` units (`Flock.Bridge.drawUnits_size`), so the record's subset sample
+(`SampleHeld`), composite `k` accepted what the prover sent, v2 drew `units` under the sampling design `L` over `n` units there, and
+the session's sampling design and population are `L` and `n`, the record v2 reads decodes to the session's sample file at the proof
+blocks `units` names. v2 drew the session's `kd` units (`Flock.Bridge.sampleUnits_size`), so the record's subset sample
 is the session's. -/
-theorem recordDraw_of_drew {k : Verity.Registration.Composite} (hH : DrawHeld k) {s : Verity.Sent} {dr : Draws}
-    {L : Flock.Draw.Law} {n : ℕ} {ξ : ByteArray} {units : Array ℕ} (hS : Verity.SameAccepts k s)
-    (hd : Drew k s dr L n ξ units) (A : Live)
+theorem recordSample_of_drew {k : Verity.Registration.Composite} (hH : SampleHeld k) {s : Verity.Sent} {dr : Draws}
+    {L : Flock.Draw.SamplingDesign} {n : ℕ} {ξ : ByteArray} {units : Array ℕ} (hS : Verity.SameAccepts k s)
+    (hd : Drew k s dr L n ξ units) (hone : OneStatement s.params) (A : Live)
     (hL : A.design = L) (hn : A.n = n) {record : String}
     (hr : sentRecord s = some record) :
     FlockSoundness.Discharge.Exec.recordDraw record =
       some (A.dj (Finset.univ.filter fun u : Fin A.n => u.val ∈ units)) := by
-  obtain ⟨hu, h⟩ := hH s dr L n ξ units record hS hd hr
+  obtain ⟨hu, h⟩ := hH s dr L n ξ units record hS hd hone hr
   obtain ⟨_, _, _, _, _, _, -, -, -, -, _, hdu⟩ := hd
   subst hL hn
-  have hk : units.size = A.kd := Flock.Bridge.drawUnits_size A.hlaw hdu
-  rw [exec_recordDraw, h]
+  have hk : units.size = A.kd := Flock.Bridge.sampleUnits_size A.hlaw hdu
+  rw [exec_recordSample, h]
   show _ = some (FlockSoundness.Discharge.ZkLink.drawOf (.subset A.kd) A.n _).toJson
-  rw [drawOf_filter hu, hk]
+  rw [sampleOf_filter hu, hk]
 
 /-! ## v2's coins fit `MAX_COINS` frames -/
 
@@ -840,7 +819,7 @@ theorem coins_size_le {bs : Core.Blobs} {a b e : ByteArray} {p : _root_.Spot.One
     {dr : Draws} (h : V2Accepts bs a b e p c ev ξ dr) :
     ξ.size ≤ _root_.Spot.Challenger.COIN_BYTES * _root_.Spot.Challenger.MAX_COINS := by
   obtain ⟨-, -, hev, hξ, hdr, -⟩ := h
-  obtain ⟨b', hb'⟩ := Binding.dispatch_evidence hev
+  obtain ⟨b', hb'⟩ := dispatch_evidence hev
   obtain ⟨-, -, -, -, hops, -⟩ :=
     Properties.Challenger.Limits.withinAt_spec (Properties.Challenger.Limits.evidenceOf_within hb')
   obtain ⟨raw, hraw, rfl⟩ := Properties.Challenger.oneStageZk_reads p c dr hdr ev ξ hξ
@@ -875,7 +854,7 @@ theorem prefix_flatten {a b : List (List Bool)} (h : a <+: b) : a.flatten <+: b.
   obtain ⟨t, rfl⟩ := h
   exact ⟨t.flatten, by rw [List.flatten_append]⟩
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The record's sample is the session's sample file at the sample**, wherever the play's coins of the sample's family
 agree with the sample's coins (`CoinsAgree`): in a play at the parameters `θ` of a session v2 sets up and tied to v2's
@@ -883,8 +862,8 @@ verifier, whose sampled verdict accepts, whose log v2 read is the device's, and 
 `label` answering `after`, the record decodes to the session's sample file at the sample of the device's coins `ω`, whose
 bytes are the coins `κ`. Where the play holds more of the family's coins than `κ`, v2's still fit `κ`'s
 (`coins_size_le`, `hm`). -/
-theorem recordDraw_of_coins {V : Vocab d α} {k : Verity.Registration.Composite} {A : Live} {θ : ByteArray}
-    {F : Array ByteArray} (hA : SetsUp V θ F A) (ht : PopTied θ A) (hR : DrawReadAll k coinsRead) (hH : DrawHeld k) {m : ℕ} (hm : _root_.Spot.Challenger.MAX_COINS ≤ m)
+theorem recordSample_of_coins {V : Vocab d α} {k : Verity.Registration.Composite} {A : Live} {θ : ByteArray}
+    {F : Array ByteArray} (hA : SetsUp V θ F A) (ht : PopTied θ A) (hR : SampleReadAll k coinsRead) (hH : SampleHeld k) {m : ℕ} (hm : _root_.Spot.Challenger.MAX_COINS ≤ m)
     {κ : Fin m → Fin 512 → Bool} {ω : A.Ω}
     (hsrc : _root_.Properties.Spot.bytesOf (A.src ω 0) =
       _root_.Properties.Spot.bytesOf (coinBytes m 64 κ 0))
@@ -894,13 +873,14 @@ theorem recordDraw_of_coins {V : Vocab d α} {k : Verity.Registration.Composite}
     (hr : sentRecord o.sent = some record) :
     FlockSoundness.Discharge.Exec.recordDraw record = some (A.dj (A.L.draw ω)) := by
   obtain ⟨p₀, hp₀, -⟩ := hA.params
-  obtain ⟨dr, L, n, ξ, units, hd, hs⟩ := logged_draw_v2 hR (by rw [hθ]; exact hp₀) hv hl
+  have hone : OneStatement o.params := by rw [hθ]; exact hA.single
+  obtain ⟨dr, L, n, ξ, units, hd, hs⟩ := logged_sample_v2 hR (by rw [hθ]; exact hp₀) hone hv hl
   have hn := n_of_popTied ht hv.2.1 hθ hd
-  have hL := law_of_setsUp hA hv.2.1 hθ hd hn
+  have hL := samplingDesign_of_setsUp hA hv.2.1 hθ hd hn
   obtain ⟨a, b, e, p, c, ev, hcase, hacc, -⟩ := id hd
   obtain ⟨hlab, haft⟩ := hN a b e p c ev ξ dr hcase hacc
   have hξ := coins_size_le hacc
-  unfold ShowsDraw at hs
+  unfold ShowsSample at hs
   rw [hlab, haft] at hs
   have e₀ : bitsOf (_root_.Properties.Spot.bytesOf (coinBytes m 64 κ 0)) = (fillCoins κ).flatten :=
     bitsOf_streamOf_coinBytes (B := 64) κ
@@ -913,8 +893,8 @@ theorem recordDraw_of_coins {V : Vocab d α} {k : Verity.Registration.Composite}
       rw [h64] at hξ
       rw [length_bitsOf, length_fillCoins]
       omega
-  rw [draw_of_drew hd A ω hL hn hpre]
-  exact recordDraw_of_drew hH hv.2.1 hd A hL hn hr
+  rw [sample_of_drew hd A ω hL hn hpre]
+  exact recordSample_of_drew hH hv.2.1 hd hone A hL hn hr
 
 /-! ## The record's sample from the sample-coupled first stop -/
 
@@ -938,11 +918,11 @@ ends where the sampled verdict accepts, the log v2 read is the device's, v2 read
 `label` answering `after`, and every release of that family precedes every opening, the record decodes to the session's
 sample file at `ω`'s sample. The walk from the sample's fill stops at a log of the fill's releases, then nothing or an
 opening (`walkFill_req`). The order leaves the play's coins of the family those releases' (`freshCoins_of_stopTail`),
-which agree with the sample's coins, and `recordDraw_of_coins` reads the rest. -/
-theorem recordDraw_firstStop (e : 𝔽 ≃ (Fin 128 → Bool)) {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray}
+which agree with the sample's coins, and `recordSample_of_coins` reads the rest. -/
+theorem recordSample_firstStop (e : 𝔽 ≃ (Fin 128 → Bool)) {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray}
     {c : ByteArray} {k : Verity.Registration.Composite} {A : Live} {rd : Reading A.rounds}
     {σ : Strategy (V.game θ F c)} {label : String} {after : ByteArray} {m : ℕ} {κ : A.Ω → Fin m → Fin 512 → Bool}
-    (hA : SetsUp V θ F A) (ht : PopTied θ A) (hR : DrawReadAll k coinsRead) (hH : DrawHeld k)
+    (hA : SetsUp V θ F A) (ht : PopTied θ A) (hR : SampleReadAll k coinsRead) (hH : SampleHeld k)
     (hrd : PicksOpenings rd) (hm : _root_.Spot.Challenger.MAX_COINS ≤ m)
     (hsrc : ∀ ω, _root_.Properties.Spot.bytesOf (A.src ω 0) =
       _root_.Properties.Spot.bytesOf (coinBytes m 64 (κ ω) 0))
@@ -968,6 +948,6 @@ theorem recordDraw_firstStop (e : 𝔽 ≃ (Fin 128 → Bool)) {V : Vocab d α} 
     rw [hlog] at hP ⊢
     rw [freshCoins_of_stopTail hP htail]
     exact hc
-  exact recordDraw_of_coins hA ht hR hH hm (hsrc ω.1) hθ hv hl hN hc' hrec
+  exact recordSample_of_coins hA ht hR hH hm (hsrc ω.1) hθ hv hl hN hc' hrec
 
 end Verity.Sampled

@@ -258,7 +258,7 @@ def extend {Coin : Type} [Inhabited Coin] {n N : ℕ} (ρ : Fin n → Coin) (r :
   fork n (fun i => coinSeq ρ i.val) r
 
 /-- An inner run's coins with its abort coins, as a sample of the compiled verifier's coins and `E_O`'s. -/
-def extendDraw {Coin C : Type} [Inhabited Coin] {n N : ℕ} (t : (Fin n → Coin) × (Fin N → Coin) × C) :
+def extendSample {Coin C : Type} [Inhabited Coin] {n N : ℕ} (t : (Fin n → Coin) × (Fin N → Coin) × C) :
     (Fin N → Coin) × C :=
   (extend t.1 t.2.1, t.2.2)
 
@@ -290,8 +290,8 @@ theorem unifMap_extend {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited C
     _ = Ex (fun p : (Fin N → Coin) × (Fin N → Coin) => G (fork n p.1 p.2)) := by simp only [h1]
     _ = Ex G := Ex_fork hoff G
 
-theorem unifMap_extendDraw {Coin C : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [Fintype C] {n N : ℕ}
-    (h : n ≤ N) : UnifMap (fun t : (Fin n → Coin) × (Fin N → Coin) × C => extendDraw t) := by
+theorem unifMap_extendSample {Coin C : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [Fintype C] {n N : ℕ}
+    (h : n ≤ N) : UnifMap (fun t : (Fin n → Coin) × (Fin N → Coin) × C => extendSample t) := by
   let e : (Fin n → Coin) × (Fin N → Coin) × C ≃ ((Fin n → Coin) × (Fin N → Coin)) × C :=
     { toFun := fun t => ((t.1, t.2.1), t.2.2)
       invFun := fun p => (p.1.1, p.1.2, p.2)
@@ -376,7 +376,7 @@ coins and `E_O`'s) is kept as `keepD` keeps the sample they extend to. -/
 noncomputable def keepA (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (ρ : Fin (I.V.k (xI D x)) → Coin) (a : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) : Bool :=
-  keepD H D I DO decO P x ω (extendDraw (ρ, a))
+  keepD H D I DO decO P x ω (extendSample (ρ, a))
 
 /-! ## `E*`'s view is `P_I`'s aborting runs' wherever every rerun agrees -/
 
@@ -478,8 +478,8 @@ theorem abortRun_eq {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO :
     (hn : I.V.k (xI D x) ≤ D.V.k x) (ω : Ω)
     (t : (Fin (I.V.k (xI D x)) → Coin) × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) :
     abortRun H (innerP H D I DO decO P x decC) I.V (xI D x) (keepA H D I DO decO P x) ω t =
-      innerF H D I DO decO P x decC ω (extendDraw t) := by
-  simp only [abortRun, innerF, keepA, extendDraw, innerCoins_extend D I x hn]
+      innerF H D I DO decO P x decC ω (extendSample t) := by
+  simp only [abortRun, innerF, keepA, extendSample, innerCoins_extend D I x hn]
   rfl
 
 /-- `P_I`'s aborting run records only calls that `E_O`'s witnesses there record, or those witnesses' calls collide
@@ -514,7 +514,7 @@ theorem calls_true {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : 
 sample it reruns at is bad, it sees what `E^rep` sees of `P_I`'s aborting runs (`RP.eval_congr`); the judged sample is
 `P_I`'s accepted run, since `E_O` succeeds there and the inner view accepts. A bad rerun costs `N_I` times one sample's
 (`Pr_exists_rerun_le`), and `E^rep` at `P_I`'s aborting runs over their own coins is `Inner.PrBadAbort`'s (the inner
-coins and the abort coins extend to uniform samples, `unifMap_extendDraw`). -/
+coins and the abort coins extend to uniform samples, `unifMap_extendSample`). -/
 theorem PrBadGood_le_abort {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {decC : Msg → Msg → Coin} (hV : InnerViewRun H D I DO) (hAcc : InnerAccepts H D I DO)
     (hpc : PublicCoin H I decC) (hR : InnerRounds D I) (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type}
@@ -576,7 +576,7 @@ theorem PrBadGood_le_abort {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W
     have hΦ : UnifMap (fun s : Ω × ((Fin (I.V.k (xI D x)) → Coin) × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) ×
         (Fin (I.waits (xI D x)) → Fin (I.cap (xI D x)) →
           (Fin (I.V.k (xI D x)) → Coin) × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) =>
-        (s.1, (extendDraw s.2.1).1, (extendDraw s.2.1).2, fun i j => extendDraw (s.2.2 i j))) := by
+        (s.1, (extendSample s.2.1).1, (extendSample s.2.1).2, fun i j => extendSample (s.2.2 i j))) := by
       let e : Ω × ((Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) ×
           (Fin (I.waits (xI D x)) → Fin (I.cap (xI D x)) → (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) ≃
           Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x ×
@@ -585,15 +585,15 @@ theorem PrBadGood_le_abort {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W
           invFun := fun s => (s.1, (s.2.1, s.2.2.1), s.2.2.2)
           left_inv := fun _ => rfl
           right_inv := fun _ => rfl }
-      exact (UnifMap.self.prod ((unifMap_extendDraw (hR x)).prod
-        (UnifMap.pi (UnifMap.pi (unifMap_extendDraw (hR x)) _) _))).comp (UnifMap.equiv e)
+      exact (UnifMap.self.prod ((unifMap_extendSample (hR x)).prod
+        (UnifMap.pi (UnifMap.pi (unifMap_extendSample (hR x)) _) _))).comp (UnifMap.equiv e)
     rw [← hΦ.Pr Y]
     refine Pr_congr fun s => ?_
-    show (innerF H D I DO decO P x decC s.1 (extendDraw s.2.1)).out = .acc ∧
+    show (innerF H D I DO decO P x decC s.1 (extendSample s.2.1)).out = .acc ∧
       ¬ I.R.ext (xI D x) ((erepProg (I.waits (xI D x)) (I.k (xI D x)) (I.cap (xI D x)) I.opens
-        (I.assemble (xI D x)) (I.check (xI D x)) (extendDraw s.2.1) (fun i j => extendDraw (s.2.2 i j))).eval H
+        (I.assemble (xI D x)) (I.check (xI D x)) (extendSample s.2.1) (fun i j => extendSample (s.2.2 i j))).eval H
           (innerF H D I DO decO P x decC s.1)).1 ↔ _
-    have hf : (fun d => innerF H D I DO decO P x decC s.1 (extendDraw d)) =
+    have hf : (fun d => innerF H D I DO decO P x decC s.1 (extendSample d)) =
         abortRun H (innerP H D I DO decO P x decC) I.V (xI D x) (keepA H D I DO decO P x) s.1 :=
       funext fun d => (abortRun_eq (hR x) s.1 d).symm
     rw [erepProg_eval_comp, hf, ← abortRun_eq (hR x)]
@@ -690,8 +690,8 @@ theorem PrBAbort_le_PrBI {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} 
       fun p hp => (List.mem_append.1 hp).elim (calls_true hT hN0 ω _ p) (calls_true hT hN0 ω _ p)
     have hsome : (findColl (D.calls x ((eoOut H D I DO decO P x ω (extend ρ a.1, a.2)).getD []) ++
         D.calls x ((eoOut H D I DO decO P x ω (extend (forkCoins j ρ ρ') a'.1, a'.2)).getD []))).isSome := by
-      rcases innerF_vLog_sub (decC := decC) hL hpc ω (extendDraw (ρ, a)) with h1 | ⟨u, v, huv, -⟩
-      · rcases innerF_vLog_sub (decC := decC) hL hpc ω (extendDraw (forkCoins j ρ ρ', a')) with
+      rcases innerF_vLog_sub (decC := decC) hL hpc ω (extendSample (ρ, a)) with h1 | ⟨u, v, huv, -⟩
+      · rcases innerF_vLog_sub (decC := decC) hL hpc ω (extendSample (forkCoins j ρ ρ', a')) with
           h2 | ⟨u, v, huv, -⟩
         · exact findColl_isSome_of_sub H htrue (fun p hp => (List.mem_append.1 hp).elim
             (fun hp => List.mem_append_left _ (h1 p hp)) fun hp => List.mem_append_right _ (h2 p hp)) h

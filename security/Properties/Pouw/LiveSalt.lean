@@ -53,7 +53,7 @@ The facts PoUW's argument reads from an acceptance:
 * **The salt is fixed only after the epoch's root.** The open naming `R` is signed before the session's record, which
   holds the challenger's commitment to the coins (`leafOf o.sig < recordLeaf`). The coin is opened after `R`
   (`liveReason`), and `R` is the root the log shows the coin's release followed. That the gate and the challenger run as
-  written, in that order, is S5 (live coins on `trusted-host`); that the coin stays hidden from the hello to its
+  written, in that order, is S5 (live coins on `trusted-device`); that the coin stays hidden from the hello to its
   release is N1 (X-RO commitments, hm96's hiding leaves). Both are named assumptions of PoUW's model, not this check's
   properties.
 * **One epoch, one session, one salt.** The ledger opens `R` once and the session once (`LedgerShows`' last clause), so
@@ -113,7 +113,7 @@ def WeightsRoot (m : Json) (w : ByteArray) : Prop :=
 def EPOCH_OPEN_TAG : ByteArray := "verity/pouw-epoch-open/v1".toUTF8
 
 /-- What `epochOpenRoot w k` hashes: `EPOCH_OPEN_TAG` ‖ `w` ‖ u64be(`k`), concatenated with no separator, as
-`PouwCheck.windowOpenRoot` concatenates its parts. With `w` 64 bytes and `k` below 2^64 it is 97 bytes, every part at a
+`PouwCheck.executionPhaseOpenRoot` concatenates its parts. With `w` 64 bytes and `k` below 2^64 it is 97 bytes, every part at a
 fixed offset. -/
 def epochMessage (w : ByteArray) (k : Nat) : ByteArray := EPOCH_OPEN_TAG ++ w ++ PouwCommit.be8 k
 
@@ -126,7 +126,7 @@ def EpochRoot (m : Json) (w : ByteArray) (k : Nat) : Prop :=
   WeightsRoot m w ∧ PouwWindow.natOf? (at? m "pass_index") = some k ∧ k < 2 ^ 64
 
 /-- The window identity that a Pearl-C salt session is opened on: `{root}`, the epoch's root in lowercase hex. -/
-def rootWindow (r : ByteArray) : Json := Json.mkObj [("root", .str (Flock.hexOf r))]
+def rootExecutionPhase (r : ByteArray) : Json := Json.mkObj [("root", .str (Flock.hexOf r))]
 
 /-- `audit.salt_of` over a live commitment: the epoch's 32-byte salt from its opened salt coin and the weights' root. -/
 def liveSalt (c : LiveCommitment) (coin w : ByteArray) : Except String ByteArray := do
@@ -198,7 +198,7 @@ def Accepted (key ledger pins main session m : Json) (w : ByteArray) (k : Nat) (
   ∃ (ck : ChallengerKey) (openSeq : Nat) (received : Roots),
     ChallengerKey.ofJson key = .ok ck ∧
     at? m "schema" = .str MANIFEST_SCHEMA ∧ EpochRoot m w k ∧
-    pinnedChallengePhase ledger (rootWindow (epochOpenRoot w k)) ck pins main = .ok a ∧
+    pinnedChallengePhase ledger (rootExecutionPhase (epochOpenRoot w k)) ck pins main = .ok a ∧
     challengePhaseNamed a ck session = .ok (c, received) ∧
     Counts c received (epochOpenRoot w k) ∧
     LedgerShows ledger a.session (epochOpenRoot w k) a.recordLeaf openSeq ∧

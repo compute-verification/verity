@@ -120,7 +120,7 @@ its packed trace, its extra claims `e` at the points `pts`, each of the table's 
 structure RepIn (H : Claims.Msg → Claims.Msg) (st : Flock.Stmt) (tr : Trace) (ω : TapeZk) (i : ℕ)
     (v : Schedule × ℕ) (cm : Commit) (pts : Array (Array F128)) (e : Array Claim) (rep : ℕ) (ic : InnerCommit) :
     Prop where
-  schedule : Zk.schedule (Setup.ofCircuit st).m = .ok v
+  schedule : Zk.schedule (Setup.ofCircuit st).wideLeaf (Setup.ofCircuit st).m = .ok v
   commit : commitPZk (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit st).merkle
     (v.1.levels.getD 0 default) v.2 (packed tr (Setup.ofCircuit st).m) (ω.extra i) (ω.lanePad i) (ω.salt i 0 0) =
       .ok cm
@@ -278,7 +278,7 @@ theorem Case.extras_le (c : Case H rel) {st : Flock.Stmt} (hst : st ∈ c.sts) {
   omega
 
 theorem repRoundsT_eq {spec : SessionSpec} {st : Flock.Stmt} {v : Schedule × ℕ} {e : Array Claim}
-    (hv : Zk.schedule st.m = .ok v) (he : e.size = spec.points * st.regions.size) :
+    (hv : Zk.schedule st.wideLeaf st.m = .ok v) (he : e.size = spec.points * st.regions.size) :
     repRoundsT st v e = repRounds true spec st := by
   rcases v with ⟨sch, tp⟩
   simp [repRoundsT, repRounds, hv, he]
@@ -314,7 +314,7 @@ theorem repStart_last (spec : SessionSpec) (sts : Array Flock.Stmt) :
 /-- **Table `q / 2`'s rep `q % 2` of a good case has good coins** (`CoinsT`) from `repStartZk` sends: its sends end
 by the last rep's, inside the verifier's coins, and its slots are `BadZk`'s. -/
 theorem Case.coinsT (c : Case H rel) {q : ℕ} (hq : q < 2 * c.sts.size) {v : Schedule × ℕ}
-    (hv : Zk.schedule c.sts[q / 2]!.m = .ok v) {e : Array Claim}
+    (hv : Zk.schedule c.sts[q / 2]!.wideLeaf c.sts[q / 2]!.m = .ok v) {e : Array Claim}
     (he : e.size = c.spec.points * c.sts[q / 2]!.regions.size) :
     CoinsT c.sts[q / 2]! v e c.r (repStartZk c.spec c.sts q) := by
   rcases v with ⟨sch, tp⟩
@@ -367,7 +367,7 @@ def Case.priorT (c : Case H rel) (q : ℕ) : Array (List F128) :=
 its earlier claim points (`Case.priorT`): the table's rank slot is `BadZk`'s, inside the verifier's coins, and rep
 `0`'s check reads the first two of rep `1`'s four points (`maskRankOk_append_left`). -/
 theorem Case.maskRankT (c : Case H rel) {q : ℕ} (hq : q < 2 * c.sts.size) {v : Schedule × ℕ}
-    (hv : Zk.schedule c.sts[q / 2]!.m = .ok v) {e : Array Claim}
+    (hv : Zk.schedule c.sts[q / 2]!.wideLeaf c.sts[q / 2]!.m = .ok v) {e : Array Claim}
     (he : e.size = c.spec.points * c.sts[q / 2]!.regions.size) :
     MaskRankT c.sts[q / 2]! c.r (repStartZk c.spec c.sts q) (c.priorT q) := by
   have hk : (V true).k c.x = 2 + rounds true c.spec c.sts := by
@@ -601,7 +601,7 @@ sends, on its inputs (`RepIn`). -/
 theorem Run.repIn (h64 : JsonRT.Out64 H) (hR : RepShapedT H) (o : Run H Readable.relation) :
     ∃ (schs : Array (Schedule × ℕ)) (cms : Array Commit) (streams : Array (Array Round)),
       streams.size = 2 * o.sts.size ∧ (∀ rs ∈ streams, ∀ x ∈ rs, ∃ c, x.bytes = some c) ∧
-      ∀ i < o.sts.size, o.tabs[i]! = Setup.ofCircuit o.sts[i]! ∧ Zk.schedule o.sts[i]!.m = .ok schs[i]! ∧
+      ∀ i < o.sts.size, o.tabs[i]! = Setup.ofCircuit o.sts[i]! ∧ Zk.schedule o.sts[i]!.wideLeaf o.sts[i]!.m = .ok schs[i]! ∧
         o.sch i = schs[i]!.1 ∧ ∀ r < 2, ∃ p ic l t' l' prior ws,
           (o.stream i r).rounds = streams[2 * i + r]!.map (roundRec o.spec (Claims.hOf H)) ∧ o.zp i r = p ∧
           streams[2 * i + r]! = t'.rounds ∧
@@ -627,7 +627,7 @@ theorem Run.repIn (h64 : JsonRT.Out64 H) (hR : RepShapedT H) (o : Run H Readable
 theorem Run.start_eq (hPR : ProverRunsT H) (h64 : Claims.Out64 H) {o : Run H Readable.relation}
     {schs : Array (Schedule × ℕ)} {cms : Array Commit} {streams : Array (Array Round)}
     (hss : streams.size = 2 * o.sts.size)
-    (hrep : ∀ i < o.sts.size, o.tabs[i]! = Setup.ofCircuit o.sts[i]! ∧ Zk.schedule o.sts[i]!.m = .ok schs[i]! ∧
+    (hrep : ∀ i < o.sts.size, o.tabs[i]! = Setup.ofCircuit o.sts[i]! ∧ Zk.schedule o.sts[i]!.wideLeaf o.sts[i]!.m = .ok schs[i]! ∧
         o.sch i = schs[i]!.1 ∧ ∀ r < 2, ∃ p ic l t' l' prior ws,
           (o.stream i r).rounds = streams[2 * i + r]!.map (roundRec o.spec (Claims.hOf H)) ∧ o.zp i r = p ∧
           streams[2 * i + r]! = t'.rounds ∧
@@ -695,7 +695,7 @@ theorem lgInnerAt_of (h64 : JsonRT.Out64 H) (hR : RepShapedT H) (hPR : ProverRun
         schs[i]!.1.k0 := by
       unfold Run.lay
       rw [htabi, hsch]
-    have hv' : Zk.schedule (Setup.ofCircuit o.sts[i]!).m = .ok schs[i]! := hv
+    have hv' : Zk.schedule (Setup.ofCircuit o.sts[i]!).wideLeaf (Setup.ofCircuit o.sts[i]!).m = .ok schs[i]! := hv
     have htp : o.tPad i = schs[i]!.2 := by
       unfold Run.tPad zkSchedsOf
       rw [getElem!_pos _ i (by simpa using hi), Array.getElem_map, ← getElem!_pos o.tabs i hi, htabi]
@@ -778,8 +778,8 @@ theorem proverRunsZk_of (hPR : ProverRunsT H) (h64 : Claims.Out64 H) : JsonRT.Pr
   have hx := extras_size hex
   have hin : ∀ rep, RepIn H st (tracesOf c.sts c.w)[0]! c.ω 0 v cm (pointsOf c.spec (Claims.coinSeq c.r 0)) e rep
       (ic rep) := fun rep => ⟨hv, hcm, c.points_mPts hst, hex, hic rep⟩
-  have hv0 : Zk.schedule c.toCase.sts[0 / 2]!.m = .ok v := by
-    show Zk.schedule c.sts[0]!.m = .ok v
+  have hv0 : Zk.schedule c.toCase.sts[0 / 2]!.wideLeaf c.toCase.sts[0 / 2]!.m = .ok v := by
+    show Zk.schedule c.sts[0]!.wideLeaf c.sts[0]!.m = .ok v
     rw [hst0]
     exact hv
   have he0 : e.size = c.toCase.spec.points * c.toCase.sts[0 / 2]!.regions.size := by

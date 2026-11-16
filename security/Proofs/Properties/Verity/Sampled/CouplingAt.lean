@@ -4,9 +4,9 @@ public import Proofs.Properties.Verity.Sampled.Charge
 public import Proofs.Properties.Verity.Sampled.MovesReachAt
 
 /-!
-# Sampled proofs' coupling off the empty classes at their counts
+# SPOT's coupling off the empty classes at their counts
 
-The coupling holds the joint law off each stop's empty class, and pays the class's probability in the stops' term. Off
+The coupling holds the joint distribution off each stop's empty class, and pays the class's probability in the stops' term. Off
 the empty classes themselves (`linkEmpty`, `roundEmpty`), that term is within the hiding term only where each stop's
 opening asks for the count of coins the stop releases (`couplesErr_sampleMap_le`, under `RoundCounts` and
 `LinkCounts`): at a frame of another count every class is empty, and the empty class costs 1. Off the empty classes at
@@ -28,7 +28,7 @@ namespace Verity.Sampled
 open Verity.Game
 open scoped ENNReal
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 local notation "𝔽" => FlockLevel3.GF128
 
@@ -46,7 +46,7 @@ def roundEmptyAt (E : List Release → Game Exchange) : RoundHold := fun g' _ s 
 
 variable (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
 
-/-- **The sample-coupled coin map's premise off the empty classes at their counts**: the joint law's tape off
+/-- **The sample-coupled coin map's premise off the empty classes at their counts**: the joint distribution's tape off
 `linkEmptyAt` and `roundEmptyAt` is within the openings' gaps and empty classes at the stops' counts over the stops of
 the uniform tape, wherever the sample's coins are uniform (`couples_of_close`, as `sampleMap_couples`). -/
 theorem sampleMap_couples_at (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c))
@@ -101,7 +101,7 @@ theorem couplingTarget_withProject_of_sample_at (rd : Readings) (K : Constructio
 omit θ F c in
 /-- **The coupling, assembled, off the empty classes at their counts**: `couplingTarget_assembled` off `linkEmptyAt`
 and `roundEmptyAt`, with no bound on the stops' term (`couplingTarget_withProject_of_sample_at`), wherever the outcomes
-beside accepted plays on the joint law's support off those events are the writer's at the moves v2's files decode to
+beside accepted plays on the joint distribution's support off those events are the writer's at the moves v2's files decode to
 (`hM`). -/
 theorem couplingTarget_assembled_at (K : Constructions V) (T : PinnedTables)
     (dev : Exchange → Properties.Challenger.History) (rd : Readings)

@@ -45,7 +45,7 @@ VERITY_RETIRED = frozenset({"core", "ml"})
 END_STATE_DOCS = ("ARCHITECTURE.md",)
 #: (document, token as written) that reads as a repository path but names something else, each with why.
 NOT_PATHS = {
-    ("verity/circuits/ops/tests/fixtures/README.md", "tests/veritor/core/golden/"): "veritor's path, where the captures were copied from",
+    ("tests/verity/circuits/ops/fixtures/README.md", "tests/veritor/core/golden/"): "veritor's path, where the captures were copied from",
     ("tools/research/README.md", ".cursor/mcp.json"): "the Cursor config the reader writes in their own checkout",
     (".agents/skills/kernel-engineering/SKILL.md", "panel.py"): "the kernel panel, kept in an agent store",
     ("benchmarks/pouw/harness/README.md", "panel.py"): "the kernel panel, kept in an agent store",
@@ -54,13 +54,11 @@ NOT_PATHS = {
     ("benchmarks/numerical/README.md", "utils.cpp::bfloat16_to_gfloat_tensor"): "the GPU simulator's source",
     ("benchmarks/pous/README.md", "gmp.h"): "the system's GMP header",
     ("benchmarks/ppl/README.md", "linears_layerwise.py"): "a harness the bench replaced",
-    ("fixtures/proof-format-v3/README.md", "test_format3_equivalence.py::test_write_vectors"): "veritor's test",
-    ("fixtures/proof-format-v3/README.md", "format3_equivalence.rs"): "D-SP1's guest, deleted with the archive",
     ("tools/verity/lean/README.md", "lakefile.lean"): "the file the package deliberately lacks",
-    ("verity/protocols/accounting/pous/verifier/DISCREPANCIES.md", "BandPubEncoder.lean"): "the band chain's Lean, outside this tree",
-    ("verity/protocols/accounting/pous/verifier/PROTOCOL.md", "BandPubEncoder.lean"): "the band chain's Lean, outside this tree",
-    ("verity/protocols/accounting/pous/verifier/PROTOCOL.md", "BandEncDec.lean"): "the band chain's Lean, outside this tree",
-    ("verity/protocols/accounting/pous/verifier/PROTOCOL.md", "regate.py"): "the timing red team's script",
+    ("verity/protocols/resource_accounting/memory/pous/verifier/DISCREPANCIES.md", "BandPubEncoder.lean"): "the band chain's Lean, outside this tree",
+    ("verity/protocols/resource_accounting/memory/pous/verifier/PROTOCOL.md", "BandPubEncoder.lean"): "the band chain's Lean, outside this tree",
+    ("verity/protocols/resource_accounting/memory/pous/verifier/PROTOCOL.md", "BandEncDec.lean"): "the band chain's Lean, outside this tree",
+    ("verity/protocols/resource_accounting/memory/pous/verifier/PROTOCOL.md", "regate.py"): "the timing red team's script",
     ("security/Definitions/Pous/Model/BandChain.lean", "SpongeDense.lean"): "the band chain's Lean, outside this tree",
     ("security/Definitions/Pous/Model/BandChain.lean", "BandChainModel.lean"): "the band chain's Lean, outside this tree",
     ("security/Definitions/Pous/Model/BandChain.lean", "BandMultiModel.lean"): "the band chain's Lean, outside this tree",
@@ -82,12 +80,12 @@ NOT_PATHS = {
 #: file a demo branch edits isn't rewritten until it lands. Unlike `NOT_PATHS` it has no currency check, so the demo
 #: branch's landing, which drops the mention, needs no edit here; the entry leaves after it.
 WAITING = {
-    ("security/Definitions/NetworkCertifier/Schedule.lean", "verity/protocols/accounting/communication/certifier/schedule.py"):
+    ("security/Definitions/Certifier/Schedule.lean", "verity/protocols/resource_accounting/communication/certifier/schedule.py"):
         "the `remote` demo branch rewrites this docstring",
-    ("security/Definitions/Accounting/Guarantees/Headline.lean", "fixtures/fold_bulk_loops.json"): "both demo branches edit the file",
-    ("security/Definitions/Accounting/Guarantees/Headline.lean", "fold_bulk.cu"): "both demo branches edit the file",
-    ("security/Definitions/Accounting/Sheets/B200.lean", "census/DS-100.csv"): "both demo branches edit the file",
-    ("security/Definitions/Accounting/Sheets/H200.lean", "census/DS-90.csv"): "both demo branches edit the file",
+    ("security/Definitions/Pouw/Guarantees/Headline.lean", "fixtures/fold_bulk_loops.json"): "both demo branches edit the file",
+    ("security/Definitions/Pouw/Guarantees/Headline.lean", "fold_bulk.cu"): "both demo branches edit the file",
+    ("security/Definitions/Registration/Sheets/B200.lean", "census/DS-100.csv"): "both demo branches edit the file",
+    ("security/Definitions/Registration/Sheets/H200.lean", "census/DS-90.csv"): "both demo branches edit the file",
     ("security/Definitions/Core/TC/Pipeline.lean", "relation.py"): "both demo branches edit the file",
     ("security/Definitions/Core/TC/Relation.lean", "relation.py"): "both demo branches edit the file",
     ("security/Definitions/Pouw/DitherInstance.lean", "benchmarks/pouw/theory/d5_v2.py"): "both demo branches edit the file",
@@ -95,7 +93,7 @@ WAITING = {
     ("security/Definitions/Pouw/PearlC/Tile4Circuit.lean", "tests/test_circuit_tile_lean.py"): "both demo branches edit the file",
     ("security/Definitions/Pouw/PearlC/TileCircuit.lean", "tests/test_circuit_tile_lean.py"): "both demo branches edit the file",
     ("security/Definitions/Pouw/PearlC/WholeCircuit.lean", "tests/test_circuit_whole_lean.py"): "both demo branches edit the file",
-    ("security/Proofs/Pouw/Period/Accept.lean", "benchmarks/all_protocols/legs/pouw.py"): "both demo branches edit the file",
+    ("security/Proofs/Pouw/MonitoringPeriod/Accept.lean", "benchmarks/all_protocols/legs/pouw.py"): "both demo branches edit the file",
 }
 
 _TOKEN = re.compile(r"`([^`\s]+)`|\]\(([^)\s]+)\)")

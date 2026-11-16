@@ -1,5 +1,5 @@
 """`lean_headline_dc`: the H200's and B200's headline instances as Lean, exact
-(security/Definitions/Accounting/HeadlineDc/Sm*.lean). `machine-model lean-headline` writes them after sm_120's, and
+(security/Definitions/Pouw/HeadlineDc/Sm*.lean). `machine-model lean-headline` writes them after sm_120's, and
 with `--check` exits 1 when a committed file is not what it would write; `--numbers` prints each instance's bound, its
 branches and their terms and writes no Lean file, and `--json F` also writes the readings as JSON (`write`).
 
@@ -30,18 +30,12 @@ from verity_machine_model.dc_reading import (
 )
 from verity_machine_model.lean_headline import Q
 
-#: What other files read of it: the command and its test, and its own test in `benchmarks/pouw/tests/`.
+#: What other files read of it: the command and its test, and its own test in `tests/benchmarks/pouw/`.
 __all__ = ["OUT", "main", "render_measured", "write"]
 
-OUT = LH.ROOT / "security" / "Definitions" / "Accounting" / "HeadlineDc"
+OUT = LH.ROOT / "security" / "Definitions" / "Pouw" / "HeadlineDc"
 
 
-def _as_written(path: str) -> str:
-    """A Lean file's path as the generated modules' doc comments name it: its top directory with the capital it had when
-    they were written. A layout move that renames that directory leaves Lean sources byte for byte (Lake builds from
-    them), so the committed modules keep the old name, and what this writes must stay what they hold."""
-    top, _, rest = path.partition("/")
-    return f"{top.capitalize()}/{rest}"
 SHEET_ROW = {"DS_issue": ".issue", "DS_tensor": ".tensor", "DS_smem": ".smem"}
 SHAPES = {"Sm90": "sm_90's wgmma as one warp's quarter of its warpgroup instruction (`m·n·k/4`), a 2:4 sparse form at "
                   "its dense twin's, its mma.sync whole, DMMA's at the f64 peak",
@@ -119,9 +113,9 @@ public import {imports}
 /-!
 # {fam.gpu} ({fam.key})'s {what} (trusted; generated)
 
-Written by `benchmarks/pouw/lean_headline_dc.py` from the machine model's data (`benchmarks/pouw/machine_model/data`),
+Written by `benchmarks/pouw/lean_headline_dc.py` from the machine model's data (`benchmarks/machine_model/data`),
 and checked against it by `benchmarks/pouw/tests/test_lean_headline_dc.py`: edit the data and rerun the exporter, never
-this file. `Accounting.Guarantees.TS.{reads}` reads it.
+this file. `ResourceAccounting.Guarantees.TS.{reads}` reads it.
 '''
 
 
@@ -150,7 +144,7 @@ def render_sheet(fam: Family, r: Reading) -> str:
         + (f" `{CATCH_ALL[fam.key]}` is A2's catch-all: every warp instruction no other class names counts there, at its "
            f"issue slot alone." if fam.key in CATCH_ALL else ""),
         (f"`{sv}`, `sheet`: the {fam.gpu}'s data sheet ({fam.sheet}), {S.cited(fam.sh)} as "
-         f"`{_as_written(fam.sh.lean)}` states it: f_max {fam.fmax} MHz ({fam.fmax_src}); each tensor class's dense MACs a warp "
+         f"`{fam.sh.lean}` states it: f_max {fam.fmax} MHz ({fam.fmax_src}); each tensor class's dense MACs a warp "
          f"instruction ({SHAPES[fam.ns]}) and its operand type's dense MACs an SM clock; the Nsight Compute pipes "
          f"{', '.join(p.upper() for p in lane[:-1])} and {lane[-1].upper()}, each at its width (the Programming "
          f"Guide's, and the uniform datapath's the census's measured UP line, which no document states); no "
@@ -171,7 +165,7 @@ def render_sheet(fam: Family, r: Reading) -> str:
         f"class); A6's floors `q = q_T = ½`, `b_T = 0`; {x.Nw} committed words a unit of honest work ({honest})"
         + ("; its filler menu the one route ffill runs on (sm_90's uniform datapath has no FFMA)." if filler else "."),
         (f"`flat`: the floor program ♭ a unit: the MMA and the design's operand floor (word production), the fold "
-         f"({x.fold_mix}), {fill_doc}and ε_skip's skippable work at {x.skip}'s price, {r.eps_skip:.6%} of ♭'s bound "
+         f"({x.fold_mix}), {fill_doc}and ε_skip's free compute at {x.skip}'s price, {r.eps_skip:.6%} of ♭'s bound "
          f"(`eps_budget.design_skip` on {fam.sheet})."),
         f"`lamStar`: π*, the certificate minimising the bound over this menu ({' + '.join(f'{k} {float(v):.6f}' for k, v in x.lam.items())}).",
         "`checks`: the checks a window, one a round (Theorem S's S).",
@@ -180,16 +174,16 @@ def render_sheet(fam: Family, r: Reading) -> str:
     fold_lines = ",\n".join(f"    {_sparse(x, f)}" for f in x.folds)
     pipe_ctors = "\n".join(f"  | {p}" for p in lane)
     width_lines = "\n".join(f"  | .{p} => {S.literal(w)}" for p, w in fam.pipes.values())
-    return _header(fam, f"headline instance: {fam.sheet} and `{fam.design}`", "Definitions.Accounting.HeadlineDc.Encoding",
+    return _header(fam, f"headline instance: {fam.sheet} and `{fam.design}`", "Definitions.Pouw.HeadlineDc.Encoding",
                    f"{fam.ns}SheetHeadline") + f'''
 {_bullets(bullets)}
 -/
 
 @[expose] public section
 
-namespace Accounting.TS.Headline.{fam.ns}
+namespace ResourceAccounting.TS.Headline.{fam.ns}
 
-open Accounting.TS
+open ResourceAccounting.TS
 
 /-- The {fam.sheet} census's instruction classes, in index order. -/
 def classes : List String := {LH._list([f'"{k}"' for k in x.classes], "  ")}
@@ -244,7 +238,7 @@ def d2s : DesignData where
 {LH._words(f"♭'s fold a unit: the lane fold for {x.Nw} words, {x.fold_mix}. -/", "/-- ", "")}
 {_sparse_def("flatFold", x, x.nf)}
 
-/-- ♭'s skippable work a unit, at {x.skip}'s price. -/
+/-- ♭'s free compute a unit, at {x.skip}'s price. -/
 {_sparse_def("flatSkip", x, x.ns)}
 
 /-- The floor program ♭, labelled. -/
@@ -257,7 +251,7 @@ noncomputable def lamStar : SheetRow Pipe → ℝ
 /-- The checks a window. -/
 def checks : ℕ := {x.checks}
 
-end Accounting.TS.Headline.{fam.ns}
+end ResourceAccounting.TS.Headline.{fam.ns}
 '''
 
 
@@ -305,7 +299,7 @@ def render_measured(fam: Family, r: Reading, s: Reading) -> str:
         + f"`flatSkip`, `flat`: ♭ is `{fam.ns}.flat`'s {_and(theirs)}"
         + "".join(f", its {p} {fam.measured}'s ({x.words_mix if p == 'word production' else x.fold_mix})"
                   for p in mine)
-        + f", with ε_skip's skippable work at {fam.measured}'s {r.eps_skip:.6%} (`eps_budget.design_skip` on "
+        + f", with ε_skip's free compute at {fam.measured}'s {r.eps_skip:.6%} (`eps_budget.design_skip` on "
         f"{fam.measured}), at {x.skip}'s price.",
         (f"`lamStar`: π*, the certificate minimising the bound over this menu "
          f"({' + '.join(f'{k} {float(v):.6f}' for k, v in x.lam.items())})."),
@@ -313,15 +307,15 @@ def render_measured(fam: Family, r: Reading, s: Reading) -> str:
     nt, nfo = len(x.writers), len(x.folds)
     body = (f"d2s.modelFill {nk} {nt} {nfo} machine {fam.ns}.flatFill" if x.nx else f"d2s.model {nk} {nt} {nfo} machine")
     return _header(fam, f"measured headline instance: {fam.measured} and `{fam.design}`",
-                   f"Definitions.Accounting.HeadlineDc.{fam.ns}", f"{fam.ns}MeasuredHeadline") + f'''
+                   f"Definitions.Pouw.HeadlineDc.{fam.ns}", f"{fam.ns}MeasuredHeadline") + f'''
 {_bullets(bullets)}
 -/
 
 @[expose] public section
 
-namespace Accounting.TS.Headline.{fam.ns}Measured
+namespace ResourceAccounting.TS.Headline.{fam.ns}Measured
 
-open Accounting.TS
+open ResourceAccounting.TS
 
 /-- {fam.measured}'s rows, in index order. -/
 def rowNames : List String := {LH._list([f'"{row}"' for row in x.rows], "  ")}
@@ -351,7 +345,7 @@ def d2s : DesignData where
 noncomputable def model : Model (Fin {nk}) (Fin {m}) (Fin {nt}) Unit Empty (Fin {nfo}) Unit :=
   {body}
 
-{own_fold}/-- ♭'s skippable work a unit on {fam.measured}, at its {x.skip} price. -/
+{own_fold}/-- ♭'s free compute a unit on {fam.measured}, at its {x.skip} price. -/
 {_sparse_def("flatSkip", x, x.ns)}
 
 /-- The floor program ♭ on {fam.measured}, labelled. -/
@@ -362,7 +356,7 @@ noncomputable def flat : Labelled (Fin {nk}) :=
 noncomputable def lamStar : Fin {m} → ℝ :=
   cert {m} [{lam}]
 
-end Accounting.TS.Headline.{fam.ns}Measured
+end ResourceAccounting.TS.Headline.{fam.ns}Measured
 '''
 
 
@@ -389,15 +383,15 @@ def render_twin(fam: Family, t: Reading, r: Reading) -> str:
          f"({' + '.join(f'{k} {float(v):.6f}' for k, v in x.lam.items())})."),
     ]
     return _header(fam, f"(I3) twin: {fam.measured} at q = {qd} and `{fam.design}`",
-                   f"Definitions.Accounting.HeadlineDc.{fam.ns}Measured", f"{fam.ns}MeasuredI3Headline") + f'''
+                   f"Definitions.Pouw.HeadlineDc.{fam.ns}Measured", f"{fam.ns}MeasuredI3Headline") + f'''
 {_bullets(bullets)}
 -/
 
 @[expose] public section
 
-namespace Accounting.TS.Headline.{fam.ns}MeasuredI3
+namespace ResourceAccounting.TS.Headline.{fam.ns}MeasuredI3
 
-open Accounting.TS
+open ResourceAccounting.TS
 
 /-- `{fam.ns}Measured.d2s` at (I3)'s floors `q = q_T = {qd}`. -/
 def d2s : DesignData where
@@ -417,7 +411,7 @@ noncomputable def model : Model (Fin {nk}) (Fin {m}) (Fin {nt}) Unit Empty (Fin 
 noncomputable def lamStar : Fin {m} → ℝ :=
   cert {m} [{lam}]
 
-end Accounting.TS.Headline.{fam.ns}MeasuredI3
+end ResourceAccounting.TS.Headline.{fam.ns}MeasuredI3
 '''
 
 

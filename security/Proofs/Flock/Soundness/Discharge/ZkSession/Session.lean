@@ -4,7 +4,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkSession.Table
 public import Proofs.Flock.Soundness.SessionBatch
 public import Proofs.Flock.Soundness.Audit.Extraction
 public import Proofs.Flock.Soundness.Lowering
-public import Proofs.Flock.Soundness.ExecDrawOS
+public import Proofs.Flock.Soundness.ExecSampleOS
 
 /-!
 # A batched `--zk` session and its audit (live/PROTOCOL.md §1–§7, PROTOCOL.md §5)
@@ -22,7 +22,7 @@ the other tables do (`value_batch_getD_le`). Over every table at once the bound 
 
 **The audit** (`analysisZK`, in the shape of `Audit.FlockBatched`): the verifier samples units by a sampling design `L`, plans the
 `--zk` tables from the sample and the registration (`planZ`), and reads each sampled proof block from one table (`tab`). A sampled
-proof block wrong in the committed transcript `Xc` is charged to its table: either the table's oracle is not `CommittedPad`
+proof block incorrect in the committed transcript `Xc` is charged to its table: either the table's oracle is not `CommittedPad`
 (`ks`), or it is, and every satisfying padded witness near it decodes, on the unit's wires, to values other than `Xc`'s
 (`link`, `LinkEvZK`). At this layer the oracle is the prover's message, so extraction is the oracle itself and `ε_ks` is
 discharged by `sessionZK_sound` with no assumption (`zk_knowledgeSound`): it is the largest table bound of the plan,
@@ -31,15 +31,15 @@ averaged over the sample (`ksAvgZK`). The lowering comes from each sampled proof
 
 **The count curve** (`zk_flock_count`, and `zk_flock_count_execOS` at the live sample under A3): in the shape of
 `Prog.flock_headline`,
-`Pr[accept ∧ at least K wrong units] ≤ miss(K) + ε_ks^zk + δ_link`, with
-* `miss(K)`: `Law.stratified`'s count curve at the live sample, under A3 (`uniform/io-getrandombytes`);
+`Pr[accept ∧ at least K incorrect proof blocks] ≤ miss(K) + ε_ks^zk + ε_bind`, with
+* `miss(K)`: `SamplingDesign.stratified`'s count curve at the live sample, under A3 (`uniform/io-getrandombytes`);
 * `ε_ks^zk = ksAvgZK`: per table `padLinkError + (padRepError + εInner)²`, proved here;
-* `δ_link`: the named `BindSound` hypothesis, as `Audit.flock_batched_count` leaves it without `--zk`.
+* `ε_bind`: the named `BindSound` hypothesis, as `Audit.flock_batched_count` leaves it without `--zk`.
 
 **Open guarantees** (what this statement does not cover, each a separate piece of work):
 * *The compiled `--zk` layer.* Here every oracle is a message. Under `--zk` the level-0 table, the pads (`Ch, Cμ`), the
   inner proof's `τ` and the coin tree are Merkle commitments with salted leaves, so the headline's `ε_ks` (knowledge
-  extraction from caps, `ksAvgStrict` under `cr/sha-512`), `δ_link` (`LinkCR`, under `ecr/sha-512`) and `δ_tree`
+  extraction from caps, `ksAvgStrict` under `cr/sha-512`), `ε_bind` (`LinkCR`, under `ecr/sha-512`) and `δ_tree`
   (`TreeRewind`, under `cr/sha-512`) need a `--zk` compiled table and session. The salted session
   (`Discharge/Exec/SessionL.lean`) fixes the table's openings to `Opens × Salts`; a version generic over the per-table
   game would carry `TabZK.after`'s compiled form.
@@ -251,7 +251,7 @@ theorem loweringSoundZK_of_place (place : ∀ S R u, u ∈ S → UnitPlace P (ta
   simp only [decodeOfPlace, hu, ↓reduceDIte]
   exact (place S R u hu).correct hM
 
-variable {L : Law n}
+variable {L : SamplingDesign n}
 
 /-- **The batched `--zk` audit's analysis.** `Xc` is the committed transcript; `ks` and `link` are the session's
 joint probabilities of acceptance with the two ways unit `u`'s table can fail. -/
@@ -259,7 +259,7 @@ noncomputable def analysisZK (decode : DecoderZK (C := C) planZ tab)
     (Xc : (R : Reg) → Cont L Reg (batchedSessionZK A planZ) R → (Fin C.N → Bool))
     (hlow : LoweringSoundZK A P planZ tab decode) : ExtractionAnalysis L Reg (batchedSessionZK A planZ) where
   Tr := Fin C.N → Bool
-  wrong := P.wrong
+  incorrect := P.incorrect
   committed := Xc
   ks S R τ u := prob (fun outs => acceptedZK (planZ S R) outs ∧
     ¬ (tabOfZ planZ tab S R u).Committed A (outs.getD (tab S R u) dfltZK).2) (sessionZK A (planZ S R)) (zkStrat A planZ τ)
@@ -273,12 +273,12 @@ noncomputable def analysisZK (decode : DecoderZK (C := C) planZ tab)
     · refine Or.inr ⟨hacc, hc, fun M _ hsat => ?_⟩
       by_contra hno
       push Not at hno
-      exact P.mem_wrong.1 hu (P.correct_congr (fun g hg => (hno g hg).symm) (hlow S R u hS M hsat))
+      exact P.mem_incorrect.1 hu (P.correct_congr (fun g hg => (hno g hg).symm) (hlow S R u hS M hsat))
     · exact Or.inl ⟨hacc, hc⟩
 
 /-- **The `--zk` audit's knowledge term**: after each sample, the largest bound of the plan's tables, averaged over
 the sample. -/
-noncomputable def ksAvgZK (L : Law n) (R : Reg) : ℝ≥0∞ :=
+noncomputable def ksAvgZK (L : SamplingDesign n) (R : Reg) : ℝ≥0∞ :=
   avg fun ω => ⨆ j : Fin (planZ (L.draw ω) R).length, ((planZ (L.draw ω) R).get j).bound
 
 /-- **`ε_ks` is discharged for `--zk` sessions** (interactive-oracle layer), with no assumption. -/
@@ -291,43 +291,43 @@ theorem zk_knowledgeSound (hA : A.Correct) (decode : DecoderZK (C := C) planZ ta
   exact (sessionZK_sound A hA (planZ (L.draw ω) R) (tab (L.draw ω) R u) _).trans
     (le_iSup (fun j : Fin (planZ (L.draw ω) R).length => ((planZ (L.draw ω) R).get j).bound) (tab (L.draw ω) R u))
 
-/-- **The batched `--zk` audit's count curve**: `Pr[accept ∧ at least K wrong units] ≤ miss K + ε_ks^zk + δ_link`. -/
+/-- **The batched `--zk` audit's count curve**: `Pr[accept ∧ at least K incorrect proof blocks] ≤ miss K + ε_ks^zk + ε_bind`. -/
 theorem zk_flock_count (hA : A.Correct) (place : ∀ S R u, u ∈ S → UnitPlace P (tabOfZ planZ tab S R u).S u)
     (Xc : (R : Reg) → Cont L Reg (batchedSessionZK A planZ) R → (Fin C.N → Bool))
-    {δlink : (R : Reg) → Cont L Reg (batchedSessionZK A planZ) R → ℝ≥0∞}
+    {εbind : (R : Reg) → Cont L Reg (batchedSessionZK A planZ) R → ℝ≥0∞}
     (hlink : (analysisZK A P planZ tab (decodeOfPlace A P planZ tab place) Xc
-      (loweringSoundZK_of_place A P planZ tab place)).BindSound δlink)
+      (loweringSoundZK_of_place A P planZ tab place)).BindSound εbind)
     (K : ℕ) (σ : Strategy (audit L Reg (batchedSessionZK A planZ))) :
-    prob (fun o => o.1 = true ∧ K ≤ (P.wrong (Xc (reg σ) (cont σ))).card) (audit L Reg (batchedSessionZK A planZ)) σ ≤
-      L.miss K + ksAvgZK planZ L (reg σ) + δlink (reg σ) (cont σ) :=
+    prob (fun o => o.1 = true ∧ K ≤ (P.incorrect (Xc (reg σ) (cont σ))).card) (audit L Reg (batchedSessionZK A planZ)) σ ≤
+      L.miss K + ksAvgZK planZ L (reg σ) + εbind (reg σ) (cont σ) :=
   extraction_audit_count (analysisZK A P planZ tab _ Xc (loweringSoundZK_of_place A P planZ tab place))
     (zk_knowledgeSound A P planZ tab hA _ Xc _) hlink K σ
 
 /-- **The `--zk` count curve at the live sample.** With the units sampled by `Flock.Draw.drawWith`'s stratified sampling design on a
 byte source that A3 makes uniform (`hA3`), as in `Prog.flock_headline`:
-`Pr[accept ∧ at least K wrong units] ≤ miss(K) + ε_ks^zk + δ_link`, with `miss(K)` `Law.stratified`'s count curve. -/
+`Pr[accept ∧ at least K incorrect proof blocks] ≤ miss(K) + ε_ks^zk + ε_bind`, with `miss(K)` `SamplingDesign.stratified`'s count curve. -/
 theorem zk_flock_count_execOS (hA : A.Correct)
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
+    (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     (place : ∀ S R u, u ∈ S → UnitPlace P (tabOfZ planZ tab S R u).S u)
-    (Xc : (R : Reg) → Cont (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
+    (Xc : (R : Reg) → Cont (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (batchedSessionZK A planZ) R → (Fin C.N → Bool))
-    {δlink : (R : Reg) → Cont (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
+    {εbind : (R : Reg) → Cont (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (batchedSessionZK A planZ) R → ℝ≥0∞}
     (hlink : (analysisZK A P planZ tab (decodeOfPlace A P planZ tab place) Xc
-      (loweringSoundZK_of_place A P planZ tab place)).BindSound δlink)
+      (loweringSoundZK_of_place A P planZ tab place)).BindSound εbind)
     (K : ℕ)
-    (σ : Strategy (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
+    (σ : Strategy (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (batchedSessionZK A planZ))) :
-    prob (fun o => o.1 = true ∧ K ≤ (P.wrong (Xc (reg σ) (cont σ))).card)
-        (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (batchedSessionZK A planZ)) σ ≤
-      (Law.stratified σs ks hks).miss K +
-        ksAvgZK planZ (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) (reg σ) +
-        δlink (reg σ) (cont σ) :=
+    prob (fun o => o.1 = true ∧ K ≤ (P.incorrect (Xc (reg σ) (cont σ))).card)
+        (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (batchedSessionZK A planZ)) σ ≤
+      (SamplingDesign.stratified σs ks hks).miss K +
+        ksAvgZK planZ (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) (reg σ) +
+        εbind (reg σ) (cont σ) :=
   (zk_flock_count A P planZ tab hA place Xc hlink K σ).trans
-    (add_le_add (add_le_add (Law.execOS_miss_le σs ks hks St hS Kd pop Lb src hA3 K) le_rfl) le_rfl)
+    (add_le_add (add_le_add (SamplingDesign.execOS_miss_le σs ks hks St hS Kd pop Lb src hA3 K) le_rfl) le_rfl)
 
 end Audit
 

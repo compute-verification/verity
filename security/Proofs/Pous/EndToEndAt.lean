@@ -1,7 +1,7 @@
 module
 
-public import Proofs.Flock.Soundness.ExecDraw
-public import Proofs.Flock.Soundness.KeyedDraw
+public import Proofs.Flock.Soundness.ExecSample
+public import Proofs.Flock.Soundness.KeyedSample
 public import Properties.Pous.EndToEndAt
 public import Proofs.Pous.Sanity
 import Mathlib.Algebra.Order.Floor.Semifield
@@ -22,9 +22,9 @@ import VCVio.Prelude.Core
 # PoUS's ring game at any block count, proved
 
 * `drawAtMost : DrawAtMost`: the code's sampler is Flock's (`uniformOn N` is `uniformL` on the stream's bytes,
-  `FlockSoundness.Audit.KeyedDraw.uniformOn_streamOf`), whose rejection loop gives each index at most `1/N`
-  (`FlockSoundness.Audit.DrawExec.uniformL_le`): `card_draw_le`. Over the 105 independent streams the indices' fibre is
-  a product of single-stream fibres (`card_draws_le`), and a union bound over the indices (`pr_draw_le`) moves any
+  `FlockSoundness.Audit.KeyedSample.uniformOn_streamOf`), whose rejection loop gives each index at most `1/N`
+  (`FlockSoundness.Audit.SampleExec.uniformL_le`): `card_sample_le`. Over the 105 independent streams the indices' fibre is
+  a product of single-stream fibres (`card_samples_le`), and a union bound over the indices (`pr_sample_le`) moves any
   event from the streams to uniform indices.
 * `endToEndRingAt : EndToEndRingAt`: `endToEndRing`'s proof with that inequality in place of `pr_passes`'s equality,
   and the bound `c` in place of `P2RingAuditSecure`.
@@ -47,19 +47,19 @@ open scoped ENNReal
 theorem ofFin_eq_toUInt8 (a : Fin 256) : UInt8.ofFin a = a.val.toUInt8 :=
   UInt8.toNat_inj.1 (by rw [UInt8.toNat_ofFin, Nat.toUInt8_eq, UInt8.toNat_ofNat_of_lt' a.isLt])
 
-theorem streamOf_eq_bytesOf {n : ℕ} (x : Bytes n) : FlockSoundness.Audit.Law.streamOf x = bytesOf x := by
-  simp only [FlockSoundness.Audit.Law.streamOf, bytesOf, ofFin_eq_toUInt8]
+theorem streamOf_eq_bytesOf {n : ℕ} (x : Bytes n) : FlockSoundness.Audit.SamplingDesign.streamOf x = bytesOf x := by
+  simp only [FlockSoundness.Audit.SamplingDesign.streamOf, bytesOf, ofFin_eq_toUInt8]
 
 /-- **One stream**: `uniformOn N` returns `i` on at most a `1/N` share of the streams. -/
-theorem card_draw_le (N : ℕ) (hN : 0 < N) (i : ℕ) :
+theorem card_sample_le (N : ℕ) (hN : 0 < N) (i : ℕ) :
     (Finset.univ.filter fun s : Bytes DRAW_BYTES =>
         FlockSoundness.Randomness.uniformOn N (bytesOf s) = some i).card * N ≤ Fintype.card (Bytes DRAW_BYTES) := by
-  have hle := FlockSoundness.Audit.DrawExec.uniformL_le N hN (fun r _ => r = i)
+  have hle := FlockSoundness.Audit.SampleExec.uniformL_le N hN (fun r _ => r = i)
     (fun r => if r = i then 1 else 0)
     (fun r _ ℓ => by
       show FlockSoundness.Game.prCoin (fun _ : Fin ℓ → Fin 256 => r = i) ≤ if r = i then 1 else 0
       split_ifs with h
-      · exact FlockSoundness.Audit.DrawExec.prCoin_le_one _
+      · exact FlockSoundness.Audit.SampleExec.prCoin_le_one _
       · simp only [h]
         exact FlockSoundness.Game.prCoin_false.le)
     (DRAW_BYTES + 1) DRAW_BYTES
@@ -70,7 +70,7 @@ theorem card_draw_le (N : ℕ) (hN : 0 < N) (i : ℕ) :
   have hp : FlockSoundness.Game.prCoin (fun s : Bytes DRAW_BYTES =>
       FlockSoundness.Randomness.uniformOn N (bytesOf s) = some i) ≤ (N : ℝ≥0∞)⁻¹ := by
     refine le_trans (FlockSoundness.Game.prCoin_mono fun s hs => ?_) (hle.trans ?_)
-    · rw [← streamOf_eq_bytesOf, FlockSoundness.Audit.KeyedDraw.uniformOn_streamOf] at hs
+    · rw [← streamOf_eq_bytesOf, FlockSoundness.Audit.KeyedSample.uniformOn_streamOf] at hs
       obtain ⟨⟨r, rest⟩, hu, hr⟩ := Option.map_eq_some_iff.1 hs
       exact ⟨r, rest, hu, hr⟩
     · rw [← one_div]
@@ -89,7 +89,7 @@ theorem card_draw_le (N : ℕ) (hN : 0 < N) (i : ℕ) :
   exact_mod_cast h
 
 /-- **The 105 streams**: the streams from which `uniformOn N` reads the indices `I` are a `1/N^105` share. -/
-theorem card_draws_le (N : ℕ) (hN : 0 < N) (I : Fin 105 → Fin N) :
+theorem card_samples_le (N : ℕ) (hN : 0 < N) (I : Fin 105 → Fin N) :
     (Finset.univ.filter fun s : Streams =>
         ∀ j, FlockSoundness.Randomness.uniformOn N (bytesOf (s j)) = some (I j).val).card *
       Fintype.card (Fin 105 → Fin N) ≤ Fintype.card Streams := by
@@ -103,11 +103,11 @@ theorem card_draws_le (N : ℕ) (hN : 0 < N) (I : Fin 105 → Fin N) :
   have h1 : Fintype.card (Fin 105 → Fin N) = ∏ _j : Fin 105, N := by simp
   have h2 : Fintype.card Streams = ∏ _j : Fin 105, Fintype.card (Bytes DRAW_BYTES) := by simp
   rw [hfil, Fintype.card_piFinset, h1, h2, ← Finset.prod_mul_distrib]
-  exact Finset.prod_le_prod₀ (fun _ _ => Nat.zero_le _) fun j _ => card_draw_le N hN (I j).val
+  exact Finset.prod_le_prod₀ (fun _ _ => Nat.zero_le _) fun j _ => card_sample_le N hN (I j).val
 
 /-- **A union bound over the sample**: if each value `i` is sampled (`d t i`) on at most a `1/|I|` share of `T`, any event
 `F` of the sampled value is at most as likely as under a uniform `i`. -/
-theorem pr_draw_le {A T I : Type} [Fintype A] [Fintype T] [Fintype I] [Nonempty A] [Nonempty T] [Nonempty I]
+theorem pr_sample_le {A T I : Type} [Fintype A] [Fintype T] [Fintype I] [Nonempty A] [Nonempty T] [Nonempty I]
     (d : T → I → Prop) [∀ t i, Decidable (d t i)]
     (hfib : ∀ i, (Finset.univ.filter fun t => d t i).card * Fintype.card I ≤ Fintype.card T)
     (F : A → I → Prop) :
@@ -147,13 +147,13 @@ theorem pr_draw_le {A T I : Type} [Fintype A] [Fintype T] [Fintype I] [Nonempty 
     _ = _ := ENNReal.mul_div_mul_right _ _ hT0 (ENNReal.natCast_ne_top _)
 
 /-- Any event of the 105 indices the code reads from the streams is at most as likely as under uniform indices. -/
-theorem pr_draws_le {A : Type} [Fintype A] [Nonempty A] (N : ℕ) [NeZero N] (F : A → (Fin 105 → Fin N) → Prop) :
+theorem pr_samples_le {A : Type} [Fintype A] [Nonempty A] (N : ℕ) [NeZero N] (F : A → (Fin 105 → Fin N) → Prop) :
     pr (fun x : A × Streams => ∃ I : Fin 105 → Fin N,
         (∀ j, FlockSoundness.Randomness.uniformOn N (bytesOf (x.2 j)) = some (I j).val) ∧ F x.1 I) ≤
       pr (fun x : A × (Fin 105 → Fin N) => F x.1 x.2) :=
-  pr_draw_le (fun (s : Streams) (I : Fin 105 → Fin N) =>
+  pr_sample_le (fun (s : Streams) (I : Fin 105 → Fin N) =>
       ∀ j, FlockSoundness.Randomness.uniformOn N (bytesOf (s j)) = some (I j).val)
-    (card_draws_le N (Nat.pos_of_ne_zero (NeZero.ne N))) F
+    (card_samples_le N (Nat.pos_of_ne_zero (NeZero.ne N))) F
 
 theorem drawAtMost : DrawAtMost := by
   intro N P
@@ -163,9 +163,9 @@ theorem drawAtMost : DrawAtMost := by
           ∃ i : Fin (N + 1), FlockSoundness.Randomness.uniformOn (N + 1) (bytesOf x.2) = some i.val ∧ P i) :=
         (pr_snd _).symm
     _ ≤ pr (fun x : Unit × Fin (N + 1) => P x.2) :=
-        pr_draw_le (A := Unit) (fun (s : Bytes DRAW_BYTES) (i : Fin (N + 1)) =>
+        pr_sample_le (A := Unit) (fun (s : Bytes DRAW_BYTES) (i : Fin (N + 1)) =>
             FlockSoundness.Randomness.uniformOn (N + 1) (bytesOf s) = some i.val)
-          (fun i => by rw [Fintype.card_fin]; exact card_draw_le (N + 1) N.succ_pos i.val)
+          (fun i => by rw [Fintype.card_fin]; exact card_sample_le (N + 1) N.succ_pos i.val)
           (fun _ i => P i)
     _ = pr P := pr_snd P
 
@@ -193,7 +193,7 @@ theorem pr_passesAt_le (N : ℕ) [NeZero N] {S D Q L : ℕ} (session : ByteArray
     ← PousThm1.pr_equiv (Equiv.prodAssoc _ _ _) (fun x : (ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins ×
       (Fin 105 → Fin N) => EvAt N W A x.1 (coinViewAt N session x.2.1 x.2.2) x.2.2)]
   refine le_trans (pr_mono fun y hy => ?_)
-    (pr_draws_le N fun (a : (ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins) I =>
+    (pr_samples_le N fun (a : (ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins) I =>
       EvAt N W A a.1 (coinViewAt N session a.2 I) I)
   obtain ⟨I, v, hu, hv, hs⟩ := hy
   exact ⟨I, hu, v, hv, hs⟩

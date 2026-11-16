@@ -315,7 +315,7 @@ def toyD : Deploy Bool ℕ Unit where
   commit := ⟨fun _ _ => .ret true, fun _ _ _ => []⟩
   universal _ := toyProg
   flock := toyFlock
-  stage2 _ := ∅
+  secondStage _ := ∅
   checked _ _ := []
   rounds _ _ := ∅
   session _ _ _ := none

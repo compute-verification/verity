@@ -16,7 +16,7 @@ open Finset
 
 variable {Q R S : Type}
 
-/-- **Assumption TT(g₀), tight noised transcript** (problem statement §4.4), for a cost model `CM`, a protocol `P`
+/-- **Assumption TT(g₀), tight noised trace** (problem statement §4.4), for a cost model `CM`, a protocol `P`
 (the named assumption is its instance at `CM = M_4090` and `P = D1.m1`), a domain `D`, a target `g₀` and an error
 `δ(q, N)`.
 
@@ -35,7 +35,7 @@ def TT [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S
   CM.Queries ∧
   ∀ U : Workload, U.InDomain D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
     pr (fun x : (Q → R) × S =>
-      T / (1 - g₀) < ∑ u ∈ checkedSet P U x.1 x.2 (A.transcript U x.1 x.2), ((U.layout.shape u).Wmm : ℝ) ∧
+      T / (1 - g₀) < ∑ u ∈ checkedSet P U x.1 x.2 (A.trace U x.1 x.2), ((U.layout.shape u).Wmm : ℝ) ∧
         ¬ A.Breaks U x.1 x.2)
       ≤ δ q U.layout.N
 

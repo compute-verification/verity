@@ -26,7 +26,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Facts
 `setupOne_hidden`, `setupOne_public`: `setupOne` is `setupHidden` under hidden outputs and `setupH` otherwise.
 
 The rest are what this area reads of `Stmt.setupHidden`, all from `Discharge/Hidden`'s `Hidden.setupHidden_spec`
-(`Discharge/Hidden/`). `setupHidden_tags`, `setupHidden_drawn`, `setupHidden_parseC` and `setupHidden_n` are projections
+(`Discharge/Hidden/`). `setupHidden_tags`, `setupHidden_sampled`, `setupHidden_parseC` and `setupHidden_n` are projections
 of `Spec` (`tagsEq`, `pub`, `parse`, and `n`, `blocksReal`, `nbl`); `setupHidden_hm96`, `setupHidden_wf` and
 `parse_untyped` are `Discharge/Hidden`'s (`Hidden/Facts.lean`).
 -/
@@ -77,7 +77,7 @@ theorem setupHidden_wf (h : Stmt.setupHidden tags cf pf coins tables draw partit
   Hidden.setupHidden_wf h
 
 /-- `Spec.pub`, at a sample. -/
-theorem setupHidden_drawn {d : Json}
+theorem setupHidden_sampled {d : Json}
     (h : Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st) :
     ∃ pop, HmOut.loadPublic tags st.c pf = .ok pop ∧ HmOut.drawn st.c pop d = .ok st.pub := by
   obtain ⟨pop, hl, -, hd⟩ := (Hidden.setupHidden_spec h).pub

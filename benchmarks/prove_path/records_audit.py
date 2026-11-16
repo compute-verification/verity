@@ -1,29 +1,29 @@
-"""A window's audit from its records alone: what an integration hands Verity (`verity.commitments.windows.interface`), and nothing else.
+"""A window's audit from its records alone: what an integration hands Verity (`verity.commitments.periods.interface`), and nothing else.
 
 The records, every one in the window's directory but the advice's opening:
 
-* **the circuit** in proof blocks with its public layout (``circuit.json``), which the registration binds by SHA-512;
-* **the compiler and the advice**, when the circuit depends on run-time choices: the registration's window names the compiler
+* **the circuit** in proof blocks with its public layout (``circuit.json``), which the docket binds by SHA-512;
+* **the compiler and the advice**, when the circuit depends on run-time choices: the docket's window names the compiler
   (``compiler``: its name and digest, which carries the public cap on the advice's length, and the commit its code is at)
   and the advice's hiding commitment (``advice``: its root and its length in bits, which is charged); the advice is a bit
   string the audit never interprets;
-* **the values**, committed before any coin: the registration (``registration.json``) and the files `rows.write` writes;
+* **the values**, committed before any coin: the docket (``registration.json``) and the files `rows.write` writes;
 * **on a sample, the sampled proof blocks' openings** (``m<k>-private.bin``), which reach only the prover behind the ZK server.
 
 The verifier's window is `interface.of_records`'s, each template resolved among the Definitions a catalog registers
 (`catalog_resolve`), or, for a
 template the verifier lowers from its own input set (``--template-sets``), that set's Definition; a window with row tables
-is refused until its records carry their segment roots. Before the sample the audit holds the registration to that circuit,
+is refused until its records carry their segment roots. Before the sample the audit holds the docket to that circuit,
 to the run root the run published (``--run``) and, for a compiled circuit, to the compiler and advice it was compiled from
-(`source`), and runs the compile check (`compile_check`, the named gap until the compile unit exists): the advice's opening
+(`source`), and runs the compile check (`compile_check`, the named gap until the compile slice's proof block exists): the advice's opening
 opens the registered root under the registered compiler, and that compiler, run as the command the verifier's own table
 names for it (``--compilers``) from a checkout of the registered commit whose code hashes to the registered digest, makes
 this circuit from the advice and charges the registered length. A circuit with no compiler is the one the verifier
-registered (``--circuit``). Then `a5.audit`, its stream's rule the rate its caller states (``--law``: ``rate:NUM/DEN``,
+registered (``--circuit``). Then `a5.audit`, its stream's rule the rate its caller states (``--sampling-design``: ``rate:NUM/DEN``,
 ``stratified-rate:NUM/DEN`` or ``work-rate:NUM/DEN``; a fixed count ``subset:K``, ``stratified:K`` or ``work:K`` is refused
-by name, `service.Law`) and the window's sampling design the one that rate names over the window's own proof blocks
-(`verifier_window`), which the stream holds the registration to:
-the registration checked by Lean and Python, the sample on live coins read after
+by name, `service.SamplingDesign`) and the window's sampling design the one that rate names over the window's own proof blocks
+(`verifier_window`), which the stream holds the docket to:
+the docket checked by Lean and Python, the sample on live coins read after
 the receipt, Flock ``--zk`` behind the Lean ZK server on the sampled members, Lean's verdicts and the audit record. Then the
 advice was fixed before the sample (`fixed_before_draw`), and advice re-committed after the coins is refused (`after_draw`).
 Units whose outputs are served out (``--outputs`` and the circuit's registered reads of output ports, `output_class`) would be
@@ -39,45 +39,45 @@ pinned before the run (``--registered FILE``: ``{"program", "values": {param: en
 member's ``--registered`` file comes from the record and those entries alone (`interface.registered_reads`), and Lean's
 registered reads open every row of its read ports against the pinned root at the row the record reads for its unit
 (a5's ``registered``, with its negatives: no registered reads, another root, every unit reading another row, a port
-committed afresh); a5 adds the member's other ports at the registration's roots (`rows.own_reads`). The reads
+committed afresh); a5 adds the member's other ports at the docket's roots (`rows.own_reads`). The reads
 of a pinned parameter leave the free inputs where the window's root for it is the pinned root: `declared_count` counts
-them registered, its pins the ``--registered`` file's roots and the window's roots those its registration records
+them registered, its pins the ``--registered`` file's roots and the window's roots those its docket records
 (`window_roots`: its ``registered_roots``, `interface.Window.write`, and its committed values' entries). A record that
 lists its members (a served window's) declares its reads beside them, as a served window reads its model's weights
 (each ``weights/<label>@<words>``, pinned at the root of the committer's weights registration): each read port its
 members' own rows or a shared-row table of them (`interface.listed_reads`), audited and counted as a stated record's
 reads are, and the count names every parameter it reads whose window root is no pin (``unpinned``), whose reads count
-free. A history table (`interface.History`) is pinned at the root the window's registration records for it
-(`history.pins`), which a5's registration check before the sample and its stream's registrations hold to the root the
+free. A history table (`interface.History`) is pinned at the root the window's docket records for it
+(`history.pins`), which a5's docket check before the sample and its stream's dockets hold to the root the
 verifier computes over its writers' public bodies (a5's ``history``, `history.params` of the same pins as the
 reads); a held run's strings it doesn't hold, so a window with one is refused.
 
-A registration whose window commits per-window values (``activations``: ``{program, values: {value: entry}}``, a
-loop's activation rows) has them fixed before the sample with the rest of the registration;
+A docket whose window commits per-window values (``activations``: ``{program, values: {value: entry}}``, a
+loop's activation rows) has them fixed before the sample with the rest of the docket;
 the audit holds each entry's domain to the one core's ``registered.domain`` makes of the program, the value, its rows and
 the window's run root (`committed_activations`), and reports their roots. Those the circuit doesn't read take nothing from
 the free inputs. Those it reads as ties (a wired loop's activations: an output port writes every row an input port
-takes, `tied_values`) are pinned from the registration beside ``--registered``'s (`window_pins`), so Lean's registered
+takes, `tied_values`) are pinned from the docket beside ``--registered``'s (`window_pins`), so Lean's registered
 reads tie each reader's row to its writer's. One it reads only through input ports is opened against its committed root
 too, but the prover chose its rows: its reads count free, and the count names it (``leak.untied``). PoUW's H1 tiles
 have theirs pinned through ``--registered``, from the window's entries.
 
 A circuit whose program takes values ahead of its templates' parameters (`interface.Registered.values`: a served window's
 H1 tables, or each Pearl+ call's A rows and y, which its proof blocks make where the model makes them) has them registered
-first by an earlier record W (``--tie W``: PoUW H1's registration of the window, fixed before H1's sample coin, or Pearl+'s
+first by an earlier record W (``--tie W``: PoUW H1's docket of the window, fixed before H1's sample coin, or Pearl+'s
 window record of its retained timed rounds, written after the retention and before the verifier's coin), and the window's
-registration, chained right after W, registers each as
+docket, chained right after W, registers each as
 W's entry of it (one-stage's ``outputs``, `tie_of`): H1's table `credit.window_table` of it under ``--tie-prefix``, or
 Pearl+'s by the value's own name. R7 takes its domain and root from W's entry, so the proof blocks read the values at W's
 roots (each pinned at W's entry, `interface.registered_reads`) and nothing of them is registered afresh. Their readers are
 sampled like any other proof block (under a stratified rate, a stratum a table), never proved whole as an output class.
 The summary's ``tie`` names W, and for Pearl+'s W what holds its roots to the ones its passes credited: Pearl+'s verdict,
 the prover's development verifier (`PEARL_CREDIT`). Once the records are read and before any proof, a ``TIE`` line and
-``OUT/tie.json`` name W too, with the registration's ``previous`` and whether it is W's digest (``chained``), so an
+``OUT/tie.json`` name W too, with the docket's ``previous`` and whether it is W's digest (``chained``), so an
 audit stopped before its proofs end still says what it was tied to.
 
 ``--day N --day-log LOG``: the window is day N's, and the deployment's registration log declares the day's one circuit
-(`verity.protocols.accounting.registration.verifier.registration.Declaration`). R2 holds the registration's program to
+(`verity.protocols.registration.verifier.registration.Declaration`). R2 holds the docket's program to
 it (`declared_day`, one-stage's Declared day), a negative moves the declaration to another program, and the summary's
 ``day`` names the day's declared program and where the day came from (`DAY_SOURCES`). ``--day`` and the prover's log
 are the development fallback: they bind the day to no time the auditor's device signed. ``--day-ledger LEDGER`` reads
@@ -85,33 +85,36 @@ the day from the challenger's signed ledger instead (`device_day`, the challenge
 the window's signed open and the declarations its lane signed before it, so a window that opens before UTC midnight
 and closes after is its open's day's.
 It reads the device's own ledger whole: a copy PoUS cut to a window's sessions
-(`pous.period.cite`) drops the declarations and the chain, and is refused. A window opened before its day's declaration,
+(`pous.period_prover.cite`) drops the declarations and the chain, and is refused. A window opened before its day's declaration,
 or of a lane that never declares, has no declaration of its day, so R2 refuses it (``R2-undeclared``).
 
 The negatives (`negatives` before the sample, a5's after it) cost Lean verifies of their own; ``--skip-negatives`` leaves
 them out of an audit (its summary says so), for a run of several audits of one circuit, which runs them in its first.
+With ``--negative-workers N`` a5's negatives that ask the verifier again run N at a time, each in a worker process
+forked from the audit (`a5.NegativeWorkers`); the summary's ``negative_workers`` is each one's own seconds and memory.
 
 ``warm``: a window's templates and binding are public, so every template its composers make is composed into a5's compose
 cache before the timed audit (`warm`, `a5.warm`), under the tree and ``FLOCK_*`` environment the audit then runs in, since
 the cache's key covers both; the audit with ``--compose-cache`` then composes none. An audit's time quoted with the cache
 quotes the warm's beside it.
 
-    records_audit.py audit --window DIR --law L (--opening FILE --compilers FILE [--repo DIR] | --circuit SHA512) --run HEX \\
-        [--template-sets DIR] [--outputs FILE] --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
+    records_audit.py audit --window DIR --sampling-design L (--opening FILE --compilers FILE [--repo DIR] | --circuit SHA512) --run HEX \\
+        [--template-sets DIR] [--outputs FILE] --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof --zk-server flock-zk-server \\
         --out DIR [--delta D] [--port P] [--ports N] [--forged | --forged-read] [--challenger local|loopback:HOST:PORT|gate:USER@HOST --main FILE] \\
         [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE] [--tie W [--tie-prefix P]] [--skip-negatives] \\
-        [--compose-cache DIR] [--day N --day-log LOG [--day-params FILE] | --day-ledger LEDGER]
-    records_audit.py warm --window DIR --law L [--template-sets DIR] --compose-cache DIR [--jobs N]
+        [--compose-cache DIR] [--day N --day-log LOG [--day-params FILE] | --day-ledger LEDGER] \\
+        [--lean-workers N] [--audit-mem-gb G] [--negative-workers N]
+    records_audit.py warm --window DIR --sampling-design L [--template-sets DIR] --compose-cache DIR [--jobs N]
     records_audit.py count --circuit FILE --bits N [--catalog MODULE ...] [--pin NAME=ROOT ...] [--pins FILE ...] [--registration FILE]
     records_audit.py period --window DIR --audit DIR --out FILE [--pin NAME=ROOT ...] [--pins FILE ...]
 
-``period``: a window's audit as one compute audit of the network certifier's period (`NetworkCheck.Period`'s rows form),
+``period``: a window's audit as one compute audit of the network attester's period (`NetworkCheck.Period`'s rows form),
 the ``audits`` entry `scan_period.rows_case` reads (`scan_zk.answers` writes the block round's in that shape): the window's
-registration (``--window``'s ``registration.json``), the population Program's descriptor the audit sampled (``--audit``'s
-``window/program.json``, the one the registration names), the audit's one-stage answer (`served_integrity.answer`:
+docket (``--window``'s ``registration.json``), the population Program's descriptor the audit sampled (``--audit``'s
+``window/program.json``, the one the docket names), the audit's one-stage answer (`served_integrity.answer`:
 undecided for an accepted audit whose record names no challenger key and session a check verified its coins under, or
 doesn't say whether it wrote the case for the compiled check), and its terms, ``free`` and ``steps`` 0. ``free`` is the count `audit` reports (`declared_count` at the pins, with the window's own
-values pinned, its untied ones free) but for the scan's state (`TIED`): the period refuses an audit whose state isn't
+values pinned, its untied ones free) but for the scan's state (``--tied``): the period refuses an audit whose state isn't
 the scan's state tree (``stateTied``), so its reads count registered. Refused where the window commits no scan state.
 
 ``count``: a record that declares its inputs, counted before the committer writes its members' rows (`declared_count`): a
@@ -129,11 +132,11 @@ only where the committer registered the words its engine serves (within the anal
 free.
 
 ``--compilers FILE``: ``{name: {"digest": hex, "argv": [...], "code": [path, ...], "pythonpath": [path, ...]}}``, the
-registered compilers the verifier holds, each by the name and digest a registration names it under. A registration names
+registered compilers the verifier holds, each by the name and digest a docket names it under. A docket names
 the commit its compiler's code is at; the audit checks that commit out of ``--repo`` (default this tree's repository) into
 a worktree of its own, recomputes the digest there over the repository paths ``code`` (`interface.compiler_digest`),
 refuses the compiler unless it is the registered one, and runs ``argv`` in that checkout with ``pythonpath`` (repository
-paths) as its ``PYTHONPATH``: never the auditing tree's code. A registration naming no commit runs ``argv`` from the
+paths) as its ``PYTHONPATH``: never the auditing tree's code. A docket naming no commit runs ``argv`` from the
 auditing tree. The compile command is ``argv --advice FILE --out FILE``:
 
 * ``--advice FILE``: the opened advice's bytes (the opening's ``advice``), nothing else of the window: the command's other
@@ -146,7 +149,7 @@ auditing tree. The compile command is ``argv --advice FILE --out FILE``:
 ``--challenger``: the sample on the auditor's challenger's coins (`a5_coins`), the only coins a sample is on, as `prove_path.py audit`
 takes them: ``local``, a development session on this machine (with ``--deployed-key``, under a key made at the deployed
 LMS parameters, the only ones SPOT's v2 reads a challenger's signatures under), ``loopback:HOST:PORT``, that session on the challenger
-party's host (`challenger_party.py`, `verity run CONFIG --party challenger`), or ``gate:USER@HOST``, the auditor host through its SSH gate with
+party's host (`challenger_party.py`, `verity run CONFIG --party challenger`), or ``gate:USER@HOST``, the auditor device through its SSH gate with
 the lane's gate key ``--gate-key``, its challenger on ``--peer``'s 127.0.0.1 (so the audit runs on that peer), under the
 deployment's key record ``--challenger-key``. The gate opens a root once, ever.
 
@@ -188,13 +191,12 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
 from verity import device as ST  # noqa: E402
-from verity.protocols.accounting.registration.verifier import registration as G  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.blocks import SCAN_STATE  # noqa: E402
-from verity.protocols.accounting.pouw.verifier import credit as CR  # noqa: E402
+from verity.protocols.registration.verifier import registration as G  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import registered as REG, registration as R  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import registered as REG, docket as R  # noqa: E402
 from verity.circuits.codec import program_digest  # noqa: E402
-from verity.commitments.windows import history as HW, interface as IF  # noqa: E402
+from verity.commitments.periods import history as HW, interface as IF  # noqa: E402
 
 #: where an audit's ports start when ``--port`` isn't given (`free_ports`): below Linux's ephemeral range (32768-60999), from
 #: which outbound connections take theirs
@@ -207,7 +209,7 @@ REFUSED = 2
 def catalog_resolve(tid: str) -> Any:
     """`interface.resolve` over every catalog's Definitions, the registry's loaded too (a window's io shell and
     its blocks, which `interface`'s own walk can't import); a refusal names the registry modules that failed to import."""
-    from verity.definitions.registry.catalog import load
+    from verity_vllm.definitions.registry.catalog import load
 
     _, errors = load()
     try:
@@ -242,7 +244,7 @@ def _verdict(ok: Mapping[str, bool], detail: Mapping[str, Any] | None = None) ->
 
 
 def tree_root() -> Path:
-    """The auditing tree: the repository this file is in, whose compilers run for a registration naming no commit."""
+    """The auditing tree: the repository this file is in, whose compilers run for a docket naming no commit."""
     return Path(subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=HERE, capture_output=True, text=True,
                                check=True).stdout.strip())
 
@@ -263,7 +265,7 @@ def checkout(repo: Path, commit: str, at: Path) -> Iterator[Path]:
 
 def compiler_code(entry: Mapping[str, Any], compiler: Mapping[str, Any], at: Path | None) -> None:
     """That the compiler about to run is the registered one, or a ValueError saying why not. At a checkout ``at`` of the
-    registration's ``commit``, the digest this verifier computes (`interface.compiler_digest`, over the code paths its own
+    docket's ``commit``, the digest this verifier computes (`interface.compiler_digest`, over the code paths its own
     table names, ``code``) must be the registered digest: the commit only says where to fetch that code. With no commit, the
     auditing tree's compiler runs, the table's digest the verifier's word for it, recomputed there when the table names
     ``code``."""
@@ -287,9 +289,9 @@ def _bits(stdout: str) -> int | None:
 
 def compile_check(circuit: Mapping[str, Any], window: Mapping[str, Any], opening: Any, compilers: Mapping[str, Any],
                   scratch: Path, repo: Path | None = None) -> tuple[dict[str, Any], dict[str, Any] | None]:
-    """The compile check: the registration's compiler is one the verifier holds, under the digest it holds (``compiler``); the
+    """The compile check: the docket's compiler is one the verifier holds, under the digest it holds (``compiler``); the
     opening opens the registered advice root under that compiler (``advice``); the code that runs is the registered compiler's
-    (``code``, `compiler_code`: a registration naming a ``commit`` is compiled from that commit of ``repo``, default the
+    (``code``, `compiler_code`: a docket naming a ``commit`` is compiled from that commit of ``repo``, default the
     auditing tree's repository, checked out in a worktree of its own, with the table's ``pythonpath`` under it); the
     compiler's command on the opened advice exits 0 (``compiles``), the circuit record it writes is ``circuit`` less its
     run's fields (``circuit``) and the length it charges is the registered one (``length``). The command runs only on advice
@@ -340,7 +342,7 @@ def compile_check(circuit: Mapping[str, Any], window: Mapping[str, Any], opening
 
 
 def source(w: Mapping[str, Any] | None, held: Mapping[str, Any]) -> dict[str, Any]:
-    """The registration's window held to what the verifier holds: the circuit record's SHA-512 (``circuit``), the run root it
+    """The docket's window held to what the verifier holds: the circuit record's SHA-512 (``circuit``), the run root it
     names (``run``), and the compiler and advice the compile check verified, or neither for a circuit with no compiler
     (``compiler``, ``advice``); ``compiled``: the compile check's verdict (true for a circuit with no compiler)."""
     w = w or {}
@@ -358,7 +360,7 @@ WINDOW_PREMISE = ("the earlier rows' committed activations the window reads (its
 def leak_count(members: Iterable[Any], external: Iterable[str], bits: int) -> dict[str, Any]:
     """The leak bound's count against the advice's charge (``bits``, the registered length; 0 for a circuit with no compiler).
     ``other_inputs`` is #(otherInputs \\ registered): ``otherInputs`` (``SampledCharge.lean``), the circuit's input
-    gates no step lists as ingress, less the inputs the registration fixes. The circuit's input gates are each of the
+    gates no step lists as ingress, less the inputs the docket fixes. The circuit's input gates are each of the
     verifier's ``members``' parameter rows' bits (16 a u16 word: `interface.layout` refuses a port of part words), once per
     unit, or once per table row for a shared-row port (``tables``), and none for a port wired from other units' outputs
     (``wired``, which a5's wiring check holds). A record that declares no input lists no steps and registers no input (a
@@ -385,15 +387,15 @@ def declared_count(doc: Mapping[str, Any], bits: int, resolve: Callable[[str], A
     """The leak bound's count of a record that declares its inputs (`interface.input_count`: a stated record's from its
     description alone, a listed one's from its members, its registered reads and its window's ingress): its input rows
     less those its wires,
-    registered reads of a parameter whose window root (``roots``, those the registration records: `window_roots`) is the
+    registered reads of a parameter whose window root (``roots``, those the docket records: `window_roots`) is the
     verifier's pin (``pins``, ``{param: root}``) and the run's ingress fill
-    leave ``free``, and ``other_inputs`` is those plus the advice's ``bits``, the compile unit's one input, a statement of
+    leave ``free``, and ``other_inputs`` is those plus the advice's ``bits``, the compile slice's proof block's one input, a statement of
     its own. So ``other_inputs`` equals the charge exactly when the circuit leaves no input free. That is the run figure,
     the one to quote: only Lean's run ingress (the ingress gates ``freeInputs`` reads) counts as ingress. A listed
     record's window ingress (`interface.listed_ingress`: what its members read from rows before the window) adds the
     window figure beside it (``window``, those rows subtracted too), which holds only under its ``premise``
     (`WINDOW_PREMISE`). ``unpinned`` names the parameters the record reads whose window root is no pin of the
-    verifier's (none pinned, another root, or none the registration records): their reads of input rows are free. An
+    verifier's (none pinned, another root, or none the docket records): their reads of input rows are free. An
     ``untied`` value
     (`window_pins`: a per-window value no output port of the circuit writes, whose rows the prover chose) is no pin here,
     though the audit opens its reads against its committed root: its input rows are free, and the count names it."""
@@ -424,9 +426,9 @@ def pin_arg(s: str) -> tuple[str, str]:
 
 def pins_of(pin: Iterable[tuple[str, str]], files: Iterable[str] = ()) -> dict[str, str]:
     """The verifier's pins, ``{param: root}``: each ``--pin NAME=ROOT`` and each ``--pins FILE``'s, a JSON ``{param: root}``
-    or a registration of values ``{program, values: {param: entry}}`` (or a list of them) whose entries' roots they are,
+    or a docket of values ``{program, values: {param: entry}}`` (or a list of them) whose entries' roots they are,
     each entry held to its domain as the audit's ``--registered`` holds it (`pinned`): vLLM's committer's weights
-    registration (`window_weights.weights_registration`, each weight's ``weights/<label>@<words>``). Refused (ValueError)
+    docket (`window_weights.weights_registration`, each weight's ``weights/<label>@<words>``). Refused (ValueError)
     where two name one parameter, a root isn't hex digits, or the file is a weights record, which states each weight's
     shape and no root."""
     out = list(pin)
@@ -447,14 +449,14 @@ def pins_of(pin: Iterable[tuple[str, str]], files: Iterable[str] = ()) -> dict[s
     return pins
 
 
-#: the groups of committed values a window's registration may name, each ``{program, values: {param: entry}}``: its
+#: the groups of committed values a window's docket may name, each ``{program, values: {param: entry}}``: its
 #: per-window values (``activations``: `TorchLoop.commit_activations`, PoUW's operands) and values pinned for it
 #: (``registered``: PoUW's weights), PoUW's `core_check.WINDOW_VALUES`
 ENTRY_GROUPS = ("activations", "registered")
 
 
 def window_roots(w: Mapping[str, Any]) -> dict[str, str]:
-    """The roots a window's registration records for its parameters, by parameter: its registered roots
+    """The roots a window's docket records for its parameters, by parameter: its registered roots
     (``registered_roots``, `interface.registered_roots`) and each committed value's entry's root (`ENTRY_GROUPS`). Refused
     (ValueError) where an entry names no root of hex digits or two of them give one parameter two roots."""
     roots = IF.registered_roots(w)
@@ -473,7 +475,7 @@ def window_roots(w: Mapping[str, Any]) -> dict[str, str]:
 
 
 def registration_roots(rec: Mapping[str, Any]) -> dict[str, str]:
-    """The roots a window's registration records for its parameters (`window_roots`): core's registration's window's, or
+    """The roots a window's registration records for its parameters (`window_roots`): core's docket's window's, or
     an integration's own window registration's, whose ``window`` is no mapping (vLLM's advice registration names the
     window's index there)."""
     w = rec.get("window")
@@ -484,7 +486,7 @@ def pinned(doc: Any) -> dict[str, dict[str, Any]]:
     """The registered values' entries the verifier pinned before the run (``--registered``), by parameter, each refused
     (ValueError) unless it names its parameter and its domain is the one core's ``registered.domain`` makes of the pin's
     program, the value and its rows: a root is pinned under its domain, never the prover's word for one. A list of pins
-    is their values together, each under its own program (the weights under the model's, the output a network certifier
+    is their values together, each under its own program (the weights under the model's, the output a network attester
     relayed under the reading program's), a value pinned once."""
     if isinstance(doc, list):
         out: dict[str, dict[str, Any]] = {}
@@ -537,10 +539,10 @@ def tied_values(circuit: Mapping[str, Any], values: Iterable[str], resolve: Call
 
 def window_pins(w: Mapping[str, Any], circuit: Mapping[str, Any],
                 resolve: Callable[[str], Any] = IF.resolve) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
-    """The per-window values the circuit reads (its registered parameters among the registration's ``activations``), by
+    """The per-window values the circuit reads (its registered parameters among the docket's ``activations``), by
     parameter, each refused (ValueError) unless it names its value and a root and its domain binds the window's run root,
     as ``(ties, untied)``. The ties (`tied_values`: a wired loop's activations, each written by an output port and read by
-    an input port) are pinned: the registration fixes them before the sample, and the Lean verifier's registered reads open
+    an input port) are pinned: the docket fixes them before the sample, and the Lean verifier's registered reads open
     each writer's and each reader's rows against the same root, so a reader's rows are its writer's. An untied value (read
     only by input ports) is opened against its committed root too, since the Lean verifier opens every registered read, but
     nothing in the circuit fixes its rows: the prover chose them, so its reads count free (`declared_count`)."""
@@ -558,12 +560,12 @@ def window_pins(w: Mapping[str, Any], circuit: Mapping[str, Any],
 
 def tie_of(circuit: Mapping[str, Any], w: Mapping[str, Any] | None,
            prefix: str | None) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
-    """The window's tie to ``w`` (``--tie``: W, the earlier registration that registered first the values the circuit's
+    """The window's tie to ``w`` (``--tie``: W, the earlier docket that registered first the values the circuit's
     program takes, `interface.Registered.values`): a5's ``tie``, one-stage's ``log`` (W), ``registered`` (each value's
     words), ``outputs`` (each value W's entry of it) and ``schemas`` (each value's rows, `interface.value_format`), and the
     pins of the values, each W's entry under the value's name, which `interface.registered_reads` holds to the rows the
     value's readers read. W names a value under ``prefix``, its descriptor's ``PREFIX``, as its table
-    `credit.window_table` (PoUW H1's registration of the window, each value a Commit table in ``row/v2`` rows), or, with
+    `credit.window_table` (PoUW H1's docket of the window, each value a Commit table in ``row/v2`` rows), or, with
     no prefix, by the value's own name (Pearl+'s window record, `pearl_c.window`: each call's A rows and y, FP32 words in
     ``row-seg/v1`` rows, beside each weight's B rows, which the circuit doesn't take). ``({}, {})`` for a circuit that
     takes no values with no W. Refused (ValueError) for values without W, W without values, and W registering a value
@@ -651,7 +653,7 @@ def device_day(lines: list[str], root: str, key: Any, verify: Callable[[Any, byt
     one-stage R2's shape: the UTC day of the window open's signed ``started_utc``, and the declarations its lane signed
     before that open), never ``--day``. The tied W's naming is held to `registration.Declaration` rebuilt from the
     device's entry of its day. ValueError (`challenger.CoinError`) where the reader refuses the ledger."""
-    from verity.protocols.proofs.spot.device import challenger as Ch
+    from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
     got = Ch.declared_day(lines, {"root": root}, key, verify)
     day = got["day"]
     declarations = [{"blocks": list(d["blocks"]), "day": d["day"], "program": d["program"]} for d in got["declarations"]]
@@ -672,7 +674,7 @@ def tie_row(tied: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def committed_activations(w: Mapping[str, Any]) -> dict[str, Any] | None:
-    """The per-window values the registration's window commits (``activations``), each refused unless it names its value
+    """The per-window values the docket's window commits (``activations``), each refused unless it names its value
     and a root and its domain binds the window's run root (a root committed in another window opens under none of this
     window's domains): -> {ok, codes, detail}, ``detail["values"]`` each value's root and shape; None for a window that
     commits none."""
@@ -691,8 +693,8 @@ def committed_activations(w: Mapping[str, Any]) -> dict[str, Any] | None:
 
 
 def negatives(w: Mapping[str, Any], held: Mapping[str, Any], circuit: Mapping[str, Any], scratch: Path) -> dict[str, dict]:
-    """What the audit refuses before any sample about the records: a registration naming another circuit or another run root,
-    one binding a compiler for a circuit registered with none; for a compiled circuit, a registration naming another
+    """What the audit refuses before any sample about the records: a docket naming another circuit or another run root,
+    one binding a compiler for a circuit registered with none; for a compiled circuit, a docket naming another
     compiler, another commit of it, another advice root or another length, or binding neither (a circuit passed off as the
     compiler's), the advice's opening under another salt (which opens no registered root), and a circuit record other than
     the compiler's output (``held["output"]``, the compile check's, its first template one unit short)."""
@@ -723,12 +725,12 @@ def negatives(w: Mapping[str, Any], held: Mapping[str, Any], circuit: Mapping[st
 
 def fixed_before_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], bound: Mapping[str, Any] | None) -> dict[str, Any]:
     """That the circuit, its compiler and its advice were fixed before the coins, checked rather than assumed: the digest of the
-    registration (which covers the window's ``circuit``, ``compiler`` and ``advice``) is the one the sample's receipt names, the
-    receipt the stream wrote when it received the registration and before its select read any coin (the challenger's
-    coins also commit to that digest before any is read: a5_coins); and that registration
+    docket (which covers the window's ``circuit``, ``compiler`` and ``advice``) is the one the sample's receipt names, the
+    receipt the stream wrote when it received the docket and before its select read any coin (the challenger's
+    coins also commit to that digest before any is read: a5_coins); and that docket
     binds the compiler and advice the compile check verified (``bound``, None for a circuit with none). -> {ok, codes, detail}:
-    ``after-the-draw`` where the sample followed another registration or another stream's, ``compiler`` or ``advice`` where the
-    registration binds another."""
+    ``after-the-draw`` where the sample followed another docket or another stream's, ``compiler`` or ``advice`` where the
+    docket binds another."""
     import a5 as A5
 
     w, b = rec.get("window") or {}, bound or {}
@@ -740,9 +742,9 @@ def fixed_before_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], bound:
 
 def after_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], held: Mapping[str, Any]) -> dict:
     """The negative: once the coins are read, the prover commits the same advice again (fresh salts, so a fresh root) and hands
-    in a registration binding that root, with its opening. Every check before the sample passes on it (the new opening opens
+    in a docket binding that root, with its opening. Every check before the sample passes on it (the new opening opens
     the new root, the same advice compiles to the same circuit, `source` holds), and `fixed_before_draw` refuses it
-    (``after-the-draw``): the sample followed the registration received first."""
+    (``after-the-draw``): the sample followed the docket received first."""
     c = held["compiler"]
     data = bytes.fromhex(held["opening"]["advice"])
     late = IF.commit_advice(c, data)
@@ -779,16 +781,14 @@ def composer(fn: Any, st: Mapping[str, Any]) -> Callable[[Path, str, str], dict[
     return compose
 
 
-#: the window value the network certifier's period ties to its scan's state tree (``stateTied``): the scan's state rows
-TIED = SCAN_STATE
-
-
-def period(window: Path, audit: Path, pins: Mapping[str, str]) -> dict[str, Any]:
-    """The window's audit as one compute audit of the network certifier's period (module docstring's ``period``):
-    ``{answer, free, program, registration, steps}``. ``pins`` are the verifier's (`pins_of`). ValueError where the
-    circuit isn't the one the registration binds, the window commits no `TIED` value its circuit reads, the audit wrote no
-    Program or another than the registration names, or its answer commits to another registration."""
-    import served_integrity as SI
+def period(window: Path, audit: Path, pins: Mapping[str, str], tied: str) -> dict[str, Any]:
+    """The window's audit as one compute audit of the network attester's period (module docstring's ``period``):
+    ``{answer, free, program, registration, steps}``. ``pins`` are the verifier's (`pins_of`). ``tied`` is the window
+    value the period ties to its scan's state tree (``stateTied``): the network attester's scan-state value, which the
+    caller passes, since SPOT reads the certifier's output as a certified input and never imports it. ValueError where the
+    circuit isn't the one the docket binds, the window commits no ``tied`` value its circuit reads, the audit wrote no
+    Program or another than the docket names, or its answer commits to another docket."""
+    from verity.protocols.proofs.spot.verifier.one_stage import served_integrity as SI
 
     rec = json.loads((window / "registration.json").read_text())
     body, own = (window / "circuit.json").read_bytes(), rec.get("window") or {}
@@ -796,10 +796,10 @@ def period(window: Path, audit: Path, pins: Mapping[str, str]) -> dict[str, Any]
         raise ValueError(f"{window / 'circuit.json'} is not the circuit record the registration binds")
     doc = json.loads(body)
     ties, untied = window_pins(own, doc, catalog_resolve)
-    if TIED not in ties | untied:
-        raise ValueError(f"the window commits no {TIED} its circuit reads: the period has no state to tie to its scan's")
+    if tied not in ties | untied:
+        raise ValueError(f"the window commits no {tied} its circuit reads: the period has no state to tie to its scan's")
     count = declared_count(doc, 0, catalog_resolve, pins={**pins, **pin_roots({**ties, **untied})},
-                           roots=window_roots(own), untied=set(untied) - {TIED})
+                           roots=window_roots(own), untied=set(untied) - {tied})
     try:
         program = json.loads((audit / "window" / "program.json").read_text())
     except OSError:
@@ -812,11 +812,11 @@ def period(window: Path, audit: Path, pins: Mapping[str, str]) -> dict[str, Any]
     return {"answer": answer, "free": count["free"], "program": program, "registration": rec, "steps": 0}
 
 
-def verifier_window(window_dir: Path, law: Mapping[str, Any] | str, template_sets: Path | None) -> tuple[Any, dict, dict]:
+def verifier_window(window_dir: Path, sampling_design: Mapping[str, Any] | str, template_sets: Path | None) -> tuple[Any, dict, dict]:
     """The verifier's window and circuit record from the records (`interface.of_records`), and a5's template sets: each
     statement's template composed from its Definition (`composer`), every other template lowered from the verifier's own
-    input set, whose Definition it resolves to; any other template from a catalog (`catalog_resolve`). ``law`` is
-    the window's sampling design, or as text the rate a stream states as its rule (`service.Law`, which refuses a fixed
+    input set, whose Definition it resolves to; any other template from a catalog (`catalog_resolve`). ``sampling_design`` is
+    the window's sampling design, or as text the rate a stream states as its rule (`service.SamplingDesign`, which refuses a fixed
     count by name): the window's sampling design and work table are then the ones that rate names over the window's own proof
     blocks (`a5.rated`), as the stream derives them. A window with row tables is refused: a5 checks their segment roots
     against the ones recorded before each coin (``step_roots``), which the records don't carry yet."""
@@ -824,12 +824,12 @@ def verifier_window(window_dir: Path, law: Mapping[str, Any] | str, template_set
 
     own = A5.template_sets(template_sets) if template_sets else {}
     resolve = lambda t: own[t][1] if t in own else catalog_resolve(t)  # noqa: E731
-    if isinstance(law, str):
-        S.Law(law)
+    if isinstance(sampling_design, str):
+        S.SamplingDesign(sampling_design)
         mine, doc = IF.of_records(window_dir, {}, resolve)
-        mine = A5.rated(mine, law)
+        mine = A5.rated(mine, sampling_design)
     else:
-        mine, doc = IF.of_records(window_dir, law, resolve)
+        mine, doc = IF.of_records(window_dir, sampling_design, resolve)
     if mine.row_tables:
         raise ValueError(f"the window has {len(mine.row_tables)} row tables, and its records don't carry the segment roots "
                          "recorded before each segment's coin, so the audit can't check the tables against them: refused "
@@ -843,8 +843,8 @@ def output_class(circuit: Mapping[str, Any], given: Iterable[Iterable[int]] = ()
     verifier's own, from the circuit's shape) and every unit an uncut registered read of an output port (``o<j>``)
     covers in the circuit record (``registered``'s ``reads``: units ``[at, at + prod(radix))`` of its reader template,
     the population's indices from the templates' order), unless it reads one of the window's ``own`` values
-    (`window_pins`: a tie inside the window, a wired loop's activations; `tie_of`: the earlier registration's values the
-    window's registration reuses, each table's readers a stratum of its own), whose units the sample samples like any other. A
+    (`window_pins`: a tie inside the window, a wired loop's activations; `tie_of`: the earlier docket's values the
+    window's docket reuses, each table's readers a stratum of its own), whose units the sample samples like any other. A
     value pinned from outside the window (a served ``out`` that the next step also reads) keeps its units in the class."""
     base, at = {}, 0
     for t, n in circuit["templates"]:
@@ -1011,17 +1011,18 @@ def audit(a: argparse.Namespace) -> int:
     """The audit (module docstring) into ``a.out``: ``summary.json`` and a ``RECORDS`` line, its ``definitions`` the module
     each member template's Definition is in and ``loaded`` the ``verity*`` packages the process loaded. -> 0 when it passed."""
     import a5 as A5
-    import a5_coins as AC
+    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
+    from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
 
     t0, wdir, out = time.time(), Path(a.window), Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     try:
-        mine, doc, sets = verifier_window(wdir, a.law, Path(a.template_sets) if a.template_sets else None)
+        mine, doc, sets = verifier_window(wdir, a.sampling_design, Path(a.template_sets) if a.template_sets else None)
         pins = pinned(json.loads(Path(a.registered).read_text())) if a.registered else {}
         def resolve(t: str) -> Any:
             return sets[t][1] if t in sets else catalog_resolve(t)
-        registration = json.loads((wdir / "registration.json").read_text())
-        own = registration.get("window") or {}
+        docket = json.loads((wdir / "registration.json").read_text())
+        own = docket.get("window") or {}
         ties, untied = window_pins(own, doc, resolve)
         if twice := sorted((set(ties) | set(untied)) & set(pins)):
             raise ValueError(f"values {twice} are both pinned and the window's own")
@@ -1032,7 +1033,7 @@ def audit(a: argparse.Namespace) -> int:
             raise ValueError(f"values {twice} are both pinned and the earlier registration's")
         pins |= tie_pins
         roots = window_roots(own)
-        for e in registration.get("registered") or ():
+        for e in docket.get("registered") or ():
             if e.get("value") in tie_pins and roots.setdefault(e["value"], e["root"]) != e["root"]:
                 raise ValueError(f"the window's registration records two roots for {e['value']!r}")
         histories = HW.pins(doc, roots)
@@ -1041,7 +1042,7 @@ def audit(a: argparse.Namespace) -> int:
         pins |= histories
         reads = IF.registered_reads(doc, mine, pins, registered=REG)
         if a.day_ledger:
-            from verity.protocols.proofs.spot.device import challenger as Ch, remote as SPR
+            from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch, remote as SPR
             key = Ch.key_of_record(json.loads(Path(a.challenger_key).read_text()))
             day = device_day(SPR.ledger_lines(a.day_ledger), mine.run, key, AC.lms_verify, w_tie)
         else:
@@ -1069,7 +1070,7 @@ def audit(a: argparse.Namespace) -> int:
     more = {} if a.skip_negatives else negatives(w, held, doc, out / "negatives")
     a.ports = a.ports if a.ports is not None else max(1, len(mine.members))
     a.port = a.port if a.port is not None else free_ports(a.ports)
-    a.coins, a.verifier_coins, a.window_root, a.rule = None, not a.challenger, mine.run, a.law
+    a.coins, a.verifier_coins, a.window_root, a.rule = None, not a.challenger, mine.run, a.sampling_design
     a.outputs = output_class(doc, json.loads(Path(a.outputs).read_text()) if a.outputs else (),
                              own=set(ties) | set(untied) | set(tie_pins))
     a.tie, a.declared = tied, day
@@ -1080,22 +1081,24 @@ def audit(a: argparse.Namespace) -> int:
     if a.forged:
         os.environ["FC_ZK_SELF_CHECK"] = "skip"
     manager, a.coins, finisher = AC.start(a.challenger, mine.run, [0], out / "challenger", a.main, ssh_key=a.gate_key,
-                                          peer=a.peer, key_record=a.challenger_key, deployed=a.deployed_key)
+                                          peer=a.peer, key_record=a.challenger_key, deployed=a.deployed_key,
+                                          local=LC.Local)
     try:
         s, ok = A5.audit(a, sets, out / "window", mine, wdir, lambda x: source(x, held), a.port,
                          {"verifier_window_s": window_s, "circuit": held["circuit"], **({"compile": compiled} if compiled else {})},
                          more, rank=0, registered=reads or None, ports=a.ports,
-                         history=(lambda publics: HW.params(doc, mine, publics, pins)) if histories else None)
+                         history=(lambda publics: HW.params(doc, mine, publics, pins)) if histories else None,
+                         session=finisher)
     finally:
         a.coins.skip(0)
         finisher.join()
         published = a.coins.evidence()
         manager.shutdown()
     row = {"seconds": round(time.time() - t0, 1), "verifier_window_s": window_s, "circuit": held["circuit"],
-           "compiler": held["compiler"], "advice": held["advice"], "compile": compiled, "law": a.law,
+           "compiler": held["compiler"], "advice": held["advice"], "compile": compiled, "law": a.sampling_design,
            **{x: s.get(x) for x in ("run_root", "population", "members", "registration", "source", "refused", "checks_before_draw",
                                     "audit", "draw", "draw_counts", "negatives", "negatives_skipped", "coins",
-                                    "timing", "outputs")}}
+                                    "timing", "outputs", "negative_workers", "plain", "arm", "coin_trees")}}
     bits = int((held["advice"] or {}).get("bits", 0))
     counted = pin_roots(pins)
     row["leak"] = (declared_count(doc, bits, resolve, counted, roots, untied)
@@ -1156,7 +1159,7 @@ def warm(a: argparse.Namespace) -> int:
     import a5 as A5
 
     t0 = time.time()
-    mine, _doc, sets = verifier_window(Path(a.window), a.law, Path(a.template_sets) if a.template_sets else None)
+    mine, _doc, sets = verifier_window(Path(a.window), a.sampling_design, Path(a.template_sets) if a.template_sets else None)
     window_s = round(time.time() - t0, 1)
     got = A5.warm(a, sets, mine, a.jobs)
     for g in got:
@@ -1173,10 +1176,10 @@ def main(argv: list[str] | None = None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("audit", help="a window's audit from its records alone")
     p.add_argument("--window", required=True, help="the window's directory: circuit.json, registration.json, the value files")
-    p.add_argument("--law", required=True, help="the rate the audit's stream states as its rule (rate:NUM/DEN, "
+    p.add_argument("--sampling-design", required=True, help="the rate the audit's stream states as its rule (rate:NUM/DEN, "
                    "stratified-rate:NUM/DEN or work-rate:NUM/DEN), whose sampling design over the window's proof blocks the "
                    "registration is held to; a fixed count (subset:K, stratified:K, work:K) is refused")
-    p.add_argument("--opening", help="the advice's opening (interface.advice_opening): the named gap, until the compile unit")
+    p.add_argument("--opening", help="the advice's opening (interface.advice_opening): the named gap, until the compile slice's proof block")
     p.add_argument("--compilers", help="with --opening: the registered compilers the verifier holds, {name: {digest, argv, "
                    "code, pythonpath}}")
     p.add_argument("--repo", help="with --opening: the repository a registered compiler's commit is checked out from (default "
@@ -1189,7 +1192,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--m0-pythonpath", required=True)
     p.add_argument("--bin", required=True)
     p.add_argument("--lean", required=True)
-    p.add_argument("--firewall", required=True)
+    p.add_argument("--zk-server", required=True)
     p.add_argument("--out", required=True)
     p.add_argument("--delta", type=float, default=0.5)
     p.add_argument("--port", type=int, default=None, help="the sessions' base port (default a base whose --ports ports are "
@@ -1198,6 +1201,8 @@ def main(argv: list[str] | None = None) -> int:
                    "every member with a proved unit, a sample needing more refused before any listens (default one a member)")
     p.add_argument("--session-timeout", type=float, default=14400)
     p.add_argument("--session-jobs", type=A5.one_session, default=1, help="1 only: a5 runs the sessions one at a time (a5.ONE_AT_A_TIME)")
+    p.add_argument("--archive-link", action="store_true", help=A5.ARCHIVE_LINK_HELP)
+    A5.lean_options(p)
     forges = p.add_mutually_exclusive_group()
     forges.add_argument("--forged", action="store_true", help="the window holds a forged unit: it must be refused")
     forges.add_argument("--forged-read", action="store_true", help="the window holds a registered read that opens no pinned "
@@ -1206,10 +1211,12 @@ def main(argv: list[str] | None = None) -> int:
                    help="after an accepted audit, at most N one-bit edits of its first drawn session's proof, each of which "
                    "Lean verify must refuse (`proof_edits`)")
     p.add_argument("--challenger", help="draw on the auditor's challenger's coins (a5_coins): local, loopback:HOST:PORT or "
-                   "gate:USER@HOST (the auditor host through its SSH gate, with --peer and --challenger-key)")
+                   "gate:USER@HOST (the auditor device through its SSH gate, with --peer and --challenger-key)")
     p.add_argument("--deployed-key", action="store_true",
                    help="with --challenger local: the session's key at the deployed LMS parameters (a5_coins.start's deployed), "
                    "its whole tree made over this machine's cores")
+    p.add_argument("--plain", action="store_true", help="with --challenger and a stratified rate: plain sessions, not --zk "
+                   "(a5's plain audit, `a5.plain_refusal` its scope)")
     p.add_argument("--peer", help="with --challenger gate:USER@HOST: this machine as the gate's /etc/vy/peers names it, whose "
                    "127.0.0.1 the session's challenger listens on")
     p.add_argument("--challenger-key", help="with --challenger gate:USER@HOST: the challenger's key record of its deployment "
@@ -1238,7 +1245,7 @@ def main(argv: list[str] | None = None) -> int:
                    "staging links each kept circuit and composes none (default none: every template composed here)")
     p = sub.add_parser("warm", help="every template of a window composed into a5's compose cache, before its timed audit")
     p.add_argument("--window", required=True, help="the window's directory, as its audit takes it")
-    p.add_argument("--law", required=True, help="the window's rule, as its audit takes it")
+    p.add_argument("--sampling-design", required=True, help="the window's rule, as its audit takes it")
     p.add_argument("--template-sets", help="the verifier's own input sets, as its audit takes them")
     p.add_argument("--compose-cache", required=True, help="the cache the audit's --compose-cache names")
     p.add_argument("--jobs", type=int, default=1, help="templates composed at once, each in a forked process: what the "
@@ -1265,10 +1272,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--out", required=True, type=Path, help="the period's audit entry, JSON")
     p.add_argument("--pin", action="append", default=[], type=pin_arg, metavar="NAME=ROOT", help="as count's")
     p.add_argument("--pins", action="append", default=[], metavar="FILE", help="as count's")
+    p.add_argument("--tied", required=True, metavar="VALUE", help="the value the period ties to its scan's state tree: the "
+                   "network certifier's scan-state value (its verifier's `blocks.SCAN_STATE`)")
     a = ap.parse_args(argv)
     if a.cmd == "period":
         try:
-            got = period(a.window, a.audit, pins_of(a.pin, a.pins))
+            got = period(a.window, a.audit, pins_of(a.pin, a.pins), a.tied)
         except (ValueError, RuntimeError) as e:
             print(f"records_audit.py period: {e}", file=sys.stderr)
             return 1

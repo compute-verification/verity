@@ -37,9 +37,9 @@ import Mathlib.Topology.Sheaves.Init
 # `SoundAtBridge`'s layer premises hold together, and its event is Flock's
 
 `soundAtBridge_nonvacuous` is the bridge's witness, as `ZkReg/NonVacuousHJ.lean` is `zk_session_soundHJR`'s: at any
-family of Flock sessions, the layer `rowsLayer` that reads them (accepted where flock-verify accepts, opened at the
+family of Flock sessions, the layer `rowsLayer` that reads them (accepted where verity-verify-proof accepts, opened at the
 value layer, its relation that every sampled proof block is right) meets `AcceptedLive`, `OpenedPlurAt` at `δo = 0` and
-`RelOfRows` together; a proof of it is unsound exactly where its session's outcome is `RowsSession.BadU` (flock-verify
+`RelOfRows` together; a proof of it is unsound exactly where its session's outcome is `RowsSession.BadU` (verity-verify-proof
 accepts and a sampled proof block is wrong or its rows are off at its own reads), so `SoundAtBridge`'s conclusion there is
 Flock's event and no weaker one; and a finite bound on every session's `n · bound` meets the `δ` hypothesis at its
 real value.
@@ -49,7 +49,7 @@ real value.
 
 namespace Flock.SoundAtBridge
 
-open FlockSoundness FlockSoundness.Discharge.ZkReg Accounting.TS
+open FlockSoundness FlockSoundness.Discharge.ZkReg ResourceAccounting.TS
 open Pouw.RelativeSecurity (Paths)
 open scoped ENNReal
 
@@ -59,7 +59,7 @@ variable {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type}
 with outcomes `out`, any reading `rows` of a session's value layer and any rightness `right`, the layer
 `rowsLayer sess out rows right` meets `AcceptedLive`, `OpenedPlurAt` at `δo = 0` and `RelOfRows`; its proof `i` of
 round `w` is unsound on the path `x` exactly where `(sess x w i).BadU (out x w i)`; and a bound `B ≠ ⊤` on every
-session's `n · bound` meets `n · bound ≤ ofReal δ` at `δ = B.toReal ≥ 0`. Not covered: `WindowLaw`,
+session's `n · bound` meets `n · bound ≤ ofReal δ` at `δ = B.toReal ≥ 0`. Not covered: `ExecutionPhaseSamplingDesign`,
 `RowsSession.CR` (`EndToEndRegisteredRows`' `cr/sha-512` and `ecr/sha-512` instances) and a
 session's existence (`ZkReg.zk_session_soundHJR_nonvacuous` covers its sample hypotheses). -/
 theorem soundAtBridge_nonvacuous (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)

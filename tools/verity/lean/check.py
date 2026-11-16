@@ -6,6 +6,7 @@
     python tools/verity/lean/check.py --all [--root DIR] [--build] [--out DIR]   the controls, then every package under DIR (default .)
     python tools/verity/lean/check.py --name-instances [--build] PACKAGE_DIR...  write each anonymous instance's name into its source
     python tools/verity/lean/check.py --lift FILE [--build] PACKAGE_DIR   lift guarantees into `SecurityProofs.G : G` (`lift`)
+    python tools/verity/lean/check.py --ask [--build] [--no-replay] PACKAGE_DIR...   the GB a run of them asks (`reserve.py`)
 
 For each package it reads the facts from the roots' `.olean` files as data (`Facts.lean`: initializers disabled and no
 environment extension loaded, so none of the package's code runs) and replays the audited modules through the kernel
@@ -14,6 +15,10 @@ on private copies of the files they read (`Pipeline`); the replay after the buil
 and is the one that judges. It first checks the modules `replay-first.json` lists for the package, each in a step of its
 own at its stated threads, and reuses them the same way (`replay_in_steps`). The audits of `UNREAD_FACTS` that replay also write what each constant of their roots mentions
 (`Unread.lean`, `unread_facts`), which `unread.py`'s ratchet on wholly unread modules reads.
+
+With `--build` it first judges every package on its sources and its lock alone (`sources_judge`), before the slot and
+any build, and builds none that this stops (`unbuilt_by_sources`); a pass there decides nothing, since each audit runs
+those checks again on its build.
 
 It judges what it read against the package's policy and records, `lean-audit.json`. README.md is the outline: "What it
 checks" lists every way a package fails (each failure carries a code and the entry it is about, `Failure`, which the
@@ -38,6 +43,8 @@ import bisect
 import contextlib
 import datetime
 import difflib
+import fcntl
+import functools
 import gzip
 import hashlib
 import json
@@ -56,7 +63,7 @@ import threading
 import time
 import tomllib
 from collections.abc import Callable, Iterable
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import CancelledError, ThreadPoolExecutor
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -67,14 +74,18 @@ ROOT = HERE.parents[2]
 #: test that drives `main` can redirect it off the checkout, which the test suite's read guard would otherwise flag
 SEAL_BASE = ROOT / ".lake" / "sealed"
 POLICY = "lean-audit.json"
-#: what a package's work directory holds from the moment its builds are about to run: the package, and whether they run in
-#: the sandbox. A run that is killed leaves no report, and this is then what says whether the modules it compiled may go
-#: into the artifact cache (`lean_audit.built`)
+#: what a package's work directory holds from the moment its builds are about to run: the package, whether they run in
+#: the sandbox, and `SAMPLE_PENDING` until its sampled recompile has ended, then that recompile's failures where it
+#: differs. A run that is killed leaves no report, and this is then what says whether the modules it compiled may go into
+#: the artifact cache (`lean_audit.built`)
 BUILDING = "building.json"
+#: what `BUILDING` says until the sample has ended: modules compiled on top of restored ones that nothing has sampled yet,
+#: which `lean_audit.LakeArtifacts.put` refuses
+SAMPLE_PENDING = {"sample": "pending"}
 #: the lock's schema version, which every lock this file writes carries as `format`: bump it with any change to what a lock
 #: holds or how its sections read, and `merge.py`'s `FORMAT` with it, so an older driver leaves a newer lock to git's
 #: conflict rather than merge what it can't read
-FORMAT = 1
+FORMAT = 2
 #: the facts document `facts_of` keeps beside a package's reports, gzipped with no timestamp: equal facts are equal bytes
 FACTS = "facts.json.gz"
 #: the stage-A document that `--facts-from` judges from (`facts_document`), beside a package's reports; the augmented,
@@ -114,7 +125,7 @@ FIXED = Path("/var/tmp/verity")
 #: `--tree`: the tree the audited packages are in, which a build binds at `FIXED` (default: this file's checkout)
 TREE = ROOT
 #: the controls' own packages; `--all` does not audit them as the repository's
-FIXTURES = HERE / "tests" / "fixtures"
+FIXTURES = HERE.parents[2] / "tests" / "tools" / "verity" / "lean" / "fixtures"
 #: each package of the controls with the violations its copies add: `modules` is written in Lean's module system, where
 #: proofs and unexposed bodies are only in each `.olean`'s private part
 CONTROLS = {"control": "violations.json", "modules": "module-violations.json"}
@@ -122,11 +133,13 @@ CONTROLS = {"control": "violations.json", "modules": "module-violations.json"}
 GENERATED = re.compile(r"^(_.*|match_\d+|proof_\d+|eq_\d+|eq_def|mk|rec|recOn|casesOn|noConfusion|noConfusionType|below|brecOn"
                        r"|binductionOn|ibelow|ctorIdx|inj|injEq|sizeOf_spec)$")
 ORDER = ("format", "roots", "proved_in", "exempt", "runs", "axioms", "assumptions_module", "assumptions", "domain", "open",
-         "open_seed", "open_default_issue", "default_owner", "trust", "deployed", "trust_gap", "meaning", "escapes", "verifier",
-         "claims", "witnesses", "unwitnessed", "witnesses_assumed", "compile_time", "dependency_unchecked", "layers",
-         "reads_exempt", "trees", "upstream", "four_names", "guarantees", "shape", "reads", "dependencies")
+         "open_seed", "open_default_issue", "default_owner", "ids", "trust", "deployed", "trust_gap", "meaning", "escapes",
+         "verifier", "claims", "witnesses", "unwitnessed", "witnesses_assumed", "compile_time", "dependency_unchecked",
+         "layers", "reads_exempt", "trees", "upstream", "four_names", "guarantees", "shape", "reads", "dependencies")
 #: a guarantee's `owner`: the handle of the lane that answers for it (`@lane`)
 OWNER = re.compile(r"@[a-z0-9][a-z0-9-]*")
+#: a premise entry's `id`, the claim id that names it (`claim_ids.py`): kebab-case, or `<property>/<instance>`
+CLAIM_ID = re.compile(r"[a-z0-9]+(-[a-z0-9]+)*(/[a-z0-9]+(-[a-z0-9]+)*)?")
 #: an open premise's `issue` (the Linear issue that discharges it) and `due`
 OPEN_ISSUE, OPEN_DUE = re.compile(r"[A-Z][A-Z0-9]*-[0-9]+"), re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
 #: the kinds a guarantee's `premises` record lists: the named assumptions it rests on, the open premises it takes and
@@ -192,7 +205,7 @@ def lean_slot(repo: Path) -> int | None:
     `lean_slot.py` (a copy of this directory elsewhere)."""
     import importlib.util
 
-    path = repo / "tools" / "verity" / "check" / "lean_slot.py"
+    path = repo / "tools" / "check" / "lean_slot.py"
     if not path.is_file():
         if LEAN_SLOTS.exists() and not os.environ.get("LEAN_SLOT"):
             raise RuntimeError(f"{LEAN_SLOTS} caps this node's Lean audits, and {path} is missing to take a slot: "
@@ -220,24 +233,25 @@ def cores() -> int:
     return n
 
 
-#: what auditing a package that pins ArkLib (security/Proofs, and Security, which audits it beside itself) needs: its build
-#: of Flock's soundness peaks at 15–24 GB (the lean-proofs skill); `VERITY_LEAN_MEM_FLOOR_GIB` sets another floor, 0 none
-MEM_FLOOR_GIB = 24
-#: an audit of a spec whose guarantees an ArkLib package proves (Security): its whole replay peaks at about 145 GiB at
-#: 48 threads and is killed at a 128 GiB cap at 16, so the replay's resident base is
-#: about 120 GiB and a thread adds under 1: fewer threads don't make it fit, only the floor does
-SPEC_FLOOR_GIB = 160
-#: the run a machine below the floor prints instead, which `research run --on auto` places
-BELOW_FLOOR_RUN = ("research run --on auto --mem-gb 32 --max-min 120 --project verity --source . --cwd clone "
+#: the runs a run below its floor prints instead, at its ask (`--mem-gb`, in GB), which `research run --on auto` places: a
+#: records run of a package (`lean_changed.py`'s), and an audit of the packages it names (this file's)
+BELOW_FLOOR_RUN = ("research run --on auto --mem-gb {gb} --max-min 120 --project verity --source . --cwd clone "
                    "--declared-output 'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records {pkg}")
-#: the same for a spec beside its ArkLib package, on a cluster shape above SPEC_FLOOR_GIB (`cpu-xl`, 280 GiB)
-BELOW_SPEC_FLOOR_RUN = ("research run --on auto --kind lean-audit --project verity --source . --cwd source "
-                        "--declared-output 'lean-audit/*' -- python3 tools/verity/lean/check.py --build {pkg}")
+BELOW_FLOOR_AUDIT = ("research run --on auto --mem-gb {gb} --max-min 180 --project verity --source . --cwd clone "
+                     "--declared-output 'lean-audit/*' -- python3 tools/verity/lean/check.py {args}")
+STEPS = ("build", "replay")
 
 
-def memory_gib(proc: Path = Path("/proc"), cgroup: Path = Path("/sys/fs/cgroup")) -> float:
-    """The memory this process may use, swap included: the machine's, bounded by the limits of its cgroup and every cgroup
-    above it (`/proc/self/cgroup`: a queued run's limit is on its own scope, below the hierarchy's root)."""
+@functools.cache
+def reserve():
+    """`reserve.py`, the GiB each step needs and what a run reserved, loaded when a build or a replay first reads it."""
+    return sibling("reserve")
+
+
+def memory(proc: Path = Path("/proc"), cgroup: Path = Path("/sys/fs/cgroup")) -> tuple[float, str]:
+    """(the GiB this process may use, swap included, what bounds it): the machine's memory, bounded by the limits of its
+    cgroup and every cgroup above it (`/proc/self/cgroup`: a queued run's limit is on its own scope, below the hierarchy's
+    root), which is then its cgroup's limit."""
     info = {}
     for line in (proc / "meminfo").read_text().splitlines():
         k, _, v = line.partition(":")
@@ -254,10 +268,11 @@ def memory_gib(proc: Path = Path("/proc"), cgroup: Path = Path("/sys/fs/cgroup")
             except (OSError, ValueError):
                 continue
         return min(got) if got else None
-    ram, swap = info.get("MemTotal", 0), info.get("SwapTotal", 0)
-    ram = ram if (m := limit("memory.max")) is None else min(ram, m)
-    swap = swap if (s := limit("memory.swap.max")) is None else min(swap, s)
-    return (ram + swap) / 2**30
+    machine = info.get("MemTotal", 0), info.get("SwapTotal", 0)
+    m, s = limit("memory.max"), limit("memory.swap.max")
+    ram, swap = machine[0] if m is None else min(machine[0], m), machine[1] if s is None else min(machine[1], s)
+    return (ram + swap) / 2**30, ("its cgroup's limit" if (ram, swap) != machine else "this machine's memory") + \
+        ", swap included"
 
 
 def _cgroups(proc: Path, cgroup: Path) -> list[Path]:
@@ -292,71 +307,134 @@ def free_gib(proc: Path = Path("/proc"), cgroup: Path = Path("/sys/fs/cgroup")) 
     return max(0, min(left)) / 2**30
 
 
-#: about what one `lean` of a Mathlib or ArkLib build peaks at: Lake runs as many at once as `LEAN_NUM_THREADS`, so a build
-#: of such a package runs no more than its memory holds (a Security build with more jobs is OOM-killed, even at 64 GB)
-BUILD_GIB_PER_JOB = 8
 #: the dependencies (manifest names) that make a package's build and replay heavy
 HEAVY_DEPS = frozenset({"mathlib", "Arklib"})
 
 
-def pins_heavy(pkg: Path) -> bool:
-    """Whether ``pkg`` pins one of `HEAVY_DEPS`, by its manifest alone."""
-    m = pkg / "lake-manifest.json"
+def pinned(manifest: bytes | str | None) -> frozenset[str]:
+    """The `HEAVY_DEPS` a `lake-manifest.json`'s text pins: none for no manifest, or one that isn't one."""
     try:
-        names = {d.get("name") for d in json.loads(m.read_text()).get("packages", [])} if m.is_file() else set()
-    except (OSError, ValueError):
-        names = set()
-    return bool(names & HEAVY_DEPS)
+        return frozenset({d.get("name") for d in json.loads(manifest).get("packages", [])} & HEAVY_DEPS) \
+            if manifest else frozenset()
+    except (ValueError, AttributeError, TypeError):
+        return frozenset()
+
+
+def pins(pkg: Path) -> frozenset[str]:
+    """The `HEAVY_DEPS` ``pkg`` pins, by its manifest alone."""
+    m = pkg / "lake-manifest.json"
+    return pinned(m.read_bytes()) if m.is_file() else frozenset()
+
+
+def pins_heavy(pkg: Path) -> bool:
+    """Whether ``pkg`` pins one of `HEAVY_DEPS`."""
+    return bool(pins(pkg))
+
+
+def reserved(env=os.environ) -> tuple[float | None, str]:
+    """(the GiB this run reserved, what says so): `reserve.reserved` on what this machine lets it hold (`memory`), which
+    is what a run that declares no reservation plans by."""
+    return reserve().reserved(env, *memory())
 
 
 def build_threads(pkg: Path, env=os.environ, have_gib: float | None = None) -> int | None:
-    """The `LEAN_NUM_THREADS` a build of ``pkg`` runs with, when its memory bounds it: ``pkg`` pins a heavy
-    dependency (`pins_heavy`) and `LEAN_NUM_THREADS` is unset; else None (`lake_env`'s value)."""
-    if "LEAN_NUM_THREADS" in env or not pins_heavy(pkg):
+    """The `LEAN_NUM_THREADS` a build of ``pkg`` runs with, the jobs Lake runs at once, when ``pkg`` pins a heavy dependency
+    (`pins_heavy`): as many of `LEAN_NUM_THREADS` (else of every core) as what the run reserved holds (`reserve.build_jobs`,
+    on ``have_gib`` or `reserved`), all of them where a reservation is no number; else None (`lake_env`'s value)."""
+    if not pins_heavy(pkg):
         return None
-    gib = memory_gib() if have_gib is None else have_gib
-    return max(1, min(cores(), int(gib // BUILD_GIB_PER_JOB)))
+    try:
+        jobs = max(1, int(env["LEAN_NUM_THREADS"]))
+    except (KeyError, ValueError):
+        jobs = cores()
+    have = reserved(env)[0] if have_gib is None else have_gib
+    return jobs if have is None else reserve().build_jobs(have, jobs)
 
 
-#: memory per replay thread of a Mathlib or ArkLib package, a cap on its threads: the whole-Security replay's peak is mostly
-#: its resident base (`SPEC_FLOOR_GIB`), with 145 GiB at 48 threads and over 128 at 16; a heavy replay runs alone
-#: (`_HEAVY_REPLAY`), since two side by side took that run to 183 GiB
-REPLAY_GIB_PER_THREAD = 4
+#: a heavy replay runs alone, since two side by side need twice its figure (`reserve.REPLAY_ARKLIB_GIB`)
 _HEAVY_REPLAY = threading.Semaphore(1)
+#: {package: (the jobs its sample runs beside its replay, the GiB they hold)}, set by `sample_jobs`
+_BESIDE: dict[Path, tuple[int, int]] = {}
 
 
 def replay_threads(pkg: Path, env=os.environ, have_gib: float | None = None) -> int | None:
-    """The `LEAN_NUM_THREADS` the kernel replay of ``pkg`` runs with when its memory bounds it (as `build_threads`, at
-    `REPLAY_GIB_PER_THREAD`); else None."""
-    if build_threads(pkg, env, have_gib=1) is None:
+    """The `LEAN_NUM_THREADS` the kernel replay of ``pkg`` runs with, alone (`_HEAVY_REPLAY`), when it pins a heavy
+    dependency: one per `reserve.REPLAY_PER_THREAD_GIB` of what the run reserved (``have_gib``, else `reserved`, else this
+    machine's memory) less what its sample holds beside it (`sample_jobs`), up to every core (`reserve.replay_threads`); a
+    run below its need refuses first (`memory_refusal`). None where `LEAN_NUM_THREADS` is set or ``pkg`` pins neither
+    (`lake_env`'s value)."""
+    if "LEAN_NUM_THREADS" in env or not pins_heavy(pkg):
         return None
-    gib = memory_gib() if have_gib is None else have_gib
-    return max(1, min(cores(), int(gib // REPLAY_GIB_PER_THREAD)))
+    have = reserved(env)[0] if have_gib is None else have_gib
+    have = memory()[0] if have is None else have
+    return reserve().replay_threads(have - _BESIDE.get(pkg.resolve(), (0, 0))[1], cores())
 
 
-def memory_refusal(pkgs: list[Path], have_gib: float, env=os.environ) -> str | None:
-    """Why this machine should not audit ``pkgs``, or None: one pins ArkLib and the memory is below the floor, which is
-    `SPEC_FLOOR_GIB` when a spec beside it reads its build (`proved_in`: the facts of every guarantee it proves).
-    `check.py` and the fast path (`lean_changed.py`) refuse by it alike."""
-    heavy = [p for p in pkgs if (m := p / "lake-manifest.json").is_file()
-             and any(d.get("name") == "Arklib" for d in json.loads(m.read_text()).get("packages", []))]
-    spec = [p for p in pkgs if (p / POLICY).is_file() and json.loads((p / POLICY).read_text()).get("proved_in")]
-    need = SPEC_FLOOR_GIB if heavy and spec else MEM_FLOOR_GIB
+def sample_jobs(pkg: Path, threads: int | None, replay: bool, env=os.environ) -> int | None:
+    """How many recompiles at once the sample of ``pkg`` (`sampled_recompile`, on the build's ``threads``) runs beside its
+    replay (``replay``: the audit replays): None, its own share of ``threads``, for a package that pins no heavy
+    dependency or an audit with no replay (whose sample no dependent's build runs beside: `audit`); else those `reserve.beside` fits in what the replay's need leaves of what the
+    run reserved, kept in `_BESIDE` for the sample and the replay's threads; 0 where none fits, and the sample runs after
+    the replay."""
+    if not replay or not (p := pins(pkg)):
+        return None
+    have = reserved(env)[0]
+    want = max(1, int((threads or cores()) * SAMPLE_CORE_SHARE))
+    jobs = reserve().beside(memory()[0] if have is None else have, p, want)
+    _BESIDE[pkg.resolve()] = (jobs, reserve().held(jobs) if jobs else 0)
+    return jobs
+
+
+def rel(p: Path) -> str:
+    """``p`` from the repository's root where it is under it."""
+    return os.path.relpath(p, ROOT) if p.resolve().is_relative_to(ROOT) else str(p)
+
+
+def ask_lines(pins_of: dict[str, frozenset[str]], steps=STEPS) -> tuple[int, str]:
+    """(the GB a run asks `research run --mem-gb` for, the line that says it in GiB): the largest need among ``steps`` of
+    the packages it audits (``pins_of``: {package: what it pins of `HEAVY_DEPS`}), `reserve.ask`'s. `--ask`, the line a
+    refusal prints under its command and the fast path's `--ask` all print it."""
+    r = reserve()
+    gb, n, step, pkg = r.ask(pins_of, steps)
+    if step is None:
+        return gb, "0 GiB: it takes no build and no replay"
+    name = r.figure(step, pins_of[pkg])
+    return gb, (f"{gb} GB is {r.gib(gb):.1f} GiB, for the {n} GiB the {step} of {pkg} needs at its largest ({name}, "
+                f"{r.where(name)}), the most any step of the run needs")
+
+
+def print_ask(gb: int, line: str) -> None:
+    """`--ask`'s output, both tools': one line on stdout, the ask in GB as a whole number, which a launch line reads as
+    `research run --mem-gb "$(... --ask ...)"`, and nothing else there; the line in GiB goes to stderr."""
+    print(gb, flush=True)
+    print(f"research run --mem-gb {gb}: {line}", file=sys.stderr, flush=True)
+
+
+def memory_refusal(pkgs: list[Path], have: tuple[float | None, str], env=os.environ, steps=STEPS,
+                   run: str | None = None) -> str | None:
+    """Why a run taking ``steps`` (of `STEPS`) of ``pkgs``, every package it audits (those proving another's guarantees
+    included), must not start with what it reserved (``have``, `reserved`'s), or None: it reserved less than the largest
+    floor among them (`reserve.floor`; `VERITY_LEAN_MEM_FLOOR_GIB` sets another, 0 none, and one that is no number
+    refuses), or a reservation that is no number. The reason names the command to run instead (``run``, with ``{gb}`` for
+    the ask; by default this file's audit of ``pkgs``) and, under it, the ask in GiB (`ask_lines`). `check.py` and the fast
+    path (`lean_changed.py`) refuse by it alike."""
+    r = reserve()
+    pins_of = {rel(p): pins(p) for p in pkgs}
+    floor, step, pkg = r.largest(r.floor, pins_of, steps)
     try:
-        floor = float(env.get("VERITY_LEAN_MEM_FLOOR_GIB", need))
+        floor = float(env.get("VERITY_LEAN_MEM_FLOOR_GIB", floor))
     except ValueError:
-        floor = need
-    if not heavy or have_gib >= floor:
+        return (f"VERITY_LEAN_MEM_FLOOR_GIB={env['VERITY_LEAN_MEM_FLOOR_GIB']!r} is no number of GiB: set it to one (0 for "
+                "none), or unset it for the floor of what this run audits")
+    got, said = have
+    if floor <= 0 or (got is not None and got >= floor):
         return None
-    def rel(p):
-        return os.path.relpath(p, ROOT) if p.resolve().is_relative_to(ROOT) else str(p)
-    what = (f"{rel(spec[0])}'s audit reads {rel(heavy[0])}'s facts for every guarantee it proves, about 40 GiB beside the "
-            f"replay" if heavy and spec else f"{rel(heavy[0])} pins ArkLib, whose build peaks near {MEM_FLOOR_GIB} GiB")
-    run = BELOW_SPEC_FLOOR_RUN if heavy and spec else BELOW_FLOOR_RUN
-    return (f"{what}, and this machine has {have_gib:.0f} GiB (memory and swap, within its cgroup), under the {floor:.0f} "
-            f"GiB floor: run it on a node, `{run.format(pkg=rel(pkgs[0]))}` "
-            f"(add --update for the record), or set "
-            f"VERITY_LEAN_MEM_FLOOR_GIB=0 to try here anyway")
+    gb, line = ask_lines(pins_of, steps)
+    run = (run or BELOW_FLOOR_AUDIT.format(gb="{gb}", args=" ".join(["--build", *pins_of]))).format(gb=gb)
+    what = f"the {step} of {pkg}" if step else "this run"
+    held = f"reserved {got:.1f} GiB ({said})" if got is not None else f"reserved nothing it can read ({said})"
+    return (f"{what} needs at least {floor:g} GiB, and this run {held}: run it where it asks {gb} GB,\n"
+            f"  {run}\n  {line}\nor set VERITY_LEAN_MEM_FLOOR_GIB=0 to try here anyway")
 
 
 #: `--artifacts`: the node's Lake artifact cache, which a run writes after its builds (`lean_audit.LakeArtifacts`)
@@ -408,15 +486,57 @@ def lake_env() -> dict[str, str]:
 
 
 #: per auditing thread, the largest resident set of any process `run` has waited for since `took` last recorded it
+#: (`bytes`), and the most a process tree it sampled held at once (`tree`)
 _peak = threading.local()
+#: how often `run` with ``tree`` sums what its process tree holds
+TREE_EVERY_S = 1.0
+
+
+def tree_bytes(pid: int, proc: Path = Path("/proc")) -> int:
+    """What ``pid`` and every process below it hold now, the page cache aside: each one's anonymous and shared resident
+    pages (`RssAnon` and `RssShmem` of its `status`), its children read from each of its tasks' `children`."""
+    total, todo, seen = 0, [pid], set()
+    while todo:
+        if (q := todo.pop()) in seen:
+            continue
+        seen.add(q)
+        try:
+            for line in (proc / str(q) / "status").read_text().splitlines():
+                k, _, v = line.partition(":")
+                if k in ("RssAnon", "RssShmem"):
+                    total += int(v.split()[0]) * 1024
+            for t in (proc / str(q) / "task").iterdir():
+                todo += [int(c) for c in (t / "children").read_text().split()]
+        except OSError:                                 # it ended since its parent's `children` named it: it holds nothing
+            continue
+    return total
+
+
+def peaked(rep: dict, step: str, pkg: Path, gib: float, log=print) -> None:
+    """Record ``step``'s peak, ``gib`` (`peak_gib`), and log the warning `reserve.warning` gives it, if any: this run's
+    alone, in no report, so no kept pass carries it to a run that reuses it."""
+    rep.setdefault("peak_gib", {})[step] = gib
+    if w := reserve().warning(step, pins(pkg), gib):
+        log(f"warning: {rel(pkg)}: {w}")
 
 
 def run(argv: list[str], cwd: Path, log: Path | None = None, timeout: float = 4 * 3600,
         on_line=None) -> tuple[int, str]:
     """``argv``'s exit code and its output. It is reaped with `os.wait4`, whose usage covers the process and every
     descendant it waited for (each `lean` a `lake build` runs), so the step's peak memory is known (`took`). ``on_line``
-    is given each line of its standard output as it comes (a build's, to `Pipeline.line`)."""
+    is given each line of its standard output as it comes (a build's, to `Pipeline.line`). What its whole process tree
+    holds at once is sampled every `TREE_EVERY_S` (`tree_bytes`), its most kept in `_peak.tree`: a build's jobs run side
+    by side, which a single process's peak doesn't add up."""
     p = subprocess.Popen(argv, cwd=cwd, env=lake_env(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    done, most = threading.Event(), [0]
+
+    def sample():
+        while True:
+            most[0] = max(most[0], tree_bytes(p.pid))
+            if done.wait(TREE_EVERY_S):
+                return
+    sampler = threading.Thread(target=sample, daemon=True)
+    sampler.start()
     got: dict[str, str] = {}
 
     def read(k, f, give=on_line):
@@ -448,12 +568,15 @@ def run(argv: list[str], cwd: Path, log: Path | None = None, timeout: float = 4 
         raise
     finally:
         timer.cancel()
+        done.set()
+        sampler.join()
     p.returncode = os.waitstatus_to_exitcode(status)
     for r in readers:
         r.join()
     p.stdout.close()
     p.stderr.close()
     _peak.bytes = max(getattr(_peak, "bytes", 0), usage.ru_maxrss * 1024)          # Linux reports it in KiB
+    _peak.tree = max(getattr(_peak, "tree", 0), most[0])
     text = got.get("out", "") + got.get("err", "")
     if log is not None:
         log.write_text(text if (err := got.get("on_line_error")) is None else
@@ -879,15 +1002,17 @@ def lift(pkg: Path, policy: dict, facts: dict, lifts: dict[str, dict]) -> dict[s
     return moves
 
 
-def listings(pkg: Path, files: dict[str, str], policy: dict, facts: dict, update: bool = False
+def listings(pkg: Path, files: dict[str, str], policy: dict, facts: dict | None, update: bool = False
              ) -> tuple[list[str], dict, list[str]]:
     """The `compile_time` entries against the package.  Each names one module, with the reason and the digest of its file
     as it was reviewed, so a later edit needs a new review.  No listed module may declare a guarantee or a definition a guarantee
     reads: compile-time code there (a term elaborator, a notation, a macro) could change what a
-    statement means.  Returns (failures, the entries with today's digests, what `--update` asks a reviewer to read)."""
+    statement means.  Returns (failures, the entries with today's digests, what `--update` asks a reviewer to read).
+    With ``facts`` None (`sources_judge`, before the build) nothing says what a guarantee reads, and that rule
+    (`compile-time.cited`) is left to the audit of the build."""
     fails, now, notes = [], {}, []
     cited: dict[str, set[str]] = {}
-    for p, rec in facts["pins"].items():
+    for p, rec in ({} if facts is None else facts["pins"]).items():
         for mod in {rec.get("module"), *(r["module"] for r in rec.get("reads", []))} - {None}:
             cited.setdefault(mod, set()).add(p)
     for m, entry in sorted(policy.get("compile_time", {}).items()):
@@ -974,8 +1099,9 @@ def facts_program(pkg: Path) -> str:
 
 def program(pkg: Path, source: str) -> str:
     """The tool's Lean program ``source`` (`Facts.lean`, `Unread.lean`) compiled (`lean -c`, then `leanc`) with ``pkg``'s
-    toolchain, once per toolchain and source in a process. The program is checked against the digest it had when compiled
-    before each use. Raises RuntimeError when it does not compile or has changed."""
+    toolchain, once per toolchain and source in a process, and with `PROGRAMS` once per `program_key` across processes
+    (`kept_program`). The program is checked against the digest it had when compiled or taken before each use. Raises
+    RuntimeError when it does not compile or has changed."""
     src = TOOL / source
     stem = src.stem
     toolchain = (pkg / "lean-toolchain").read_text().strip() if (pkg / "lean-toolchain").is_file() else ""
@@ -984,19 +1110,175 @@ def program(pkg: Path, source: str) -> str:
         lock = _programs_locks.setdefault(key, threading.Lock())
     with lock:
         if key not in _programs or not _programs[key][0].exists():
-            d = Path(tempfile.mkdtemp(prefix=f"lean-{stem.lower()}-"))
-            atexit.register(shutil.rmtree, d, True)
-            exe = d / stem.lower()
-            for argv in (["lake", "env", "lean", "-R", str(src.parent), "-c", str(d / f"{stem}.c"), str(src)],
-                         ["lake", "env", "leanc", "-O3", "-DNDEBUG", "-rdynamic", str(d / f"{stem}.c"), "-o", str(exe)]):
-                rc, text = run(argv, pkg, d / "compile.log")
-                if rc:
-                    raise RuntimeError(f"`{' '.join(argv)}` failed (exit {rc}):\n{text[-3000:]}")
+            if isinstance(exe := kept_program(pkg, src), str):
+                if PROGRAMS is not None:
+                    print(f"program cache: {exe}; {source} is compiled for this process alone", flush=True)
+                d = Path(tempfile.mkdtemp(prefix=f"lean-{stem.lower()}-"))
+                atexit.register(shutil.rmtree, d, True)
+                exe = d / stem.lower()
+                for argv in (["lake", "env", "lean", "-R", str(src.parent), "-c", str(d / f"{stem}.c"), str(src)],
+                             ["lake", "env", "leanc", *LEANC_FLAGS, str(d / f"{stem}.c"), "-o", str(exe)]):
+                    rc, text = run(argv, pkg, d / "compile.log")
+                    if rc:
+                        raise RuntimeError(f"`{' '.join(argv)}` failed (exit {rc}):\n{text[-3000:]}")
             _programs[key] = (exe, sha256(exe))
         exe, digest = _programs[key]
     if sha256(exe) != digest:
         raise RuntimeError(f"tamper: the compiled `{source}` ({exe}) changed after it was compiled")
     return str(exe)
+
+
+#: `--program-cache`: where `program` keeps each compiled program for later processes (`kept_program`), or None
+PROGRAMS: Path | None = None
+#: `leanc`'s flags for a program (`facts_program` says why it exports its symbols)
+LEANC_FLAGS = ["-O3", "-DNDEBUG", "-rdynamic"]
+#: what names a kept program's key (`program_key`): bump it with any change to how `kept_program` compiles
+PROGRAM_SCHEMA = "lean-program/v1"
+
+
+def program_key(pkg: Path, src: Path) -> tuple[str, Path] | str:
+    """(The key `kept_program` keeps the program ``src`` under, the toolchain directory it compiles with), or why the key
+    can't be computed. The key is a digest of everything the compile reads: ``src``'s bytes (it imports the toolchain's
+    modules alone, the only ones the compile's search path holds), the toolchain `elan` resolves for ``pkg`` (its real
+    directory and the path, mode, size, mtime and inode of every file and link in it: the compiler, the C compiler and
+    linker it brings, their sysroot and the modules), the flags (`PROGRAM_SCHEMA`, `LEANC_FLAGS`) and the environment
+    (`program_env`, the same for every caller)."""
+    if isinstance(tc := elan_toolchain(pkg), str):
+        return tc
+    if not (tc / "bin" / "leanc").is_file():
+        return f"the toolchain {tc} has no bin/leanc"
+    try:
+        h = hashlib.sha256(json.dumps({"schema": PROGRAM_SCHEMA, "source": sha256(src), "toolchain": str(tc),
+                                       "leanc": LEANC_FLAGS, "env": program_env(tc)}).encode())
+        for top, dirs, files in os.walk(tc):
+            dirs.sort()
+            for name in sorted([*dirs, *files]):
+                p = os.path.join(top, name)
+                st = os.lstat(p)
+                link = os.readlink(p) if os.path.islink(p) else ""
+                h.update(f"{os.path.relpath(p, tc)}\0{st.st_mode}\0{st.st_size}\0{st.st_mtime_ns}\0{st.st_ino}\0{link}\n"
+                         .encode())
+    except OSError as e:
+        return f"the toolchain {tc} changed while it was read: {e}"
+    return h.hexdigest(), tc
+
+
+def elan_toolchain(pkg: Path) -> Path | str:
+    """The real directory of the toolchain `lake env` runs in ``pkg`` (`elan which lean`: the package's `lean-toolchain`
+    or an override), or why `elan` names none."""
+    try:
+        r = subprocess.run(["elan", "which", "lean"], cwd=pkg, env=lake_env(), capture_output=True, text=True,
+                           timeout=60)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return f"`elan which lean` didn't run: {e}"
+    if r.returncode or not r.stdout.strip():
+        return f"`elan which lean` named no toolchain (exit {r.returncode}): {(r.stdout + r.stderr).strip()[-300:]}"
+    return Path(r.stdout.strip()).resolve().parents[1]
+
+
+def program_env(tc: Path) -> dict[str, str]:
+    """The environment `kept_program` compiles in: the toolchain's `bin` alone on the path, and nothing of the caller's
+    (`LEAN_PATH`, `LEAN_SYSROOT`, `LEAN_CC`, a C compiler's variables), so the program is the same for every caller."""
+    return {"PATH": str(tc / "bin")}
+
+
+def kept_program(pkg: Path, src: Path) -> Path | str:
+    """The program ``src`` from `PROGRAMS` under its `program_key`, compiled into it first when it isn't there: one
+    process compiles while the others wait on its `.compile` lock, and the program appears whole, renamed into place.
+    This process holds the program's `.lock` shared until it exits, and `evict` removes none that is held. Why not, when
+    there is no `PROGRAMS`, its key can't be computed, or a build could write it (`sandbox_reads_only`): the caller then
+    compiles its own. Raises RuntimeError when it does not compile."""
+    if PROGRAMS is None:
+        return "no --program-cache"
+    if not sandbox_reads_only(PROGRAMS):
+        return f"{PROGRAMS} is not read-only to a sandboxed build here, so a build could have written it"
+    if isinstance(k := program_key(pkg, src), str):
+        return k
+    key, tc = k
+    name = f"{src.stem.lower()}-{key}"
+    exe = PROGRAMS / name
+    held = open(PROGRAMS / f".{name}.lock", "a")
+    try:
+        fcntl.flock(held, fcntl.LOCK_SH)
+        if not exe.is_file():
+            with open(PROGRAMS / f".{name}.compile", "a") as compiling:
+                fcntl.flock(compiling, fcntl.LOCK_EX)
+                if not exe.is_file():
+                    compile_program(src, tc, exe)
+                    evict(src.stem.lower())
+        os.utime(exe)
+    except BaseException:
+        held.close()
+        raise
+    _TAKEN.append(held)
+    return exe
+
+
+#: how many programs of one source `evict` keeps, the most recently taken first, beside those a process holds
+PROGRAMS_KEPT = 8
+#: the `.lock` of each kept program this process took, held shared until it exits (`kept_program`)
+_TAKEN: list = []
+
+
+def compile_program(src: Path, tc: Path, exe: Path) -> None:
+    """``src`` compiled with the toolchain at ``tc`` in `program_env` into ``exe``, which appears whole or not at all."""
+    d = Path(tempfile.mkdtemp(prefix=f".{src.stem.lower()}-", dir=exe.parent))
+    try:
+        c, out = d / f"{src.stem}.c", d / src.stem.lower()
+        for argv in ([str(tc / "bin" / "lean"), "-R", str(src.parent), "-c", str(c), str(src)],
+                     [str(tc / "bin" / "leanc"), *LEANC_FLAGS, str(c), "-o", str(out)]):
+            r = subprocess.run(argv, cwd=d, env=program_env(tc), capture_output=True, text=True)
+            if r.returncode:
+                raise RuntimeError(f"`{' '.join(argv)}` failed (exit {r.returncode}):\n{(r.stdout + r.stderr)[-3000:]}")
+        os.replace(out, exe)
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def evict(stem: str) -> list[str]:
+    """Remove `PROGRAMS`' programs of ``stem`` past the `PROGRAMS_KEPT` most recently taken, but for those a process holds
+    (its `.lock` shared): one is removed only under its `.lock` held exclusively, which no process then holds, and one
+    eviction runs at a time (`.evict`). Returns the names of those it left because a process holds them."""
+    held = []
+    with open(PROGRAMS / ".evict", "a") as evicting:
+        fcntl.flock(evicting, fcntl.LOCK_EX)
+        kept = sorted(PROGRAMS.glob(f"{stem}-*"), key=lambda p: p.stat().st_mtime_ns, reverse=True)
+        for exe in kept[PROGRAMS_KEPT:]:
+            with open(exe.with_name(f".{exe.name}.lock"), "a") as lock:
+                try:
+                    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    held.append(exe.name)
+                    continue
+                exe.unlink()
+    return held
+
+
+#: {directory: whether a sandboxed build can't write it}, probed once a process (`sandbox_reads_only`)
+_READS_ONLY: dict[Path, bool] = {}
+
+
+def sandbox_reads_only(d: Path) -> bool:
+    """Whether builds run in the sandbox here (`sandboxed`) and it leaves ``d`` read-only (checked, not assumed: a mount
+    whose read-only remount failed stays writable), so no build can have written what ``d`` holds."""
+    d = d.resolve()
+    if d not in _READS_ONLY:
+        d.mkdir(parents=True, exist_ok=True)
+        _READS_ONLY[d] = sandboxed() and _unwritable_in_sandbox(d)
+    return _READS_ONLY[d]
+
+
+def _unwritable_in_sandbox(d: Path) -> bool:
+    probe = Path(tempfile.mkdtemp(prefix="lean-audit-sandbox-"))
+    try:
+        return subprocess.run([*UNSHARE, "--", "bash", str(TOOL / "sandbox.sh"), str(probe), "--", "bash", "-c",
+                               f'! touch "{d}/.sandbox-probe" 2>/dev/null'], capture_output=True,
+                              timeout=60).returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    finally:
+        (d / ".sandbox-probe").unlink(missing_ok=True)
+        shutil.rmtree(probe, ignore_errors=True)
 
 
 #: the packages whose audit writes `Unread.lean`'s facts (`unread_facts`) for `unread.py`'s ratchet, which `lean_audit.py`
@@ -1062,7 +1344,7 @@ def facts_config(policy: dict, moved: dict[str, str] | None = None) -> dict:
 #: `facts_config` takes (the names they list, `shape`'s premises and the names its inline texts print, the honest
 #: witnesses); and `format`, which `dump` writes and only the merge driver reads
 JUDGED = frozenset({"guarantees", "reads", "assumptions", "domain", "open", "open_seed", "shape", "trust_gap", "unwitnessed",
-                    "witnesses", "witnesses_assumed", "format"})
+                    "witnesses", "witnesses_assumed", "ids", "format"})
 
 
 def build_inputs(policy: dict) -> dict:
@@ -1249,7 +1531,7 @@ def read_cached_facts(cache: Path, key: str) -> dict | None:
 
 def renamed(name: str, moved: dict[str, str]) -> str:
     """``name`` after the moves ``moved`` ({old: new}, a declaration or a namespace each): its longest moved prefix
-    replaced by the new name (`Facts.lean`'s `renameName` maps back the same way)."""
+    replaced by the new name (`unrenamed` and `Facts.lean`'s `renameName` map back the same way)."""
     parts = name.split(".")
     for i in range(len(parts), 0, -1):
         if (p := ".".join(parts[:i])) in moved:
@@ -1257,46 +1539,313 @@ def renamed(name: str, moved: dict[str, str]) -> str:
     return name
 
 
-def renamed_witnesses(policy: dict, moved: dict[str, str]) -> dict:
-    """The policy's `witnesses`, `unwitnessed`, `witnesses_assumed`, `trust`, `deployed` and `trust_gap` with every
-    guarantee, theorem and premise they name `renamed` by ``moved``."""
+def unrenamed(name: str, moved: dict[str, str]) -> str:
+    """``name`` before the moves ``moved`` ({old: new}, one old name to each new one): its longest prefix that is a new
+    name replaced by the old one, as `Facts.lean`'s `renameName` maps the build's names back."""
+    return renamed(name, {new: old for old, new in moved.items()})
+
+
+#: main, whose merge-base with HEAD is the commit a change stands on (`base_revs`), the first that resolves
+MAIN = ("refs/remotes/origin/main", "refs/heads/main")
+#: the maps keyed by a guarantee, theorem or premise that `renamed_witnesses` re-keys, beside `deployed`, `trust`,
+#: `shape.inline` and `claims.witnesses`
+RE_KEYED = ("guarantees", "deployed", "ids", "trust_gap", "witnesses_assumed", "witnesses", "unwitnessed", "open", "domain",
+            "assumptions", "four_names_except")
+
+
+def renamed_witnesses(policy: dict, moved: dict[str, str] | Callable[[str], str]) -> dict:
+    """The policy's `witnesses`, `unwitnessed`, `witnesses_assumed`, `trust`, `deployed`, `trust_gap`, `ids`, `open`,
+    `domain`, `assumptions`, `four_names_except` and `claims.witnesses` with every guarantee, theorem and premise they name
+    `renamed` by ``moved`` (or mapped by it, a function), each entry's other fields kept."""
+    rn = moved if callable(moved) else lambda n: renamed(n, moved)
     out, ws, allow = {}, policy.get("witnesses"), policy.get("unwitnessed")
+    for k in ("open", "domain", "assumptions"):
+        if isinstance(m := policy.get(k), dict):
+            out[k] = {rn(a): e | {"cites": rn(e["cites"])} if isinstance(e, dict) and isinstance(e.get("cites"), str)
+                      else e for a, e in m.items()}
+    if isinstance(waiting := policy.get("four_names_except"), dict):
+        out["four_names_except"] = {rn(g): why for g, why in waiting.items()}
+    if isinstance(claims := policy.get("claims"), dict) and isinstance(cw := claims.get("witnesses"), dict):
+        out["claims"] = claims | {"witnesses": {rn(c): {k: rn(v) if isinstance(v, str) else
+                                                        [rn(x) if isinstance(x, str) else x for x in v]
+                                                        if isinstance(v, list) else v for k, v in w.items()}
+                                                if isinstance(w, dict) else w for c, w in cw.items()}}
     if name_list(policy.get("deployed")):
-        out["deployed"] = sorted(renamed(n, moved) for n in policy["deployed"])
+        out["deployed"] = sorted(rn(n) for n in policy["deployed"])
     if isinstance(trust := policy.get("trust"), dict):
         def keyed(m):
-            return {renamed(p, moved): why for p, why in m.items()} if isinstance(m, dict) else m
-        out["trust"] = {k: {renamed(g, moved): keyed(ps) for g, ps in v.items()}
+            return {rn(p): why for p, why in m.items()} if isinstance(m, dict) else m
+        out["trust"] = {k: {rn(g): keyed(ps) for g, ps in v.items()}
                         if k == "extra" and isinstance(v, dict) else keyed(v) for k, v in trust.items()}
     if isinstance(gap := policy.get("trust_gap"), dict):
-        out["trust_gap"] = {renamed(g, moved): sorted(renamed(p, moved) for p in name_list(ps)) for g, ps in gap.items()}
+        out["trust_gap"] = {rn(g): sorted(rn(p) for p in name_list(ps)) for g, ps in gap.items()}
     if isinstance(taken := policy.get("witnesses_assumed"), dict):
-        out["witnesses_assumed"] = {renamed(a, moved): why for a, why in taken.items()}
+        out["witnesses_assumed"] = {rn(a): why for a, why in taken.items()}
+    if isinstance(ids := policy.get("ids"), dict):
+        out["ids"] = {rn(p): i for p, i in ids.items()}
     if isinstance(ws, dict):
-        out["witnesses"] = {renamed(g, moved): {k: [renamed(n, moved) if isinstance(n, str) else n for n in v]
-                                                if isinstance(v, list) else renamed(v, moved) if isinstance(v, str) else v
-                                                for k, v in w.items()} if isinstance(w, dict) else w for g, w in ws.items()}
+        out["witnesses"] = {rn(g): {k: [rn(n) if isinstance(n, str) else n for n in v]
+                                    if isinstance(v, list) else rn(v) if isinstance(v, str) else v
+                                    for k, v in w.items()} if isinstance(w, dict) else w for g, w in ws.items()}
     if isinstance(allow, dict):
-        out["unwitnessed"] = {renamed(g, moved): h for g, h in allow.items()}
+        out["unwitnessed"] = {rn(g): h for g, h in allow.items()}
     if isinstance(spec := policy.get("shape"), dict) and isinstance(spec.get("inline"), dict):
-        out["shape"] = spec | {"inline": {renamed(g, moved): h for g, h in spec["inline"].items()}}
+        out["shape"] = spec | {"inline": {rn(g): h for g, h in spec["inline"].items()}}
     return out
 
 
-def move_errors(moved: dict[str, str]) -> list[str]:
-    """Why ``moved`` cannot be read back: two old names moved to one new name, a name moved to itself, or a new name under
-    another new name whose old names are not nested the same way (the build's names would map back to the wrong ones)."""
+def move_errors(moved: dict[str, str], names: Iterable[str] = ()) -> list[str]:
+    """Why ``moved`` cannot be read back: a name moved to itself, two old names moved to one new name (a name of the build
+    under it has no one old name), a new name at, under or over another entry's old name (a chain or a swap: `rename.py`
+    has already renamed the lock's hand-kept lines, which `renamed_witnesses` would then move a second time), or a name of
+    ``names`` (a lock's, `lock_names`) whose new name maps back to another
+    (`unrenamed`).  Both maps take the longest prefix, so the names under an entry nested under another's new name map
+    back under its own old name whether or not the old names nest alike; only a name that falls under a longer entry
+    than its own on one way, and not on the other, fails to come back.  Which names do is a fact of the lock and the
+    build, not of the map: here the lock's, and the build's in the texts `Facts.lean` compares (`moved_conflicts`)."""
     errs = [f"{old} moves to itself" for old, new in sorted(moved.items()) if old == new]
     by_new: dict[str, list[str]] = {}
     for old, new in moved.items():
         by_new.setdefault(new, []).append(old)
     errs += [f"{', '.join(sorted(olds))} all move to {new}" for new, olds in sorted(by_new.items()) if len(olds) > 1]
+    def above(name: str) -> list[str]:
+        return [name.rsplit(".", i)[0] for i in range(name.count(".") + 1)]
+    under: dict[str, set[str]] = {}
+    for o in moved:
+        for p in above(o):
+            under.setdefault(p, set()).add(o)
     for old, new in sorted(moved.items()):
-        for old2, new2 in sorted(moved.items()):
-            if new2 != new and under([new], new2) and old2 != old + new2[len(new):]:
-                errs.append(f"{old2} moves to {new2}, under {new}, where {old} moves; the names under {new2} would map back "
-                            f"under {old}, not {old2}")
+        for other in sorted(({o for o in above(new) if o in moved} | under.get(new, set())) - {old}):
+            errs.append(f"{old} moves to {new}, and {other}, which moves to {moved[other]}, is at, under or over it: a "
+                        f"chain or a swap, which the lock's lines `rename.py` already renamed would follow twice; split "
+                        f"it into two passes, each its own moves file")
+    if errs:
+        return errs
+    for n in sorted(set(names)):
+        if (m := renamed(n, moved)) != n and (b := unrenamed(m, moved)) != n:
+            errs.append(f"{n} moves to {m}, which maps back to {b}: give {n} an entry of its own")
     return errs
+
+
+def lock_sections(policy: dict) -> list[tuple[str, object]]:
+    """The sections of ``policy`` that `--moved` re-keys (`renamed_witnesses`), each by its label: a map, whose keys are
+    re-keyed, or `deployed`, a list."""
+    out: list[tuple[str, object]] = [(k, policy.get(k)) for k in RE_KEYED]
+    if isinstance(trust := policy.get("trust"), dict):
+        out += [(f"trust.{k}", v) for k, v in trust.items()]
+        if isinstance(extra := trust.get("extra"), dict):
+            out += [(f"trust.extra.{g}", ps) for g, ps in extra.items()]
+    if isinstance(shape := policy.get("shape"), dict):
+        out.append(("shape.inline", shape.get("inline")))
+    if isinstance(claims := policy.get("claims"), dict):
+        out.append(("claims.witnesses", claims.get("witnesses")))
+    return out
+
+
+def section_collisions(policy: dict, moved: dict[str, str], bases: Iterable[dict] = ()) -> list[str]:
+    """Two names of one section of ``policy`` that `--moved` re-keys (`lock_sections`) landing on one new name, where the
+    pass would keep one entry for both and one guarantee's record or line would stand for another's.  A name of the same
+    section in a lock of the change's base (``bases``, `base_locks`) counts too unless the moves take it elsewhere, so a
+    record deleted by hand before the move still holds its name.  Names that meet across sections are no collision: a
+    record still under its old name meets its own lines already written under the new one."""
+    of_base: dict[str, set[str]] = {}
+    for b in bases:
+        for section, names in lock_sections(b):
+            if isinstance(names, (dict, list)):
+                of_base.setdefault(section, set()).update(n for n in names if isinstance(n, str) and renamed(n, moved) == n)
+    out = []
+    for section, names in lock_sections(policy):
+        names = {n for n in names if isinstance(n, str)} if isinstance(names, (dict, list)) else set()
+        lands: dict[str, list[str]] = {}
+        for n in sorted(names | of_base.get(section, set())):
+            lands.setdefault(renamed(n, moved), []).append(n if n in names else f"{n} (in the base's lock)")
+        out += [f"{', '.join(ns)} all land on {m} in {section}" for m, ns in sorted(lands.items()) if len(ns) > 1]
+    return out
+
+
+def move_refusals(moved: dict[str, str], policy: dict, bases: Iterable[dict] = ()) -> list[tuple[str, str]]:
+    """Why ``moved`` cannot re-key the lock ``policy``, each with its failure code: the map itself (`moved.map`), a name of
+    the lock that does not come back (`moved.round-trip`; `move_errors` over `lock_names`), and two names of one section
+    that land on one, with the names of the change's base locks ``bases`` (`moved.collision`; `section_collisions`)."""
+    if errs := move_errors(moved):
+        return [("moved.map", e) for e in errs]
+    return [("moved.round-trip", e) for e in move_errors(moved, lock_names(policy))] + \
+        [("moved.collision", e) for e in section_collisions(policy, moved, bases)]
+
+
+def moves_refused(pkgs: list[Path], moved: dict[str, str], bases: dict[Path, list[dict]] | None = None) -> list[str]:
+    """`move_refusals` of each package's lock as loaded, before anything is written (`main`); the judge refuses them again.
+    It reads the lock only to refuse the moves, and changes nothing an audit builds, extracts or replays."""
+    out = []
+    for p in pkgs:
+        if not (p / POLICY).is_file():
+            continue
+        try:
+            policy = load(p)
+        except ValueError as e:
+            out.append(f"{p / POLICY}: {e}")
+            continue
+        out += [f"{p / POLICY}: {e}" for _, e in move_refusals(moved, policy, (bases or {}).get(p, ()))]
+    return out
+
+
+def write_staged(reports: list[dict]) -> None:
+    """Write the lock each of ``reports`` staged (`_finish`'s ``defer``) as its package's: the end of a `--moved` run in
+    which no move was refused.  Every lock is first copied beside its package's (`.lean-audit.json.moved`), and only then
+    is each renamed over it, so a failure while copying writes none; a process killed between two renames leaves the
+    locks before it written and the rest beside theirs: restore the written ones (`git checkout`) and run it again."""
+    beside = [(Path(r["staged_lock"]), Path(r["package"]) / POLICY) for r in reports]
+    try:
+        for staged, lock in beside:
+            shutil.copyfile(staged, lock.with_name(f".{POLICY}.moved"))
+    except BaseException:
+        for _, lock in beside:
+            lock.with_name(f".{POLICY}.moved").unlink(missing_ok=True)
+        raise
+    for _, lock in beside:
+        os.replace(lock.with_name(f".{POLICY}.moved"), lock)
+        print(f"audit: {lock}: written", flush=True)
+
+
+def base_revs(repo: Path, given: Iterable[str] = ()) -> list[str] | str:
+    """The commits a `--moved` run compares with: HEAD and its merge-base with main (`MAIN`), the commit the change
+    stands on, since HEAD may already hold the change's own hand edits to the lock, and each of ``given`` (`--base`)
+    beside them, never instead; ``given`` stands in for the merge-base only where there is none.  Or why there are none."""
+    def git(*args: str) -> str | None:
+        r = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True)
+        return r.stdout.strip() if r.returncode == 0 and r.stdout.strip() else None
+    if (head := git("rev-parse", "HEAD")) is None:
+        return f"{repo} has no HEAD"
+    if bad := [g for g in given if git("rev-parse", "-q", "--verify", f"{g}^{{commit}}") is None]:
+        return f"--base: {', '.join(bad)} is no commit of {repo}"
+    main = next((m for r in MAIN if (m := git("rev-parse", "-q", "--verify", r))), None)
+    mb = git("merge-base", head, main) if main else None
+    if mb is None and not given:
+        return (f"{repo} has no main ({', '.join(MAIN)}) or no merge-base of HEAD with it: give `--base REV`, the "
+                f"commit of main the change stands on (the queue's check of a candidate: the candidate's base)")
+    return list(dict.fromkeys([head, *([mb] if mb else []),
+                               *(git("rev-parse", f"{g}^{{commit}}") or g for g in given)]))
+
+
+def base_locks(pkg: Path, revs: list[str], repo: Path, tree: Path | None = None) -> tuple[list[dict], list[str]]:
+    """``pkg``'s lock at each of ``revs`` in ``repo``, its path taken under ``tree`` (the tree the packages are in) or
+    ``repo``, and the commits of ``revs`` whose tree has no file at that path; ValueError for a commit git can't read, a
+    lock git lists but can't show, and a lock it can't parse."""
+    roots = [r.resolve() for r in (tree, repo) if r is not None]
+    rel = next((pkg.resolve().relative_to(r) for r in roots if pkg.resolve().is_relative_to(r)), None)
+    if rel is None:
+        raise ValueError(f"{pkg} is under neither {' nor '.join(map(str, roots))}")
+    path = (rel / POLICY).as_posix()
+    out, absent = [], []
+    for rev in revs:
+        def git(*args: str) -> subprocess.CompletedProcess:
+            return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True)
+        if git("cat-file", "-e", f"{rev}^{{commit}}").returncode:
+            raise ValueError(f"{rev} is no commit of {repo}")
+        if (ls := git("ls-tree", "--name-only", rev, "--", path)).returncode:
+            raise ValueError(f"git can't list {path} at {rev}: {ls.stderr.strip()}")
+        if not ls.stdout.strip():
+            absent.append(rev)
+            continue
+        if (r := git("show", f"{rev}:{path}")).returncode:
+            raise ValueError(f"git can't show {path} at {rev}: {r.stderr.strip()}")
+        try:
+            out.append(json.loads(r.stdout))
+        except ValueError as e:
+            raise ValueError(f"{path} at {rev} is not JSON: {e}") from None
+    return out, absent
+
+
+def moves_file(path: Path) -> dict[str, str]:
+    """The moves file ``path``, {old name: new name}; ValueError for any other JSON, and for an old name it gives twice
+    (`json` would keep the last)."""
+    twice: list[str] = []
+
+    def pairs(ps: list) -> dict:
+        seen: dict = {}
+        for k, v in ps:
+            if k in seen and seen[k] != v:
+                twice.append(f"{k} moves to both {seen[k]} and {v}")
+            seen[k] = v
+        return seen
+    moved = json.loads(path.read_text(), object_pairs_hook=pairs)
+    if not isinstance(moved, dict) or not all(isinstance(v, str) for v in [*moved, *moved.values()]):
+        raise ValueError("a JSON object of old names to new names")
+    if twice:
+        raise ValueError("; ".join(twice))
+    if bad := [f"{n!r} is not a Lean name ({why})" for n in sorted({*moved, *moved.values()}) if (why := name_error(n))]:
+        raise ValueError("; ".join(bad))
+    return moved
+
+
+def lean_id_first(c: str) -> bool:
+    """Lean's `isIdFirst`: an ASCII letter, `_`, or a letter-like character (`isLetterLike`)."""
+    v = ord(c)
+    return (c.isascii() and c.isalpha()) or c == "_" or (0x3b1 <= v <= 0x3c9 and v != 0x3bb) or (
+        0x391 <= v <= 0x3a9 and v not in (0x3a0, 0x3a3)) or 0x3ca <= v <= 0x3fb or 0x1f00 <= v <= 0x1ffe or (
+        0x2100 <= v <= 0x214f) or 0x1d49c <= v <= 0x1d59f
+
+
+def lean_id_rest(c: str) -> bool:
+    """Lean's `isIdRest`: `isIdFirst`, an ASCII digit, `'`, `!`, `?`, or a subscript (`isSubScriptAlnum`)."""
+    v = ord(c)
+    return lean_id_first(c) or (c.isascii() and c.isdigit()) or c in "'!?" or 0x2080 <= v <= 0x2089 or (
+        0x2090 <= v <= 0x209c) or 0x1d62 <= v <= 0x1d6a
+
+
+def name_error(name: str) -> str | None:
+    """Why ``name`` is not a Lean name that `String.toName` reads back as itself, or None.  `String.toName` splits as
+    `splitNameLit` does, and reads the whole string as the anonymous name unless each component, between single dots, is
+    an identifier (`isIdFirst`, then `isIdRest`), a run of ASCII digits, or `«…»` up to the first `»`.  This refuses
+    besides: whitespace, a number with a leading zero and an escape around an identifier (Lean reads `A.01` as `A.1`
+    and `A.«b»` as `A.b`, which `renamed` compares as other strings), and an empty or `«`-holding escape.  `renamed`
+    splits at every dot, so it agrees with `Facts.lean`'s `renameName` only on such names (a dot inside `«…»` starts no
+    prefix that an accepted entry can be)."""
+    if not name:
+        return "empty"
+    if any(ch.isspace() for ch in name):
+        return "whitespace"
+    i = 0
+    while True:
+        start = i
+        if i == len(name) or name[i] == ".":
+            return "an empty component"
+        if name[i] == "«":
+            if (j := name.find("»", i + 1)) < 0:
+                return "a « left open"
+            part, i = name[i + 1:j], j + 1
+            if not part or "«" in part:
+                return f"the escaped component {name[start:i]!r} is empty or holds a «"
+            if lean_id_first(part[0]) and all(map(lean_id_rest, part[1:])):
+                return f"{name[start:i]!r} is {part!r} to Lean: write it without « »"
+        elif lean_id_first(name[i]):
+            i += 1
+            while i < len(name) and lean_id_rest(name[i]):
+                i += 1
+        elif "0" <= name[i] <= "9":
+            while i < len(name) and "0" <= name[i] <= "9":
+                i += 1
+            if name[start] == "0" and i - start > 1:
+                return f"the number {name[start:i]!r} has a leading zero, which Lean drops"
+        else:
+            return (f"{name[i]!r} (U+{ord(name[i]):04X}) starts no identifier, number or « »: String.toName reads the "
+                    f"name as anonymous")
+        if i == len(name):
+            return None
+        if name[i] != ".":
+            return (f"{name[i]!r} (U+{ord(name[i]):04X}) after the component {name[start:i]!r} is no identifier "
+                    f"character: String.toName reads the name as anonymous")
+        i += 1
+
+
+def lock_names(policy: dict) -> set[str]:
+    """Every name of ``policy`` that `renamed_current` renames, and every name its `shape.inline` texts print (`paired`
+    renames those): the lock's names that a moves file must take forward and back to themselves."""
+    seen: set[str] = set()
+    renamed_current(policy, lambda n: seen.add(n) or n)
+    inline = (policy.get("shape") or {}).get("inline")
+    return seen | {n for es in inline.values() if isinstance(es, dict) for t in es for n in NAMES.findall(t)} \
+        if isinstance(inline, dict) else seen
 
 
 #: hex digits of the hashes in records written before SHA-256: a guarantee's `type_hash` (Lean's 32-bit `Expr.hash`) and a read
@@ -1436,6 +1985,61 @@ def own_modules(facts: dict) -> set[str]:
             if "/.lake/build/" in (o := str(g.get("olean", ""))) and "/.lake/packages/" not in o}
 
 
+def orphan_failures(policy: dict, files: dict[str, str], modules: set[str]) -> list[Failure]:
+    """`orphan.file` for each of the package's ``files`` that is neither one of ``modules`` (those its roots import) nor
+    under `exempt`, and `orphan.stale-exempt` for each `exempt` entry that matches no file."""
+    fails, exempt = [], policy.get("exempt", {})
+    for m, rel in sorted(files.items()):
+        if m not in modules and not under(exempt, m):
+            fails.append(Failure("orphan.file", rel, f"orphan: {rel} is not imported by the roots "
+                                 f"({', '.join(policy['roots'])}) nor under `exempt`: nothing builds or audits it"))
+    for p in sorted(exempt):
+        if not any(under([p], m) for m in files):
+            fails.append(Failure("orphan.stale-exempt", p, f"orphan: `exempt` lists {p}, which matches no file; remove the entry"))
+    return fails
+
+
+def layer_failures(policy: dict, modules: set[str], imports: dict[str, list[str]], graph: dict[str, list[str]] | None,
+                   own: set[str]) -> list[Failure]:
+    """The `layers` rules over ``modules`` and each one's direct ``imports``: an entry that matches no module, an `except`
+    that names none of its modules, and an import from outside the layer.  An import of one of ``own`` (a module this
+    repository builds) is outside unless the rule admits it; any other is outside only when what the rule admits doesn't
+    already reach it in ``graph`` ({module: its imports}, the dependencies' included), which only a build gives.  With
+    ``graph`` None (`sources_judge`, before the build) such an import is left to the audit of the build."""
+    fails, layers = [], policy.get("layers", {})
+    sealed = sorted(k for k, r in layers.items() if r.get("sealed"))
+
+    def admits(prefixes: list[str], i: str) -> bool:
+        return any(under([p], i) and not any(s != p and under([p], s) and under([s], i) for s in sealed) for p in prefixes)
+
+    def reached(start: list[str]) -> set[str]:
+        seen, stack = set(), list(start)
+        while stack:
+            if (x := stack.pop()) not in seen:
+                seen.add(x)
+                stack += graph.get(x, [])
+        return seen
+    for layer, rule in sorted(layers.items()):
+        inside = [m for m in sorted(modules) if under([layer], m)
+                  and not any(under([s], m) and not under([s], layer) for s in sealed)]
+        if not inside:
+            fails.append(Failure("layers.empty", layer, f"layers: {layer} matches no audited module; remove the entry"))
+        for m in rule.get("except", []):
+            if m not in inside:
+                fails.append(Failure("layers.stale-except", layer, f"layers: {layer}'s `except` lists {m}, which is not one "
+                                     f"of its modules"))
+        for m in inside:
+            if m in rule.get("except", []):
+                continue
+            held = [i for i in imports.get(m, []) if admits(rule["imports"], i) or i == "Init"]
+            reach = None if graph is None else reached(held)
+            for i in imports.get(m, []):
+                if i not in held and (i in own or (reach is not None and i not in reach)):
+                    fails.append(Failure("layers.import", m, f"layers: {m} imports {i}, outside {layer}'s layer "
+                                         f"({', '.join(rule['imports'])})"))
+    return fails
+
+
 def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False, owner: str | None = None,
           ticket: dict | None = None) -> tuple[list[str], dict]:
     """(failures, the policy with guarantees and reads as the build has them).  A pure function of the facts: the tests run
@@ -1445,8 +2049,6 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
     `premises.open` lists the open premises it takes and each one resting on a read (`on_read`) that its statement reads,
     whoever else takes it; such an entry's `why` fails when no guarantee reads its `Prop` without taking it."""
     fails = []
-    if free := unowned_lock(policy) and not owner:
-        ticket = None
     allowed = set(policy.get("axioms", STANDARD))
     own = set(facts["own_modules"]) if "own_modules" in facts else own_modules(facts)
     by_axiom: dict[str, list[str]] = {}
@@ -1476,49 +2078,12 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
     fails += [x for x in witness_failures(policy, facts, own) if not (update and x.code == "witnesses.unwitnessed-unlisted")]
     fails += four_name_failures(policy, facts)
     modules = set(facts["modules"])
-    exempt = policy.get("exempt", {})
-    for m, rel in sorted(files.items()):
-        if m not in modules and not under(exempt, m):
-            fails.append(Failure("orphan.file", rel, f"orphan: {rel} is not imported by the roots "
-                                 f"({', '.join(policy['roots'])}) nor under `exempt`: nothing builds or audits it"))
-    for p in sorted(exempt):
-        if not any(under([p], m) for m in files):
-            fails.append(Failure("orphan.stale-exempt", p, f"orphan: `exempt` lists {p}, which matches no file; remove the entry"))
-    layers = policy.get("layers", {})
-    sealed = sorted(k for k, r in layers.items() if r.get("sealed"))
-
-    def admits(prefixes: list[str], i: str) -> bool:
-        return any(under([p], i) and not any(s != p and under([p], s) and under([s], i) for s in sealed) for p in prefixes)
     graph = {m: g["imports"] for m, g in facts.get("graph", {}).items()}
-
-    def reached(start: list[str]) -> set[str]:
-        seen, stack = set(), list(start)
-        while stack:
-            if (x := stack.pop()) not in seen:
-                seen.add(x)
-                stack += graph.get(x, [])
-        return seen
-    for layer, rule in sorted(layers.items()):
-        inside = [m for m in sorted(modules) if under([layer], m)
-                  and not any(under([s], m) and not under([s], layer) for s in sealed)]
-        if not inside:
-            fails.append(Failure("layers.empty", layer, f"layers: {layer} matches no audited module; remove the entry"))
-        for m in rule.get("except", []):
-            if m not in inside:
-                fails.append(Failure("layers.stale-except", layer, f"layers: {layer}'s `except` lists {m}, which is not one "
-                                     f"of its modules"))
-        for m in inside:
-            if m in rule.get("except", []):
-                continue
-            held = [i for i in facts["imports"].get(m, []) if admits(rule["imports"], i) or i == "Init"]
-            reach = reached(held)
-            for i in facts["imports"].get(m, []):
-                if i not in held and (i in own or i not in reach):
-                    fails.append(Failure("layers.import", m, f"layers: {m} imports {i}, outside {layer}'s layer "
-                                         f"({', '.join(rule['imports'])})"))
+    fails += orphan_failures(policy, files, modules) + layer_failures(policy, modules, facts["imports"], graph, own)
     if conflicts := facts.get("moved_conflicts"):
         more = f" and {len(conflicts) - 8} more" if len(conflicts) > 8 else ""
-        clash = "; ".join(f"{c['name']} would be {c['as']}, and so would {c['with']}" for c in conflicts[:8])
+        clash = "; ".join(f"{c['name']} would be {c['as']}, and so would {c['with']}" if "with" in c else
+                          f"{c['name']} would be {c['as']}, which moves to {c['back']}" for c in conflicts[:8])
         fails.append(Failure("moved.conflict", None, f"moved: under the old names, {clash}{more}: the map cannot tell them "
                              f"apart, so the review compares nothing under the old names; map only the declarations that moved"))
     assumed = policy.get("assumptions", {})
@@ -1542,7 +2107,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
     listed = listed_premises(policy) | dict.fromkeys(cited)
     for name, rec in sorted(policy.get("guarantees", {}).items()):
         who = (rec or {}).get("owner") or owner or (ticket.get("owner") if update and ticket else None)
-        if not who and not free:
+        if not who:
             fails.append(Failure("guarantees.no-owner", name, f"guarantees: {name} has no owner: write \"owner\": \"@lane\" "
                                  f"in its entry, the handle of the lane that answers for it, or run `check.py --update "
                                  f"--owner @lane`"))
@@ -1698,6 +2263,9 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
     if update and isinstance(policy.get("trust_gap"), dict):
         out["trust_gap"] = trust_gap_kept(out)
     fails += trust_failures(out)
+    if update and isinstance(policy.get("ids"), dict):
+        out["ids"] = ids_kept(out)
+    fails += id_failures(out, {getattr(f, "entry", None) for f in fails})
     return fails, out
 
 
@@ -2628,8 +3196,8 @@ NAMES = re.compile(r"(?<![\w.'!?])([^\W\d][\w'!?]*(?:\.[^\W\d][\w'!?]*)*)")
 def moved_fields(op: list[str], np: list[str], start: int, fields: dict, moves: dict) -> list[tuple[str, str]] | None:
     """The renames that take the dotted name ``op`` to ``np`` (each split at its dots) through its fields: the two alike up
     to ``start`` (past a variable, or the constant ``np`` starts with) and as long, and each field that differs standing,
-    in ``np``, for one constant (``fields``), which `--moved` moved from the constant of the old field's name; None for
-    any other pair."""
+    in ``np``, for one constant (``fields``), which `--moved` moved from the constant of the old field's name in the
+    structure's old namespace (`unrenamed`: a structure moved with its field); None for any other pair."""
     if len(op) != len(np) or op[:start] != np[:start]:
         return None
     out = []
@@ -2639,8 +3207,10 @@ def moved_fields(op: list[str], np: list[str], start: int, fields: dict, moves: 
         if len(cs := fields.get((".".join(np[:k]), np[k])) or set()) != 1:
             return None
         n = next(iter(cs))
-        o = n[:len(n) - len(np[k])] + op[k]
-        if not n.endswith("." + np[k]) or renamed(o, moves) != n:
+        if not n.endswith("." + np[k]):
+            return None
+        o = f"{unrenamed(n[:len(n) - len(np[k]) - 1], moves)}.{op[k]}"
+        if renamed(o, moves) != n:
             return None
         out.append((o, n))
     return out or None
@@ -2842,8 +3412,9 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
     holds, where the definitions it reads have records of their own; for a premise no `reads` record holds, whatever
     module defines it (a Proofs or Properties module, outside `meaning`), it is ``walked``'s ({premise: (its module, the
     digest of it and every definition it reads in `meaning` and this repository's modules)}, `Facts.lean`'s
-    `assumption_reads`), so a change to its statement or to anything it reads changes its record.  An update writes the
-    digests, drops an entry no guarantee reads, and converts a list of assumption modules into the definitions the
+    `assumption_reads`), so a change to its statement or to anything it reads changes its record.  An entry may carry
+    `id`, the claim id that names the premise, written by hand and kept by an update (`claim_ids.py` writes the table
+    from each id to its Lean names from these).  An update writes the digests, drops an entry no guarantee reads, and converts a list of assumption modules into the definitions the
     guarantees read there, each owned by the one owner of the guarantees that read its module (``read_by``, `readers`;
     or ``owner``).
     ``premised`` ({definition: the guarantees whose statements take it}, from `Facts.lean`'s `premises`) names the premises
@@ -2856,7 +3427,7 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
     premised in its place.  Under an update, a premise that doesn't unfold counts as listed, since the update adds it."""
     assumed, opened, fails, out, opens = policy.get("assumptions", {}), policy.get("open", {}), [], {}, {}
     domained, domains, cited, cover = policy.get("domain", {}), {}, cited or {}, cover or {}
-    declared_in, seed, free = assumption_homes(policy), policy.get("open_seed"), unowned_lock(policy) and not owner
+    declared_in, seed = assumption_homes(policy), policy.get("open_seed")
     home = " or ".join(declared_in)
     if not isinstance(opened, dict):
         fails.append(Failure("open.form", None, "open: `open` is {premise: {owner, digest[, issue], due}}"))
@@ -3017,19 +3588,24 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
             continue
         if kind is None:
             continue
-        entry = ({"owner": who} if who else {}) | ({"digest": h} if h is not None else {})
+        cid = (rec or {}).get("id") if isinstance(rec, dict) else None
+        if cid is not None and not (isinstance(cid, str) and CLAIM_ID.fullmatch(cid)):
+            fails.append(Failure(f"{kind}.id-form", a, f"{kind}: {a}'s `id` is {cid!r}: a claim id is kebab-case "
+                                 f"(`trusted-device`) or `<property>/<instance>` (`cr/sha-512`)"))
+            cid = None
+        entry = ({"id": cid} if cid else {}) | ({"owner": who} if who else {}) | ({"digest": h} if h is not None else {})
         if kind == "domain":
             entry = domain_entry(a, rec if section == "domain" else {}, entry)
         if kind == "open":
             ticket = {k: rec[k] for k in ("issue", "due") if k in (rec or {})} if section == "open" else \
                 {k: v for k, v in (issue_of(a, who) or {}).items() if k in ("issue", "due")}
             if held:
-                if not (isinstance(rec["why"], str) and rec["why"].strip() and "\n" not in rec["why"] and (free or (
-                        OPEN_ISSUE.fullmatch(str(ticket.get("issue"))) and OPEN_DUE.fullmatch(str(ticket.get("due")))))):
+                if not (isinstance(rec["why"], str) and rec["why"].strip() and "\n" not in rec["why"] and
+                        OPEN_ISSUE.fullmatch(str(ticket.get("issue"))) and OPEN_DUE.fullmatch(str(ticket.get("due")))):
                     fails.append(Failure("open.form", a, f"open: {a}'s entry, which gives a `why`, gives the `issue` that "
                                          f"discharges it as a Linear key (TEAM-N), its `due` as a date (YYYY-MM-DD) and "
                                          f"its `why` as one line naming a statement that holds it without taking it"))
-            elif not ticket and not (free and section == "open"):
+            elif not ticket:
                 fails.append(unlisted(a, premised[a], entry))
                 continue
             elif ticket and not (("issue" not in ticket or OPEN_ISSUE.fullmatch(str(ticket["issue"])))
@@ -3037,7 +3613,7 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
                 fails.append(Failure("open.form", a, f"open: {a}'s entry gives its `due` as a date (YYYY-MM-DD) and its "
                                      f"`issue`, when it has one, as a Linear key (TEAM-N)"))
             entry |= ticket | ({"why": rec["why"]} if held else {})
-        if not who and not free:
+        if not who:
             fails.append(Failure(f"{kind}.no-owner", a, f"{kind}: {a} has no owner: write \"owner\": \"@lane\" in its "
                                  f"entry, or run `check.py --update --owner @lane`"))
         elif who and not OWNER.fullmatch(who):
@@ -3065,7 +3641,7 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
                 fails.append(Failure("domain.unlisted", d, f"domain: {d}, the statement of {cited[d]}, another listed "
                                      f"guarantee, is a premise of {', '.join(sorted(by))} the lock doesn't list; run "
                                      f"`check.py --update`, which lists it under `domain` citing {cited[d]}"))
-            elif not mine and not free:
+            elif not mine:
                 fails.append(Failure("domain.no-owner", d, f"domain: {d} has no owner: write \"owner\": \"@lane\" in "
                                      f"its entry, or run `check.py --update --owner @lane`"))
             continue
@@ -3077,7 +3653,7 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
                 fails.append(unlisted(d, by, entry))
                 continue
             opens[d] = entry | {k: ticket[k] for k in ("issue", "due") if k in ticket}
-            if not mine and not free:
+            if not mine:
                 fails.append(Failure("open.no-owner", d, f"open: {d} has no owner: write \"owner\": \"@lane\" in its "
                                      f"entry, or under its `open_seed` entry"))
             continue
@@ -3154,7 +3730,7 @@ def regenerated(policy: dict, facts: dict, files: dict[str, str], fails: list[st
     if not fails or not all(RECORD_DIFFERENCE.match(f) for f in fails):
         return None
     new = judge(policy, facts, files, update=True)[1]
-    return policy | {k: new[k] for k in ("guarantees", "reads", "assumptions", "domain", "open", "shape", "trust_gap")
+    return policy | {k: new[k] for k in ("guarantees", "reads", "assumptions", "domain", "open", "shape", "trust_gap", "ids")
                      if k in new}
 
 
@@ -3177,7 +3753,7 @@ def repaired(policy: dict, facts: dict, files: dict[str, str], fails: list[str],
     (`trust_gap_kept`).  The audit then judges the package on it (`audit`): what still fails there fails."""
     new = judge(policy, facts, files, update=True, ticket=ticket)[1]
     out = policy | {k: new[k] for k in ("guarantees", "reads", "assumptions", "domain", "open", "shape", "unwitnessed",
-                                        "trust_gap") if k in new}
+                                        "trust_gap", "ids") if k in new}
     out.pop("open_seed", None)
     allow, shape_ = dict(out.get("unwitnessed") or {}), dict(out.get("shape") or {})
     drops = {"witnesses.stale": ("witnesses",), "witnesses.assumed-stale": ("witnesses_assumed",),
@@ -3268,9 +3844,9 @@ def name_list(v) -> list[str]:
     return v if isinstance(v, list) and all(isinstance(x, str) for x in v) else []
 
 
-def premise_closure(lock: dict, name: str) -> set[str]:
-    """The named assumptions and open premises guarantee ``name``'s record lists, and those of each listed guarantee whose
-    statement it takes as a domain hypothesis (the `domain` entry's `cites`), transitively."""
+def premise_closure(lock: dict, name: str, kinds: tuple[str, ...] = GAP_KINDS) -> set[str]:
+    """The named assumptions and open premises (``kinds`` of its `premises`) guarantee ``name``'s record lists, and those
+    of each listed guarantee whose statement it takes as a domain hypothesis (the `domain` entry's `cites`), transitively."""
     listed, domain = lock.get("guarantees") or {}, lock.get("domain") or {}
     out, seen, todo = set(), set(), [name]
     while todo:
@@ -3278,7 +3854,7 @@ def premise_closure(lock: dict, name: str) -> set[str]:
             continue
         seen.add(g)
         took = rec.get("premises") if isinstance(rec.get("premises"), dict) else {}
-        out |= {p for k in GAP_KINDS for p in name_list(took.get(k))}
+        out |= {p for k in kinds for p in name_list(took.get(k))}
         todo += [e["cites"] for d in name_list(took.get("domain"))
                  if isinstance(e := domain.get(d), dict) and isinstance(e.get("cites"), str)]
     return out
@@ -3356,6 +3932,46 @@ def trust_gap_kept(lock: dict) -> dict[str, list[str]]:
     entry left empty or of a guarantee `deployed` doesn't list.  It adds nothing, so the gap only shrinks."""
     held, gaps = lock.get("trust_gap") or {}, trust_gaps(lock)
     return {g: kept for g in sorted(held) if g in gaps and (kept := sorted(set(name_list(held[g])) & set(gaps[g])))}
+
+
+#: a claim id (`verity.claims`): a property of an instance, `cr/sha-512`, or a bare kebab-case id, `trusted-device`
+CLAIM_ID = re.compile(r"[a-z0-9]+(-[a-z0-9]+)*(/[a-z0-9]+(-[a-z0-9]+)*)?")
+
+
+def trust_premises(lock: dict) -> set[str]:
+    """The premises `trust` names: its base's and each deployed guarantee's own."""
+    trust = lock.get("trust") if isinstance(lock.get("trust"), dict) else {}
+    extra = trust.get("extra") if isinstance(trust.get("extra"), dict) else {}
+    return set(trust.get("base") or {}) | {p for ps in extra.values() if isinstance(ps, dict) for p in ps}
+
+
+def id_listed(lock: dict) -> set[str]:
+    """The premises an `ids` entry may name: those the lock lists under `assumptions`, `domain` or `open`, or in `trust`."""
+    return {p for k in ("assumptions", "domain", "open") if isinstance(lock.get(k), dict) for p in lock[k]} | \
+        trust_premises(lock)
+
+
+def ids_kept(lock: dict) -> dict[str, str]:
+    """The `ids` an update writes: each entry of a premise the lock still lists (`id_listed`), sorted."""
+    listed = id_listed(lock)
+    return {p: i for p, i in sorted((lock.get("ids") or {}).items()) if p in listed}
+
+
+def id_failures(lock: dict, failed: set | frozenset = frozenset()) -> list[str]:
+    """Each premise's claim id.  `ids` is {premise: its claim id} (`CLAIM_ID`), the id `verity.claims` cites it by, from
+    which `tools/verity/lean/claim_ids.py` writes that package's table of each id's Lean names.  Every named assumption
+    (`assumptions`) and every premise `trust` names has one, which only a person gives; an open or domain premise may.
+    A premise that fails already (``failed``, the entries of the judge's other failures) owes that fix first.  An entry
+    of a premise the lock no longer lists is read by nothing, and `--update` drops it (`ids_kept`)."""
+    ids = lock.get("ids", {})
+    if not isinstance(ids, dict) or not all(isinstance(i, str) and CLAIM_ID.fullmatch(i) for i in ids.values()):
+        return [Failure("ids.form", None, "ids: `ids` is {premise: its claim id}, each id a property of an instance "
+                        "(`cr/sha-512`) or a bare kebab-case id (`trusted-device`), as `verity.claims` cites it")]
+    assumed = set(lock["assumptions"]) if isinstance(lock.get("assumptions"), dict) else set()
+    return [Failure("ids.missing", p, f"ids: {p}, {'a named assumption' if p in assumed else 'a premise `trust` names'}, "
+                    f"has no claim id: write {json.dumps(p)}: \"<id>\" under `ids`, the id `verity.claims` cites it by "
+                    "(its docstring's), then `python3 tools/verity/lean/claim_ids.py --write`")
+            for p in sorted((assumed | trust_premises(lock)) - set(ids) - set(failed))]
 
 
 #: what a property's one hypothesis that is not a premise says its function returned (`shape`): `none` for a function that
@@ -3665,31 +4281,6 @@ def unowned(rec: dict | None) -> dict:
     return {k: v for k, v in (rec or {}).items() if k != "owner"}
 
 
-#: a lane's bookkeeping in a lock: who answers for an entry and, for an open premise, the issue that discharges it and its
-#: due date (`LANE_FIELDS`, on an entry of `LANE_ENTRIES`' sections), and the sections that hold their defaults
-LANE_FIELDS, LANE_ENTRIES = ("owner", "issue", "due"), ("guarantees", "assumptions", "domain", "open")
-LANE_SECTIONS = ("default_owner", "open_default_issue", "open_seed")
-
-
-def unowned_lock(policy: dict) -> bool:
-    """Whether ``policy`` is an unowned lock: it lists a guarantee or a premise and holds none of a lane's bookkeeping
-    (`LANE_FIELDS`, `LANE_SECTIONS`), as the lock of a tree with no lanes does.  It is read from the lock's content, so a
-    lock with one such field is owned and held to every rule.  On an unowned lock no entry owes an owner, an `open` entry
-    is its digest (and its `why`, `on_read`) alone, and neither `--update` nor `--bookkeeping warn` writes an owner, an
-    issue or a date into it.  A run given `--owner` reads the lock as owned, and owns it (`judge`)."""
-    entries = [r for s in LANE_ENTRIES if isinstance(sec := policy.get(s), dict) for r in sec.values()]
-    return bool(entries) and not any(k in policy for k in LANE_SECTIONS) and not any(
-        f in r for r in entries if isinstance(r, dict) for f in LANE_FIELDS)
-
-
-def unowned_at(pkg: Path) -> bool:
-    """Whether ``pkg``'s lock is an unowned one (`unowned_lock`).  Not one the audit can't read, which it reports."""
-    try:
-        return isinstance(policy := load(pkg), dict) and unowned_lock(policy)
-    except (OSError, ValueError):
-        return False
-
-
 def restated(base: dict, side: dict) -> list[str]:
     """The guarantees the record ``side`` adds or restates against the record ``base``: its entry under `guarantees`
     differs, its owner aside, or a definition its signature names has another hash under `reads` (a guarantee lifted into
@@ -3928,6 +4519,26 @@ def module_files(pkg: Path) -> dict[str, Path]:
     return {m: d / rel for d in [*deps, pkg] for m, rel in lean_modules(d).items()}
 
 
+def source_graph(pkg: Path, roots: list[str]) -> tuple[dict[str, list[str]], list[str]]:
+    """({module: the modules its header imports}, the modules whose header can't be read) over the modules ``roots`` import
+    that have a source in the package or a package it requires by path (`module_files`): the import graph read from the
+    sources (`headers.py`), with no build.  `Init` leads a module's imports unless its header says `prelude`, as it leads
+    the imports Lean elaborates the header to, so the list has the modules `Facts.lean` reports for it (`imports`)."""
+    files, headers = module_files(pkg), sibling("headers")
+    graph: dict[str, list[str]] = {}
+    cut, seen, stack = [], set(), list(roots)
+    while stack:
+        if (m := stack.pop()) in seen or m not in files:
+            continue
+        seen.add(m)
+        if (h := headers.header(files[m].read_text(errors="replace"))) is None:
+            cut.append(m)
+            continue
+        graph[m] = [*([] if h.prelude else ["Init"]), *(i.module for i in h.imports)]
+        stack += graph[m]
+    return graph, sorted(cut)
+
+
 def provers(pkg: Path, policy: dict) -> list[tuple[str, Path]]:
     """The packages the policy's `proved_in` names, each as written (a path relative to ``pkg``) and resolved."""
     return [(p, (pkg / p).resolve()) for p in policy.get("proved_in", []) if isinstance(p, str)]
@@ -4028,8 +4639,10 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
                           "assumptions": listed_premises(policy), "shape": policy.get("shape", {}),
                           "witnesses": policy.get("witnesses", {})}, qwork, moved, keep, sealed=qview)
         lib = (qview.lib if qview else q / ".lake" / "build" / "lib" / "lean").resolve()
-        loaded = {".".join(r.relative_to(lib).with_suffix("").parts) for r in (Path(o).resolve() for o in qf["oleans"])
-                  if r.parts[:len(lib.parts)] == lib.parts}
+        dirs: dict[Path, Path] = {}
+        real = [(dirs.get(o.parent) or dirs.setdefault(o.parent, o.parent.resolve())) / o.name
+                for o in map(Path, qf["oleans"])]
+        loaded = {".".join(r.relative_to(lib).with_suffix("").parts) for r in real if r.parts[:len(lib.parts)] == lib.parts}
         if unaudited := sorted(loaded - set(qf["modules"])):
             fails.append(Failure("proved_in.unaudited", entry, f"proved_in: {entry}'s roots ({', '.join(qpol['roots'])}) "
                                  f"import its {', '.join(unaudited)}, which are not under them, so its replay does not check "
@@ -4069,6 +4682,7 @@ MOVED = "the same statement under its old names"
 LIFTED = "the same statement, its definition unfolded once"
 MOVED_READS = "definitions read in another module or under another name: the same under their old names"
 OWNED = "who answers for it, not what it says"
+MOVED_ENTRY = "its entry under its new name; its definition is compared in `reads`"
 
 
 class Change(str):
@@ -4173,7 +4787,8 @@ def lifted_into(a: dict, b: dict, fact: dict, mv: dict, renames: dict[str, str] 
     return lift["head"] if a.get("type_hash") == unfolded and assumptions == b.get("assumptions") else None
 
 
-def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames: dict[str, str] | None = None) -> list[str]:
+def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames: dict[str, str] | None = None,
+           base: Iterable[dict] = ()) -> list[str]:
     """What an `--update` changed: each changed guarantee's signature before and after, and each changed definition a
     guarantee reads, with the guarantees that read it in the build (none for one gone) and its source as it is now.  A
     guarantee whose statement is the same but prints differently (a toolchain's printer, notation) gets one line, and so
@@ -4186,17 +4801,22 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
     reading of its own.  After `--moved` (``renames``, `facts_of`), a guarantee and a definition are compared with the
     record of their old names, by their texts under the old names: a guarantee that says what its record says gets one line
     (moved from its old name, lifted), and the definitions that are the same are counted on one line.  One the base already
-    records under its new name (a lock re-recorded after the move) is compared with that record.  Each entry added to
+    records under its new name (a lock re-recorded after the move) is compared with that record, and so is one whose new
+    name a lock of the change's base (``base``, `base_locks`) records with another statement, whatever ``old`` holds:
+    a record deleted by hand before the move leaves that guarantee's statement changed, never moved.  Each entry added to
     or dropped from `verifier.allow` gets a line."""
     out = []
     op, np = old.get("guarantees", {}), new.get("guarantees", {})
     moves = not facts.get("moved_conflicts")
     moved = {n: f["moved"] for n, f in facts["pins"].items() if moves and f.get("moved")}
-    was = {n: moved[n]["as"] if n in moved and moved[n]["as"] in op else n for n in np}
+    prior = {n: r for b in base for n, r in (b.get("guarantees") or {}).items()
+             if n in moved and moved[n]["as"] != n and isinstance(r, dict) and isinstance(np.get(n), dict)
+             and any(r.get(k) != np[n].get(k) for k in ("type_hash", "unfolded_hash"))}
+    was = {n: moved[n]["as"] if n in moved and n not in prior and moved[n]["as"] in op else n for n in np}
     lifts: dict[str, set[str]] = {}
     for name in sorted(set(np) | (set(op) - set(was.values()))):
         o = was.get(name, name)
-        a, b = op.get(o) or {}, np.get(name) or {}
+        a, b = prior.get(name) or op.get(o) or {}, np.get(name) or {}
         if a and b and a.get("owner") != b.get("owner"):
             out.append(f"guarantee {name}: owner {a.get('owner') or 'none'} -> {b.get('owner') or 'none'}: {OWNED}")
         a, b = unowned(a), unowned(b)
@@ -4282,7 +4902,7 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
         out.append(f"reads: {regrouped} {REGROUPED}")
     if regrouped_own:
         out.append(f"reads: {regrouped_own} {REGROUPED_OWN}")
-    out += assumption_changes(old, new)
+    out += assumption_changes(old, new, renames)
     before, after = ((d.get("verifier") or {}).get("allow", []) for d in (old, new))
     where = {e["name"]: f" (@[{kind}], in {e.get('module')})" for kind, e in compiled(facts.get("verifier") or {})}
     out += [Change("verifier", a, f"verifier: allowed {a}{where.get(a, '')}: compiled code no proof sees, now on the "
@@ -4316,12 +4936,17 @@ def premise_changes(a: dict, b: dict, new: dict) -> list[str]:
     return out
 
 
-def assumption_changes(old: dict, new: dict) -> list[str]:
+def assumption_changes(old: dict, new: dict, renames: dict[str, str] | None = None) -> list[str]:
     """A line for each listed premise whose `digest` changed, or that has one where its record held none, and that no
-    `reads` record holds (a definition there gets its own line): its statement or a definition it reads changed; and one
+    `reads` record holds (a definition there gets its own line): its statement or a definition it reads changed.  After
+    `--moved` (``renames``) each of ``old``'s entries is read under its new name, and a premise that moved gets one line:
+    its entry moved, where a `reads` record holds its definition, which that record's lines compare under the old names;
+    else a statement change, since its `digest` hashes the names of what it reads and is not compared.  And one
     for each that moved between `assumptions`, `domain` and `open`, or whose open entry's issue or due date changed, or
     whose domain entry's `why` or `cites` did; and one for each domain hypothesis ``old`` lists under none of the three,
     with its `why` and the guarantees whose records take it: it restricts what they say, and nothing else prints it."""
+    if renames:
+        old = old | renamed_witnesses(old, renames)
     was, now = map(listed_premises, (old, new))
     records = new.get("guarantees") if isinstance(new.get("guarantees"), dict) else {}
 
@@ -4341,7 +4966,10 @@ def assumption_changes(old: dict, new: dict) -> list[str]:
         h, before = (rec or {}).get("digest"), (was.get(a) or {}).get("digest")
         k = kind(new, a)
         what = {"assumptions": "assumption", "domain": "domain hypothesis", "open": "open premise"}[k]
-        if a in was and h and h != before and a not in held:
+        if renames and a in was and (o := unrenamed(a, renames)) != a:
+            out.append(f"{what} {a}: moved from {o}: {MOVED_ENTRY}" if a in held else
+                       Change(k, a, f"{what} {a}: moved from {o}, its digest not compared (it hashes the new names)"))
+        elif a in was and h and h != before and a not in held:
             out.append(Change(k, a, f"{what} {a}: " + ("changed (its statement or a definition it reads)" if before else
                                                        "recorded: its statement and the definitions it reads, digested")))
         if a not in was and k == "domain":
@@ -4367,7 +4995,8 @@ def statement_changes(notes: list[str]) -> list[str]:
     """The lines of a review that change what a guarantee says: all but the guarantees and read groups whose statements and
     definitions are unchanged (printed differently, rehashed with SHA-256 while the 32-bit hashes still match, moved or
     lifted), and a changed owner."""
-    return [n for n in notes if not n.endswith((REPRINTED, REHASHED, REGROUPED, REGROUPED_OWN, MOVED, LIFTED, MOVED_READS, OWNED))]
+    return [n for n in notes if not n.endswith((REPRINTED, REHASHED, REGROUPED, REGROUPED_OWN, MOVED, LIFTED, MOVED_READS, OWNED,
+                                                 MOVED_ENTRY))]
 
 
 def changes(notes: list[str], old: dict, new: dict) -> list[dict]:
@@ -4527,12 +5156,16 @@ def staged_line(staged: dict) -> str:
 SAMPLE_RNG: random.Random = secrets.SystemRandom()
 #: the sampled recompile takes this many modules, or this share of them, whichever is more
 SAMPLE_MIN, SAMPLE_SHARE = 8, 0.02
-#: a module's outputs the sampled recompile compares, as Lake writes them (`sampled_file`)
-SAMPLED_OUTPUTS = ("olean", "ilean", "olean.server", "olean.private", "ir", "ir.sig", "c", "bc")
-#: what Lake writes beside them, hidden with them in the recompile's overlay so Lake compiles the module
-SAMPLED_BESIDE = ("trace", "setup.json", *(f"{o}.hash" for o in SAMPLED_OUTPUTS))
+#: a module's outputs the sampled recompile compares: the parts a seal holds (`SNAPSHOT_PARTS`, `SNAPSHOT_CODE`), which are
+#: all that every reader after the seal reads of it
+SAMPLED_OUTPUTS = ("olean", "olean.server", "olean.private", "ir.sig", "ir")
 #: the outputs that keep the path of the module's source (a message's), compared as object graphs when their bytes differ
 PATH_PARTS = ("olean.server", "olean.private")
+#: the lakefile settings, of a package or a target, that give Lake's `lean` command more than the options and files the
+#: sample's command passes (`sampled_setup`): a module so compiled fails its sample rather than be compared with another
+SAMPLE_UNREPEATED = ("buildType", "moreLeanArgs", "weakLeanArgs", "backend")
+#: the share of the cores the sample's compiles take, beside the replay, which runs at the same time
+SAMPLE_CORE_SHARE = 0.5
 #: (its package's build, module) of each module a build step of this process compiled (`note_compiled`): another
 #: package's build reuses what this run compiled into a path dependency's build, which without the sandbox is as cold as
 #: its own (`sampled_recompile`)
@@ -4551,58 +5184,102 @@ def note_compiled(keyed: dict, log: Path) -> None:
 
 
 def sampled_file(mk, build: Path, mod: str, ext: str) -> Path:
-    """Where ``mod``'s file ``ext`` (`SAMPLED_OUTPUTS`, `SAMPLED_BESIDE`) sits in a package's ``build`` (``mk``:
+    """Where ``mod``'s file ``ext`` (`SAMPLED_OUTPUTS`, its `trace`) sits in a package's ``build`` (``mk``:
     `module_keys`): Lake keeps the C code, its hash and the `setup.json` it gives `lean` under `ir/`, the rest under
     `lib/lean/`."""
     ir = ext == "setup.json" or ext.split(".")[0] in ("c", "bc")
     return build / ("ir" if ir else "lib/lean") / mk.path_of(mod, f".{ext}")
 
 
-def sampled_recompile(pkg: Path, roots: list[str], work: Path, built: set[str], jobs: list[str],
-                      log=print) -> tuple[list[Failure], dict]:
-    """Recompile a random sample of the modules ``pkg``'s build didn't compile, and fail on any difference from the outputs
-    the build holds for them: (its failures, the report's `sampled`). The audit judges a module by its `.olean` files, and
-    a module the build didn't compile has outputs it restored (the node's artifact cache, `stage_build`, or a bundle another
-    node published) or kept (the package's kept build, `lean_audit.WarmBuilds`); nothing else binds those outputs to the
-    module's source. The population is every module of the build (``roots`` and the default targets, the workspace's path
-    dependencies included, `module_keys.keys`) with a trace in its package's build and not in ``built`` (the modules Lake
-    reported compiling); the sample is `SAMPLE_MIN` of them or `SAMPLE_SHARE`, whichever is more, all when fewer, taken
-    with `SAMPLE_RNG` after the build.
+def _options(table: dict, at: str = "") -> dict:
+    """A lakefile's `leanOptions` table as `lean` reads options: TOML nests a dotted key (`backward.proofsInPublic`)."""
+    out = {}
+    for k, v in table.items():
+        out |= _options(v, f"{at}{k}.") if isinstance(v, dict) else {f"{at}{k}": v}
+    return out
 
-    The build is never written: other packages' audits read a path dependency's outputs (their tests, their seals' re-hash)
-    while this runs. In the sandbox each of the build's `.lake` directories (`writable`) gets an overlay whose upper layer
-    is under ``work``/`sampled` (`in_overlay`); there the sampled modules' outputs and Lake's files beside them
-    (`SAMPLED_BESIDE`) are removed, and `lake build +M...` compiles them (``jobs``: the build's `env` prefix, without the
-    staged cache, so Lake restores nothing), into the upper layer at the build's own path, read at `FIXED` as the build
-    read it (`bound`). Every output (`SAMPLED_OUTPUTS`)
-    must be there in both or neither and equal byte for byte; where only `PATH_PARTS` differ, the module's parts must be
-    one object graph but for strings that are absolute paths ending in the module's source path (`olean_graph.differs`):
-    Lean keeps a message's file in `olean.server`, so a build at another path, one from before builds were bound at
-    `FIXED` or one of a package outside `TREE`, differs there. A failure names the module
-    and its file, the report's `mismatched` lists each module failed so ({module: its package's directory}), which
-    a records run has Lake compile before it audits again (`lean_changed.mismatched`), and the recompile's outputs stay
-    in the upper layers; a pass removes them. Without the sandbox there is no overlay, so nothing is recompiled and the
-    report's `unsampled` says so; a module of the population that no build of
-    this process compiled (`RUN_COMPILED`) was restored or kept, which nothing would check, so it fails the audit, and only
-    a cold run passes there (`lean_audit.sandboxed`'s probe can pass where this one fails). The audit prints the sample
-    under its line (`sampled:`), so a run records what it checked. The caller holds the build's `.lake` directories
-    (`writing`), so no build changes an overlay's lower layer while it is mounted. A sample can miss a wrong module, so
-    the uncached nightly check stays the backstop."""
+
+def sampled_setup(mk, key, mod: str, lakefiles: dict[Path, dict]) -> dict | str:
+    """The `--setup` file Lake writes for ``mod`` (``key``, `module_keys.keys`) but its `importArts`, which stays empty, so
+    `lean` finds every import on its search path, the seal's: the module's name and package, whether it is a `module`
+    file, and the options Lake gives it, the package's `leanOptions` and then its target's (a library, or the executable
+    whose root it is; `Package.owner`). Or why the sample can't repeat its compile: no single target owns it, or the
+    package or that target sets one of `SAMPLE_UNREPEATED`. ``lakefiles`` caches each package's parsed lakefile."""
+    p = key.package
+    if (doc := lakefiles.get(p.dir)) is None:
+        doc = lakefiles[p.dir] = tomllib.loads((p.dir / "lakefile.toml").read_text())
+    if not (owner := p.owner(mod)):
+        return f"no single target of {p.name} compiles it"
+    first = owner.split("+")[0]
+    kind, name = ("lean_exe", first.removeprefix(mk.EXE)) if first.startswith(mk.EXE) else ("lean_lib", first)
+    target = next((t for t in doc.get(kind, []) if t.get("name") == name), {})
+    if unrepeated := [k for t in (doc, target) for k in SAMPLE_UNREPEATED if k in t]:
+        return f"{p.name}'s lakefile sets {unrepeated[0]}, which Lake's `lean` command reads and the sample's doesn't"
+    return {"name": mod, "package": p.name, "isModule": key.module, "importArts": {}, "dynlibs": [], "plugins": [],
+            "options": _options(doc.get("leanOptions", {})) | _options(target.get("leanOptions", {}))}
+
+
+def sampled_recompile(pkg: Path, roots: list[str], work: Path, built: set[str], sealed: "Sealed | None",
+                      threads: int | None = None, log=print) -> tuple[list[Failure], dict]:
+    """Recompile a random sample of the modules ``pkg``'s build didn't compile, and fail on any difference from the copies
+    of them its seal holds (``sealed``): (its failures, the report's `sampled`). The audit judges a module by its `.olean`
+    files, and a module the build didn't compile has outputs it restored (the node's artifact cache, `stage_build`, or a
+    bundle another node published) or kept (the package's kept build, `lean_audit.WarmBuilds`); nothing else binds those
+    outputs to the module's source. The population is every module of the build (``roots`` and the default targets, the
+    workspace's path dependencies included, `module_keys.keys`) that the seal holds and that is not in ``built`` (the
+    modules Lake reported compiling); the sample is `SAMPLE_MIN` of them or `SAMPLE_SHARE`, whichever is more, all when
+    fewer, taken with `SAMPLE_RNG` after the build.
+
+    It runs after the seal, beside the replay where what the run reserved holds both (`sample_jobs`), else after it, and
+    reads nothing a build can write: once the package is announced
+    (`audit`'s ``built``), a dependent's build may rewrite its `.lake`. Each sampled module is compiled from its source by
+    the toolchain's `lean`, on the seal's search path (`Sealed.bin`) with a setup that names no import's files
+    (`sampled_setup`), so every import it loads is the seal's copy. It runs in the build sandbox, writable only in its own
+    directory under ``work``/`sampled`, where it writes its outputs, and reads its source at `FIXED` as the build read it
+    (`bound`), `SAMPLE_CORE_SHARE` of ``threads`` (the build's `LEAN_NUM_THREADS`, which each `lean` is given, else the
+    cores) at a time, and beside a heavy replay no more than `sample_jobs` fits. Every output (`SAMPLED_OUTPUTS`) must be in both the seal and the recompile or in neither, and equal
+    byte for byte; where only `PATH_PARTS` differ, the module's parts must be one object graph but for strings that are
+    absolute paths ending in the module's source path (`olean_graph.differs`): Lean keeps a message's file in
+    `olean.server`, so a build at another path, one from before builds were bound at `FIXED` or one of a package outside
+    `TREE`, differs there. A
+    failure names the module and its file, the report's `mismatched` lists each module failed so ({module: its package's
+    directory}, the package's own and never its seal's), which a records run has Lake compile before it audits again
+    (`lean_changed.mismatched`), and the recompile's outputs stay under ``work``/`sampled`; a pass removes them.
+
+    Without the sandbox ``sealed`` is None, and the audit calls this before its seal: nothing is recompiled and the
+    report's `unsampled` says so. A module of the population (there: those with a trace in their package's build) that
+    no build of this process compiled (`RUN_COMPILED`) was restored or kept, which nothing would check, so it fails the
+    audit, and only a cold run passes there (`lean_audit.sandboxed`'s probe can pass where this one fails). The audit
+    prints the sample under its line (`sampled:`), so a run records what it checked. A sample can miss a wrong module,
+    so the uncached nightly check stays the backstop."""
     mk, og = sibling("module_keys"), sibling("olean_graph")
     s = time.monotonic()
     keyed = mk.keys(pkg, roots)
     with _RUN_COMPILED_LOCK:
         cold = set(RUN_COMPILED)
-    pop = sorted(m for m, k in keyed.items()
-                 if m not in built and sampled_file(mk, k.package.build(), m, "trace").is_file())
+    builds: dict[Path, Path] = {}
+
+    def build(m: str) -> Path:
+        p = keyed[m].package
+        return builds.get(p.dir) or builds.setdefault(p.dir, p.build().resolve())
+
+    def live(m: str, ext: str) -> Path:
+        return sampled_file(mk, build(m), m, ext)
+
+    def held(m: str) -> bool:
+        if sealed is None:
+            return live(m, "trace").is_file()
+        return (f := sealed.moved(live(m, "olean"))) is not None and f.is_file()
+
+    pop = sorted(m for m in keyed if m not in built and held(m))
     sample = sorted(SAMPLE_RNG.sample(pop, min(len(pop), max(SAMPLE_MIN, math.ceil(SAMPLE_SHARE * len(pop))))))
     rep: dict = {"population": len(pop), "modules": sample}
     if not keyed and isinstance(why := mk.workspace(pkg), str):
         rep["unkeyed"] = why
-    if sample and not sandboxed():
-        rep["modules"], rep["unsampled"] = [], ("no sandbox here, and the recompile runs only in an overlay in the "
-                                                "sandbox's mount namespace, never in the build other packages read")
-        if warm := [m for m in pop if (keyed[m].package.build().resolve(), m) not in cold]:
+    if sample and sealed is None:
+        rep["modules"], rep["unsampled"] = [], ("no sandbox here, and the recompile runs only in the sandbox, against the "
+                                                "seal, never on the build other packages read")
+        if warm := [m for m in pop if (build(m), m) not in cold]:
             rep["seconds"] = round(time.monotonic() - s, 1)
             return [Failure("sampled", None, (
                 f"sampled: the sandbox probe failed here (`sandboxed`), yet {len(warm)} of the {len(pop)} modules "
@@ -4613,81 +5290,66 @@ def sampled_recompile(pkg: Path, roots: list[str], work: Path, built: set[str], 
         rep["seconds"] = round(time.monotonic() - s, 1)
         return [], rep
     top = work / "sampled"
-    _remove_tree(top)
-    lakes = sorted({d.resolve() for d in [*writable(pkg), *(keyed[m].package.dir / ".lake" for m in sample)] if d.is_dir()})
-    layers = {d: top / str(i) for i, d in enumerate(lakes)}
-
-    def upper(f: Path) -> Path | None:
-        f = f.resolve()
-        d = max((d for d in layers if f.is_relative_to(d)), default=None)
-        return d and layers[d] / "upper" / f.relative_to(d)
-
-    gone = [f for m in sample for ext in (*SAMPLED_OUTPUTS, *SAMPLED_BESIDE)
-            if (f := sampled_file(mk, keyed[m].package.build(), m, ext)).is_file()]
-    if out := [f for f in gone if upper(f) is None]:
-        rep["seconds"] = round(time.monotonic() - s, 1)
-        return [Failure("sampled", None, f"sampled: {out[0]} resolves outside the .lake directories the recompile "
-                                         f"overlays ({', '.join(map(str, lakes))}), so it can't be recompiled")], rep
-    top.mkdir(parents=True)
-    at = bound([pkg / ".lake", *lakes])
-    (listing := top / "remove.txt").write_text("".join(f"{fixed(f) if at else f.resolve()}\n" for f in gone))
-    log(f"sampled: {pkg}: recompiling {len(sample)} of the {len(pop)} modules this build didn't compile")
-    rc, text = run(in_overlay(layers, ["bash", "-c", 'while IFS= read -r f; do rm -f -- "$f" || exit; done < "$0"; exec "$@"',
-                                       str(listing), *jobs, "lake", "build", *(f"+{m}" for m in sample)], at),
-                   pkg, work / "sampled.log")
-    for t in layers.values():
-        _remove_tree(t / "work")
-    rep["seconds"] = round(time.monotonic() - s, 1)
-    if rc:
-        return [Failure("sampled", None, f"sampled: the recompile of {', '.join(sample)} exited {rc}\n{text[-3000:]}")], rep
-    fails, graphs = [], []
-    compiled = {m for m, *_ in BUILT.findall(text)}
-    for m in sample:
-        if m not in compiled:
-            fails.append(Failure("sampled", m, f"sampled: {m}: Lake didn't recompile it, so its outputs can't be compared"))
+    shutil.rmtree(top, ignore_errors=True)
+    lakefiles: dict[Path, dict] = {}
+    fails, plans = [], []
+    for i, m in enumerate(sample):
+        setup = sampled_setup(mk, keyed[m], m, lakefiles)
+        if isinstance(setup, str):
+            fails.append(Failure("sampled", m, f"sampled: {m}: {setup}, so the sample can't repeat its compile"))
             continue
-        p = keyed[m].package
-        old = {ext: sampled_file(mk, p.build(), m, ext) for ext in SAMPLED_OUTPUTS}
-        now = {ext: upper(f) for ext, f in old.items()}
+        (d := top / str(i)).mkdir(parents=True)
+        (d / "setup.json").write_text(json.dumps(setup))
+        plans.append((m, d))
+    lean, n = sealed.bin("lean"), threads or cores()
+    rep["jobs"] = jobs = max(1, min(len(plans), int(n * SAMPLE_CORE_SHARE), _BESIDE.get(pkg.resolve(), (0,))[0] or n))
+    at = bound([pkg / ".lake", *(keyed[m].package.dir / ".lake" for m, _ in plans)])
+    log(f"sampled: {pkg}: recompiling {len(sample)} of the {len(pop)} modules this build didn't compile against its seal, "
+        f"{jobs} at a time")
+
+    def compile(m: str, d: Path) -> tuple[int, str]:
+        (o := d / mk.path_of(m, ".olean")).parent.mkdir(parents=True, exist_ok=True)
+        src = keyed[m].package.file(m)
+        return run([*UNSHARE, "--", "bash", str(TOOL / "sandbox.sh"), "--ro", str(sealed.dir), *at, str(d), "--",
+                    *lean[:-1], *([f"LEAN_NUM_THREADS={threads}"] if threads else []), lean[-1],
+                    str(fixed(src) if at else src), "-o", str(o), "-i", str(o.with_suffix(".ilean")),
+                    "-c", str(o.with_suffix(".c")), "--setup", str(d / "setup.json"), "--json"],
+                   keyed[m].package.dir, d / "lean.log")
+
+    with ThreadPoolExecutor(max_workers=jobs) as ex:
+        ran = list(ex.map(lambda md: compile(*md), plans))
+    rep["seconds"] = round(time.monotonic() - s, 1)
+    graphs = []
+    for (m, d), (rc, text) in zip(plans, ran):
+        if rc:
+            fails.append(Failure("sampled", m, f"sampled: {m}: `lean` exited {rc} on its source against the seal\n"
+                                               f"{text[-3000:]}"))
+            continue
+        old = {ext: sealed.mapped(live(m, ext)) for ext in SAMPLED_OUTPUTS}
+        now = {ext: d / mk.path_of(m, f".{ext}") for ext in SAMPLED_OUTPUTS}
         if one := [ext for ext in SAMPLED_OUTPUTS if now[ext].is_file() != old[ext].is_file()]:
-            fails.append(Failure("sampled", m, f"sampled: {m}: {', '.join(one)} only in the build or only in the recompile"))
+            fails.append(Failure("sampled", m, f"sampled: {m}: {', '.join(one)} only in the seal or only in the recompile"))
             continue
         here = [ext for ext in SAMPLED_OUTPUTS if old[ext].is_file()]
         differ = [ext for ext in here if now[ext].read_bytes() != old[ext].read_bytes()]
         if bad := [ext for ext in differ if ext not in PATH_PARTS]:
-            fails.append(Failure("sampled", m, f"sampled: {m}: the build's {old[bad[0]].relative_to(p.dir)} differs from "
-                                               f"what its source compiles to ({', '.join(bad)} differ; the recompile's is "
-                                               f"{now[bad[0]]})"))
+            fails.append(Failure("sampled", m, f"sampled: {m}: the build's {live(m, bad[0])} differs from what its source "
+                                               f"compiles to ({', '.join(bad)} differ; the seal's copy is {old[bad[0]]}, "
+                                               f"the recompile's {now[bad[0]]})"))
             continue
         if differ:
             parts = [q for q in og.PARTS if q in here]
             if why := og.differs({q: old[q] for q in parts}, {q: now[q] for q in parts}, mk.path_of(m, ".lean").as_posix()):
-                fails.append(Failure("sampled", m, f"sampled: {m}: the build's {old[differ[0]].relative_to(p.dir)} differs "
-                                                   f"from what its source compiles to: {why}"))
+                fails.append(Failure("sampled", m, f"sampled: {m}: the build's {live(m, differ[0])} differs from what its "
+                                                   f"source compiles to: {why}"))
                 continue
             graphs.append(m)
     rep["by_graph"] = graphs
     if fails:
         rep["mismatched"] = {f.entry: str(keyed[f.entry].package.dir.resolve()) for f in fails}
-        for f in list(top.rglob("*")):
-            if f.is_symlink() or not (f.is_file() or f.is_dir()):
-                f.unlink()                              # whiteouts: the run's files keep regular files only
-        return fails, rep
-    _remove_tree(top)
-    rep["seconds"] = round(time.monotonic() - s, 1)
-    return [], rep
-
-
-def _remove_tree(d: Path) -> None:
-    """Remove ``d``, opening each directory first: the kernel leaves an overlay's work directory unreadable (mode 0)."""
-    with contextlib.suppress(OSError):
-        d.chmod(0o700)
-    for root, dirs, _ in os.walk(d):
-        for sub in (os.path.join(root, x) for x in dirs):
-            if not os.path.islink(sub):
-                with contextlib.suppress(OSError):
-                    os.chmod(sub, 0o700)
-    shutil.rmtree(d, ignore_errors=True)
+    else:
+        shutil.rmtree(top, ignore_errors=True)
+    return fails, rep
 
 
 def bound(lakes: Iterable[Path], tree: Path | None = None) -> list[str]:
@@ -4702,15 +5364,6 @@ def fixed(path: Path, tree: Path | None = None) -> Path:
     """``path``, in ``tree`` (default `TREE`), as a build bound at `FIXED` names it: its directory resolved, as the tree
     is, and its own name kept (a package's `.lake/packages` may be a link out of the tree)."""
     return FIXED / (path.parent.resolve() / path.name).relative_to((tree or TREE).resolve())
-
-
-def in_overlay(layers: dict[Path, Path], argv: list[str], at: Iterable[str] = ()) -> list[str]:
-    """``argv`` in the build sandbox with an overlay over each directory of ``layers`` ({directory: its layers'
-    directory}, `sandbox.sh`'s `--overlay`): it reads each directory as it is and writes only into its layers, so the
-    directory itself, which other processes read meanwhile, never changes. ``at``: `bound`'s words, with which ``argv``
-    reads the tree, overlays included, at `FIXED`."""
-    return [*UNSHARE, "--", "bash", str(TOOL / "sandbox.sh"),
-            *(a for d, t in sorted(layers.items()) for a in ("--overlay", str(d), str(t))), *at, "--", *argv]
 
 
 def in_sandbox(pkg: Path, argv: list[str], at: Iterable[str] = ()) -> list[str]:
@@ -5083,6 +5736,12 @@ def store_replay(replay_cache: Path, key: str, module: str) -> None:
     write_atomic(replay_cache / f"{key}.json", json.dumps({"schema": REPLAY_SCHEMA, "module": module, "key": key}).encode())
 
 
+def has_replay(replay_cache: Path | set[str], key: str) -> bool:
+    """Whether ``replay_cache`` holds a pass under ``key``: a directory's entry (`store_replay`), or a key in the set a run
+    keeps in its own memory (`replay_in_steps`)."""
+    return key in replay_cache if isinstance(replay_cache, set) else (replay_cache / f"{key}.json").is_file()
+
+
 def touch_replays(replay_cache: Path, keys: dict[str, str], modules) -> int:
     """Mark the entries of ``modules`` used now, so the cache's eviction (`lean_audit.prune_replays`, by mtime) keeps what
     every replay reuses, Mathlib's and ArkLib's modules first, rather than dropping it as the oldest stored. Returns how many
@@ -5096,7 +5755,7 @@ def touch_replays(replay_cache: Path, keys: dict[str, str], modules) -> int:
     return evicted
 
 
-def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path, replay_cache: Path | None,
+def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path, replay_cache: Path | set[str] | None,
                 closure: bool = False, search: list[str] | None = None, digest=None, store: bool = True,
                 prefix: tuple[str, ...] = (), held: bool = False, threads: int | None = None) -> tuple[list[str], dict]:
     """(failures, how many modules were checked and reused): the kernel replay of the package's audited modules
@@ -5111,12 +5770,14 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
     `replay_in_steps`): `lean`'s `-j`, the one count the pool of its tasks is sized from, which is the machine's without
     it whatever `LEAN_NUM_THREADS` says. ``store`` is false for an unsealed audit (a control, a stubbed test),
     whose keys are hashed from the live `.lake`: it may reuse the cache but writes nothing to it, so a live-keyed verdict
-    can never poison a sealed run."""
+    can never poison a sealed run. A set for ``replay_cache`` is a run's own (`replay_in_steps`): the keys of the modules
+    it passed, held in its memory, which nothing touches or evicts."""
     found = work / "replay.json"
     found.unlink(missing_ok=True)
-    keys = replay_keys(facts, toolchain, digest) if replay_cache else {}
+    own = isinstance(replay_cache, set)
+    keys = replay_keys(facts, toolchain, digest) if replay_cache is not None else {}
     def passed(m):
-        return m in keys and (replay_cache / f"{keys[m]}.json").is_file()
+        return m in keys and has_replay(replay_cache, keys[m])
     n = replay_threads(pkg)
     alone = n is not None and not held                 # a heavy replay runs alone, whatever threads a step states
     n = n if threads is None else threads
@@ -5130,7 +5791,7 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
         checked = [m for m in facts["modules"] if m not in reused]
         deps_checked, deps_reused = closure_plan(facts, passed) if closure else ([], [])
         evicted = 0
-        if keys and store:
+        if keys and store and not own:
             fresh = {*facts["modules"], *deps_checked}
             evicted = touch_replays(replay_cache, keys, [*reused, *(m for m in facts["graph"] if closure and m not in fresh)])
         rc, text = run([*prefix, *([] if n is None else ["env", f"LEAN_NUM_THREADS={n}"]), *lean, "--run",
@@ -5142,7 +5803,9 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
         # a module's entry says its declarations passed with its imports present: one rejected elsewhere takes nothing from it
         accepted = [m for m in checked + deps_checked if m not in set(doc.get("rejected", []))] \
             if keys and (rc == 0 or (rc == 1 and "rejected" in doc)) else []
-        if accepted and store:
+        if accepted and store and own:
+            replay_cache.update(keys[m] for m in accepted)
+        elif accepted and store:
             replay_cache.mkdir(parents=True, exist_ok=True)
             for m in accepted:
                 store_replay(replay_cache, keys[m], m)
@@ -5240,11 +5903,15 @@ def replay_in_steps(pkg: Path, policy: dict, facts: dict, toolchain: str, work: 
     the rest, so it covers the same modules, reads the same files and gives the same failures and axioms as one step
     does. A listed step only moves when a module is checked and at how many threads.
 
-    The steps need a cache to carry their verdicts: an audit that has none, or may not write it (``store``), runs the one
-    step, and its stats say so (`first`). The stats are the last step's, with each module a listed step stored counted as
-    checked rather than reused, the highest peak of any step (`peak_gib`), and the listed steps (`first`: each with its
-    module, threads, seconds, peak, phases, whether it was stored, and its failures but for the axioms it does not
-    compare)."""
+    The steps need a cache to carry their verdicts, since a listed module replayed beside the rest holds more than the
+    replay's figure (`reserve.REPLAY_ARKLIB_GIB`, which holds only when the listed modules go first). An audit that has
+    none, or may not write it (``store``), keeps them in a set of its own, in this process's memory alone, under the same
+    `replay_keys` keys: no other process can read or write it, the last step reuses a module from it only where the key
+    it computes is there, as from a node's cache, and it ends with the audit. Such an audit reuses nothing a node's cache
+    holds. The stats are the last step's, with each module a listed step stored counted as checked rather than reused,
+    the highest peak of any step (`peak_gib`), the listed steps (`first`: each with its module, threads, seconds, peak,
+    phases, whether it was stored, and its failures but for the axioms it does not compare) and where they were kept
+    (`first_kept`)."""
     def last():
         return replay_step(pkg, policy, facts, toolchain, work, replay_cache, closure, search, digest, store)
     try:
@@ -5253,13 +5920,12 @@ def replay_in_steps(pkg: Path, policy: dict, facts: dict, toolchain: str, work: 
         return [Failure("lean", None, f"lean: {e}")], {"checked": 0, "reused": 0}
     if not first:
         return last()
+    kept = "the replay cache"
     if replay_cache is None or not store:
-        fails, stats = last()
-        return fails, stats | {"first": "not used: this audit has no replay cache it may write, so one step checks every "
-                                        "module"}
+        replay_cache, store, kept = set(), True, "this run's memory: it has no replay cache it may write"
     keys = replay_keys(facts, toolchain, digest)
     def passed(m):
-        return (replay_cache / f"{keys[m]}.json").is_file()
+        return has_replay(replay_cache, keys[m])
     threads = replay_threads(pkg) or int(lake_env()["LEAN_NUM_THREADS"])
     steps = []
     for i, (mods, n) in enumerate(replay_plan(facts["modules"], first, passed, threads)[:-1]):
@@ -5275,7 +5941,7 @@ def replay_in_steps(pkg: Path, policy: dict, facts: dict, toolchain: str, work: 
     fails, stats = last()
     stored = sum(s["stored"] for s in steps)
     return fails, stats | {"checked": stats["checked"] + stored, "reused": stats["reused"] - stored, "first": steps,
-                           "peak_gib": max([stats["peak_gib"], *(s["peak_gib"] for s in steps)])}
+                           "first_kept": kept, "peak_gib": max([stats["peak_gib"], *(s["peak_gib"] for s in steps)])}
 
 
 #: a pipelined batch starts only with this much memory free (`free_gib`): about a heavy replay's peak (44 to 138 GiB in
@@ -5367,7 +6033,7 @@ class Pipeline:
     def wait(self) -> None:
         """Until the batch running when the build ended (`end`) has stored what the kernel accepted, so the final replay
         reuses those modules rather than checking them beside it. `_HEAVY_REPLAY` doesn't order the two: the final replay
-        takes it only when `replay_threads` caps its threads, which it never does under `lean_audit.py`."""
+        takes it only when `replay_threads` sets its threads, which it never does under `lean_audit.py`."""
         self.thread.join()
 
     def _go(self) -> bool:
@@ -5655,6 +6321,86 @@ def template(pkg: Path) -> dict:
     return {"roots": libs or [pkg.name], "guarantees": {}}
 
 
+def sources_judge(pkg: Path, policy: dict, repo: Path = ROOT, update: bool = False) -> list[Failure]:
+    """What ``pkg``'s sources and lock fail with no build: `scans`, `run_paths`, the `compile_time` listings (`listings`),
+    and the orphan and layer rules (`orphan_failures`, `layer_failures`) over the import graph read from the sources
+    (`source_graph`), which run only when every header can be read.  Each failure is one the audit of the build gives
+    again, with its code, its entry and its text, in the order that audit reports them; ``update`` is that audit's.  A
+    pass decides nothing: the audit runs each of these again, the layer rule also over the imports of modules no package
+    of the repository builds, and fails where the two graphs differ (`source_graph_failures`)."""
+    files = lean_modules(pkg)
+    fails = scans(pkg, files, policy)
+    graph, cut = source_graph(pkg, policy["roots"])
+    if not cut:
+        modules = {m for m in graph if under(policy["roots"], m)}
+        fails += orphan_failures(policy, files, modules)
+        fails += layer_failures(policy, modules, graph, None, set(module_files(pkg)))
+    return fails + run_paths(pkg, policy, repo) + listings(pkg, files, policy, None, update)[0]
+
+
+def source_graph_failures(pkg: Path, policy: dict, facts: dict) -> list[Failure]:
+    """`sources.graph` when the import graph read from ``pkg``'s sources (`source_graph`) is not the build's (``facts``):
+    the modules under the roots, or the modules one of them imports, compared as sets (a header that names a module twice
+    imports it once).  `sources_judge` judged the sources by the first before the build; the audit judges by the second."""
+    roots = policy["roots"]
+    graph, cut = source_graph(pkg, roots)
+    read, built = {m for m in graph if under(roots, m)}, set(facts["modules"])
+    differ = [f"{m} (its header can't be read)" for m in cut]
+    differ += [f"{m} (the roots import it only in the {'sources' if m in read else 'build'})" for m in sorted(read ^ built)
+               if m not in cut]
+    for m in sorted(read & built):
+        ours, theirs = set(graph[m]), set(facts["imports"][m])
+        differ += [f"{m} (it imports {i} only in the {'sources' if i in ours else 'build'})" for i in sorted(ours ^ theirs)]
+    if not differ:
+        return []
+    more = f" and {len(differ) - 8} more" if len(differ) > 8 else ""
+    return [Failure("sources.graph", None, f"sources: the import graph read from the sources' headers (`headers.py`) is not "
+                    f"the build's, at {', '.join(differ[:8])}{more}: the checks that ran before the build read the first and "
+                    f"the audit reads the second, so either `headers.py` reads a header otherwise than Lean does, or the "
+                    f"build is of other sources than these")]
+
+
+def unbuilt_by_sources(pkgs: list[Path], updated: set[Path], repo: Path = ROOT, log=print) -> dict[Path, list[Failure]]:
+    """{package: its failures} for each of ``pkgs`` a run does not build.  One whose sources or lock fail before the build
+    (`sources_judge`, with `update` for those of ``updated``) has those failures.  One that rests on a package that is
+    not built fails with `sources.unbuilt`, naming it: it requires it by path, and would compile that package's modules
+    itself where the run builds each package in its own audit and seals it; or its `proved_in` names it, and nothing
+    would prove its guarantees.  So a failure the sources already show costs no build of what it stops, and stops no
+    other package's audit.  A package whose lock names no roots, or whose lock, manifest or sources can't be read, is
+    left to its audit, which reports it."""
+    out: dict[Path, list[Failure]] = {}
+    rests: dict[Path, dict[Path, str]] = {}
+    for p in pkgs:
+        try:
+            policy = load(p)
+            if "roots" not in policy:
+                continue
+            rests[p] = {q: "its `proved_in` names" for _, q in provers(p, policy) if q in pkgs} | {
+                d: "it requires by path" for d in path_deps(p) if d in pkgs and d != p}
+            if fails := sources_judge(p, policy, repo, p in updated):
+                out[p] = fails
+        except (OSError, ValueError) as e:
+            log(f"sources: {p} is not judged before its build, whose audit reports it: {type(e).__name__}: {e}")
+    while more := {p: [f"{os.path.relpath(q, p)} ({how})" for q, how in on.items() if q in out]
+                   for p, on in rests.items() if p not in out and any(q in out for q in on)}:
+        for p, names in more.items():
+            out[p] = [Failure("sources.unbuilt", None, f"sources: not built, since this run builds none of what it rests on: "
+                              f"{', '.join(names)}; fix the failures that package's report holds first")]
+    return out
+
+
+def judged_line(pkgs: list[Path], unbuilt: dict[Path, list[Failure]], seconds: float) -> str:
+    """What a `--build` run says once `unbuilt_by_sources` has judged ``pkgs``, before it waits for a slot: how many it
+    judged, how long that took, and the packages it does not build (``unbuilt``), or that no failure decides nothing."""
+    one = len(pkgs) == 1
+    stopped = [str(p) for p in pkgs if p in unbuilt]
+    return (f"sources: {len(pkgs)} package{'' if one else 's'} judged on {'its' if one else 'their'} sources and "
+            f"lock{'' if one else 's'} in {seconds:.1f} s, before any build: "
+            + (f"{len(stopped)} {'is' if len(stopped) == 1 else 'are'} not built ({', '.join(stopped)})" if stopped else
+               f"{'it does not fail' if one else 'none fails'}, which decides nothing: each audit runs the same checks on "
+               f"its build"))
+
+
 def _open(pkg: Path, out: Path) -> tuple[dict, dict | None, Path | None]:
     """(rep, policy, work) for an audit of ``pkg`` into ``out``: the lock loaded and the work directory `audit-<tag>`
     made and cleared of a stale lock and review, shared by `audit` and `audit_from_facts`.  Returns (rep with a
@@ -5689,15 +6435,16 @@ def anonymous_failures(found: list[dict]) -> list[Failure]:
                     f"Write `instance {i['id']}` there (`check.py --name-instances` writes each one)") for i in found]
 
 
-def renamed_current(policy: dict, moved: dict[str, str] | None) -> dict:
-    """``policy`` with its guarantees and witnesses renamed by ``moved`` ({old: new}), the lock the audit judges against
-    (`current` in `audit`): the records read under the old names resolve to the build's new ones."""
+def renamed_current(policy: dict, moved: dict[str, str] | Callable[[str], str] | None) -> dict:
+    """``policy`` with its guarantees and witnesses renamed by ``moved`` ({old: new}, or a function), the lock the audit
+    judges against (`current` in `audit`): the records read under the old names resolve to the build's new ones."""
     if not moved:
         return policy
+    rn = moved if callable(moved) else lambda n: renamed(n, moved)
     renames: dict[str, dict] = {}
     for n, r in sorted(policy.get("guarantees", {}).items()):
-        if r or renamed(n, moved) not in renames:
-            renames[renamed(n, moved)] = r
+        if r or rn(n) not in renames:
+            renames[rn(n)] = r
     return policy | {"guarantees": renames} | renamed_witnesses(policy, moved)
 
 
@@ -5706,16 +6453,27 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
           ready=lambda q: None, owner: str | None = None, name: bool = False, lifts: dict | None = None,
           replay_cache: Path | None = None, closure: bool = False, kept_facts: str = "all",
           bookkeeping: str | None = None, facts_out: Path | None = None, seals: "Seals | None" = None,
-          store: bool | None = None, facts_cache: Path | None = None, facts_reuse: bool = False) -> dict:
+          store: bool | None = None, facts_cache: Path | None = None, facts_reuse: bool = False,
+          matched=lambda ok: None, prover_matched=lambda q: None, base: list[dict] | None = None,
+          defer: bool = False) -> dict:
     """Audit one package; returns its report (`failures` empty when it passes). With ``build``, a random sample of the
-    modules the build didn't compile is compiled again and compared with what the build holds (`sampled_recompile`; the
-    report's `sampled`) before the seal. ``built`` is called once its build has passed, before anything reads it; ``ready`` (a package its `proved_in` names) returns once that package's build has
+    modules the build didn't compile is compiled again from their sources against the seal and compared with the seal's
+    copies (`sampled_recompile`; the report's `sampled`), in `background` beside the replay, and the verdict waits for it
+    as it does for the replay: a failure there fails the package, and its facts document is then neither written nor
+    stored. With no replay it holds the package's `writable` directories (`writing`) from before ``built`` until it
+    ends, so no dependent's build runs beside it. ``matched`` hears once whether the sample matched (True where nothing was sampled); ``prover_matched`` (a
+    package whose facts `proved` read) returns once that package's sample has, False when it didn't match, and the
+    package then fails (`proved_in.sampled`). Without the sandbox nothing is recompiled, and the sample's check runs
+    before the seal. ``built`` is called once its build has passed, before anything reads it; ``ready`` (a package its `proved_in` names) returns once that package's build has
     ended, False when it did not pass (`proved`), and None for a package this run doesn't audit, whose build, where the
     package is required by path, is settled with this one's (`stage_build`); the report's `seconds` holds that wait as `proved-in-wait`, apart from
     `audit`, and within `audit` the package's facts (`facts`) and the provers' (`proved-in`). ``runs`` runs the package's
     tests (`tests`), ``repo`` the checkout their data's
     `generate` reads. ``moved`` ({old name: new name}, with ``update``) renames the record's guarantees, and the review compares
-    the build with the records under the old names (`review`). An update's report holds the review, whether it changes what a
+    the build with the records under the old names (`review`), each held to ``base``, the locks of the change's base
+    (`base_locks`): a move may land on no name they hold, and a guarantee whose new name they record with another
+    statement is reviewed as changed.  With ``defer`` the lock it writes is staged for the run (`_finish`). An update's
+    report holds the review, whether it changes what a
     guarantee says (`statement_changes`), and the guarantees and reads it compared with (`before`) beside those it wrote.
     ``owner`` (with ``update``) is the owner of a guarantee whose entry names none.  ``name`` writes each anonymous
     instance's name into its source (`name_instances`) instead of failing on it.  ``lifts`` writes those lifts (`lift`)
@@ -5759,13 +6517,13 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         log(f"replay: {pkg}: {rep['replay_cache']}; every module is replayed")
         replay_cache = None
     t, _peak.bytes = time.monotonic(), 0
-    pipe = None
+    pipe = later = None
     if build:
         rep["sandbox"] = sandboxed()
         at = bound(writable(pkg)) if rep["sandbox"] else []
         rep["bound"] = at[1:] or None
-        (work / BUILDING).write_text(json.dumps({k: rep[k] for k in ("package", "sandbox", "bound")}))
-        n = build_threads(pkg)
+        (work / BUILDING).write_text(json.dumps({k: rep[k] for k in ("package", "sandbox", "bound")} | SAMPLE_PENDING))
+        n, _peak.tree = build_threads(pkg), 0
         if ARTIFACTS and not rep["sandbox"]:
             rep["staged"] = ("not used: this node builds without the sandbox, where nothing samples what a build restores "
                              "(`sampled_recompile`)")
@@ -5837,21 +6595,29 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
                 pipe.end(stop=bool(rep["failures"]))
             if cache:
                 shutil.rmtree(cache, ignore_errors=True)
+            if _peak.tree:
+                peaked(rep, "build", pkg, round(_peak.tree / 2**30, 1), log)
         if DEV_CACHE:
             rep["sampled"] = "none sampled: a --dev-cache build restores from Lake's own cache, and its run is never a verdict"
         else:
             compiled = set(build_seconds([work / f"{step}.log" for step in ("build-plugins", "build", "build-roots")]))
-            with writing(pkg, log):
-                fails, rep["sampled"] = sampled_recompile(
-                    pkg, policy["roots"], work, compiled,
-                    ["env", "-u", "LAKE_CACHE_DIR", *([f"LEAN_NUM_THREADS={n}"] if n is not None else [])], log)
-            if fails:
-                rep["failures"] += fails
-                return reported(rep)
+            if rep["sandbox"]:
+                later = compiled
+            else:
+                with writing(pkg, log):
+                    fails, rep["sampled"] = sampled_recompile(pkg, policy["roots"], work, compiled, None, n, log)
+                if fails:
+                    rep["failures"] += fails
+                    return reported(rep)
     # the seal, taken before the build is announced (`built`): every reader below reads these private copies, so a
     # dependent's build, which may write this package's `.lake` once it is announced, cannot change what they see
     try:
         sealed = seals.take(pkg, rep["toolchain"], policy["roots"], policy.get("exempt", {}), work, log) if seals is not None else None
+        own_seal = None
+        if later is not None and sealed is None:        # the sample reads only a seal: without the run's, it takes its own
+            with writing(pkg, log):
+                own_seal = Sealed(pkg, rep["toolchain"], work / "sample-seal").take(
+                    policy["roots"], policy.get("exempt", {}), work, log)
     except RuntimeError as e:                           # the build cannot be sealed; `one`'s finally announces it unpassed
         rep["failures"].append(Failure("lean", None, f"lean: {e}"))
         return reported(rep)
@@ -5862,9 +6628,57 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     # tampered with, so by default it reuses the cache but writes nothing — a live-keyed verdict never enters it.
     # ``store`` overrides the default for a caller whose cache is a throwaway private dir, as lean's review allows.
     store = (sealed is not None) if store is None else store
-    built()
-    files = lean_modules(pkg)
-    background = ThreadPoolExecutor(max_workers=5)
+    replays = bool(replay) and not lifts
+    # with no replay, nothing plans the sample's jobs against a dependent's build (`sample_jobs`), so it holds the package's
+    # `writable` directories from before the announcement until it ends, and no build that writes them starts beside it
+    hold, held = contextlib.ExitStack(), threading.Lock()
+    if later is not None and not replays:
+        hold.enter_context(writing(pkg, log))
+        log(f"sampled: {rel(pkg)}: no replay to plan it beside, so a build that writes its .lake starts once it ends")
+
+    def release() -> None:
+        with held:
+            hold.close()
+
+    def recompile() -> tuple:
+        try:
+            return timed(sampled_recompile, pkg, policy["roots"], work, later, sealed or own_seal, n, log)
+        finally:
+            release()
+
+    if later is None:
+        matched(True)
+    try:
+        built()
+        files = lean_modules(pkg)
+        background = ThreadPoolExecutor(max_workers=6)
+        beside = sample_jobs(pkg, n, replays) if later is not None else None
+        sample = background.submit(recompile) if later is not None and beside != 0 else None
+    except BaseException:
+        release()
+        raise
+    if later is not None and beside == 0:
+        log(f"sampled: {rel(pkg)}: no room beside its replay in what this run reserved, so it starts once the replay ends")
+
+    def sampled() -> list[str]:
+        """The sample's failures, once it has ended, which ``matched`` hears; called once, on every way out below, each
+        after the replay has ended, so a sample with no room beside the replay (`sample_jobs`) runs here."""
+        if later is None:
+            return []
+        try:
+            (got, rep["sampled"]), rep["seconds"]["sampled"] = sample.result() if sample else recompile()
+        except (OSError, RuntimeError, ValueError, subprocess.SubprocessError, CancelledError) as e:
+            got = [Failure("sampled", None, f"sampled: the recompile raised {type(e).__name__}: {e}")]
+        finally:
+            _BESIDE.pop(pkg.resolve(), None)
+            release()
+        (work / BUILDING).write_text(json.dumps({k: rep[k] for k in ("package", "sandbox", "bound")} |
+                                                ({"failures": got} if got else {})))
+        if own_seal:
+            shutil.rmtree(own_seal.dir, ignore_errors=True)
+        matched(not got)
+        return got
+
     # tests run sandboxed on the live `.lake`, not a seal: a package with `runs` is one no other package builds, so every
     # build in the run has ended before its tests start, and `tests` fails loudly if a build is still writing that `.lake`
     ran = background.submit(timed, tests, pkg, policy, files, work, repo, update) if runs and policy.get("runs") and not lifts else None
@@ -5875,12 +6689,13 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     upstream = background.submit(timed, sibling("upstream").pinned, pkg, policy["upstream"]) \
         if early and "upstream" in policy else None
     current = renamed_current(policy, moved)
-    s, waited = time.monotonic(), []
+    s, waited, read = time.monotonic(), [], []
 
     def built_prover(q: Path):
         w = time.monotonic()
         passed = ready(q)
         waited.append(time.monotonic() - w)
+        read.append(q)
         return passed
 
     replayed = scanned = digested = unread = None
@@ -5910,6 +6725,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         rep["failures"].append(Failure("proved_in.unpassed", None, str(e)) if isinstance(e, Unpassed) else
                                Failure("lean", None, f"lean: {e}"))
         background.shutdown(cancel_futures=True)
+        rep["failures"] += sampled()
         return reported(rep)
     if waited:
         rep["seconds"]["proved-in-wait"] = round(sum(waited), 1)
@@ -5922,6 +6738,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
             rep["moved"] = lift(pkg, current, facts, lifts)
         except ValueError as e:
             rep["failures"].append(Failure("lift", None, f"lift: {e}"))
+        rep["failures"] += sampled()
         return reported(rep)
     facts["source_modules"] = sorted(module_files(pkg))
     fails, new = judge(current, facts, files, update, owner)
@@ -5940,7 +6757,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     (dep_missed, rep["dependency_sources"]), rep["seconds"]["dependency-sources"] = \
         scanned.result() if scanned else timed(dependency_scans, pkg, facts["oleans"], policy, sealed)
     scn = scans(pkg, files, policy)
-    fails = scn + dep_missed + fails
+    fails = scn + source_graph_failures(pkg, policy, facts) + dep_missed + fails
     rep["heartbeats"] = heartbeats(pkg, files, build_seconds([work / "build.log", work / "build-roots.log"] if build else []))
     anonymous = anonymous_instances(pkg, files, facts)
     if name and anonymous:
@@ -5974,6 +6791,24 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     if replayed:
         (rfails, rep["replay"]), rep["seconds"]["replay"] = replayed.result()
         fails += rfails
+        stats = rep["replay"] if isinstance(rep["replay"], dict) else {}
+        log(f"replay: {rel(pkg)}: ended in {rep['seconds']['replay']} s, {stats.get('checked')} modules checked and "
+            f"{stats.get('reused')} reused")
+        if isinstance(rep["replay"], dict) and rep["replay"].get("peak_gib"):
+            peaked(rep, "replay", pkg, rep["replay"]["peak_gib"], log)
+    unsampled, w = sampled(), time.monotonic()
+    for q in read:
+        if prover_matched(q) is False:
+            entry = os.path.relpath(q, pkg.resolve())
+            unsampled.append(Failure("proved_in.sampled", entry, f"proved_in: {entry}'s sampled recompile failed (its "
+                                     f"report says which module), so the facts read from its seal may not be of its sources"))
+    if read:
+        rep["seconds"]["proved-in-sample-wait"] = round(time.monotonic() - w, 1)
+    if unsampled:
+        fails += unsampled
+        if facts_cache is not None or facts_out is not None:
+            rep["facts_cache"] = "not written: a sampled recompile failed, so the facts may not be of the sources"
+            facts_cache = facts_out = None
     if pipe:
         rep["pipeline"] = [dict(b) for b in pipe.batches]
     if fresh:
@@ -6026,21 +6861,36 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
             store_cached_facts(facts_cache, rep["facts_key"], doc)
         else:
             write_facts_document(Path(facts_out), doc)
-    return _finish(pkg, work, policy, new, facts, files, fails, rep, update, moved, bookkeeping, judged, on_lock, lnotes, t, log)
+    return _finish(pkg, work, policy, new, facts, files, fails, rep, update, moved, bookkeeping, judged, on_lock, lnotes, t, log,
+                   base, defer)
 
 
 def _finish(pkg: Path, work: Path, policy: dict, new: dict, facts: dict, files: dict[str, str], fails: list[str],
             rep: dict, update: bool, moved: dict[str, str] | None, bookkeeping: str | None,
-            judged: Callable[[dict], list[str]], on_lock: list[str], lnotes: list[str], t: float, log=print) -> dict:
+            judged: Callable[[dict], list[str]], on_lock: list[str], lnotes: list[str], t: float, log=print,
+            base: list[dict] | None = None, defer: bool = False) -> dict:
     """The records tail `audit` and `audit_from_facts` share, once the lock failures ``fails`` and the record ``new`` are
     judged: the bookkeeping repair (`--bookkeeping warn`), the record `--update`/`--regenerate` writes and its review, the
     notes, and the report (`report.json`).  ``judged`` runs the lock's spec/trees/shape checks (the caller's), ``on_lock``
     the caller's lock failures (bookkeeping keeps the rest), ``lnotes`` the compile-time listings' review notes, ``t`` the
-    audit's start for `seconds.total`.  A pure function of what it is given: `--facts-from` writes the same record."""
+    audit's start for `seconds.total`, ``base`` the locks of the change's base (`base_locks`) that `--moved` is held to.
+    With ``defer`` the lock `--update` writes is left in the report (`staged_lock`), for the run to write with every other
+    package's or not at all (`main`).  A pure function of what it is given: `--facts-from` writes the same record."""
     def sources() -> dict[str, Path]:
         return {m: f for _, q in provers(pkg, policy) if q.is_dir() for m, f in module_files(q).items()} | module_files(pkg)
 
-    if bookkeeping is not None and fails and not update and not unowned_lock(policy):
+    def write(pkg: Path, new: dict) -> None:
+        if defer:
+            (work / "staged").mkdir(exist_ok=True)
+            dump(work / "staged", new)
+            rep["staged_lock"] = str(work / "staged" / POLICY)
+        else:
+            dump(pkg, new)
+
+    if moved and (back := move_refusals(moved, policy, base or ())):
+        fails = [*fails, *(Failure(c, None, f"moved: {e}") for c, e in back)]
+    refused = [f for f in fails if (code_of(f) or "").startswith("moved.")]
+    if bookkeeping is not None and fails and not update:
         ticket = bookkeeping_ticket(policy, bookkeeping)
         fixed = repaired(policy, facts, files, fails, ticket)
         mine = {id(f) for f in on_lock}
@@ -6066,22 +6916,24 @@ def _finish(pkg: Path, work: Path, policy: dict, new: dict, facts: dict, files: 
         rep |= {"review": notes, "statement_changes": bool(statement_changes(notes)), "regenerated": str(work / POLICY),
                 "changes": changes(notes, policy, regen)}
         log(f"audit: {pkg}/{POLICY}: every failure is a record difference; {work / POLICY} is the record `--update` writes")
-    if update and new != policy:
-        dump(pkg, new)
-        notes = review(policy, new, facts, sources(), moved) + lnotes
+    if update and refused and new != policy:
+        log(f"audit: {pkg}/{POLICY}: not rewritten, the moves are refused ({len(refused)} moved failures)")
+    elif update and new != policy:
+        write(pkg, new)
+        notes = review(policy, new, facts, sources(), moved, base or ()) + lnotes
         (work / "review.txt").write_text("\n".join(notes) + "\n")
         rep["review"] = notes
         must = statement_changes(notes)
         rep["statement_changes"] = bool(must)
         rep["before"] = {k: policy.get(k, {}) for k in ("guarantees", "reads")}   # the record the review compared with
-        log(f"audit: {pkg}/{POLICY}: guarantees and reads rewritten from the build" + (
+        log(f"audit: {pkg}/{POLICY}: guarantees and reads {'staged' if defer else 'rewritten'} from the build" + (
             f"; {len(notes) - len(must)} lines say the same statements, printed differently, rehashed, moved or lifted"
             if len(notes) > len(must) else "") + (
             "; these change what a guarantee says, and the landing message shows them:\n" + "\n".join(f"  {s}" for s in must)
             if must else ""))
-    elif update and (work / POLICY).read_text() != (pkg / POLICY).read_text():
-        dump(pkg, new)
-        log(f"audit: {pkg}/{POLICY}: rewritten under today's names and layout, saying what it said")
+    elif update and not refused and (work / POLICY).read_text() != (pkg / POLICY).read_text():
+        write(pkg, new)
+        log(f"audit: {pkg}/{POLICY}: {'staged' if defer else 'rewritten'} under today's names and layout, saying what it said")
     weak = sum(len((r or {}).get("type_hash", "")) == OLD for r in policy.get("guarantees", {}).values()) + \
         sum(old_group(g) for g in policy.get("reads", {}).values())
     if weak and not update:
@@ -6102,7 +6954,7 @@ def _finish(pkg: Path, work: Path, policy: dict, new: dict, facts: dict, files: 
 
 def audit_from_facts(pkg: Path, out: Path, facts_from: Path, update: bool = False, owner: str | None = None,
                      repo: Path = ROOT, moved: dict[str, str] | None = None, bookkeeping: str | None = None,
-                     log=print) -> dict:
+                     log=print, base: list[dict] | None = None, defer: bool = False) -> dict:
     """Judge ``pkg`` from a stage-A facts document (`--facts-from`), with no build and no `Facts.lean`.  It reads the
     document (`read_facts_document` from ``facts_from``, a file or the reports directory that holds the package's
     `audit-<tag>/FACTS_DOC`) and runs the lock checks over its facts (`judge`, `spec_reads`, `tree_failures`, `shape`,
@@ -6137,7 +6989,8 @@ def audit_from_facts(pkg: Path, out: Path, facts_from: Path, update: bool = Fals
     rep["unread_spec"] = unread_spec(facts, read_by_dependents(pkg, repo))
     scanned = find.get("dependency_scans", {})
     rep["dependency_sources"] = scanned.get("read", 0)
-    fails = restore_failures(find.get("scans", [])) + restore_failures(scanned.get("missed", [])) + fails
+    fails = restore_failures(find.get("scans", [])) + source_graph_failures(pkg, policy, facts) + \
+        restore_failures(scanned.get("missed", [])) + fails
     rep["heartbeats"] = find.get("heartbeats", [])
     fails += restore_failures(find.get("anonymous", []))
     if "upstream" in policy:
@@ -6165,7 +7018,7 @@ def audit_from_facts(pkg: Path, out: Path, facts_from: Path, update: bool = Fals
     if update and listed.get("compile_time"):
         new["compile_time"] = listed["compile_time"]
     return _finish(pkg, work, policy, new, facts, files, fails, rep, update, moved, bookkeeping, judged, on_lock,
-                   listed.get("notes", []), t, log)
+                   listed.get("notes", []), t, log, base, defer)
 
 
 def reported(rep: dict) -> dict:
@@ -6196,7 +7049,7 @@ def controls(toolchain: str, out: Path, install: bool = False, log=print) -> lis
     violation is added (and with none of the failures its `not` lists, by prefix).  ``install`` (`--build`) first installs
     elan and the toolchain with `setup.sh`, so a machine without elan works.
 
-    Among the violations (`tests/fixtures/violations.json`, by key):
+    Among the violations (`violations.json` in `FIXTURES`, by key):
     - `kernel`: a false theorem added through `debug.skipKernelTC`, spelled so that no scan finds it, which must pass
       every check but the replay and fail the replay;
     - `initializer`: an initializer that tries to forge the facts, which must never run where the audit reads the
@@ -6307,7 +7160,7 @@ def tampered(seals: dict[str, str], watch: list[Path]) -> list[str]:
 
 
 def main(argv: list[str]) -> int:
-    global TOOL, ARTIFACTS, DEV_CACHE, TREE
+    global TOOL, ARTIFACTS, DEV_CACHE, TREE, PROGRAMS
     ap = argparse.ArgumentParser(prog="check.py", description=__doc__.split("\n\n")[0])
     ap.add_argument("package", nargs="*", type=Path, help="a Lake package directory with a lean-audit.json")
     ap.add_argument("--all", action="store_true", help="the controls, then every package under --root")
@@ -6316,7 +7169,14 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--update", action="store_true", help="write the guarantees' records from the build instead of comparing them")
     ap.add_argument("--moved", type=Path, metavar="FILE", help="with --update: a JSON object {old name: new name} of the "
                     "declarations and namespaces moved since the record (the longest prefix applies); the record's guarantees are "
-                    "renamed, and the review compares the build with the records under the old names")
+                    "renamed, and the review compares the build with the records under the old names; no name may land "
+                    "on one the lock or a --base lock holds, and the locks are written together at the end of the run, "
+                    "or none is")
+    ap.add_argument("--base", action="append", metavar="REV", help="with --moved: a commit whose locks the move is held "
+                    "to (repeatable): a moved name may not land on a name they hold, and a guarantee whose new name they "
+                    "record with another statement is reviewed as changed; always held to HEAD and its merge-base with "
+                    "main too, and REV adds to them, never replaces them (the queue's check of a candidate gives the "
+                    "candidate's base)")
     ap.add_argument("--owner", metavar="@LANE", help="with --update: the owner of each guarantee whose entry names none")
     ap.add_argument("--name-instances", action="store_true", help="write each anonymous instance's name (the one Lean gave "
                     "it) into its declaration instead of failing on it; no record changes")
@@ -6335,12 +7195,19 @@ def main(argv: list[str]) -> int:
                     f"{BOOKKEEPING_DAYS} days; an entry with no owner takes its guarantees', else the lock's "
                     "`default_owner`) passes, and each repair prints a warning naming its entry and owner")
     ap.add_argument("--no-replay", action="store_true", help="skip the kernel replay (`Replay.lean`)")
+    ap.add_argument("--ask", action="store_true", help="print the GB this run would ask `research run --mem-gb` for, a whole "
+                    "number alone on stdout, and on stderr the GiB that holds and the step that needs it, then exit: the "
+                    "largest need (`reserve.py`) among the steps it takes (the build with --build, the replay without "
+                    "--no-replay) of every package it audits")
     ap.add_argument("--dev-cache", action="store_true", help="restore the dependencies from the verified build cache "
                     "(`cache.py get`, Mathlib's `cache get`) for a development check: our packages are still built and "
                     "replayed, but the reports are a lean-fast/v1 result, which no gate accepts")
     ap.add_argument("--replay-cache", type=Path, metavar="DIR", help="reuse the replay of each module that passed it with the "
                     "same .olean files, its imports' included, on the same toolchain (`replay_keys`), and store each one "
                     "checked here")
+    ap.add_argument("--program-cache", type=Path, metavar="DIR", help="keep the tool's compiled Lean programs here for later "
+                    "runs, each under a key of everything it is compiled from (`program_key`), where builds run in the "
+                    "sandbox and it leaves DIR read-only (`kept_program`)")
     ap.add_argument("--artifacts", type=Path, metavar="DIR", help="the node's Lake artifact cache (`lean_audit.LakeArtifacts`): "
                     "each build restores the modules it indexes under their keys (`module_keys.py`), and never writes it "
                     "(`stage_build`). A module of the package that its build holds and the cache lacks is compiled again, so "
@@ -6405,12 +7272,14 @@ def main(argv: list[str]) -> int:
     if a.moved:
         if not a.update:
             ap.error("--moved goes with --update")
-        moved = json.loads(a.moved.read_text())
-        if not isinstance(moved, dict) or not all(isinstance(v, str) for v in [*moved, *moved.values()]):
-            ap.error(f"{a.moved}: a JSON object of old names to new names")
+        try:
+            moved = moves_file(a.moved)
+        except ValueError as e:
+            ap.error(f"{a.moved}: {e}")
         if errs := move_errors(moved):
             ap.error(f"{a.moved}: " + "; ".join(errs))
     ARTIFACTS = a.artifacts.resolve() if a.artifacts else None
+    PROGRAMS = a.program_cache.resolve() if a.program_cache else None
     TREE = a.tree
     DEV_CACHE = a.dev_cache
     lifts = None
@@ -6432,15 +7301,52 @@ def main(argv: list[str]) -> int:
         except ValueError:
             more = []                                   # its audit reports the policy
         pkgs += [q for _, q in more if q not in pkgs and (q / POLICY).is_file()]
-    for flag, d in (("--replay-cache", a.replay_cache), ("--facts-cache", a.facts_cache)):
+    bases: dict[Path, list[dict]] = {}
+    if a.base and not moved:
+        ap.error("--base goes with --moved")
+    if moved:
+        if isinstance(revs := base_revs(a.repo.resolve(), a.base or ()), str):
+            ap.error(revs)
+        try:
+            held = {p: base_locks(p, revs, a.repo.resolve(), a.tree) for p in pkgs}
+        except ValueError as e:
+            ap.error(f"--moved: the base's lock: {e}")
+        bases = {p: locks for p, (locks, _) in held.items()}
+        print(f"audit: --moved is held to the locks at {', '.join(revs)}", flush=True)
+        for p, (_, absent) in held.items():
+            if absent:
+                print(f"audit: {p}/{POLICY} is not in {', '.join(absent)}, so it is held to "
+                      f"{len(revs) - len(absent)} of those commits", flush=True)
+    if moved and (errs := moves_refused(pkgs, moved, bases)):
+        ap.error(f"{a.moved}: " + "; ".join(errs))
+    for flag, d in (("--replay-cache", a.replay_cache), ("--facts-cache", a.facts_cache),
+                    ("--program-cache", a.program_cache)):
         if d is not None and (over := build_roots_over(d, pkgs)):
             ap.error(f"{flag} {d} overlaps {', '.join(map(str, over))}, which a build writes, so a build could forge its "
                      f"entries: put the cache outside every audited package's .lake and its path dependencies'")
-    if a.facts_from is None and (why := memory_refusal(pkgs, memory_gib())):
+    steps = (*(["build"] if a.build else []), *(["replay"] if not a.no_replay and a.facts_only is None else []))
+    if a.ask:
+        print_ask(*ask_lines({rel(p): pins(p) for p in pkgs}, steps))
+        return 0
+    args = [*(f for f, on in (("--build", a.build), ("--closure", a.closure), ("--no-replay", a.no_replay),
+                              ("--update", a.update)) if on), *(rel(p) for p in pkgs if p in named)]
+    have = reserved() if a.facts_from is None and steps else None
+    if have and (why := memory_refusal(pkgs, have, steps=steps,
+                                       run=BELOW_FLOOR_AUDIT.format(gb="{gb}", args=" ".join(args)))):
         print(f"check.py: {why}", file=sys.stderr, flush=True)
         return 2
+    if have and have[0] is not None and any(map(pins_heavy, pkgs)):
+        print(f"check.py: a heavy step plans its jobs within {have[0]:.1f} GiB, what this run reserved ({have[1]})",
+              file=sys.stderr, flush=True)
+    # what the sources and the locks already fail, before a slot is waited for and before any build: a package this stops
+    # is not built (`unbuilt_by_sources`).  Stage A (`--facts-only`) gives no lock verdict, and a lift rewrites the sources
+    unbuilt: dict[Path, list[Failure]] = {}
+    if a.build and a.facts_only is None and not lifts:
+        t = time.monotonic()
+        unbuilt = unbuilt_by_sources(pkgs, named if a.update else set(), a.repo.resolve())
+        print(judged_line(pkgs, unbuilt, time.monotonic() - t), flush=True)
     try:
-        if a.build:
+        if a.build and (a.all or len(unbuilt) < len(pkgs)):
             lean_slot(a.repo.resolve())                 # its descriptor stays open, and the slot held, until this process exits
     except RuntimeError as e:
         print(f"check.py: {e}", file=sys.stderr, flush=True)
@@ -6459,6 +7365,9 @@ def main(argv: list[str]) -> int:
         sandboxed()                                     # probed once, before anything runs beside the probe
     built = {p: threading.Event() for p in pkgs}
     passed: set[Path] = set()
+    #: each package's sampled recompile has ended (`audit`'s ``matched``), and those whose sample matched
+    sample_done = {p: threading.Event() for p in pkgs}
+    matching: set[Path] = set()
     needs = {p: [d for d in path_deps(p) if d in built and d != p] for p in pkgs}
     by_controls: list[str] = []
     reports: dict[Path, dict] = {}
@@ -6486,14 +7395,17 @@ def main(argv: list[str]) -> int:
                 print("\n".join(f"  tamper: {p} changed while the controls ran" for p in moved), flush=True)
 
     def one(pkg: Path) -> None:
-        if a.facts_from is None:
+        if a.facts_from is None and pkg not in unbuilt:
             for d in needs[pkg]:
                 built[d].wait()
         try:
             mine = pkg in named
             if a.facts_from is not None:
                 rep = audit_from_facts(pkg, out, a.facts_from, a.update and mine, a.owner, a.repo.resolve(),
-                                       moved if mine else None, due, log=print)
+                                       moved if mine else None, due, log=print, base=bases.get(pkg), defer=bool(moved))
+            elif pkg in unbuilt:
+                built[pkg].set()                        # unpassed, and unsealed: no package that builds rests on it
+                rep = {"package": str(pkg), "seconds": {}, "failures": list(unbuilt[pkg])}
             else:
                 rep = audit(pkg, out, a.build, a.update and mine, (not a.no_replay) and a.facts_only is None, a.fresh,
                             built=lambda: (passed.add(pkg), seal(pkg)),
@@ -6505,10 +7417,14 @@ def main(argv: list[str]) -> int:
                             bookkeeping=due, seals=run_seals,
                             facts_cache=(a.facts_only or a.facts_cache).resolve()
                             if (a.facts_only or a.facts_cache) and mine else None,
-                            facts_reuse=a.facts_cache is not None)
+                            facts_reuse=a.facts_cache is not None,
+                            matched=lambda ok: (ok and matching.add(pkg), sample_done[pkg].set()),
+                            prover_matched=lambda q: (sample_done[q].wait(), q in matching)[1] if q in sample_done else None,
+                            base=bases.get(pkg), defer=bool(moved))
         finally:
             if a.facts_from is None and not built[pkg].is_set():
                 seal(pkg)
+            sample_done[pkg].set()
         with lock:
             if tamper := [Failure("tamper", p, f"tamper: {p} changed while {pkg} was built and audited")
                           for p in tampered(seals, bins)]:
@@ -6520,8 +7436,6 @@ def main(argv: list[str]) -> int:
                     Path(doc).unlink(missing_ok=True)    # the sidecar first, so a crash between leaves a miss
             if a.regenerate and rep.get("regenerated") and rep["failures"]:
                 rep["settled"], rep["failures"] = rep["failures"], []
-            if unowned_at(pkg):
-                rep["unowned"] = True
             reports[pkg] = reported(rep)
             n = sum(rep.get("declarations", {}).values())
             head = f"AUDIT {pkg}: {'PASS' if not rep['failures'] else 'FAIL'}"
@@ -6534,7 +7448,7 @@ def main(argv: list[str]) -> int:
                          "; built in the sandbox" + ("" if rep.get("bound") else ", not bound: outside --tree"))
             if "inline_debt" in rep:
                 head += f"; inline debt {rep['inline_debt'][0]} ({rep['inline_debt'][1]} premises)"
-            print(head + ("; unowned" if rep.get("unowned") else ""), flush=True)
+            print(head, flush=True)
             if c := rep.get("replay", {}).get("closure"):
                 print(f"  closure: {c['checked']} modules checked, {c['reused']} reused, of the {c['modules']} the package "
                       f"imports ({c['loaded_unchecked']} of those reused loaded beside them, the rest imported); its own: "
@@ -6581,6 +7495,11 @@ def main(argv: list[str]) -> int:
     finally:
         run_seals.close()
     reports = [reports[p] for p in pkgs]
+    if moved and (staged := [r for r in reports if r.get("staged_lock")]):
+        if refused := [r["package"] for r in reports if any((c or "").startswith("moved.") for c in r["failure_codes"])]:
+            print(f"audit: no lock written: the moves are refused in {', '.join(refused)}", flush=True)
+        else:
+            write_staged(staged)
     if lifts and not reports[0]["failures"]:
         moved = Path(f"{a.lift}.moved.json")
         moved.write_text(json.dumps(reports[0]["moved"], indent=1) + "\n")

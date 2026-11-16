@@ -50,14 +50,14 @@ import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 `accRow_table` takes a staged part's table 0 to label its instances in order (`hidx`). At every accepted decision that
 holds, from the decision's own checks (`labels_full`):
 
-* the record's sample is the statement's: `checks` compares them up to key order (`drawEq`), and both are rebuilt
-  (`Flock.norm`: `recordDraw_norm`, `insO_draw_norm`), so they are equal (`eq_of_rel_norm`);
-* the verdict's last refusals (`fullDrawO`) decode that sample to every unit of its population, with no closure
-  (`fullDraw_some`, `Witness.fullDraw_ok`), so the units it proves are `range pop`;
+* the record's sample is the statement's: `checks` compares them up to key order (`sampleEq`), and both are rebuilt
+  (`Flock.norm`: `recordSample_norm`, `insO_sample_norm`), so they are equal (`eq_of_rel_norm`);
+* the verdict's last refusals (`fullSampleO`) decode that sample to every unit of its population, with no closure
+  (`fullSample_some`, `Witness.fullSample_ok`), so the units it proves are `range pop`;
 * the setup's `oneFull` leaves one table (`count ≤ 1`), set up at the statement's sample, whose instances are the units the
-  sample proves (`setupOne_stmt`, `drawn_spec`);
+  sample proves (`setupOne_stmt`, `sampled_spec`);
 * under the inner shape the setup ran `checkLabels` (`RecIns.setup_labels`), which at one table checks table 0's labels
-  against the sample itself (`tableDraw d 1 0 = d`).
+  against the sample itself (`tableSample d 1 0 = d`).
 
 `labels_run` and `labels_stagedAll` state it at each part an accepted run stages (`stagedPart_run`, `stagedAll_run`).
 -/
@@ -71,11 +71,11 @@ open Claims (Msg Out Prover run coinSeq replay)
 open FlockDeploy (Coin)
 open Lean (Json)
 
-/-- The checks after the verdict compare the record's sample with the statement's (`drawEq`). -/
-theorem checks_drawEq {zk : Bool} {s : FlockDeploy.Ins} {spec : SessionSpec} {x : Msg}
+/-- The checks after the verdict compare the record's sample with the statement's (`sampleEq`). -/
+theorem checks_sampleEq {zk : Bool} {s : FlockDeploy.Ins} {spec : SessionSpec} {x : Msg}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Msg × Coin)} {f : FlockDeploy.Final}
     (h : FlockDeploy.checks zk s spec x link c₁ mids f = .ok ()) :
-    FlockDeploy.drawEq (FlockSoundness.Discharge.Exec.recordDraw f.record) s.read.draw = true := by
+    FlockDeploy.sampleEq (FlockSoundness.Discharge.Exec.recordDraw f.record) s.read.draw = true := by
   unfold FlockDeploy.checks at h
   obtain ⟨_, -, h⟩ := FlockSoundness.Refine.ebind_ok h
   obtain ⟨_, h, -⟩ := FlockSoundness.Refine.ebind_ok h
@@ -85,7 +85,7 @@ theorem checks_drawEq {zk : Bool} {s : FlockDeploy.Ins} {spec : SessionSpec} {x 
   · simp [throw, throwThe, MonadExceptOf.throw] at h
 
 /-- A record's sample is rebuilt (`Flock.norm`). -/
-theorem recordDraw_norm {r : String} {d : Json} (h : FlockSoundness.Discharge.Exec.recordDraw r = some d) :
+theorem recordSample_norm {r : String} {d : Json} (h : FlockSoundness.Discharge.Exec.recordDraw r = some d) :
     Flock.norm d = d := by
   unfold FlockSoundness.Discharge.Exec.recordDraw at h
   repeat' split at h
@@ -93,8 +93,8 @@ theorem recordDraw_norm {r : String} {d : Json} (h : FlockSoundness.Discharge.Ex
     | (cases h; done)
     | (obtain rfl := Option.some.inj h; exact FlockDeploy.norm_norm _)
 
-/-- A recursive statement's sample is rebuilt (`Flock.norm`, `Raw.ins_draw`). -/
-theorem insO_draw_norm {x : Msg} {i : RecIns} (h : insO x = some i) {d : Json} (hd : i.base.read.draw = some d) :
+/-- A recursive statement's sample is rebuilt (`Flock.norm`, `Raw.ins_sample`). -/
+theorem insO_sample_norm {x : Msg} {i : RecIns} (h : insO x = some i) {d : Json} (hd : i.base.read.draw = some d) :
     Flock.norm d = d := by
   unfold insO at h
   obtain ⟨w, -, hw⟩ := Option.bind_eq_some_iff.1 h
@@ -106,7 +106,7 @@ theorem insO_draw_norm {x : Msg} {i : RecIns} (h : insO x = some i) {d : Json} (
   | ok s' =>
     rw [hi] at hw
     cases hw
-    obtain ⟨draw, -, hdr⟩ := FlockDeploy.Raw.ins_draw (RecRaw.ins_base hi)
+    obtain ⟨draw, -, hdr⟩ := FlockDeploy.Raw.ins_sample (RecRaw.ins_base hi)
     rw [hdr] at hd
     obtain ⟨d₀, -, rfl⟩ := Option.map_eq_some_iff.1 hd
     exact FlockDeploy.norm_norm d₀
@@ -125,19 +125,19 @@ theorem RecIns.setup_labels {s : RecIns} {spec : SessionSpec} {sts : Array Stmt}
        assumption)
     | simp_all
 
-/-- Under the verifier's inner shape, `RecSetup.fullDraw` at a sample passes only where the sample decodes and the
+/-- Under the verifier's inner shape, `RecSetup.fullSample` at a sample passes only where the sample decodes and the
 witness's sample check passes at its population. -/
-theorem fullDraw_some {n : RecVStar.Inner} {rec : Bool} {d : Json} {record : String}
-    (h : (RecSetup.fullDraw (some n) rec (some d) record).isOk = true) :
-    ∃ U, Draw.UnitDraw.ofJson d = .ok U ∧ Flock.Witness.fullDraw U.population record = .ok () := by
-  unfold RecSetup.fullDraw at h
-  cases hU : Draw.UnitDraw.ofJson d with
+theorem fullSample_some {n : RecVStar.Inner} {rec : Bool} {d : Json} {record : String}
+    (h : (RecSetup.fullSample (some n) rec (some d) record).isOk = true) :
+    ∃ U, Draw.UnitSample.ofJson d = .ok U ∧ Flock.Witness.fullSample U.population record = .ok () := by
+  unfold RecSetup.fullSample at h
+  cases hU : Draw.UnitSample.ofJson d with
   | error e =>
     simp [hU, bind, Except.bind, pure, Except.pure, Except.isOk, Except.toBool, throw, throwThe,
       MonadExceptOf.throw] at h
   | ok U =>
     refine ⟨U, rfl, ?_⟩
-    cases hw : Flock.Witness.fullDraw U.population record with
+    cases hw : Flock.Witness.fullSample U.population record with
     | error e =>
       simp [hU, hw, bind, Except.bind, pure, Except.pure, Except.isOk, Except.toBool, Except.mapError, throw,
         throwThe, MonadExceptOf.throw] at h
@@ -149,27 +149,27 @@ verifier's inner shape, and the decision's checks and its last refusals pass, ta
 theorem labels_full {x : Msg} {i : RecIns} {spec spec' : SessionSpec} {sts : Array Stmt}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Msg × Coin)} {f : FlockDeploy.Final}
     (hsu : setupO x = some (i, spec, sts)) (hin : i.inner.isSome = true) (h0 : 0 < sts.size)
-    (hck : FlockDeploy.checks true i.base spec' x link c₁ mids f = .ok ()) (hfd : fullDrawO x f = true) :
+    (hck : FlockDeploy.checks true i.base spec' x link c₁ mids f = .ok ()) (hfd : fullSampleO x f = true) :
     Registered.unitIndices sts[0].pub = .ok (Array.range sts[0].pub.n) := by
   obtain ⟨hio, hset⟩ := setupO_some hsu
   obtain ⟨n, hn⟩ := Option.isSome_iff_exists.1 hin
-  obtain ⟨ds, hds⟩ := FlockDeploy.KS.checks_draw hck
-  have hrel := (FlockDeploy.drawEq_iff _ _).1 (checks_drawEq hck)
+  obtain ⟨ds, hds⟩ := FlockDeploy.KS.checks_sample hck
+  have hrel := (FlockDeploy.sampleEq_iff _ _).1 (checks_sampleEq hck)
   have heq : FlockSoundness.Discharge.Exec.recordDraw f.record = i.base.read.draw :=
-    FlockDeploy.eq_of_rel_norm hrel (fun _ h => recordDraw_norm h) (fun _ h => insO_draw_norm hio h)
+    FlockDeploy.eq_of_rel_norm hrel (fun _ h => recordSample_norm h) (fun _ h => insO_sample_norm hio h)
   rw [hds] at heq
-  have hfull := fullDrawO_fullDraw hfd
+  have hfull := fullSampleO_fullSample hfd
   have hinn : innerOfO x = some n := by simp [innerOfO, hio, hn]
   have hwd : Flock.Witness.recordDraw f.record = some ds := heq
   rw [hinn, hwd] at hfull
-  obtain ⟨U, hU, hw⟩ := fullDraw_some hfull
-  obtain ⟨d', D, hd', hD, -, -, hunits, hcl⟩ := FlockSoundness.Discharge.Recursion.Witness.fullDraw_ok hw
+  obtain ⟨U, hU, hw⟩ := fullSample_some hfull
+  obtain ⟨d', D, hd', hD, -, -, hunits, hcl⟩ := FlockSoundness.Discharge.Recursion.Witness.fullSample_ok hw
   rw [heq] at hd'
   cases hd'
   rw [hU] at hD
   cases hD
   have hprov : U.proved = Array.range U.population := by
-    simp [Draw.UnitDraw.proved, hcl, hunits]
+    simp [Draw.UnitSample.proved, hcl, hunits]
   have hread := RecIns.setup_read hset
   have hpi := Claims.Bridge.Custody.publicInputs_none_of_checks hck
   have hof := RecIns.setup_oneFull hset
@@ -186,13 +186,13 @@ theorem labels_full {x : Msg} {i : RecIns} {spec spec' : SessionSpec} {sts : Arr
   obtain ⟨d, hd, hdd⟩ := hall 0 h0
   rw [hdd hc1, hds] at hd
   obtain ⟨⟨c, pop, -, hdr⟩, -⟩ := FlockComplete.JsonRT.setupOne_stmt hd
-  obtain ⟨D', hD', -, hnp, -⟩ := FlockSoundness.Discharge.Layout.drawn_spec (hdr ds rfl)
+  obtain ⟨D', hD', -, hnp, -⟩ := FlockSoundness.Discharge.Layout.sampled_spec (hdr ds rfl)
   rw [hU] at hD'
   cases hD'
   have hlab := RecIns.setup_labels hset hn
   rw [hds] at hlab
   have hl0 := FlockC3.PubRows.checkLabels_at hlab 0 h0
-  rw [show RecVStar.tableDraw ds i.base.read.I.count 0 = ds from if_pos hc1] at hl0
+  rw [show RecVStar.tableSample ds i.base.read.I.count 0 = ds from if_pos hc1] at hl0
   cases hu : Registered.unitIndices sts[0].pub with
   | error e => simp [RecVStar.checkLabel, hU, hu, bind, Except.bind] at hl0
   | ok idx => rw [FlockC3.PubRows.checkLabel_ok hl0 hU hu, hnp, hprov, Array.size_range]

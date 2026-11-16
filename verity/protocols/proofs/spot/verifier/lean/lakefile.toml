@@ -1,11 +1,13 @@
-# Sampled proofs' one-stage audit as a `Core.Protocol` (`verity/sampled-proofs/one-stage/v1`): the registration record and
+# SPOT's one-stage audit as a `Core.Protocol` (`verity/sampled-proofs/one-stage/v1`): the registration record and
 # its R1–R7 (v1 and v2 records), the partition, the draw's checks, the verdict, the integrity profile and the whole audit
 # record: the audit's definition, which `verity/protocols/proofs/spot/verifier/one_stage` mirrors and its difftest holds to
-# it. `sampled-proofs-verifier` is the verifier of record the Python calls (`one_stage.verifier`). Code, not analysis: Lean
-# core, C-Flock and the interface.
+# it. `spot-verifier` is the verifier the Python calls (`one_stage.verifier`): the audit's checks, the
+# stream's and fleet's rules, and the challenger's ledger and session checks (`Spot.Pieces.verifier`). Code, not
+# analysis: Lean core, Flock and the interface.
 name = "core_spot"
-defaultTargets = ["Spot", "sampled-proofs-one-stage", "sampled-proofs-one-stage-zk", "sampled-proofs-difftest",
-  "sampled-proofs-verifier", "site-difftest", "sampled-proofs-plancheck"]
+defaultTargets = ["Spot", "spot-one-stage", "spot-one-stage-zk", "spot-monitoring-period",
+  "spot-difftest", "spot-verifier", "spot-wired-key-dev",
+  "spot-plancheck"]
 
 [leanOptions]
 autoImplicit = false
@@ -33,29 +35,35 @@ path = "../../../../../circuits/difftest"
 name = "Spot"
 
 [[lean_exe]]
-name = "sampled-proofs-one-stage"
+name = "spot-one-stage"
 root = "Spot.Main"
 
 [[lean_exe]]
-name = "sampled-proofs-one-stage-zk"
+name = "spot-one-stage-zk"
 root = "Spot.ZkMain"
 
+# SPOT's period (`verity/sampled-proofs/period/v1`, `Spot.MonitoringPeriod.protocol`): every window of a lane's
+# monitoring period held to one accepting one-stage audit on its proofs.
 [[lean_exe]]
-name = "sampled-proofs-difftest"
+name = "spot-monitoring-period"
+root = "Spot.MonitoringPeriodMain"
+
+[[lean_exe]]
+name = "spot-difftest"
 root = "Spot.DifftestMain"
 
 [[lean_exe]]
-name = "sampled-proofs-verifier"
+name = "spot-verifier"
 root = "Spot.VerifierMain"
+
+# Development plays only, never an accept of record: round 2 with the wired key's switch on, which the build of
+# record holds off (`Spot.SecondStage.WIRED_KEY`). Only its difftest runs it; no audit, script or benchmark does.
+[[lean_exe]]
+name = "spot-wired-key-dev"
+root = "Spot.WiredKeyDevMain"
 
 # The planner's designs checked in exact arithmetic (`Spot.PlanCheck`), which
 # `verity/protocols/proofs/spot/plancheck.py` calls.
 [[lean_exe]]
-name = "sampled-proofs-plancheck"
+name = "spot-plancheck"
 root = "Spot.PlanCheckMain"
-
-# The Site's port (`CoreProtocol.Site`), which `tests/test_site_difftest.py` holds to `verity.hardware.site`: the
-# registration log is the proof service's record, and this package requires both the interface and the harness.
-[[lean_exe]]
-name = "site-difftest"
-root = "Spot.SiteDifftestMain"

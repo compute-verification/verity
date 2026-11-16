@@ -3,9 +3,9 @@
 //! output lines are `flock-pure`'s (so its bench.py drives either); the statement differs (no union, no
 //! wiring argument), so it is its own Table 1 configuration (`prover=flock-cuda-block`).
 //!
-//!   flock-pure-gpu serve    --listen ADDR --out DIR --instances FILE --netlist FILE --pin SHA256 [--sessions N] [--operator LANE]
-//!   flock-pure-gpu prove    --verifier ADDR --instances FILE --netlist FILE [--gpu] [--runs N] [--warm W] [--dump DIR]
-//!   flock-pure-gpu selftest --instances FILE --netlist FILE [--gpu]
+//!   flock-pure-gpu serve    --listen ADDR --out DIR --instances FILE --circuit-description FILE --pin SHA256 [--sessions N] [--operator LANE]
+//!   flock-pure-gpu prove    --verifier ADDR --instances FILE --circuit-description FILE [--gpu] [--runs N] [--warm W] [--dump DIR]
+//!   flock-pure-gpu selftest --instances FILE --circuit-description FILE [--gpu]
 //!
 //! Session: `Hello(Σ)`, `Commit(root_f = Σ, root_B, publics = each block's x and W chunk chaining values and unit 31's
 //! y16)`, two verifier points (the public regions' claims), `Link(y = 0, 0)` (no cross-field link: y is pinned to zero),
@@ -696,7 +696,7 @@ fn selftest(st: &Arc<PureStmt>, inst: &Arc<Instances>, gpu: bool) {
         }
         let v = if gpu {
             let out = std::process::Command::new(std::env::current_exe().unwrap())
-                .args(["selftest", "--gpu", "--instances", &arg("--instances", ""), "--netlist", &arg("--netlist", ""), "--only", name])
+                .args(["selftest", "--gpu", "--instances", &arg("--instances", ""), "--circuit-description", &arg("--circuit-description", ""), "--only", name])
                 .output()
                 .expect("spawn a case");
             let text = String::from_utf8_lossy(&out.stdout);
@@ -728,13 +728,13 @@ fn main() {
     let cmd = std::env::args().nth(1).unwrap_or_default();
     let tb = Instant::now();
     let inst = Arc::new(Instances::load(&arg("--instances", "instances.bin")));
-    let net = UnitNet::load(&arg("--netlist", "net.txt"));
+    let net = UnitNet::load(&arg("--circuit-description", "net.txt"));
     let pin = arg("--pin", "");
     if !pin.is_empty() {
         let got: String = net.sha256.iter().map(|x| format!("{x:02x}")).collect();
-        assert_eq!(got, pin, "the netlist's sha256 is not the pinned lowering");
+        assert_eq!(got, pin, "the circuit description's sha256 is not the pinned lowering");
     }
-    assert_eq!(inst.relation, net.relation, "instances and netlist name different relations");
+    assert_eq!(inst.relation, net.relation, "instances and circuit description name different relations");
     let lay = Layout::of(inst.row_bytes, inst.units, inst.header["schemas"]["a"].as_str().unwrap_or("").starts_with("sha256/"));
     if let Err(e) = flock_live::pure_block::admit(lay, &net, &inst) {
         eprintln!("REFUSED\t{e}");
@@ -785,7 +785,7 @@ fn main() {
                 }
             }
         }
-        _ => eprintln!("usage: flock-pure-gpu serve|prove|selftest|replay --instances FILE --netlist FILE [--pin SHA256] ..."),
+        _ => eprintln!("usage: flock-pure-gpu serve|prove|selftest|replay --instances FILE --circuit-description FILE [--pin SHA256] ..."),
     }
 }
 

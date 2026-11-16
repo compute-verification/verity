@@ -91,7 +91,7 @@ def SeparatedOn (S : Set G) (D : Set (G → ℚ)) (T : Finset (G → ℚ)) : Pro
 /-- The sum of the coordinates on `Fin (m + 1) → ℚ`, a word to which every lane contributes. -/
 def sumCoords (m : ℕ) : (Fin (m + 1) → ℚ) → ℚ := fun g => ∑ j, g j
 
-/-! ## Pinned statements (draft semantics, pending review) -/
+/-! ## Guarantees (draft semantics, pending review) -/
 
 /-- **Dense words cost `a` against the legacy class** (draft semantics, pending review): under `FloorTc a c` with
 `c ≤ a ≤ 2c`, for a well-formed `MH100w` program on free inputs in which every cheap tensor-core register is an

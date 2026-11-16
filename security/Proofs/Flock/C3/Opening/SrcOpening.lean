@@ -54,7 +54,7 @@ def OpenTie (sh : Flock.Shape) (w : Array F128) (ops : FlockVBridge.AccChain.Ope
     u.op = openSteps (fun i => FlockSoundness.Refine.vecOf 128 (decodedO sh w (consO ops)).rs[i.val]!) ρ γ
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-  {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type} {S : ℕ} {Vs : Fin S → VStmt}
+  {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type} {S : ℕ} {Vs : Fin S → VStmt}
 
 local notation "ℐ" => holoInnerAt T CT st hp
 

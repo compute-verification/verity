@@ -27,7 +27,7 @@ code's SHA-512 does (`HashOf`; `Verity.sha512` is one):
 namespace Flock.Bridge.Spec
 
 open Flock.Registered
-open Properties.NetworkCertifier.Bytes (bs bs_append bs_length be64_bs)
+open Properties.Certifier.Bytes (bs bs_append bs_length be64_bs)
 
 /-! ## Byte encodings -/
 
@@ -154,7 +154,7 @@ theorem dig_bytes {b : ByteArray} (h : b.size = 64) : (dig b).bytes = bs b := by
 theorem dig_inj {a b : ByteArray} (ha : a.size = 64) (hb : b.size = 64) (h : dig a = dig b) : a = b := by
   have := congrArg Verity.Digest.bytes h
   rw [dig_bytes ha, dig_bytes hb] at this
-  exact Properties.NetworkCertifier.Bytes.bs_inj this
+  exact Properties.Certifier.Bytes.bs_inj this
 
 /-- **`H` reads a byte string as the code's SHA-512 does**: its digest of the string's bytes is SHA-512's output. -/
 def HashOf (H : Hash.Msg → Hash.Digest) : Prop := ∀ x : ByteArray, H (bs x) = dig (Flock.Sha512.hash x)

@@ -517,7 +517,8 @@ def q_word_units(path: str | Path, units: Units | None = None) -> tuple[dict[int
     """Q_word{X=16, W=32} v1's units per Call (root node index), and the population (`partition_object.Partition`'s)."""
     from verity.circuits import partition_object as PO
     from verity.circuits.cut import QueryInapplicable
-    from verity.definitions.boolean import load_program
+    from verity.circuits.ops.boolean.versions import load_program
+    import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
     program, _digest = load_program(Path(path))
     calls = PO.calls(program)
     for k, fn in calls:
@@ -776,6 +777,7 @@ def analyze_served(build: dict[str, Any], *, units: Units | bool = False, ignore
     with it (the Build doesn't record the sampling), so no stop happens and both counts are what one would key."""
     from verity.circuits.codec import encode_program
     from verity.circuits.program import Program
+
     from verity_vllm.query.program_view import specialization
 
     P = build["program"]

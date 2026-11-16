@@ -1,12 +1,12 @@
 module
 
 public import Properties.Pouw.ServedWork
-public import Proofs.Pouw.PeriodJ10R
+public import Proofs.Pouw.MonitoringPeriodJ10R
 
 /-!
 # Proof of `ServedWork`
 
-`Properties.Pouw.Served.ServedWork` from `H1J10RCheckedCreditPeriod` and `SAKServed`:
+`Properties.Pouw.Served.ServedWork` from `H1J10RCheckedCreditMonitoringPeriod` and `SAKServed`:
 
 * `prob_salt_le`: a window's salt coin is uniform given anything fixed before it, so the salt falls in a degenerate set
   chosen from what is fixed before it with that set's probability (by windows: slices of the earlier windows' coins, then
@@ -21,8 +21,8 @@ public import Proofs.Pouw.PeriodJ10R
 
 namespace Properties.Pouw.Served.SecurityProofs
 
-open Properties.Pouw.Served Properties.Pouw.PeriodJ10R Properties.Pouw.PeriodJ10R.SecurityProofs
-open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
+open Properties.Pouw.Served Properties.Pouw.MonitoringPeriodJ10R Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs
+open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
 
 /-! ## A window's salt is uniform given what is fixed before it -/
 
@@ -90,7 +90,7 @@ theorem servedWork : ServedWork := by
   intro ι K T L U C Ξ V I W St _ _ _ _ _ _ _ _ _ nB mB σ k hk sT unitOf Sc Cd n hn hN hr hM hKd ws opened enc place
     tile Wp Pl folded ρ δs δbind δks G μ Reg hon p lam κdeg B inst state work hS hρ hρ1 hρN hwmax hlk hG hDD hPre
     hMoved hRBD hDraw hServ hSalt hLucks hUF g1 g2 p1 p2 hSAK hSt hext hReg hp hFix hRight
-  have hW := h1J10RCheckedCreditPeriod σ k hk sT unitOf Sc Cd hn hN hr hM hKd ws opened enc place tile Wp Pl folded
+  have hW := h1J10RCheckedCreditMonitoringPeriod σ k hk sT unitOf Sc Cd hn hN hr hM hKd ws opened enc place tile Wp Pl folded
     ρ δs δbind δks hS hρ hρ1 hρN hwmax hlk hG hDD hPre hMoved hRBD hDraw hServ hSalt hLucks hUF
   have hne : Nonempty (Coin C Ξ Cd.rounds σ sT) := by
     obtain ⟨y⟩ := paths_nonempty (Ω := C) Cd.rounds

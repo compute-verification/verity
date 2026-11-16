@@ -58,6 +58,8 @@ import torch
 from verity_config.settings import SHARED
 from verity_vllm.commit import row_tables as RTB
 from verity_vllm.commit import row_tables_device as D
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import row_table_nvcc
+from verity_torch.pouw import row_table_side_stream
 
 RESULT_SCHEMA = "research/result/v0.1"
 #: a read's fresh rows and their bytes: the opened history row (576 u16 words), its salt, its path (17 x 64) and its output row
@@ -184,7 +186,7 @@ def beside(batch: int, reads: int, layers: int, ctx: bytes, key: bytes, solo: di
     g = torch.Generator(device="cuda").manual_seed(3)
     x = torch.randn(batch, BUSY_H, dtype=torch.bfloat16, device="cuda", generator=g)
     w = torch.randn(BUSY_H, BUSY_N, dtype=torch.bfloat16, device="cuda", generator=g)
-    serving, side, gs = torch.cuda.current_stream(), D.side_stream(), torch.cuda.Stream()
+    serving, side, gs = torch.cuda.current_stream(), row_table_side_stream(torch), torch.cuda.Stream()
 
     def sleep(cycles: int) -> tuple[Any, Any]:
         a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
@@ -362,8 +364,8 @@ def main(argv: list[str] | None = None) -> int:
     started = time.perf_counter()
     ctx, key = hashlib.sha512(b"table-read-commit/context").digest(), hashlib.sha256(b"table-read-commit/row-key").digest()
     gpu = torch.cuda.is_available()
-    nvcc_v = subprocess.run([D.nvcc(), "--version"], capture_output=True, text=True).stdout.strip().splitlines()[-1:] \
-        if D.nvcc() else None
+    nvcc_v = subprocess.run([row_table_nvcc(), "--version"], capture_output=True, text=True).stdout.strip().splitlines()[-1:] \
+        if row_table_nvcc() else None
     summary: dict[str, Any] = {
         "gpu": torch.cuda.get_device_name() if gpu else None,
         "capability": list(torch.cuda.get_device_capability()) if gpu else None, "cpu": cpu_name(), "cpus": os.cpu_count(),

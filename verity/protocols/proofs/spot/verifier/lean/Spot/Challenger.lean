@@ -1,6 +1,6 @@
 /-
-The proof system's challenger: its live coins, the one live-coin source of every protocol, as the verifier checks them
-(`verity/core/protocols/spot/challenger.py`, which `tests/test_challenger_difftest.py` holds to this, the
+The proof system's challenger: its live coins, the live coins of every protocol, as the verifier checks them
+(`verity/protocols/proofs/spot/device/challenger.py`, which `tests/test_challenger_difftest.py` holds to this, the
 verifier).
 
 Coins are indexed by label and index and named by no protocol. A layout is a scheme, an epoch and its families
@@ -14,7 +14,7 @@ epoch the challenger flips every coin and its hm96 salt and publishes the coin c
 
 and opens coin `(label, i)` once, after the root the verifier recorded for it. There is no beacon and no Fiat–Shamir.
 `after` binds an opening to that root but can't show the coin was released after it: the release order is a trust
-assumption on the auditor-trusted challenger (`trusted-host`), not something this checks.
+assumption on the auditor-trusted challenger (`trusted-device`), not something this checks.
 `liveReason` is `live_reason`, the check of one opening; `orderReason` is `order_reason`, the check of a family's
 openings against the roots the verifier recorded, in order: coin `i` opened after root `i`, each once, none before its
 root is recorded, and every recorded root's coin opened. Both give Python's reasons in Python's words and order, `none`

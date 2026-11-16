@@ -12,8 +12,8 @@ verity bench exfiltration --json          the same as one document: value, unit,
 verity bench exfiltration --share 0.05    read at another share of total compute
 verity bench exfiltration --served-run F  beside it, the share a served two-stage run's record F measures
 verity bench exfiltration --variant V     read one variant of the row, in a run that holds several
-verity bench exfiltration --response-ids N the network certifier's part for a class of at most N ids a response
-verity bench exfiltration --scan-delta D  the network certifier's errors at another δ of its scans (a fraction)
+verity bench exfiltration --response-ids N the network attester's part for a class of at most N ids a response
+verity bench exfiltration --scan-delta D  the network attester's errors at another δ of its scans (a fraction)
 verity bench exfiltration --local-only    read this machine's catalog alone, not the store's remote
 verity bench exfiltration --help          every parameter and its default
 ```
@@ -38,15 +38,15 @@ verity bench exfiltration --help          every parameter and its default
     them (no table's row priced their proving, or they priced under half of it, with the share each source prices),
     else the share the table's rows price, else "at the planner's assumed prices" for rows that record no table's
     row. Read with `--row "(i) honest"`, the figure itself carries the label.
-- **The network certifier's part** is `verity bench certifier_term`'s (`benchmarks/certifier_term/`): the schedules,
-  the fail cells and the jitter, for the scan and N2 as the monitoring-period check charges them today, for the scan
+- **The network attester's part** is `verity bench certifier_term`'s (`benchmarks/certifier_term/`): the schedules,
+  the fail cells and the jitter, for the scan as the monitoring-period check charges them today, for the scan
   under each change to its check, and for the design with no run behind it, before a served audit has sampled a
   stop block and once one has. The design's two rows are also charged the count: how many of a link's releases
   each content class holds in an execution phase. The command reads that command's document (`certifier-term/v2`)
   and refuses another schema.
   - **Its figures of record are at two release schedules**, D_j = 2, the jitter bound of that document's term of
     record. A figure at D_j = 1, and every figure of a row whose release times are taken once (`timing`,
-    `all three`), is what a network certifier with a set-time card would be charged. That card is simulated: none
+    `all three`), is what a network attester with a set-time card would be charged. That card is simulated: none
     is deployed, and it is an input of the document, `set_time_card`, the one input marked `simulated`. Each such
     figure is printed only under the label the document gives it, "with a simulated set-time card", in a line, a
     column or a row's name that carries the label. The command reads the label from the document, at its top and
@@ -56,26 +56,52 @@ verity bench exfiltration --help          every parameter and its default
     so the headline gives that command's own term of record beside this one's.
 
 A link's execution phase carries K = schedules + cells + jitter + min(entries, advice + the wrong blocks' output bits
-at δ). The first three terms are the network certifier's part and the last term's second branch is the compute
-audit's, so the command also prints their sum under the network certifier's rows: the scan and N2 as charged today,
+at δ). The first three terms are the network attester's part and the last term's second branch is the compute
+audit's, so the command also prints their sum under the network attester's rows: the scan as charged today,
 the scan with all three changes, and the design, before its stop block and with it. Where a row charges the entries
 and they are fewer than the compute audit's part, they stand in its place. The command prices no advice, and says
 so among its inputs.
 
-The sums under the rows whose schedules are 0 (`all three`, `design`) take a response's output count at 0: a stop
-block, sampled on a served audit, holds that count to the response's ids. Until a served audit has sampled one the
-server chooses the count, and the network certifier's row `design, no stop block` charges it, as its schedules.
-The command reads the output count from that row and prints it beside those sums, marked assumed, in every
-monitoring period and where it says no advice is priced.
+The rows that hold the lengths by a stop block (`lengths`, `all three`, `design`) are charged below their schedules
+only on the execution phases of a link that the stop verdicts' reader holds ("How the stop class is charged",
+below); on every other execution phase their stop class is charged its whole schedule. A sum takes a response's
+output count at 0 only on an execution phase held, where a stop block, sampled on a served audit, holds that count to
+the response's ids. The sums that do are those under the rows the reader's answer names, where it holds an
+execution phase (`all three`, `design`), never those of a row because its schedules read 0. With no execution phase
+held, those sums hold the count as the row `design, no stop block` does, no sum takes it at 0, and the command calls
+each by a name that says its stop class is charged its whole schedule. Until a served audit has sampled a stop
+block the server chooses the count, and the network attester's row `design, no stop block` charges it, as its
+schedules. The command reads the output count from that row and prints it, marked assumed, in every monitoring
+period, beside the sums that take it at 0 where there are any.
 
 ## The stop class's verdicts
 
-The output count's 0 in those sums stays assumed until a run backs it: the four verdicts a stop class needs, each
-accepted and complete, are the stop record, the response tie, the request tie and the compute audit's second stage.
-The command reads them from the store, from every run that carries
-`run_of_record=exfiltration-glm53-stop-verdicts` and no `superseded_by`, in the file `out/verdicts.jsonl` of its run
-files, one verdict's record a line (`VERDICT_FIELDS` in `exfiltration.py`). A record lacking a field is refused by the
-field's name:
+The command reads two things from the runs that carry `run_of_record=exfiltration-glm53-stop-verdicts`, each run with
+the runs that replace it (`superseded_by`). It lists those runs once, and both readings are of that list.
+
+### How the stop class is charged
+
+The command hands the list to the stop verdicts' reader, `verity/protocols/resource_accounting/network/prover/stop_verdicts.py`
+(`of_runs(store, runs, superseded)`), every run that carries the record, with those another run replaces. It hands
+the reader's answer to the network attester's calculator, which charges the stop class of its rows by it and by
+nothing else. What the reader reads in a run's files, and what holds an execution phase, are its own
+(`benchmarks/certifier_term/README.md`, "The stop class's verdicts"); the command reads none of those files itself.
+The document carries the answer (`certifier.stop`): the rows it charges, the execution phases held, whether the stop
+class is charged below on every execution phase, the reader's own lines, the verdicts it read, and the runs it was
+handed with the superseded ones. The print gives the reader's lines as they are, under a line that names the runs.
+
+With no run carrying the record the reader is not asked, and the calculator's rows are as with no record read: each
+connection charged its whole schedule, `design` equal to `design, no stop block`, and the network attester's
+figure in the headline the `scan` row's.
+
+### The output count's mark
+
+Where a sum takes the output count at 0, that 0 stays assumed until a run backs it: the four verdicts a stop class
+needs, each accepted and complete, are the stop record, the response tie, the request tie and the compute audit's
+second stage. This account is the command's own and decides the mark alone: it names no row and moves no figure.
+The command reads the verdicts from the runs of the list that no other replaces, in the file `out/verdicts.jsonl` of
+a run's files, one verdict's record a line (`VERDICT_FIELDS` in `exfiltration.py`). Nothing holds the class this
+account names to the execution phases the reader holds. A record lacking a field is refused by the field's name:
 
 - `piece`: `stop_record`, `response_tie`, `request_tie` or `second_stage`.
 - `control`: null on the honest run, or the negative control it is: `id` (a changed id) or `max_tokens` (a changed
@@ -110,16 +136,19 @@ The class is complete when every piece's honest run is `accept`, the four name o
 assumes, `1/1`, and a changed id and a changed `max_tokens` are each
 refused, on a piece, by the verifier that accepted that piece's honest run, and no control is accepted. Where they
 don't name one class the print says which verdict lacks a field or records a failed check, or which field the four
-disagree on with each value's pieces, and claims nothing. Where the class is complete the
+disagree on with each value's pieces, and claims nothing. Where the class is complete, and the reader's answer
+names a row whose sum takes the count at 0, the
 output count's 0 is marked `run, not proved`, printed "run (Python verifier, not proved)" with each verdict's run and
-verifier and counted apart from measured, its source naming the boundary's registration, and the class prints as
+verifier and counted apart from measured, its source naming the sums, the execution phases held and the boundary's
+registration, and the class prints as
 `complete on class C of serve S at rate 1/1 (run, not proved: OPEN; Python verifier for PIECES)`, OPEN being each
 unproved piece's `open`. Only where every piece's record names its `proved_by` is it `measured`; the command takes that
-from the field, never from a flag or a name. Short of complete, the inputs print as with no verdicts and the output
+from the field, never from a flag or a name. A complete class where the reader holds no execution phase prints as
+complete and marks nothing: no sum takes the count at 0, so the inputs list no 0. Short of complete, the 0 where a
+sum takes it stays assumed and the output
 count's line names what is missing; a `withheld` piece or control prints as `withheld: OPEN`, and a withheld control
 is not refused. A control on a withheld piece refused by that piece's verifier (the same module and commit) counts as
-refused. With no run carrying the record the print is as it was before the command read
-any.
+refused. With no run carrying the record the account is not made and the print names no class.
 
 ## The share of compute
 
@@ -161,9 +190,57 @@ The record is one JSON object (`served_share` in `exfiltration.py`):
 job serves. So the window's serving and, where the same job served `compiled` on the same plan and rate, stock's are
 read from that record, and no stock serve of this command's own is needed.
 
+The reader is `python -m verity_bench.served_record --second DIR [--first DIR] [--serve DIR] [--replay DIR]
+[--serving META] [--stock META]` (`benchmarks/harness/verity_bench/served_record.py`). A served run is four runs
+(the serve, the first stage, the replay of the sampled spans, the second stage), and each `DIR` is one's directory
+as it is fetched, its `job.json` beside its `out/`; only the second stage is required. It prints the record from the
+files those runs published and the two loads' `meta.json`, with `None` for each field those files lack, and names
+each one with the file it read and what that file holds instead. It computes no share and decides no verdict.
+
+- A session's seconds are those its own `prove_seconds_source` names in `audit.timing`: `busy`, the proof server's
+  clock on the session's prover (`busy_s`), or `session`, the audit's clock on the whole session (`session_s`). The
+  record's `prove_seconds_source` is `busy` only where every session's is, and `session` where any is; where a
+  session names none its seconds are `session_s` and the field is named as absent.
+- Beside the fields above the record holds `audit`, what the audit showed: the class the second stage audited, as
+  its summary names the first stage's file (`class`), and the digest of the registration it read (`registration`);
+  the sessions' verdicts counted by kind, the driver's checks, whether the second stage says it held, the stream's
+  outcome with its codes and whether it says it is complete, the layout the serve committed, what the interior
+  registered, and what holds the four runs' files to each other.
+
+## What a served run's audit showed
+
+From a record that holds `audit` the command prints one more section, before the resampling holes
+(`benchmarks/harness/verity_bench/served_row.py`; `served_run` in the JSON), read against the tree:
+
+- **The verdict**, in the verifier's own words: how many of the sampled proof blocks' proofs the Lean verifier accepted, then the
+  final accept as the stream's outcome gave it: given, refused with its codes, or withheld, where every check of the
+  second stage held and the outcome is refused by one code the table names a reason for. An accept the verifier
+  withheld is never printed as given, and neither is an outcome that accepted beside a second stage that did not
+  hold: that one is printed as refused. An accept whose outcome does not say it is complete is printed as given and
+  not complete. The summary's top-level `accepted` is the one-stage record of the sessions alone and is never read
+  as the audit's verdict.
+- **What the audit covered**: the replay block as the layout names it, the stand-in (instances of the check's
+  template) or a Definition of the class's own.
+- **To fully proved**: the replay block where it is the stand-in; its inputs where the interior registers them,
+  which is after the first stage's sample; every verdict a verifier that is not Lean decided; every Lean verdict
+  whose lock entry (`security/lean-audit.json`) is missing or lists open premises; and the final accept where it was
+  not given, or is not complete. Which verifier decides each kind of verdict, and the lock entry that covers it, are
+  data (`verity_bench/data/served_row.json`). The resampling holes and the cited theorem are the next block's, and
+  this one prints no line on them.
+- **The mark** is `proved` only where that list is empty, the final accept is given and complete, the cited
+  theorem's lock entry lists no open premise and each resampling hole is closed at every one of the served run's
+  four runs' commits, as the next block reads them; `run, not proved` otherwise.
+- **The prover's seconds** as the record holds them, said as "at most" where they are a session's, with the cards
+  the provers ran on and what the data file notes of a card.
+- **The verdict as a record** of the stop class's verdicts of record, for the piece `second_stage`, in the
+  command's own words: `accept` only for an accept that is complete, `not complete` for one that is not, `refuse`,
+  or `withheld`. Beside that record's fields it names what the verdict is of: its `class`, its `serve` (the serve's
+  run) and its `registration` (the digest the second stage read), each null where the served run's files give none,
+  and the section then says which it lacks.
+
 ## The security level
 
-Beside the GB the command prints the binding bound the row of record holds: the probability that an accepted run
+Beside the GB the command prints the binding bound the plan of record's row holds: the probability that an accepted run
 opens a value off the committed trace, by the bound Lean states of a two-stage sample counted by classes of gates
 (`CompiledTwo.eventTwoX_le_cls_at_budget`'s right-hand side). The planner computes it for each
 row's own design (`benchmarks/spot_figures/binding.py`, `over_phases`) and writes it in the row's
@@ -182,13 +259,13 @@ Every figure carries the error summed over everything it covers. A figure whose 
 "no bound at this period", with that error and no amount: a union bound of 1 or more bounds nothing.
 
 - **The compute audit's part** fails with at most its rows' δ over the monitoring period (`delta_seen`).
-- **The network certifier's part** fails with at most ε, which its document gives each row (`eps`): the δ of each
+- **The network attester's part** fails with at most ε, which its document gives each row (`eps`): the δ of each
   execution phase's scan, summed over every link of the scope and every execution phase of the monitoring period. A
   scope's monitoring period has one ε, whichever row charges it, and the command refuses a document whose rows of
   one carry two. So a link's week can carry an amount where the world's year carries none, from the same scans.
 - **The two together** fail with at most the sum of both parts' errors.
 
-The scans' δ is an input of the network certifier's calculator, and this command gives it one. By default it is the δ
+The scans' δ is an input of the network attester's calculator, and this command gives it one. By default it is the δ
 at which the row printed that sums the most execution phases, the world's year, carries an error of 2^-20: 2^-20
 divided by that row's execution phases, which the calculator's own document counts. Every row printed then carries
 that error or less. `verity bench certifier_term`'s result of record takes its δ the same way
@@ -199,13 +276,13 @@ document states among its inputs, never a copy the command keeps.
 
 ## The requests
 
-Both parts count the same requests: the sampling plan's, which the network certifier's calculator counts by default
+Both parts count the same requests: the sampling plan's, which the network attester's calculator counts by default
 and reads from the planner in the tree. The command holds no count of its own, so its inputs list that calculator's
 request count and what its request is, as the calculator marks them. The requests one of the planner's rows is
 priced over are its `replay_sample / q`, the sampled replays over the probability a request is sampled; the row's `requests`
 field is the planner's default scope's count, another request's, and is not read. The command refuses if the two
 parts don't cover the same GPU-seconds, if the rows of record are priced over other requests than the network
-certifier's part counts, or if the two aren't shares of the same weights.
+attester's part counts, or if the two aren't shares of the same weights.
 
 ## The records it reads
 
@@ -262,42 +339,50 @@ plan of the case, is left out and listed under "Refused".
 - **The figure**: over the world's year, the compute audit's part in GB with its copies of the weights, its bits a
   request and the requests it is priced over, how its proving time is priced by the row's plan and what prices it by
   source, row `(i) honest` under its label, what its rows say of their pricing, then the network
-  certifier's part under each of its rows at D_j = 2, then the two summed, each followed by a line under the
-  network certifier's label for what rests on the simulated card, then the output count. The network certifier's
+  attester's part under each of its rows at D_j = 2, then the two summed, each followed by a line under the
+  network attester's label for what rests on the simulated card, then the output count, then how the stop class of
+  the network attester's rows is charged, with the runs handed to the stop verdicts' reader and the reader's own
+  lines. The network attester's
   figures end with their ε over the world's year and the δ of the scans it sums, and the sums with their error.
-  Where the ε is 1 or more the network certifier's part is "no bound at this period", with the ε, in place of every
+  Where the ε is 1 or more the network attester's part is "no bound at this period", with the ε, in place of every
   amount of it, the output count among them; where the two parts' errors sum to 1 or more, so are the two together.
-  One line gives the errors: the compute audit's δ over the monitoring period, the network certifier's ε with the
+  One line gives the errors: the compute audit's δ over the monitoring period, the network attester's ε with the
   scans' δ and the execution phases it sums, and their sum. One more line gives the compute audit's part with the
   network check's own proving taken off the audit budget (`--network-check-share`, assumed: no run measures it and
   the planner's rows don't count it).
 - **Inputs**: every input's part, value, unit, mark and source. A mark is `measured` (a run measured it), `modeled`
-  (derived from other figures), `simulated` (what a stand-in does in its place: the network certifier's set-time
+  (derived from other figures), `simulated` (what a stand-in does in its place: the network attester's set-time
   card, the one such input), `assumed`, `missing` (a field a served run's record lacks, with its gap), `measured, at
   most` or `modeled, at most` (an upper bound: a served run's proving read from its sessions' seconds), or `run, not
   proved` (the stop class's verdicts, a run's, checked by a verifier no Lean proof covers yet). The compute audit's
   come from its rows of record: δ, λ and the most
   bits a request's output holds; and from the row's plan, where it is read: the share of proving time each way of
-  pricing a block family covers (measured statements, computed, or both). The network certifier's are its
-  calculator's own marks. The fleet, the request counted, a request of the plan and the weights are read by both.
-  The advice and the output count are listed at 0, each with what it leaves out.
+  pricing a block family covers (measured statements, computed, or both). A family priced from measured statements
+  is timed alone, one session on a card, and the plan prices it with its provers sharing a GPU through the
+  planner's factor. Its share is marked `measured` only where the row's plan records what prices its proving and
+  none of it is at the planner's assumed default; else it is `modeled`, the input's source says so in words, and
+  the share of the plan's proving at that default is an input of its own, marked `assumed`. The network
+  attester's are its calculator's own marks. The fleet, the request counted, a request of the plan and the weights
+  are read by both. The advice is listed at 0 with what it leaves out, and so is the output count where a sum takes
+  it at 0, with the sums and the execution phases they take it at 0 on; where no sum does, the inputs list no output
+  count.
 - **The compute audit's part**: each scope of record, with its run, its β at the share, its bound at λ = 1 and at the
   row's λ, the requests its rows are priced over, and each part of the total there. A β outside the pinned budgets is
   marked extrapolated. Under it, for each scope whose plan is read, its proving time by how its block families are
   priced, with the plan and its budget.
-- **The network certifier's part over the world's year**: a legend line a row, with its standing and, where the
+- **The network attester's part over the world's year**: a legend line a row, with its standing and, where the
   calculator gives the row one, its mark beside it (the `scan` row's accept, `run, not proved`); a row's mark the
   command has no name for is refused. Then each of its rows' schedules, cells, term at D_j = 2 with
   its multiple of the weights, term at D_j = 1 in a column whose header carries the label, and the entries, then the
   δ of its scans and its ε. A row whose release times are taken once carries the label in its name. A row whose ε is
   1 or more has "no bound at this period" in place of each amount.
 - **Each monitoring period over all compute**: a week, a month and a year of the reference datacenter and of the
-  world, with the compute audit's part as a pooled total and in bits a request, the network certifier's term of
-  record under the scan, N2 and the design before its stop block and with it, the two together, and the output
+  world, with the compute audit's part as a pooled total and in bits a request, the network attester's term of
+  record under the scan and the design before its stop block and with it, the two together, and the output
   count. Each part's amounts are followed by its error over that scope and monitoring period: the compute audit's
-  δ, the scans' δ and the network certifier's ε, and the error of the two together. A figure whose error is 1 or more
+  δ, the scans' δ and the network attester's ε, and the error of the two together. A figure whose error is 1 or more
   is "no bound at this period".
-- **Each monitoring period over all compute, under the label**: the same scopes, with the network certifier's term
+- **Each monitoring period over all compute, under the label**: the same scopes, with the network attester's term
   and the two together under `all three`, and under each other row at D_j = 1. Every amount's column carries the
   label in its header, and no amount of the table is of record. Each line ends with its errors, the table above's.
 - **SPOT's resampling holes in the code that ran**, over the compute audit's runs of record, or with `--served-run`
@@ -318,7 +403,7 @@ run (`RESEARCH_RUN_DIR` set) the command writes them into the run's `result.json
 share over each monitoring period of the document it has a value over (a week, a month and a year of a datacenter's
 and of the world's compute), with its `period` and `over` (`year` and `world` for the world's year), in GB a world
 year at 10% of compute and so on for each period. A period it has no value over (one no run of record holds, or where
-the network certifier's ε is 1 or more) is left out, but the world's year, the figure each metric's title names, which
+the network attester's ε is 1 or more) is left out, but the world's year, the figure each metric's title names, which
 is always written and written last, so a reader that keys a result's measurements by name alone, the last of a name
 winning, reads it:
 
@@ -326,12 +411,12 @@ winning, reads it:
   the compute audit's part, λ times the bound where row `(ii) honest`'s total is 10% of compute), and that part over
   each other period.
 - `benchmarks/exfiltration-compute-audit-gb`: the compute audit's part over each period.
-- `benchmarks/exfiltration-network-certifier-gb`: the network certifier's part of record, the `scan` row at D_j = 2;
+- `benchmarks/exfiltration-network-certifier-gb`: the network attester's part of record, the `scan` row at D_j = 2;
   over the world's year with no value and "no bound at this period" with its ε as its why where that ε is 1 or more.
 
 Each measurement's first input opens
-with its mark (`modeled`, and the network certifier's with the mark its calculator gives the `scan` row beside it), its
-second is its error over its period (the compute audit's δ, or the network certifier's ε at its scans' δ), and the
+with its mark (`modeled`, and the network attester's with the mark its calculator gives the `scan` row beside it), its
+second is its error over its period (the compute audit's δ, or the network attester's ε at its scans' δ), and the
 rest are the runs of record it read. The document is kept as
 `out/exfiltration.json`, the run's measurement file and its validation's evidence, and the fingerprint holds what
 ran. The print is the same in a run as outside one.

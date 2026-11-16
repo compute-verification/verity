@@ -152,6 +152,8 @@ open Flock
 open FlockSoundness
 open Claims.Flock (PlainIdx ZkIdx plainSched plainLevel0 plainLen zkSched zkLevel0 zkLen)
 
+variable {wideLeaf : Bool}
+
 /-! ## Each table's error -/
 
 /-- **A plain table's error is at most `2^{−205}`** at every `m` the plain verifier serves and every planned shape. -/
@@ -167,17 +169,17 @@ theorem tableErr_plain_le (spec : SessionSpec) (st : Stmt) (h1 : 22 ≤ st.m) (h
 `InRange`: `padLinkError + (padRepError + ε_inner)²` at `m1Schedule`, with `ε_inner ≤ innerUp`. -/
 theorem tableErr_zk_le (spec : SessionSpec) (st : Stmt) (h1 : 25 ≤ st.m) (h2 : st.m ≤ 35)
     (hst : (acct spec st).InRange) : tableErr true spec st ≤ 2 ^ (-(205 : ℝ)) := by
-  have hf := Accounting.m1Facts_spec (Accounting.m1Facts_all st.m h1 h2)
-  have hl := Accounting.padLinkError_le (Accounting.m1Schedule st.m) (acct spec st) (Accounting.m1Pad st.m) hst
-  have hr0 := Accounting.m1_rep_nonneg st.m h1 h2 (acct spec st)
-  have hr := Claims.Flock.Numbers.padRepError_le_of (Accounting.m1Schedule st.m) (acct spec st) hst
-    (Accounting.m1Pad st.m) 2 (Accounting.m1SqrtUp st.m) hf.1 hf.2.2.1 hf.2.2.2.2
-  have hc := Rat.cast_le (K := ℝ) |>.2 (Claims.Flock.Numbers.m1_check_zk st.m h1 h2)
+  have hf := Accounting.m1Facts_spec (Accounting.m1Facts_all (wide := st.wideLeaf) st.m h1 h2)
+  have hl := Accounting.padLinkError_le (Accounting.m1Schedule st.wideLeaf st.m) (acct spec st) (Accounting.m1Pad st.wideLeaf st.m) hst
+  have hr0 := Accounting.m1_rep_nonneg (wide := st.wideLeaf) st.m h1 h2 (acct spec st)
+  have hr := Claims.Flock.Numbers.padRepError_le_of (Accounting.m1Schedule st.wideLeaf st.m) (acct spec st) hst
+    (Accounting.m1Pad st.wideLeaf st.m) 2 (Accounting.m1SqrtUp st.wideLeaf st.m) hf.1 hf.2.2.1 hf.2.2.2.2
+  have hc := Rat.cast_le (K := ℝ) |>.2 (Claims.Flock.Numbers.m1_check_zk (wideLeaf := st.wideLeaf) st.m h1 h2)
   push_cast at hc
   have hi := Claims.Flock.Numbers.innerUp_nonneg
-  have hsq : (Accounting.padRepError (Accounting.m1Schedule st.m) (acct spec st) (Accounting.m1Pad st.m) 2 +
+  have hsq : (Accounting.padRepError (Accounting.m1Schedule st.wideLeaf st.m) (acct spec st) (Accounting.m1Pad st.wideLeaf st.m) 2 +
       (Claims.Flock.Numbers.innerUp : ℝ)) ^ 2 ≤
-      ((Accounting.padRepUp (Accounting.m1Schedule st.m) (Accounting.m1Pad st.m) 2 (Accounting.m1SqrtUp st.m) : ℝ) +
+      ((Accounting.padRepUp (Accounting.m1Schedule st.wideLeaf st.m) (Accounting.m1Pad st.wideLeaf st.m) 2 (Accounting.m1SqrtUp st.wideLeaf st.m) : ℝ) +
         Claims.Flock.Numbers.innerUp) ^ 2 := by
     gcongr
   simp only [tableErr, ite_true]
@@ -186,7 +188,7 @@ theorem tableErr_zk_le (spec : SessionSpec) (st : Stmt) (h1 : 25 ≤ st.m) (h2 :
 theorem tableErr_nonneg (zk : Bool) (spec : SessionSpec) (st : Stmt) : 0 ≤ tableErr zk spec st := by
   unfold tableErr
   split
-  · have : 0 ≤ Accounting.padLinkError (Accounting.m1Schedule st.m) (acct spec st) (Accounting.m1Pad st.m) := by
+  · have : 0 ≤ Accounting.padLinkError (Accounting.m1Schedule st.wideLeaf st.m) (acct spec st) (Accounting.m1Pad st.wideLeaf st.m) := by
       unfold Accounting.padLinkError; positivity
     positivity
   · unfold Accounting.tableError Accounting.linkError; positivity
@@ -225,16 +227,17 @@ theorem plain_facts : ∀ i : PlainIdx, (plainSched i.m).k0 ≤ 6 ∧ (plainSche
     plainLen i ∈ [10, 11, 12, 13, 14, 15, 18, 19, 20, 21, 22, 23] := by
   decide +kernel
 
-/-- The masked level 0 at each `m` served, likewise. -/
-theorem zk_facts : ∀ i : ZkIdx, (zkSched i.m).1.k0 ≤ 6 ∧ (zkSched i.m).1.levels.size ≤ 7 ∧
+/-- The masked level 0 at each table served, likewise, with at most `10` lanes (log): the wide-leaf version's `m − 25`
+at `m = 35`. -/
+theorem zk_facts : ∀ i : ZkIdx, (zkSched i.wideLeaf i.m).1.k0 ≤ 10 ∧ (zkSched i.wideLeaf i.m).1.levels.size ≤ 7 ∧
     zkLen i ∈ [10, 11, 12, 13, 14, 15, 18, 19, 20, 21, 22, 23] := by
   decide +kernel
 
 theorem plainIdx_of {m : ℕ} (h1 : 22 ≤ m) (h2 : m ≤ 35) : ∃ i : PlainIdx, i.m = m :=
   ⟨⟨m - 22, by omega⟩, by simp only [Claims.Flock.PlainIdx.m]; omega⟩
 
-theorem zkIdx_of {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) : ∃ i : ZkIdx, i.m = m :=
-  ⟨⟨m - 25, by omega⟩, by simp only [Claims.Flock.ZkIdx.m]; omega⟩
+theorem zkIdx_of (wideLeaf : Bool) {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) : ∃ i : ZkIdx, i.At wideLeaf m :=
+  ⟨_, Claims.Flock.ZkIdx.of_at wideLeaf h1 h2⟩
 
 theorem d_mem_bounds {d : ℕ} (h : d ∈ [10, 11, 12, 13, 14, 15, 18, 19, 20, 21, 22, 23]) : 10 ≤ d ∧ d ≤ 23 := by
   simp only [List.mem_cons, List.not_mem_nil, or_false] at h
@@ -253,9 +256,9 @@ theorem tableLen_plain_bounds (st : Stmt) (h1 : 22 ≤ st.m) (h2 : st.m ≤ 35) 
 /-- A masked table's level-0 length is `2^10` to `2^23` at every `m` the masked verifier serves. -/
 theorem tableLen_zk_bounds (st : Stmt) (h1 : 25 ≤ st.m) (h2 : st.m ≤ 35) :
     2 ^ 10 ≤ tableLen true st ∧ tableLen true st ≤ 2 ^ 23 := by
-  obtain ⟨i, hi⟩ := zkIdx_of h1 h2
+  obtain ⟨i, hi⟩ := zkIdx_of st.wideLeaf h1 h2
   have hd := (zk_facts i).2.2
-  rw [Claims.Flock.zkLen, hi] at hd
+  rw [Claims.Flock.zkLen, hi.level0] at hd
   obtain ⟨hlo, hhi⟩ := d_mem_bounds hd
   simp only [tableLen, ite_true]
   exact ⟨pow_le_pow_right₀ (by norm_num) hlo, pow_le_pow_right₀ (by norm_num) hhi⟩
@@ -280,7 +283,7 @@ theorem N₀_le {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts
 /-- **`N₀` at one table** is that table's level-0 length, `2^{d₀}`. -/
 theorem N₀_one {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hs : setupOf zk x = some (s, spec, sts)) (h1 : sts.size = 1) :
-    N₀ zk x = (2 : ℝ) ^ (if zk then zkLevel0 (sts[0]'(by omega)).m else plainLevel0 (sts[0]'(by omega)).m).d := by
+    N₀ zk x = (2 : ℝ) ^ (if zk then zkLevel0 (sts[0]'(by omega)).wideLeaf (sts[0]'(by omega)).m else plainLevel0 (sts[0]'(by omega)).m).d := by
   have hl : sts.toList = [sts[0]'(by omega)] := by
     apply List.ext_getElem (by simp [h1])
     intro i hi _
@@ -314,13 +317,13 @@ theorem k_plain (rel : Readable.Parsed → Readable.Relation) {x : Claims.Msg} {
 theorem k_zk (rel : Readable.Parsed → Readable.Relation) {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} (hs : setupOf true x = some (s, spec, sts)) (h0 : sts.size = 1)
     (h1 : 25 ≤ (sts[0]'(by omega)).m) (h2 : (sts[0]'(by omega)).m ≤ 35) :
-    (deployZk rel).N₀ x = 2 ^ (zkLevel0 (sts[0]'(by omega)).m).d ∧ 2 ^ 10 ≤ (deployZk rel).N₀ x ∧
+    (deployZk rel).N₀ x = 2 ^ (zkLevel0 (sts[0]'(by omega)).wideLeaf (sts[0]'(by omega)).m).d ∧ 2 ^ 10 ≤ (deployZk rel).N₀ x ∧
       (deployZk rel).N₀ x ≤ 2 ^ 23 ∧
-      (deployZk rel).k x = Claims.Flock.Numbers.kVal (zkLevel0 (sts[0]'(by omega)).m).d := by
-  obtain ⟨i, hi⟩ := zkIdx_of h1 h2
+      (deployZk rel).k x = Claims.Flock.Numbers.kVal (zkLevel0 (sts[0]'(by omega)).wideLeaf (sts[0]'(by omega)).m).d := by
+  obtain ⟨i, hi⟩ := zkIdx_of (sts[0]'(by omega)).wideLeaf h1 h2
   have hd := (zk_facts i).2.2
-  rw [Claims.Flock.zkLen, hi] at hd
-  have hN : (deployZk rel).N₀ x = 2 ^ (zkLevel0 (sts[0]'(by omega)).m).d := N₀_one hs h0
+  rw [Claims.Flock.zkLen, hi.level0] at hd
+  have hN : (deployZk rel).N₀ x = 2 ^ (zkLevel0 (sts[0]'(by omega)).wideLeaf (sts[0]'(by omega)).m).d := N₀_one hs h0
   obtain ⟨hlo, hhi⟩ := d_mem_bounds hd
   refine ⟨hN, ?_, ?_, ?_⟩
   · rw [hN]; exact pow_le_pow_right₀ (by norm_num) hlo
@@ -357,20 +360,20 @@ theorem repRounds_plain_le (spec : SessionSpec) (st : Stmt) (h1 : 22 ≤ st.m) (
     omega
 
 /-- **A masked rep records at most `2200` rounds** at a served `m`, `k_log ≤ 27`, at most `1026` regions and two link
-points: `(m + (k_log − 6)) + (2 + 2·regions + 1) + (k0 + 7 + 11·(levels − 1)) + 4 ≤ 2194`. -/
+points: `(m + (k_log − 6)) + (2 + 2·regions + 1) + (k0 + 7 + 11·(levels − 1)) + 4 ≤ 2198`. -/
 theorem repRounds_zk_le (spec : SessionSpec) (st : Stmt) (h1 : 25 ≤ st.m) (h2 : st.m ≤ 35)
     (hk : st.c.kLog ≤ 27) (hR : st.regions.size ≤ 1026) (hp : spec.points ≤ 2) : repRounds true spec st ≤ 2200 := by
   have hc : spec.points * st.regions.size ≤ 2052 := (Nat.mul_le_mul hp hR).trans (by norm_num)
-  obtain ⟨i, hi⟩ := zkIdx_of h1 h2
+  obtain ⟨i, hi⟩ := zkIdx_of st.wideLeaf h1 h2
   have hf := zk_facts i
-  rw [hi] at hf
+  rw [hi.sched] at hf
   unfold repRounds
   simp only [ite_true]
-  cases h : Zk.schedule st.m with
+  cases h : Zk.schedule st.wideLeaf st.m with
   | error e => simp
   | ok p =>
     obtain ⟨sch, t⟩ := p
-    have : (zkSched st.m).1 = sch := by simp [zkSched, h]
+    have : (zkSched st.wideLeaf st.m).1 = sch := by simp [zkSched, h]
     rw [this] at hf
     dsimp only
     omega
@@ -401,9 +404,9 @@ theorem tableWeight_plain_le (st : Stmt) (h1 : 22 ≤ st.m) (h2 : st.m ≤ 35) :
 
 theorem tableWeight_zk_le (st : Stmt) (h1 : 25 ≤ st.m) (h2 : st.m ≤ 35) (hk : st.c.kLog ≤ 27) :
     tableWeight true st ≤ 2 ^ 33 := by
-  obtain ⟨i, hi⟩ := zkIdx_of h1 h2
+  obtain ⟨i, hi⟩ := zkIdx_of st.wideLeaf h1 h2
   have hf := zk_facts i
-  rw [hi] at hf
+  rw [hi.sched] at hf
   simp only [tableWeight, ite_true]
   exact Claims.Flock.Numbers.weightOf_le_m1_pads h1 h2 hk hf.1
 

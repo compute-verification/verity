@@ -2,7 +2,7 @@
 (the weights'), ``value`` (a per-window registered value's, such as the scan state rows), ``table_root``, ``opening``, else
 ``free``) and their bytes, its output rows and their bytes, and the SHA-512
 compressions a by-reference commit spends on them: every output row hashed fresh, every input row only re-leafed in its
-port's tree, since a wired row's b||c is its writer's and a registered row's the registration's.
+port's tree, since a wired row's b||c is its writer's and a registered row's the docket's.
 
     python class_rows.py --tiny [--slots]                                 # TINY, locally
     python class_rows.py --llama1b [--int8] --probe 1,2,2                 # one Program at a probe class, ~2 s
@@ -93,11 +93,13 @@ def main(argv=None) -> int:
     ap.add_argument("--out", default=None)
     a = ap.parse_args(argv)
     sys.path.insert(0, str(Path.cwd() / "adapters/vllm"))
+    sys.path.insert(0, str(Path.cwd() / "adapters/torch"))
     from verity_vllm.program.predict import window_circuit as WC
     from verity_vllm.program.predict.window_circuit import CLASS_OF_RECORD, Grain, WindowClass, class_circuit
-    from verity.commitments.windows import interface as IF
+    from verity.commitments.periods import interface as IF
     from verity_vllm.program.predict.steps import Registered
     from verity_vllm.program.predict.phi import Phi
+    from verity.device import load_card, number
 
     t0 = time.perf_counter()
     if a.tiny:
@@ -106,12 +108,13 @@ def main(argv=None) -> int:
         cls = WindowClass(8, 4, 2, lanes=4, every=16) if a.slots else WindowClass(2, 4, 2)
         circuit = class_circuit(reg, cls, None, Grain(gemm_words=512, rows=9, select=64), provable=False)
     else:
-        cfg = json.loads((Path.cwd() / "adapters/vllm/tests/program/predict/fixtures/llama32-1b.config.json").read_text())
-        target = {"compute_capability": [12, 0], "num_sms": 188}
+        cfg = json.loads((Path.cwd() / "tests/adapters/vllm/tests/program/predict/fixtures/llama32-1b.config.json").read_text())
+        target = {"compute_capability": [12, 0], "num_sms": int(number(load_card("rtx-pro-6000-server")["sm"]["count"]))}
         if a.int8:
             from verity_vllm.program.model import INT8_EXACT_QUANT
             cfg = {**cfg, "quantization_config": dict(INT8_EXACT_QUANT)}
-            target = {"compute_capability": [9, 0], "num_sms": 132, "int8_exact": "linears"}
+            target = {"compute_capability": [9, 0], "num_sms": int(number(load_card("h200-sxm-141gb")["sm"]["count"])),
+                      "int8_exact": "linears"}
         phi = Phi(model={"repo": "org/m", "revision": "r", "hf_config": cfg}, target=target)
         reg = Registered.of(phi, default_seed=7)
         cls = WindowClass(*map(int, a.cls.split(","))) if a.cls else CLASS_OF_RECORD

@@ -4,12 +4,12 @@
         --workload workloads/workload_qwen15_32x16_1req.json --case B1 --tp 2 --out /vol/cp/tp2/runs/<name>/capture \
         [--snapshot-steps all|0,1,2,3] [--no-observer] [--census] [--verify-weights] [--engine-arg key=value ...]
 
-Same κ as `bench/m1_capture.py` (`profile.apply_env()`, `engine_kwargs(cp, enforce_eager=True)`, `enable_prefix_caching=False`,
+Same κ as `bench/match_capture.py` (`profile.apply_env()`, `engine_kwargs(cp, enforce_eager=True)`, `enable_prefix_caching=False`,
 uninstrumented throwaway warm-up, our request ids) with two differences forced by the process topology:
 
   * `tensor_parallel_size` (and any `--engine-arg`) is passed to `LLM(...)` directly — `vllm_adapter.build_engine` exposes no
     engine-argument passthrough and ends in `handle.model_runner(llm)`, which has no in-process runner to find under the
-    multiprocess executor (PROPOSED: `build_engine(engine_args=...)`, `m1_capture/run_config --engine-arg`);
+    multiprocess executor (PROPOSED: `build_engine(engine_args=...)`, `match_capture/run_config --engine-arg`);
   * the observer is installed in every rank's process through `worker_extension_cls` = `tp2_worker.EXTENSION` and driven with
     `llm.collective_rpc("tp2_install" | "tp2_close")`; the run directory holds one raw log per rank (`log.rank<r>.jsonl.gz`)
     plus `rank<r>/{values,snapshots.json,versions.json,cos_sin_cache.npy}`, `stats.rank<r>.json`, `tokens.rank<r>.json`, and the

@@ -9,7 +9,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Discharge.Exec.Tables
 
 /-!
-# flock-verify's acceptance with its digest comparisons read through `keep`
+# verity-verify-proof's acceptance with its digest comparisons read through `keep`
 
 `Exec.Accepts` reads `Flock.verify`. The plain verdict's text with each comparison of a record digest with the digest
 of an encoding read through `keep` is `Flock.verifyWithMK keep` (`Flock/With/VerifyE.lean`): at `keep := id` it is
@@ -220,7 +220,7 @@ theorem decodeWithK_allRetained (keep : Bool → Bool) (hs : Hashes Flock.V) {sp
 
 /-! ## The acceptance -/
 
-/-- **flock-verify accepts the transcript, its digest comparisons read through `keep`**: `Accepts` with
+/-- **verity-verify-proof accepts the transcript, its digest comparisons read through `keep`**: `Accepts` with
 `verifyWithMK keep With.std` for `verify`. -/
 def AcceptsK (keep : Bool → Bool) (I : Inputs) (t : Transcript) : Prop :=
   ∃ spec sts, setupOf I t.record = .ok (spec, sts) ∧

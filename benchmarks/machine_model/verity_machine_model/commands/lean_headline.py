@@ -1,6 +1,6 @@
 """machine-model lean-headline [--check | --numbers] [--json F]
                                           write every family's headline instances as exact Lean data, the files the
-                                          headline guarantees read (security/Definitions/Accounting/Headline/ and
+                                          headline guarantees read (security/Definitions/Pouw/Headline/ and
                                           HeadlineDc/, Sm*.lean); --check writes nothing and exits 1 when a committed
                                           file is not what it would write; --numbers prints the data-centre
                                           families' readings and writes no Lean file; --json F also writes those

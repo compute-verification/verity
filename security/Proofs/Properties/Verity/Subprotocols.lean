@@ -26,15 +26,16 @@ everything (`soundness_at_of_componentBounds_nontrivial`).
 
 Each bound is a hypothesis until its subprotocol's piece proves it of its compiled component in the causal game: for a
 subprotocol that decides an `Audit` (`Subprotocol.ofAudit`), from a per-period guarantee of the coins model
-(`Accounting.PeriodRun.Sound`) coupled to the game's coins; the inference-only policy's claim is about the declaration
-and reads no coin, so its bound is its own.
+(`ResourceAccounting.PeriodRun.Sound`) coupled to the game's coins; the inference-only policy's claim is about its own case in
+the play's messages and reads no coin, and its target is proved outright where v0 decides it
+(`Proofs.Properties.Verity.InferenceOnly`); at remote's plain sibling it is the rows check's, open.
 -/
 
 @[expose] public section
 
 namespace Verity
 
-open Accounting Core
+open ResourceAccounting Core
 open scoped ENNReal
 
 namespace Vocab
@@ -88,7 +89,7 @@ section
 
 variable {k : Verity.Registration.Composite}
 
-/-- **Sampled proofs' target from its component-level bound** -/
+/-- **SPOT's target from its component-level bound** -/
 theorem spotSound_of (h : V.ComponentBound k .sampled) : V.SpotSound k := V.sound_of k .sampled h
 
 /-- **PoUW's target from its component-level bound** -/
@@ -98,7 +99,7 @@ theorem pouwSound_of (h : V.ComponentBound k .pouw) : V.PouwSound k := V.sound_o
 theorem inferenceOnlySound_of (h : V.ComponentBound k .inferenceOnly) : V.InferenceOnlySound k :=
   V.sound_of k .inferenceOnly h
 
-/-- **At the honest deployment, sampled proofs**: `sound_of_honest` at `.sampled`. -/
+/-- **At the honest deployment, SPOT**: `sound_of_honest` at `.sampled`. -/
 theorem spotSound_of_honest (h : V.HonestHolds k .sampled) (θ : ByteArray) (F : Array ByteArray)
     (c : ByteArray) (hreg : V.Registered θ F) :
     Game.prob (fun o => ComponentAccepts k .sampled o.sent ∧ ¬ V.Holds k θ F c (V.honest θ F c) .sampled o)
@@ -126,7 +127,7 @@ theorem inferenceOnlySound_of_honest (h : V.HonestHolds k .inferenceOnly) (θ : 
         (V.game θ F c) (V.honest θ F c) = 0 :=
   V.sound_of_honest k .inferenceOnly h θ F c hreg
 
-/-- **Sampled proofs' target fails for a verifier that accepts everything**: `sound_of_nontrivial` at `.sampled`. -/
+/-- **SPOT's target fails for a verifier that accepts everything**: `sound_of_nontrivial` at `.sampled`. -/
 theorem spotSound_of_nontrivial (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Game.Strategy (V.game θ F c))
     (hfail : ∀ o, ¬ V.Holds k θ F c σ .sampled o) (hlt : V.error .sampled θ F c σ < 1) :
@@ -171,7 +172,7 @@ theorem componentBound_unbounded (k : Verity.Registration.Composite) (a : Subpro
 end Idle
 
 /-- **`SoundnessOfComponents`' honest lemma**: its hypotheses hold at the idle deployment's compiled remote composite,
-sampled proofs, PoUW and the inference-only policy each meeting its bound at its component. -/
+SPOT, PoUW and the inference-only policy each meeting its bound at its component. -/
 theorem soundness_at_of_componentBounds_honest :
     Idle.unbounded.ComponentBound .remote .sampled ∧ Idle.unbounded.ComponentBound .remote .pouw ∧
       Idle.unbounded.ComponentBound .remote .inferenceOnly :=
@@ -180,6 +181,6 @@ theorem soundness_at_of_componentBounds_honest :
 /-- **`SoundnessOfComponents`' nontrivial lemma**: its conclusion fails at remote for a verifier that accepts
 everything, at the idle deployment whose errors are all `0`. -/
 theorem soundness_at_of_componentBounds_nontrivial : ¬ Idle.exact.SoundnessFor .remote fun _ => True :=
-  Idle.nontrivial_at .remote (Finset.mem_filter.2 ⟨Finset.mem_univ _, rfl⟩)
+  Idle.nontrivial_at .remote (Verity.mem_subprotocols.2 (by decide))
 
 end Verity

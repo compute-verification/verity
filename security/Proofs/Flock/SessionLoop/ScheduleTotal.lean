@@ -35,7 +35,7 @@ def ScheduleTotal (x : Msg) : Prop :=
   ∀ (s0 : FlockDeploy.Ins) (spec : _root_.Flock.SessionSpec) (sts : Array _root_.Flock.Stmt),
     FlockDeploy.setupOf true x = some (s0, spec, sts) →
   ∀ k < 2 * sts.size, ∀ (link : Array F128), link.size / sts[k / 2]!.mPts = spec.points →
-  ∀ (c : _root_.Flock.Firewall.Frame.Cfg) (t : _root_.Flock.Firewall.Finish.Tab) (dom : ByteArray)
+  ∀ (c : _root_.Flock.ZkServer.Frame.Cfg) (t : _root_.Flock.ZkServer.Finish.Tab) (dom : ByteArray)
     (xs : Array (Array F128)) (hs : Array ByteArray),
     placeholder spec sts k link = .ok (c, t, dom, xs, hs) →
   ∀ (cr : Array (Array F128)) (sched : Array (ByteArray × ℕ)),

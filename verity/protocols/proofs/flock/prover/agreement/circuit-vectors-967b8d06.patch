@@ -34,7 +34,7 @@ index 956b7edb..3e373441 100644
      h.update(what.as_bytes());
 @@ -763,9 +786,10 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
          srv.cfg.draw_law = None;
-         srv.cfg.draw_given = Some(draw.clone());
+         srv.cfg.sample_given = Some(draw.clone());
          let s = Arc::new(Mutex::new(srv));
 -        let (v, _) = session(st, inst, shared(InProc(s.clone())), &Plan { gpu, ..Plan::default() }, ProverSeed::from_os());
 +        let (v, proofs) = session(st, inst, shared(InProc(s.clone())), &Plan { gpu, ..Plan::default() }, ProverSeed::from_os());

@@ -1,6 +1,6 @@
 """PoUB's receipts beside the store's load: each pass's sketch of every unit of `C*` as the decode
 reads it, the units' receipts and the pass's root, bit for bit PoUB's `p2`'s (the interface is `PROTOCOL.md`
-§11 of `verity/protocols/accounting/poub/verifier`; the fixture is `benchmarks/pous/p2_v1/serve.py fixture`). ::
+§11 of `verity/protocols/resource_accounting/memory/poub/verifier`; the fixture is `benchmarks/pous/p2_v1/serve.py fixture`). ::
 
     units = plan_units(layout.tensors)         # the units the store's tensors lie in: the pass's Plan.whole
     tree = Tree(units, device)                 # the receipt tree's row and leaf tables over one y buffer, built once
@@ -17,7 +17,7 @@ reads it, the units' receipts and the pass's root, bit for bit PoUB's `p2`'s (th
   block's π alone (a GEMM against S_i's four block columns, the one of j mod 4 kept), which the fixture is held to
   first.
 - **y** (`receipts.cu`): a thread a unit, one SHA-512 compression from `sketch_prefix(seed)`'s midstate over
-  u64be g ‖ σ_g, with the GPU's one SHA-512 compression (`verity/circuits/kernels/sha512.cuh`); `receipts_host.cpp` is its
+  u64be g ‖ σ_g, with the GPU's one SHA-512 compression (`verity/commitments/cuda/sha512.cuh`); `receipts_host.cpp` is its
   host twin.
 - **root** (`Tree`): sha512_rows' engine over the y buffer: each leaf's 16 receipts (1,024 bytes) a sha512/row/v2 row,
   its hm96-sha512 leaf under the leaf's 192-byte salt, its frame-v3-sha512 leaf in the pass's domain
@@ -45,15 +45,15 @@ import numpy as np
 import torch
 from verity_config.settings import of
 
-from verity.circuits.kernels import SHA512
-from verity.protocols.accounting.poub.verifier import p2
-from verity.protocols.accounting.poub.verifier import receipts as R
+from verity.commitments.cuda import SHA512
+from verity.commitments.cuda.sha512_rows import engine as SE
+from verity.protocols.resource_accounting.memory.poub.verifier import p2
+from verity.protocols.resource_accounting.memory.poub.verifier import receipts as R
 
 settings = of(__file__)
 HERE = Path(__file__).resolve().parent
-ROWS_DIR = HERE.parent / "sha512_rows"
-sys.path.insert(0, str(ROWS_DIR))
-import engine as SE  # noqa: E402
+sys.path.insert(0, str(HERE.parent / "sha512_rows"))
+import torch_engine as TE  # noqa: E402
 
 BLOCK, UNIT, PER = p2.BLOCK_BYTES, p2.UNIT_BYTES, p2.UNIT_BLOCKS
 DEVICE_SOURCES = (SHA512, HERE / "receipts.cuh", HERE / "receipts.cu")
@@ -94,7 +94,7 @@ def receipts_lib(arch: str | None) -> ctypes.CDLL:
     nvcc = shutil.which("nvcc")
     if nvcc is None:
         raise RuntimeError("no nvcc on the path")
-    flags = (*SE.NVCC_FLAGS, *SE.variant_flags(SE.DEFAULT_VARIANT), f"-gencode=arch=compute_{arch},code=sm_{arch}")
+    flags = (*SE.NVCC_FLAGS, *SE.variant_flags(TE.VARIANT), f"-gencode=arch=compute_{arch},code=sm_{arch}")
     return _build(nvcc, DEVICE_SOURCES, flags, "libp2r_cuda.so")
 
 
@@ -175,7 +175,7 @@ class Tree:
     def __init__(self, units: int, device: Any) -> None:
         self.device = torch.device(device)
         self.host = self.device.type != "cuda"
-        self.E = SE.Engine("host" if self.host else self.device)
+        self.E = TE.Engine("host" if self.host else self.device)
         self.units, self.G = units, R.leaves(units)
         self.plan = R.Plan.whole(units)
         self.y = torch.zeros(units, R.DIGEST_BYTES, dtype=torch.uint8, device=self.device)

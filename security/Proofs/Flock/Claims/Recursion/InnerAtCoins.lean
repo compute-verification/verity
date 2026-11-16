@@ -57,7 +57,7 @@ readers take it off `x` and the coins alone:
 * its `m` and `k_log` are the inner statement's table 0's (`Files.stmt` at the files `x` carries, which the deployed
   plain verifier sets up at the same numbers, `innerSetup_files`);
 * each rep `r`'s rounds, where its stream has any, are `canonRounds` of the coins after the link, up to rounds of no
-  coins (`CoinSource.ofRounds` drops them, so `verifierRows` reads only the rest: `verifierRows_filter`).
+  coins (`RoundCoins.ofRounds` drops them, so `verifierRows` reads only the rest: `verifierRows_filter`).
 
 `staged_innerAt` proves it from the verifier's checks. The rounds are the challenger's live-coin part's record's (`coinTie_sized`, the
 coin tie with `repCoins`' round counts); `checkReads` holds that record to the schedule of the verifier's inner shape,
@@ -539,7 +539,7 @@ theorem staged_rounds {b : Brings} {s : ℕ} {x xO : Msg} {c : ℕ → Coin} {r 
     exact Option.some.inj hsrc
   rw [hrec] at hdec
   obtain ⟨R', hRead', sp, hsized, hall⟩ := coinTie_sized
-    (fun a lt x hx => (FlockSoundness.Audit.DrawExec.mem_qsort a lt x).1 hx) hic hR hdec hfind
+    (fun a lt x hx => (FlockSoundness.Audit.SampleExec.mem_qsort a lt x).1 hx) hic hR hdec hfind
   rw [hRead] at hRead'
   cases hRead'
   have hsz : (st'.rounds.map (·.coins)).size = st'.rounds.size := Array.size_map ..

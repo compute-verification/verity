@@ -1,4 +1,10 @@
-/-
+module
+
+public import Flock.With.Log
+public import Flock.With.Setup
+public import Flock.With.SimWalk
+
+/-!
 The `…With` functions of `Flock.With.Setup` under a simulation (`Flock.With.Sim`): run with two oracles that `S` relates
 hash by hash, each function's two runs are related by `S`, `Stmt.setupTablesWith`'s among them (`setupTablesWith_sim`).
 The monads are lawful, and in each a `throw` ends the run (`Throws`), so that the walk meets a check's join point only at
@@ -8,11 +14,6 @@ With the oracles of `Flock.With.Log`: forgetting the log gives back setup at `h`
 the log's length is `Stmt.setupCalls h`, the number of SHA-512 calls a run with the counting oracle makes
 (`Stmt.setupLogged_size`).
 -/
-module
-
-public import Flock.With.Log
-public import Flock.With.Setup
-public import Flock.With.SimWalk
 
 @[expose] public section
 
@@ -197,34 +198,34 @@ theorem loadPublicWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : T
   sim_walk [publicDigestWith_sim S hh]
   iterate 40 (all_goals (try (dsimp +zetaDelta -zeta only)); all_goals sim_walk [publicDigestWith_sim S hh])
 
-theorem drawnWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws M) (tN : Throws N)
+theorem sampledWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws M) (tN : Throws N)
     {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (c : Circuit) (pub : Public) (draw : Json) :
-    S.R (HmRow.drawnWith hs c pub draw) (HmRow.drawnWith hs' c pub draw) := by
-  unfold HmRow.drawnWith
+    S.R (HmRow.sampledWith hs c pub draw) (HmRow.sampledWith hs' c pub draw) := by
+  unfold HmRow.sampledWith
   simp -zeta only [tM.bind, tN.bind]
   sim_walk [publicDigestWith_sim S hh]
   iterate 40 (all_goals (try (dsimp +zetaDelta -zeta only)); all_goals sim_walk [publicDigestWith_sim S hh])
 
 theorem templateStrataWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws M) (tN : Throws N)
-    {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (law : String) (obj : Json) (program : ByteArray) :
-    S.R (HmRow.templateStrataWith hs law obj program) (HmRow.templateStrataWith hs' law obj program) := by
+    {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (samplingDesign : String) (obj : Json) (program : ByteArray) :
+    S.R (HmRow.templateStrataWith hs samplingDesign obj program) (HmRow.templateStrataWith hs' samplingDesign obj program) := by
   unfold HmRow.templateStrataWith
   simp -zeta only [tM.bind, tN.bind]
   sim_walk [descParseWith_sim S tM tN hh]
   iterate 40 (all_goals (try (dsimp +zetaDelta -zeta only)); all_goals sim_walk [descParseWith_sim S tM tN hh])
 
-theorem stratifiedLawWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws M) (tN : Throws N)
+theorem stratifiedSamplingDesignWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws M) (tN : Throws N)
     {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (obj : Json) (program : ByteArray) (k : Nat) :
-    S.R (HmRow.stratifiedLawWith hs obj program k) (HmRow.stratifiedLawWith hs' obj program k) := by
-  unfold HmRow.stratifiedLawWith
+    S.R (HmRow.stratifiedSamplingDesignWith hs obj program k) (HmRow.stratifiedSamplingDesignWith hs' obj program k) := by
+  unfold HmRow.stratifiedSamplingDesignWith
   sim_walk [templateStrataWith_sim S tM tN hh]
   iterate 40 (all_goals (try (dsimp +zetaDelta -zeta only)); all_goals sim_walk [templateStrataWith_sim S tM tN hh])
 
-theorem workLawWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws M) (tN : Throws N)
+theorem workSamplingDesignWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws M) (tN : Throws N)
     {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (obj : Json) (program : ByteArray) (k : Nat)
     (table : Array (String × Nat × Nat)) :
-    S.R (HmRow.workLawWith hs obj program k table) (HmRow.workLawWith hs' obj program k table) := by
-  unfold HmRow.workLawWith
+    S.R (HmRow.workSamplingDesignWith hs obj program k table) (HmRow.workSamplingDesignWith hs' obj program k table) := by
+  unfold HmRow.workSamplingDesignWith
   sim_walk [templateStrataWith_sim S tM tN hh]
   iterate 40 (all_goals (try (dsimp +zetaDelta -zeta only)); all_goals sim_walk [templateStrataWith_sim S tM tN hh])
 
@@ -246,13 +247,13 @@ theorem setupHWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throw
   unfold Stmt.setupHWith
   simp -zeta only [tM.bind, tN.bind]
   sim_walk [parseTypedWith_sim S tM tN hh, parseWith_sim S tM tN hh, Sim.map S, checkPartitionWith_sim S tM tN hh,
-    loadPublicWith_sim S tM tN hh, drawnWith_sim S tM tN hh, stratifiedLawWith_sim S tM tN hh, checkPublicWith_sim S tM tN hh,
+    loadPublicWith_sim S tM tN hh, sampledWith_sim S tM tN hh, stratifiedSamplingDesignWith_sim S tM tN hh, checkPublicWith_sim S tM tN hh,
     deriveTemplateUnitsWith_sim S tM tN hh, qwordFindingWith_sim S tM tN hh]
   iterate 40
     all_goals try (dsimp +zetaDelta -zeta only)
     all_goals sim_walk [parseTypedWith_sim S tM tN hh, parseWith_sim S tM tN hh, Sim.map S,
-      checkPartitionWith_sim S tM tN hh, loadPublicWith_sim S tM tN hh, drawnWith_sim S tM tN hh,
-      stratifiedLawWith_sim S tM tN hh, checkPublicWith_sim S tM tN hh, deriveTemplateUnitsWith_sim S tM tN hh,
+      checkPartitionWith_sim S tM tN hh, loadPublicWith_sim S tM tN hh, sampledWith_sim S tM tN hh,
+      stratifiedSamplingDesignWith_sim S tM tN hh, checkPublicWith_sim S tM tN hh, deriveTemplateUnitsWith_sim S tM tN hh,
       qwordFindingWith_sim S tM tN hh]
 
 theorem hmOutParseWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws M) (tN : Throws N)
@@ -298,10 +299,10 @@ theorem hmInLoadPublicWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM
   sim_walk [loadPublicWith_sim S tM tN hh]
   iterate 40 (all_goals (try (dsimp +zetaDelta -zeta only)); all_goals sim_walk [loadPublicWith_sim S tM tN hh])
 
-theorem hmInDrawnWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws M) (tN : Throws N)
+theorem hmInSampledWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws M) (tN : Throws N)
     {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (c : Circuit) (pi : HmIn.Ports) (pub : Public)
-    (draw : Json) : S.R (HmIn.drawnWith hs c pi pub draw) (HmIn.drawnWith hs' c pi pub draw) :=
-  drawnWith_sim S tM tN hh _ pub draw
+    (draw : Json) : S.R (HmIn.sampledWith hs c pi pub draw) (HmIn.sampledWith hs' c pi pub draw) :=
+  sampledWith_sim S tM tN hh _ pub draw
 
 theorem hmLinksCheckWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws M) (tN : Throws N)
     {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (c : Circuit) (pop : Public)
@@ -321,13 +322,13 @@ theorem setupHiddenWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : 
   unfold Stmt.setupHiddenWith
   simp -zeta only [tM.bind, tN.bind]
   sim_walk [hmOutParseCommitWith_sim S tM tN hh, Sim.map S, checkPartitionWith_sim S tM tN hh,
-    hmInLoadPublicWith_sim S tM tN hh, hmInDrawnWith_sim S tM tN hh, stratifiedLawWith_sim S tM tN hh,
+    hmInLoadPublicWith_sim S tM tN hh, hmInSampledWith_sim S tM tN hh, stratifiedSamplingDesignWith_sim S tM tN hh,
     hmOutCheckPublicWith_sim S tM tN hh, deriveTemplateUnitsWith_sim S tM tN hh, hmLinksCheckWith_sim S tM tN hh,
     qwordFindingWith_sim S tM tN hh]
   iterate 40
     all_goals try (dsimp +zetaDelta -zeta only)
     all_goals sim_walk [hmOutParseCommitWith_sim S tM tN hh, Sim.map S, checkPartitionWith_sim S tM tN hh,
-      hmInLoadPublicWith_sim S tM tN hh, hmInDrawnWith_sim S tM tN hh, stratifiedLawWith_sim S tM tN hh,
+      hmInLoadPublicWith_sim S tM tN hh, hmInSampledWith_sim S tM tN hh, stratifiedSamplingDesignWith_sim S tM tN hh,
       hmOutCheckPublicWith_sim S tM tN hh, deriveTemplateUnitsWith_sim S tM tN hh, hmLinksCheckWith_sim S tM tN hh,
       qwordFindingWith_sim S tM tN hh]
 
@@ -344,12 +345,12 @@ theorem setupTablesWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : 
         closure publicInputs) := by
   unfold Stmt.setupTablesWith
   simp -zeta only [tM.bind, tN.bind]
-  sim_walk [stratifiedLawWith_sim S tM tN hh, workLawWith_sim S tM tN hh, setupHiddenWith_sim S tM tN hh,
+  sim_walk [stratifiedSamplingDesignWith_sim S tM tN hh, workSamplingDesignWith_sim S tM tN hh, setupHiddenWith_sim S tM tN hh,
     setupHWith_sim S tM tN hh, hmOutParseWith_sim S tM tN hh, hmInLoadPublicWith_sim S tM tN hh,
     loadPublicWith_sim S tM tN hh, parseWith_sim S tM tN hh]
   iterate 40
     all_goals try (dsimp +zetaDelta -zeta only)
-    all_goals sim_walk [stratifiedLawWith_sim S tM tN hh, workLawWith_sim S tM tN hh, setupHiddenWith_sim S tM tN hh,
+    all_goals sim_walk [stratifiedSamplingDesignWith_sim S tM tN hh, workSamplingDesignWith_sim S tM tN hh, setupHiddenWith_sim S tM tN hh,
       setupHWith_sim S tM tN hh, hmOutParseWith_sim S tM tN hh, hmInLoadPublicWith_sim S tM tN hh,
       loadPublicWith_sim S tM tN hh, parseWith_sim S tM tN hh]
 

@@ -8,10 +8,10 @@ import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
 
 /-!
-# Product laws on committed rounds
+# Product sampling designs on committed rounds
 
-The hybrid of `Hybrid.lean` runs on `ω : I → Z` sampled from a product of per-round laws `μ j` (`W μ ω`, the weight of
-`ω`). `resample` resamples one coordinate `k` from its own sampling design inside the sum, and `reweight` changes `k`'s law under a
+The hybrid of `Hybrid.lean` runs on `ω : I → Z` sampled from a product of per-round sampling designs `μ j` (`W μ ω`, the weight of
+`ω`). `resample` resamples one coordinate `k` from its own sampling design inside the sum, and `reweight` changes `k`'s sampling design under a
 function that does not read `ω k`.
 -/
 
@@ -26,7 +26,7 @@ section Weights
 
 variable {I Z : Type} [Fintype I] [DecidableEq I] [Fintype Z]
 
-/-- The weight of `ω` under the product of the laws `μ j`. -/
+/-- The weight of `ω` under the product of the sampling designs `μ j`. -/
 noncomputable def W (μ : I → Z → ℝ≥0∞) (ω : I → Z) : ℝ≥0∞ := ∏ j, μ j (ω j)
 
 /-- The weight of `ω`'s coordinates other than `k`. -/
@@ -124,7 +124,7 @@ theorem resample {μ : I → Z → ℝ≥0∞} {k : I} (hμ : ∑ z, μ k z = 1)
   refine Finset.sum_congr rfl fun ω _ => ?_
   ring
 
-/-- **Changing coordinate `k`'s law** under a function that does not read `ω k`. -/
+/-- **Changing coordinate `k`'s sampling design** under a function that does not read `ω k`. -/
 theorem reweight {μ μ' : I → Z → ℝ≥0∞} {k : I} (hoff : ∀ j, j ≠ k → μ j = μ' j) (hμ : ∑ z, μ k z = 1)
     (hμ' : ∑ z, μ' k z = 1) (G : (I → Z) → ℝ≥0∞) (hG : ∀ ω z, G (update ω k z) = G ω) :
     ∑ ω, W μ ω * G ω = ∑ ω, W μ' ω * G ω := by

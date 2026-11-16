@@ -86,8 +86,8 @@ variable (c : Code) (iroots : Claims.Msg → Claims.Seen → ℕ → List Claims
 `deployZk`, at its deployed decoder, with Flock's KS by `MaskedKS`, the list bound by `listWithin_deployZk`, binding by
 `commit_binds` and the inner numbers by `innerNumbers_deploy`. It takes the sampled verifier's four code facts and its
 sessions' runs, scope (`SessionsIn`) and openings. -/
-theorem ks_masked (hd : c.DrawLaw) (hr : c.Refuses FlockDeploy.sha512)
-    (hi : c.InteriorFixed FlockDeploy.sha512 iroots) (hf : c.DrawFixed)
+theorem ks_masked (hd : c.SampleDesign) (hr : c.Refuses FlockDeploy.sha512)
+    (hi : c.InteriorFixed FlockDeploy.sha512 iroots) (hf : c.SampleFixed)
     (hruns : Claims.Sampling.SessionRuns FlockDeploy.sha512 (deploy _root_.Flock.Readable.relation c))
     (hnum : SessionsIn c.atInnerN₀)
     (hopens : Claims.Sampling.SessionOpens FlockDeploy.sha512 (deploy _root_.Flock.Readable.relation c) iroots) :
@@ -97,8 +97,8 @@ theorem ks_masked (hd : c.DrawLaw) (hr : c.Refuses FlockDeploy.sha512)
     (innerNumbers_deploy _ c hnum) hopens
 
 /-- **Its committed form**: as `ks_masked`, `KSReg` (`ksReg_compiled`). -/
-theorem ksReg_masked (hd : c.DrawLaw) (hr : c.Refuses FlockDeploy.sha512)
-    (hi : c.InteriorFixed FlockDeploy.sha512 iroots) (hf : c.DrawFixed)
+theorem ksReg_masked (hd : c.SampleDesign) (hr : c.Refuses FlockDeploy.sha512)
+    (hi : c.InteriorFixed FlockDeploy.sha512 iroots) (hf : c.SampleFixed)
     (hruns : Claims.Sampling.SessionRuns FlockDeploy.sha512 (deploy _root_.Flock.Readable.relation c))
     (hnum : SessionsIn c.atInnerN₀)
     (hopens : Claims.Sampling.SessionOpens FlockDeploy.sha512 (deploy _root_.Flock.Readable.relation c) iroots) :

@@ -51,7 +51,6 @@ KNOWN = {
     ("tools/research/README.md", "research keeper set NAME --on NODE"):
         "infra: names set, stop and status at once, and `set` takes its command after `--`",
     ("tools/research/src/research/slack.py", "research msg router"): "comms: a subcommand to come, named as one",
-    ("verity/protocols/compose/verifier/remote/README.md", "verity verify proof"): "soundness: a command to come, named as one",
     ("verity/protocols/compose/verifier/remote/README.md", "verity verify remote"): "soundness: a command to come, named as one",
 }
 
@@ -476,8 +475,8 @@ def test_a_verdict_reads_the_tree_alone(tmp_path):
     (tmp_path / "refuses.py").write_text("import sys\nopen(sys.argv[1]).read()\nsys.exit('none of its slots is within these cores')\n")
     (tmp_path / "bad.py").write_text("import sys\nsys.exit('bad: no such option')\n")
     probe = "".join(json.dumps({"file": "-", "line": 0, "argv": a, "block": True}) + "\n" for a in (
-        ["tools/verity/check/check.py", "--record", "--on", "auto", "--pool", "research"],
-        ["tools/verity/check/check.py", "--agreement-files"], ["tools/verity/check/check.py", "--preflight"],
+        ["tools/check/check.py", "--record", "--on", "auto", "--pool", "research"],
+        ["tools/check/check.py", "--agreement-files"], ["tools/check/check.py", "--preflight"],
         ["research", "notes", "sync", "--path", "kb"], [str(tmp_path / "refuses.py"), str(tmp_path / "slots")],
         [str(tmp_path / "bad.py")]))
     bare = {"PATH": "/usr/bin:/bin", "HOME": str(tmp_path),

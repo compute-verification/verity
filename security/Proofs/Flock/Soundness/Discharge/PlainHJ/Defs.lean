@@ -19,15 +19,15 @@ import Mathlib.Tactic.NormNum.RealSqrt
 /-!
 # One plain sampled session of `J` hidden-output tables: the plan, the samples and the openings
 
-`flock-verify verify --plain-tables --session-tables J` (no `--zk`) at hidden outputs: `Stmt.setupTables` sets table `j`
+`verity-verify-proof verify --plain-tables --session-tables J` (no `--zk`) at hidden outputs: `Stmt.setupTables` sets table `j`
 up with `Stmt.setupHidden` under `tagsAt` at its sample `Composed.drawJ`. These are `PlainJ/Defs.lean`'s plan pieces with
-the one-table hidden-output tables (`HiddenExec.TableH`, `DrawSetupH`) in place of `Integrate.Table`, at the plain inputs
+the one-table hidden-output tables (`HiddenExec.TableH`, `SampleSetupH`) in place of `Integrate.Table`, at the plain inputs
 `PlainJ.inputsPJ I j`, as `ZkHidden.tableShHJ` takes them at the `--zk` inputs:
 
-* `tablePHJ`, `planPHJ`, `tabPHJ`: table `j`'s hidden-output table with the inputs it is set up on (its `DrawSetupH`'s
+* `tablePHJ`, `planPHJ`, `tabPHJ`: table `j`'s hidden-output table with the inputs it is set up on (its `SampleSetupH`'s
   table at table `j`'s inputs, else a reference setup `x₀`'s refused table at table 0's), the plan of `nTab I` tables,
   and each sampled proof block's table (`partOf`).
-* `DrawOkPHJ`, `opnPHJ`: the challenger's live-coin part's sample at each table, and table `j`'s openings, with `setupHidden` for
+* `SampleOkPHJ`, `opnPHJ`: the challenger's live-coin part's sample at each table, and table `j`'s openings, with `setupHidden` for
   `setupH`.
 -/
 
@@ -47,35 +47,35 @@ variable {n mPts : ℕ} {Reg : Type}
 section Plan
 
 variable {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-  (x₀ : DrawSetupH (inputsPJ I 0) mPts S₀ d₀)
+  (x₀ : SampleSetupH (inputsPJ I 0) mPts S₀ d₀)
 
 open Classical in
-/-- **Table `j` at sample `S`, under hidden outputs**, with the inputs it is set up on: the table flock-verify sets up at
+/-- **Table `j` at sample `S`, under hidden outputs**, with the inputs it is set up on: the table verity-verify-proof sets up at
 table `j`'s inputs and sample when it sets one up, and otherwise the reference setup `x₀`'s refused table at table 0's
 inputs. -/
 noncomputable def tablePHJ (S : Finset (Fin n)) (j : Fin (nTab I)) :
     (I' : Inputs) × TableH I' mPts (partS I (dj S) S j) :=
-  if h : Nonempty (DrawSetupH (inputsPJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) then
+  if h : Nonempty (SampleSetupH (inputsPJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) then
     ⟨inputsPJ I j, (Classical.choice h).table⟩
   else ⟨inputsPJ I 0, x₀.refused _⟩
 
 theorem tablePHJ_set {S : Finset (Fin n)} {j : Fin (nTab I)}
-    (h : Nonempty (DrawSetupH (inputsPJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j))) :
+    (h : Nonempty (SampleSetupH (inputsPJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j))) :
     tablePHJ dj x₀ S j = ⟨inputsPJ I j, (Classical.choice h).table⟩ := by
   unfold tablePHJ
   rw [dite_eq_left_of_eq_true (eq_true h)]
 
 theorem tablePHJ_refused {S : Finset (Fin n)} {j : Fin (nTab I)}
-    (h : ¬ Nonempty (DrawSetupH (inputsPJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j))) :
+    (h : ¬ Nonempty (SampleSetupH (inputsPJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j))) :
     tablePHJ dj x₀ S j = ⟨inputsPJ I 0, x₀.refused _⟩ := by
   unfold tablePHJ
   rw [dite_eq_right_of_eq_false (eq_false h)]
 
-/-- **Table `j` where flock-verify sets it up**: at a `DrawSetupH` of table `j`'s inputs and sample, `tablePHJ` is the
+/-- **Table `j` where verity-verify-proof sets it up**: at a `SampleSetupH` of table `j`'s inputs and sample, `tablePHJ` is the
 table of one with the same statement. -/
 theorem tablePHJ_of {S : Finset (Fin n)} {j : Fin (nTab I)}
-    (x : DrawSetupH (inputsPJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) :
-    ∃ y : DrawSetupH (inputsPJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j), y.st = x.st ∧
+    (x : SampleSetupH (inputsPJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) :
+    ∃ y : SampleSetupH (inputsPJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j), y.st = x.st ∧
       tablePHJ dj x₀ S j = ⟨inputsPJ I j, y.table⟩ :=
   ⟨Classical.choice ⟨x⟩, Except.ok.inj ((Classical.choice ⟨x⟩).h.symm.trans x.h), tablePHJ_set dj x₀ ⟨x⟩⟩
 
@@ -100,12 +100,12 @@ end Plan
 
 /-! ## The challenger's live-coin part's samples, and table `j`'s openings -/
 
-/-- **The challenger's live-coin part's sample at `S`, at `J` hidden-output tables** (`PlainJ.DrawOkPJ` with `setupHidden` for
+/-- **The challenger's live-coin part's sample at `S`, at `J` hidden-output tables** (`PlainJ.SampleOkPJ` with `setupHidden` for
 `setupH`): each table's sample proves the sampled proof blocks it is given (`partS`), and setupHidden sets each table up at it
 with `mPts` link points. -/
-def DrawOkPHJ (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ) (S : Finset (Fin n)) : Prop :=
+def SampleOkPHJ (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ) (S : Finset (Fin n)) : Prop :=
   ∀ j : Fin (nTab I),
-    (∀ D, Draw.UnitDraw.ofJson (drawJ I (dj S) j) = .ok D → ∀ u ∈ partS I (dj S) S j, u.val ∈ D.proved) ∧
+    (∀ D, Draw.UnitSample.ofJson (drawJ I (dj S) j) = .ok D → ∀ u ∈ partS I (dj S) S j, u.val ∈ D.proved) ∧
     ∀ st, Stmt.setupHidden (tagsAt I.tags I.count j) I.circuitFile I.publicFile I.coins I.tables
       (some (drawJ I (dj S) j)) I.partition I.program = .ok st → st.mPts = mPts
 

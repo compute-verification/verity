@@ -23,6 +23,7 @@ from typing import Literal
 import numpy as np
 
 from verity_vllm.config import option, workload_arg
+from verity_vllm.pipeline.cli import write
 
 __all__ = ["COMMANDS", "main"]
 
@@ -30,7 +31,7 @@ __all__ = ["COMMANDS", "main"]
 def kernel(out: Path) -> dict:
     import torch
     import vllm.v1.sample.ops.topk_topp_triton as TT
-    from verity.definitions.registry.topp_geometry import (
+    from verity_vllm.definitions.registry.topp_geometry import (
         SPLIT_MAX_BATCH,
         registered_splits,
     )
@@ -76,7 +77,7 @@ def kernel(out: Path) -> dict:
                 rec[arm] = {"S": S, "rows_moved": len(moved), "kept": [int(x.sum()) for x in kb[:4]]}
             ok &= rec["pinned"]["rows_moved"] == 0
             batches.append(rec)
-            print(json.dumps(rec), flush=True)
+            write(json.dumps(rec))
     doc = {"ok": bool(ok), "num_sm": num_sm, "registered_splits": S_reg, "V": V, "rows": SPLIT_MAX_BATCH,
            "gpu": torch.cuda.get_device_name(0), "vllm": __import__("vllm").__version__,
            "vllm_moved_some_row": any(b["vllm"]["rows_moved"] for b in batches), "batches": batches}
@@ -88,7 +89,7 @@ def served(workload: str, out: Path) -> dict:
     from verity_vllm.engine import engine_profile as prof
 
     prof.apply_env()
-    from verity.definitions.registry.topp_geometry import registered_splits
+    from verity_vllm.definitions.registry.topp_geometry import registered_splits
 
     from verity_vllm.commit.committer.topp_splits import install_split_kernel_proxies
     from verity_vllm.engine import topp_pin
@@ -123,7 +124,7 @@ def served(workload: str, out: Path) -> dict:
            "num_sm": num_sm, "registered_splits": S, "S_together": sorted(s_together), "S_alone": sorted(s_alone),
            "requests": len(reqs), "differ": differ, "tokens_together": together, "tokens_alone": alone}
     (out / "served.json").write_text(json.dumps(doc, indent=1) + "\n")
-    print(json.dumps({k: v for k, v in doc.items() if not k.startswith("tokens")}), flush=True)
+    write(json.dumps({k: v for k, v in doc.items() if not k.startswith("tokens")}))
     return doc
 
 

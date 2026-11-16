@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Sampling.Select.Design
-public import Proofs.Flock.Claims.Sampling.Select.DrawLaw
+public import Proofs.Flock.Claims.Sampling.Select.SampleDesign
 
 /-!
 # The sampling scope check from the deployed design (`Claims.Sampling.ScopeMatches`, `Refuses`)

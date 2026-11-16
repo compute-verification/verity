@@ -75,13 +75,13 @@ the check's suites and `verity check`. The same command through `research run`, 
 `AGENT_GUARD_LOCAL_OK=1` anywhere in the command passes it too.
 
 No tool call may block more than 20 minutes: an agent blocked in one long call looks silent and misses its wake-ups. So it
-refuses a command that plainly would: a `sleep` past BLOCK_CAP_S (`sleep 3000`, `sleep 30m`, `sleep 2h`, `sleep infinity`),
+refuses a command that plainly would: a `sleep` past BLOCK_LIMIT_S (`sleep 3000`, `sleep 30m`, `sleep 2h`, `sleep infinity`),
 there or in `bash -c`, `$(...)` or over ssh, unless a `timeout` around it ends it sooner or it runs in the background (`&`), and
-`research run --wait-max S` past the cap. A polling loop is judged only by the sleeps it names.
+`research run --wait-max S` past the limit. A polling loop is judged only by the sleeps it names.
 
 One agent per checkout (worktree_guard.py): it refuses an agent's branch switch in a worktree another agent owns, and its push of
 a branch registered to another agent or of `main`, `checked` or `next`, to the repositories whose queue drive runs
-(`compute-verification/verity` and `compute-verification/infra`) and no other: the notes' `main` is every agent's to push.
+(`compute-verification/verity` and `compute-verification/platform`, or its old name `infra`) and no other: the notes' `main` is every agent's to push.
 It places a git command by the event's cwd and its own `-C` alone: a `cd` anywhere in the command (`flattened` holds what
 carriers run too) leaves it unplaced unless its `-C` is absolute, a `source` or a `GIT_DIR` the command sets (`git_env`)
 whatever its `-C`, and an unplaced push is judged as theirs.
@@ -97,7 +97,9 @@ shell's environment. So it refuses, wherever it is typed, a command that leaves 
 `declare` or `typeset`, an assignment with no command after it. This rule alone refuses in doubt: in a subshell or what a
 carrier runs too, where the name may die with it. The names ahead of one command, an `unset` and a read pass. Not covered: a
 variable the shell held before the guard arrived, one a script exports, and a name the shell builds
-(`GIT_{AUTHOR,COMMITTER}_NAME`, `export "$line"`).
+(`GIT_{AUTHOR,COMMITTER}_NAME`, `export "$line"`). The same reading refuses leaving `PYTHONPATH` or `RESEARCH_AT_CHECKOUT`
+set, which changes which code every later command runs (`kept_code_reason`, CODE_VARIABLES), but only in the shell itself
+(`own_shell`) and never in doubt: what a carrier, a subshell or a script runs passes.
 
 The VM's tmux server stays (kept_session.py): its environment holds the secrets it started with, which a shell that lost
 them takes back from it. So it refuses `tmux kill-server`, and a `tmux kill-session` that would end the session the VM
@@ -116,13 +118,30 @@ still queued when the agent's turn ends is not delivered then (the stop hook, `s
 follow-up, and no delivery relies on that) and may be gone by the agent's next turn, since a cloud VM does not keep `/tmp`
 across a long pause: an agent whose turn has ended is resumed with the text itself.
 
+It tells a cloud agent whose turn runs on another model than it was launched on (`model_reason`): a turn the agent's own
+timer or a subscription starts can take another model than its launcher named, and nothing in the turn says so. Models
+are compared by family (`settings.model_family`), never by effort. The first command of such a turn that would pass is
+refused once, naming both models and the two ways on: hand the turn's job to a local child started with `Task` and
+`claude-opus-5-5-high` (or `claude-sonnet-5-5-high`), or end the turn and be resumed by the lead; the rest of
+the turn's commands pass, and `AGENT_GUARD_MODEL_OK=1` in that first command passes it too. The launch model is the one
+the agent's first turn in this machine's event log names, so a machine a wake or a resume booted, whose log holds no
+launch turn, takes its first turn there for the launch.
+
+It refuses every command of a cloud worker's turn on Fable 5.2, each time (`fable_reason`): no worker runs Fable 5.2. A
+lead is an agent that holds a handle in the Slack registry, or has the id `infra/cursor/launch_coordinator.py` gives a
+registered handle at a generation from 1 to 50 (`task_hook.leads`); every other agent is a worker. The refusal says to
+end the turn and say what started it, to be resumed or launched again on `claude-opus-5-5-high`. A lead's turn, a turn
+whose payload names no model, and every turn while the registry can't be read pass; a worker launched on Fable is not
+told its other turns run on another model.
+
 Before an allowed `git merge` or `git merge-tree`, it sets the repository's merge drivers (`.gitattributes` names them; git keeps
 them only in a clone's config) from origin/main's `research.clone.RECORD_DRIVER`, each whose value differs, as boot.sh and
-every run clone do; without origin/main, from the checkout's own when lean-audit's is unset. A VM that never ran boot.sh (a
+every run clone do; without origin/main it sets none, since the hook runs no file of a checkout's own. A VM that never ran boot.sh (a
 cloud worker's) otherwise merges each lean-audit.json line by line and shows conflicts the queue never sees: 359 in one trial
 merge of a PR onto `next`; and one that kept an older command runs the merged-into branch's own merge.py, which collapsed
 Security's lock to one `reads` group when an old branch merged main.
 """
+import fcntl
 import fnmatch
 import glob
 import importlib
@@ -136,7 +155,9 @@ import sys
 import time
 from pathlib import Path
 
-from settings import INBOX, INBOX_POLL_S, record_event
+import settings
+from settings import (EVENT_LOG, EVENT_VALUE_MAX, INBOX, INBOX_POLL_S, MODEL_OK, MODEL_PASS, MODEL_REFUSAL,
+                      agent_events, launch_model, model_family, record_event)
 
 PATTERN = re.compile(r"KEY|TOKEN|SECRET|PASSW|CREDENTIAL|PRIVATE", re.I)
 WRAPPERS = {"sudo", "doas", "command", "builtin", "exec", "nohup", "time", "nice", "stdbuf", "timeout", "setsid", "taskset"}
@@ -184,7 +205,7 @@ PROC_ARGV = re.compile(r"/proc/\S*cmdline|\$\{?\w+\}?/cmdline\b|\.cmdline\(|psut
 
 
 def secret(name: str) -> bool:
-    listed = set(re.split(r"[,\s]+", os.environ.get("CLOUD_AGENT_ALL_SECRET_NAMES", ""))) - {""}
+    listed = set(re.split(r"[,\s]+", settings.get("CLOUD_AGENT_ALL_SECRET_NAMES", ""))) - {""}
     return name in listed or bool(PATTERN.search(name))
 
 
@@ -1081,7 +1102,8 @@ def weight(text: str) -> int:
     """The heaviest simple command of `text` run on this VM: a command through `research run` or over ssh runs elsewhere."""
     try:
         commands = words_of(text)
-    except ValueError:
+    except ValueError as e:
+        print(f"shell_hook: a command the hook can't split weighs nothing ({e})", file=sys.stderr)
         return 0
     return max((weight_words(words) for words, _ in commands), default=0)
 
@@ -1091,27 +1113,29 @@ def available() -> tuple[float, float] | None:
     (/proc/vmstat beside it), or, where this process's cgroup's limit is tighter, that limit and the lesser of that and what the
     limit leaves over the cgroup's working set. The working set is memory.current less memory.stat's inactive_file, the file cache
     the kernel reclaims on demand, as container runtimes count it; all of memory.current where memory.stat can't be read."""
-    meminfo = Path(os.environ.get("AGENT_GUARD_MEMINFO", "/proc/meminfo"))
+    meminfo = Path(settings.get("AGENT_GUARD_MEMINFO", "/proc/meminfo"))
     try:
         info = dict(re.findall(r"^(\w+):\s+(\d+) kB", meminfo.read_text(), re.M))
         avail, total = int(info["MemAvailable"]) * 1024, int(info["MemTotal"]) * 1024
-    except (OSError, KeyError, ValueError):
+    except (OSError, KeyError, ValueError) as e:
+        print(f"shell_hook: {meminfo} unread, so memory is not known ({type(e).__name__}: {e})", file=sys.stderr)
         return None
     # the balloon's pages are counted as used, but the hypervisor hands them back as the VM asks for memory
     if (vmstat := meminfo.with_name("vmstat")).is_file():
         v = dict(re.findall(r"^(balloon_inflate|balloon_deflate) (\d+)$", vmstat.read_text(), re.M))
         avail = min(total, avail + max(0, int(v.get("balloon_inflate", 0)) - int(v.get("balloon_deflate", 0))) * 4096)
     try:
-        rel = open("/proc/self/cgroup").read().split("::", 1)[1].strip()
-        cg = os.environ.get("AGENT_GUARD_CGROUP") or f"/sys/fs/cgroup{rel}"
-        limit = open(f"{cg}/memory.max").read().strip()
+        rel = open("/proc/self/cgroup").read().partition("::")[2].strip()
+        cg = settings.get("AGENT_GUARD_CGROUP") or f"/sys/fs/cgroup{rel}"
+        limit = open(f"{cg}/memory.max").read().strip() if rel and os.path.exists(f"{cg}/memory.max") else "max"
         if limit != "max" and int(limit) < total:
             meminfo_avail, used, total = avail, int(open(f"{cg}/memory.current").read()), int(limit)
             avail = min(meminfo_avail, total - used)        # stands when memory.stat can't be read
             cache = int(dict(re.findall(r"^(\w+) (\d+)$", open(f"{cg}/memory.stat").read(), re.M)).get("inactive_file", 0))
             avail = min(meminfo_avail, total - max(0, used - cache))
-    except (OSError, IndexError, ValueError):
-        pass
+    except (OSError, ValueError) as e:
+        print(f"shell_hook: the cgroup's memory unread, so what was read before stands ({type(e).__name__}: {e})",
+              file=sys.stderr)
     return avail, total
 
 
@@ -1134,7 +1158,7 @@ def local_work_reason(command: str) -> str | None:
     if w != PRESSURE:
         return None
     mem = available()
-    floor = float(os.environ.get("AGENT_GUARD_MIN_AVAIL", "0.25"))
+    floor = float(settings.get("AGENT_GUARD_MIN_AVAIL", "0.25"))
     if mem is None or mem[0] >= floor * mem[1]:
         return None
     return (f"this VM has {mem[0] / 2**30:.1f} GiB of {mem[1] / 2**30:.1f} GiB available (under {floor:.0%}), and this command runs "
@@ -1142,7 +1166,7 @@ def local_work_reason(command: str) -> str | None:
 
 
 #: no tool call may block longer: an agent blocked in one long call looks silent and misses its wake-ups
-BLOCK_CAP_S = 1200
+BLOCK_LIMIT_S = 1200
 DURATION = re.compile(r"(\d+(?:\.\d*)?|\.\d+)([smhd]?)")
 UNIT_S = {"": 1, "s": 1, "m": 60, "h": 3600, "d": 86400}
 
@@ -1187,19 +1211,20 @@ def blocks_text(text: str) -> float:
     """The longest any simple command of `text` plainly blocks for; one sent to the background (`&`) blocks nothing."""
     try:
         commands = words_of(text)
-    except ValueError:
+    except ValueError as e:
+        print(f"shell_hook: a command the hook can't split blocks for no time ({e})", file=sys.stderr)
         return 0.0
     return max((blocks_words(words) for words, op in commands if op != "&"), default=0.0)
 
 
 def block_reason(command: str) -> str | None:
-    """Why this command may not run as one tool call (it would block past BLOCK_CAP_S), or None."""
+    """Why this command may not run as one tool call (it would block past BLOCK_LIMIT_S), or None."""
     s = blocks_text(command)
-    if s <= BLOCK_CAP_S:
+    if s <= BLOCK_LIMIT_S:
         return None
-    return (f"this command would block for {'ever' if s == math.inf else f'{s:g} s'}, past {BLOCK_CAP_S} s: no tool call may block "
+    return (f"this command would block for {'ever' if s == math.inf else f'{s:g} s'}, past {BLOCK_LIMIT_S} s: no tool call may block "
             "more than 20 minutes (Daniel, 19 Oct); end your turn and let the run's completion or a timer subscription wake you. "
-            f"`research run --wait` stops after {BLOCK_CAP_S} s on its own and names the command to check back with.")
+            f"`research run --wait` stops after {BLOCK_LIMIT_S} s on its own and names the command to check back with.")
 
 
 def flattened(text: str) -> list[list[str]]:
@@ -1291,7 +1316,8 @@ def checkout_reason(command: str, conversation: str, cwd: str) -> str | None:
     worktree_guard = guard()
     try:
         raw, (dirs, _) = flattened(command), cd_dirs(command, cwd)
-    except ValueError:
+    except ValueError as e:
+        print(f"shell_hook: a command the hook can't split passes the checkout guard ({e})", file=sys.stderr)
         return None
     next_ok = [assigned(w, "AGENT_GUARD_PUSH_NEXT_OK") for w in raw]
     return worktree_guard.reason([unwrap(w) for w in raw], conversation, cwd, next_ok, git_env(raw), dirs)
@@ -1313,6 +1339,56 @@ def shell_identity_reason(command: str) -> str | None:
         except ValueError:
             raw += [cut.split() for cut in re.split(r"[;&|()`\n]+", part)]
     return guard().kept_identity_reason(shell_keeps(raw))
+
+
+#: variables that change which code every later command of a shell runs: each name with what it changes and the command
+#: that takes it for one run
+CODE_VARIABLES = {
+    "PYTHONPATH": ("every later `python3` and `research` imports from its directories first, a scratch tree's code among them, "
+                   "and from an older installed copy once that tree is gone", "`PYTHONPATH=DIR python3 ...`"),
+    "RESEARCH_AT_CHECKOUT": ("every later `research` runs the checkout's own copy instead of re-executing from origin/main's code",
+                             "`RESEARCH_AT_CHECKOUT=1 research ...`"),
+}
+SUBSTITUTION = re.compile(r"\$\([^()]*\)|`[^`]*`")
+
+
+def own_shell(text: str) -> list[list[str]]:
+    """The simple commands of `text` that run in the shell reading it, as `words_of` splits them, and what an `eval` among
+    them runs: not what a subshell runs (`( ... )`, a pipeline's member, one sent to the background), a command substitution
+    (`$( ... )`, a backquote, taken out first, innermost first) or a carrier. Each `(` left is marked with a word of its own,
+    which the split would drop with the empty command before it."""
+    while (cut := SUBSTITUTION.sub("_", text)) != text:
+        text = cut
+    out, depth, before = [], 0, ""
+    for words, op in words_of(text.replace("(", " \0 (")):
+        words = [w for w in words if w != "\0"]
+        if depth == 0 and words and not {before.strip("()"), op.strip("()")} & {"|", "|&"} and op.strip("()") != "&":
+            run = unwrap(words)
+            out += own_shell(" ".join(run[1:])) if run[:1] == ["eval"] else [words]
+        depth, before = max(0, depth + op.count("(") - op.count(")")), op
+    return out
+
+
+def kept_code_reason(command: str) -> str | None:
+    """Why this command, which leaves one of CODE_VARIABLES set in the shell that runs it (`shell_keeps` of `own_shell`), may
+    not run, or None. Unlike the identity rule it never refuses in doubt: the harm is only in the shell that persists, and
+    a carrier, a subshell or a script exporting PYTHONPATH in its own process is honest work, so a text the hook can't split
+    passes."""
+    if not any(name in command for name in CODE_VARIABLES):
+        return None
+    try:
+        kept = shell_keeps(own_shell(command))
+    except ValueError as e:
+        print(f"shell_hook: a command the hook can't split passes the rule for code variables ({e})", file=sys.stderr)
+        return None
+    for name in kept:
+        if name in CODE_VARIABLES:
+            changes, one_run = CODE_VARIABLES[name]
+            return (f"this command leaves `{name}` set in the shell itself, and a name left set changes which code every later "
+                    f"command of this shell runs: {changes}. Put it on the one command instead, {one_run}, or run it in a "
+                    f"subshell, `( export {name}=...; cmd )`; if the shell already holds it, `unset {' '.join(CODE_VARIABLES)}` "
+                    f"clears it.")
+    return None
 
 
 def own_tmux(given: dict[str, str]) -> bool:
@@ -1346,9 +1422,12 @@ def delivery(conversation: str) -> str | None:
         return None
     box = os.path.join(INBOX, conversation + ".md")
     taking = box + ".taking"
+    if not os.path.exists(box):
+        return None
     try:
         os.replace(box, taking)
-    except OSError:
+    except OSError as e:
+        print(f"shell_hook: {box} not taken, so not delivered now ({type(e).__name__}: {e})", file=sys.stderr)
         return None
     try:
         with open(taking) as f:
@@ -1358,6 +1437,92 @@ def delivery(conversation: str) -> str | None:
     finally:
         os.remove(taking)
     return text if text.strip() else None
+
+
+#: a cloud agent's or a subagent's conversation id (`task_hook.AGENT_ID`); a local session's user picks its model turn
+#: by turn
+CLOUD_AGENT = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
+MODEL_TOLD = ("Refused once, only to tell you (tools/agent-guard/shell_hook.py): this turn runs on `{model}`, and you "
+              "were launched on `{launch}`, the model your first turn in this machine's event log names. A turn your own "
+              "timer or a subscription starts can take another model than your launcher named. Two ways on: hand this "
+              "turn's job to a child started with Task and `model: claude-opus-5-5-high` (or `claude-sonnet-5-5-high` "
+              "for a fully specified task; never Fable 5.2), local (no `environment`), so it runs on this machine and "
+              "has your checkout; or end the turn and be resumed by your lead, which keeps your launch model. Nothing is "
+              "wrong with this command: it and the rest of this turn's commands now pass, so you can read your notes, "
+              "start the child and push. If your brief names another launch model than `{launch}`, this machine's log "
+              "began after your launch (a wake or a resume put you on a new machine): go by your brief.")
+#: Fable 5.2's family (`settings.model_family`), at any effort
+FABLE = "claude-fable-5-2"
+FABLE_REFUSED = ("Refused by tools/agent-guard/shell_hook.py: this turn runs on `{model}`, and no worker runs Fable 5.2: a "
+                 "worker runs `claude-opus-5-5-high`, or `claude-sonnet-5-5-high` for a fully specified task, and only a lead "
+                 "(an agent that holds a handle in the Slack registry) runs Fable 5.2. Every command of this turn is refused. "
+                 "End this turn now, and say in your last message what started it (a timer, a subscription, another "
+                 "agent's completion, a resume); your lead resumes you, or launches you again naming "
+                 "`claude-opus-5-5-high`.")
+
+
+def worker(agent: str) -> bool | None:
+    """Whether the cloud agent `agent` is a worker, any agent but a lead (`task_hook.leads`); None when the registry can't
+    be read, which it says on stderr."""
+    try:
+        task_hook = guard("task_hook")
+        return agent not in task_hook.leads()
+    except (ImportError, OSError, ValueError, AttributeError) as e:
+        print(f"shell_hook: the Fable rule refuses nothing, since it can't read the registry: {type(e).__name__}: {e}",
+              file=sys.stderr)
+        return None
+
+
+def fable_reason(event: dict) -> str | None:
+    """The Fable rule: the refusal's text for every command of a cloud worker's turn on Fable 5.2, each time; else None.
+    Never refused: a lead's turn, a turn whose payload names no model, and every turn while the registry can't be read,
+    which says so on stderr, since a lead the guard can't tell from a worker must not be locked out."""
+    agent, model = event.get("conversation_id"), event.get("model")
+    if not (isinstance(agent, str) and CLOUD_AGENT.fullmatch(agent) and isinstance(model, str)
+            and model_family(model) == FABLE):
+        return None
+    if not worker(agent):
+        return None
+    return FABLE_REFUSED.format(model="".join(c for c in model[:EVENT_VALUE_MAX] if c.isprintable()))
+
+
+def model_reason(event: dict, command: str) -> str | None:
+    """The model rule: the refusal's text for the first command the hook would otherwise pass in a cloud agent's turn
+    whose model's family differs from its launch model's (`settings.launch_model`, `settings.model_family`), once a
+    turn; else None. The refusal settles the turn, and so does MODEL_OK in that command, which passes it: either adds a
+    line to EVENT_LOG for the turn, and every later command of a settled turn passes. Never refused: an agent whose turns
+    all name one family, whatever their effort, one with no launch
+    model on record, a payload that names no model, no turn or no cloud agent, and a worker launched on Fable 5.2,
+    whose other turns run on the model it should have had (`fable_reason`). The lock on EVENT_LOG makes the check
+    and the line one step, so of two commands a turn starts at once exactly one is refused; a log that can't be opened,
+    locked or written refuses nothing, and says so on stderr, since a turn the rule can't record as told it can't keep to
+    once. Every other refusal comes first (`main`): a command refused for another reason leaves the turn unsettled."""
+    agent, turn, model = (event.get(k) for k in ("conversation_id", "generation_id", "model"))
+    if not all(isinstance(v, str) and v for v in (agent, turn, model)) or not CLOUD_AGENT.fullmatch(agent):
+        return None
+    turn, model = turn[:EVENT_VALUE_MAX], model[:EVENT_VALUE_MAX]
+    try:
+        with open(EVENT_LOG, "a") as log:
+            fcntl.flock(log, fcntl.LOCK_EX)
+            events = agent_events(agent)
+            launch = launch_model(events)
+            if launch is None or model_family(launch) == model_family(model) or (
+                    model_family(launch) == FABLE and worker(agent)):
+                return None
+            if any(e.get("generation_id") == turn and e.get("event") in (MODEL_REFUSAL, MODEL_PASS) for e in events):
+                return None
+            passed = MODEL_OK in command
+            log.write(json.dumps({"t": int(time.time()), "hook": "shell_hook.py",
+                                  "event": MODEL_PASS if passed else MODEL_REFUSAL, "conversation_id": agent,
+                                  "generation_id": turn, "model": model, "launch_model": launch}) + "\n")
+    except OSError as e:
+        print(f"shell_hook: the model rule refuses nothing, since it can't record a turn as told in {EVENT_LOG}: {e}",
+              file=sys.stderr)
+        return None
+    if passed:
+        return None
+    shown = {k: "".join(c for c in v if c.isprintable()) for k, v in (("model", model), ("launch", launch))}
+    return MODEL_TOLD.format(**shown)
 
 
 def checkout(root: str, cwd: str) -> str:
@@ -1382,8 +1547,8 @@ def poll(conversation: str, repo: str) -> bool:
     with open(mark, "a"):
         os.utime(mark)
     with open(os.path.join(INBOX, conversation + ".pull.log"), "a") as log:
-        subprocess.Popen([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "inbox.py"), "pull",
-                          conversation, "--repo", repo], stdin=subprocess.DEVNULL, stdout=log, stderr=log,
+        subprocess.Popen([sys.executable, "-E", "-S", os.path.join(os.path.dirname(os.path.abspath(__file__)), "inbox.py"),
+                          "pull", conversation, "--repo", repo], stdin=subprocess.DEVNULL, stdout=log, stderr=log,
                          env={**os.environ, "AGENT_INBOX": INBOX}, start_new_session=True)
     return True
 
@@ -1393,8 +1558,8 @@ CLONE_PY = "tools/research/src/research/clone.py"
 
 
 def merge_drivers(command: str, cwd: str) -> None:
-    """Set the record merge drivers in ``cwd``'s repository before a merge there: origin/main's, each that differs, else the
-    checkout's when lean-audit's is unset (module doc)."""
+    """Set the record merge drivers in ``cwd``'s repository before a merge there: origin/main's, each that differs, and none
+    without origin/main (module doc)."""
     if not MERGE.search(command):
         return
     import importlib.util
@@ -1407,13 +1572,13 @@ def merge_drivers(command: str, cwd: str) -> None:
     if not (top := git("rev-parse", "--show-toplevel").stdout.strip()):
         return
     main = git("show", f"origin/main:{CLONE_PY}")
-    if main.returncode and git("config", "--get", "merge.lean-audit.driver").stdout.strip():
+    if main.returncode:
+        print(f"shell_hook: merge drivers not set in {top}: it has no origin/main to read {CLONE_PY} from, and the hook "
+              f"runs no file of a checkout's own", file=sys.stderr)
         return
     with tempfile.TemporaryDirectory(prefix="agent-guard-clone-") as tmp:
-        path = os.path.join(top, CLONE_PY)
-        if not main.returncode:
-            with open(path := os.path.join(tmp, "clone.py"), "w") as f:
-                f.write(main.stdout)
+        with open(path := os.path.join(tmp, "clone.py"), "w") as f:
+            f.write(main.stdout)
         spec = importlib.util.spec_from_file_location("agent_guard_clone", path)
         if spec is None or spec.loader is None:
             return
@@ -1437,25 +1602,25 @@ def main() -> int:
         record_event("shell_hook.py", event)
     except (ValueError, AttributeError):
         record_event("shell_hook.py", raw)
-        command, conversation, cwd, root = raw, "", os.getcwd(), ""
+        event, command, conversation, cwd, root = {}, raw, "", os.getcwd(), ""
     try:
         deny = refused_text(command)
-    except Exception:                                   # a bug here must not allow what the fallback would refuse
+    except Exception:  # noqa: BLE001 (a bug here must not allow what the fallback would refuse)
         deny = (ENVIRONMENT if FALLBACK.search(command) or re.search(r"/proc/\S*environ", command)
                 else ARGV if LISTING_FALLBACK.search(command) else "")
     try:
         low = None if deny else block_reason(command)
-    except Exception:                                   # a bug in the block gate must not stop every command
+    except Exception:  # noqa: BLE001 (a bug in the block gate must not stop every command)
         low = None
     try:
         low = low or (None if deny else local_work_reason(command))
-    except Exception:                                   # a bug in the local-work gate must not stop every command
+    except Exception:  # noqa: BLE001 (a bug in the local-work gate must not stop every command)
         low = None
     try:
-        low = low or (None if deny else shell_identity_reason(command))
+        low = low or (None if deny else shell_identity_reason(command) or kept_code_reason(command))
         low = low or (None if deny or ("git" not in command and "worktree_guard" not in command)
                       else checkout_reason(command, conversation, cwd))
-    except Exception:                                   # nor one in the checkout guard, or in the rule for a name left in the shell
+    except Exception:  # noqa: BLE001 (nor one in the checkout guard, or in the rule for a name left in the shell)
         pass
     low = low or (None if deny else kept_session_reason(command))
     low = secret_file_reason(command, stated_cwd(raw)) or low   # ahead of the gates' reasons: the one about a secret is the one to act on
@@ -1466,12 +1631,22 @@ def main() -> int:
                           "agent_message": "Refused by tools/agent-guard/shell_hook.py (.cursor/hooks.json): " + reason}))
     else:
         try:
+            told = fable_reason(event) or model_reason(event, command)
+        except (OSError, LookupError, TypeError, ValueError,
+                AttributeError) as e:                   # a bug in the model rules must not stop every command
+            print(f"shell_hook: model rule failed: {type(e).__name__}: {e}", file=sys.stderr)
+            told = None
+        if told:
+            print(json.dumps({"permission": "deny", "user_message": told, "agent_message": told}))
+            return 0
+        try:
             poll(conversation, checkout(root, cwd))
         except (OSError, ValueError) as e:              # nor a failed poll: the next command's hook tries again
             print(f"shell_hook: inbox poll failed: {e}", file=sys.stderr)
         try:
             message = delivery(conversation)
-        except Exception:                               # an unreadable inbox must not block the agent's command
+        except (OSError, ValueError) as e:              # an unreadable inbox must not block the agent's command
+            print(f"shell_hook: inbox unreadable, no message delivered: {type(e).__name__}: {e}", file=sys.stderr)
             message = None
         try:
             merge_drivers(command, cwd)

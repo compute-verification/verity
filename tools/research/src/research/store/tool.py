@@ -19,6 +19,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
@@ -57,9 +58,12 @@ def tree_sha256(root: Path) -> str:
 
 
 def _read_marker(d: Path) -> str | None:
+    if not (d / ART_MARKER).exists():
+        return None
     try:
         line = (d / ART_MARKER).read_text(encoding="utf-8").strip().splitlines()[0].strip()
-    except (OSError, IndexError):
+    except (OSError, IndexError) as e:
+        print(f"research data: {d / ART_MARKER} unread, so it names no artifact ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
     return line if line.startswith("art:") else None
 
@@ -107,9 +111,12 @@ def glob_re(pat: str) -> re.Pattern[str]:
 
 def _ignore_rules(root: Path) -> list[tuple[re.Pattern[str], bool]]:
     rules = [(re.compile(r"^(?:.*/)?\.git$"), True), (re.compile(r"^(?:.*/)?__pycache__$"), True)]
+    if not (root / ".gitignore").exists():
+        return rules
     try:
         lines = (root / ".gitignore").read_text(encoding="utf-8").splitlines()
-    except OSError:
+    except OSError as e:
+        print(f"research data: {root / '.gitignore'} unread, so only the default rules apply ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return rules
     for raw in lines:
         s = raw.strip()
@@ -137,8 +144,8 @@ def list_source_files(root: Path) -> list[str]:
             r = subprocess.run(["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"], cwd=root, capture_output=True, timeout=60)
             if r.returncode == 0:
                 return sorted({p for p in r.stdout.decode("utf-8", errors="replace").split("\0") if p and (root / p).is_file()})
-        except (OSError, subprocess.TimeoutExpired):
-            pass
+        except (OSError, subprocess.TimeoutExpired) as e:
+            print(f"research data: git ls-files in {root} did not run, so .gitignore lists the files ({type(e).__name__})", file=sys.stderr, flush=True)
     rules = _ignore_rules(root)
     out = []
     for dirpath, dirnames, filenames in os.walk(root):
@@ -246,7 +253,8 @@ class Tool:
             if any(rx.match(rel) for rx in pats):
                 try:
                     out[rel] = _sha256_file(root / rel)
-                except OSError:
+                except OSError as e:
+                    print(f"research data: {rel} not hashed ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
                     continue
         return dict(sorted(out.items()))
 

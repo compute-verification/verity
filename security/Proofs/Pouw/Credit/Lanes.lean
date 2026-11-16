@@ -41,14 +41,14 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Pouw.Period.Accept
+import Proofs.Pouw.MonitoringPeriod.Accept
 
 /-!
-# The lanes window's strata and law
+# The lanes window's strata and sampling design
 
-The compiled `strata` and `law` run on the lanes window in the kernel (`decide +kernel`, through the `DecidableEq` the
+The compiled `strata` and `samplingDesign` run on the lanes window in the kernel (`decide +kernel`, through the `DecidableEq` the
 sample's structures derive here), past `strata`'s key sort, which the kernel doesn't reduce (`keys_lanes`, as
-`Proofs.Pouw.Period.Accept` reads H1's items). Their loops, sorts and the template's digits are core's, so this module
+`Proofs.Pouw.MonitoringPeriod.Accept` reads H1's items). Their loops, sorts and the template's digits are core's, so this module
 imports those in full. `Proofs.Pouw.Credit` reads the results from here: with core's definitions in full there, its
 `Nat.choose` bounds exceed their budget.
 -/
@@ -66,7 +66,7 @@ theorem ok_of_toOption {ε α : Type} {x : Except ε α} {a : α} (h : x.toOptio
   cases x <;> simp_all [Except.toOption]
 
 theorem keys_lanes : PouwCheck.keys lanesLayout = some PouwCheck.Credit.LAYOUT_KEYS :=
-  Properties.Pouw.Period.SecurityProofs.Accept.keys_of (by decide) (by decide +kernel)
+  Properties.Pouw.MonitoringPeriod.SecurityProofs.Accept.keys_of (by decide) (by decide +kernel)
 
 theorem strata_lanes : PouwCheck.Credit.strata lanesLayout = .ok lanesStrata := by
   apply ok_of_toOption
@@ -74,7 +74,7 @@ theorem strata_lanes : PouwCheck.Credit.strata lanesLayout = .ok lanesStrata := 
   rw [keys_lanes]
   decide +kernel
 
-theorem law_lanes : PouwCheck.Credit.law lanesStrata (toJson lanesK) = .ok lanesLaw :=
+theorem samplingDesign_lanes : PouwCheck.Credit.samplingDesign lanesStrata (toJson lanesK) = .ok lanesSamplingDesign :=
   ok_of_toOption (by decide +kernel)
 
 end Properties.Pouw.Credit.SecurityProofs

@@ -19,7 +19,7 @@ challenger and the verifier never hold a row, a salt or a served value):
    ``--partition``), holds the commitment's registration to them (`check_registration`), and the stager builds its
    statement bound to them;
 3. the verifier registers the execution phase's ok rows itself (`ok_registration`: value ``ok``, row u the one word 1 under unit
-   u's public salt), samples ``--draw`` units of the execution phase's tiles by Lean ``flock-verify draw`` on the coin's stream,
+   u's public salt), samples ``--draw`` units of the execution phase's tiles by Lean ``verity-verify-proof draw`` on the coin's stream,
    groups them by call (a registered port reads one value, and a call's units read its own tables, so a statement holds
    one call's units), and writes each call's ``--registered`` file (`registered_file`: `h1unit.registered_reads` from
    its own Program under the execution phase's roots and its own ``ok``, the ok port o1 beside the A, B and record ports,
@@ -36,7 +36,7 @@ challenger and the verifier never hold a row, a salt or a served value):
    ok is 1, its record the tile's product and dequant. Lean (``verify --zk --registered``) derives each instance's unit
    from its own Program, and an accepted check must say so (``units: derived``), and opens each A row, B row, record and
    ok row against its registered root at the position its Program reads, so ok is bound through the verifier's
-   registration (`Accounting.Guarantees.TS.CheckedSessionSound`'s port ``ok`` of ``own``), not through its public file.
+   registration (`ResourceAccounting.Guarantees.TS.CheckedSessionSound`'s port ``ok`` of ``own``), not through its public file.
 
 The negatives are on ``honest``'s units, the sampled proof blocks of the first sampled proof block's call.
 
@@ -135,13 +135,15 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-import h1unit as U  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.prover.lowering import h1unit as U  # noqa: E402
+
+import h1form as F  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.commitments.randomness import derive  # noqa: E402
-from verity.protocols.accounting.pouw.verifier import core_check as CC  # noqa: E402
-from verity.protocols.accounting.pouw.verifier import credit as CR  # noqa: E402
-from verity.protocols.accounting.pouw.verifier import verifier  # noqa: E402
-from verity.protocols.accounting.pouw.verifier.coins import Challenger, coin_reason  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.verifier import verifier  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger, coin_reason  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G  # noqa: E402
 
@@ -149,7 +151,7 @@ SAMPLE_DOMAIN = "verity/pouw/h1-prove-draw/v0"
 R, C = U.TILE
 #: the in-proof negatives, by `window.py tamper`'s flag
 IN_PROOF = {"in-receipt": "--receipt-word", "in-d": "--d-word", "in-y": "--y-cell", "in-z": "--z-cell", "in-swap": "--swap",
-            "in-call": "--call", "in-z-only": "--z-only", **({"in-xa": "--xa-flip"} if U.tile() == "v3" else {})}
+            "in-call": "--call", "in-z-only": "--z-only", **({"in-xa": "--xa-flip"} if F.tile() == "v3" else {})}
 #: the negatives that fail at binding, by `window.py tamper`'s flag
 BINDING = {"flipped-zy": "--zy-word", "wrong-receipt": "--receipt"}
 #: the in-proof negative whose base statement (its unit computes ok = 0 where its record moved) ``ok-zero`` proves
@@ -197,7 +199,7 @@ def tamper_flag(flag: str, units: list[int], call: tuple[int, int]) -> list[str]
 def program_of(k: int, calls: Sequence[tuple[str, int]], slot: int) -> SimpleNamespace:
     """The public Program of an execution phase shape (`h1unit.Shape.window`: its calls' names and B rows, its slot), its
     template-instance query and partition (``tp`` as core evaluates it, ``obj`` the `verity/partition/v1` object)."""
-    program, query = U.Shape(k, R, C).window(calls, slot)
+    program, query = F.shape(k, R, C).window(calls, slot)
     return SimpleNamespace(program=program, query=query, tp=P.evaluate(program, query), obj=P.partition(program, query))
 
 
@@ -308,7 +310,7 @@ def unit_registered(win: SimpleNamespace, k: int, op: dict, u: int,
     """Unit ``u``'s registered reads as the verifier's public file states them (`h1unit.verifier_pub`'s ``reads``): each
     registered port's value, the position the verifier's Program reads (`h1unit.unit_reads`) and the opened path, and the
     ok port's at the verifier's own ``ok`` (``okr``, `ok_registration`) and its path there."""
-    reg = set(U.Shape(k).in_rows)
+    reg = set(F.shape(k).in_rows)
     out = {port: (value, index, "".join(op["rows"][port]["path"]))
            for port, (value, index) in U.unit_reads(win.program, win.tp, u).items() if port in reg}
     value, index = U.unit_reads(win.program, win.tp, u)["o1"]
@@ -321,7 +323,7 @@ def registered_file(path: Path, win: SimpleNamespace, com: dict, call: int, unit
     its commitment's roots and its own ``ok``, ``okr``), written to ``path``, held to the h1 execution phase's own reads
     (`h1unit.unit_reads`) at the sampled ``units``. Returns what it wrote and the file."""
     k, t = com["unit"]["k"], time.time()
-    reg = {*U.Shape(k).in_rows, "o1"}
+    reg = {*F.shape(k).in_rows, "o1"}
     doc = U.registered_reads(win.program, win.tp, call, {v: r for v, (_n, r) in roots_of(com, okr).items()},
                              com["window"], U.window_open_root(com), win.obj["program"])
     if why := U.check_known(win.obj["program"], U.window_open_root(com), U.OUT_PORTS["ok"], doc["ports"][U.OUT_PORTS["ok"]]):
@@ -494,13 +496,13 @@ def lean_sample(lean: str, n: int, k: int, src: bytes) -> list[int]:
     p = subprocess.run([lean, "draw", "--population", str(n), "--k", str(k), "--stream", src.hex()], capture_output=True, text=True)
     lines = [x[5:] for x in p.stdout.splitlines() if x.startswith("DRAW ")]
     if p.returncode != 0 or len(lines) != 1:
-        raise SystemExit(f"flock-verify draw: exit {p.returncode}: {(p.stderr or p.stdout)[-300:]}")
+        raise SystemExit(f"verity-verify-proof draw: exit {p.returncode}: {(p.stderr or p.stdout)[-300:]}")
     return [int(u) for u in json.loads(lines[0])["units"]]
 
 
 def sample_units(lean: str, coin: bytes, window: str, registration: str, population: int, k: int) -> list[int]:
     """The `k` units of `population` an execution phase's sampling coin selects, after its registration (hex) was recorded: Lean
-    ``flock-verify draw`` on the coin's stream under `SAMPLE_DOMAIN`, bound to the execution phase's name and its registration."""
+    ``verity-verify-proof draw`` on the coin's stream under `SAMPLE_DOMAIN`, bound to the execution phase's name and its registration."""
     key = derive(coin, SAMPLE_DOMAIN, {"window": window, "registration": registration})
     return sorted(lean_sample(lean, population, k, key.stream("draw", 2 * k * CC.width(population) + 64)))
 
@@ -551,12 +553,12 @@ def cmd_prepare(a: argparse.Namespace) -> int:
     # one statement a sampled call: "honest" the first sampled proof block's (the negatives'), "honest-c<c>" each other's
     honest = {c: "honest" if c == c0 else f"honest-c{c}" for c in by_call}
     record["windows"][w1].update(registration=reg.hex(), draw_opening=do.to_json())
-    record["draw"] = {"population": T, "k": a.draw, "units": units, "by": "flock-verify draw (Lean)",
+    record["draw"] = {"population": T, "k": a.draw, "units": units, "by": "verity-verify-proof draw (Lean)",
                       "calls": {honest[c]: {"call": c, "units": us} for c, us in by_call.items()},
                       "reads": {str(u): U.unit_reads(win.program, win.tp, u) for u in units}}
     log(f"drew {units} of {T}: {record['draw']['calls']}")
     k = com1["unit"]["k"]
-    shape = U.Shape(k, R, C)
+    shape = F.shape(k, R, C)
     regs1, docs1, record["registered_reads"] = {c: vp / f"w1-c{c}.registered.json" for c in by_call}, {}, {}
     for c, us in by_call.items():
         record["registered_reads"][f"w1-c{c}"], docs1[c] = registered_file(regs1[c], win, com1, c, us, ok1)
@@ -906,11 +908,11 @@ def cmd_summarize(a: argparse.Namespace) -> int:
         pe = out / s["tag"] / "prove.err"
         fw = text + (pe.read_text(errors="replace") if pe.exists() else "")
         proofs[s["tag"]] = {"instances": s["n"], "prove": t, "prove_out": text[-1500:] or None,
-                            "serve": _time(out / s["tag"] / "serve.time"), "firewall_timed": "t.firewall" in fw}
-    zk_server = a.firewall == "1"
+                            "serve": _time(out / s["tag"] / "serve.time"), "firewall_timed": "t.zk_server" in fw or "t.firewall" in fw}
+    zk_server = a.zk_server == "1"
     checks, ok = [], bool(record["z_only_registration"]["refused"])
     if zk_server and not proofs.get("honest", {}).get("firewall_timed"):
-        print("FAIL: H1_FIREWALL=1 but the honest prover's records carry no ZK server times")
+        print("FAIL: H1_ZK_SERVER=1 but the honest prover's records carry no ZK server times")
         ok = False
     # the selftest build's controls: its honest record passes every check and is refused last, for its statement
     # (`ProvedScope.servedForm`); a forged one is refused before that, by the check it breaks
@@ -970,7 +972,7 @@ def cmd_summarize(a: argparse.Namespace) -> int:
                "credit_registration": {"from_reads": record.get("credit_registration"), "from_lean": credit},
                "windows": {w: {k: v[k] for k in ("tiles", "slot", "calls", "commit_seconds", "serve_seconds") if k in v}
                            for w, v in record["windows"].items()},
-               "tile": U.tile(), "z_is_served_product": {w: v["served"].get("z_is_served_product")
+               "tile": F.tile(), "z_is_served_product": {w: v["served"].get("z_is_served_product")
                                                           for w, v in record["windows"].items()},
                "xa": {w: v["served"].get("xa") for w, v in record["windows"].items()},
                "xa_flip": (record.get("tampered") or {}).get("in-xa", {}).get("xa_flip"),
@@ -1009,7 +1011,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--work", required=True)
     p.add_argument("--out", required=True)
     p.add_argument("--controls", default="")
-    p.add_argument("--firewall", default="0", help="1: the provers ran under the ZK server (FC_FIREWALL=1), whose times "
+    p.add_argument("--zk-server", default="0", help="1: the provers ran under the ZK server (FC_ZK_SERVER=1), whose times "
                                                     "the honest prover's records must carry")
     a = ap.parse_args(argv)
     return {"prepare": cmd_prepare, "summarize": cmd_summarize}[a.cmd](a)

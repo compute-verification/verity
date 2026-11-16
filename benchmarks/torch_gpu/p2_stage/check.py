@@ -1,7 +1,7 @@
 """The CPU half of a load run's check, run on the node after the GPU is released:
 
 - **decode**: every encoded block of the layer, from the development store or an encoded store's segment files (as
-  `layer.py` takes them), against P2's reference (`layout.check_blocks`: `p2_v1/store.py`'s `decode_block`, the spec's
+  `layer.py` takes them), against P2's reference (`layout.check_blocks`: `p2_store/store.py`'s `decode_block`, the spec's
   `reference.decode` under `reference.keys_after` of the store's prefix, refusing rows not below p and non-codewords), each block's 2,054 bytes
   against the store's W (`layout.payloads`: the stream's bytes, from `W` or else the seeded generator, zero past each
   tensor's end), in a process pool;
@@ -29,6 +29,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "verity/protocols/resource_accounting/memory/poub/prover/p2_stage/stage.py").parent))
 import layout as L
 
 _JOB: dict = {}
@@ -129,7 +130,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--layout", type=Path, required=True)
     ap.add_argument("--weights", type=Path, required=True)
     ap.add_argument("--w", type=Path, help="the stream's bytes at their offsets (else the generator's)")
-    ap.add_argument("--generator", default="benchmarks.torch_gpu.p2_stage.served_weights")
+    ap.add_argument("--generator", default="verity.protocols.resource_accounting.memory.pous.prover.served_weights")
     ap.add_argument("--shape", default="h200")
     ap.add_argument("--weights-seed", default="text:verity/cmp92/h200/weights/v1")
     store = ap.add_mutually_exclusive_group(required=True)

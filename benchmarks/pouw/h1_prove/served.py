@@ -35,10 +35,10 @@ import hashlib
 import json
 from pathlib import Path
 
-from verity.protocols.accounting.pouw.verifier import credit as CR
-from verity.protocols.proofs.spot.device import remote
-from verity.protocols.proofs.spot.device.challenger import CoinError, LiveOpening, ledger_head, pinned_session
-from verity_vllm.protocols.pouw.h1 import challenger as PHC
+from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
+from verity.protocols.proofs.spot.verifier.challenger import remote
+from verity.protocols.proofs.spot.verifier.challenger.challenger import CoinError, LiveOpening, ledger_head, pinned_session
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
 
 
 def locate(calls: list[dict], tile: tuple[int, int], u: int) -> dict:
@@ -102,7 +102,7 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(f"REFUSED: {why[0]}: {why[1]}")
     layout, _ = CR.layout_of(descriptor)
     strata, _ = CR.strata(layout)
-    CR.law(strata, k)
+    CR.sampling_design(strata, k)
     coin = LiveOpening.from_json(commits["draw"]["coin"]).coin
     out = {"window": root, "draw_root": commits["draw"]["root"], "coin": coin.hex(), "session": audited.session,
            "period": audited.period, "circuit": audited.circuit, "k": k,

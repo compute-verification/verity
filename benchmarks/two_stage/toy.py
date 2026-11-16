@@ -16,7 +16,7 @@ proves them (`audit.py`).
   (`Member.wired_trees`): a reader's row is its writer's output value, a leaf of the writer's tree under that row's salt,
   so the interior commits each value once (`Binding.held`). Each span is replayed from its ingress, the boundary record's
   row at S[i]. Every member is a shared-row member and every port of it a registered read
-  (`verity.commitments.windows.links.Port`), so Lean opens every row a session proves: a link port (b_in's input, b_out's output)
+  (`verity.commitments.periods.links.Port`), so Lean opens every row a session proves: a link port (b_in's input, b_out's output)
   at the boundary record, its rows committed under the boundary's salts at S[i] so an honest replay's ``b || c`` are the
   boundary's, its header naming the boundary port, the leaves S and each one's path to the boundary root; a wired port at
   its writer's port of the interior record, its table the writer's output rows (table row r at leaf r, as the header
@@ -42,13 +42,13 @@ from pathlib import Path
 import numpy as np
 
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as REG, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as REG, docket as R
 from verity.circuits import boolean as BL
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.types import Array
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-from verity.commitments.windows import links as LK, rows as CS
+from verity.commitments.periods import links as LK, rows as CS
 
 #: a row's hm96 hash compresses a block before its last only from 112 bytes on, and Flock's unit statement needs one such row
 H = 1024
@@ -229,10 +229,10 @@ def wires(q: int) -> list[tuple[tuple[str, str, tuple[int, ...]], ...]]:
             for t, w in enumerate(WRITERS)]
 
 
-def interior_window(boundary_digest: str, sample: Sequence[int], law: Mapping | None = None) -> CS.Binding:
+def interior_window(boundary_digest: str, sample: Sequence[int], sampling_design: Mapping | None = None) -> CS.Binding:
     """The interior window of the replay sample ``sample`` after the boundary registration ``boundary_digest``: one member a
     template, template-major, each wired port its writer's output value with no tree of its own (`rows.Binding.held`), its
-    table the writer's Q·n_w output rows; ``law`` the interior registration's (default: every unit, ``subset:Q·n_rho``)."""
+    table the writer's Q·n_w output rows; ``sampling_design`` the interior registration's (default: every unit, ``subset:Q·n_rho``)."""
     q = len(sample)
     program, query = CS.population_program([(t, q * n) for t, n in zip(TEMPLATES, N_T)])
     ids = [tid for tid, _, _ in P.ranges(program, query)]
@@ -241,7 +241,7 @@ def interior_window(boundary_digest: str, sample: Sequence[int], law: Mapping | 
         table = q * (n_t if w is None else N_T[w])
         members.append(CS.Member(tid, rows=rows, outs=outs, n=q * n_t, base=base, wired=wired, wired_trees=False,
                                  tables=tuple((p, table) for p, _ in rows), schemas=tuple((p, V2) for p, _ in rows + outs)))
-    return CS.Binding(program, query, dict(law or {"law": "subset", "k": q * N_RHO}), interior_run(boundary_digest, sample),
+    return CS.Binding(program, query, dict(sampling_design or {"law": "subset", "k": q * N_RHO}), interior_run(boundary_digest, sample),
                       tuple(members))
 
 
@@ -261,14 +261,14 @@ class Interior:
     registered: dict[str, dict[str, dict]]
 
 
-def interior(bc: CS.Committed, boundary_digest: str, sample: Sequence[int], law: Mapping | None = None, *,
+def interior(bc: CS.Committed, boundary_digest: str, sample: Sequence[int], sampling_design: Mapping | None = None, *,
              salt_key: bytes | None = None, replayed: np.ndarray | None = None) -> Interior:
     """The proof server's interior of the replay sample ``sample``: each span replayed from its ingress, the boundary record's
     row (``bc``, the boundary's commitment), and committed, each link member's boundary port under the boundary's salts at the
     sample's leaves. ``replayed``: the ingress replayed instead, ``(Q, 2H/16)`` u16: a prover's whose link rows don't open the
     boundary record (tests and refused runs)."""
     at = [int(s) for s in sample]
-    win = interior_window(boundary_digest, at, law)
+    win = interior_window(boundary_digest, at, sampling_design)
     names = boundary_ports(bc.window)
     ports = {win.members[t].key: LK.Port.of(bc, names[b]) for t, (_p, b) in LINKS.items()}
     r = replay(ports[win.members[0].key].rows_at(at) if replayed is None else replayed)

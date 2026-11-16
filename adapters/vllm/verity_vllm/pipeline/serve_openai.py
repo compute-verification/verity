@@ -14,7 +14,7 @@
         [--remote-verifier HOST:PORT [--remote-kv-lib SO] [--remote-filler-gib 0]]
         [--day N --day-log LOG --day-program HEX [--day-blocks KEYS] [--day-params FILE]]
 
-It serves what the network certifier sends (`benchmarks/network_traces/certifier_serve.py`): ``/v1/models``,
+It serves what a network attester's client sends: ``/v1/models``,
 ``/tokenize`` and ``/v1/completions``, the prompt as token ids or text, streamed as vLLM's own server streams it (one
 ``data: {...}`` event per engine output, the usage chunk, ``data: [DONE]``), or as one JSON response. vLLM's OpenAI server
 is the reference: under ``--protocol vllm`` (the default) a request is parsed by its ``CompletionRequest`` (defaults,
@@ -22,11 +22,11 @@ validation, ``to_sampling_params``) and every chunk is its ``CompletionStreamRes
 ``completion_stream_generator`` does; ``max_tokens`` is bounded by its ``get_max_tokens`` rule. `serve_protocol.PlainProtocol`
 (``--protocol plain``) is the same framing without vLLM, for the CPU tests; `serve_protocol.framing_agrees` holds the two to
 each other and the server records the result at start. ``--protocol ids`` (`serve_protocol.IdsProtocol`) answers a network
-certifier's id request (exactly ``active.id_request`` in its ``--id-payload`` + 9-byte cells, its release headers aside) in the
+attester's id request (exactly ``id_form.id_request`` in its ``--id-payload`` + 9-byte cells, its release headers aside) in the
 scan's id form: no HTTP head, one ``io_tie.id_event`` of ``--id-payload`` bytes a token, no usage chunk, then ``data: [DONE]``; a stream the
 engine fails stops after its ids so far and the connection closes, with no ``[DONE]`` and no text (its reason only in
-``summary.json``'s ``stream_errors`` and the log), so the network certifier sees it unterminated. Every
-other request (the network certifier's shim and probes, the load) is answered as ``--protocol vllm`` answers it.
+``summary.json``'s ``stream_errors`` and the log), so the network attester sees it unterminated. Every
+other request (the network attester's shim and probes, the load) is answered as ``--protocol vllm`` answers it.
 
 Sampling parameters are values the request brings: the server applies vLLM's neutral
 defaults, never the model's ``generation_config``, and records each request's ingress (the sampling fields it sent, the
@@ -45,13 +45,13 @@ The engine is `verity_vllm.LLM` (in-process engine core, Model Runner V2), stepp
 thread (`serve_loop.EngineLoop`): each HTTP request is admitted with ``add_request`` under the engine id ``cmpl-<hex>-0`` (vLLM's
 ``f"{request_id}-{i}"``), and vLLM's scheduler batches whatever is admitted; each engine output goes back to its
 request's connection as it comes. The HTTP side is an asyncio server on its own thread, one request per connection. It
-takes a request's first line only as the network certifier does (`serve_head.request_line`), and answers 400 to any other:
+takes a request's first line only as the network attester does (`serve_head.request_line`), and answers 400 to any other:
 those are the bytes the certifier passes on without its release.
 Requests reach the engine in the order the frontend parsed them (``--admit arrival``, the default), or in the network
-certifier's release order (``--admit release-order``: `serve_admit.ReleaseOrder`, which says what the certifier sends), where each step's
+attester's release order (``--admit release-order``: `serve_admit.ReleaseOrder`, which says what the certifier sends), where each step's
 rows also keep the scheduler's order, so a step's new rows are in admission order (`serve_admit.keep_scheduler_rows`; ``serve.json``'s
 ``step_rows``). ``--admit tick`` (`serve_admit.TickGate`) also adds each at the step the certified tick says, from the release
-buckets the network certifier's watermark gives (its ``POST /verity/watermark``, which the server reads as it streams) and the
+buckets the network attester's watermark gives (its ``POST /verity/watermark``, which the server reads as it streams) and the
 engine class's registered step times (``--tick-sat-ms``, ``--tick-free-ms``), the rows kept as under ``release-order``.
 No compile slice replays that admission, so its windows' served rows name none (`no_slice`, `serve_commit.NO_TICK_SLICE`).
 The engine schedules synchronously unless ``--async-scheduling``, which the row's Build of record must declare
@@ -103,13 +103,13 @@ it is written before the pending seals too, and its ``final`` is true only once 
 
 ``--protocols pouw:eps1-sm120-h1fx1`` serves PoUW H1 on this server's own Commit, one H1 window a Commit window
 (`serve_h1`), each window's H1 outcome its ``windows.jsonl`` line's ``pouw_h1``. With ``--challenger-gate`` and
-``--challenger-peer`` each window's coins come from a session of its own on the auditor host's challenger, reserved
+``--challenger-peer`` each window's coins come from a session of its own on the auditor device's challenger, reserved
 through the challenger's gate (`serve_h1.GateSessions`); without them they are in-process, and no window credits anything.
 ``--protocols pouw:pearl-c-h100-v1-h3`` (``--precision bfloat16``) serves every linear but the LM head as Pearl+'s FP8
 product under this server's Commit, one Pearl+ epoch a Commit window, the window's circuit cut at those linears
 (`serve_pearl`): each window's passes, one an engine step, its ``coins.json`` and ``served.json`` go to ``pearl/w<k>/``, and
 its outcome is its ``windows.jsonl`` line's ``pouw_pearl``. With ``--challenger-gate``, ``--challenger-peer`` and
-``--challenger-lane`` each window's salt coin comes from a salt-only session of its own on the auditor host's challenger,
+``--challenger-lane`` each window's salt coin comes from a salt-only session of its own on the auditor device's challenger,
 reserved under the lane when the window opens (`serve_pearl.live`); without them it is in-process and credits nothing.
 ``--day N`` declares day N's one circuit in ``--day-log`` before the model loads, and each window's registration names it (`serve_day`).
 ``--remote-verifier HOST:PORT`` proves the engine's store (its weights, and ``--remote-filler-gib``) to
@@ -135,7 +135,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity_vllm import settings
+from verity_vllm import messages as M, settings
 from verity_vllm.config import UsageError, group, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED, UNSEEDED, rule_of
 from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h1 as SH, serve_head as HD, serve_learn as SL,
@@ -171,10 +171,10 @@ class Options:
     run_id: str = option("--run-id", env="RESEARCH_RUN_ID", default="local", help="the Commit's run id (default $RESEARCH_RUN_ID)")
     protocol: str = option("--protocol", choices=tuple(PROTOCOLS), default="vllm",
                            help="vllm: vLLM's own request and response classes; plain: the same framing without them; ids: a "
-                                "network certifier's id requests streamed in the scan's id form, raw, and every other request as vllm "
+                                "network attester's id requests streamed in the scan's id form, raw, and every other request as vllm "
                                 "(serve_protocol.IdsProtocol)")
     id_payload: int = option("--id-payload", type=int, default=ID_PAYLOAD,
-                             help="--protocol ids: each id event's bytes, the network certifier's cell payload B − 9 (default 503: the scan's "
+                             help="--protocol ids: each id event's bytes, the network attester's cell payload B − 9 (default 503: the scan's "
                                   "B = 512)")
     precision: str = option("--precision", choices=PRECISIONS, default="verity_int8",
                             help="verity_int8 (default): int8 linears only, as vLLM's own server serves the int8 pin, the one that fits "
@@ -239,7 +239,7 @@ class Options:
                                        help="vLLM's --enable-force-include-usage: the usage chunk on every stream, and usage on each "
                                             "chunk (default on)")
     admit: str = option("--admit", choices=ADMIT, default="arrival",
-                        help="arrival (default): each request to the engine once parsed; release-order: in the network certifier's release "
+                        help="arrival (default): each request to the engine once parsed; release-order: in the network attester's release "
                              "order (x-verity-release), each once every earlier-released one is in; tick: in release order, each at "
                              "the step whose logical time its release bucket has closed by (serve_admit.TickGate), its windows' "
                              "served rows naming no compile slice (serve_commit.NO_TICK_SLICE)")
@@ -247,7 +247,7 @@ class Options:
                                 help="release-order, tick: skip a missing earlier release once a later request has waited this long; "
                                      "tick: open the gate once the watermark has stalled this long")
     tick_bucket_ms: float = option("--tick-bucket-ms", type=float, default=100.0,
-                                   help="tick: the network certifier's bucket (its deployment's bucket_ms)")
+                                   help="tick: the network attester's bucket (its deployment's bucket_ms)")
     tick_sat_ms: float = option("--tick-sat-ms", type=float, default=0.0,
                                 help="tick: the engine class's step time while vLLM's waiting queue is nonempty (registered with "
                                      "the class)")
@@ -309,7 +309,7 @@ class Server:
                 pass
 
     async def watermark(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter, headers: Mapping[str, str]) -> None:
-        """The network certifier's watermark (``--admit tick``): its chunked body's lines go to the gate as they come, and
+        """The network attester's watermark (``--admit tick``): its chunked body's lines go to the gate as they come, and
         its end is answered 200 (400 for a malformed stream). A POST that isn't a run's one stream (a client's, a run's
         second: `TickAdmit.watermark`) is answered 400 with its body unread."""
         try:
@@ -740,7 +740,7 @@ def main(opts: Options) -> int:
               "arena": getattr(com, "arena_sizing_record", None), "engine": llm.engine_record, "run_id": opts.run_id,
               "switch_interval_s": sys.getswitchinterval(), "watchdog": {"period_s": watchdog.period_s, "min_s": watchdog.min_s},
               "clocks": {"perf_counter": time.perf_counter(), "time": time.time()}, **SS.target_of(llm.model, opts.async_scheduling)}
-    (out / "serve.json").write_text(json.dumps(record, indent=1, default=str))
+    M.write(out / "serve.json", "ServingConfiguration", json.dumps(record, indent=1, default=str).encode())
     if mirror is not None:
         mirror()
     print(f"SERVE-OPENAI listening on {bound[0][0]}:{bound[0][1]} model={served} commit={opts.commit} protocol={proto.name}", flush=True)
@@ -758,7 +758,7 @@ def main(opts: Options) -> int:
                    "release": draws.summary() if draws is not None else None,
                    "mirror_errors": mirror.errors[:10] if mirror else None,
                    "remote_session": session.end() if session is not None else None}
-            (out / "summary.json").write_text(json.dumps(got, indent=1))
+            M.write(out / "summary.json", "RunTotals", json.dumps(got, indent=1).encode())
             if mirror is not None:
                 mirror()
             return got

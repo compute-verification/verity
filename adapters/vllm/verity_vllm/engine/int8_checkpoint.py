@@ -148,8 +148,11 @@ def fp8_exact(codes: np.ndarray, s: np.ndarray, lo: int, block: int) -> np.ndarr
     v = E4M3_VALUES[codes]
     if np.isnan(v).any():
         raise ValueError("an e4m3 NaN code")
-    rows, k = codes.shape
-    return v * _block_rows(s, lo, rows, k, block).astype(np.float64)
+    # The call is `_block_rows(s, lo, *codes.shape, block)`, made with its arguments bound to a local typed `Any` first (mypy
+    # counts an argument after a spread as one too many).  The shape is spread and not unpacked into two names, so codes that
+    # are no matrix are a call `_block_rows` refuses (TypeError); `fp8_served_bf16` reads the same way.
+    args: Any = (s, lo, *codes.shape, block)
+    return v * _block_rows(*args).astype(np.float64)
 
 
 def fp8_served_bf16(codes: np.ndarray, s: np.ndarray, lo: int, block: int) -> np.ndarray:
@@ -157,8 +160,8 @@ def fp8_served_bf16(codes: np.ndarray, s: np.ndarray, lo: int, block: int) -> np
     v = F.e4m3fn_value(codes)
     if np.isnan(v).any():
         raise ValueError("an e4m3 NaN code")
-    rows, k = codes.shape
-    u = np.ascontiguousarray(v * _block_rows(s, lo, rows, k, block), dtype=np.float32).view(np.uint32)
+    args: Any = (s, lo, *codes.shape, block)
+    u = np.ascontiguousarray(v * _block_rows(*args), dtype=np.float32).view(np.uint32)
     return ((u + np.uint32(0x7FFF) + ((u >> 16) & np.uint32(1))) >> 16).astype(np.uint16)
 
 

@@ -35,12 +35,13 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 sys.path.insert(0, str(ROOT))
 
-from verity_vllm.protocols.pouw.h1 import receipts as RC  # noqa: E402
+from verity_torch.pouw.h1 import receipts as RC  # noqa: E402
 
-from h1r import H1R, Call, words  # noqa: E402
+from h1r_torch import H1R  # noqa: E402
+from verity.protocols.experimental.dither.prover.h1r import Call, words  # noqa: E402
 
 if TYPE_CHECKING:
-    from h1r import Plan
+    from verity.protocols.experimental.dither.prover.h1r import Plan
 
 PIN = "/workspace/hf/hub/models--verity-int8--Llama-3.1-8B-INT8/snapshots/723d342ac443b040931242c768df342b0f6f15a7"
 LAYERS = 32

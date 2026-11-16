@@ -13,7 +13,7 @@ width:
   value in the circuit's evaluation;
 * `compose_cone`: the same for the wires `T` a consumer reads, given only that the units of `T`'s cone are correct;
 * `correct_congr`: a unit's correctness depends only on its committed inputs and outputs (`Partition.io`);
-* `Refines.exists_incorrect_fine`: when a fine partition refines a coarse one, a wrong coarse unit has a wrong fine unit
+* `Refines.exists_incorrect_fine`: when a fine partition refines a coarse one, a incorrect coarse unit has a incorrect fine unit
   inside it, whatever the values on the coarse unit's interior;
 * `Containment.implementation`: a circuit that contains `C` implements it.
 -/
@@ -132,9 +132,9 @@ theorem localEval_of_not_mem (X : C.Trace) {u : Fin n} {g : Fin C.N} (h : P.unit
     P.localEval X u g = X g :=
   C.run_fixed (by simp [h])
 
-theorem mem_incorrect {X : C.Trace} {u : Fin n} : u ∈ P.wrong X ↔ ¬ P.Correct X u := by
+theorem mem_incorrect {X : C.Trace} {u : Fin n} : u ∈ P.incorrect X ↔ ¬ P.Correct X u := by
   classical
-  simp [wrong]
+  simp [incorrect]
 
 theorem mem_cone {T : Finset (Fin C.N)} {u : Fin n} {t g : Fin C.N} (ht : t ∈ T) (hg : C.Feeds g t)
     (hu : P.unit g = some u) : u ∈ P.cone T := by
@@ -177,9 +177,9 @@ theorem cone_induction (X a : C.Trace) (T : Finset (Fin C.N)) (hin : C.InputsAgr
   · rw [hin g hi, C.eval_input a hi]
 
 /-- **A consumer's value, through its cone.** If the committed inputs are the anchors' values and no unit of `T`'s cone
-is wrong, every committed wire of `T` carries its evaluation. -/
+is incorrect, every committed wire of `T` carries its evaluation. -/
 theorem compose_cone (X a : C.Trace) (T : Finset (Fin C.N)) (hin : C.InputsAgree X a)
-    (h : Disjoint (P.wrong X) (P.cone T)) : ∀ t ∈ T, t ∈ P.committed → X t = C.eval a t := by
+    (h : Disjoint (P.incorrect X) (P.cone T)) : ∀ t ∈ T, t ∈ P.committed → X t = C.eval a t := by
   intro t ht htc
   have hc : ∀ u ∈ P.cone T, P.Correct X u := fun u hu => by
     by_contra hw
@@ -188,7 +188,7 @@ theorem compose_cone (X a : C.Trace) (T : Finset (Fin C.N)) (hin : C.InputsAgree
 
 /-- **Composition.** If every unit is correct and the committed inputs are the anchors' values, every committed wire
 carries its value in the circuit's evaluation. -/
-theorem compose (X a : C.Trace) (hin : C.InputsAgree X a) (h : P.wrong X = ∅) :
+theorem compose (X a : C.Trace) (hin : C.InputsAgree X a) (h : P.incorrect X = ∅) :
     ∀ g ∈ P.committed, X g = C.eval a g :=
   fun g hg => P.compose_cone X a P.committed hin (by simp [h]) g hg hg
 
@@ -264,10 +264,10 @@ theorem localEval_eq {X Y : C.Trace} {u : Fin nc}
     rw [Pc.localEval_of_not_mem X hxu, Pf.localEval_of_not_mem Y hxv]
     exact (hY x (Pc.mem_committed_of_read hx (by rw [hu]; exact Ne.symm hxu))).symm
 
-/-- **A wrong coarse unit has a wrong fine unit inside it**, whatever `Y` holds on the coarse unit's interior, as long
+/-- **A incorrect coarse unit has a incorrect fine unit inside it**, whatever `Y` holds on the coarse unit's interior, as long
 as `Y` agrees with `X` on the coarse committed wires. -/
 theorem exists_incorrect_fine {X Y : C.Trace} (hY : ∀ g ∈ Pc.committed, Y g = X g)
-    {u : Fin nc} (hu : u ∈ Pc.wrong X) : ∃ v, r.parent v = u ∧ v ∈ Pf.wrong Y := by
+    {u : Fin nc} (hu : u ∈ Pc.incorrect X) : ∃ v, r.parent v = u ∧ v ∈ Pf.incorrect Y := by
   by_contra hno
   push Not at hno
   have hf : ∀ v, r.parent v = u → Pf.Correct Y v := fun v hv => by
@@ -279,16 +279,16 @@ theorem exists_incorrect_fine {X Y : C.Trace} (hY : ∀ g ∈ Pc.committed, Y g 
     simpa using hgu
   rw [← hY g hg, hf v hvu g (r.committed_subset hg) hv, r.localEval_eq hY hf g.val g v rfl hv hvu]
 
-/-- A fine trace that extends a coarse one has at least as many wrong fine units as the coarse one has wrong
+/-- A fine trace that extends a coarse one has at least as many incorrect fine units as the coarse one has incorrect
 coarse units. -/
 theorem card_incorrect_le {X Y : C.Trace} (hY : ∀ g ∈ Pc.committed, Y g = X g) :
-    (Pc.wrong X).card ≤ (Pf.wrong Y).card := by
+    (Pc.incorrect X).card ≤ (Pf.incorrect Y).card := by
   classical
-  calc (Pc.wrong X).card ≤ ((Pf.wrong Y).image r.parent).card := by
+  calc (Pc.incorrect X).card ≤ ((Pf.incorrect Y).image r.parent).card := by
         refine Finset.card_le_card fun u hu => ?_
         obtain ⟨v, hv, hvw⟩ := r.exists_incorrect_fine hY hu
         exact Finset.mem_image.2 ⟨v, hvw, hv⟩
-    _ ≤ (Pf.wrong Y).card := Finset.card_image_le
+    _ ≤ (Pf.incorrect Y).card := Finset.card_image_le
 
 end Refines
 

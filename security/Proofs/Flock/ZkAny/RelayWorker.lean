@@ -24,7 +24,7 @@ rounds at the frame rounds and the ZK server's own message at every other round:
 Rust's checks on a worker's rep (`LeanRelease.cross`: the worker failing, the device's level-0 root, the masking
 cross-checks, the end check on the returned proof and the constraints on the pads) run in `flock-circuit` on the
 prover's side of the loop's connection, before a round is sent: a rep a check failed sends each later round as its
-place with no device round in it (`Firewall::round`, `Firewall::scheduled`), and the checks at the `Finish` and on the
+place with no device round in it (`ZkServer::round`, `ZkServer::scheduled`), and the checks at the `Finish` and on the
 coins of a round already sent change only the rounds after it. What reaches the loop at a frame round is the round they
 leave, the content `LiveChallenger::round` sends, so they are the worker's, and the release's decision is the frame's
 alone:

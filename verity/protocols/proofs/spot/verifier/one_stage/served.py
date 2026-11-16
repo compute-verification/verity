@@ -5,12 +5,11 @@ A *served tree* is a frame-v3-sha512 tree of `hm96-sha512/row/v1` rows that serv
 a template's operands, Dither's z/y leaves or receipt roots, H1's per-call A, y and z tables. Its root is a hiding
 commitment, which binds nothing on its own: `EndToEndRegisteredRows` links a proof's value layer to a committed row only at
 a registered read. So the service registers each served tree as a port of the verifier's own `--registered` file before
-the session's statement and coin (`RowsSession.ServedRegistered`), and verifies with `flock-verify --zk --registered`;
+the session's statement and coin (`RowsSession.ServedRegistered`), and verifies with `verity-verify-proof --zk --registered`;
 `Flock.Guarantees.ServedRowsLinked` then gives the committed tree's row at every served read.
 
 **The port form.** A served tree is the registered value of the program parameter whose rows it commits (`value`): its
-`leaves` rows, each `words` leaves of `word_bits` bits (16 or 32), under `root` and `domain`. It enters the registration
-record as one `registered` entry (`registered.ENTRY_KEYS`, plus `word_bits` when it is not 16), which R7 holds to the
+`leaves` rows, each `words` leaves of `word_bits` bits (16 or 32), under `root` and `domain`. It enters the docket as one `registered` entry (`registered.ENTRY_KEYS`, plus `word_bits` when it is not 16), which R7 holds to the
 verifier's own (`registration.check(..., registered=values, outputs=outputs, schemas=schemas, window_root=, held=)`), and
 the verifier's
 `--registered` file as one port per circuit port that reads it (`registered.reads_file`: the value, root, leaves, words,
@@ -63,7 +62,7 @@ from typing import Any, Mapping, Sequence
 from verity.circuits.codec import canonical_json
 from verity.circuits.program import Program
 
-from . import partition as P, registered as G, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as G, docket as R
 
 _HEX64 = re.compile(r"[0-9a-f]{128}")
 #: the row formats a served tree may name, each one the registered form reads
@@ -94,13 +93,13 @@ class ServedTree:
         return cls(e["value"], e["root"], e["leaves"], e["words"], e["domain"], reg.word_bits, row_schema=reg.schema)
 
     def entry(self) -> dict[str, Any]:
-        """The registration record's `registered` entry."""
+        """The docket's `registered` entry."""
         return {"value": self.value, "root": self.root, "leaves": self.leaves, "words": self.words,
                 **G.width_entry(self.word_bits), "domain": self.domain}
 
 
 @dataclass(frozen=True)
-class ServedRegistration:
+class ServedDocket:
     """What `register_served` returns. `registered`: the record's `registered` entries (`registration.record(...,
     registered=)`); `values`, `outputs`, `window_root` and `held`: R7's own copies (`registration.check(...,
     registered=values, outputs=outputs, window_root=window_root, held=held)`, `outputs` None when no tree is an earlier
@@ -123,7 +122,7 @@ class ServedRegistration:
         return self.file["ports"]
 
     def file_bytes(self) -> bytes:
-        """The `--registered` file as `flock-verify` reads it: canonical JSON."""
+        """The `--registered` file as `verity-verify-proof` reads it: canonical JSON."""
         return canonical_json(self.file)
 
     def write(self, path: str | Path) -> Path:
@@ -163,7 +162,7 @@ def _check_form(t: Any) -> None:
 
 def register_served(program: Program, query: Mapping[str, Any], served: Sequence[ServedTree],
                     log: Sequence[Mapping[str, Any]] = (), ports: Mapping[str, str] | None = None,
-                    window_root: str | None = None, held: Sequence[str] | None = None) -> ServedRegistration:
+                    window_root: str | None = None, held: Sequence[str] | None = None) -> ServedDocket:
     """Register each served tree as a port of the verifier's own `--registered` file, in the module's port form: the record's
     `registered` entries, R7's copies, and the file, from the verifier's own program and query. `log`: this prover's earlier
     records, which an output tree's `(record digest, port)` and a reused tree's `(record digest, value)` name. `ports`: a template parameter's circuit port, where
@@ -232,8 +231,8 @@ def register_served(program: Program, query: Mapping[str, Any], served: Sequence
     unread = sorted(set(values) - {e["value"] for e in file["ports"].values()})
     if unread:
         raise ValueError(f"served trees {unread}: no unit of the population reads them, so no proof would open them")
-    return ServedRegistration([t.entry() for t in served], values, outputs or None, roots, file, P.partition(program, query),
+    return ServedDocket([t.entry() for t in served], values, outputs or None, roots, file, P.partition(program, query),
                               schemas, window_root, None if held is None else list(held))
 
 
-__all__ = ["SCHEMAS", "ServedRegistration", "ServedTree", "register_served"]
+__all__ = ["SCHEMAS", "ServedDocket", "ServedTree", "register_served"]

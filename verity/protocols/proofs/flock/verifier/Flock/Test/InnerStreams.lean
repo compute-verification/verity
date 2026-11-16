@@ -98,10 +98,10 @@ def why (x : Flock.V Unit) : Option String := match x with | .error e => some e 
 #guard (checkOpeningShape "rec-opening/m23-c2-p0" (held (some r23))).toOption.isSome
 #guard (checkOpeningShape "rec-opening/m23-c2-p3" (held (some r23))).toOption.isSome
 #guard why (checkOpeningShape "rec-opening/m24-c2-p0" (held (some r23))) == some
-  "FIREWALL-REFUSED: registration: rec-opening/m24-c2-p0 opens R at (m 24, claims 2), not at the shape staging committed R at (m 23, claims 2, META's stacked)"
+  "ZK-SERVER-REFUSED: registration: rec-opening/m24-c2-p0 opens R at (m 24, claims 2), not at the shape staging committed R at (m 23, claims 2, META's stacked)"
 #guard (checkOpeningShape "rec-opening/m23-c3-p0" (held (some r23))).toOption.isNone
 #guard why (checkOpeningShape "rec-opening/m23-c2-p0" (held none)) == some
-  "FIREWALL-REFUSED: registration: rec-opening/m23-c2-p0 opens R at (m 23, claims 2), not at the shape staging committed R at (no shape, META's stacked)"
+  "ZK-SERVER-REFUSED: registration: rec-opening/m23-c2-p0 opens R at (m 23, claims 2), not at the shape staging committed R at (no shape, META's stacked)"
 #guard (checkOpeningShape "rec-sparse/n18-e13-s6-t0" (held none)).toOption.isSome
 
 /-! Candidate 3's V* list at the e2e's shape (m 25, k_log 22, the bucket's RecSparse (18, 13, 6, 0), R at (m 23, claims 2)):
@@ -259,13 +259,13 @@ def msgAt (s : String) (j : Nat) (got want : String) (n m : Nat) : Option String
 -- each sparse stream flips its phase's coins round for round (the challenger's record of the recorded session holds
 -- 6, six 1s, 0, a 1 per H3 round, P_LOG's 5 and the claim's 0): a round short, a coin over, and none are refused
 def spCoins : Array (Array Flock.F128) := repCoins (sparsePhaseRounds sp18)
-def spDraws (cs : Array (Array Flock.F128)) : Option String :=
+def spSamples (cs : Array (Array Flock.F128)) : Option String :=
   some (s!"rec inner transcript: sparse/rep1 draws {cs.map (·.size)} coins by round, and its schedule " ++
     s!"(rec-sparse/n18-e13-s6-t0) {spCoins.map (·.size)}")
 
 #guard (spCoins.map (·.size)).toList == [6, 1, 1, 1, 1, 1, 1, 0] ++ List.replicate 24 1 ++ [5, 0]
 #guard [spCoins.pop, spCoins.modify 7 (·.push 0), #[]].all fun cs =>
-  why (checkCovers c3 (withS #[sparseAt 0, sparseAt 1 (coins := cs), stackedAt])) == spDraws cs
+  why (checkCovers c3 (withS #[sparseAt 0, sparseAt 1 (coins := cs), stackedAt])) == spSamples cs
 -- R's stream at (m 23, claims 2): 25 message rounds and tops of 128, 64 and 64 nodes. Its c_k one round off or one
 -- short, its tops other than its rounds commit, and R's stream under an inner shape naming no schedule of R's are
 -- refused
@@ -290,7 +290,7 @@ def otherSparse (n : String) : Option String :=
 #guard ["sparse/rep2", "sparse/rep10", "sparse/rep01", "sparse/x", "sparse/"].all fun n => otherSparse n ==
   some s!"rec inner transcript: it holds {n}, and a sparse phase is one of the two reps' (sparse/rep0, sparse/rep1)"
 #guard otherSparse "sparse/rep1" == none
--- every stream but the sparse phases' and R's holds the rep's rounds at the inner shape, round for round (`RepsDrawn`'s
+-- every stream but the sparse phases' and R's holds the rep's rounds at the inner shape, round for round (`RepsSampled`'s
 -- second half): a stream named neither way with no rounds, one round short, or one coin over in a round is refused
 def reps25 : Array SchedRound := (repRounds 25 22 8).getD #[]
 def repStream (coins : Array (Array Flock.F128)) : InnerStream :=

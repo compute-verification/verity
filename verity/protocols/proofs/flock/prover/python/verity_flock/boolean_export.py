@@ -395,7 +395,7 @@ def prims() -> dict:
         from verity.circuits.defs import PrimitiveDefinition
 
         mods = ["verity.circuits.ops.prims"]
-        import verity.definitions.registry as R
+        import verity_vllm.definitions.registry as R
         mods += [f"{R.__name__}.{m.name}" for m in pkgutil.iter_modules(R.__path__) if not m.name.startswith(("quarantine",))]
         _PRIMS = {}
         for m in mods:
@@ -413,7 +413,7 @@ def _width_prim(pid: str):
     """A primitive the registry makes per width on demand (``BitAtx{W}``, ``TopPMaskWordx{V}``), from its factory."""
     import re
 
-    from verity.definitions.registry import sampling
+    from verity_vllm.definitions.registry import sampling
 
     for pat, make in ((r"BitAtx(\d+)_v1", sampling.bit_at), (r"TopPMaskWordx(\d+)_v1", sampling.topp_mask_word)):
         m = re.fullmatch(pat, pid)
@@ -1037,7 +1037,7 @@ def _leaf_lookup(params):
 def _unit_graph(G, owner, head, inv, rank, u, gates, info, leaves, ireads) -> dict:
     """One unit's part graph: ``parts`` are its word gates in layout order (``part_nodes``: each one's activation and body node),
     ``wiring`` ``[src part, dst part, bits]`` inside the unit (a read through wiring stands for a read of its source); ``reads``
-    ``[unit class, dst part, bits]`` of a value another unit commits, ``[-1, dst part, bits, parameter]`` of the Call's inputs;
+    ``[proof-block class, dst part, bits]`` of a value another unit commits, ``[-1, dst part, bits, parameter]`` of the Call's inputs;
     ``outputs``: the parts whose value the cut commits (returned, or read by another unit)."""
     import numpy as np
 
@@ -1238,7 +1238,7 @@ def _spine(reg: CircuitTypeTable, sub, base: dict, walker: "Walker", spec: str |
     mod = lowerings.registry("C-Flock").module(sub.template.id)
     if hasattr(mod, "width") and mod.width(int(sub.params["N"])) is None:
         rec = _walked(base, walker, spec, walked_name)
-        rec["note"] = (f"at N = {sub.params['N']} the kernel's warps differ, so there is no single C-Flock unit "
+        rec["note"] = (f"at N = {sub.params['N']} the kernel's warps differ, so there is no single Flock unit "
                        f"(verity_flock.templates.{Path(mod.__file__).stem}.width); its Definition is walked instead, every "
                        f"primitive with its piece, none in a proof block")
         return rec
@@ -1364,7 +1364,7 @@ class _Encoded:
         self.ix: dict[str, dict] = {}
 
     def add(self, fn) -> str:
-        from verity.definitions.encoding import encode_specialization
+        from verity_vllm.definitions.encoding import encode_specialization
 
         top, defs = encode_specialization(fn)
         self.ix.update(defs)
@@ -1455,7 +1455,7 @@ def _commitment(g: dict, cm: "Commitments", checks: dict | None) -> dict:
     """The Call's cut under the no-recompute partition: its record id (``commitment``), or per T (``commitment_by_T``) for a group
     whose T varies, at the program graph's partition points (every T up to a few hundred, else the key-block boundaries), each
     checked against the program graph's own ``q_word_v1`` summary where it has one."""
-    from verity.definitions.encoding import word_values
+    from verity_vllm.definitions.encoding import word_values
     from verity.circuits.word import specialization
 
     if g["template"].startswith(("Const32", "Const64")):

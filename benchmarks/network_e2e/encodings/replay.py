@@ -55,7 +55,7 @@ STEP_TRACE = "verity-vllm/step-trace/v1"
 
 @dataclass(frozen=True)
 class Releases:
-    """A tick-admitted run's certified releases, as the network certifier (or the trace corpus's stand-in for it) gave
+    """A tick-admitted run's certified releases, as the network attester (or the trace corpus's stand-in for it) gave
     them: the registered tick, the certifier run's origin (unix seconds; bucket a is [origin + a·τ_b, origin + (a + 1)·τ_b)),
     and each request's release number N and bucket a, in the trace's engine order."""
 
@@ -362,12 +362,12 @@ def read_corpus_trace(d: str | Path, *, num_gpu_blocks: int | None = None, block
 
     A request's certified ingress is the client's send time (`ingress="client"`, a passive certifier on the link),
     or with `ingress="warden"` the server's own arrival stamp (`arrival`, its body read), the order vLLM schedules in.
-    That is not what design v3's warden certifies: behind it the engine still follows the body read, and the warden's
+    That is not what design v3's network attester certifies: behind it the engine still follows the body read, and the network attester's
     release order (a, ordinal) leaves order exceptions to charge (the corpus's `<trace>.released` traces carry it as
     their ingress). `ingress="warden"` is the floor a server admitting in release order at the next bucket would give.
 
     A trace served under ``--admit tick`` (meta.json's ``tick``: τ and the certifier run's origin) has each request's
-    release number and bucket from its network certifier, a warden trace's warden or the corpus's stand-in for it
+    release number and bucket from its network attester, a network attester trace's network attester or the corpus's stand-in for it
     (`requests.jsonl`'s ``release`` and ``bucket``), as `Trace.releases`."""
     d = Path(d)
     meta = json.loads((d / "meta.json").read_text())
@@ -831,7 +831,7 @@ def v0_widths(trace: Trace, *, window_buckets: int) -> dict[str, int]:
 
 
 def v0_advice(trace: Trace, v0: Any, *, bucket_s: float = 0.1) -> Any:
-    """The trace as advice v0, built with its module `v0` (`verity.protocols.accounting.certifier.verifier.advice`): the
+    """The trace as advice v0, built with its module `v0` (`verity.protocols.resource_accounting.network.verifier.advice`): the
     trace's rows in its batch order, each hit's sources from the replay's block map, and each kept output released in its
     step's release bucket. v0 validates it as it builds it."""
     rp = replay(trace.engine, trace.requests, admit=trace.before_step, passed=trace.passed)
@@ -1029,8 +1029,8 @@ def draft_table(trace: Trace, *, contexts: Sequence[str] = ("plain",), bucket_s:
             "kept_count": kept_bits(trace, codes.values())}
 
 
-#: advice v0's module (`verity.protocols.accounting.certifier.verifier.advice`)
-V0_PATH = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "advice.py"
+#: advice v0's module (`verity.protocols.resource_accounting.network.verifier.advice`)
+V0_PATH = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "advice.py"
 
 
 def load_v0(spec: str | Path | None) -> Any:
@@ -1078,8 +1078,8 @@ def main(argv: Sequence[str] | None = None) -> None:
                     help="a trace-corpus output's release time: its step's (engine) or its streamed chunk's (client)")
     ap.add_argument("--ingress", choices=("client", "warden"), default="client",
                     help="a trace-corpus request's certified ingress: the client's send time (client) or the engine's "
-                         "arrival stamp (warden: the floor a server admitting in the warden's release order would "
-                         "give; the warden certifies the release order, which a trace's .released view carries)")
+                         "arrival stamp (network_attester: the floor a server admitting in the network certifier's release order would "
+                         "give; the network certifier certifies the release order, which a trace's .released view carries)")
     ap.add_argument("--span", help="of each step trace, only the requests whose id holds this, as a trace of their own: "
                                    "one load of a serve that ran others, begun with the engine drained and its prefix "
                                    "cache reset")

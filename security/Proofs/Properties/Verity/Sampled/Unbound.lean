@@ -108,7 +108,7 @@ theorem unbound_subset_of_parsed {o : Option Flock.Bridge.Parsed} {r : Flock.Bri
     (hgame : ∀ opens : (g : Fin (Verity.Circuit.ofAudit C).N) → BitVec ((Verity.Circuit.ofAudit C).w g) → Prop,
       (∀ g b, κ g = some b → opens g (BitVec.ofBool b)) →
       (∀ g b, κ g = none → val (Flock.Bridge.posOf C g) = some b → opens g (BitVec.ofBool b)) →
-      (Accounting.unbound (Verity.Partition.ofAudit P) opens
+      (ResourceAccounting.unbound (Verity.Partition.ofAudit P) opens
         (Verity.Circuit.ofBits (Flock.Bridge.openedOf C κ val))).image Fin.val ⊆ F)
     (op : (g : Fin (Flock.Bridge.Parsed.circuit o).N) → BitVec ((Flock.Bridge.Parsed.circuit o).w g) → Prop)
     (hopen : ∀ (h : (Flock.Bridge.Parsed.circuit o).N = C.N) (g : Fin (Flock.Bridge.Parsed.circuit o).N) (b : Bool)
@@ -117,8 +117,8 @@ theorem unbound_subset_of_parsed {o : Option Flock.Bridge.Parsed} {r : Flock.Bri
           ∀ v : BitVec ((Flock.Bridge.Parsed.circuit o).w g), v.getLsbD 0 = b → op g v)
     (hconst : ∀ g b, Verity.parsedConsts o g = some b → ∀ v : BitVec ((Flock.Bridge.Parsed.circuit o).w g),
       (∀ i : Fin ((Flock.Bridge.Parsed.circuit o).w g), v.getLsbD i.val = b) → op g v)
-    (tr : (Flock.Bridge.Parsed.circuit o).Trace) (htr : HEq tr (Flock.Bridge.transcriptOf r.D r.hU r.n κ₀ val)) :
-    (Accounting.unbound (Flock.Bridge.Parsed.parts o) op tr).image Fin.val ⊆ F := by
+    (tr : (Flock.Bridge.Parsed.circuit o).Trace) (htr : HEq tr (Flock.Bridge.traceOf r.D r.hU r.n κ₀ val)) :
+    (ResourceAccounting.unbound (Flock.Bridge.Parsed.parts o) op tr).image Fin.val ⊆ F := by
   subst ho hC
   obtain rfl := eq_of_heq hP
   obtain rfl := eq_of_heq hκ
@@ -179,13 +179,14 @@ committed files that hold wherever the session's deployed commitment opens and a
 unbound in the transcript the witness `w` opens on the committed files' circuit is faulty in V5's statement at the
 session at `Flock.Bridge.partOf` over the registration's strata under `w`. -/
 theorem unbound_subset_faulty_part
-    (op : (g : Fin A.fileRead.circuit.N) → BitVec (A.fileRead.circuit.w g) → Prop) (hop : A.OpensUnder A.fileRead op)
+    (op : (g : Fin A.fileRead.circuit.N) → BitVec (A.fileRead.circuit.w g) → Prop)
+    (hop : A.OpensUnder (.one A.fileRead) op)
     (hc : ∀ g b, A.fileRead.consts g = some b → ∀ v : BitVec (A.fileRead.circuit.w g),
       (∀ i : Fin (A.fileRead.circuit.w g), v.getLsbD i.val = b) → op g v)
     (w : Wit) :
-    (Accounting.unbound A.fileRead.parts op
+    (ResourceAccounting.unbound A.fileRead.parts op
         (cast (congrArg Verity.Circuit.Trace A.circuit_eq.symm)
-          (Flock.Bridge.transcriptOf A.D A.hU A.n A.κ (w.val sha512Msg A.Cd
+          (Flock.Bridge.traceOf A.D A.hU A.n A.κ (w.val sha512Msg A.Cd
             (Flock.Bridge.stmtOf A.P A.κ (_root_.Properties.Spot.oneStageOf A.design) A.desc ⟨"", 0, []⟩
               A.roots))))).image Fin.val ⊆
       faulty sha512Msg A.Cd

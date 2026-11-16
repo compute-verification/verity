@@ -74,7 +74,8 @@ def _utc(m: re.Match | None) -> str | None:
         return None
     try:
         t = dt.datetime.fromisoformat(f"{m[2]}T{m[3][:5]}")
-    except ValueError:
+    except ValueError as e:
+        print(f"notes index: {m[0][:40]!r} is not a time, read as none ({e})", file=sys.stderr, flush=True)
         return None
     tz = (m[4] or "Z").upper()
     if tz != "Z":
@@ -110,7 +111,7 @@ def read_note(root: Path, rel: str, size: int, mtime_ns: int) -> tuple[dict, str
     created = _utc(CREATED_RE.search(front))
     s = m[1] if (m := STAMP_RE.match(parts[-1])) else None
     t = (f"{s[:4]}-{s[4:6]}-{s[6:8]}T{s[9:11]}:{s[11:13]}Z" if s else
-         created or f"{dt.datetime.fromtimestamp(mtime_ns / 1e9, dt.timezone.utc):%Y-%m-%dT%H:%M}Z")
+         created or f"{dt.datetime.fromtimestamp(mtime_ns / 1e9, dt.UTC):%Y-%m-%dT%H:%M}Z")
     lines = [ln.strip() for ln in body.splitlines() if ln.strip()]
     title = next((ln for ln in lines if ln.startswith("#")), lines[0] if lines else "").lstrip("#").strip()[:200]
     row = {**fm, "path": rel, "id": fm.get("id") or parts[-1][:-3], "created": created, "time": t, "title": title,

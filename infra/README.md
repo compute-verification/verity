@@ -26,6 +26,7 @@ to it by exec, so those are the commands to run:
 ~~~text
 research deploy drift [--on NODE]        how far each node's installed files are from origin/main
 research deploy install NODE --by WHO    install them from a pushed commit; a dry run without --apply
+research deploy roll PATH --by WHO       a file made from the register of machines, on every node that lists it, one at a time
 research keeper status --on NODE         a node's standing targets (`set` and `stop` change them)
 ~~~
 

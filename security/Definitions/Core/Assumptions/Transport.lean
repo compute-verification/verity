@@ -1,16 +1,19 @@
 module
 
 public import Definitions.Core.Transport
+public import Definitions.Assumptions.Transport
 
 /-!
-# The transport's named assumptions
+# The transport's premises
 
 The premises on a channel between an auditor party and the prover (`verity.commitments.crypto.transport`). The two placement
 premises say who can read a channel's bytes in transit, and nothing proves them; the two cryptographic ones are what the
-key schedule and the record layer give, and are theorem targets from the claims their docstrings name.
-`WitnessPathPrivateOrChannelHides` names the one hypothesis a guarantee takes when either of two of them serves, and is
-no premise of its own. They sit apart from `Assumptions` so that the other named assumptions elaborate without the
-transport's vocabulary.
+key schedule and the record layer give, and are theorem targets from the claims their docstrings name. Two of them are
+named assumptions, declared in `Definitions.Assumptions.Transport`, which this module re-exports: the placement premise
+`ImprintPathPrivate` and the cryptographic `ChannelAuthentic`. Here are `WitnessPathPrivate`, `ChannelHides` and
+`WitnessPathPrivateOrChannelHides`, which names the one hypothesis a guarantee takes when either of the first two
+serves, and is no premise of its own. They sit apart from `Assumptions` so that the other named assumptions elaborate
+without the transport's vocabulary.
 -/
 
 @[expose] public section
@@ -27,12 +30,6 @@ certifier on the server's own uplink meets it, and so does the memory challenger
 network the prover doesn't own meets it only with keys (`ChannelHides`). -/
 def WitnessPathPrivate {Node : Type} (s : Roles Node) (c : Channel Node) : Prop :=
   PathPrivate s c.party c.readsPrivate
-
-/-- **`imprint-path-private`**: the same, only for the bytes of `c`'s one imprint exchange, over the cable between an
-onsite auditor device and its server once per device (the imprint key). The premise shrinks from every
-frame of the channel's life to that one exchange. -/
-def ImprintPathPrivate {Node : Type} (s : Roles Node) (c : Channel Node) : Prop :=
-  PathPrivate s c.party c.readsImprint
 
 /-- **`channel-hides`**, for one test `E` on what a reader outside the channel's ends sees: the wire bytes of the private
 traffic `m` (sealed under the channel's randomness `ω`: its keys and the session's) and of `blank m` (traffic of the same
@@ -51,12 +48,5 @@ meets the first, and a channel across a network the prover doesn't own the secon
 def WitnessPathPrivateOrChannelHides {Node Ω M W : Type} [Fintype Ω] [Nonempty Ω] (s : Roles Node) (c : Channel Node)
     (wire : M → Ω → W) (blank : M → M) (η : ℝ≥0∞) (m : M) : Prop :=
   WitnessPathPrivate s c ∨ ∀ E, ChannelHides wire blank E η m
-
-/-- **`channel-authentic`**: in every run, the frames a receiver accepts are a prefix of the frames its peer sent, or the
-run holds a forgery: an LMS signature on a new handshake message (`euf-cma/lms-sha512-n64`), or a tag under the
-session's keys on a new unit (`prf/sha-512`). A receiver opens each unit only at its own position and refuses every unit
-after one it refused (`transport.Receiver`). -/
-def ChannelAuthentic {Run Frame : Type} (sent accepted : Run → List Frame) (forgery : Run → Prop) : Prop :=
-  ∀ r, accepted r <+: sent r ∨ forgery r
 
 end Verity.Assumptions

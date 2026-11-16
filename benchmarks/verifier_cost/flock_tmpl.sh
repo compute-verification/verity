@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The H1 tile unit in flock-ir-tmpl/v2 against its flat form: per K, flock_read.py --circuit-only builds the 4×8
-# tile's statement circuit (`h1_prove/h1unit.Shape(K)`), `python -m verity_flock.tmpl` writes its unit's templated form,
+# tile's statement circuit (`prover/lowering/h1unit.Shape(K)`), `python -m verity_flock.tmpl` writes its unit's templated form,
 # and flock-tmpl (flock_tmpl/Main.lean, built in a scratch Lake package against the checkout's verifier) times the
 # templated read (`Tmpl.parse`) and diffs `Tmpl.unroll`'s lines against the circuit's flat unit byte for byte. Run from a
 # clone (the build writes the verifier's .lake):

@@ -113,7 +113,7 @@ noncomputable def decodeRun (e : ExecHolo) (l : List Step) : C3Run e :=
 export FlockSoundness.Assumptions (heldRow)
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
+  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
 /-- **(n0) The honest family**: at the verifier's list `ss` of the inner shape `ish`, V*'s statements `Vs` whose files
 parse (`hob`), V*'s sessions `zs`, G's commit strings, digests and messages at the sessions' reads `own`, the stage

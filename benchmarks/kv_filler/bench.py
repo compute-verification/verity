@@ -33,10 +33,16 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-sys.path.insert(0, str(ROOT / "benchmarks/word_codec"))
+sys.path.insert(0, str((ROOT / "verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.py").parent))
+
+sys.path.append(str(ROOT))
 
 import cuda_lib  # noqa: E402
 import kv as K  # noqa: E402
+from verity.device import load_card  # noqa: E402
+
+SMS = load_card("rtx-pro-6000-server")["sm"]["count"]["value"]
+"""The RTX PRO 6000's SMs, its card's `sm.count`: the readers' grid is a multiple of it."""
 
 RUN_SEED = hashlib.sha256(b"verity/kv-filler/bench/seed").digest()
 MODES = {"read": -1, "fill": 4}
@@ -646,10 +652,10 @@ def reads(tu: Topup, torch, filler, R: float, seconds: float, least: int, ctas_l
     out: dict = {"R_GBps": R, "filler_alone": summary([window((), 0) for _ in range(reps)]), "alone": {}, "arms": {}}
     log(f"reads: filler alone {out['filler_alone']['total_GBps']:.0f} GB/s ({out['filler_alone']['of_R']:.3f} R)")
     for name in READERS:
-        rs = [run((name,), 188 * 8) for _ in range(reps)]
+        rs = [run((name,), SMS * 8) for _ in range(reps)]
         out["alone"][name] = {"GBps": statistics.mean(rs), "min_GBps": min(rs), "max_GBps": max(rs),
                               "of_R": statistics.mean(rs) / R}
-        log(f"reads: {name} alone at {188 * 8} CTAs {statistics.mean(rs):.0f} GB/s ({statistics.mean(rs) / R:.3f} R)")
+        log(f"reads: {name} alone at {SMS * 8} CTAs {statistics.mean(rs):.0f} GB/s ({statistics.mean(rs) / R:.3f} R)")
     for mix in [("weights",), ("kv16",), ("weights", "kv16"), ("kv32",), ("kv64",)]:
         key = "+".join(mix)
         out["arms"][key] = {}
@@ -1107,7 +1113,7 @@ def main() -> int:
                     default=[0, 100_000, 300_000, 1_000_000, 3_000_000, 10_000_000],
                     help="`writes`: the cycles slept after each 8 MiB burst, one arm each")
     ap.add_argument("--read-ctas", type=lambda s: [int(v) for v in s.split(",") if v],
-                    default=[12, 24, 47, 94, 188, 376, 752],
+                    default=[-(-SMS // d) for d in (16, 8, 4, 2)] + [SMS, 2 * SMS, 4 * SMS],
                     help="`reads`: the step-like readers' grid, one arm each")
     ap.add_argument("--read-reps", type=int, default=5)
     ap.add_argument("--few-ctas", type=lambda s: [int(v) for v in s.split(",") if v], default=[16, 32, 48, 64, 96],

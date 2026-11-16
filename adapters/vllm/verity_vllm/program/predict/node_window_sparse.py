@@ -6,12 +6,15 @@ DSA attention:
   gather), its norm's weights and its position's cos/sin row, and returns the key row the attention reads (`HISTORY`'s writer).
 * `BatchedGemm_v1{B, K, N}` is its ``SLICES``: unit (b, n) reads head b's K words of x whole and returns output word (b, n).
   Its weight ``w[b, n, :]`` is a strided column of the weights record (the record holds the field as (B, K, N)), which no
-  registered read takes, so the port is left a free input under the weights record.
+  read of the record takes, so the port reads the rank's entry of the weight in the port's order (`entry`, ``/bnk``).
 * `SparseMlaSplit_v1` is its ``CHAINS`` cut in whole key blocks (`sparse_mla_split.split_chain`, `chain_rows.plan`): per head,
   its key blocks in FA3's visit order, each reading the head's q_nope and q_rope whole and its keys as the latent rows that
   hold them (a key a row, the port cut that many ways), the blocks after a chain's first the state the one before returns,
   then the head's end (or, past one split, its column ends and combines). A template's units are place-major, then member,
   then head.
+* The indexer, past `index_topk` keys: its fused key and head-weight GEMM (`CublasSplitKGemm_v1`) is its ``SLICES`` along N,
+  and `DsaIndexerKRow_v1` and `DsaIndexerQ_v1` each the row itself (`indexer_row`); its scores (`DsaMqaLogits_v3`) are its
+  ``SLICES`` along the keys, a unit a member's score of one key (`logits`).
 * The MoE layer: the router gate's GEMM (`CublasSplitKGemmF32Out_v1`, `LlBf16DotprodGemm_v1`) is its ``SLICES`` along N;
   `MoeRouterSigmoidBias_v1` its ``SLOTS``, an output row a slot's weight or expert id; `Fp8GroupQuantUe8m0_v1` the row
   itself; and `MoeExpertFp8Gemm(W)_v1` cut per expert, its blocks apart (`expert_gemm`): block GEMMs reading their block's
@@ -24,9 +27,11 @@ from __future__ import annotations
 from typing import Any
 
 from verity.circuits.codec import descriptor_id
-from verity.commitments.windows import interface as IF
-from verity.definitions.registry import sparse_mla_split as SMS
+from verity.circuits.refs import Affine, runs
+from verity.commitments.periods import interface as IF
+from verity_vllm.definitions.registry import sparse_mla_split as SMS
 
+from verity_vllm.check.weights_of_record import weight_param
 from verity_vllm.pipeline import chain_rows as CR
 from verity_vllm.pipeline import expert_rows as XR
 from verity_vllm.pipeline import serving_templates as ST
@@ -69,11 +74,59 @@ def latent_row(w: NodeWindow, j: int, node: Any) -> None:
     w.out(j, node, [Piece(0, W, Row(t, a, "o0", W))])
 
 
+def indexer_row(w: NodeWindow, j: int, node: Any) -> None:
+    """The indexer's rows (`DsaIndexerKRow_v1`, `DsaIndexerQ_v1`), each the row itself: a member's unit reads each argument
+    whole, a weight's (its norm's weights, its position's ``cs`` row) as its run of the weights record and a node's by wire,
+    and returns each output as a row of its own (the e4m3 key or query and its f32 scale or head weights). A node's argument
+    of several writers is gathered, unless its whole row is no longer than `interface.LAST_BLOCK_BYTES` (`DsaIndexerQ_v1`'s
+    32 head weights, a GEMM slice each), which no gather unit's rows outgrow, so Flock's composer would refuse it: the port
+    then reads the writers' rows as they are, cut that many ways."""
+    spec, M = descriptor_id(node.fn), w.members(node)
+    fn = _part(spec, spec_base(spec))
+    t, a = w.unit(_family(node), fn, M)
+    for k, (port, words) in enumerate(IF.layout(fn).rows):
+        if all(s[:2] == ("p", WEIGHTS) for s in w.segments(w.arg(node, k, 0))):
+            _weight_rows(w, node, k, t, port, a)
+            continue
+        rows = w.take(node, k)
+        short = not isinstance(rows, _Free) and len(rows[0]) > 1 and 2 * words <= IF.LAST_BLOCK_BYTES
+        w.feed(t, port, a, rows if short else w.take(node, k, whole=True), (M,))
+    outs, at = [], 0
+    for o, n in IF.layout(fn).outs:
+        outs.append(Piece(at, at + n, Row(t, a, o, n)))
+        at += n
+    w.out(j, node, outs)
+
+
+def logits(w: NodeWindow, j: int, node: Any) -> None:
+    """`DsaMqaLogits_v3{N, H, D}`, the indexer's scores, as its ``SLICES`` along N: unit (n, t), ``a + n M + t``, reads
+    member t's query q and head weights w whole and key n's row k[n] and scale ks[n], and returns member t's score of key
+    n. Every member reads the keys alike, each key's two rows those its `DsaIndexerKRow_v1` unit returns."""
+    spec, M = descriptor_id(node.fn), w.members(node)
+    N = int(node.fn.bindings["N"])
+    fn = _part(spec, spec_base(spec), N=1)
+    t, a = w.unit(_family(node), fn, N * M)
+    for k, port in enumerate(("q", "w")):
+        x = w.take(node, k, whole=True)
+        w.feed(t, port, a, x if isinstance(x, _Free) else [x[m] for _n in range(N) for m in range(M)], (N, M))
+    for k, port in enumerate(("k", "ks"), 2):
+        try:
+            keys = w.rows(w.arg(node, k, 0))
+        except _Free as e:
+            w.feed(t, port, a, e, (N, M))
+            continue
+        if len(keys) != N:
+            raise Unexpressible(f"{w.name}: {spec}'s {port} is {len(keys)} rows, not one a key of {N}")
+        w.feed(t, port, a, [(r,) for r in keys for _m in range(M)], (N, M))
+    (_o, W), = IF.layout(fn).outs
+    w.out(j, node, [Piece(0, N * W, Row(t, a, "o0", W), M, 1)])
+
+
 def batched_gemm(w: NodeWindow, j: int, node: Any) -> None:
     """`BatchedGemm_v1{B, K, N}` as its ``SLICES``: unit (b, n) of member t, ``a + (b N + n) M + t``, reads head b's K words
-    of x whole and ``w[b, n, :]``, and returns output word (b, n). Its ``w`` is read in the record's (B, K, N) order, a strided
-    column a unit, which no registered read takes: a free input under the weights record (unless the record's run is the
-    port's own order, which a registered read takes)."""
+    of x whole and ``w[b, n, :]``, and returns output word (b, n). Its ``w`` is the weights record's run where the record
+    holds the port's own order, else the record's (B, K, N) order, a strided column a unit, which no read of the record
+    takes: then the rank's entry of the weight in the port's order (`entry`)."""
     spec, M = descriptor_id(node.fn), w.members(node)
     B, K, N = (int(node.fn.bindings[x]) for x in ("B", "K", "N"))
     fn = _part(spec, "BatchedGemm_v1", B=1, N=1)
@@ -85,8 +138,30 @@ def batched_gemm(w: NodeWindow, j: int, node: Any) -> None:
     if len(w.segments(refs.slice(0, K))) == 1:
         w.b.read(t, "w", a, (B, N, M), w.weight(refs, B * N * K), (N * K, K, 0))
     else:
-        w.feed(t, "w", a, _Free([("param", WEIGHTS, _label_at(w, refs))]), (B, N, M))
+        w.b.read(t, "w", a, (B, N, M), 0, (N * K, K, 0), param=entry(w, refs, K))
     w.out(j, node, [Piece(0, B * N, Row(t, a, "o0", 1), M, 1)])
+
+
+def entry(w: NodeWindow, refs: Any, K: int) -> str:
+    """The rank's registered entry of the weight ``refs`` reads as rows of ``K`` words in ``refs``' own order, a batched
+    GEMM's ``w`` (`batched_gemm`): ``weights/<label>@<K>/bnk`` (`node_window_embed.split` keeps it with the tables), its
+    words the record's at ``refs`` in turn (`NodeWindow.entries` keeps them). Refused where ``refs`` leave the one weight,
+    or another read gave the name other words."""
+    label = _label_at(w, refs)
+    first, n = next((f, k) for x, f, k in w.b.weights if x == label)
+    rs = runs(refs)
+    if any(s != "p" or w.params[i] != WEIGHTS for s, i, _lo, _hi in rs):
+        raise Unexpressible(f"{label}: a batched GEMM's weight reads past the weight")
+    lo, hi = min(r[2] for r in rs), max(r[3] for r in rs)
+    (s,) = w.segments(Affine("p", rs[0][1], lo, hi - lo))
+    if not first <= s[2] < s[3] <= first + n:
+        raise Unexpressible(f"{label}: a batched GEMM's weight reads past the weight")
+    param = f"{weight_param(label, K)}/bnk"
+    prev = w.entries.setdefault(param, refs)
+    if prev is not refs and runs(prev) != rs:
+        raise Unexpressible(f"{param}: read at two layouts of the weights record")
+    w.b.params[param] = len(refs)
+    return param
 
 
 def row_gemm(w: NodeWindow, j: int, node: Any) -> None:
@@ -301,6 +376,10 @@ FAMILIES: dict[str, Lowering] = {
     "DsaLatentRow": latent_row,
     "BatchedGemm": batched_gemm,
     "SparseMlaSplit": sparse_mla_split,
+    "CublasSplitKGemm": row_gemm,
+    "DsaIndexerKRow": indexer_row,
+    "DsaIndexerQ": indexer_row,
+    "DsaMqaLogits": logits,
     "CublasSplitKGemmF32Out": row_gemm,
     "LlBf16DotprodGemm": row_gemm,
     "MoeRouterSigmoidBias": router_slots,
@@ -309,5 +388,5 @@ FAMILIES: dict[str, Lowering] = {
     "MoeExpertFp8GemmW": expert_gemm,
 }
 
-__all__ = ["BLOCK_WORDS", "FAMILIES", "batched_gemm", "expert_gemm", "group_quant", "latent_row", "router_slots", "row_gemm",
-           "sparse_mla_split"]
+__all__ = ["BLOCK_WORDS", "FAMILIES", "batched_gemm", "expert_gemm", "group_quant", "indexer_row", "latent_row", "logits", "router_slots",
+           "row_gemm", "sparse_mla_split"]

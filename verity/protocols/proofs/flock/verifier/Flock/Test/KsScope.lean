@@ -1,17 +1,3 @@
-/-
-`KsScope`: the `--zk` statement passes `tagsWhy`, and a typed statement or one of public outputs is refused; every named
-statement that passes it reads its record's sample (`hm96Rows`), the sample `verify --zk` hands `checkOf`. A unit of
-one input group that returns the outputs passes `filesWhy`, and with a `sha512/row-seg/v1` output row too; with that row
-one compression short, or an output row of two ports, it is refused, and so are a unit reading two input groups and a
-tail stage returning the outputs (both in `scopeOkI`, which `ProvedScope.check` admits under hidden outputs). A
-shared-row public file in the form `SampledKSLiveV5` covers (two input ports' tables, its circuit's public input ports
-parsing, the file loading over them, no two roots one) passes `sharedWhy` and the whole check; one whose circuit's
-public input ports do not parse, one that does not load and a per-instance file are refused. At one table any sample
-passes `drawWhy`; at more, a subset sample whose `k` the tables divide passes, and a sample of `k` they don't divide, a sample
-that does not parse and no sample are refused. A templated statement's circuit, `Flock.Test.Tmpl`'s unit as
-`Flock.Test.TmplScope` builds it, is held to `scopeOkT` on its template: it passes at one table and is refused at two,
-with outputs a tail stage computes, and without a template.
--/
 module
 
 public import Flock.KsScope
@@ -20,6 +6,21 @@ public import Flock.Test.Wires
 meta import Flock.KsScope
 meta import Flock.Test.TmplScope
 meta import Flock.Test.Wires
+
+/-!
+`KsScope`: the `--zk` statement passes `tagsWhy`, and a typed statement or one of public outputs is refused; every named
+statement that passes it reads its record's sample (`hm96Rows`), the sample `verify --zk` hands `checkOf`. A unit of
+one input group that returns the outputs passes `filesWhy`, and with a `sha512/row-seg/v1` output row too; with that row
+one compression short, or an output row of two ports, it is refused, and so are a unit reading two input groups and a
+tail stage returning the outputs (both in `scopeOkI`, which `ProvedScope.check` admits under hidden outputs). A
+shared-row public file in the form `SampledKSLiveV5` covers (two input ports' tables, its circuit's public input ports
+parsing, the file loading over them, no two roots one) passes `sharedWhy` and the whole check; one whose circuit's
+public input ports do not parse, one that does not load and a per-instance file are refused. At one table any sample
+passes `sampleWhy`; at more, a subset sample whose `k` the tables divide passes, and a sample of `k` they don't divide, a sample
+that does not parse and no sample are refused. A templated statement's circuit, `Flock.Test.Tmpl`'s unit as
+`Flock.Test.TmplScope` builds it, is held to `scopeOkT` on its template: it passes at one table and is refused at two,
+with outputs a tail stage computes, and without a template.
+-/
 
 @[expose] public section
 
@@ -94,11 +95,11 @@ def n (x : Nat) : Json := Lean.toJson x
 def subset (k : Nat) : Json := Json.mkObj [("law", "subset"), ("population", n 8), ("k", n k),
   ("units", Json.arr ((Array.range k).map n))]
 
-#guard drawWhy 1 none == none && drawWhy 1 (some (subset 3)) == none
-#guard drawWhy 2 (some (subset 4)) == none && drawWhy 4 (some (subset 4)) == none
-#guard (drawWhy 2 (some (subset 3))).isSome && (drawWhy 4 (some (subset 6))).isSome
-#guard (drawWhy 2 (some (Json.mkObj [("law", "subset")]))).isSome
-#guard (drawWhy 2 none).isSome
+#guard sampleWhy 1 none == none && sampleWhy 1 (some (subset 3)) == none
+#guard sampleWhy 2 (some (subset 4)) == none && sampleWhy 4 (some (subset 4)) == none
+#guard (sampleWhy 2 (some (subset 3))).isSome && (sampleWhy 4 (some (subset 6))).isSome
+#guard (sampleWhy 2 (some (Json.mkObj [("law", "subset")]))).isSome
+#guard (sampleWhy 2 none).isSome
 
 /-- `checkOf`'s refusal of `c` under `tags`, at an empty public file, which no statement loads. -/
 def why (tags : Tags) (c : Circuit) (count : Nat) (draw : Option Json) : Option String :=

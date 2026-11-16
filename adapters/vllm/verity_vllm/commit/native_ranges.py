@@ -25,7 +25,7 @@ from verity_vllm.commit import step_rows
 __all__ = ["DROPPED"]
 
 # A leaf a `--retain device` window's draw-gated release did not keep (`committer.device_pool`): refused, never replayed.
-DROPPED = "dropped at its window's draw-gated release (--retain device): a draw that names it is refused, never answered from a recomputation"
+DROPPED = "dropped at its window's draw-gated release (--retain device): a sample that names it is refused, never answered from a recomputation"
 
 
 @dataclass

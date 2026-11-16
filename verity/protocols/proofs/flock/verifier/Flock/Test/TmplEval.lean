@@ -1,11 +1,12 @@
-/-
+module
+
+public import Flock.TmplEval
+
+/-!
 `Flock.TmplEval.SatAt` used as a piece fact and composed: a copy of `Flock.Test.Tmpl`'s AND Definition that holds computes
 the AND of its bound inputs, from its rows alone; and a Definition placing two copies of it on its own inputs and XORing
 them gets `0`, from its row and its calls' copies (`rows_sat` gives `SatAt` at every copy of a unit's root).
 -/
-module
-
-public import Flock.TmplEval
 
 @[expose] public section
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # What the ZK server adds to one lane statement: served.sh on a stand-in window (H1S_SMOKE=K), lane 0 alone, no negatives,
-# once under the ZK server (H1S_FIREWALL=1) and once without it (0), each lane Lean-checked. out/arms.txt has each arm's
-# exit code and job-cgroup CPU seconds; the text file beside it has, a line an arm, the flock-firewall processes' CPU
+# once under the ZK server (H1S_ZK_SERVER=1) and once without it (0), each lane Lean-checked. out/arms.txt has each arm's
+# exit code and job-cgroup CPU seconds; the text file beside it has, a line an arm, the flock-zk-server processes' CPU
 # seconds (summed over each one's last /proc sample: the prover never waits for them, so its timed.py record leaves them
 # out), how many they were and their summed peak RSS in KB; out/fw<ARM>/ is that arm's served.sh out/, its summary.json
 # among it, and out/fw<ARM>.log its log.
@@ -21,11 +21,11 @@ HZ=$(getconf CLK_TCK) MINE=$(cat /proc/self/cgroup)
     a=$(cat "$B/arm" 2>/dev/null)
     if [ "$a" != "$arm" ]; then
       if [ -n "$arm" ]; then t=0; for p in "${!cpu[@]}"; do t=$(( t + cpu[$p] )); done
-        echo "$arm $(( t / HZ )) ${#cpu[@]} $peak" >> "$OUT/firewall.txt"; fi
+        echo "$arm $(( t / HZ )) ${#cpu[@]} $peak" >> "$OUT/zk-server.txt"; fi
       cpu=() arm=$a peak=0
     fi
     r=0
-    for p in $(pgrep -x flock-firewall); do
+    for p in $(pgrep -x flock-zk-server); do
       [ "$(cat "/proc/$p/cgroup" 2>/dev/null)" = "$MINE" ] || continue
       s=$(cut -d' ' -f14,15 "/proc/$p/stat" 2>/dev/null) || continue
       [ -n "$s" ] && cpu[$p]=$(( ${s% *} + ${s#* } ))
@@ -39,7 +39,7 @@ for fw in ${ZC_ARMS:-1 0}; do
   echo "fw$fw" > "$B/arm"
   c0=$(cg_cpu)
   RESEARCH_RUN_DIR=$B/fw$fw H1L_MEM_GB=${ZC_MEM_GB:-230} H1S_SMOKE=${ZC_K:-2048} H1L_LANES=0 H1S_SKIP=tampered-zy,other-call-a \
-    H1S_FIREWALL=$fw H1L_PAR=1 H1L_LPAR=1 HZ_CACHE=${HZ_CACHE:-/workspace/research/cache/pouw-hidden-zk} \
+    H1S_ZK_SERVER=$fw H1L_PAR=1 H1L_LPAR=1 HZ_CACHE=${HZ_CACHE:-/workspace/research/cache/pouw-hidden-zk} \
     bash benchmarks/pouw/h1_lanes/served.sh > "$OUT/fw$fw.log" 2>&1
   rc=$? c1=$(cg_cpu)
   mkdir -p "$OUT/fw$fw" && cp -r "$B/fw$fw/out/." "$OUT/fw$fw/" 2>/dev/null
@@ -47,7 +47,7 @@ for fw in ${ZC_ARMS:-1 0}; do
 done
 echo done > "$B/arm"
 sleep 3
-cat "$OUT/arms.txt" "$OUT/firewall.txt" 2>/dev/null
+cat "$OUT/arms.txt" "$OUT/zk-server.txt" 2>/dev/null
 for fw in ${ZC_ARMS:-1 0}; do
   echo "== fw$fw"; grep -h -E 'proved lane0|lean lane0|FAILED|prepare:' "$OUT/fw$fw.log" | cut -c1-400
   cat "$OUT/fw$fw/lane0/prove.time" "$OUT/fw$fw/lane0/serve.time" 2>/dev/null; echo

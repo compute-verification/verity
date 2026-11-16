@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "benchmarks/census/schemas/workloads.schema.json",
-  "title": "Census workloads: served configurations and their template mix (verification units per subcircuit template and bound parameters)",
+  "title": "Census workloads: served configurations and their template mix (proof blocks per subcircuit template and bound parameters)",
   "type": "array",
   "items": {
     "type": "object",
@@ -106,7 +106,7 @@
       "vus": {
         "type": "integer",
         "minimum": 1,
-        "description": "verification units of the run (sampled proofs' replay partition)"
+        "description": "proof blocks of the run (sampled proofs' replay partition)"
       },
       "template_mix": {
         "type": "array",

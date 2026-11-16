@@ -1,4 +1,4 @@
-"""GPU-truth fixture for `TopPMask_v1{V,S}` (`verity.definitions.registry.topp_split`) across EVERY split geometry the vLLM
+"""GPU-truth fixture for `TopPMask_v1{V,S}` (`verity_vllm.definitions.registry.topp_split`) across EVERY split geometry the vLLM
 d9105ea80 split top-p pipeline can launch (S = 1, 2, 4, 8, 16, 32) with constructed pivot ties -- and the CPU checker the committed
 test uses.
 
@@ -34,6 +34,7 @@ import numpy as np
 
 from verity_vllm.commit import challenge as CH
 from verity_vllm.config import option
+from verity_vllm.pipeline.cli import write
 
 __all__ = ["COMMANDS", "main"]
 
@@ -50,7 +51,7 @@ MANIFEST_SEED = 20260920
 def drain_batches(num_sm: int) -> tuple[int, ...]:
     """The drain's batch sizes on a device of `num_sm` SMs, descending: DRAIN_BATCHES plus B and B + 1 for every B at which
     splits_for(B, num_sm) != splits_for(B + 1, num_sm), up to the split pipeline's largest batch."""
-    from verity.definitions.registry.topp_geometry import SPLIT_MAX_BATCH, splits_for
+    from verity_vllm.definitions.registry.topp_geometry import SPLIT_MAX_BATCH, splits_for
     edges = {b for n in range(1, SPLIT_MAX_BATCH) if splits_for(n, num_sm) != splits_for(n + 1, num_sm) for b in (n, n + 1)}
     return tuple(sorted(set(DRAIN_BATCHES) | edges, reverse=True))
 
@@ -78,7 +79,7 @@ def gen_random(seed: int, V: int) -> np.ndarray:
 def gen_ties(seed: int, V: int, S: int, k: int, keep_frac: float, head: int = 8, group_bias: int | None = None, plateau: float = 3.5) -> tuple[np.ndarray, float]:
     """Row with `k` identical plateau logits at lanes spread over the S slices (+ boundary pairs), and the p that puts the top-p
     boundary `keep_frac` of the way into the plateau.  `group_bias` (0/1) puts every plateau lane on a thread of that Z group."""
-    from verity.definitions.registry.topp_geometry import spt_for
+    from verity_vllm.definitions.registry.topp_geometry import spt_for
     g = CH.generator(seed)
     x = (g.standard_normal(V) * 1.0 - 6.0).astype(f32)             # tail: small mass
     slice_len = (V + S - 1) // S
@@ -269,14 +270,14 @@ def produce(out: str, record_npz: str | None, seed: int) -> None:
     F, R = TT._SPLIT_FANOUT, TT._SPLIT_ROUNDS
     record = None
     if record_npz:
-        record = (np.load(record_npz), json.load(open(record_npz + ".json")))
+        record = (np.load(record_npz), json.loads(Path(record_npz + ".json").read_text()))
     cases = build_manifest(seed, with_record=record is not None)
     o = Path(out)
     o.mkdir(parents=True, exist_ok=True)
-    arrays: dict[str, np.ndarray] = {}
+    arrays: dict[str, Any] = {}
     summary = []
 
-    def run_pipeline(x_dev: "torch.Tensor", p_dev: "torch.Tensor", S: int, V: int):
+    def run_pipeline(x_dev: torch.Tensor, p_dev: torch.Tensor, S: int, V: int):
         """stats -> 5 steps -> (instrumented mask on a copy | real mask kernel in place); returns (keep_real, keep_probe, zlane, stats, sc)."""
         stats = x_dev.new_empty((S, 4))
         parts = x_dev.new_empty((1, R, S, F, 3))
@@ -330,7 +331,7 @@ def produce(out: str, record_npz: str | None, seed: int) -> None:
         c["numkeep"] = None if np.isnan(sc[0, 4]) else float(sc[0, 4])
         c["numdup"] = None if np.isnan(sc[0, 5]) else float(sc[0, 5])
         summary.append(c)
-        print(json.dumps({k: c[k] for k in ("id", "kind", "S", "V", "p", "kept", "z_nunique", "ties", "numkeep", "numdup", "probe_keep_eq_real")}), flush=True)
+        write(json.dumps({k: c[k] for k in ("id", "kind", "S", "V", "p", "kept", "z_nunique", "ties", "numkeep", "numdup", "probe_keep_eq_real")}))
     # drain: the real entry point on a stacked batch
     dc = [c for c in cases if c["kind"] == "drain"][0]
     V = dc["V"]
@@ -353,14 +354,14 @@ def produce(out: str, record_npz: str | None, seed: int) -> None:
             s *= 2
         arrays[f"drain_B{B}_keep"] = np.packbits(keep, axis=1, bitorder="little")
         dc["batches"].append({"B": B, "S": s, "kept": [int(k.sum()) for k in keep]})
-        print(json.dumps({"drain": B, "S": s, "kept": [int(k.sum()) for k in keep][:8]}), flush=True)
+        write(json.dumps({"drain": B, "S": s, "kept": [int(k.sum()) for k in keep][:8]}))
     summary.append(dc)
     np.savez_compressed(o / "fixture.npz", **arrays)
     (o / "manifest.json").write_text(json.dumps({
         "cases": summary, "seed": seed, "num_sm": int(num_sm), "gpu": torch.cuda.get_device_name(0), "torch": torch.__version__,
         "triton": triton.__version__, "vllm": __import__("vllm").__version__, "record": os.path.basename(record_npz) if record_npz else None,
         "secs": round(time.time() - t0, 1)}, indent=1))
-    print("cases", len(summary), "->", o / "fixture.npz", f"{(o / 'fixture.npz').stat().st_size / 1024:.0f} KB", f"{time.time() - t0:.1f}s")
+    write(f"cases {len(summary)} -> {o / 'fixture.npz'} {(o / 'fixture.npz').stat().st_size / 1024:.0f} KB {time.time() - t0:.1f}s")
 
 
 # ------------------------------------------------------------------------------------------------ check (CPU)
@@ -368,8 +369,8 @@ def produce(out: str, record_npz: str | None, seed: int) -> None:
 
 def check(d: str, record_npz: str | None = None, verbose: bool = True) -> dict:
     """Model vs fixture: masked row (keep), stats, per-lane Z group, drain batches.  Returns the report dict (ok = every check passed)."""
-    from verity.definitions.registry import topp_geometry
-    from verity.definitions.registry import topp_split as TS
+    from verity_vllm.definitions.registry import topp_geometry
+    from verity_vllm.definitions.registry import topp_split as TS
     dd = Path(d)
     man = json.loads((dd / "manifest.json").read_text())
     z = np.load(dd / "fixture.npz")
@@ -425,8 +426,8 @@ def check(d: str, record_npz: str | None = None, verbose: bool = True) -> dict:
                                 "lanes_differ": int(len(diff)), "first": [int(i) for i in diff[:8]], "numkeep_model": tr.get("numkeep"), "numdup_model": tr.get("numdup"),
                                 "numkeep_kernel": c.get("numkeep"), "numdup_kernel": c.get("numdup")})
         if verbose:
-            print(json.dumps({"id": c["id"], "kind": c["kind"], "S": S, "V": V, "mask_ok": mask_ok, "stats_ok": stats_ok, "zgroup_ok": zg_ok, "ties": c.get("ties"),
-                              "kept": c.get("kept")}), flush=True)
+            write(json.dumps({"id": c["id"], "kind": c["kind"], "S": S, "V": V, "mask_ok": mask_ok, "stats_ok": stats_ok, "zgroup_ok": zg_ok, "ties": c.get("ties"),
+                              "kept": c.get("kept")}))
     dc = [c for c in man["cases"] if c["kind"] == "drain"]
     if dc:
         dc = dc[0]
@@ -445,10 +446,10 @@ def check(d: str, record_npz: str | None = None, verbose: bool = True) -> dict:
             if ok_rows != B:
                 rep["fail"].append({"drain_B": B, "S": S, "rows_ok": ok_rows})
             if verbose:
-                print(json.dumps({"drain_B": B, "S": S, "rows_ok": f"{ok_rows}/{B}"}), flush=True)
+                write(json.dumps({"drain_B": B, "S": S, "rows_ok": f"{ok_rows}/{B}"}))
     rep["ok"] = not rep["fail"] and rep["mask_ok"] == rep["n"] and rep["stats_ok"] == rep["n"] and rep["zgroup_ok"] == rep["zgroup_checked"]
     if verbose:
-        print("TOTALS", json.dumps({k: v for k, v in rep.items() if k not in ("fail", "drain")}), "fail:", rep["fail"][:5])
+        write(f"TOTALS {json.dumps({k: v for k, v in rep.items() if k not in ('fail', 'drain')})} fail: {rep['fail'][:5]}")
     return rep
 
 
@@ -487,4 +488,4 @@ def main(args: ProduceOptions | CheckOptions | ManifestOptions) -> None:
         sys.exit(0 if rep["ok"] else 1)
     else:
         for c in build_manifest(MANIFEST_SEED, with_record=args.record):
-            print(json.dumps(c))
+            write(json.dumps(c))

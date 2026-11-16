@@ -46,7 +46,7 @@ section Tie
 
 open Game Audit
 
-variable {n : ℕ} {L : Law n} {Reg Cm Reg₂ Reg' : Type} {I : Inner} {S : ℕ} {Vs : Fin S → VStmt}
+variable {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg₂ Reg' : Type} {I : Inner} {S : ℕ} {Vs : Fin S → VStmt}
   {zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
   {src : List (Cm × I.Coin) → Option Flock.RecCoins.Source} {c3 : List (Cm × I.Coin) → Option Flock.RecCoins.C3}
   {f : Flock.RecCoins.Source} {R : Reg} {ω : L.Ω} {t : List (Cm × I.Coin)} {R₂ : Reg₂}
@@ -243,7 +243,7 @@ open FlockSoundness.Discharge.Composed (drawJ partOf)
 /-- **A session's statement check 5 accepted**: where the session accepts and its record samples, the statement setting
 up a sampled proof block's part has the session's circuit and passes `RecCoins.check`, as `ChecksC3` runs it. -/
 theorem coins_of_session {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
-    {hscope : Layout.scopeOk c = true} {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
+    {hscope : Layout.scopeOk c = true} {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
     {tr : Exec.Transcript} (hacc : AcceptsZKR zo.I zo.own tr) {coins : Option Flock.RecCoins.Source}
     {c3 : Option Flock.RecCoins.C3}
     (hck : ∃ spec sts, setupOf (zkInputs zo.I) tr.record = .ok (spec, sts) ∧

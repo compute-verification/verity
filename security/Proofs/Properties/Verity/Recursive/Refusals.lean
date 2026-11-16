@@ -51,10 +51,10 @@ words. Each is the compiled component's own refusal:
 
 * **`innerOkAt_of_compiled`.** The compiled `innerHeld` runs `innerOk`: Flock's plain setup of the inner statement on its
   circuit, public file and sample, at the verifier's partition and program and `--stratified` at the population they give
-  (`HmRow.stratifiedLaw` at `K = 1`), then each check `FlockDeploy.Ins.setup` runs and the scope check. Where `x` names
+  (`HmRow.stratifiedSamplingDesign` at `K = 1`), then each check `FlockDeploy.Ins.setup` runs and the scope check. Where `x` names
   the component's inputs (`Names`), the inner statement `x` carries reads as those inputs (`ins_inner`), so the model's
   setup is the compiled one step for step (`setup_inner`), its scope check is the compiled one, it carries the sample, and
-  at one table the session's sample is the sample (`RecDeploy.drawTiedS`). That is the model's `innerOk`.
+  at one table the session's sample is the sample (`RecDeploy.sampleTiedS`). That is the model's `innerOk`.
 * **`plain_of_compiled`**, beside `Refusals`. The parts' statement `verity/flock-circuit` has no plain leaves: each
   part's verdict refuses them, so an accepted session with a part shows it.
 * **The sizes.** The compiled component refuses a staged public file, inner record, live-coin part's transcript or staged
@@ -178,7 +178,7 @@ program and `--stratified n`, and the scope check. -/
 theorem innerOk_peel {o : VStar.Recursive.Own} {cB pB dB : ByteArray}
     (h : VStar.Recursive.innerOk o cB pB dB = .ok ()) :
     ∃ t j L n spec sts, String.fromUTF8? dB = some t ∧ Flock.JsonParse.parse t = .ok j ∧
-      Flock.HmRow.stratifiedLaw o.partition o.program 1 = .ok (L, n) ∧
+      Flock.HmRow.stratifiedSamplingDesign o.partition o.program 1 = .ok (L, n) ∧
       Flock.Tags.circuitPlainLeaves.hm96Rows = true ∧
       Flock.RecSetup.checkInner none none (pure (none, none)) = .ok () ∧
       Flock.Stmt.setupTables Flock.Tags.circuitPlainLeaves cB pB .seed 1 [] (some (Flock.norm j))
@@ -190,7 +190,7 @@ theorem innerOk_peel {o : VStar.Recursive.Own} {cB pB dB : ByteArray}
       sts.forM (Flock.RecCoins.check · none (Flock.RecCoins.Source.atC3 none none none) (Flock.RecSetup.c3 none none))
         = .ok () ∧
       sts.forM (Flock.RecVStar.checkPubRows · none none none) = .ok () ∧
-      Flock.ProvedScope.drawLaw false Flock.Tags.circuitPlainLeaves false (some (Flock.norm j)) =
+      Flock.ProvedScope.sampleDesign false Flock.Tags.circuitPlainLeaves false (some (Flock.norm j)) =
         .ok () ∧
       Flock.ProvedScope.check Flock.Tags.circuitPlainLeaves false cB pB [] 1 false false = .ok () := by
   have htg : Flock.Tags.find? VStar.Recursive.INNER_STATEMENT = some Flock.Tags.circuitPlainLeaves := rfl
@@ -256,7 +256,7 @@ theorem ins_inner {ri : FlockDeploy.Raw} {o : VStar.Recursive.Own} {dB : ByteArr
 
 /-- **The model's setup of `innerIns` is the compiled `innerOk`'s**, from `innerOk_peel`'s steps: the hm96-sha512 rows
 check, the inner checks, the session, each table's registered reads and identifier (`noIdentifier_of_check`), the full
-registration, V\*'s checks, check 5, the public rows and the sample's law, with no `--zk` shape check. -/
+registration, V\*'s checks, check 5, the public rows and the sample's sampling design, with no `--zk` shape check. -/
 theorem setup_inner {cB pB : ByteArray} {o : VStar.Recursive.Own} {j : Json} {n : ℕ} {spec : Flock.SessionSpec}
     {sts : Array Flock.Stmt}
     (hhm : Flock.Tags.circuitPlainLeaves.hm96Rows = true)
@@ -270,7 +270,7 @@ theorem setup_inner {cB pB : ByteArray} {o : VStar.Recursive.Own} {j : Json} {n 
     (hcoins : sts.forM (Flock.RecCoins.check · none (Flock.RecCoins.Source.atC3 none none none)
       (Flock.RecSetup.c3 none none)) = .ok ())
     (hpub : sts.forM (Flock.RecVStar.checkPubRows · none none none) = .ok ())
-    (hlaw : Flock.ProvedScope.drawLaw false Flock.Tags.circuitPlainLeaves false
+    (hlaw : Flock.ProvedScope.sampleDesign false Flock.Tags.circuitPlainLeaves false
       (some (Flock.norm j)) = .ok ()) :
     (innerIns cB pB o j n).setup = .ok (spec, sts) := by
   have hsh : (innerIns cB pB o j n).read.tags.hm96Rows = true := hhm
@@ -319,7 +319,7 @@ theorem innerOk_of_held {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} 
     simp [FlockDeploy.setupOf, FlockDeploy.insOf, hi, hI.plain, hins, hset, Except.toOption]
   have hds : (innerIns ri.circuit ri.publicFile o j n).read.draw.isSome = true := rfl
   exact RecDeploy.innerOk_iff.2 ⟨_, spec, sts, hso, hck, hds,
-    RecDeploy.drawTiedB_iff.2 fun _ => RecDeploy.drawTiedS _ _ _ _ hso hck hds⟩
+    RecDeploy.sampleTiedB_iff.2 fun _ => RecDeploy.sampleTiedS _ _ _ _ hso hck hds⟩
 
 /-- **`Refusals.innerOk`: where the compiled component accepts and `x` names its inputs, Flock's own checks pass on
 the inner statement** (`InnerOkAt`). -/
@@ -468,16 +468,16 @@ theorem part_le {j : ℕ} {po : VStar.Recursive.PartOwn} {pp : VStar.Recursive.P
     | none => simp only [hu] at hs <;> exact absurd hs (throw_ne_ok _ _)
     | some record => exact ⟨record, rfl⟩
   simp only [hu] at hs
-  obtain ⟨drawB, hd, hs⟩ := bind_ok hs
+  obtain ⟨sampleB, hd, hs⟩ := bind_ok hs
   obtain ⟨regB, hreg, hs⟩ := bind_ok hs
   obtain ⟨partitionB, hpa, hs⟩ := bind_ok hs
   obtain ⟨bindingsB, hb, hs⟩ := bind_ok hs
   have ha : a = VStar.Recursive.STMT_OVER + VStar.Recursive.STATEMENT.toUTF8.size + circuitB.size + pubB.size +
-      po.program.size + partitionB.size + osz regB + osz drawB + bindingsB.size := (Except.ok.inj hs).symm
+      po.program.size + partitionB.size + osz regB + osz sampleB + bindingsB.size := (Except.ok.inj hs).symm
   have hcB : circuitB = q.base.circuit := Except.ok.inj (hc.symm.trans hN.circuit)
   have hpB : pubB = q.base.publicFile := Except.ok.inj (hp.symm.trans hN.publicFile)
   rw [hcB] at hd
-  have hdraw : drawB = q.base.draw := Except.ok.inj (hd.symm.trans (hN.drawB _ _ _ htg hr hu))
+  have hdraw : sampleB = q.base.draw := Except.ok.inj (hd.symm.trans (hN.sampleB _ _ _ htg hr hu))
   have hregB : regB = q.base.registered := Except.ok.inj (hreg.symm.trans hN.registeredB)
   have hbB : bindingsB = q.bindings := Except.ok.inj (hb.symm.trans hN.bindingsB)
   have hpart : q.base.partition = some partitionB := by
@@ -489,7 +489,7 @@ theorem part_le {j : ℕ} {po : VStar.Recursive.PartOwn} {pp : VStar.Recursive.P
   have e1 : q.base.statement.toUTF8.size = VStar.Recursive.STATEMENT.toUTF8.size := by rw [hst]
   have e2 : q.base.circuit.size = circuitB.size := by rw [hcB]
   have e3 : q.base.publicFile.size = pubB.size := by rw [hpB]
-  have e4 : osz q.base.draw = osz drawB := by rw [hdraw]
+  have e4 : osz q.base.draw = osz sampleB := by rw [hdraw]
   have e5 : osz q.base.partition = partitionB.size := by rw [hpart] <;> rfl
   have e6 : osz q.base.program = po.program.size := by rw [hN.program] <;> rfl
   have e7 : osz q.base.workTable = 0 := by rw [hwt] <;> rfl
@@ -536,13 +536,13 @@ theorem x_len_le {p : VStar.Recursive.Params} {e : VStar.Recursive.Evidence} {bs
   unfold VStar.Recursive.statementSize at hT
   obtain ⟨circuitB, hc, hT⟩ := bind_ok hT
   obtain ⟨pubB, hp, hT⟩ := bind_ok hT
-  obtain ⟨drawB, hd, hT⟩ := bind_ok hT
+  obtain ⟨sampleB, hd, hT⟩ := bind_ok hT
   obtain ⟨regB, hreg, hT⟩ := bind_ok hT
   obtain ⟨partitionB, hpa, hT⟩ := bind_ok hT
   obtain ⟨shapeB, hsh, hT⟩ := bind_ok hT
   obtain ⟨partsB, hps, hT⟩ := bind_ok hT
   have hTe : T = VStar.Recursive.STMT_OVER + (VStar.Recursive.STMT_OVER +
-      VStar.Recursive.INNER_STATEMENT.toUTF8.size + circuitB.size + pubB.size + drawB.size + p.own.program.size +
+      VStar.Recursive.INNER_STATEMENT.toUTF8.size + circuitB.size + pubB.size + sampleB.size + p.own.program.size +
       partitionB.size) + shapeB.size + osz regB + partsB := (Except.ok.inj hT).symm
   have hraw := raw_le ri hI.tables
   have hpart : ri.partition = some partitionB := by
@@ -552,7 +552,7 @@ theorem x_len_le {p : VStar.Recursive.Params} {e : VStar.Recursive.Evidence} {bs
   have e1 : ri.statement.toUTF8.size = VStar.Recursive.INNER_STATEMENT.toUTF8.size := by rw [hI.statement]
   have e2 : ri.circuit.size = circuitB.size := by rw [Except.ok.inj (hc.symm.trans hI.circuit)]
   have e3 : ri.publicFile.size = pubB.size := by rw [Except.ok.inj (hp.symm.trans hI.pub)]
-  have e4 : osz ri.draw = drawB.size := by rw [hI.draw, hd] <;> rfl
+  have e4 : osz ri.draw = sampleB.size := by rw [hI.draw, hd] <;> rfl
   have e5 : osz ri.partition = partitionB.size := by rw [hpart] <;> rfl
   have e6 : osz ri.program = p.own.program.size := by rw [hI.program] <;> rfl
   have e7 : osz ri.workTable = 0 := by rw [hI.workTable] <;> rfl

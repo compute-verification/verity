@@ -2,7 +2,7 @@
 
 This package writes Verity's circuits down and computes on them, and this README is the way in to all the code that builds,
 evaluates or checks a circuit: this package and its subpackages, the served workloads' Definitions
-(`verity.definitions`), the private circuits (`verity.circuits.private_circuits`) and `circuit-check`. It says what the
+(`verity_vllm.definitions`), the private circuits (`verity.circuits.private_circuits`) and `circuit-check`. It says what the
 words mean, names the one front door for each job, and links each part's README.
 
 Everything in this package is on the soundness path (the trusted places of `tests/import_order.toml` reach it): the
@@ -40,7 +40,7 @@ The terms are the [Glossary](../../ARCHITECTURE.md#glossary)'s; [`GLOSSARY.md`](
 
 ### Building a circuit: the Definition catalog
 
-[`catalog.load()`](../definitions/registry/catalog.py) (`verity.definitions.registry.catalog`) returns `(REGISTRY,
+[`catalog.load()`](../../adapters/vllm/verity_vllm/definitions/registry/catalog.py) (`verity_vllm.definitions.registry.catalog`) returns `(REGISTRY,
 errors)` with every module of the registry imported, and `catalog.load(("registry", "ops"))` the primitive circuits'
 modules too (`SCOPES`). A module that fails to import is named in `errors`, never read as "not registered". Everything that
 resolves a Definition by id goes through it, so a new module's Definitions resolve everywhere, not only where someone
@@ -48,7 +48,7 @@ imported the module:
 
 ```python
 from verity.circuits import Program, bind
-from verity.definitions.registry import catalog
+from verity_vllm.definitions.registry import catalog
 
 REGISTRY, errors = catalog.load()                         # errors == []
 rms = bind(REGISTRY["RMSNormTriton_v1"], N=64, EPS=1e-05)
@@ -56,7 +56,7 @@ program = Program(rms)                                    # the specialization's
 ```
 
 A new Definition is written with `defs.primitive` or `defs.composite` in a module of `verity.circuits.ops` (a primitive
-circuit) or of `verity.definitions.registry` (a served kernel), with a binding in its module's binding file:
+circuit) or of `verity_vllm.definitions.registry` (a served kernel), with a binding in its module's binding file:
 circuit-check's suite fails a registered Definition family no binding reaches.
 
 ### Evaluating: `verity.circuits.evaluation`
@@ -67,7 +67,7 @@ registered for the Definition when there is one (`kernel="auto"`), and computes 
 them when none is registered, with the reference (bit-sliced, for a Boolean Definition); `kernel="reference"` forces the
 reference. A kernel is speed only: `register_kernel` registers it beside what it computes, and `self_check` holds it to the
 reference bit for bit. `evaluate_bits` evaluates a Boolean Definition bit-sliced, 64 inputs per machine word. The served
-Definitions' fast evaluators are `verity.definitions.numerics`'s, registered the same way.
+Definitions' fast evaluators are `verity_vllm.definitions.numerics`'s, registered the same way.
 
 ### Checking: `circuit-check`
 
@@ -75,14 +75,14 @@ Definitions' fast evaluators are `verity.definitions.numerics`'s, registered the
 with the reference on every realization, the declared port intervals, redundant and dead gates, and the partition. A
 change that adds or modifies a circuit passes `uv run circuit-check <definition|template|row>`, with its report in the PR.
 
-- `check` runs it as its `circuit-check` step (`tools/verity/check/check.py`): `circuit-check --all`, every registered
+- `check` runs it as its `circuit-check` step (`tools/check/check.py`): `circuit-check --all`, every registered
   Definition and template, each target's pass kept in check's cache (`--cache`, `--catalog-units`) and reused while
   everything it read is unchanged. A shard of the check runs only its shards of the targets (`--shard K/N`), and
   `circuit-check --combine` joins them. A sharded check can first build every catalog binding's record once, in check's
   records step (`--cc-records`: `circuit-check --all --records-only`), and give each shard those records
-  (`--cc-records-from`). The step is off the merge gate (`off_gate` in `tools/verity/check/policy.toml`): a candidate's
+  (`--cc-records-from`). The step is off the merge gate (`off_gate` in `tools/check/policy.toml`): a candidate's
   check runs it, and its red holds nothing. The session of circuit-check's own test suite takes the bindings' records from
-  that same cache and has the ones it lacks built and stored there once (`tools/verity/circuit_check/tests/conftest.py`);
+  that same cache and has the ones it lacks built and stored there once (`tests/tools/verity/circuit_check/conftest.py`);
   either can list the records its catalog rests on (`--records-manifest FILE`, `CIRCUIT_CHECK_RECORDS_MANIFEST`), by which
   a store carries them to another run.
 - The fine-grained check ([`verity graph`](../../tools/verity/graph/README.md)) has circuit-check as one
@@ -91,12 +91,12 @@ change that adds or modifies a circuit passes `uv run circuit-check <definition|
   holds the bindings circuit-check makes to the ones the tasks list
   (`tools/verity/graph/verity_graph/families/circuit_binding.py`).
 
-### Regenerating pins and fixtures: `tools/verity/check/pins.py`
+### Regenerating pins and fixtures: `tools/check/pins.py`
 
-`python tools/verity/check/pins.py` lists every tracked file a command regenerates from the tree, with its command, and
+`python tools/check/pins.py` lists every tracked file a command regenerates from the tree, with its command, and
 `--stale` and `--regen` find and rewrite the stale pins. This package's test vectors (`tests/format_vectors.json`,
 `tests/boolean_vectors.json` and the others its `WRITERS` lists) are each rewritten only by
-`uv run python tools/verity/check/pins.py --write PATH`, the command a failing test names. A lowering pin in a
+`uv run python tools/check/pins.py --write PATH`, the command a failing test names. A lowering pin in a
 `.circuit-check.json` is circuit-check's own: `uv run circuit-check TARGET --update-pins` writes what the target measures
 now, and the diff is reviewed.
 
@@ -109,7 +109,7 @@ now, and the diff is reviewed.
 | [`silicon`](./silicon/README.md) | the GPUs' exact semantics: tensor-core steps, the FP32 pipe, casts |
 | [`targets`](./targets/README.md) | the subcircuits a proof system is asked to prove |
 | [`boolean`](boolean/README.md) | the Boolean core: the three gates, the word view, the GF(2) helpers that write gates |
-| [`verity.definitions`](../definitions/README.md) | the served workloads' Definitions, their Boolean versions and fast evaluators |
+| [`verity_vllm.definitions`](../../adapters/vllm/verity_vllm/definitions/README.md) | the served workloads' Definitions, their Boolean versions and fast evaluators |
 | [`verity.circuits.private_circuits`](./private_circuits/README.md) | the universal unit, one public Definition that runs any private circuit of a size class |
 | [`circuit-check`](../../tools/verity/circuit_check/README.md) | the property checks every circuit passes |
 
@@ -213,5 +213,5 @@ Pure functions of a Program, read by the resource audits:
 
 ## Tests
 
-`tests/` is this package's suite (`uv run tools/verity/check/suites.py verity/circuits`), and `./ops/tests/` is a suite
+`tests/` is this package's suite (`uv run tools/check/suites.py verity/circuits`), and `../../tests/verity/circuits/ops/` is a suite
 of its own.

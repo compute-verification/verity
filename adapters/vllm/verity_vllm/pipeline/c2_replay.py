@@ -5,11 +5,11 @@ replay of a deferred Commit's bundle (`pipeline.replay_bundle`, `row stage repla
 `ReplaySources`: the committed store to read (the committer, or the bundle's `commit.store_dump`), the weights provider (the live model, or the
 checkpoint opened against the committed weights root), the weights check and the VU export hook.  In both places it's the prover's
 pre-flight check: it reads committed values in the clear, so it's no verifier's check.  A verifier checks the sampled proof
-blocks' proofs (`verity.protocols.spot.verifier.one_stage`).
+blocks' proofs (`verity.protocols.proofs.spot.verifier.one_stage`).
 
 For a seeded stratified sample of Program instance rows (spec x request x phase), read
 the COMMITTED bytes of the row's inputs (the Program's dataflow -> the manifest's member rule -> the binding map), evaluate the registered
-relation (verity.definitions.numerics.derived_rows), compare with the COMMITTED output bytes bit-for-bit.  Plus the exhaustive ordered
+relation (verity_vllm.definitions.numerics.derived_rows), compare with the COMMITTED output bytes bit-for-bit.  Plus the exhaustive ordered
 boundary linkage (declared prompt -> input ids; sampled id[s-1] -> input id[s]) over every (engine step, request).  Needs no Match record.
 """
 from __future__ import annotations
@@ -34,6 +34,10 @@ from verity_vllm.pipeline import commit_plan as CP
 # The replay driver, its Definition check and codes, the executed prefix, the serving rows and the manifest's format are imported
 # inside the functions that read them, as `vu_store` is: the driver's import puts the catalog's Definitions into the Definition
 # table, and a process that only imports this module (the Commit before its replay, a deferred Commit) is to hold none of them.
+
+__all__ = ["ProgramSources", "ReplaySources", "arrivals", "cached_prefixes", "linkage_facts", "live_only", "live_only_entry",
+           "live_weights", "live_weights_check", "no_weights", "plan", "programs_of_record", "request_labels", "retention_of",
+           "rss_kb", "run", "sampling_design_of", "seed_of", "serving_rows", "vu_export"]
 
 logger = init_logger(__name__)
 
@@ -294,7 +298,7 @@ def seed_of(args: Any, rc: Any) -> tuple[int, str, str, str | None]:
     the lesser of 1/p and 2^64 tries (p: the chance one sample misses its faults), so such a replay is a measurement.  The Commit's own
     replay reads its two flags here and no coin of a challenger gate; the served C2 passes its replay challenge (`pipeline.served_match`)."""
     from verity_vllm.check.replay import driver as SR
-    from verity_vllm.check.replay import replay_codes as RC
+    from verity_vllm.records import replay_codes as RC
 
     _seed_chal = None
     if getattr(args, "replay_seed", None) is not None:
@@ -307,7 +311,7 @@ def seed_of(args: Any, rc: Any) -> tuple[int, str, str, str | None]:
     return _seed, _seed_src, _seed_form, _seed_chal
 
 
-def draw_of(args: Any) -> str:
+def sampling_design_of(args: Any) -> str:
     """The config run's sampling design (`driver.family_strata`): the record's `replay_draw`, `family` when it names none."""
     return getattr(args, "replay_draw", None) or "family"
 
@@ -334,8 +338,8 @@ def program_steps(loaded: dict, progs: dict) -> dict[str, int | None]:
 def linkage_requests(s: ReplaySources, _rl: dict[str, str], _arr: dict[str, int], _pi_steps: dict[str, int | None], _horizons: dict | None) -> list[dict[str, Any]]:
     """The DECLARED seed of each request = the SamplingParams.seed the run was asked for (the same per-request /
     sampling-level resolution vllm_adapter.sampling_params uses; None on a greedy row), and the Program's S of record from each request
-    Program's Build result -- the prescribed-input linkage reads BOTH from the record, never from the served run.  The linkage horizon is the request's PROGRAM OF RECORD's, not the workload cap: horizon = min(cap,
-    Program steps) -- the Program's T from its Build result (result.json T) else its ProgramIndex.n_steps; a request whose committed steps
+    Program's Build result -- the prescribed-input linkage reads BOTH from the record, never from the served run.  The linkage horizon is the request's PROGRAM OF RECORD's, not the workload's `max_tokens`: horizon =
+    min(max_tokens, Program steps) -- the Program's T from its Build result (result.json T) else its ProgramIndex.n_steps; a request whose committed steps
     are FEWER than its Program of record still fails by name (the chain rule is unchanged inside the horizon).  Recorded per request."""
     from verity_vllm.check.replay import driver as SR
 
@@ -345,7 +349,7 @@ def linkage_requests(s: ReplaySources, _rl: dict[str, str], _arr: dict[str, int]
              "seed": (int(r["seed"]) if r.get("seed") is not None else (int(sampling["seed"]) if sampling.get("seed") is not None else None)),
              "max_tokens": int(r.get("max_tokens") or sampling.get("max_tokens") or 1),
              "program_steps": _pi_steps.get(_rl[str(r.get("request_id"))]),
-             # the horizon is the executed prefix of record (cap on a length stop; served + LAG on an EOS stop):
+             # the horizon is the executed prefix of record (max_tokens on a length stop; served + LAG on an EOS stop):
              # boundary_linkage verifies the EOS at steps[-1 - lag] and the placeholder row(s) fed the EOS inside it
              "steps": SR.linkage_horizon(_arr[_rl[str(r.get("request_id"))]], int(r.get("max_tokens") or sampling.get("max_tokens") or 1),
                                          _pi_steps.get(_rl[str(r.get("request_id"))]),
@@ -380,7 +384,7 @@ def executed_prefix_kw(s: ReplaySources, _epr_r: dict, lk: dict, _arr: dict, _rl
         if _epr_r["any_eos_stop"] or _flt:
             (logger.warning if _flt else logger.info)(
                 "[delta] not-executed class -> sampled_replay(executed_prefix=): %s%s",
-                ", ".join(f"{k} a_r {v['a_r']} n_exec {v['n_exec']} cap {v['cap']}" for k, v in _sr_kw["executed_prefix"].items()),
+                ", ".join(f"{k} a_r {v['a_r']} n_exec {v['n_exec']} max_tokens {v['cap']}" for k, v in _sr_kw["executed_prefix"].items()),
                 f"; FAULTS {_flt}" if _flt else "; no faults")
     elif _epr_r["any_eos_stop"]:
         logger.warning("[delta] WARNING: this tree's sampled_replay has no executed_prefix=: the EOS-stopped "
@@ -398,7 +402,7 @@ def live_only_entry(protocols: Any) -> str | None:
     entries = getattr(protocols, "entries", None) or ()
     if not entries:
         return None
-    from verity.protocols.accounting.pouw.prover.circuit import SCHEMES
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import NCP_CIRCUIT_SCHEMES as SCHEMES
 
     from verity_vllm.protocols import pouw
 
@@ -465,7 +469,7 @@ def evaluate(s: ReplaySources, held: dict[str, Any], *, plan: bool = False, plan
     # (CUDA after fork) -> sampled_replay runs serial in this process; named in the replay record
     _retention = retention_of(s.com, args)
     # the executed prefix of record of every request bounds the replay population and the linkage horizon; a
-    # problem there leaves every horizon None (the cap's rows are then sampled and 'not evaluated' -> partial)
+    # problem there leaves every horizon None (the rows up to max_tokens are then sampled and 'not evaluated' -> partial)
     _epr_r = EPX.executed_prefix_of_record(sorted(_arr, key=lambda k: int(k[1:])), {_rl[str(k)]: [int(t) for t in v] for k, v in s.tokens.items() if str(k) in _rl},
                                            caps={_rl[str(q.get("request_id"))]: int(q.get("max_tokens") or sampling.get("max_tokens") or 1) for q in reqs},
                                            eos_of_record=s.stop_of_record.get("eos"), lag=s.stop_of_record.get("lag"))
@@ -476,14 +480,14 @@ def evaluate(s: ReplaySources, held: dict[str, Any], *, plan: bool = False, plan
             "ok" if _epr_r["ok"] else "PROBLEMS " + str(_epr_r["problems"][:2]))
     _wreq = linkage_requests(s, _rl, _arr, facts["program_steps"], _horizons)
     # the Program's declared stop rule + LAG = stop_rule_of_record; None = undeclared / unattested ->
-    # a request linked over fewer steps than its cap fails closed by name -- never the engine value as the rule
+    # a request linked over fewer steps than its max_tokens fails closed by name -- never the engine value as the rule
     _eos, _lag = s.stop_of_record.get("eos"), s.stop_of_record.get("lag")
     lk = SR.boundary_linkage(_bm, _rd, _wreq, embed_op_path=facts["embed_op_path"], eos_of_record=_eos, eos_lag_rows=_lag)
     _sr_kw, _ep_facts = executed_prefix_kw(s, _epr_r, lk, _arr, _rl)
     _kw = dict(arrivals=_arr, per_stratum=int(args.replay_per_stratum), seed=_seed, seed_source=_seed_src,
                seed_challenge=_seed_chal,
                max_evaluate=int(args.replay_max), weights_check=_wc, targets=list(getattr(args, "replay_target", None) or []), replay_k=args.replay_k,
-               replay_draw=draw_of(args), workers=getattr(args, "replay_workers", None), retention=_retention,
+               replay_draw=sampling_design_of(args), workers=getattr(args, "replay_workers", None), retention=_retention,
                ring_slots=(int(args.window_slots) if getattr(args, "window_slots", None) and getattr(args, "window_mb", None) else None),
                # Q(P) of record: the replay's reach is reconciled against it identity by identity
                manifest=(s.manifest if isinstance(s.manifest, dict) else None),
@@ -570,7 +574,7 @@ def free_programs(sr: dict, held: dict[str, Any], pair: int) -> None:
     openings-after-release replay pool and the next pair's run.  The RSS drop is the evidence that the premise
     `c2_freed_before_replay` holds: 70 GB of small objects die into pymalloc arenas and glibc's heap, which keep pages the OS never sees
     back until trimmed -- ask glibc to return them (madvise/brk) so the drop measures the objects, not the allocators' retention."""
-    # the three readings are typed Any: a host that gives none (`rss_kb`'s None) raises TypeError at the record below, as on main
+    # the three readings are typed Any: a host that gives none (`rss_kb`'s None) raises TypeError at the record below
     _rss_c2a: Any = rss_kb()[0]
     held.clear()
     gc.collect()
@@ -606,7 +610,7 @@ def record(s: ReplaySources, sr: dict, lk: dict, _art: Path) -> None:
                                     "strata_unevaluated": sr.get("strata_unevaluated"), "seed": _smp.get("seed"), "seed_source": _smp.get("seed_source"),
                                     "unreplayable": sr.get("unreplayable"), "weights": sr.get("weights"), "programs": sr.get("programs"),
                                     "evaluators": sr.get("evaluators"), "artifact": str(_art),
-                                    "reference": "registered relation evaluators (verity.definitions.numerics.derived_rows) on the COMMITTED input bytes (C2 of record)"}
+                                    "reference": "registered relation evaluators (verity_vllm.definitions.numerics.derived_rows) on the COMMITTED input bytes (C2 of record)"}
     components["boundary_linkage"] = {"result": lk.get("result"), "method": lk.get("method"), "checked": lk.get("pairs"), "linked": lk.get("linked"),
                                       "unlinked_n": lk.get("unlinked_n"), "unlinked": lk.get("unlinked"), "why": lk.get("why"),
                                       "prescribed": lk.get("prescribed"),      # seed linkage record

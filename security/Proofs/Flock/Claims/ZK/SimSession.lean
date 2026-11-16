@@ -558,8 +558,8 @@ theorem simSession_of (hc : SimCommit) (h0 : HybridStep 0) (h1 : HybridStep 1) (
   unfold runCut runExe sessionCut sessionPZk
   refine both_sends_bind (both_rfl _ _) ?_
   rintro schs _ l1 ⟨rfl, hA⟩
-  obtain ⟨hssz, hsf⟩ := Ret.go (Ret.mapM_array _ (fun st' v => _root_.Flock.Zk.schedule st'.m = .ok v) _
-    fun a _ => Ret.monadLift (_root_.Flock.Zk.schedule a.m)) hA
+  obtain ⟨hssz, hsf⟩ := Ret.go (Ret.mapM_array _ (fun st' v => _root_.Flock.Zk.schedule st'.wideLeaf st'.m = .ok v) _
+    fun a _ => Ret.monadLift (_root_.Flock.Zk.schedule a.wideLeaf a.m)) hA
   have hl1 := Still.go (Still.mapM_array (fun a l => by rw [monadLift_go]) _) hA
   subst hl1
   have hsch : ∀ i (hi : i < jOf x), schs[i]! = ((zkTab x ⟨i, hi⟩).sch, (zkTab x ⟨i, hi⟩).tPad) := fun i hi => by
@@ -569,7 +569,11 @@ theorem simSession_of (hc : SimCommit) (h0 : HybridStep 0) (h1 : HybridStep 1) (
       unfold stAt
       simp [FlockDeploy.tabsOf]
       rfl
-    rw [e, h2] at h1
+    have e' : (FlockDeploy.tabsOf (stsOf x))[i].wideLeaf = (stAt x ⟨i, hi⟩).wideLeaf := by
+      unfold stAt
+      simp [FlockDeploy.tabsOf]
+      rfl
+    rw [e, e', h2] at h1
     rw [getElem!_pos schs i (by omega)]
     exact (Except.ok.inj h1).symm
   dsimp only
@@ -612,7 +616,7 @@ theorem simSession_of (hc : SimCommit) (h0 : HybridStep 0) (h1 : HybridStep 1) (
     have hst : (stsOf x)[k / 2]! = stAt x ⟨k / 2, hi⟩ := by
       unfold stAt
       exact getElem!_pos _ _ _
-    have hv : _root_.Flock.Zk.schedule (stsOf x)[k / 2]!.m =
+    have hv : _root_.Flock.Zk.schedule (stsOf x)[k / 2]!.wideLeaf (stsOf x)[k / 2]!.m =
         .ok ((zkTab x ⟨k / 2, hi⟩).sch, (zkTab x ⟨k / 2, hi⟩).tPad) := by
       rw [hst]
       exact (zkTab x ⟨k / 2, hi⟩).hz
@@ -662,7 +666,7 @@ theorem simSession_of (hc : SimCommit) (h0 : HybridStep 0) (h1 : HybridStep 1) (
       (fun k => coinOf_respOf c k) hsE _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ (_root_.Flock.Transcript.init #[] _) l _ l3 e3
     rw [htab] at e3' hex
     obtain ⟨h25, -, hsm, hk0, -, hdim, hlv, -, -⟩ :=
-      FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ hv
+      FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ _ hv
     obtain ⟨hn7, hL2, -, -, -, -, -⟩ := hdim
     obtain ⟨hl3, -, -, -⟩ := repPZk_exact (hm := hm) (hn := by rw [hn7, hsm]; omega) (hk0 := hk0) (hL := hL2)
       (hq := fun i hi => (hlv i hi).q_ne_zero) (h := e3')

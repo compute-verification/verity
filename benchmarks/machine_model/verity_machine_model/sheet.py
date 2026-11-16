@@ -1,6 +1,6 @@
-"""A device's data sheet (`sheet.toml` in its directory): each constant the data-sheet machine (`Accounting.TS.Sheet`)
-reads, its value, the document that states it and its grade, and each class of its DS vector's epoch with its tensor
-form or its pipe.
+"""A device's data sheet (`sheet.toml` in its directory): each constant the data-sheet machine (`ResourceAccounting.TS.Sheet`)
+reads, its value (or a `card` line, where the device's card file holds it), the document that states it and its grade,
+and each class of its DS vector's epoch with its tensor form or its pipe.
 
 `lines` derives the DS lines from it, exactly: issue 1 for every class (A2, and A2u for the uniform datapath's), a tensor
 form's MACs a warp instruction over a quarter of its type's peak (A3), 128 over its pipe's width (A4; the uniform pipe's
@@ -23,14 +23,14 @@ from pathlib import Path
 
 from verity_machine_model import headline as H
 from verity_machine_model.eps import UNI, design, eps, machine
-from verity_machine_model.model import model, vector
+from verity_machine_model.model import card, model, vector
 
 __all__ = ["Const", "Figure", "Form", "Kind", "Peak", "ROOT", "Reading", "Sheet", "at_fmax", "cited", "differences",
            "figures", "lean", "lines", "literal", "moves", "omega", "reading", "row", "sheet", "uni"]
 
 ROOT = Path(__file__).resolve().parents[3]
 SHEET = "sheet.toml"
-ROWS = ("issue", "tensor", "pipe", "smem")   # Accounting.TS.SheetRow's order
+ROWS = ("issue", "tensor", "pipe", "smem")   # ResourceAccounting.TS.SheetRow's order
 
 
 @dataclass(frozen=True)
@@ -96,8 +96,39 @@ class Sheet:
     omega: tuple[str, str]  # A6's ω, a tensor class's accumulator words: its grade and source
 
 
-def _const(t: dict, key: str) -> Const:
-    return Const(Fraction(t[key]), t["grade"], t["source"])
+def _reader(p: Path, data: Path):
+    """`value(t, key)`: a table's `key`, or its `card` line's number: the device's card file's entries (model.toml's
+    `card`) and numbers joined by ` * ` and ` / `, as theta.toml's `card` lines are. The grade and source stay the
+    table's own, which the Lean states."""
+    cards: list[dict] = []
+
+    def value(t: dict, key: str) -> Fraction:
+        if "card" not in t:
+            return Fraction(t[key])
+        if key in t:
+            raise SystemExit(f"{p}: a table gives {key} = {t[key]} and reads the card file ({t['card']}); delete one")
+        from verity.device import number   # here: only a reader of the card needs verity
+
+        if not cards:
+            cards.append(card(data))
+        x, op = Fraction(1), "*"
+        for tok in t["card"].split():
+            if tok in ("*", "/"):
+                op = tok
+                continue
+            if tok[0].isdigit():
+                y = Fraction(tok)
+            else:
+                e = cards[0]
+                for k in tok.split("."):
+                    e = e.get(k) if isinstance(e, dict) else None
+                if not (isinstance(e, dict) and "value" in e):
+                    raise SystemExit(f"{p}: hardware/cards/{cards[0]['sku']}.toml has no entry {tok}")
+                y = number(e)
+            x = x * y if op == "*" else x / y
+        return x
+
+    return value
 
 
 def sheet(data: Path) -> Sheet:
@@ -105,6 +136,11 @@ def sheet(data: Path) -> Sheet:
     if not p.is_file():
         raise SystemExit(f"{data}: no {SHEET}; a device with a data sheet has one (README \"Devices\")")
     t = tomllib.loads(p.read_text())
+    value = _reader(p, data)
+
+    def _const(v: dict, key: str) -> Const:
+        return Const(value(v, key), v["grade"], v["source"])
+
     kinds = {}
     for k, v in t["kinds"].items():
         form = Form(v["type"], v["m"], v["n"], v["k"], v["warps"], v.get("sparse", False)) if "type" in v else None
@@ -116,7 +152,7 @@ def sheet(data: Path) -> Sheet:
               uniform_issue=_const(t["uniform_issue"], "slots"),
               clocks={c: _const(v, "mhz") for c, v in t["clocks"].items()},
               labels={c: v.get("label", f"`{c}` clock") for c, v in t["clocks"].items()},
-              peaks={ty: Peak(Fraction(v["macs"]), Fraction(v["sheet"]), v["sparse"], Fraction(v["tol"]), v["clock"],
+              peaks={ty: Peak(value(v, "macs"), Fraction(v["sheet"]), v["sparse"], Fraction(v["tol"]), v["clock"],
                               v["grade"], v["source"], v.get("element_words", 1)) for ty, v in t["peaks"].items()},
               pipes={q: _const(v, "width") for q, v in t["pipes"].items()}, kinds=kinds,
               omega=(t["omega"]["grade"], t["omega"]["source"]))
@@ -326,9 +362,9 @@ def _doc(text: str) -> list[str]:
 
 
 def cited(s: Sheet) -> str:
-    """How generated text names the sheet's file: as the committed Lean files do, by a path under `benchmarks/pouw/`
-    that the data no longer has. A change of that text changes those Lean files with it."""
-    return f"`benchmarks/pouw/machine_model/data/devices/sm_{s.vector.split('-')[1]}/{SHEET}`"
+    """How generated text names the sheet's file: as the committed Lean files do. A change of that text changes those
+    Lean files with it."""
+    return f"`benchmarks/machine_model/data/devices/sm_{s.vector.split('-')[1]}/{SHEET}`"
 
 
 def _simp(head: str, names: list[str]) -> list[str]:
@@ -336,7 +372,7 @@ def _simp(head: str, names: list[str]) -> list[str]:
     return _wrap(f"{head} [{', '.join(names)}]", "  ", "      ")
 
 
-#: what a sheet's proofs elaborate with beyond `Accounting.TS.Sheet`, which imports these privately: the `norm_num`
+#: what a sheet's proofs elaborate with beyond `ResourceAccounting.TS.Sheet`, which imports these privately: the `norm_num`
 #: extensions and instances its `decide` and `norm_num` steps find
 SHEET_IMPORTS = (
     "import Mathlib.Algebra.Order.Floor.Extended",
@@ -385,9 +421,9 @@ def lean(s: Sheet, data: Path) -> str:
     peak = {ty: f"peak{_camel(ty)}" for ty in types}
     width = {q: f"width{_camel(q)}" for q in pipes}
     clock = {c: f"{c}MHz" for c in s.clocks}
-    out = ["module", "", "public import Definitions.Accounting.TS.Sheet", *SHEET_IMPORTS, "", "/-!",
+    out = ["module", "", "public import Definitions.Pouw.TS.Sheet", *SHEET_IMPORTS, "", "/-!",
            f"# The {s.name}'s data sheet (generated)", ""]
-    out += _wrap(f"The data-sheet machine (`Accounting.TS.Sheet.machine`) at the {s.gpu}'s vendor values: each constant "
+    out += _wrap(f"The data-sheet machine (`ResourceAccounting.TS.Sheet.machine`) at the {s.gpu}'s vendor values: each constant "
                  "with the axiom that reads it, its value, its grade and its source, and the census of the machine "
                  f"model's `{s.vector}` vector, which `machine_eq_census` proves the machine is, line for line. Each "
                  "tensor peak has a lemma that the per-clock peak reproduces the document's per-second figure at the "
@@ -399,7 +435,7 @@ def lean(s: Sheet, data: Path) -> str:
                         "channels don't list NVLink peer offload.", "")
     out += [""] + _wrap(f"`uv run machine-model --device {device} sheet --lean` prints this file from {cited(s)}, and "
                         "the machine model's tests hold it to that output.", "")
-    out += ["-/", "", "@[expose] public section", "", f"namespace Accounting.TS.Sheets.{s.name}", "",
+    out += ["-/", "", "@[expose] public section", "", f"namespace ResourceAccounting.TS.Sheets.{s.name}", "",
             "noncomputable section", ""]
     # Not `deriving Fintype`: Mathlib's handler for an enumeration fails its own `rw [Finset.mem_mk, …]` under this
     # toolchain, so each instance lists the constructors.
@@ -553,5 +589,5 @@ def lean(s: Sheet, data: Path) -> str:
                 f"    ({literal(dense)} - {literal(tol)} : ℝ) * 10 ^ 12 ≤ {lhs} ∧",
                 f"      {lhs} ≤ ({literal(dense)} + {literal(tol)} : ℝ) * 10 ^ 12 := by",
                 f"  norm_num [{peak[ty]}, smCount, {clock[p.clock]}]", ""]
-    out += ["end", "", f"end Accounting.TS.Sheets.{s.name}", ""]
+    out += ["end", "", f"end ResourceAccounting.TS.Sheets.{s.name}", ""]
     return "\n".join(out)

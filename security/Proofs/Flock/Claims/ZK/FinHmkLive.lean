@@ -205,17 +205,17 @@ theorem repFwC_proofs (coin : ℕ → ℕ → F128) (n : ℕ) (hs : _root_.Flock
     {g : Array F128} {cm0 : FlockComplete.Commit} {extras : Array Claim} {pads : FlockComplete.PadsZk}
     {ic : FlockComplete.InnerCommit} {vals : Array F128} {extra lanePad : ℕ → ℕ → F128} {salt : ℕ → ℕ → ByteArray}
     {t₀ : Flock.Transcript} {l : Array Claims.Msg} {p : _root_.Flock.Zk.ZkProof} {t : Flock.Transcript} {l' : Array Claims.Msg}
-    (h : ((_root_.Flock.Firewall.Finish.repFwC (asksCut coin n) hs st sch tPad rep dom g cm0 extras pads ic vals extra
+    (h : ((_root_.Flock.ZkServer.Finish.repFwC (asksCut coin n) hs st sch tPad rep dom g cm0 extras pads ic vals extra
       lanePad salt).run t₀).go l = (.ok (p, t), l')) :
     p.proof.zerocheck = zcProofOf (_root_.Flock.Zk.PadLayout.new st.m st.kLog sch.k0) (fun i => vals[i]! + pads.h[i]!) ∧
       p.proof.lincheck =
         lcProofOf (_root_.Flock.Zk.PadLayout.new st.m st.kLog sch.k0) (fun i => vals[i]! + pads.h[i]!) := by
-  unfold _root_.Flock.Firewall.Finish.repFwC at h
-  obtain ⟨⟨zp, zc⟩, t₁, l₁, h₁, h⟩ := _root_.Flock.Firewall.Finish.run_bind_ok h
+  unfold _root_.Flock.ZkServer.Finish.repFwC at h
+  obtain ⟨⟨zp, zc⟩, t₁, l₁, h₁, h⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok h
   try dsimp only at h
-  obtain ⟨⟨lp, lc⟩, t₂, l₂, h₂, h⟩ := _root_.Flock.Firewall.Finish.run_bind_ok h
+  obtain ⟨⟨lp, lc⟩, t₂, l₂, h₂, h⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok h
   try dsimp only at h
-  obtain ⟨⟨ss, T, sws⟩, t₃, l₃, h₃, h⟩ := _root_.Flock.Firewall.Finish.run_bind_ok h
+  obtain ⟨⟨ss, T, sws⟩, t₃, l₃, h₃, h⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok h
   try dsimp only at h
   have hp : p.proof.zerocheck = zp ∧ p.proof.lincheck = lp := by
     refine runPost_apply (P := fun q _ _ => q.proof.zerocheck = zp ∧ q.proof.lincheck = lp) ?_ h
@@ -238,7 +238,7 @@ theorem repCut_proofs (coin : ℕ → ℕ → F128) (n : ℕ) (hs : _root_.Flock
     p.proof.zerocheck = zcProofOf (_root_.Flock.Zk.PadLayout.new st.m st.kLog sch.k0) src.masked ∧
       p.proof.lincheck = lcProofOf (_root_.Flock.Zk.PadLayout.new st.m st.kLog sch.k0) src.masked := by
   unfold FlockComplete.repCut at h
-  obtain ⟨⟨zp, lp, ss, T, sws⟩, t₃, l₃, h₃, h⟩ := _root_.Flock.Firewall.Finish.run_bind_ok h
+  obtain ⟨⟨zp, lp, ss, T, sws⟩, t₃, l₃, h₃, h⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok h
   try dsimp only at h
   have hp : p.proof.zerocheck = zp ∧ p.proof.lincheck = lp := by
     refine runPost_apply (P := fun q _ _ => q.proof.zerocheck = zp ∧ q.proof.lincheck = lp) ?_ h
@@ -260,7 +260,7 @@ theorem masked_of_eraseZ (coin coin' : ℕ → ℕ → F128) (n n' : ℕ) (hs hs
     {salt : ℕ → ℕ → ByteArray} {src : FlockComplete.RepSrc} {prior : Array (List F128)} {words : List ℕ}
     {t₀ t₀' : Flock.Transcript} {l l₀ : Array Claims.Msg} {p p' : _root_.Flock.Zk.ZkProof} {t t' : Flock.Transcript}
     {l₀' : Array Claims.Msg}
-    (hF : (((_root_.Flock.Firewall.Finish.repFwC (asksCut coin n) hs st sch tPad rep dom g cm0 extras pads ic vals extra
+    (hF : (((_root_.Flock.ZkServer.Finish.repFwC (asksCut coin n) hs st sch tPad rep dom g cm0 extras pads ic vals extra
       lanePad salt).run t₀).go l).1 = .ok (p, t))
     (hC : ((FlockComplete.repCut (asksCut coin' n') hs' st' sch' rep' dom' cm0' extras' ic' src prior words).run
       t₀').go l₀ = (.ok (p', t'), l₀'))

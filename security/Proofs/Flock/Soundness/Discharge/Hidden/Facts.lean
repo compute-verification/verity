@@ -131,7 +131,7 @@ theorem setupHidden_tags (h : Stmt.setupHidden tags cf pf coins tables draw part
   (setupHidden_spec' h).tagsEq
 
 /-- `Spec.pub`, at a sample. -/
-theorem setupHidden_drawn {d : Json}
+theorem setupHidden_sampled {d : Json}
     (h : Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st) :
     ∃ pop, HmOut.loadPublic tags st.c pf = .ok pop ∧ HmOut.drawn st.c pop d = .ok st.pub := by
   obtain ⟨pop, hl, -, hd⟩ := (setupHidden_spec' h).pub

@@ -45,7 +45,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -90,6 +90,9 @@ from verity_vllm.records.schema_ids import (
     WEIGHTS_OF_RECORD_PRIOR_SCHEMA,
     WEIGHTS_OF_RECORD_SCHEMA,
 )
+
+if TYPE_CHECKING:
+    import torch
 
 __all__ = ["CheckpointIndex", "ENGINE_CONSTANT_RE", "EXPERTS_RE", "FUSED", "Options", "PARAM", "SCHEMA", "build_record",
            "check", "compose", "derivation_provenance", "live_param_digests", "main", "program_weight_fields",
@@ -282,7 +285,7 @@ def weights_of_record(program: dict[str, Any], ck: CheckpointIndex, *, prefix: s
 
 # ---------------------------------------------------------------------------------------------------------------------- live side
 
-def live_param_digests(model, *, include_buffers: bool = True, raw_for: re.Pattern[str] | None = ENGINE_ROTARY_RE) -> dict[str, Any]:
+def live_param_digests(model: torch.nn.Module, *, include_buffers: bool = True, raw_for: re.Pattern[str] | None = ENGINE_ROTARY_RE) -> dict[str, Any]:
     """sha256 of every live parameter (and buffer) of the served model, by `named_parameters()` name: the SAME tensors the committer's
     weights root covers (register_weights), hashed as raw contiguous bytes (bf16 words row-major).  Tensors whose name matches `raw_for`
     (default: the rotary cos_sin table) also keep their raw words under `raw[name]` (numpy uint16, in memory only -- not for the row
@@ -468,12 +471,8 @@ def check(record: dict[str, Any], live: dict[str, Any], *, program_digests_of_re
 # ---------------------------------------------------------------------------------------------------------------------------- CLI
 
 def _default_manifest() -> str | None:
-    """The tree's checkpoint pins (`config.CHECKPOINTS`), else the working directory's `manifests/checkpoints.json`; None where
-    neither exists."""
-    for p in (config.CHECKPOINTS, Path.cwd() / "manifests" / "checkpoints.json"):
-        if p.exists():
-            return os.path.abspath(p)
-    return None
+    """The tree's checkpoint pins (`config.CHECKPOINTS`); None on a tree that holds none."""
+    return str(config.CHECKPOINTS) if config.CHECKPOINTS.exists() else None
 
 
 def record_shard_pin(checkpoint_dir: str, *, checkpoints_manifest: str | None = None, model: str | None = None,
@@ -612,7 +611,7 @@ def derivation_provenance(program_dir: str, checkpoint_dir: str, checkpoints_man
                           supersedes: str | None = None) -> dict[str, Any]:
     """[Record repairs are LOGGED DERIVATIONS] the provenance line of a record written by this CLI: tool, the code that
     ran it (the repo's HEAD when this file sits in a git tree, else null, with `code_source` naming what failed), the SOURCE FILES the derivation read (the Program's instances.json.gz
-    + result.json, the checkpoint dir + checkpoints.json) and the time; `supersedes` names the record this one replaces (row_pod moves a
+    + result.json, the checkpoint dir + checkpoints.json) and the time; `supersedes` names the record this one replaces (the row's driver moves a
     stale / older record aside before re-deriving).  Informational: never read by check() -- the digests are the evidence."""
     code = None
     code_source = None

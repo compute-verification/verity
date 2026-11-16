@@ -18,7 +18,7 @@ import numpy as np
 
 from verity_vllm.config import checkpoint_entries
 
-__all__ = ["CheckpointIndex", "manifest_entry"]
+__all__ = ["CheckpointIndex", "manifest_entry", "read_safetensors_header"]
 
 #: safetensors dtype -> (numpy view dtype, element bytes)
 _ST_DTYPE = {"BF16": (np.uint16, 2), "F16": (np.float16, 2), "F32": (np.float32, 4), "F64": (np.float64, 8),
@@ -90,12 +90,18 @@ def renamed(name: str, rules: dict[str, tuple]) -> str | None:
 
 
 def manifest_entry(manifest: str | None, ckpt_dir: str, model: str | None, revision: str | None) -> dict[str, Any] | None:
-    """The checkpoints.json entry of `ckpt_dir` (it and its siblings, `config.checkpoint_entries`): the one whose local_path is the dir, else the one of `model` at `revision`."""
+    """The checkpoints.json entry of `ckpt_dir` (it and its siblings, `config.checkpoint_entries`): the one whose local_path is the dir,
+    or whose repo and revision the dir is the HF cache snapshot of (`.../models--ORG--NAME/snapshots/REVISION`, the pin made or
+    fetched under another HF_HOME than the manifest's, as `config.checkpoint_dir` finds it), else the one of `model` at `revision`."""
     if not (manifest and os.path.exists(manifest)):
         return None
+    d = os.path.normpath(ckpt_dir)
+    snap, models = os.path.basename(d), os.path.basename(os.path.dirname(os.path.dirname(d)))
+    in_hub = os.path.basename(os.path.dirname(d)) == "snapshots"
     for c in checkpoint_entries(manifest):
         lp = str(c.get("local_path") or "")
         if (lp and os.path.realpath(lp) == os.path.realpath(ckpt_dir)) or \
+                (in_hub and c.get("repo") and models == "models--" + str(c["repo"]).replace("/", "--") and snap == str(c.get("revision"))) or \
                 (model and c.get("repo") == model and (not revision or str(c.get("revision", "")).startswith(revision[:10]))):
             return c
     return None
@@ -129,7 +135,7 @@ class CheckpointIndex:
     another process on the same files and manifest (`shard_pin`), adopted instead of hashing again."""
 
     def __init__(self, ckpt_dir: str, *, checkpoints_manifest: str | None = None, model: str | None = None, revision: str | None = None,
-                 verify_shards: bool = True, pin: dict[str, Any] | None = None, workers: int | None = None):
+                 verify_shards: bool = True, pin: dict[str, Any] | None = None, workers: int | None = None) -> None:
         self.dir = ckpt_dir
         self.tensors: dict[str, tuple[str, str, list[int], int, int]] = {}
         self.shards: list[str] = []

@@ -1,4 +1,8 @@
-/-
+module
+
+public import Flock.Net
+
+/-!
 `Flock.Circuit`: a table-lookup slot, `value = table[index]` for a pinned MUFU table, built from the table itself the same
 way on both sides (the circuit prover's `lookup.rs`), as an expanded circuit. Rows: the index bits (one 128-bit input word); the one-hot
 decoders of the low `lo` and high `n − lo` index bits (recursively, each minterm the AND of two half minterms); per output
@@ -8,9 +12,6 @@ padding to a word; the output word, bit `j` the XOR of its products; the constan
 Every row is explicit except the product rows' B side (about `bits · 2^(n−1)` entries for a table of `2^n` words), which the
 fold reads from the table directly (`Lookup.foldB`).
 -/
-module
-
-public import Flock.Net
 
 @[expose] public section
 

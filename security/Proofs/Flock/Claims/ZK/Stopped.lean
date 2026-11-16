@@ -290,7 +290,7 @@ theorem honestPR_thrown (H : Msg → Msg) {x : Msg} (hx : Live x) (w : Claims.Fl
     rw [show (2 * j + r) / 2 = j by omega]
     exact getElem!_pos (stsOf x) j hj
   obtain ⟨y⟩ := hx.2 j hj
-  have hz : _root_.Flock.Zk.schedule (stsOf x)[(2 * j + r) / 2]!.m = .ok (y.sch, y.tPad) := by
+  have hz : _root_.Flock.Zk.schedule (stsOf x)[(2 * j + r) / 2]!.wideLeaf (stsOf x)[(2 * j + r) / 2]!.m = .ok (y.sch, y.tPad) := by
     rw [hst]
     exact y.hz
   rcases hth with ⟨hm, hk, h0, h1, hbad⟩ | ⟨hρ, hbad⟩ | ⟨hβ, hbad⟩

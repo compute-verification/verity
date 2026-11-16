@@ -1,7 +1,7 @@
 module
 
 public import Batteries.Data.ByteArray
-public import Flock.Firewall.Finish
+public import Flock.ZkServer.Finish
 public import Proofs.Flock.Claims.ZK.FinishStop
 public import Proofs.Flock.Claims.ZK.Worker
 public import Proofs.Flock.Soundness.Discharge.Composed.Inner.Holds
@@ -117,7 +117,7 @@ theorem rowsAt_of_cons (Tz : TabZK 𝔽 mPts) (st : Stmt) :
         (∀ k : Fin 7, (ofZk cons[k.val]!.2 : ZkSession.Lin 𝔽 ((C.T c).tab.onVals.nE + 4)) =
           rowsOf Tz st c r (((C.T c).tab.onVals.view p ω₀).pre.2.1 r) ((C.T c).tab.onVals.view p ω₀).pre.1
             (((C.T c).tab.onVals.view p ω₀).pre.2.2.2.2.2 r).1 (0, 0) (Fin.castAdd 3 k)) ∧
-        Flock.Firewall.Finish.failingOn cons
+        Flock.ZkServer.Finish.failingOn cons
           (arrOf ((C.T c).tab.onVals.hFull (ω₀.2.2.1 r) ∘ (padEquiv (C.T c).tab.onVals.nE).symm)) = #[]) →
       (C.T c).tab.onVals.RowsAt p ω₀.1 ω₀.2.1 := by
   intro C c p ω₀ h

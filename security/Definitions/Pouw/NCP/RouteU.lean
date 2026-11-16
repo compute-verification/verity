@@ -16,7 +16,7 @@ C^U_t   = c₀ + Σ_{l < 16t} X_b[:, l]·Y[l, :]   checkedU, over ℤ, t = 1 …
 ~~~
 
 `X + β` is u8 on the int7 domain exactly for `β ∈ {127, 128, 129}` when `R` is a permutation matrix (`Unsigned`, the
-production `P`), and for `β ∈ {127, 128}` when `R` is a signed permutation (`BiasU8Iff`). ncp-v1 uses `β = 128`.
+served `P`), and for `β ∈ {127, 128}` when `R` is a signed permutation (`BiasU8Iff`). ncp-v1 uses `β = 128`.
 
 `runU` is the running value at any depth `τ` (`checkedU` reads it at `16t`), and `mmWU` is route U's int32
 accumulator: it starts at `c₀` mod `2^32` and adds each exact product `X_b[i, l]·Y[l, j]`, wrapping. The MVP's
@@ -97,7 +97,7 @@ end Params
 
 namespace RouteU
 
-/-! ## Pinned statements -/
+/-! ## Guarantees -/
 
 /-- **The int32 reading** (every `β`): route U's int32 accumulator at every depth is its running value mod `2^32`. -/
 def MmWUEq : Prop :=
@@ -114,7 +114,7 @@ def Int7Int32U : Prop :=
     (∀ i, ∀ l < k, InInt7 (A i l)) → (∀ l < k, ∀ j, InInt7 (B l j)) → k ≤ 2 ^ 15 → τ ≤ 3 * k →
     InInt32 (runU β k A B E1 F1 R τ i j)
 
-/-- **The int32 range on route U, permutation-matrix `R`** (the production `P`, `Chain.Int7Int32`'s `k`): for
+/-- **The int32 range on route U, permutation-matrix `R`** (the served `P`, `Chain.Int7Int32`'s `k`): for
 `β ∈ {127, 128, 129}`, a permutation matrix `R`, `E₁`, `F₁` in `[−31, 32]`, int7 `A`, `B` and `k ≤ 2^16`, route U's
 running value at every depth `τ ≤ 3k` is at most `29,856·k ≤ 1,956,642,816 < 2^31` in magnitude. There
 `Σ_l F₂[l][j] = −Σ_l F₁[l][j]`, so `c₀ = −3β·Σ_l B[l][j]`; grouped by original index `a < k`, each of `a`'s three

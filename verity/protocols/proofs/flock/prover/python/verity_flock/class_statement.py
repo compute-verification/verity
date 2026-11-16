@@ -458,7 +458,7 @@ def distinct_calls(graph_path: str | None, modules: str | None = None, definitio
     from verity.circuits.codec import definition_digest, descriptor_id
     from verity.circuits.defs import CompositeDefinition
     from verity.circuits.program import Program
-    from verity.definitions.encoding import encode_specialization
+    from verity_vllm.definitions.encoding import encode_specialization
 
     g = json.loads(open(graph_path).read()) if graph_path else {"groups": []}
     index = g.get("definitions_index") or {}
@@ -867,7 +867,7 @@ def unit_lowering(definition, name: str, in_rows: Sequence[tuple[str, Sequence[s
     it), of exactly its words (its bits a multiple of 16); output
     port ``o{j}`` is return field ``j``'s leaves concatenated the same way, zero-padded to whole u16 words. Every
     parameter (or each of its rows) is in one row, or is one of ``public``: a public input port before the rows, each leaf in
-    its own ceil(bits / 16) u16 words, low first (`verity.protocols.accounting.pouw.prover.circuit.anchors.region_words`' layout, the unit's leaves as
+    its own ceil(bits / 16) u16 words, low first (`verity.protocols.resource_accounting.compute.pouw.prover.circuit.anchors.region_words`' layout, the unit's leaves as
     `circuit.compose`'s public input ports read them), or with ``packed`` its leaves concatenated as a row's are (`unit_ports`).
     Returns the lowering and each output port's words. ``structural``:
     the unit as `struct_lower` lowers it on these ports (`TmplLowering`, the flat unit never built), or a table read as the
@@ -1391,19 +1391,23 @@ def _serve(binary: str, d: Path, pub: Path, circ: Path, pin: str, sessions: int,
     FC_VERIFY_SERVERS (default 1, at most ``sessions``) processes taking turns (session k the (k mod n)th's), the first on ``port``
     and the rest on ports the system picks; ``bounded``: each exits once it has served its own sessions (otherwise the caller kills
     them), for ``points`` provers one after another, each numbering its sessions from 0 and awaiting every verdict before it exits.
-    FLOCK_DRAW_LAW (a sampling design object's file, `flock-circuit serve --draw-law`): every session proves the units the verifier samples by
+    FLOCK_SAMPLE_DESIGN (a sampling design object's file, `flock-circuit serve --sample-design`): every session proves the units the verifier samples by
     that sampling design at its Register, the staged statement their population. FLOCK_ZK=1: M1's masked sessions (`--zk`, server and prover
     alike). FLOCK_CHALLENGER=1: each process takes its sessions' coin trees from its own challenger (`_challenger`, `serve
     --tree-from`), so each is bounded; none otherwise."""
     servers = max(1, min(sessions, int(os.environ.get("FC_VERIFY_SERVERS") or 1)))
     concurrency = -(-(1 + int(os.environ.get("FC_VERIFY_AHEAD") or 0)) // servers)
     logs = [d / ("serve.log" if i == 0 else f"serve-{i}.log") for i in range(servers)]
-    law = ["--draw-law", os.environ["FLOCK_DRAW_LAW"]] if os.environ.get("FLOCK_DRAW_LAW") else []
+    design = os.environ.get("FLOCK_SAMPLE_DESIGN")
+    if os.environ.get("FLOCK_DRAW_LAW") and not design:
+        raise SystemExit("FLOCK_DRAW_LAW is set and FLOCK_SAMPLE_DESIGN is not: the sampling design is read from "
+                         "FLOCK_SAMPLE_DESIGN now; set FLOCK_SAMPLE_DESIGN instead")
+    sampling_design = ["--sample-design", design] if design else []
     chs = [_challenger(d / f"challenger-{i}") for i in range(servers)] if CH.wanted(os.environ) else []
     bounded = bounded or bool(chs)
     srvs = [subprocess.Popen([binary, "serve", "--listen", f"{host}:{port if i == 0 else 0}", "--out", str(d / "sessions"),
                               "--instances", str(pub), "--circuit", str(circ), "--pin", pin, "--operator", operator,
-                              "--concurrency", str(concurrency)] + law + _zk()
+                              "--concurrency", str(concurrency)] + sampling_design + _zk()
                              + (["--sessions", str(points * len(range(i, sessions, servers)))] if bounded else [])
                              + (chs[i][1] if chs else []),
                              stdout=open(log, "w"), stderr=subprocess.STDOUT)

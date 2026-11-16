@@ -304,7 +304,7 @@ section Ports
 variable (sh : Flock.RecSparse.Shape)
 
 theorem portWords_eq (n : ℕ) : Flock.RecSparse.portWords n = VStar.portWordsOf n := by
-  unfold Flock.RecSparse.portWords Flock.RecSparse.F_WORDS Flock.RecSparse.ROW_BLOCK VStar.portWordsOf
+  unfold Flock.RecSparse.portWords Flock.RecSparse.F_WORDS Flock.RecSparse.ROW_CHUNK VStar.portWordsOf
   omega
 
 /-- The message ports' words. -/
@@ -496,7 +496,7 @@ theorem sparseIn_col {w vv : ℕ → F128} {τ : ℕ → ℕ} {v z : ℕ → Boo
     exact hin.hv q hq
   · have hvs : vBaseS sh = tauBase sh + 16 * Flock.RecSparse.tauWords sh := by simp only [vBaseS, hst, ↓reduceIte]
     have hST : sh.S ≤ Flock.RecSparse.tauWords sh := by
-      unfold Flock.RecSparse.tauWords Flock.RecSparse.ROW_BLOCK
+      unfold Flock.RecSparse.tauWords Flock.RecSparse.ROW_CHUNK
       omega
     rw [hz _ (by omega)]
     exact hin.htau hst s hs b hb
@@ -527,7 +527,7 @@ theorem stepsIn_of {z : Var → Bool} {w vv : ℕ → F128} {τ : ℕ → ℕ} (
     rw [mp_eq]
     simp [hst]
   have hST : sh.S ≤ Flock.RecSparse.tauWords sh := by
-    unfold Flock.RecSparse.tauWords Flock.RecSparse.ROW_BLOCK
+    unfold Flock.RecSparse.tauWords Flock.RecSparse.ROW_CHUNK
     omega
   refine ⟨HW, fun q => ?_, ?_, fun hst t ht => ?_, fun hst s hs b hb => ?_⟩
   · rw [portOf_v, take_vars _ _ _ (le_portWords _)]
@@ -591,7 +591,7 @@ theorem laid_sparse (ht16 : sh.tLog ≤ 16) (v : ℕ → Bool)
     exact le_portWords _
   have hτ : sh.stacked = true → 16 * sh.S ≤ (portOf sh "tau").length := fun hst => by
     rw [portOf_tau sh hst, length_vars]
-    unfold Flock.RecSparse.tauWords Flock.RecSparse.ROW_BLOCK
+    unfold Flock.RecSparse.tauWords Flock.RecSparse.ROW_CHUNK
     omega
   have hS := (sound_steps sh (portOf sh) hPv hτ ht16 (fun _ hu => used_mem sh hu)
     ⟨16 * Flock.RecSparse.inWords sh, []⟩).2
@@ -605,7 +605,7 @@ theorem laid_sparse (ht16 : sh.tLog ≤ 16) (v : ℕ → Bool)
     have : 3 ≤ (Flock.RecSparse.residualNames sh).length := by
       unfold Flock.RecSparse.residualNames
       split <;> simp
-    unfold Flock.RecSparse.outWords Flock.RecSparse.F_WORDS Flock.RecSparse.ROW_BLOCK
+    unfold Flock.RecSparse.outWords Flock.RecSparse.F_WORDS Flock.RecSparse.ROW_CHUNK
     omega
   have hobS : sh.stacked = true → 512 + 16 * sh.S ≤ 16 * Flock.RecSparse.outWords sh := fun hst => by
     have how := outWords_ge sh

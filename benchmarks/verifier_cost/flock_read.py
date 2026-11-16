@@ -1,4 +1,4 @@
-"""flock_read.py K WORK [--circuit-only]: the H1 tile unit's flat statement circuit at contraction K (`h1_prove/h1unit.Shape(K)`,
+"""flock_read.py K WORK [--circuit-only]: the H1 tile unit's flat statement circuit at contraction K (`prover/lowering/h1unit.Shape(K)`,
 the 4×8 tile, staged flat as `h1_prove/job.sh` stages it), and one instance on it (not with
 `--circuit-only`, which `flock_tmpl.sh` passes), for `flock_read.sh` to time the Lean verifier's read of.
 
@@ -22,7 +22,9 @@ H1 = Path(__file__).resolve().parents[1] / "pouw" / "h1_prove"
 sys.path.insert(0, str(H1))
 sys.path.insert(0, str(H1.parent / "hidden_zk"))
 
-import h1unit as U  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.prover.lowering import h1unit as U  # noqa: E402
+
+import h1form as F  # noqa: E402
 
 
 def description(definition) -> dict:
@@ -44,8 +46,8 @@ def main() -> None:
     t0 = time.time()
     import fast_stage
     fast_stage.install(work / "scratch")
-    shape = U.Shape(k)
-    stager = shape.stager("unit/pouw-h1-tile", circuit=work / "circuit.txt", flat=True)
+    shape = F.shape(k)
+    stager = shape.stager("unit/pouw-h1-tile", circuit=work / "circuit.txt")
     t1 = time.time()
     if "--circuit-only" in sys.argv[3:]:
         head = {"k": k, "ands": stager.low.layout.counts["ands"], "circuit_bytes": (work / "circuit.txt").stat().st_size,

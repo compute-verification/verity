@@ -1,15 +1,16 @@
-/-
-`Tmpl.layout` on `Flock.Test.Tmpl`'s unit: the pair's two copies take two lanes at 128, so the unit's columns 128 to 133
-sit at 128, 130, 132, 129, 131 and 133 (the map `benchmarks/verifier_cost/tmpl_layouts.py` gives, lenient and strict);
-`posOf` agrees with the reference `posMap` on every column, which is a permutation. The layouts it refuses: an output
-group whose start a call's lanes would move, and a call in the input rows to a Definition laid out apart.
--/
 module
 
 public import Flock.Test.Tmpl
 public import Flock.TmplLayout
 meta import Flock.Test.Tmpl
 meta import Flock.TmplLayout
+
+/-!
+`Tmpl.layout` on `Flock.Test.Tmpl`'s unit: the pair's two copies take two lanes at 128, so the unit's columns 128 to 133
+sit at 128, 130, 132, 129, 131 and 133 (the map `benchmarks/verifier_cost/tmpl_layouts.py` gives, lenient and strict);
+`posOf` agrees with the reference `posMap` on every column, which is a permutation. The layouts it refuses: an output
+group whose start a call's lanes would move, and a call in the input rows to a Definition laid out apart.
+-/
 
 @[expose] public section
 

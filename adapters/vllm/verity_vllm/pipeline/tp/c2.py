@@ -17,11 +17,13 @@ from typing import Any
 from verity_vllm.acquire.sources.oracle_witness import SUMMARY_KEYS as TPS_SUMMARY_KEYS
 from verity_vllm.check.cublas_route_pin import route_pin_gate
 from verity_vllm.pipeline import replay_bundle as RB
+from verity_vllm.records import replay_codes as RC
 from verity_vllm.records.schema_ids import TP_REPLAY_DEFERRED_SCHEMA
 
 __all__ = ["DEFER_WORLDS"]
 
 DEFERRED = "replay_deferred.json"
+RANK_RESULT = "sampled_replay_p{pair}_rank{rank}.json"      # a rank's replay of its sealed bundle, as `tp-commit-replay` writes it
 SCHEMA = TP_REPLAY_DEFERRED_SCHEMA
 #: the worlds whose Commit defers its ranks' C2 replay, each proven by a row whose deferred arm (the Commit's bundles, then
 #: `tp-commit-replay` on CPU) gave the in-process arm's picks, per-rank records, verdict and run root; any other world replays in process
@@ -47,6 +49,14 @@ def write_atomic(p: Path, text: str) -> None:
     tmp = p.with_name(p.name + ".tmp")
     tmp.write_text(text)
     os.replace(tmp, p)
+
+
+def remove_earlier(out: Path) -> None:
+    """In a used ``out``, where a Commit writes its `versions.json`: an earlier Commit's rows and verdict go (its `runs.jsonl`, its
+    `summary.json`, its deferred record and each rank's replay result), so what stands beside `versions.json` is that Commit's or
+    nothing.  The bundles the earlier Commit sealed stay."""
+    for earlier in (out / "runs.jsonl", out / "summary.json", out / DEFERRED, *out.glob(RANK_RESULT.format(pair="*", rank="*"))):
+        earlier.unlink(missing_ok=True)
 
 
 def per_rank_of(row: dict) -> dict:
@@ -172,8 +182,6 @@ def tp_form_b(cblock: dict) -> dict | None:
 def unreplayable_reasons(entries: list[dict]) -> tuple[dict[str, int], dict[str, dict]]:
     """`population.not_evaluable` and its codes, read off a replay record's `unreplayable` families, for a record that carries those
     alone: a family with no identity (structure, an interior composed into its consumer) is no gap; the rest keep their why class."""
-    from verity_vllm.check.replay import replay_codes as RC
-
     not_ev: dict[str, int] = {}
     codes: dict[str, dict] = {}
     for u in entries:
@@ -193,7 +201,6 @@ def no_evaluator_gate(cblock: dict, sr_: dict, *, rank: int, xrank_families: fro
     """[`NO_EVALUATOR_RULE`] The rank's no-evaluator families into its verdict: (record block, FAIL text | None).  ``xrank_families``:
     the cross-rank families of the world while the Commit's cross-rank collectives pass runs, else None (nothing is waived by it)."""
     from verity_vllm.check.c2_rules import _complete_replay_population_gap
-    from verity_vllm.check.replay import replay_codes as RC
     from verity_vllm.program.frontend.collective_kinds import evaluated_cross_rank
 
     pop = sr_.get("population")

@@ -7,9 +7,9 @@ in the payload and holds only public structure, hiding commitments and paths bes
 
 **The document.**
 
-* ``window``: the window's run root, registration digest, circuit record SHA-512, partition and program digests, scheme,
+* ``window``: the window's run root, docket digest, circuit record SHA-512, partition and program digests, scheme,
   population and leaf layer (``registration.json`` / ``window.json``), and ``roots``: every port root a unit's opening
-  reaches, ``{port: {root, leaves, domain, schema}}``, each the registration's root under the window-domain rule
+  reaches, ``{port: {root, leaves, domain, schema}}``, each the docket's root under the window-domain rule
   (`verity.commitments.window`).
 * ``target``: the card's binding of the templates' dot, ``{binding, card, dot}`` (`BINDINGS`: ``GEMM_SM90_S8`` for the
   H200's INT8 and ``GEMM_HOPPER`` for its BF16, ``GEMM_SM120_S8`` for the RTX PRO 6000; ``BOOLEAN_…`` the same cards' dots
@@ -18,8 +18,8 @@ in the payload and holds only public structure, hiding commitments and paths bes
   ``receipt``, the challenger's live-coin receipt, which a live sample must carry) or ``fixture`` (chosen by hand). The sampling design is
   the window's registered one, fixed before any coin, and a live sample's ``record`` (the verifier's sample object, when it
   carries one) is a sample under it over the registered population, of exactly the bundle's units (`check` against the
-  registration).
-* ``weights``: the registered values the units read (core's ``one_stage.registered``, as `benchmarks.torch_gpu.p2_stage.served_weights`
+  docket).
+* ``weights``: the registered values the units read (core's ``one_stage.registered``, as `verity.protocols.resource_accounting.memory.pous.prover.served_weights`
   registers the seeded weights: ``registered.domain(program, value, words, leaves, word_bits)``, rows in
   ``hm96-sha512/row/v2``): ``{program, values: [{value, root, leaves, words, word_bits, domain, row_schema}]}``.
 * ``commitment``: the serving steps' commitment (kernels' commit call, `commit_slots`: step tree over
@@ -58,7 +58,7 @@ in the payload and holds only public structure, hiding commitments and paths bes
   path}``, its row's bytes and salt in the payload and ``path`` its opening against the value's root. Words no piece
   covers are zero, and a row of no pieces is all zero (a V row past n, which the Definition masks).
 
-  With ``registration``, `check` holds every step root the bundle opens against to the one the registration's
+  With ``docket``, `check` holds every step root the bundle opens against to the one the docket's
   ``window.commitment`` names (`steps_provenance`, every step's root registered before the coin) and fails closed on a
   step it doesn't name.
 
@@ -68,7 +68,7 @@ in the payload and holds only public structure, hiding commitments and paths bes
 then each of its step reads' committed row and salt.
 
 `check` is the consumer's check of a bundle from its bytes alone: the payload's digest, every string recomputed from its row
-and salt, every path to its root, every root's domain recomputed from public data (the window's from the registration's
+and salt, every path to its root, every root's domain recomputed from public data (the window's from the docket's
 fields, a registered value's from its entry, the commitment's from its context, layout and coordinates), the sample's receipt
 when live, the target's dot in every template, and each unit's Definition replayed on its input rows against its output rows.
 `build` writes a bundle from a window ``Window.write`` wrote and the prover's step records (`Commitment`).
@@ -99,9 +99,9 @@ from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain, MerkleTree, merkle_depth
 from verity.commitments.row_table import ROOTS_SCHEMA, RootOpening, RootTree, verify_roots
 from verity.commitments.window import window_domain
-from verity.commitments.windows import interface as IF, rows as CS
+from verity.commitments.periods import interface as IF, rows as CS
 
-COMMIT_SLOTS = Path(__file__).resolve().parents[3] / "torch_gpu" / "commit_slots"
+COMMIT_SLOTS = Path(__file__).resolve().parents[4] / "verity" / "commitments" / "cuda" / "commit_slots"
 if str(COMMIT_SLOTS) not in sys.path:
     sys.path.insert(0, str(COMMIT_SLOTS))
 import slots as S  # noqa: E402
@@ -440,9 +440,9 @@ class _Steps:
 
 
 def steps_provenance(commitment: Commitment) -> dict[str, Any]:
-    """What a window's registration names of the run's step commitments, under its ``window`` provenance (``Window.write``'s
+    """What a window's docket names of the run's step commitments, under its ``window`` provenance (``Window.write``'s
     ``provenance``): ``{"commitment": {format, context, layout_digest, slots, blocks}}``, every block's root and every step's
-    root and domain, as a bundle's ``commitment`` has them. So the registration's digest fixes every step root a sampled
+    root and domain, as a bundle's ``commitment`` has them. So the docket's digest fixes every step root a sampled
     proof block can read (attention's K and V rows at every earlier step) before the coin, and `check` holds a bundle's openings
     to them."""
     com = commitment
@@ -670,12 +670,12 @@ def open_reads(commitment: Commitment, rows: Sequence[tuple[Mapping[str, Any], b
 
 
 def check_reads(commitment: Mapping[str, Any], rows: Sequence[tuple[Mapping[str, Any], bytes, Sequence[Mapping[str, Any]]]],
-                payload: bytes, *, kind: str = "in", registration: Mapping[str, Any] | None = None) -> dict[str, str]:
+                payload: bytes, *, kind: str = "in", docket: Mapping[str, Any] | None = None) -> dict[str, str]:
     """`check`'s verdict on port rows' reads (each ``(coords, row, reads)``, `open_reads`'s) against a ``commitment``
-    section (`commitment_doc`), each step root held to the ``registration``'s when given: ``{key: why}``, empty when they
+    section (`commitment_doc`), each step root held to the ``docket``'s when given: ``{key: why}``, empty when they
     hold."""
     bad: dict[str, str] = {}
-    com = _check_commitment({"commitment": commitment}, bad, registration)
+    com = _check_commitment({"commitment": commitment}, bad, docket)
     for i, (coords, row, reads) in enumerate(rows):
         r = {"kind": kind, "words": len(row) // 2, "reads": list(reads)}
         if (why := _check_reads(r, {"coords": coords}, row, payload, com)) is not None:
@@ -698,7 +698,7 @@ def build(window_dir: str | Path, drawn: Sequence[int], *, commitment: Commitmen
     (`BINDINGS`), which every template must bind. ``coords(label, offset)``: a unit's coordinates from its label and its
     offset in its labelled run. ``reads(coords, template, port)``: the ``(value, position)`` a unit's port reads of a
     registered value; ``weights``: those values, the prover's side (``program``, ``schema``, ``entry()``, ``path(position)``
-    and the row's string, ``string(position)`` or ``bcs[position]``: `registered.Registered`). ``draw``: the sample's ``law``,
+    and the row's string, ``string(position)`` or ``bcs[position]``: `registered.Registered`). ``draw``: the sample's ``sampling_design``,
     ``source`` and ``receipt`` (default ``{"source": "fixture"}``; a live sample without its receipt is refused). ``workers``:
     processes rebuilding the opened (step, slot) subtrees, one each.
 
@@ -714,7 +714,7 @@ def build(window_dir: str | Path, drawn: Sequence[int], *, commitment: Commitmen
     if len(set(drawn)) != len(drawn):
         raise ValueError("a unit is drawn once")
     tgt = target(binding)
-    doc_draw = _draw(draw, drawn)
+    doc_sample = _draw(draw, drawn)
     com, steps, layout = commitment, _Steps(commitment), commitment.layout
 
     roots = {r["port"]: r for r in w.rec["roots"]}
@@ -795,7 +795,7 @@ def build(window_dir: str | Path, drawn: Sequence[int], *, commitment: Commitmen
                       "partition": w.win["partition_digest"], "program": part["program"], "scheme": w.win["scheme"],
                       "population": w.win["population"], "leaf_layer": w.win["leaf_layer"], "roots": used_roots},
            "target": tgt,
-           "draw": doc_draw,
+           "draw": doc_sample,
            "weights": {"program": next(iter(progs)) if progs else None,
                        "values": [{**weights[v].entry(), "row_schema": weights[v].schema} for v in sorted(used_values)]},
            "commitment": commitment_doc(com, steps),
@@ -853,9 +853,9 @@ def _replay_bits(fn: Any, params: Sequence[Any], ret: Any, lay: IF.RowLayout, ro
 
 
 def _check_commitment(doc: Mapping[str, Any], bad: dict[str, str],
-                      registration: Mapping[str, Any] | None = None) -> tuple[Any, ...] | None:
+                      docket: Mapping[str, Any] | None = None) -> tuple[Any, ...] | None:
     """The commitment section's layout, context and block trees recomputed: ``(context, layout, slots, step roots by (block,
-    step))``, or None (with ``bad`` filled) when its layout or context can't be read. With ``registration``, every step's
+    step))``, or None (with ``bad`` filled) when its layout or context can't be read. With ``docket``, every step's
     root is held to the one its ``window.commitment`` names (`steps_provenance`), and a step it doesn't name is refused."""
     com = doc["commitment"]
     if com.get("format") != COMMITMENT:
@@ -871,8 +871,8 @@ def _check_commitment(doc: Mapping[str, Any], bad: dict[str, str],
     if S.layout_digest(layout).hex() != com["layout_digest"]:
         bad["commitment"] = "its layout digest is not its layout's"
     registered: dict[tuple[int, int], dict[str, Any]] | None = None
-    if registration is not None:
-        rc = (registration.get("window") or {}).get("commitment") or {}
+    if docket is not None:
+        rc = (docket.get("window") or {}).get("commitment") or {}
         registered = {}
         if {k: rc.get(k) for k in ("format", "context", "layout_digest", "slots")} != \
                 {"format": COMMITMENT, **{k: com[k] for k in ("context", "layout_digest", "slots")}}:
@@ -1000,10 +1000,10 @@ def _check_reads(r: Mapping[str, Any], unit: Mapping[str, Any], row: bytes, payl
     return None
 
 
-def check(doc: Mapping[str, Any], payload: bytes, *, registration: Mapping[str, Any] | None = None,
+def check(doc: Mapping[str, Any], payload: bytes, *, docket: Mapping[str, Any] | None = None,
           replay_units: bool = True) -> dict[str, str]:
-    """The consumer's check of a bundle (module docstring): ``{key: why}``, empty when it holds. ``registration``: the
-    window's ``registration.json``, whose roots and law the bundle's must be, and whose ``window.commitment``
+    """The consumer's check of a bundle (module docstring): ``{key: why}``, empty when it holds. ``docket``: the
+    window's ``registration.json``, whose roots and sampling design the bundle's must be, and whose ``window.commitment``
     (`steps_provenance`) names every step root the bundle opens against: a step it doesn't name fails closed."""
     bad: dict[str, str] = {}
     if doc.get("format") != FORMAT:
@@ -1024,14 +1024,14 @@ def check(doc: Mapping[str, Any], payload: bytes, *, registration: Mapping[str, 
     for port, r in win["roots"].items():
         if window_domain(win["program"], win["partition"], port, r["schema"], r["leaves"], win["run"]) != r["domain"]:
             bad[f"root:{port}"] = "its domain is not the window-domain rule's over the registration's fields"
-    if registration is not None:
-        law = registration["law"]
-        if d.get("law") != law or (law.get("law") == "subset" and len(d["units"]) != law.get("k")):
-            bad["draw:law"] = f"the draw is not one under the registered law {law}"
-        if "record" in d and not (D.check_draw(d["record"], registration, law).ok
+    if docket is not None:
+        sampling_design = docket["law"]
+        if d.get("law") != sampling_design or (sampling_design.get("law") == "subset" and len(d["units"]) != sampling_design.get("k")):
+            bad["draw:law"] = f"the draw is not one under the registered law {sampling_design}"
+        if "record" in d and not (D.check_draw(d["record"], docket, sampling_design).ok
                                   and d["record"].get("units") == sorted(d["units"])):
             bad["draw:record"] = "the draw's record is not a draw of its units under the registered law and population"
-        reg_roots = {r["port"]: r for r in registration["roots"]}
+        reg_roots = {r["port"]: r for r in docket["roots"]}
         for port, r in win["roots"].items():
             if (reg_roots.get(port) or {}).get("root") != r["root"]:
                 bad[f"root:{port}"] = "not the registration's root"
@@ -1040,7 +1040,7 @@ def check(doc: Mapping[str, Any], payload: bytes, *, registration: Mapping[str, 
         dom = REG.domain(doc["weights"]["program"], name, v["words"], v["leaves"], v.get("word_bits", REG.WORD_BITS))
         if dom.domain_id.hex() != v["domain"]:
             bad[f"value:{name}"] = "its domain is not the registered-value rule's over its entry"
-    com = _check_commitment(doc, bad, registration)
+    com = _check_commitment(doc, bad, docket)
     members = {m["k"]: m for m in doc["members"]}
 
     def registered_piece(q: Mapping[str, Any], crow: bytes, csalt: bytes) -> bool:
@@ -1121,16 +1121,16 @@ def step_digest(reg: Mapping[str, Any]) -> str:
     return identity_digest_sha512(STEP_FORMAT, dict(reg)).hex()
 
 
-def step_registration(com: Commitment, weights: Mapping[str, REG.Registered], law: Mapping[str, Any], *, run: str,
+def step_registration(com: Commitment, weights: Mapping[str, REG.Registered], sampling_design: Mapping[str, Any], *, run: str,
                       program: str, block: int, step: int, read_steps: bool = False) -> dict[str, Any]:
-    """The registration of step ``(block, step)`` of ``com`` (the prover's records) under ``law``, naming the registered
+    """The registration of step ``(block, step)`` of ``com`` (the prover's records) under ``sampling_design``, naming the registered
     values ``weights`` its blocks read; ``read_steps``: and the root of every step of ``block`` up to ``step`` (`STEPS_KEY`),
     which ``com`` must hold."""
     steps = _Steps(com)
     reg = {"format": STEP_FORMAT, "run": run, "program": program, "block": block, "step": step,
            "step_root": steps.step(block, step).root.hex(), "slot_roots": [r.hex() for r in steps.roots(block, step)],
            "slots": com.slots, "layout_digest": S.layout_digest(com.layout).hex(), "context": com.context.hex(),
-           "units_per_slot": com.layout.unit_count, "population": com.slots * com.layout.unit_count, "law": dict(law),
+           "units_per_slot": com.layout.unit_count, "population": com.slots * com.layout.unit_count, "law": dict(sampling_design),
            "weights": [{"value": v, "root": w.root.hex()} for v, w in sorted(weights.items())]}
     if read_steps:
         reg[STEPS_KEY] = [{"step": s, "root": steps.step(block, s).root.hex()} for s in range(step + 1)]
@@ -1143,7 +1143,7 @@ def position_of(reg: Mapping[str, Any], index: int) -> tuple[int, int]:
 
 
 def check_step(doc: Mapping[str, Any], payload: bytes, reg: Mapping[str, Any], index: int, *,
-               registration: Mapping[str, Any] | None = None) -> dict[str, str]:
+               docket: Mapping[str, Any] | None = None) -> dict[str, str]:
     """`check` of a sampled proof block's bundle, then the bundle held to the step registration ``reg`` at sampled ``index``:
     ``{key: why}``, empty when it holds. Its commitment is the registered step (root, slot roots, layout, context), it is
     one proof block whose outputs open in the layout unit ``index`` names, every row opens against the registered step
@@ -1151,7 +1151,7 @@ def check_step(doc: Mapping[str, Any], payload: bytes, reg: Mapping[str, Any], i
     reads (`Read`) holds each read to the registered step's slot root, or, at an earlier step, to that step's root as
     ``reg``'s `STEPS_KEY` names it: a read at a step ``reg`` doesn't name is refused. The paths themselves are `check`'s,
     which runs first, so a row whose paths don't reach the registered step root is refused."""
-    bad = check(doc, payload, registration=registration)
+    bad = check(doc, payload, docket=docket)
     if set(reg) - {STEPS_KEY} != STEP_KEYS or reg["format"] != STEP_FORMAT:
         return {**bad, "step": f"not a {STEP_FORMAT} with exactly {sorted(STEP_KEYS)} and optionally {STEPS_KEY}"}
     if (reg["population"] != reg["slots"] * reg["units_per_slot"] or len(reg["slot_roots"]) != reg["slots"]
@@ -1249,7 +1249,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     a = ap.parse_args(argv)
     doc, pay = read(a.bundle)
     reg = json.loads(Path(a.registration).read_text()) if a.registration else None
-    bad = check(doc, pay, registration=reg)
+    bad = check(doc, pay, docket=reg)
     print(json.dumps({"units": len(doc["units"]), "ok": not bad, "bad": bad}, sort_keys=True))
     return 0 if not bad else 1
 

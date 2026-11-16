@@ -39,7 +39,7 @@ into the run's ``$OUT`` after each close and each seal.
 
 With ``served`` (the statics of the compile slice the windows are proved by, `SERVED_SLICE`; `served_statics`) each close
 also commits the step rows the window ran
-(`verity.protocols.accounting.certifier.verifier.served_rows.register`, under the window's run root): each request named by its arrival
+(`verity_vllm.compiler.served_rows.register`, under the window's run root): each request named by its arrival
 id, its index in the order the engine admitted the run's requests. The record's public part (the registration's
 binding, root, count and row width, with the statics and the slice) goes into the window's ``windows.jsonl`` line, beside
 its run root, written at the close and so before sampling over it; the rows and their salts go to ``served_rows/w<k>.json``, the prover's.
@@ -60,9 +60,10 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from verity.protocols.accounting.certifier.verifier import charge_chain as CC
-from verity.protocols.accounting.certifier.verifier import compile_slice as CS
-from verity.protocols.accounting.certifier.verifier import served_rows as SRW
+from verity.protocols.resource_accounting.network.verifier import charge_chain as CC
+from verity_vllm.compiler import compile_slice as CS
+from verity_vllm.compiler import served_rows as SRW
+from verity_vllm import messages as M
 from verity_vllm.commit.served_record import BlockValues, base_id, served_rows, window_commit
 from verity_vllm.engine.served_seed import SeedCoins, param_of
 from verity_vllm.errors import Refused
@@ -105,7 +106,7 @@ def advice_trace(out: Path, engine: Any) -> Any:
 
 
 #: requests.jsonl's engine id to ``user`` map alone, a line each as requests.jsonl's: ``{"engine_id", "user"}``.  It holds no
-#: request value (the network certifier's users are request indexes, ``user-<i>``), so it can leave the node with
+#: request value (the network attester's users are request indexes, ``user-<i>``), so it can leave the node with
 #: windows.jsonl and serve.json while requests.jsonl, with the prompt and output ids, stays.
 REQUEST_USERS = "request_users.jsonl"
 
@@ -199,7 +200,7 @@ class LiveRequest:
     prompt_ids: list[int]
     ingress: dict[str, Any] = field(default_factory=dict)
     user: str | None = None                      # the body's `user`, the id the advice names the request by
-    release: Any = None                          # (the network certifier's run, its place in the release order), under --admit release-order
+    release: Any = None                          # (the network attester's run, its place in the release order), under --admit release-order
     admitted: int = -1                           # its place in the order requests were added to the engine
     streamed: list[int] = field(default_factory=list)
     finish: dict[str, Any] | None = None
@@ -596,8 +597,7 @@ class CommitWindows:
             if self.pool is not None:
                 rec["pool_row"] = self._pool_out.pop(rec["window"], None)
             self.records.append(rec)
-            with open(self.out / "windows.jsonl", "a") as fh:
-                fh.write(json.dumps(rec) + "\n")
+            M.append(self.out / "windows.jsonl", "Run", json.dumps(rec).encode())
 
     def _served_rows(self, rec: dict[str, Any], com: Any) -> dict[str, Any]:
         """The closed window's served rows committed under its run root (`commit_served`): the record's public part, with the
@@ -612,10 +612,10 @@ class CommitWindows:
             return {"error": f"{type(e).__name__}: {e}"[:500]}
         d = self.out / "served_rows"
         d.mkdir(parents=True, exist_ok=True)
-        (d / f"w{rec['window']}.json").write_text(json.dumps({
+        M.write(d / f"w{rec['window']}.json", "CommittedRows", json.dumps({
             "window": rec["window"], "run_root": rec["run_root"], "statics": self.served, "ids": ids,
             "session": [[None if s is None else [list(r) for r in s] for s in w] for w in session],
-            "salts": [s.hex() for s in served.registration.salts]}))
+            "salts": [s.hex() for s in served.registration.salts]}).encode())
         named = {"slice": SERVED_SLICE} if self.no_slice is None else {"slice": None, "no_slice": self.no_slice}
         return {**served.record(), "statics": self.served, **named}
 
@@ -707,8 +707,7 @@ class CommitWindows:
                     line["release"] = released
                 with self._lock:
                     self.seals.append(line)
-                with open(self.out / "seals.jsonl", "a") as fh:
-                    fh.write(json.dumps(line) + "\n")
+                M.append(self.out / "seals.jsonl", "Run", json.dumps(line).encode())
                 self._sealed(line)
                 if self.mirror is not None:
                     self.mirror()
@@ -754,7 +753,7 @@ class CommitWindows:
     def _check_finished(self, finished: Sequence[LiveRequest]) -> None:
         """Each of ``finished`` checked against the record its window's readback completed, a line of requests.jsonl, and its
         engine id and ``user`` a line of `REQUEST_USERS`."""
-        with open(self.out / "requests.jsonl", "a") as fh, open(self.out / REQUEST_USERS, "a") as fu:
+        with open(self.out / "requests.jsonl", "ab") as fh, open(self.out / REQUEST_USERS, "ab") as fu:
             for led in finished:
                 eid = led.engine_id
                 rr = self.record.requests.get(eid)
@@ -766,8 +765,8 @@ class CommitWindows:
                 with self._lock:
                     self.checked.append({"http_id": led.http_id, "engine_id": led.engine_id, "passed": rec["check"]["passed"],
                                          "cache_hit": int(rec["check"].get("cache_hit") or 0)})
-                fh.write(json.dumps(rec) + "\n")
-                fu.write(json.dumps({"engine_id": rec["engine_id"], "user": rec["user"]}) + "\n")
+                fh.write(M.line("Request", json.dumps(rec).encode()))
+                fu.write(M.line("Request", json.dumps({"engine_id": rec["engine_id"], "user": rec["user"]}).encode()))
 
     def summary(self) -> dict[str, Any]:
         """The windows closed so far; ``closing`` those whose finalize, off the loop, has yet to run (their requests unchecked)."""

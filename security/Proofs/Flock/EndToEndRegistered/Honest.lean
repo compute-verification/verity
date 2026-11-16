@@ -28,7 +28,7 @@ import all Init.WF
 
 `Flock.SecurityProofs.EndToEndRegistered_honest` concludes, at one instance, each premise of
 `Flock.Guarantees.EndToEndRegistered` that no named assumption states, and
-`Flock.SecurityProofs.EndToEndRegisteredDrawn_honest` the same of `EndToEndRegisteredDrawn`, which takes the same four:
+`Flock.SecurityProofs.EndToEndRegisteredDrawn_honest` the same of `EndToEndRegisteredSampled`, which takes the same four:
 
 * `Built`: the one-row unit net `unitNet`, which `Net.ofRows` builds (a constant row and one output word);
 * `TagsOkZHJ`: `verify --zk`'s inputs at `verity/flock-circuit/tmpl`'s tags (`Flock.Tags.circuitTmpl`), the templated
@@ -95,7 +95,7 @@ section Link
 variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
-  {L : Law n} {decode : DecoderZK (C := C) planZ tab} {Dh : Type}
+  {L : SamplingDesign n} {decode : DecoderZK (C := C) planZ tab} {Dh : Type}
   {Hc : List UInt8 → Dh} (vb : ValueBindingZ A P planZ tab decode Hc)
   (R : Reg) (τ : Cont L Reg (batchedSessionZC A Hs planZ) R)
 
@@ -154,7 +154,7 @@ theorem _root_.Flock.SecurityProofs.EndToEndRegistered_honest :
     Built ZkReg.Witness.unitNet ∧ ZkHidden.TagsOkZHJ ZkReg.Witness.ins ∧
       (∀ {mPts : ℕ} {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
           (planZ : Finset (Fin n) → Reg → List (TabZK FlockLevel3.GF128 mPts))
-          (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length) {L : Law n}
+          (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length) {L : SamplingDesign n}
           {decode : DecoderZK (C := C) planZ tab} {Dh : Type} {Hc : List UInt8 → Dh}
           (vb : ValueBindingZ execArith P planZ tab decode Hc) (R : Reg)
           (τ : Cont L Reg (batchedSessionZC execArith ZkExec.hs512 planZ) R) (k Rw M : ℕ),
@@ -165,12 +165,12 @@ theorem _root_.Flock.SecurityProofs.EndToEndRegistered_honest :
         SessCRZ execArith ZkExec.hs512 T pre post cap₀ σ (2 ^ 257) (2 ^ 257) :=
   ⟨ZkReg.Witness.unitNet_built, ZkReg.Witness.ins_tagsOk, by intros; apply linkCRZC_top, by intros; apply sessCRZ_top⟩
 
-/-- **`EndToEndRegisteredDrawn`'s premises hold together**: they are `EndToEndRegistered`'s. -/
+/-- **`EndToEndRegisteredSampled`'s premises hold together**: they are `EndToEndRegistered`'s. -/
 theorem _root_.Flock.SecurityProofs.EndToEndRegisteredDrawn_honest :
     Built ZkReg.Witness.unitNet ∧ ZkHidden.TagsOkZHJ ZkReg.Witness.ins ∧
       (∀ {mPts : ℕ} {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
           (planZ : Finset (Fin n) → Reg → List (TabZK FlockLevel3.GF128 mPts))
-          (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length) {L : Law n}
+          (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length) {L : SamplingDesign n}
           {decode : DecoderZK (C := C) planZ tab} {Dh : Type} {Hc : List UInt8 → Dh}
           (vb : ValueBindingZ execArith P planZ tab decode Hc) (R : Reg)
           (τ : Cont L Reg (batchedSessionZC execArith ZkExec.hs512 planZ) R) (k Rw M : ℕ),

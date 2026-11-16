@@ -1,53 +1,41 @@
-"""network-e2e's steps after N2 and the proofs, toward the one command over varied traffic: the advice (I1 v0,
-`verity.protocols.accounting.certifier.verifier.advice`), its bits per link-window (v0's `bits_by_window` beside the derived rules'
-residual, `encodings/derived.py`), the prove path's audit of a committed run's step units compiled from that advice
-(`benchmarks/prove_path`), and the negatives (`benchmarks/network_traces/negatives.py`). Each stage's result says what
-it stood on; `stubs` lists what is still a stand-in.
+"""The network chain's steps after N2 and the proofs, over varied traffic: the advice (I1 v0,
+`verity.protocols.resource_accounting.network.verifier.advice`), its bits per execution phase (v0's `bits_by_window` beside the derived rules'
+residual, `encodings/derived.py`) and the prove path's audit of a committed run's step units compiled from that advice
+(`benchmarks/prove_path`). Each stage's result says what it stood on; `stubs` lists what is still a stand-in.
 
-* **The advice** (`advice`, ``--advice FILE``): I1's JSON (`to_json`), its `encode` bytes, or a prove-path run's stand-in
+* **The advice** (`advice`, a file): I1's JSON (`to_json`), its `encode` bytes, or a prove-path run's stand-in
   advice from before v0 fixed ``release`` and ``sources`` (its ``advice/advice.json``), upgraded as
   `advice_windows.advice_of_workload` now writes it: no sources, each kept output released in its step's bucket. It is
   bound to the runs only on the advice profile, by the honest run's certified I/O (``io.json``): every advice request is
   a certified request (its ``user``), once.
-* **Bits per link-window** (`bits`), T the honest run's egress window in buckets (`window_buckets`): v0's (I1's
-  `bits_by_window`) and, given the registered serving config (``--serving-config``: `derived.Config`'s fields, or a step
+* **Bits per execution phase** (`bits`), T the honest run's egress window in buckets: v0's (I1's
+  `bits_by_window`) and, given the registered serving config (`derived.Config`'s fields, or a step
   trace's ``config``) and the certified I/O the advice is bound to, whose tokens the residual reads (canonical sources,
   derived hits), the residual's (`derived.residual`), unshaped (release sent) and shaped (release derived), charged by
   I1's rule (`derived.charge`), with the forced fields' share. `derived.reconstruct` must give back every step of the
   advice and every output length from the residual, the config and the tokens, and `derived.rebuild` the whole advice
   (the tie's derivation, in the clear on the rehearsal's published witness).
-* **The endpoint's own advice** (`served_advice`, e2e's ``--endpoint-run``): `verity-vllm advice` over a `verity-vllm
+* **The endpoint's own advice** (`served_advice`, a served run's records): `verity-vllm advice` over a `verity-vllm
   serve-openai` endpoint's records (`ENDPOINT`), one window advice (`verity_vllm.pipeline.window_advice`) a closed
   Commit window, each registered (its hiding root, under the window's Commit) with its opening beside it. The honest
   run's windows are bound to it (each window opened to its registered root, every certified request admitted in
   exactly one window, a window that carries requests in joined to the window before it, `window_chain.join`) and each
   chain of windows rebuilt from its certified I/O under the config read off the endpoint's records
-  (`endpoint_config`), its bits placed in the run's link-windows.
-* **The prove path** (`prove_path`, ``--prove-path DIR|TGZ``): `prove_path.py audit`'s output adopted (`run.sh`'s ``$OUT``,
+  (`endpoint_config`), its bits placed in the run's execution phases.
+* **The prove path** (`prove_path`, a directory or a gzipped tar): `prove_path.py audit`'s output adopted (`run.sh`'s ``$OUT``,
   each arm a directory with its ``summary.json``): an honest arm passes when every rank's audit accepted on the verifier's
   coins and every negative was refused; a forged arm when the forged unit it sampled was stopped (`prove_path.forged_row`:
   the ZK server released no proof of it, or in a plain audit Lean refused the proof it read). The advice the arm
-  committed is held to ``--advice``'s: the stand-in's codec committed the file's bytes (its SHA-512), v0's commitment is
-  hiding, so there only its ``total_bits``. That holds it to the file, not to these runs: the prove path is bound to them
-  only when the file is their advice and the Commit it proves is theirs, and only a bound prove path counts in the OK.
+  committed is held to the given advice file's: the stand-in's codec committed the file's bytes (its SHA-512), v0's
+  commitment is hiding, so there only its ``total_bits``. That holds it to the file, not to these runs: the prove path
+  is bound to them only when the file is their advice and the Commit it proves is theirs, and only a bound prove path
+  counts in the OK.
   Beside the endpoint's own advice, an arm of ``prove_path.py audit --serve-run`` names the served run's Commit window
   it proves (`served_commit`); the prove path is bound to these runs when every arm's Commit is the endpoint's (its
   ``windows.jsonl``) and sealed while serving, every arm's committed advice is held by content to the report's advice
   of its window (`held_to`: its root registered under that Commit, its opening opening it to that advice, which the
   report's OK requires), and an honest arm's is one of the honest run's own Commit windows. When each was registered is
   read off the registration and the endpoint's trace (`closes`), never the job's.
-* **The negatives** (`negatives`): `negatives.suite` on the runs, handed the advice's v0 bytes for its advice negatives
-  and, given each request's sampled ids (``--ids``), the I/O tie's verdict on every negative it reads (`io_tie`'s
-  reference on a fake upstream's cells and Commit port of the advice and those ids, under the map the verifier computes
-  from the advice).
-* **The I/O tie on the runs** (`tie`, on the advice profile, where the negatives registry doesn't run):
-  `negatives.tie_run` on each run, `io_tie`'s reference in the clear on its stand-ins (each window's certified frames
-  held to their head, the sampled ids as the Commit's port), with each run's ids from the endpoint's records
-  (`served_ids`, the requests that arrived in its link-windows) or ``--ids``, which must give each run's certified
-  requests an id for each output they served (`uncovered`). Honest owes acceptance, and token, whose certified ids
-  aren't the endpoint's, a refusal by content at exactly the link-windows its changed ids fall in (`changed_windows`).
-  The tie is required on the advice profile (`tie_gate`): the report isn't OK when it didn't run, gave the honest run no
-  verdict or didn't accept it, or when a part it must establish there (`TIE_REQUIRED`) didn't hold.
 """
 from __future__ import annotations
 
@@ -55,20 +43,14 @@ import hashlib
 import importlib.util
 import json
 import math
-import struct
 import sys
-from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[1] / "benchmarks" / "network_traces"))
 
-import active_replay as ar  # noqa: E402
-import negatives as NG  # noqa: E402
-import window_chain as WC  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import advice as I1  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.active import compact_record_data  # noqa: E402
+from verity.protocols.resource_accounting.network.prover import window_chain as WC  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier import advice as I1  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
 from verity.commitments import advice as AC  # noqa: E402
 from verity_vllm.pipeline import window_advice as WA  # noqa: E402
@@ -83,7 +65,7 @@ def _derived():
 
 
 D = _derived()
-ADVICE = "advice"  # certifier_serve's varied plan's N2 profile: its egress counts, from the advice, no N2 unit holds
+ADVICE = "advice"  # the varied plan's N2 profile: its egress counts, from the advice, no N2 unit holds
 
 
 def _sha512(data: bytes) -> str:
@@ -115,11 +97,6 @@ def advice(path: Path):
     return adv, {"file": str(path), "form": form, "file_sha512": _sha512(data), "v0_sha512": _sha512(I1.encode(adv)),
                  "bits": I1.total_bits(adv), "requests": len(adv.requests), "steps": len(adv.steps),
                  "outputs": len(adv.release)}
-
-
-def window_buckets(run: Path) -> int:
-    """T, the buckets of the run's egress window, from its calibration report as certifier-serve reads it."""
-    return ar.Setup(json.loads((run / "calibration.json").read_text())).egress_params.buckets
 
 
 def holdings(adv, io: list[dict]):
@@ -240,7 +217,7 @@ def _first_steps(recs: list[dict]) -> dict[int, float]:
 def served_advice(ep: Path, adv_dir: Path, deployment: dict, io: list[dict], T: int, eos: list[int]) -> tuple[dict, dict]:
     """The endpoint's own advice for the honest run, as `advice` and `bits` report one: ``adv_dir`` is `verity-vllm
     advice`'s over the endpoint's records ``ep`` (`ENDPOINT`), one window advice (`window_advice`) a closed Commit
-    window. The run's windows are those whose first step falls in its link-windows (``deployment``'s origin and span,
+    window. The run's windows are those whose first step falls in its execution phases (``deployment``'s origin and span,
     `SLACK_S`). A window that carries requests in joins the window before it into a chain (``chain``), joined into one
     I1 v0 advice (`window_chain.join`): its carried requests and their state are the earlier window's, as that window's
     registered advice closed them, never its own string's, so each request and step is charged once. The advice is
@@ -250,7 +227,7 @@ def served_advice(ep: Path, adv_dir: Path, deployment: dict, io: list[dict], T: 
     the run holds, and no window is left owing a carry. Each chain's advice is rebuilt from its certified I/O under the
     config read off the endpoint (`endpoint_config`) by `bits`, charged per bucket (T 1) and placed at its first
     window's first step's bucket, each later window's release counted from its own first step's, so its bits land in
-    the link-windows of T buckets I1's rule puts them in, its release at its own width; a chain's bits are on its first
+    the execution phases of T buckets I1's rule puts them in, its release at its own width; a chain's bits are on its first
     window's row."""
     recs = _jsonl(ep / "advice_trace.jsonl")
     serve = json.loads((ep / "serve.json").read_text())
@@ -319,7 +296,7 @@ def served_advice(ep: Path, adv_dir: Path, deployment: dict, io: list[dict], T: 
             return last[rid]
 
         try:
-            adv = WC.join([(w, a) for w, a, _ in chained], released)
+            adv = WC.join([(w, a) for w, a, _ in chained], released, WA)
         except I1.MalformedAdvice as err:
             problems.append(str(err))
             for w, a, row in chained:
@@ -335,7 +312,7 @@ def served_advice(ep: Path, adv_dir: Path, deployment: dict, io: list[dict], T: 
                               else None for k in COUNTS})
     missing, twice = [u for u, n in seen.items() if n == 0], [u for u, n in seen.items() if n > 1]
     if not rows:
-        problems.append("no Commit window of the endpoint's opened in the run's link-windows")
+        problems.append("no Commit window of the endpoint's opened in the run's execution phases")
     if missing:
         problems.append(f"{len(missing)} certified requests are in none of the run's Commit windows ({', '.join(missing[:3])})")
     if twice:
@@ -500,7 +477,7 @@ def served_commit(s: dict, bits: dict, commits: dict[int, dict], registered: dic
     report's advice directory ``adv_dir``, each window's close ``closed``), whether registered by the report's own run
     or apart. ``registered`` is, by window, who registered its advice (``by``, ``ref``), the registration's directory
     when it isn't the report's (``registration``), the serving run's own record (``record``, its run directory,
-    `serve_record`) and the arm's first sample (``first_draw``), as the job states them (``--prove-path-registered``);
+    `serve_record`) and the arm's first sample (``first_draw``), as the job states them;
     whether it was at serve time is never the job's to say: its sample followed the registration when every rank's
     `advice_before_draw` (the verifier's receipt of it before any coin) says so. A window with no next close in the
     endpoint's records is bounded by the session's end only when the record says the session ended with this window
@@ -537,7 +514,7 @@ def served_commit(s: dict, bits: dict, commits: dict[int, dict], registered: dic
 def prove_path(src: Path | list[Path], info: dict | None, advice_bound: bool | None = None, bits: dict | None = None,
                ep: Path | None = None, registered: dict | None = None) -> dict:
     """`prove_path.py audit`'s output at ``src`` (one directory or several), one row per arm and rank (the module's
-    docstring). Each arm's committed advice is held to the ``--advice`` file (``info``), which says nothing of these
+    docstring). Each arm's committed advice is held to the given advice file (``info``), which says nothing of these
     runs: the prove path is ``bound`` to them only when that file is these runs' advice (``advice_bound``, `bits`'
     ``bound``) and the Commit it proves is theirs, which nothing here checks (no Commit record of these runs is an
     input), so it is never bound and its ``ok`` stays out of the report's. Beside the endpoint's own advice
@@ -616,186 +593,11 @@ def prove_path(src: Path | list[Path], info: dict | None, advice_bound: bool | N
             and False not in given}
 
 
-# --- the negatives ----------------------------------------------------------------------------------------------------
-
-def negatives(runs: dict[str, Path], work: Path, adv, clock, ids: Path | None = None) -> dict:
-    """`negatives.suite` on ``runs`` (by strategy), its advice negatives made from ``adv``'s v0 bytes, and with ``ids``
-    (each request's sampled ids, `negatives.read_ids`) the I/O tie's verdict on the negatives it reads. ``ok`` unless a
-    row that ran says otherwise: a pending check's row (``ok`` None) or one that didn't run is the report's to list, not
-    a failure."""
-    path = None
-    if adv is not None:
-        work.mkdir(parents=True, exist_ok=True)
-        path = work / "advice.bin"
-        path.write_bytes(I1.encode(adv))
-    rows = NG.suite(runs, work / "negatives", advice=path, ids=ids, clock=clock)
-    return {"ran": True, "format": NG.FORMAT, "rows": rows,
-            "ok": all(r.get("ok") is not False for r in rows.values() if r.get("ran"))}
-
-
-# --- the I/O tie on the runs ------------------------------------------------------------------------------------------
-
-#: the live tampers only the I/O tie refuses, each owed a refusal by content at exactly the link-windows it changed
-TIE_OWED = ("token",)
-#: what the I/O tie must establish on the honest run beside its acceptance, for the report to be OK (`tie_gate`): each a
-#: key of `negatives.tie_run`'s row that must be true, with the report's reason when it isn't. The compact
-#: finish (each response's length and finish held to the advice, `active.compact_finish_violations`) goes here if the tie reports it as a key of its own; as a failing part it already refuses the honest run.
-TIE_REQUIRED: dict[str, str] = {
-    "finish": "the I/O tie didn't establish the honest run's finish (`negatives.tie_run`'s finish: on a compact run "
-              "its records held to its sampled ids, `active.compact_finish_violations`)"}
-
-
 def _read_json(path: Path):
     try:
         return json.loads(path.read_text())
     except (OSError, ValueError):
         return None
-
-
-def served_rows(ep: Path, deployment: dict) -> dict[str, dict]:
-    """Each ``requests.jsonl`` row by its ``user``, of the requests that reached the endpoint in a run's link-windows
-    (``deployment``'s origin and span, `SLACK_S`): its scheduler trace's ``arrive`` records by engine id, and the rows
-    by the same. Every strategy of a rehearsal sends the same users, so a run's rows are the ones that arrived in its
-    own span; a user arriving twice in it is refused."""
-    origin, span = deployment["origin_unix"], deployment["windows"] * deployment["window_s"]
-    arrived = {r["request"] for r in _jsonl(ep / "advice_trace.jsonl")
-               if r["kind"] == "arrive" and origin - SLACK_S <= r["t"] < origin + span}
-    out: dict[str, dict] = {}
-    for r in _jsonl(ep / "requests.jsonl"):
-        if r["engine_id"] in arrived and r.get("user"):
-            if r["user"] in out:
-                raise ValueError(f"{r['user']} reached the endpoint twice in the run's link-windows")
-            out[r["user"]] = r
-    return out
-
-
-def served_ids(ep: Path, deployment: dict) -> dict[str, list[int]]:
-    """Each request's sampled ids (``streamed_ids``) by its ``user``, of a run's `served_rows`."""
-    return {u: list(r["streamed_ids"]) for u, r in served_rows(ep, deployment).items()}
-
-
-def _output_stream(slot: bytes, compact: bool) -> int | None:
-    """The stream (request ordinal) of a certified egress frame that `negatives.tie_run` places as its stream's next
-    output: on a compact plan every frame, each a compact record (`active.compact_record_data`), else each id event;
-    None for another frame of a plan of id events. Raises ValueError for a frame neither reads: a compact plan's frame
-    that isn't a record, or one `decode_frame` can't parse."""
-    if compact:
-        got = compact_record_data(slot)
-        if got is None:
-            raise ValueError(f"a compact plan's egress frame that isn't a compact record ({slot[:16].hex()})")
-        return got[0]
-    try:
-        return NG.id_event_data(NG.decode_frame(slot)[2])[0] if NG._is_id_event(slot) else None
-    except struct.error as err:
-        raise ValueError(f"an egress frame that doesn't decode ({err}): {slot[:16].hex()}") from err
-
-
-def changed_windows(run: Path) -> list[int] | None:
-    """The link-windows a token run's changed ids fall in: each output its shim logged as changed (``server.json``'s
-    ``tampered``, (session, index)), placed as `negatives.tie_run` places the certified egress's id events, or on a
-    compact plan its compact records (`_output_stream`), each its stream's next output and the stream's user the
-    certified I/O's. None when the shim logged none. Raises ValueError for an egress frame it can't place."""
-    changed = (_read_json(run / "server.json") or {}).get("tampered")
-    if not changed:
-        return None
-    plan, report = (json.loads((run / f).read_text()) for f in ("plan.json", "calibration.json"))
-    setup = ar.Setup(report)
-    e, i = setup.egress_params, setup.ingress_params
-    ins = [ar.unpack_record(b, i.frame_bytes) for b in ar.read_blobs(run / "requests.records")]
-    outs = [ar.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(run / "responses.records")]
-    users = {r["stream"]: r["user"] for r in NG.cs.certified_io(plan, setup, ins, outs)["records"]}
-    compact, at, nxt = bool(plan.get("compact")), {}, defaultdict(int)
-    for rec in sorted(outs, key=lambda r: r.window):
-        for q in (_output_stream(s, compact) for row in rec.grid for s in row if s is not None):
-            if q is not None:
-                at[users.get(q), nxt[q]] = rec.window
-                nxt[q] += 1
-    return sorted({at[u, k] for u, k in changed if (u, k) in at})
-
-
-def uncovered(run: Path, ids: dict[str, list[int]]) -> str | None:
-    """Why ``ids`` don't cover the run's certified requests (its ``io.json``, which the rehearsal's check writes on the
-    advice profile: each request's user and served ``output``), or None when every one has a sampled id for each of
-    its served outputs. `negatives.tie_run` gives each sampled id one row of the Commit's port and has no backstop for
-    a served output with none (its unplaced count is committed outputs no cell carries), so ids that miss a request,
-    or name it with fewer ids than it served, leave those outputs untied."""
-    io = _read_json(run / "io.json")
-    if not isinstance(io, dict) or not isinstance(io.get("requests"), list):
-        return "no certified I/O (io.json) to hold the sampled ids to"
-    reqs = io["requests"]
-    if not reqs:
-        return "no certified request in its io.json to tie"
-    if not all(isinstance(r, dict) and isinstance(r.get("output"), list) for r in reqs):
-        return "a certified request in its io.json without its served outputs to hold the sampled ids to"
-    missing = sum(r.get("user") not in ids for r in reqs)
-    short = [(len(ids[r["user"]]), len(r["output"])) for r in reqs
-             if r.get("user") in ids and len(ids[r["user"]]) < len(r["output"])]
-    why = [f"no sampled ids for {missing}"] * bool(missing) + \
-        [f"fewer sampled ids than served outputs for {len(short)}"] * bool(short)
-    return None if not why else f"{' and '.join(why)} of its {len(reqs)} certified requests" + (
-        f" ({sum(n for n, _ in short)} sampled, {sum(m for _, m in short)} served)" if short else "")
-
-
-def tie(runs: dict[str, Path], ep: Path | None, ids: Path | None, why: str | None = None) -> dict:
-    """The I/O tie's verdict on each run (`negatives.tie_run`: `io_tie`'s reference in the clear, on
-    `negatives.TIE_STAND_INS`), each run's sampled ids and client aborts ``ids``' (`negatives.read_ids` and
-    `negatives.read_aborted`, one map for every run) or else the endpoint's records' ``ep`` for its own link-windows
-    (`served_rows`, `negatives.commit_aborted`), and whether it is the verdict the run owes
-    (`negatives.tie_ok`): honest's accepted, a negative's it reads refused by its part, and token's (`TIE_OWED`) at
-    exactly the link-windows its changed ids fall in (`changed_windows`). A run has no verdict when its ids don't cover
-    its certified requests (`uncovered`), when it lacks what the tie opens, or when its tie raises; the row says why.
-    Not run without `io_tie` in the tree or without the ids (``why``: why the endpoint's records aren't here). On the
-    advice profile the tie is required: `tie_gate` says what keeps it from passing the report."""
-    if NG.io_tie_module() is None:
-        return {"ran": False, "why": NG.TIE_MISSING["io-tie"]}
-    if ids is None and ep is None:
-        return {"ran": False, "why": f"no sampled ids ({why or 'neither --endpoint-run nor --ids given'})"}
-    given, rows = None if ids is None else (NG.read_ids(ids), NG.read_aborted(ids)), {}
-    for name, d in runs.items():
-        row = {"verdict": NG.NOT_APPLICABLE, "ok": None, "codes": [], "failing": {}, "windows": [], "unplaced": None,
-               "changed": None, "requests": None, "outputs": None, "placed": None, "held": None, "missing": {},
-               "why": None}
-        try:
-            if given is not None:
-                got, gone = given
-            else:
-                served = served_rows(ep, json.loads((d / "deployment.json").read_text()))
-                got = {u: list(r["streamed_ids"]) for u, r in served.items()}
-                gone = {u for u, r in served.items() if NG.commit_aborted(r)}
-            lacking = uncovered(d, got)
-            if lacking:
-                rows[name] = row | {"requests": len(got), "why": lacking}
-                continue
-            t = NG.tie_run(d, got, aborted=gone)
-            changed = changed_windows(d) if name in TIE_OWED else None
-        except (OSError, KeyError, ValueError, struct.error) as err:
-            rows[name] = row | {"why": repr(err)}
-            continue
-        ok = NG.tie_ok(name, t)
-        if name in TIE_OWED and ok:
-            ok = changed is not None and sorted(t["failing"]) == changed
-        rows[name] = row | {k: t.get(k) for k in ("verdict", "codes", "failing", "unplaced", "held", "missing",
-                                                  "outputs", "placed", *TIE_REQUIRED)} | {
-            "ok": ok, "windows": sorted(w for w in t["failing"] if w >= 0), "changed": changed, "requests": len(got),
-            "why": "; ".join(t["missing"].values()) or None}
-    return {"ran": True, "why": None,
-            "from": "the endpoint's records (each run's requests by their arrival in its link-windows)" if given is None
-            else str(ids), "stand_ins": NG.TIE_STAND_INS, "runs": rows}
-
-
-def tie_gate(t: dict | None) -> list[str]:
-    """Why the I/O tie (`tie`'s result ``t``) keeps the report from being OK on the advice profile, where it is required;
-    empty when it passes. It fails when it didn't run (no `io_tie` in the tree, no sampled ids), gave the honest run no
-    verdict, didn't accept it, or when a part it must establish beside its verdict (`TIE_REQUIRED`) didn't hold on it.
-    The report reads the tie's pass here only: a required part the tie gains fails the report through this."""
-    if not t or not t.get("ran"):
-        return [f"the I/O tie didn't run, and the advice profile requires it: {(t or {}).get('why') or 'no tie stage'}"]
-    honest = t["runs"].get("honest")
-    if honest is None or honest["verdict"] not in ("accepted", "refused"):
-        return [f"the I/O tie gave no verdict on the honest run: {(honest or {}).get('why') or 'no honest run'}"]
-    if honest["ok"] is not True:
-        return ["the I/O tie didn't accept the honest run"]
-    return [why for k, why in TIE_REQUIRED.items() if honest.get(k) is not True]
 
 
 # --- what's still a stand-in ------------------------------------------------------------------------------------------
@@ -804,10 +606,9 @@ def stubs(r: dict, varied_client: bool) -> list[str]:
     """What the report stood on that isn't yet the chain's own, from what ``r`` (the report) says ran."""
     out, c = [], r.get("chain") or {}
     if not varied_client:
-        out.append("Varied traffic: certifier_serve.py's `rehearse --traffic varied` (Poisson arrivals, "
-                   "prompts as ids, real EOS) isn't in this tree.")
+        out.append("Varied traffic: no varied plan (Poisson arrivals, prompts as ids, real EOS) ran.")
     if r.get("profile") == ADVICE:
-        out.append("N2 on the advice profile: no N2 unit holds its egress counts, so no link-window has N2's verdict "
+        out.append("N2 on the advice profile: no N2 unit holds its egress counts, so no execution phase has N2's verdict "
                    "and nothing is proved by n2_zk; the rehearsal's own check (certified I/O, audit, salt) is the "
                    "verdict.")
     a, b = c.get("advice"), c.get("bits") or {}
@@ -870,20 +671,20 @@ def stubs(r: dict, varied_client: bool) -> list[str]:
             out.append(f"I/O tie: {next(t['why'] for t in ties if not t['ran'])}.")
         else:
             out.append("I/O tie: `io_tie`'s reference in the clear on a fake upstream's cells and Commit port of the "
-                       "advice and the given ids, not the warden's cells under its root and the endpoint's Commit "
+                       "advice and the given ids, not the network certifier's cells under its root and the endpoint's Commit "
                        "proved in an IoTieWindow unit.")
     t = c.get("tie")
     if t is not None and t["ran"]:
         out.append("I/O tie: `io_tie`'s reference in the clear on the negatives' stand-ins (each window's certified "
-                   "frames held to their head and committed under fake salts in place of the warden's cells, the "
+                   "frames held to their head and committed under fake salts in place of the network certifier's cells, the "
                    f"sampled ids from {t['from']} under fake salts in place of the Commit's port), not the endpoint's "
-                   "Commit and the warden's cells in an IoTieWindow unit.")
+                   "Commit and the network certifier's cells in an IoTieWindow unit.")
     where = str(r.get("where") or "")
     if where.startswith("off the developer's node"):
-        out.append("Auditor host: the certifier ran on another node than the endpoint's, through an ssh forward, not on "
-                   "the auditor host (--from takes a gate run's fetch).")
+        out.append("Auditor device: the certifier ran on another node than the endpoint's, through an ssh forward, not on "
+                   "the auditor device (--from takes a gate run's fetch).")
     elif not where.startswith("gate: "):
-        out.append("Auditor host: the certifier ran off the gate (--from takes a gate run's fetch).")
+        out.append("Auditor device: the certifier ran off the gate (--from takes a gate run's fetch).")
     return out
 
 
@@ -918,22 +719,22 @@ def _registered(g: dict | None) -> str:
     margin, bound = (nxt, "the next window closed") if nxt is not None else \
         (end, "its session ended, with no window after it") if end is not None else (None, None)
     if g.get("at_serve_time"):
-        return (f"by {by} at serve time{ref}, {lag}, before its draw and {'at least ' if a else ''}{margin} s before "
+        return (f"by {by} at serve time{ref}, {lag}, before its sample and {'at least ' if a else ''}{margin} s before "
                 f"{bound}{stamped}")
     if g.get("at_serve_time") is None:
         unknown = ([] if margin is not None else ["the next window's close isn't in the endpoint's records"]) \
-            + ([] if g.get("before_draw") is not None else ["no draw receipt orders it against its draw"]) \
+            + ([] if g.get("before_draw") is not None else ["no sample receipt orders it against its sample"]) \
             + ([f"its run record's stamp, {a['stamp']} to the second, puts it up to {abs(margin)} s after {bound}, "
                 f"though its file's time, {g['file_at']}, is before"] if a and a.get("within") is False else [])
         when = f", no later than {g['at']} ({_lag(g.get('after_close_s'))})" if a else f" at {g['at']}, {lag}"
         return f"by {by}{ref}{when}; whether at serve time is unknown: {' and '.join(unknown)}"
     lead = None if not g.get("first_draw") else round(
         (datetime.fromisoformat(g["first_draw"]) - datetime.fromisoformat(g["at"])).total_seconds(), 1)
-    late = ([] if g.get("before_draw") is not False else ["after its draw"]) \
+    late = ([] if g.get("before_draw") is not False else ["after its sample"]) \
         + ([f"{abs(margin)} s after {bound}"]
            if margin is not None and (margin < 0 or g.get("before_draw") is not False) else [])
     return (f"after serving, by {by}{ref}, {lag}, {' and '.join(late)}{stamped}"
-            + (f", {lead} s before the first draw" if lead is not None and lead >= 0 else ""))
+            + (f", {lead} s before the first sample" if lead is not None and lead >= 0 else ""))
 
 
 def markdown(c: dict) -> list[str]:
@@ -944,7 +745,7 @@ def markdown(c: dict) -> list[str]:
     if served:
         lines += ["", "## Advice", "",
                   (f"The endpoint's own ({b['served']}): `verity-vllm advice` over its records, one window advice a "
-                   f"closed Commit window, at {a['file']}. The run's Commit windows (those opening in its link-windows): "
+                   f"closed Commit window, at {a['file']}. The run's Commit windows (those opening in its execution phases): "
                    f"{a['windows']}, with {a['requests']} requests, {a['steps']} steps, {a['outputs']} kept outputs, "
                    f"{a['bits']} bits in v0." if a else "The endpoint's own: none.")
                   + f" Bound to these runs: {_cell(b['bound'])} ({b['bound_why'] or 'every window opened to its registered root under its Commit, every advice request a certified one, each admitted in one window'})."
@@ -953,7 +754,7 @@ def markdown(c: dict) -> list[str]:
                      + ", ".join("–".join(map(str, c)) for c in b["chains"]) + "): each chain's v0 and derived bits "
                      "are on its first window's row, the committed bits each window's own string's."
                      if b.get("chains") else ""),
-                  "", "| Commit window | Commit run id | opens at s | link-window | requests admitted | carried in | "
+                  "", "| Commit window | Commit run id | opens at s | execution phase | requests admitted | carried in | "
                   "steps | committed bits | v0 bits | derived bits | derived, shaped | forced | opened | bound | rebuilt |",
                   "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
         lines += [f"| {x['window']} | refused: {x['refused']} |" + " — |" * 13 if "refused" in x else
@@ -969,7 +770,7 @@ def markdown(c: dict) -> list[str]:
                   f"{a['v0_sha512'][:16]}…. Bound to these runs: {_cell(b['bound'])} ({b['bound_why'] or 'by the certified I/O'})."]
     if b is not None:
         cfg = b["config"]
-        lines += ["", "## Advice bits per link-window", "",
+        lines += ["", "## Advice bits per execution phase", "",
                   f"T = {b['T']} buckets a window. v0: I1's `bits_by_window` ({b['v0_total']} bits in all). Derived: "
                   "the derived rules' residual at its least widths, charged by I1's rule, with the release sent "
                   "(unshaped) and derived (shaped); forced: the residual's fields only witness fixes. "
@@ -996,7 +797,7 @@ def markdown(c: dict) -> list[str]:
             lines += ["", "## Prove path", "",
                       f"`prove_path.py audit --serve-run`'s output adopted from {p['dir']}: each arm a Commit window of "
                       f"the endpoint's served run ({b['served']}), its step units compiled from that window's advice by "
-                      "the registered compiler, drawn on the auditor's challenger's coins, proved --zk behind the Lean firewall "
+                      "the registered compiler, sampled on the auditor's challenger's coins, proved --zk behind the Lean ZK server "
                       f"and verified by Lean. Bound to these runs: {_cell(p['bound'])}"
                       + (" (every arm's Commit the endpoint's, its run root the one sealed while serving, its advice "
                          "root registered under that Commit and opened to the report's advice of its window, and an "
@@ -1016,14 +817,14 @@ def markdown(c: dict) -> list[str]:
         else:
             lines += ["", "## Prove path" + (" (from the fixed workload, not this run)" if served else ""), "",
                       f"`prove_path.py audit`'s output adopted from {p['dir']}: each rank's step units compiled from the "
-                      "advice by the registered compiler, drawn on the auditor's challenger's coins, proved --zk behind the Lean "
-                      "firewall and verified by Lean. The advice each arm committed is the --advice file: "
+                      "advice by the registered compiler, sampled on the auditor's challenger's coins, proved --zk behind the Lean "
+                      "ZK server and verified by Lean. The advice each arm committed is the --advice file: "
                       f"{_cell(p['committed_is_the_advice_file'])}. Bound to these runs: {_cell(p['bound'])}"
                       + ("" if p["bound"] else f" ({p['bound_why']}), so its ok is not the report's")
                       + "".join(f"; {n} held by {a['advice_held_by']}" for n, a in p["arms"].items()
                                 if a.get("advice_held_by")) + "." + gaps]
-        lines += ["", "| arm | ok | rank | audit accepted | units | drawn | wrong units at most | negatives refused | "
-                  "forged unit refused | s | prove s a drawn unit | Lean verify s a drawn unit | proof bytes | source |",
+        lines += ["", "| arm | ok | rank | audit accepted | units | sampled | incorrect proof blocks at most | negatives refused | "
+                  "forged unit refused | s | prove s a sampled proof block | Lean verify s a sampled proof block | proof bytes | source |",
                   "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
 
         def each(x, k):
@@ -1057,9 +858,9 @@ def markdown(c: dict) -> list[str]:
             lines += ["`negatives.tie_run` on each run: `io_tie`'s reference in the clear, the sampled ids from "
                       f"{t['from']}. Required on the advice profile: the report is OK only when the tie accepts the "
                       "honest run, its ids covering every certified request. Owed: honest accepted, token refused by "
-                      "content at exactly the link-windows its changed ids fall in, drop refused by content; late and "
+                      "content at exactly the execution phases its changed ids fall in, drop refused by content; late and "
                       "extra owe nothing here. Window -1: committed outputs no certified cell carries.", "",
-                      "| run | verdict | ok | codes | refused link-windows (parts) | changed ids' link-windows | requests "
+                      "| run | verdict | ok | codes | refused execution phases (parts) | changed ids' execution phases | requests "
                       "| outputs | placed | unplaced | frames held egress/ingress | why |",
                       "|---|---|---|---|---|---|---|---|---|---|---|---|"]
             for name, x in t["runs"].items():

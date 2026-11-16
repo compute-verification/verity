@@ -207,12 +207,12 @@ theorem stratifiedWith_take (src : ByteArray) (strata : Array Flock.Draw.Stratum
     obtain ⟨h1, _⟩ := Prod.mk.inj (Except.ok.inj h)
     have hD : D = out'.qsort (fun x1 x2 => decide (x1 < x2)) := (Option.some.inj h1).symm
     refine seqMiss_mono (fun i => strata[i]!) _ _ _ (fun i _ Dl hDl x hx => ?_) _ _ hseq
-    rw [hD, DrawExec.mem_qsort]; exact hDl x hx
+    rw [hD, SampleExec.mem_qsort]; exact hDl x hx
 
 /-- The stages a sampling design's sample over `[0, n)` runs (`Flock.Draw.drawWith`), stage `i` missing as `miss i` says: one for
 `subset` and `bernoulli`, one per stratum for `stratified` and `work`. -/
-def lawStages (law : Flock.Draw.Law) (n : ℕ) (miss : ℕ → Array ℕ → Prop) : List Stage :=
-  match law with
+def samplingDesignStages (samplingDesign : Flock.Draw.SamplingDesign) (n : ℕ) (miss : ℕ → Array ℕ → Prop) : List Stage :=
+  match samplingDesign with
   | .subset k => [⟨2 * k * Flock.Draw.width n + 64, Flock.Draw.subset k n, miss 0⟩]
   | .bernoulli a b => [⟨2 * n * Flock.Draw.width b + 64, Flock.Draw.bernoulli a b n, miss 0⟩]
   | .stratified _ strata => (List.range' 0 strata.size).map fun i => stage strata[i]! (miss i)
@@ -220,19 +220,19 @@ def lawStages (law : Flock.Draw.Law) (n : ℕ) (miss : ℕ → Array ℕ → Pro
     (List.range' 0 (strata.map (·.toStratum)).size).map fun i => stage (strata.map (·.toStratum))[i]! (miss i)
 
 /-- The unit stage `i`'s local index `x` is. -/
-def unitOf (law : Flock.Draw.Law) (i x : ℕ) : ℕ :=
-  match law with
+def unitOf (samplingDesign : Flock.Draw.SamplingDesign) (i x : ℕ) : ℕ :=
+  match samplingDesign with
   | .stratified _ strata => strata[i]!.unit x
   | .work _ strata => (strata.map Flock.Draw.WorkStratum.toStratum)[i]!.unit x
   | _ => x
 
-/-- **`drawUnits` as stages**: a sample from `src` that ends runs `law`'s stages in turn from its first byte, every unit
+/-- **`sampleUnits` as stages**: a sample from `src` that ends runs `samplingDesign`'s stages in turn from its first byte, every unit
 each stage samples among the units it returns. -/
-theorem drawUnits_seq (law : Flock.Draw.Law) (n : ℕ) (src : ByteArray) (units : Array ℕ) (read : ℕ)
-    (h : Draw.drawUnits law n src = .ok (units, read)) :
-    SeqMiss (lawStages law n fun i Dl => ∀ x ∈ Dl, unitOf law i x ∈ units) src 0 := by
-  unfold Draw.drawUnits at h
-  cases hw : (Flock.Draw.drawWith (fun _ need => Draw.take src need) law n).run 0 with
+theorem sampleUnits_seq (samplingDesign : Flock.Draw.SamplingDesign) (n : ℕ) (src : ByteArray) (units : Array ℕ) (read : ℕ)
+    (h : Draw.sampleUnits samplingDesign n src = .ok (units, read)) :
+    SeqMiss (samplingDesignStages samplingDesign n fun i Dl => ∀ x ∈ Dl, unitOf samplingDesign i x ∈ units) src 0 := by
+  unfold Draw.sampleUnits at h
+  cases hw : (Flock.Draw.drawWith (fun _ need => Draw.take src need) samplingDesign n).run 0 with
   | error e => rw [hw] at h; exact absurd h (by rw [bind_error]; simp)
   | ok x =>
     obtain ⟨r, read'⟩ := x
@@ -244,7 +244,7 @@ theorem drawUnits_seq (law : Flock.Draw.Law) (n : ℕ) (src : ByteArray) (units 
     dsimp only at h
     obtain ⟨hu, -⟩ := Prod.mk.inj (Except.ok.inj h)
     subst hu
-    cases law with
+    cases samplingDesign with
     | subset k =>
       unfold Flock.Draw.drawWith at hw
       dsimp only at hw

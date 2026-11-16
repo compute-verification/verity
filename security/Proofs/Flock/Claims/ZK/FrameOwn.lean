@@ -1,6 +1,6 @@
 module
 
-public import Flock.Firewall.Frame
+public import Flock.ZkServer.Frame
 public import Mathlib.Data.Nat.Notation
 public import Mathlib.Tactic.ToAdditive
 public import Mathlib.Tactic.ToDual
@@ -41,9 +41,9 @@ namespace Claims.ZKServer
 
 open _root_.Flock (V F128)
 open _root_.Flock.Transcript (header)
-open _root_.Flock.Firewall.Frame (Cfg Masker labelFrame wordBytes innerOwn)
+open _root_.Flock.ZkServer.Frame (Cfg Masker labelFrame wordBytes innerOwn)
 
-export _root_.Flock.Firewall.Frame (ownRound)
+export _root_.Flock.ZkServer.Frame (ownRound)
 
 theorem byteArray_beq_self (a : ByteArray) : (a == a) = true := by
   show (a.data == a.data) = true

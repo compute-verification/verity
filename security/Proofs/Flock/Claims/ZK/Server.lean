@@ -22,7 +22,7 @@ values of four kinds (`Kind`), on a public schedule (`ZkServer.sched`):
 A round in which any check fails, a worker misses its time (`none`), or the server refuses from the witness and its
 tape alone (`ZkServer.refuses`, `false` unless a server says otherwise), releases the stop (`ZkServer.stop`), and so does
 every later round (`ZkServer.live`). The worker is any function of the statement, the witness, the server's tape and
-the history (`ZkServer.Worker`); it never sees the check coins. The inner phase's firewall, `Flock.Firewall.run`, is the
+the history (`ZkServer.Worker`); it never sees the check coins. The inner phase's ZK server, `Flock.ZkServer.run`, is the
 same shape: by `run_resalt` its stop never depends on its salts, and by `run_of_one` what it sends is a fixed template
 filled with the commit strings of fixed digests under its own salts, kinds `fixed` and `recomputed` over `own`.
 

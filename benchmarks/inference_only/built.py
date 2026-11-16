@@ -22,6 +22,7 @@ import itertools
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -33,6 +34,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.device import load_card
 
 import policy as P
 
@@ -41,11 +43,12 @@ sys.path.append(str(P.ROOT / "benchmarks" / "one_stage"))
 
 #: the pinned exact-int8 checkpoint of Llama 3.2 1B
 MODEL = "verity-int8/Llama-3.2-1B-INT8"
-#: the card the class is registered for, serving an exact-int8 checkpoint's linears int8
-H200 = {"compute_capability": (9, 0), "num_sms": 132, "int8_exact": "linears"}
+#: the card the class is registered for, serving an exact-int8 checkpoint's linears int8; its SMs are the card's
+H200 = {"compute_capability": (9, 0), "num_sms": load_card("h200-sxm-141gb")["sm"]["count"]["value"],
+        "int8_exact": "linears"}
 DIVISIONS = ("session", "position", "proof block")
 #: the inference-only policy's check, a Lake package
-PACKAGE = P.ROOT / "verity/protocols/policy/inference_only/verifier/nci/lean"
+PACKAGE = P.ROOT / "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean"
 
 
 def _declared() -> tuple[tuple[str, ...], str]:
@@ -111,9 +114,9 @@ def block_work(cls: tuple[int, int, int], model: str) -> dict[str, int]:
 def policy(doc: Mapping[str, Any], pins: Mapping[str, str]) -> dict[str, Any]:
     """The session policy of the record ``doc`` under θ = ``pins``: its block Definition and slots, `c` and `k`, the
     gate table and each template's gates a unit."""
+    from verity.circuits.ops.boolean.versions import gate_table
+    # block_counts registers the vLLM adapter's catalog with the Boolean-versions lookup as it loads
     from verity_vllm.program.predict import block_counts as BC
-
-    from verity.definitions.boolean import gate_table
 
     fn, m, steps = BC.session(doc)
     table, unpriced = gate_table([fn])
@@ -136,7 +139,7 @@ def divisions(doc: Mapping[str, Any], pins: Mapping[str, str], gates: Mapping[st
     the largest block's fresh bits, and what that block's fresh bits are."""
     from verity_vllm.program.predict import block_counts as BC
 
-    from verity.commitments.windows import interface as IF
+    from verity.commitments.periods import interface as IF
 
     units = {t: int(n) for t, n in doc["templates"]}
     lays = {t: IF.layout(BC.resolve(t)) for t in units}
@@ -224,35 +227,64 @@ def instance(pol: Mapping[str, Any], c: int, k: int, n: int) -> dict[str, Any]:
             "k": k, "n": n}
 
 
+class NoLake(RuntimeError):
+    """`lake` isn't on PATH, so the package's executables can't be built here."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "`lake` isn't on PATH, and the check is Lean, built here from this tree with `lake build`: install elan "
+            "(https://github.com/leanprover/elan), which installs the toolchain "
+            f"{(PACKAGE / 'lean-toolchain').read_text().strip()} that {PACKAGE.relative_to(P.ROOT)}/lean-toolchain "
+            "names, and run again")
+
+
+def need_lake() -> None:
+    """Raise `NoLake` where `lake` isn't on PATH."""
+    if shutil.which("lake") is None:
+        raise NoLake
+
+
+def lake_built(exe: str) -> Path:
+    """The package's executable ``exe``, built first with `lake`."""
+    try:
+        build = subprocess.run(["lake", "build", exe], cwd=PACKAGE, capture_output=True, text=True)
+    except FileNotFoundError:
+        raise NoLake from None
+    if build.returncode:
+        raise RuntimeError(f"`lake build {exe}` in {PACKAGE.relative_to(P.ROOT)} failed:\n"
+                           + (build.stdout + build.stderr)[-2000:])
+    return PACKAGE / ".lake/build/bin" / exe
+
+
+def timed(argv: list[str], stdout: Path, clock: Callable[[], float] = time.perf_counter,
+          private: bool = False) -> dict[str, Any]:
+    """Run ``argv`` with its standard output to ``stdout``: what it cost (wall and CPU seconds, peak memory), or a
+    RuntimeError where it exits nonzero, with its exit code and, unless what it reads is ``private``, its standard
+    error."""
+    with stdout.open("wb") as fh:
+        start = clock()
+        child = subprocess.Popen(argv, stdout=fh, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL)
+        with child.stderr:
+            err = child.stderr.read()
+        # the child's own resources, which `wait` doesn't give
+        _, status, used = os.wait4(child.pid, 0)
+        wall = clock() - start
+        child.returncode = os.waitstatus_to_exitcode(status)
+    if child.returncode:
+        said = "" if private else f": {err.decode(errors='replace')[-2000:]}"
+        raise RuntimeError(f"{Path(argv[0]).name} exited {child.returncode}{said}")
+    return {"wall_s": wall, "cpu_s": used.ru_utime + used.ru_stime, "peak_mib": used.ru_maxrss / 1024}
+
+
 def lean_count(inst: Mapping[str, Any], clock: Callable[[], float] = time.perf_counter) -> dict[str, Any]:
     """The count (`EXECUTABLE`) on ``inst``, built first with `lake`: its verdict as it printed it, and
     what the run cost (wall and CPU seconds, peak memory, the instance's bytes)."""
-    try:
-        build = subprocess.run(["lake", "build", EXECUTABLE[0]], cwd=PACKAGE, capture_output=True, text=True)
-    except FileNotFoundError:
-        raise RuntimeError("`lake` isn't on PATH, so the Lean check can't be built: install the toolchain "
-                           f"{(PACKAGE / 'lean-toolchain').read_text().strip()} (elan) and run again") from None
-    if build.returncode:
-        raise RuntimeError(f"`lake build {EXECUTABLE[0]}` in {PACKAGE.relative_to(P.ROOT)} failed:\n"
-                           + (build.stdout + build.stderr)[-2000:])
+    exe = lake_built(EXECUTABLE[0])
     with tempfile.TemporaryDirectory() as d:
         path, out = Path(d) / "instance.json", Path(d) / "verdict.json"
         path.write_text(json.dumps(inst))
-        with out.open("wb") as fh:
-            start = clock()
-            child = subprocess.Popen([str(PACKAGE / ".lake/build/bin" / EXECUTABLE[0]), *EXECUTABLE[1:], str(path)],
-                                     stdout=fh, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL)
-            with child.stderr:
-                err = child.stderr.read()
-            # the child's own resources, which `wait` doesn't give
-            _, status, used = os.wait4(child.pid, 0)
-            wall = clock() - start
-            child.returncode = os.waitstatus_to_exitcode(status)
-        if child.returncode:
-            raise RuntimeError(f"{' '.join(EXECUTABLE)} exited {child.returncode}: {err.decode(errors='replace')[-2000:]}")
-        return {"verdict": json.loads(out.read_text()),
-                "cost": {"wall_s": wall, "cpu_s": used.ru_utime + used.ru_stime, "peak_mib": used.ru_maxrss / 1024,
-                         "instance_bytes": path.stat().st_size}}
+        cost = timed([str(exe), *EXECUTABLE[1:], str(path)], out, clock)
+        return {"verdict": json.loads(out.read_text()), "cost": {**cost, "instance_bytes": path.stat().st_size}}
 
 
 def judged(got: Mapping[str, Any], c: int, k: int, n: int) -> dict[str, Any]:

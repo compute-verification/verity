@@ -6,7 +6,7 @@ public import Base.Bytes
 /-!
 # LMS verification (RFC 8554 over SHA-512)
 
-Executable forms of `verity/ml/crypto/lms.py`'s verifier, whose module docstring is the spec: the parameters (`Params`,
+Executable forms of `verity/commitments/crypto/lms.py`'s verifier, whose module docstring is the spec: the parameters (`Params`,
 `Params.make`: N = 64, or `TOY_N` = 8 when asked for by name; W in {1, 2, 4, 8}; 1 ≤ H ≤ 30; `deployed` = (64, 1, 20)),
 the signature's byte format (`Signature.decode`: `u32(q) ‖ C ‖ y_0 ‖ … ‖ y_{P−1} ‖ path_0 ‖ … ‖ path_{H−1}`), the public
 key's (`I ‖ T[1]`), and verification (`digits`, `chain`, `leaf`, `interior`, `messageHash`, `rootOf`, `verify`). No

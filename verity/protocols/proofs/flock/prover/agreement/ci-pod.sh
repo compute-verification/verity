@@ -40,7 +40,7 @@ for c in $(ls "$W/live"); do
 done
 
 (cd "$SRC/verity/protocols/proofs/flock/verifier" && lake build)
-LEAN=$SRC/verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-verify
+LEAN=$SRC/verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof
 
 SETS=()
 [ -n "${CI_SETS:-}" ] && SETS=(--sets "$CI_SETS")

@@ -6,7 +6,7 @@ the trusted clock (`ticks`, strictly increasing). A registered input needs no de
 every block that reads it, before the epoch, as serving holds its weights and as PoUB registers each copy.
 A registered value kept in one copy instead (`held`, or a registered parameter named in `place`) is moved to its readers
 in other blocks, and those crossings are bandwidth like any other. Every gate of a node is placed with it, so this is
-Lean's `Accounting.Placed` (and `Accounting.Requirement.Placement`) at the census's grain: a gate's leaf and step are its
+Lean's `ResourceAccounting.Placed` (and `ResourceAccounting.Requirement.Placement`) at the census's grain: a gate's leaf and step are its
 node's. The placement is private and committed. A crossing is a census
 value produced in one block and read in another; crossings are derived, never declared, since moving a value doesn't
 change it.
@@ -43,7 +43,7 @@ _partitions: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
 
 def _partition(evaluate: Callable, program: Program, query: Mapping[str, Any]) -> Any:
     """`evaluate(program, query)`, once per Program, query and evaluator (a refusal too)."""
-    from verity.protocols.proofs.spot.verifier.one_stage.registration import query_digest
+    from verity.protocols.proofs.spot.verifier.one_stage.docket import query_digest
 
     memo = _partitions.setdefault(program, {})
     key = (evaluate, query_digest(query))
@@ -121,8 +121,7 @@ class Placed:
                query: Mapping[str, Any] | None = None) -> Profile:
         """The placement's public properties for the epoch `plan` audits. `ticks` is PoUW's proved bound per block
         (`benchmarks/pouw/proved_ticks.py`): (1 − ε) of the block-ticks the floor program ♭ takes for the block's census
-        at the data sheet's rates, which outside δ no accepted window undercuts over any route. `record` is the sampled
-        proofs' one-stage registration of the Program and `query` the verifier's copy of its partition query: each
+        at the data sheet's rates, which outside δ no accepted window undercuts over any route. `record` is SPOT's one-stage registration of the Program and `query` the verifier's copy of its partition query: each
         block's proof blocks are the units of that partition whose gates run there, and the record must name that query,
         its partition and its population (proofs, review 4). Without a record they are the served query's
         (`partition_object.query()`, Q_word v1 at X = 16), which the profile marks as assumed (`Profile.partition`), and
@@ -171,7 +170,7 @@ class Placed:
         """Each block's proof blocks under the registered partition, as core's one-stage verifier evaluates and checks it,
         or the served query's as circuits evaluates it, assumed; and which it was."""
         from verity.protocols.proofs.spot.verifier.one_stage import partition as P
-        from verity.protocols.proofs.spot.verifier.one_stage.registration import query_digest
+        from verity.protocols.proofs.spot.verifier.one_stage.docket import query_digest
         from verity.circuits import partition_object as PO
 
         program = self.program

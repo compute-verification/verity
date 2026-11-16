@@ -5,7 +5,7 @@ argument groups (``slices``, `serving_rows._slices`) and of packed words (``pack
 intermediate (``("mid", name)``: FlashInfer's q and s, a norm's scale) is a value serving never stores: the readers compute it
 with its twin (``MIDS``), held to the served outputs (the coordinates' reader holds the twin of the row's output on q and s; a
 norm's twin gives the row's outputs beside its scale), and the window wires each unit's row of it to the output row of the part
-unit that returned it (:func:`wire`, `verity.commitments.windows.wiring`), so a sampled coordinate's q and s are the committed outputs
+unit that returned it (:func:`wire`, `verity.commitments.periods.wiring`), so a sampled coordinate's q and s are the committed outputs
 of its row's quantisation, and an apply block's scale its row's sum of squares'."""
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from typing import Any, NamedTuple
 
 import numpy as np
 
-from verity.commitments.windows import rows as CS
+from verity.commitments.periods import rows as CS
 from verity_vllm.pipeline import slice_rows as SL
 from verity_vllm.pipeline.serving_templates import COORDS, PART_STATICS, PARTS, coord_width, part, template
 
@@ -26,42 +26,42 @@ Row = tuple[str, Any, dict, dict]
 
 
 def _flashinfer_quant(x: np.ndarray) -> dict[str, np.ndarray]:
-    from verity.definitions.numerics.deepgemm_twins import flashinfer_quant_1x128_row
+    from verity_vllm.definitions.numerics.deepgemm_twins import flashinfer_quant_1x128_row
 
     q, s = flashinfer_quant_1x128_row(x)
     return {"q": np.asarray(q, dtype=np.uint8), "s": np.asarray(s, dtype=np.uint32)}
 
 
 def _flashinfer_y(mid: dict[str, np.ndarray], w: np.ndarray, ws: np.ndarray, G: int) -> np.ndarray:
-    from verity.definitions.numerics.derived_rows import scaled_mm_fp8_block_row
+    from verity_vllm.definitions.numerics.derived_rows import scaled_mm_fp8_block_row
 
     return scaled_mm_fp8_block_row(mid["q"], mid["s"], w, ws, G=G)[0]
 
 
 def _vector8_scale(S: dict, x: np.ndarray, w: np.ndarray) -> tuple[dict, dict]:
-    from verity.definitions.numerics.cuda_rmsnorm_rows import rms_norm_rows
+    from verity_vllm.definitions.numerics.cuda_rmsnorm_rows import rms_norm_rows
 
     got = rms_norm_rows(x[None], w, float(S["EPS"]), int(S["BLOCK"]))
     return {"scale": got["scale"]}, {0: got["out"][0]}
 
 
 def _fused_vector8_scale(S: dict, x: np.ndarray, res: np.ndarray, w: np.ndarray) -> tuple[dict, dict]:
-    from verity.definitions.numerics.cuda_rmsnorm_rows import fused_add_rms_norm_rows
+    from verity_vllm.definitions.numerics.cuda_rmsnorm_rows import fused_add_rms_norm_rows
 
     got = fused_add_rms_norm_rows(x[None], res[None], w, float(S["EPS"]), int(S["BLOCK"]))
     return {"scale": got["scale"]}, {0: got["out"][0], 1: got["residual"][0]}
 
 
 def _dsa_scale(S: dict, x: np.ndarray, w: np.ndarray) -> tuple[dict, dict]:
-    from verity.definitions.numerics.dsa_norm_rows import dsa_rmsnorm_rows
+    from verity_vllm.definitions.numerics.dsa_norm_rows import dsa_rmsnorm_rows
 
     got = dsa_rmsnorm_rows(x[None], w, float(S["EPS"]))
     return {"r": got["r"]}, {0: got["out"][0]}
 
 
 def _mnnvl_scale(S: dict, r: np.ndarray, w: np.ndarray) -> tuple[dict, dict]:
-    from verity.definitions.registry import tp_allreduce as TA
-    from verity.definitions.registry.tp_allreduce_check import mnnvl_norm_of
+    from verity_vllm.definitions.registry import tp_allreduce as TA
+    from verity_vllm.definitions.registry.tp_allreduce_check import mnnvl_norm_of
 
     normed, rs = mnnvl_norm_of(r[None], w, TA.strategy(S["SHOT"]), int(S["CLUSTER"]), float(S["EPS"]),
                               S["FMA"] in (True, "true"))
@@ -94,7 +94,7 @@ def mids(pi: Any, r: dict, d: dict, store: Any, weights: Callable, rid: str, arr
          packed: Callable) -> dict[str, np.ndarray]:
     """Row ``r``'s intermediates (``MIDS``) by name, each its elements, by their twin from what it reads; refused when an output
     the twin predicts is not the row's served one."""
-    from verity.definitions.numerics.ir_rows import f64_statics
+    from verity_vllm.definitions.numerics.ir_rows import f64_statics
     from verity_vllm.query.program_view import spec_base
 
     mid = MIDS[spec_base(r["spec"])]

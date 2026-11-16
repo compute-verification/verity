@@ -92,7 +92,7 @@ def _verified_replicas(root: Path) -> list[str]:
 
 
 def _md5(p: Path) -> str:
-    h = hashlib.md5()  # noqa: S324  (an S3 ETag is an MD5; this is a comparison, not a security use)
+    h = hashlib.md5()  # an S3 ETag is an MD5; this is a comparison, not a security use
     with p.open("rb") as f:
         for chunk in iter(lambda: f.read(1 << 20), b""):
             h.update(chunk)
@@ -103,7 +103,7 @@ def compare(store_root: Path, fresh: LocalStore, *, jobs: int = 32, progress: Pr
     """The comparison of step 2 and the causes of step 3 (module docstring); `fresh` is already built."""
     prog = progress or Progress(None)
     here = LocalStore(store_root)                                    # record files only: its catalog is never opened read-write here
-    r = fresh._require_remote()  # noqa: SLF001
+    r = fresh._require_remote()
     rep: dict[str, Any] = {"store": str(store_root), "fresh": str(fresh.root), "remote": r.describe(), "unexplained": []}
 
     def recheck(keys: dict[str, str]) -> dict[str, str]:             # id -> cause, for records only the store under test has
@@ -146,7 +146,7 @@ def compare(store_root: Path, fresh: LocalStore, *, jobs: int = 32, progress: Pr
         try:
             data = p.read_bytes()
             need[art] = [(manifest_key(h), len(data), hashlib.md5(data).hexdigest())] + \
-                        [(object_key(b), n, None) for b, n in ArtifactManifest.from_doc(json.loads(data)).blobs()]  # noqa: S324
+                        [(object_key(b), n, None) for b, n in ArtifactManifest.from_doc(json.loads(data)).blobs()]
         except Exception as e:  # noqa: BLE001
             failed[art] = f"{type(e).__name__}: {e}"
     wanted = {k for items in need.values() for k, _, _ in items}

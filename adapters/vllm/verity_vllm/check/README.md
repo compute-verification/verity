@@ -18,9 +18,10 @@ underscore, so it states none. The Commit's side: `verdict` gives
 compare, the Match record's reader (`MatchOracle`), the producers of the members it reads, and the reader of opened
 values that it hands on from `commit.opened`; `value_check` the value check of the native rows. The weights:
 `weights_of_record` gives the record's derivation, its `check` against the served parameters, a field's composition
-and the `weights-of-record` command; `checkpoint_index` the shards of a checkpoint of record; `derived_weights` and
-`fp8_ue8m0` the weights vLLM makes or rewrites at load; `fp8_moe_scales` and `tp_shards` what a TP rank holds of a
-tensor; `component_programs` a row's Programs on disk, by shape. The Match's side: `gates` gives the gates, their ids
+and the `weights-of-record` command; `checkpoint_index` the shards of a checkpoint of record and a shard's header;
+`derived_weights` and `fp8_ue8m0` the weights vLLM makes or rewrites at load; `fp8_moe_scales` and `tp_shards` what a
+TP rank holds of a tensor; `component_programs` a row's Programs on disk, by shape.
+The Match's side: `gates` gives the gates, their ids
 and the gates document; `verdict_names` gives the ids alone, each by what its gate checks, and imports nothing, for a
 reader of a gates document that must not load the gates; `batch` the batch invariance of a template; `program_ops`
 the operations the Match's checks run on Programs; `codes` the verdict codes; `fold_compare` the `fold-compare` command,

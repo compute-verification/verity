@@ -11,6 +11,8 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
+from verity.circuits.codec import canonical_json, program_digest
+
 from verity_vllm.check.match import derived_index as DI
 from verity_vllm.check.match.match_run import MatchRun, NamedCheck
 from verity_vllm.config import workload_file
@@ -258,11 +260,10 @@ def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
     # the artifact's `workload_digest` field is a CLAIM: recompute it from the descriptor GP-01 wrote beside the
     # artifact (descriptor.json.gz) and refuse a mismatch, so a digest edited/zeroed in the Build's artifact cannot flow into this checker's
     # copy (global_match_global_program.json) and the finalizer's same-attempt rule.  Absent descriptor (an evidence dir pulled without the
-    # 17-25 MB file) -> recorded as unverified, never as verified.
+    # descriptor) -> recorded as unverified, never as verified.
     digest_verification = {"verified": False, "why": "descriptor.json.gz not beside the artifact"}
     dpath = os.path.join(os.path.dirname(os.path.abspath(artifact_path)), "descriptor.json.gz")
     if os.path.exists(dpath):
-        from verity.circuits.codec import canonical_json, program_digest
         with gzip.open(dpath, "rb") as f:
             desc = json.loads(f.read())
         recomputed = program_digest(desc)
@@ -372,7 +373,7 @@ def eos_lag_rows(facts: dict) -> tuple[int | None, str]:
 
 def record_engine_facts(header: dict, oracle_dir: str | None = None) -> dict:
     """The execution conditions the record attests, gathered from EVERY location a recorder writes them:
-    the production recorder nests the effective LLM(**kw) under `RunHeader.profile.engine_kwargs` and the compilation facts under
+    the serving recorder nests the effective LLM(**kw) under `RunHeader.profile.engine_kwargs` and the compilation facts under
     `RunHeader.profile.compilation` (vllm_adapter build_manifest); older/foreign headers put them at the top level; the run's
     `capture/versions.json` repeats the effective engine kwargs.  Returns {engine: {k: v}, compilation: {fact: v}, values: {k: [distinct v]},
     sources: {k: [locations]}, disagreements: {k: (a, b, src_a, src_b)}, and unreadable: {location: error} only when a location is present

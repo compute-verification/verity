@@ -32,8 +32,8 @@ multiple of 16.
   word is a valid output of a transition and, through the epilogue, of the proof block; it is not a finite accumulator, so a
   chain whose intermediate transition saturates is rejected at the next step.  The pinned simulator masks the
   exponent instead and is not the reference there.
-* **Statement.** An obligation is a ``typed-obligation/v0`` object (``statement_format = 2``, ``fixtures/typed-obligation-v0``)
-  whose family digest is :data:`FAMILY_DIGEST`.
+* **Statement.** An obligation is a ``typed-obligation/v0`` object (``statement_format = 2``,
+  ``tests/benchmarks/numerical/checker/fixtures/typed-obligation-v0``) whose family digest is :data:`FAMILY_DIGEST`.
 
 Transition unit versus proof block
 ==================================
@@ -62,7 +62,7 @@ References and the log of disagreements
 Outside FIRST
 =============
 
-* **Hardware NaN word.** The production epilogue's ``cvt.rn.bf16.f32`` produces ``0x7FFF`` for NaN, not ``0x7FC0``;
+* **Hardware NaN word.** The served epilogue's ``cvt.rn.bf16.f32`` produces ``0x7FFF`` for NaN, not ``0x7FC0``;
   that is version ``@2`` of :data:`TC_AMPERE_BF16_NAME` (vector ``accept--tc-store-cast-nan-hw``).  The two agree on
   every non-NaN word, and NaN is outside the finite domain, so the choice is immaterial for this target.
 * **Total semantics.** :mod:`verity.circuits.silicon.total` defines the step on every encoding -- NaN, infinities,
@@ -72,8 +72,8 @@ Outside FIRST
   (:data:`verity.circuits.silicon.models.HOPPER_BF16_M16N8K16`); a different pipeline, a different target.
 * **Kernel-level accumulation order.** The target fixes the chain the *relation* checks (ascending ``k``, one
   accumulator).  Whether a given GEMM kernel launch (split-K, stream-K, different tile orders) realises exactly this
-  chain is a frontend binding question; ``fixtures/typed-obligation-v0``'s K = 1536 input is one captured case where
-  it did.
+  chain is a frontend binding question; ``tests/benchmarks/numerical/checker/fixtures/typed-obligation-v0``'s
+  K = 1536 input is one captured case where it did.
 
 Draft targets
 =============
@@ -88,7 +88,7 @@ status (pinned / hypothesis / unprobed) says how much hardware stands behind the
   Program ``GemmAccumulator<K>``, ``K`` a multiple of 32: ``tc_dot32_0`` then ``K/32 - 1`` chained ``tc_dot32`` in
   ascending ``k``, the FP32 accumulator word **public** (the bare dot).  Domain: finite E4M3 operands (every byte but
   ``0x7F``/``0xFF``; 448 is finite) and finite FP32 accumulators at every step.  The scale-and-``cvt.rn.satfinite.e4m3x2``
-  epilogue of a production FP8 GEMM is a **separate relation** -- it composes with this one but is not part of it.
+  epilogue of a served FP8 GEMM is a **separate relation** -- it composes with this one but is not part of it.
   Note the lossy step: the incoming accumulator keeps only its top 14 significand bits, even through a group of zero
   products (D10).
 * :data:`FP8_ADA_MMA` -- ``sm89.mma.m16n8k32.e4m3`` (pinned: RTX 4090, 24,898,304 elements), model
@@ -166,7 +166,7 @@ __all__ = [
 
 #: The tensor-core gate families' names and versions.  Each ``veritor.*`` spelling is baked into a ``*_FAMILY_DIGEST``
 #: pin, fixtures and recorded runs, so it stays; a new family takes a fresh id outside ``veritor.*``
-#: (``verity/circuits/tests/test_targets_frozen_families.py``).
+#: (``tests/verity/circuits/test_targets_frozen_families.py``).
 TC_AMPERE_BF16_NAME = "veritor.tc-ampere-bf16"
 #: The family-name prefix of FIRST's vocabulary on another BF16 pipeline.
 TC_BF16_NAME_PREFIX = "veritor.tc-bf16."
@@ -275,7 +275,7 @@ _FP8_DOMAIN = (
     "accumulators at every step; anything else is rejected, not computed"
 )
 _FP8_EPILOGUE = (
-    "none: the FP32 accumulator word is the public output (the bare dot).  The production FP8 store -- scale by a "
+    "none: the FP32 accumulator word is the public output (the bare dot).  The served FP8 store -- scale by a "
     "per-tensor factor, then cvt.rn.satfinite.e4m3x2 -- is a SEPARATE relation, to be stated and pinned later; it "
     "composes with this target, it is not part of it"
 )
@@ -323,7 +323,7 @@ _NVFP4_DOMAIN = (
     "leave binary32 (D20: NaN / inf accumulators and overflowing sums are outside the model, recorded, never computed)"
 )
 _NVFP4_EPILOGUE = (
-    "none: the FP32 accumulator word is the public output (the bare block-scaled dot).  The production NVFP4 store -- "
+    "none: the FP32 accumulator word is the public output (the bare block-scaled dot).  The served NVFP4 store -- "
     "a per-tensor scale, then quantisation to E2M1 with per-block UE4M3 scales -- is a SEPARATE relation; it composes "
     "with this target, it is not part of it"
 )

@@ -242,7 +242,7 @@ theorem check_ok {callee : String → Option CircuitType} {t : CircuitType} (h :
   · assumption
   · cases h
 
-/-- `flock-verify circuit-type FILE...`: each FILE is `{"types": [content, ...]}`, callees before callers. Prints one line
+/-- `verity-verify-proof circuit-type FILE...`: each FILE is `{"types": [content, ...]}`, callees before callers. Prints one line
 `CIRCUITTYPE {"file", "index", "digest", "ok", "error"}` per type. A type is a callee of later ones only once accepted. -/
 def cmd (paths : List String) : IO UInt32 := do
   for path in paths do

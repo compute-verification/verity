@@ -551,7 +551,7 @@ theorem uGate_mem (K : ℕ) {i j : ℕ} (hi : i < TM) (hj : j < TN) : uGate K TM
 theorem tile_out {K : ℕ} (X : (tileSpec p K TM TN).toCircuit.Trace)
     (hX : (tileSpec p K TM TN).part.Correct X 0) :
     ∀ g ∈ (tileSpec p K TM TN).outs, val X g = tileVal p K TM TN X g := by
-  have hw : (tileSpec p K TM TN).part.wrong X = ∅ := by
+  have hw : (tileSpec p K TM TN).part.incorrect X = ∅ := by
     ext u
     simp only [Verity.Partition.mem_incorrect, Finset.notMem_empty, iff_false, not_not]
     rwa [Subsingleton.elim u 0]

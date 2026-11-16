@@ -13,11 +13,11 @@ its served y and its weight side). `replay` checks:
 3. each weight side's Y unit leaves open to its units root and its inputs (the weight's rows as read) to its inputs digest;
    each call's unit leaves open to its units root, its inputs (Y and c₀ as the call read them) to its inputs digest, and its
    served y to its dequantization units' leaves;
-4. the window's sample (`verity.protocols.accounting.pouw.prover.circuit`): the run's calls are one window, listed with their anchors, shapes and leaves
+4. the window's sample (`verity.protocols.resource_accounting.compute.pouw.prover.circuit`): the run's calls are one window, listed with their anchors, shapes and leaves
    on its `anchors.Receipt`, sealed before any key exists; `anchors.SaltWindows.open` refuses a call index an earlier window of the salt used, and
    `anchors.Ledger.open` derives the window's key from a fresh
    source, and each call samples its plan (`Traced.draw`) under the work sampling design at its share of the window's budget
-   (`plan.window_laws`). Every proved unit of a call is opened by the prover (`CallRecord.opening`, regenerated natively),
+   (`plan.window_sampling_designs`). Every proved unit of a call is opened by the prover (`CallRecord.opening`, regenerated natively),
    and so is every unit it reads; so is each Y unit its sampled tiles read, in its weight side (once per replay). Each
    opening must hash to its committed leaf, the unit's template (`ncp2.templates`) must evaluate, by the IR reference,
    from its opened inputs to its opened outputs, and the call's Y and c₀ at each sampled column strip must be its weight
@@ -49,17 +49,17 @@ from typing import Any
 
 import numpy as np
 from verity.circuits.evaluation import evaluate
-from verity.definitions.numerics.kernel_registry import Declined
-from verity.protocols.accounting.pouw.prover.circuit import SCHEMES
-from verity.protocols.accounting.pouw.prover.circuit import anchors as CA
-from verity.protocols.accounting.pouw.prover.circuit import plan as CPL
-from verity.protocols.accounting.pouw.prover.circuit.ncp2 import D
-from verity.protocols.accounting.pouw.verifier.protocol import DomainError
+from verity_vllm.definitions.numerics.kernel_registry import Declined
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import SCHEMES
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import anchors as CA
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import plan as CPL
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit.ncp2 import D
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import DomainError
 
 from verity_vllm.check.replay.delegate import Place, delegated
 from verity_vllm.protocols import pouw
-from verity_vllm.protocols.pouw import circuit as PC
-from verity_vllm.protocols.pouw import native as PN
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import circuit as PC
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import native as PN
 from verity_vllm.records.schema_ids import POUW_CIRCUIT_REPLAY_SCHEMA
 
 M32 = 0xFFFFFFFF
@@ -139,7 +139,7 @@ TAMPER_LEAF = 7
 
 def tamper_tiles(records: Sequence[PC.CallRecord]) -> tuple[list[PC.CallRecord], dict[str, Any]]:
     """A negative control: the calls as a prover commits and opens them with word `TAMPER_LEAF` of every tile of the first call
-    flipped in its low bit. Each call's tile stratum samples at least one tile (`plan.WorkLaw`'s floor), so whatever the
+    flipped in its low bit. Each call's tile stratum samples at least one tile (`plan.WorkSamplingDesign`'s floor), so whatever the
     window's fresh sample, a wrong tile is proved. Returns the calls and where the tamper is."""
     rec = records[0]
     nat = PN.Native(rec.call, rec.scheme)
@@ -228,8 +228,8 @@ def replay(records: Sequence[PC.CallRecord], commitment: Mapping[str, Any], k: i
         try:
             ans = derived(records, salt, first)
             ledger = windows.open(CA.Receipt(tuple((a, r.shape, PC.call_leaf(r)) for a, r in zip(ans, records))))
-            laws = CPL.window_laws([t.layout() for t in traced], k)
-            plans = [t.draw(law, a, ledger) for t, law, a in zip(traced, laws, ans)]
+            sampling_designs = CPL.window_sampling_designs([t.layout() for t in traced], k)
+            plans = [t.draw(sampling_design, a, ledger) for t, sampling_design, a in zip(traced, sampling_designs, ans)]
             ledger.sent()
             record = ledger.record()
         except (DomainError, ValueError) as e:

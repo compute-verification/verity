@@ -62,9 +62,9 @@ form, bits and efficiency are the compiled sampled verifier's at the deployed re
   deployed trace commitment's opening program, hm96 leaves of rows that place the opened bit under the verifier's own
   registered path check; at the deployed record by definition and proved (`SamplingDeploy.deploy_commit`,
   `SamplingDeploy.row_places`).
-* `DrawSlots` (`Sampling.Select.DrawLaw`): on every statement that parses and whose query evaluates, the partition and
+* `DrawSlots` (`Sampling.Select.SampleDesign`): on every statement that parses and whose query evaluates, the partition and
   design are the verifier's own: the partition has the shape of its layout, and the design is the one `Slots.select`
-  samples, from uniform bytes of the coins, every slot checked where it is refused; the Lean sampled-proofs verifier's
+  samples, from uniform bytes of the coins, every slot checked where it is refused; the Lean SPOT verifier's
   run, which builds `D`.
 * `ProgramScope` (`Sampling.Select.Scope`): the scope check is the readable scope's program part (a topologically
   ordered program, partitioned into proof blocks). The design part is a theorem (`designWellFormed`); the program part
@@ -74,7 +74,7 @@ form, bits and efficiency are the compiled sampled verifier's at the deployed re
   of the descriptor is total (Flock's verifier has no `partial` def); what remains is its map from each word gate to
   that word gate's bit gates in `prog`, under which its `Q_word` evaluation is `partition`.
 * `huniv : UniversalIs D`: the deployed universal unit computes what its Definition's gates do (`universalProg`, the
-  port of `verity.ml.private_circuits.universal`'s `build`); the code side's binding of the compiled unit. That those
+  port of `verity.circuits.private_circuits.universal`'s `build`); the code side's binding of the compiled unit. That those
   gates compute `PrivateCircuit.eval` is proved (`universal_correct`); the deployed record's unit is the Definition's
   (`SamplingDeploy.universalIs_deploy`).
 * `hComplete : Complete H D`: of the record's reference prover (`D.P`) at its error (`D.δc H`); at the deployed record,

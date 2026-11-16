@@ -42,10 +42,10 @@ def circuit_lowering(subcircuit):
 def supports(subcircuit, scheme):
     n = int(subcircuit.params["N"])
     if width(n) is None:
-        return f"C-Flock lowers {FAMILY} when its warps are identical units (N a multiple of 1024), not N = {n}"
+        return f"Flock lowers {FAMILY} when its warps are identical units (N a multiple of 1024), not N = {n}"
     if scheme in SCHEMES:
         return None
-    return (f"C-Flock proves {subcircuit.id} under verity/flock-circuit ({', '.join(SCHEMES)}: unit {UNIT}, the row tail in the "
+    return (f"Flock proves {subcircuit.id} under verity/flock-circuit ({', '.join(SCHEMES)}: unit {UNIT}, the row tail in the "
             f"statement), not under {scheme}")
 
 

@@ -1059,7 +1059,7 @@ def hexList (ctx : String) (xs : Array String) : V (Array ByteArray) :=
 
 /-- **A rep's coins, by the transcript's rounds**: what the inner session's record (the prover's, which check 5 reads)
 holds of rep stream `s` at each of the transcript's rounds `0 … n-1` of it (`rs`, in round order): that round's coins, or
-`none` at the round the record has no counterpart of. A holo session's firewall splits z_partial's round in two (`rec_session`:
+`none` at the round the record has no counterpart of. A holo session's ZK server splits z_partial's round in two (`rec_session`:
 a round of no coins, then h's round), and the transcript records both where the prover's record has the one round. So with
 one round of no coins at `j` in the transcript's stream, the record has `n - 1` rounds, its round `k` the transcript's `k`
 below `j` and `k + 1` from `j` on (h's round taking z_partial's coins); with none, the two have the same rounds. -/
@@ -1082,7 +1082,7 @@ def repCoins (s : String) (rs : Array Json) (srec : Json) : V (Array (Option (Ar
 /-- A registered top's row: a 64-byte node as 32 u16 words, zero-padded to one SHA-512 block (`rec_live.ROW_WORDS`). -/
 def TOP_ROW_WORDS : Nat := 64
 
-def refused (what : String) : String := s!"FIREWALL-REFUSED: {what}"
+def refused (what : String) : String := s!"ZK-SERVER-REFUSED: {what}"
 
 /-- The registered entry of R whose rows' `b ‖ c` are `bcs` (`rec_live.top_entry`, `rec_residuals.commits_entry`): one row
 of `TOP_ROW_WORDS` 16-bit words a node, its domain `Registered.domain` under the registration's `program`, and the
@@ -1267,7 +1267,7 @@ def candidate3 (tr : Json) (rounds : Array Json) (t : String) (names : List Stri
   for b in all do
     let h := hexOf b
     if seen.contains h then
-      throw s!"rec inner transcript: the b ‖ c {(h.take 16).toString}… is committed twice; the firewall commits each under a fresh salt"
+      throw s!"rec inner transcript: the b ‖ c {(h.take 16).toString}… is committed twice; the ZK server commits each under a fresh salt"
     seen := seen.insert h
   return out
 
@@ -1280,7 +1280,7 @@ def checkFinished (tr : Json) : V Unit := do
   | .ok "finish" => pure ()
   | .ok e =>
     throw s!"rec inner transcript: the inner session ended {e}, not finish: a stopped session is no inner proof"
-  | .error _ => throw "rec inner transcript: the coin server's record names no end; only a finished session is read"
+  | .error _ => throw "rec inner transcript: the challenger's live-coin part's record names no end; only a finished session is read"
 
 /-- `rec_live.schedule_for`'s streams at the inner shape `i` over Hello's one table `t`, in its order: each stream's
 name, its parent and the parent's round it is opened at, and its rounds. The circuit table's two reps at `repRounds`
@@ -1307,7 +1307,7 @@ still ends `finish`. This holds that record to the schedule here, by counts alon
 schedule. It reads the schedule right only at `k_log ≥ 6`: below it `SchedRound`'s absorb flag can't tell z_partial's
 round from a 2-element one, and `statements`, which every V* session's setup runs, refuses such a shape. -/
 def checkSchedule (i : Inner) (tr : Json) : V Unit := do
-  let at_ := "the coin server's record is off the schedule of the verifier's inner shape " ++
+  let at_ := "the challenger's live-coin part's record is off the schedule of the verifier's inner shape " ++
     s!"(m {i.m}, k_log {i.kLog}, claims {i.claims})"
   let tables := ((tr.getObjVal? "hello").toOption.getD Json.null).getObjValAs? (Array String) "tables"
   let .ok #[t] := tables | throw s!"rec inner transcript: {at_}: Hello names no one table"
@@ -1699,7 +1699,7 @@ def innerLink (tr : Json) (record : String) : V InnerLink := do
     | throw "rec inner transcript: the inner session's record holds no link points (link.points)"
   let held ← rp.mapM (f128sOfHex "the inner session's record's link points")
   if held != points then
-    throw ("rec inner transcript: the inner session's record's link points are not the ones the coin server drew " ++
+    throw ("rec inner transcript: the inner session's record's link points are not the ones the challenger's live-coin part drew " ++
       "(link.points): check 5 would take the extra claims at points the prover chose")
   return { table := t, root, tops, points }
 
@@ -1727,7 +1727,7 @@ def checkTopRowsAt (unit name value : String) (lk : InnerLink) (l : Nat) (positi
     match topRow lk l positions[r]! with
     | .ok (what, c) =>
       if row r != c then
-        throw s!"rec-tops: {unit}: port {name}'s table row {r} is not {what}, which the coin server committed"
+        throw s!"rec-tops: {unit}: port {name}'s table row {r} is not {what}, which the challenger's live-coin part committed"
     | .error why =>
       throw s!"rec-tops: {unit}: port {name}'s table row {r} reads row {positions[r]!} of {value}, and {why}"
 
@@ -1767,9 +1767,9 @@ def checkLinkRounds (i : Inner) (lk : InnerLink) : V Unit := do
 
 /-- Table `j`'s sample among `count` tables of a session sampled by `d`, as `Stmt.setupTables` builds it: `d` at one table,
 else part `j` of `d`'s units, a subset sample of the population. -/
-def tableDraw (d : Json) (count j : Nat) : Json :=
+def tableSample (d : Json) (count j : Nat) : Json :=
   if count ≤ 1 then d else
-    match Draw.UnitDraw.ofJson d with
+    match Draw.UnitSample.ofJson d with
     | .ok u => Json.mkObj [("law", Json.str "subset"), ("population", Lean.toJson u.population),
         ("k", Lean.toJson (u.units.size / count)),
         ("units", Json.arr ((u.units.extract (j * (u.units.size / count))
@@ -1778,13 +1778,13 @@ def tableDraw (d : Json) (count j : Nat) : Json :=
 
 /-- Table `j`'s statement labels its instances with the units its sample `dj` proves. -/
 def checkLabel (dj : Json) (pub : Public) (j : Nat) : V Unit := do
-  let D ← Draw.UnitDraw.ofJson dj
+  let D ← Draw.UnitSample.ofJson dj
   let idx ← Registered.unitIndices pub
   if idx != D.proved then
     throw s!"rec-labels: table {j} labels its instances {idx}, not the units its draw proves {D.proved}"
 
 /-- **A sampled session of V*'s labels each instance with the unit it is**: every table's statement names, in its header's
-`units.indices`, exactly the units its sample proves (`tableDraw`). A registered read's position is read at an instance's
+`units.indices`, exactly the units its sample proves (`tableSample`). A registered read's position is read at an instance's
 label (`Registered.checkPort`), so the label must be the unit. V*'s populations are their units `0..n-1`, so an honest
 statement's labels (the population's labels of the sampled proof blocks) are those units; a population labelled from another
 start would not pass, and only a session with an inner shape (`--rec-inner`) is checked. A session without a sample
@@ -1792,7 +1792,7 @@ passes. -/
 def checkLabels (draw : Option Json) (count : Nat) (sts : Array Stmt) : V Unit :=
   match draw with
   | none => pure ()
-  | some d => (Array.range sts.size).forM fun j => checkLabel (tableDraw d count j) sts[j]!.pub j
+  | some d => (Array.range sts.size).forM fun j => checkLabel (tableSample d count j) sts[j]!.pub j
 
 /-- **A value the verifier's shared rows register is one registration in every session** (`SharedOwnRoot`): each port of
 `--registered` reading a value some entry of `--rec-rows` reads agrees with the first such entry in every field but reads

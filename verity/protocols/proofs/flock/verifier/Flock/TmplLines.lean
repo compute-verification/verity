@@ -1,14 +1,15 @@
-/-
-A templated statement's template read off the file's line view (`ByteLines.View`), which its parse cuts once:
-`HmOut.tmplOfView` is `HmOut.tmplOf` (`tmplOfView_eq`), without its second scan for `'\n'`s, its UTF-8 check and its
-copy of the template's text. The template's parse reads its lines through the view (`View.tmplLine`), and each row's
-numbers off the file's bytes (`View.tmplNums`), so a row makes no `String` (`View.parseAt_tmpl`).
--/
 module
 
 public import Flock.ByteLines
 public import Flock.Tmpl
 public import Flock.TmplSection
+
+/-!
+A templated statement's template read off the file's line view (`ByteLines.View`), which its parse cuts once:
+`HmOut.tmplOfView` is `HmOut.tmplOf` (`tmplOfView_eq`), without its second scan for `'\n'`s, its UTF-8 check and its
+copy of the template's text. The template's parse reads its lines through the view (`View.tmplLine`), and each row's
+numbers off the file's bytes (`View.tmplNums`), so a row makes no `String` (`View.parseAt_tmpl`).
+-/
 
 @[expose] public section
 

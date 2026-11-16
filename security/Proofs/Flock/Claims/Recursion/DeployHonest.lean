@@ -245,7 +245,7 @@ theorem insO_staged_link {st : Stage} {x : Msg} {ms : List (Msg × Out)} {s : �
 /-! ## The inner statement an honest inner run is accepted at -/
 
 /-- **The deployed plain verifier admits the inner statement**: it sets up, `verify`'s scope check
-(`ProvedScope.check`) passes on it, and it carries a unit sample (`ProvedScope.drawLaw` refuses a session without one).
+(`ProvedScope.check`) passes on it, and it carries a unit sample (`ProvedScope.sampleDesign` refuses a session without one).
 At a recursive session's inner statement, whose leaves are plain SHA-512, the scope check passes only without `--zk`
 and with hidden outputs (`ProvedScope.leafOk`, `Readable.check_ok_iff`, `Readable.Rules`; `inner_check_plain`). -/
 def InnerAdmitted (x : Msg) : Prop :=
@@ -253,12 +253,12 @@ def InnerAdmitted (x : Msg) : Prop :=
     ∃ d, ins.read.draw = some d
 
 /-- **An honest inner run the deployed plain verifier accepts is of a statement it admits** (`acc_check`,
-`acc_draw_of_setup`), at SHA-512: `InnerAccepts` there holds only where `InnerAdmitted` does. -/
+`acc_sample_of_setup`), at SHA-512: `InnerAccepts` there holds only where `InnerAdmitted` does. -/
 theorem innerAdmitted_of_accepts {x : Msg} {cs : List Coin} {v : List (Msg × Msg)}
     (h : InnerAccepts FlockDeploy.sha512 (FlockDeploy.V false) x cs v) : InnerAdmitted x := by
   have hacc : ¬ Claims.Flock.NoAcc FlockDeploy.sha512 (FlockDeploy.V false) (xIOf x) := fun hn => hn _ _ _ _ h
   obtain ⟨ins, spec, sts, -, -, hs, -, hc⟩ := FlockDeploy.KS.acc_check hacc
-  exact ⟨ins, spec, sts, hs, hc, FlockDeploy.KS.acc_draw_of_setup hacc hs⟩
+  exact ⟨ins, spec, sts, hs, hc, FlockDeploy.KS.acc_sample_of_setup hacc hs⟩
 
 /-! ## The code's side -/
 

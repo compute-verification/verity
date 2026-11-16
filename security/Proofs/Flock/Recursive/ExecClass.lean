@@ -71,7 +71,7 @@ def shapeOf (st : Flock.Stmt) : Flock.Stmt :=
 /-- **The executable's checks of a statement's class**: its layout (`StmtWF`), its regions (`RegionsWF`), and
 `Zk.schedule` accepting its `m`. -/
 def ClassOk (st : Flock.Stmt) : Prop :=
-  Refine.StmtWF st ∧ Refine.RegionsWF st ∧ ∃ p, Flock.Zk.schedule st.m = .ok p
+  Refine.StmtWF st ∧ Refine.RegionsWF st ∧ ∃ p, Flock.Zk.schedule st.wideLeaf st.m = .ok p
 
 /-- **Lean's verifier accepts `st` as the inner statement**, set up as `RecVStar.innerOf` and `RecCoins.Inner.load` set
 it up: from some circuit and public files, partition object and program (`innerOf` passes the verifier's own, and
@@ -82,7 +82,7 @@ def AcceptsStmt (st : Flock.Stmt) : Prop :=
   (∃ (cf pf : ByteArray) (partition : Option Lean.Json) (program : Option ByteArray) (spec : Flock.SessionSpec),
     Flock.Stmt.setupTables Flock.RecVStar.innerTags cf pf Flock.RecVStar.innerTree 1 (partition := partition)
       (program := program) = .ok (spec, #[st])) ∧
-  ∃ p, Flock.Zk.schedule st.m = .ok p
+  ∃ p, Flock.Zk.schedule st.wideLeaf st.m = .ok p
 
 /-- The inner tags hide the statement's outputs, so `setupTables` sets the inner statement up with `setupHidden`. -/
 theorem innerTags_hiddenOutputs : Flock.RecVStar.innerTags.hiddenOutputs = true := rfl
@@ -153,8 +153,10 @@ noncomputable def execClassAt (st : Flock.Stmt) : ExecClass :=
   if h : ClassOk (shapeOf st) then ExecClass.ofStmt st h else ExecClass.fixed
 
 theorem ClassOk.of_shape {st : Flock.Stmt} (h : ClassOk (shapeOf st)) : ClassOk st := by
-  obtain ⟨hwf, hr, hp⟩ := h
-  refine ⟨⟨hwf.hk6, hwf.hk, hwf.pin, hwf.slots⟩, ⟨hr.hm, hr.mPts, fun reg hreg => ?_⟩, hp⟩
+  obtain ⟨hwf, hr, p, hp⟩ := h
+  have hm : 25 ≤ st.m ∧ st.m ≤ 35 := ZkHidden.schedule_range hp
+  refine ⟨⟨hwf.hk6, hwf.hk, hwf.pin, hwf.slots⟩, ⟨hr.hm, hr.mPts, fun reg hreg => ?_⟩,
+    ZkHidden.schedule_ok_of_range _ hm.1 hm.2⟩
   have hmem : stripBytes reg ∈ (shapeOf st).regions.toList := by
     rw [show (shapeOf st).regions = st.regions.map stripBytes from rfl, Array.toList_map]
     exact List.mem_map.2 ⟨reg, hreg, rfl⟩
@@ -162,8 +164,10 @@ theorem ClassOk.of_shape {st : Flock.Stmt} (h : ClassOk (shapeOf st)) : ClassOk 
   exact ⟨w.free_lt, w.nodup, w.free_size⟩
 
 theorem ClassOk.to_shape {st : Flock.Stmt} (h : ClassOk st) : ClassOk (shapeOf st) := by
-  obtain ⟨hwf, hr, hp⟩ := h
-  refine ⟨⟨hwf.hk6, hwf.hk, hwf.pin, hwf.slots⟩, ⟨hr.hm, hr.mPts, fun reg hreg => ?_⟩, hp⟩
+  obtain ⟨hwf, hr, p, hp⟩ := h
+  have hm : 25 ≤ st.m ∧ st.m ≤ 35 := ZkHidden.schedule_range hp
+  refine ⟨⟨hwf.hk6, hwf.hk, hwf.pin, hwf.slots⟩, ⟨hr.hm, hr.mPts, fun reg hreg => ?_⟩,
+    ZkHidden.schedule_ok_of_range _ hm.1 hm.2⟩
   rw [show (shapeOf st).regions = st.regions.map stripBytes from rfl, Array.toList_map] at hreg
   obtain ⟨r, hr', rfl⟩ := List.mem_map.1 hreg
   have w := hr.regions r hr'

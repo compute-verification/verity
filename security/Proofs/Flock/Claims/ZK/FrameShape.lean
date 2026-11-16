@@ -31,7 +31,7 @@ namespace Claims.ZKServer
 
 open _root_.Flock (V F128)
 open _root_.Flock.Transcript (header)
-open _root_.Flock.Firewall.Frame (Cfg Masker INNER_ROUNDS roundFree)
+open _root_.Flock.ZkServer.Frame (Cfg Masker INNER_ROUNDS roundFree)
 open FlockSoundness.Refine (Frame encs)
 
 /-- **Two runs alike in `f`**: both return, at results equal under `f`, or both fail with one error. -/
@@ -209,14 +209,14 @@ theorem roundFree_alike_core {c c' : Cfg} (hc : CfgAlike c c') (s : Masker) (b :
         let r ← fs.foldlM (stepAt c) (s, ByteArray.empty, #[], 0)
         (fun (_ : Unit) => (r.2.1 ++ header 4 k n, { r.1 with owed := some n }, r.2.2.1)) <$>
           (match r.1.inner with
-           | some j => _root_.Flock.Firewall.Frame.innerOwn c r.1 j X n
+           | some j => _root_.Flock.ZkServer.Frame.innerOwn c r.1 j X n
            | none => pure () : V Unit)))
     (he' : roundFree c' { s with stopped := b } X' n =
       (do
         let r ← fs'.foldlM (stepAt c') ({ s with stopped := b }, ByteArray.empty, #[], 0)
         (fun (_ : Unit) => (r.2.1 ++ header 4 k n, { r.1 with owed := some n }, r.2.2.1)) <$>
           (match r.1.inner with
-           | some j => _root_.Flock.Firewall.Frame.innerOwn c' r.1 j X' n
+           | some j => _root_.Flock.ZkServer.Frame.innerOwn c' r.1 j X' n
            | none => pure () : V Unit)))
     (hI : ∀ q, fs.foldlM (stepAt c) (s, ByteArray.empty, #[], 0) = .ok q → q.1.inner = none) :
     RelM (fun q : ByteArray × Masker × Array ℕ => (unstop q.2.1, q.2.2)) (roundFree c s X n)
@@ -243,14 +243,14 @@ theorem roundFree_alike_ok_core {c c' : Cfg} (hc : CfgAlike c c') (s : Masker) (
         let r ← fs.foldlM (stepAt c) (s, ByteArray.empty, #[], 0)
         (fun (_ : Unit) => (r.2.1 ++ header 4 k n, { r.1 with owed := some n }, r.2.2.1)) <$>
           (match r.1.inner with
-           | some j => _root_.Flock.Firewall.Frame.innerOwn c r.1 j X n
+           | some j => _root_.Flock.ZkServer.Frame.innerOwn c r.1 j X n
            | none => pure () : V Unit)))
     (he' : roundFree c' { s with stopped := b } X' n =
       (do
         let r ← fs'.foldlM (stepAt c') ({ s with stopped := b }, ByteArray.empty, #[], 0)
         (fun (_ : Unit) => (r.2.1 ++ header 4 k n, { r.1 with owed := some n }, r.2.2.1)) <$>
           (match r.1.inner with
-           | some j => _root_.Flock.Firewall.Frame.innerOwn c' r.1 j X' n
+           | some j => _root_.Flock.ZkServer.Frame.innerOwn c' r.1 j X' n
            | none => pure () : V Unit)))
     {q q' : ByteArray × Masker × Array ℕ} (hq : roundFree c s X n = .ok q)
     (hq' : roundFree c' { s with stopped := b } X' n = .ok q') : unstop q.2.1 = unstop q'.2.1 ∧ q.2.2 = q'.2.2 := by

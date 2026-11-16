@@ -1,10 +1,11 @@
 /-
 Canonical JSON and hex read at any size. `Core.canonicalJson`, `Flock.canon` and `Flock.unhex` go through
-`String.toList`, whose runtime (`lean_string_data`) counts characters in 32 bits and builds a list cell per character:
-a string of `n ≥ 2^32` characters becomes its first `n mod 2^32`, so `canonicalJson` refuses a canonical text holding
-one ("not canonical JSON") and `Flock.unhex` reads a prefix of one, and below that a string costs about 30 bytes of
-memory per character. A protocol's case carries its evidence as such a string (PoUS's `C*`, gigabytes of hex), so its
-readers use these, which give the same answers at any size, reading the text's bytes in place:
+`String.toList` (`canonicalJson` on its whole text, which it reads with `Flock.JsonParse.parse`), whose runtime
+(`lean_string_data`) counts characters in 32 bits and builds a list cell per character: a string of `n ≥ 2^32`
+characters becomes its first `n mod 2^32`, so `canonicalJson` refuses a canonical text of that many characters and
+`Flock.unhex` reads a prefix of one, and below that a string costs about 30 bytes of memory per character. A
+protocol's case carries its evidence as such a string (PoUS's `C*`, gigabytes of hex), so its readers use these,
+which give the same answers at any size, reading the text's bytes in place:
 
 * `parseUpTo`, `parse`, `read`: `canonicalJson`'s answer, the JSON it accepts or the reason it refuses, from one pass
   that accepts exactly the texts `Flock.canon` writes and copies each string out once;
@@ -12,8 +13,9 @@ readers use these, which give the same answers at any size, reading the text's b
 * `writes`: whether `Flock.canon j` is `s`, or `canon`'s error, without writing it.
 
 The `#guard`s at the end hold each to the function it stands in for on texts at every edge of canonical JSON, and
-`CoreProtocol.Cli`'s hold `parseUpTo` and `parse` to `canonicalJson`. This imports only what `Core.Protocol` does, so
-anything that may import that (a composition's decoder) may import this.
+`CoreProtocol.Cli`'s hold `parseUpTo` and `parse` to `canonicalJson`. They are a test over those texts, not a theorem:
+no proof says a reader here answers as the function it stands in for on every text. This imports only what
+`Core.Protocol` does, so anything that may import that (a composition's decoder) may import this.
 -/
 module
 

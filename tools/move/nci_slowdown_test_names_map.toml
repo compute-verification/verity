@@ -1,0 +1,12 @@
+# benchmarks/nci: two test names that still called the slowdown a hardware multiple, an older name.
+
+[words]
+
+[[words_in]]
+files = ["benchmarks/nci/tests/test_statement.py"]
+
+[words_in.words]
+test_the_slowdown_is_a_hardware_multiple_against_the_unconstrained_run = "test_the_slowdown_compares_with_the_unconstrained_run"
+test_d_is_the_hardware_multiple_of_the_binding_terms = "test_the_slowdown_is_set_by_the_binding_terms"
+
+[keep]

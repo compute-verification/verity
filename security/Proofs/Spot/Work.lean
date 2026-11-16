@@ -7,7 +7,7 @@ import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
 /-!
-# Skippable work: what the incorrect proof blocks' cones and luck bound
+# ε_skip work: what the incorrect proof blocks' cones and luck bound
 
 A run commits `σ` while computing only the units `K`; the units it skips are `univ \ K`. A skipped unit can be correct
 for three reasons: it is downstream of an incorrect proof block (its inputs are garbage the prover chose, which may make

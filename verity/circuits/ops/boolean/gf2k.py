@@ -150,12 +150,12 @@ def kmul_forms(C, a0: list, a1: list, b0: list, b1: list) -> list[list]:
 
 Gf128Mul = TR.definition(
     "Gf128Mul", 1, lambda C, a, b: mul_forms(C, a, b), (("a", F), ("b", F)), F,
-    doc="a · b in GF(2^128) = GF(2)[x]/(x^128 + x^7 + x^2 + x + 1), bit i the coefficient of x^i (C-Flock's F): Karatsuba to "
+    doc="a · b in GF(2^128) = GF(2)[x]/(x^128 + x^7 + x^2 + x + 1), bit i the coefficient of x^i (Flock's F): Karatsuba to "
         "single bits, 2,187 ANDs")
 
 Gf256Mul = TR.definition(
     "Gf256Mul", 1, lambda C, a0, a1, b0, b1: kmul_forms(C, a0, a1, b0, b1), (("a", K), ("b", K)), K,
-    doc="a · b in GF(2^256) = F[u]/(u^2 + u + x^-1), an element (c0, c1) = c0 + c1 u over C-Flock's F: (p0 + x^-1 p1, p2 + p0) "
+    doc="a · b in GF(2^256) = F[u]/(u^2 + u + x^-1), an element (c0, c1) = c0 + c1 u over Flock's F: (p0 + x^-1 p1, p2 + p0) "
         "for p0 = a0 b0, p1 = a1 b1, p2 = (a0 + a1)(b0 + b1), three Gf128Mul circuits, 6,561 ANDs")
 
 

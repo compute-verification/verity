@@ -2,7 +2,7 @@
 # The trace corpus (corpus.py's docstring) on one leased GPU of a node, from the shipped tree's root, as a job whose
 # input is the C4 shard benchmarks/ppl/datasets.json pins (c4-validation.00000-of-00008.json.gz), in a GPU slot:
 #   [CORPORA="llama32_1b/seeded;llama32_1b/async-greedy:heavy,smallkv"] [REQUESTS=1000] [MAX_MIN=45] [JOIN=0] \
-#     env CHECK_SLOTS=/workspace/research/locks/gpu/slots python3 tools/verity/check/slot.py --by LANE -- \
+#     env CHECK_SLOTS=/workspace/research/locks/gpu/slots python3 tools/check/slot.py --by LANE -- \
 #     bash benchmarks/network_e2e/traces/run.sh
 # JOIN=0 leaves the summaries and the comparison to join.sh on a CPU node.
 # CORPORA's entries, apart by spaces or ";", are MODEL/VARIANT[:TRACE,...] (corpus.MODELS, corpus.VARIANTS, corpus.TRACES;
@@ -17,7 +17,7 @@
 # The hostile-scheduler test serves corpus.HOSTILE's traces, honest first, synchronous and async, e.g.
 #   CORPORA="llama32_1b/greedy:honest,refuse-1,refuse-2,refuse-3,shortest-4;llama32_1b/async-greedy:honest,refuse-5,shortest-6"
 # and the same for seeded; its OUT (corpus/ and compare/) goes in whole as one vllm-adversarial-schedule/v1 tree.
-# The warden traces (corpus.WARDEN) need benchmarks/network_traces/warden_serve.py and the warden in the shipped tree:
+# The network attester traces (corpus.NETWORK_CERTIFIER) need verity/protocols/resource_accounting/network/attester/network_attester_serve.py and the network attester in the shipped tree:
 #   CORPORA="llama32_1b/async-greedy:warden-heavy,warden-smallkv"
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?run this under research run}; OUT=$D/out

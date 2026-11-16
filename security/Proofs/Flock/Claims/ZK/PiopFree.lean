@@ -124,7 +124,7 @@ theorem piopCut_of_phases {coin : ℕ → ℕ → F128} {n : ℕ} {st : Setup} (
   try dsimp only
   rw [Replay.bind_go h₂']
   try dsimp only
-  rw [Replay.bind_go (Flock.Firewall.Finish.rankCheck_pass_go l₂' hrk')]
+  rw [Replay.bind_go (Flock.ZkServer.Finish.rankCheck_pass_go l₂' hrk')]
   try dsimp only
   rw [Replay.bind_go h₃']
   exact ⟨_, t₃', l₃', rfl, by omega⟩
@@ -142,16 +142,16 @@ theorem piopCut_split_rank {coin : ℕ → ℕ → F128} {n : ℕ} {st : Setup} 
         ((ringSwitchCut (asksCut coin n) src.sv (abcClaims st.m st.kLog zc lc ++ extras)).run t₂).go l₂ =
           (.ok ((ss, T, sws), t₃), l₃) := by
   unfold piopCut at h
-  obtain ⟨⟨zp', zc⟩, t₁, l₁, h₁, h⟩ := Flock.Firewall.Finish.run_bind_ok h
+  obtain ⟨⟨zp', zc⟩, t₁, l₁, h₁, h⟩ := Flock.ZkServer.Finish.run_bind_ok h
   try dsimp only at h
-  obtain ⟨⟨lp', lc⟩, t₂, l₂, h₂, h⟩ := Flock.Firewall.Finish.run_bind_ok h
+  obtain ⟨⟨lp', lc⟩, t₂, l₂, h₂, h⟩ := Flock.ZkServer.Finish.run_bind_ok h
   try dsimp only at h
-  obtain ⟨u, t₂', l₂', hr, h⟩ := Flock.Firewall.Finish.run_bind_ok h
+  obtain ⟨u, t₂', l₂', hr, h⟩ := Flock.ZkServer.Finish.run_bind_ok h
   have hok := rankCheckP_ok hr
   obtain ⟨ht, hl⟩ := rankCheckP_go hr
   rw [ht, hl] at h
   try dsimp only at h
-  obtain ⟨⟨ss', T', sws'⟩, t₃', l₃', h₃, h⟩ := Flock.Firewall.Finish.run_bind_ok h
+  obtain ⟨⟨ss', T', sws'⟩, t₃', l₃', h₃, h⟩ := Flock.ZkServer.Finish.run_bind_ok h
   try dsimp only at h
   rw [pure_go] at h
   simp only [Prod.mk.injEq, Except.ok.injEq] at h
@@ -213,7 +213,7 @@ theorem piopCut_of_repFwC {x : Msg} (hx : Live x) {c : Fin (refK x) → FlockDep
     {pads : FlockComplete.PadsZk} {ic : FlockComplete.InnerCommit} {vals : Array _root_.Flock.F128}
     {extra lanePad : ℕ → ℕ → _root_.Flock.F128} {salt : ℕ → ℕ → ByteArray} {t₀ : _root_.Flock.Transcript}
     {l : Array Msg} {p : _root_.Flock.Zk.ZkProof} {t : _root_.Flock.Transcript} {l' : Array Msg}
-    (h : ((_root_.Flock.Firewall.Finish.repFwC (FlockComplete.asksCut (ligCoin c) n)
+    (h : ((_root_.Flock.ZkServer.Finish.repFwC (FlockComplete.asksCut (ligCoin c) n)
       (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash) st sch tPad rep dom g cm0 extras pads ic vals extra
       lanePad salt).run t₀).go l = (.ok (p, t), l'))
     (hl : l.size = repBase x (2 * j + r)) (lay' : _root_.Flock.Zk.PadLayout) (src : FlockComplete.RepSrc)
@@ -222,8 +222,8 @@ theorem piopCut_of_repFwC {x : Msg} (hx : Live x) {c : Fin (refK x) → FlockDep
     ∃ res t₃ l₃, ((FlockComplete.piopCut (FlockComplete.asksCut (ligCoin c) n) st lay' src cap' root' extras'
       (priorE c j r) (Composed.maskWordsOf (stsOf x)[j]!)).run t₀').go l = (.ok (res, t₃), l₃) := by
   obtain ⟨hm, -⟩ := tab_bounds hx hj
-  obtain ⟨_, _, _, _, _, _, _, hfw⟩ := _root_.Flock.Firewall.Finish.repFwC_piopFw h
-  obtain ⟨_, _, _, _, _, _, h₁, h₂, h₃⟩ := _root_.Flock.Firewall.Finish.piopFw_split hfw
+  obtain ⟨_, _, _, _, _, _, _, hfw⟩ := _root_.Flock.ZkServer.Finish.repFwC_piopFw h
+  obtain ⟨_, _, _, _, _, _, h₁, h₂, h₃⟩ := _root_.Flock.ZkServer.Finish.piopFw_split hfw
   obtain ⟨res, t₃, l₃, hrun, -⟩ := FlockComplete.piopCut_of_phases (by omega) h₁ h₂ h₃ lay' src cap' root' hes
     (priorE c j r) (Composed.maskWordsOf (stsOf x)[j]!) t₀' rfl fun _ _ _ _ _ _ _ _ h₁' h₂' =>
       rank_at_admits hx hA hj hr (ligCoin c) n (fun _ _ _ => rfl) st hsm hsk hfk _ _ _ _ ht₀' hl h₁' h₂'

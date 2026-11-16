@@ -269,7 +269,7 @@ def _program(a: argparse.Namespace) -> Any:
     from verity.circuits.program import Program
 
     if a.model == "tiny":
-        from verity.definitions.registry import b1
+        from verity_vllm.definitions.registry import b1
         from verity.circuits.tiny import TINY
         return Program(bind(b1.Serve, C=TINY, LP=3, STEPS=2))
     return one_call(resolver(a.resolver, "--definition")(a.definition))

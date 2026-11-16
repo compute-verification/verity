@@ -142,9 +142,9 @@ theorem plays_opening {m : ℕ} (hm : 7 ≤ m) (c : Fin 2 → Model.Claim GF128 
     PlaysT (opening execArith hm [c 0, c 1]) (openSteps s ρ γ)
       (opResult execArith hm [c 0, c 1] [(c 0, s 0, ρ 0), (c 1, s 1, ρ 1)] γ) := by
   have h₀ : PlaysT (opStep (c 0)) [.inl ⟨Fin 128 → GF128, s 0⟩, .inr ⟨Fin 7 → GF128, ρ 0⟩] (c 0, s 0, ρ 0) :=
-    playsT_recv_bind (playsT_draw_bind (.ret _))
+    playsT_recv_bind (playsT_sample_bind (.ret _))
   have h₁ : PlaysT (opStep (c 1)) [.inl ⟨Fin 128 → GF128, s 1⟩, .inr ⟨Fin 7 → GF128, ρ 1⟩] (c 1, s 1, ρ 1) :=
-    playsT_recv_bind (playsT_draw_bind (.ret _))
+    playsT_recv_bind (playsT_sample_bind (.ret _))
   have hm₁ : PlaysT ([c 1].mapM opStep)
       ([.inl ⟨Fin 128 → GF128, s 1⟩, .inr ⟨Fin 7 → GF128, ρ 1⟩] ++ ([] ++ [])) [(c 1, s 1, ρ 1)] := by
     rw [List.mapM_cons, List.mapM_nil]
@@ -188,7 +188,7 @@ theorem opening_of_steps (e : ExecHolo) (l : List Step) (s : Fin 2 → Fin 128 �
 /-- **`RecOpening.run`'s residuals are zero only when each claim passes the verifier's value check** on its ring
 switch: its first stage is `ringSwitch` (`ringSwitch_checks`). -/
 theorem checks_of_run {sh : Flock.Shape} {M : Flock.RecAlgebra.Messages F128}
-    {a : Fin 2 → Flock.RecAlgebra.AClaim F128} {k₀ k₁ : ℕ} {src : Flock.RecAlgebra.CoinSource} {res : Array F128}
+    {a : Fin 2 → Flock.RecAlgebra.AClaim F128} {k₀ k₁ : ℕ} {src : Flock.RecAlgebra.RoundCoins} {res : Array F128}
     (h : Flock.RecOpening.run sh M #[a 0, a 1] k₀ src = .ok (res, k₁)) (hz : ∀ x ∈ res, x = 0) (i : Fin 2) :
     Flock.dot (FlockSoundness.Refine.wOf (a i).toClaim) M.rs[i.val]! = (a i).toClaim.value := by
   unfold Flock.RecOpening.run at h
@@ -208,7 +208,7 @@ theorem packed_check {m : ℕ} (hm : 7 ≤ m) {c : Flock.Claim} {c' : Model.Clai
 /-! ## The read fact -/
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
+  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
 /-- **(n4's read fact) R's opening steps are the opening's prover's**, at every accepted outcome: on the tape of V*'s
 layers' messages and the rounds' coins, the part past both sparse phases begins with the opening's steps, whose ring
@@ -218,7 +218,7 @@ def OpeningRead (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : ByteArra
   F.AtAccepted dg N k Rw fun R ω t Lb =>
     let u := F.run R ω t Lb
     ∃ (sh : Flock.Shape) (M : Flock.RecAlgebra.Messages F128) (a : Fin 2 → Flock.RecAlgebra.AClaim F128)
-      (src : Flock.RecAlgebra.CoinSource) (k₀ k₁ : ℕ) (res : Array F128) (ρ : Fin 2 → Fin 7 → GF128) (γ : Fin 2 → GF128),
+      (src : Flock.RecAlgebra.RoundCoins) (k₀ k₁ : ℕ) (res : Array F128) (ρ : Fin 2 → Fin 7 → GF128) (γ : Fin 2 → GF128),
       Flock.RecOpening.shape? (holoAt st hp).cls.shape.mReg 2 = some sh ∧
       Flock.RecOpening.run sh M #[a 0, a 1] k₀ src = .ok (res, k₁) ∧ (∀ x ∈ res, x = 0) ∧
       (∀ i, FlockSoundness.Refine.ClaimRel (holoAt st hp).cls.shape.mReg (a i).toClaim (u.claim i).toClaim) ∧

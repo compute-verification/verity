@@ -71,7 +71,7 @@ open Lean (Json JsonNumber)
 theorem decodeJ_recordObj {h : ByteArray → ByteArray}
     (h64 : ∀ b, (h b).size = 64) {spec : SessionSpec} {t : String} (ht : spec.tables = #[t])
     (hct : spec.coinTree = none)
-    (hdraw : DrawOk spec) (hsig : 0 < spec.sigma.size)
+    (hdraw : SampleOk spec) (hsig : 0 < spec.sigma.size)
     {rb : ByteArray} (hrb : 0 < rb.size)
     {points : Array (Array F128)} (hpts : points.size = spec.points) (hpm : ∀ p ∈ points, p.size = spec.mPts)
     {streams : Array (Array Round)} (hss : streams.size = spec.repStreams.size)
@@ -98,15 +98,15 @@ theorem decodeJ_recordObj {h : ByteArray → ByteArray}
   have hlm : Record.str l "mode" = .ok "exchange" := str_same hls (gL (by simp [linkList]))
   have hsg : Record.str l "sigma" = .ok (hexOf spec.sigma) :=
     str_same hls (gL (v := hexJ spec.sigma) (by simp [linkList]))
-  obtain ⟨dv, hdv, hdvs⟩ := hs.getObjVal (gR (k := "unit_draw") (v := spec.unitDraw.getD Json.null)
+  obtain ⟨dv, hdv, hdvs⟩ := hs.getObjVal (gR (k := "unit_draw") (v := spec.unitSample.getD Json.null)
     (by simp [recordList]))
   simp only [hlm, hsg, FlockComplete.ok_bind, beq_self_eq_true, check_true, hdv]
   have hdc : ∀ o : Option Json, (dv = Json.null → o = none) → (dv ≠ Json.null → o = some dv) →
-      Draw.check o spec.unitDraw spec.instances = .ok () := by
+      Draw.check o spec.unitSample spec.instances = .ok () := by
     intro o ho₁ ho₂
-    unfold DrawOk at hdraw
+    unfold SampleOk at hdraw
     revert hdraw hdvs
-    cases spec.unitDraw with
+    cases spec.unitSample with
     | none =>
       intro _ hdvs
       simp only [Option.getD_none] at hdvs

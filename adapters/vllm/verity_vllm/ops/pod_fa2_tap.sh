@@ -9,9 +9,9 @@
 #   cd <tree>/adapters/vllm && bash verity_vllm/ops/pod_fa2_tap.sh                # ~10-15 min first time (nvcc), seconds after
 #   -> prints  FA2-TAP-OK <sha256 of verity_fa2_matReq.so> hdims=<mask> <path>          (or FA2-TAP-FAIL <reason>, exit 1)
 #
-# What it does: (1) clones vllm-project/flash-attention at the pinned 506341a1 (+ cutlass submodule) into /workspace/cp/vllm-flash-attn
-# when absent; (2) copies it to $FA2/trees/tap8 and applies verity_tap_v7.patch + apply_v8.py (parametric (kBlockN, kHeadDim) M1
-# layout; see fa2_tap_src/apply_v8.py); (3) builds with `verity-vllm fa2-tap-build` (fa2_tap_src/build_ext.py; same flags as the pinned CMake build, sm arch from the
+# What it does: (1) clones vllm-project/flash-attention at the pinned 506341a1 (+ cutlass submodule) into $FA_SRC
+# (default: beside $FA2, /workspace/cp/vllm-flash-attn) when absent; (2) copies it to $FA2/trees/tap8 and applies verity_tap_v7.patch + apply_fa2_tap.py (parametric (kBlockN, kHeadDim) M1
+# layout; see fa2_tap_src/apply_fa2_tap.py); (3) builds with `verity-vllm fa2-tap-build` (fa2_tap_src/build_ext.py; same flags as the pinned CMake build, sm arch from the
 # device) into $FA2/build/matReq (the path row_pod.sh / commit_delta --hidden-so use; an earlier hd-64-only .so is kept as
 # build/matReq_hd64_r9/); (4) verifies: the .so loads, exposes verity_set_tap_v8 / verity_tap_hdims, tap mode 3 / src 59, and the
 # hdims mask contains every requested head dim.  Exactness per head dim is a separate step: tests/properties/fa_tap_exactness_gpu.py (needs the GPU).
@@ -28,6 +28,7 @@ if [ -z "${CUDA_HOME:-}" ]; then for c in /usr/local/cuda-12.9 /usr/local/cuda; 
 export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda}; export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
 export MAX_JOBS=${MAX_JOBS:-32}
 FA2=${FA2:-/workspace/cp/fa2}; HDIMS=${HDIMS:-${FA2_TAP_HDIMS:-64,96,128,256}}
+FA_SRC=${FA_SRC:-$(dirname "$FA2")/vllm-flash-attn}   # the pinned upstream tree, beside $FA2
 PIN=506341a143fcabd4bb79052a7605ada727d6b3f5
 SRC=$REPO/verity_vllm/acquire/fa2_tap_src
 ROW_GUARD=${FA2_TAP_ROW_GUARD:-0}; NAME=verity_fa2_matReq; BUILD=matReq; DEFS="VERITY_TAP=3,VERITY_MAT_SRC=59"
@@ -40,15 +41,15 @@ $PY -c "import ninja" 2>/dev/null || $PY -m pip install -q ninja || fail "ninja"
 mkdir -p "$FA2/trees" "$FA2/build" "$FA2/logs"
 
 # (1) pinned tree
-if [ ! -d /workspace/cp/vllm-flash-attn/.git ]; then
-  git clone -q https://github.com/vllm-project/flash-attention.git /workspace/cp/vllm-flash-attn || fail "clone vllm-flash-attn"
+if [ ! -d "$FA_SRC"/.git ]; then
+  git clone -q https://github.com/vllm-project/flash-attention.git "$FA_SRC" || fail "clone vllm-flash-attn"
 fi
-( cd /workspace/cp/vllm-flash-attn && git checkout -q $PIN && git submodule update --init --depth 1 csrc/cutlass >/dev/null 2>&1 ) || fail "checkout $PIN"
-[ "$(cd /workspace/cp/vllm-flash-attn && git rev-parse HEAD)" = "$PIN" ] || fail "tree is not at $PIN"
+( cd "$FA_SRC" && git checkout -q $PIN && git submodule update --init --depth 1 csrc/cutlass >/dev/null 2>&1 ) || fail "checkout $PIN"
+[ "$(cd "$FA_SRC" && git rev-parse HEAD)" = "$PIN" ] || fail "tree is not at $PIN"
 
 # (2) tap8 tree = pin + v7 patch + v8 (idempotent)
-if [ ! -d "$FA2/trees/tap8" ]; then cp -r /workspace/cp/vllm-flash-attn "$FA2/trees/tap8" || fail "copy tree"; fi
-( cd "$FA2/trees/tap8" && python3 "$SRC/apply_v8.py" csrc/flash_attn/src "$SRC" ) | tail -3 || fail "apply_v8"
+if [ ! -d "$FA2/trees/tap8" ]; then cp -r "$FA_SRC" "$FA2/trees/tap8" || fail "copy tree"; fi
+( cd "$FA2/trees/tap8" && PYTHONPATH="$REPO${PYTHONPATH:+:$PYTHONPATH}" verity-vllm fa2-tap-apply --src csrc/flash_attn/src --src-dir "$SRC" ) | tail -3 || fail "fa2-tap-apply"
 grep -q "Verity_mat_ctx<kBlockM, kBlockN, kHeadDim>" "$FA2/trees/tap8/csrc/flash_attn/src/flash_fwd_kernel.h" || fail "tap8 tree not v8"
 [ "${TREE_ONLY:-0}" = "1" ] && { echo "FA2-TAP-TREE-OK $FA2/trees/tap8"; exit 0; }
 
@@ -67,7 +68,7 @@ HAVE=0
 if [ -f "$OUT/$NAME.so" ]; then
   HAVE=$($PY -c "import torch; torch.ops.load_library('$OUT/$NAME.so'); print(int(torch.ops.$NAME.verity_tap_hdims()))" 2>/dev/null || echo 0)
 fi
-# Rebuild only when the SOURCE SET or the BUILD CONFIG changed: sha256 over every file of fa2_tap_src (patch, apply_v8,
+# Rebuild only when the SOURCE SET or the BUILD CONFIG changed: sha256 over every file of fa2_tap_src (patch, apply_fa2_tap,
 # build_ext, stubs, headers) + the pinned FA tree commit + arch + hdims + defines + the nvcc version, recorded beside the .so
 # ($OUT/source_set.sha256) after a successful build.  Decision recorded in the release log: REBUILD (why) | REBUILD-SKIP (hash equal) |
 # ADOPT (an existing hdims-complete build from before this gate is taken as the baseline for the current source set WITHOUT rebuilding -- the

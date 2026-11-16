@@ -21,7 +21,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 
 `holoProg_of_zclc` is `Runs.prog_of_zclc` at a holo shape: `holoProg_of_checks` with its zerocheck and lincheck checks
 from `zclc_of_residuals_dec`. A holo record keeps `z_partial`'s round, which issued no coins, so the rep's rounds are
-not `NoEmpty`; E reads them through `CoinSource.ofRounds`, which skips the empty ones (`ofRounds_filter`). The checks are
+not `NoEmpty`; E reads them through `RoundCoins.ofRounds`, which skips the empty ones (`ofRounds_filter`). The checks are
 taken at the transcript's rounds with their empty ones filtered out (`R'`), whose rounds below `z_partial`'s are the
 transcript's (`filter_getElem!_of`: every one of them issued coins, `HoloLcAnswered` and the zerocheck's counts), and
 read back at the transcript's.

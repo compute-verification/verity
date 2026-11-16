@@ -84,7 +84,7 @@ theorem value_foldRounds_sum_le (A : Arith F K) (hA : A.Correct) {ι : Type} (S 
   | k + 1, N, s, q, hq, hs => by
       have := hA.charTwoK
       rw [foldRounds_succ]
-      refine (value_drawK_le A hA _ _ (fun r => ∃ M ∈ S,
+      refine (value_sampleK_le A hA _ _ (fun r => ∃ M ∈ S,
           q.eval r = (roundPolyLo (k + N) (u M) v).eval r)
           ((2 * S.card : ℕ) / Fintype.card K) (((2 * k * S.card : ℕ) : ℝ≥0∞) / Fintype.card K)
           ?_ fun r hr => ?_).trans ?_
@@ -128,7 +128,7 @@ theorem value_foldRounds_sum_invariant (A : Arith F K) (hA : A.Correct) :
   | k + 1, s, q, hq => by
       have := hA.charTwoK
       rw [foldRounds_succ]
-      refine le_antisymm ((value_drawK_le A hA _ _ (fun _ => False) 0 0 (by simp [prCoin, avg])
+      refine le_antisymm ((value_sampleK_le A hA _ _ (fun _ => False) 0 0 (by simp [prCoin, avg])
         fun r _ => ?_).trans (by simp)) zero_le
       rw [value_send]
       refine iSup_le fun msg => ?_

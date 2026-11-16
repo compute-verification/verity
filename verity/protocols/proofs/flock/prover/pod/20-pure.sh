@@ -39,7 +39,7 @@ python3 - <<EOF | tee $O/lowering.txt
 from verity_flock import lowering
 import hashlib
 for r in ("$REL",) + (("fp8-hopper",) if "$REL" != "fp8-hopper" else ("bf16-hopper",)):
-    t = lowering.netlist(r); open("$O/net-%s.txt" % r, "w").write(t)
+    t = lowering.circuit_description(r); open("$O/net-%s.txt" % r, "w").write(t)
     d = hashlib.sha256(t.encode()).hexdigest(); print(r, d, "PINNED" if d == lowering.PINS[r] else "NOT-PINNED")
 EOF
 grep -q "^$REL .* PINNED" $O/lowering.txt || exit 3
@@ -49,7 +49,7 @@ for mode in $MODE; do case $mode in
 selftest)
   for v in ${SELF_VUS:-8 64}; do
     python3 -m verity_flock.instances $REL $v $O/inst-$REL-$v.bin --procs $TH | tee -a $O/instances.txt
-    $B selftest --instances $O/inst-$REL-$v.bin --netlist $O/net-$REL.txt --netlist-other $O/net-$OTHER.txt 2>$O/selftest-$v.err \
+    $B selftest --instances $O/inst-$REL-$v.bin --circuit-description $O/net-$REL.txt --circuit-description-other $O/net-$OTHER.txt 2>$O/selftest-$v.err \
       | tee $O/selftest-$REL-$v.txt | grep -E '^(NEG|SELFTEST)' | cut -c1-240
   done
   grep -h '^NEG' $O/selftest-$REL-*.txt > $O/negatives-$REL.tsv ;;
@@ -58,14 +58,14 @@ sweep)
     --runs ${RUNS:-5} --procs $TH ${VERIFIER:+--verifier $VERIFIER} 2>&1 | tee $O/sweep-$REL.log | cut -c1-600 ;;
 serve)
   python3 -m verity_flock.instances $REL ${SERVE_VUS:-4096} $O/inst-$REL-serve.bin --procs $TH
-  $B serve --listen 0.0.0.0:7400 --out $O/sessions-$REL --pin $PIN --instances $O/inst-$REL-serve.bin --netlist $O/net-$REL.txt ;;
+  $B serve --listen 0.0.0.0:7400 --out $O/sessions-$REL --pin $PIN --instances $O/inst-$REL-serve.bin --circuit-description $O/net-$REL.txt ;;
 replay)
   for d in ${REPLAY_DIR:?}/p*-*/; do
     n=$(basename $d | cut -d- -f2)
     python3 -m verity_flock.instances $REL $n $O/inst-$REL-$n.bin --procs $TH >/dev/null
     for s in $d/sessions/p*/; do
       i=$(basename $s | cut -c2-5); r=$(printf "%02d" $((10#$i)))
-      $B replay --instances $O/inst-$REL-$n.bin --netlist $O/net-$REL.txt --pin $PIN --session $s/session.json \
+      $B replay --instances $O/inst-$REL-$n.bin --circuit-description $O/net-$REL.txt --pin $PIN --session $s/session.json \
         --proofs $d/proofs/run$r-rep0.proof,$d/proofs/run$r-rep1.proof 2>/dev/null | sed "s|^|$(basename $d)/$(basename $s)\t|" | tee -a $O/replay-$REL.tsv | cut -c1-240
     done
   done ;;

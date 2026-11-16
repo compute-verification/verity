@@ -1,11 +1,12 @@
-/-
-`RecVStar.checkLabels` on a population of four units: a sampled table's statement must label its instances with the units its
-sample proves, at one table and at two (each table's part of the sample, `tableDraw`, as `Stmt.setupTables` builds it).
--/
 module
 
 public import Flock.RecVStar
 meta import Flock.RecVStar
+
+/-!
+`RecVStar.checkLabels` on a population of four units: a sampled table's statement must label its instances with the units its
+sample proves, at one table and at two (each table's part of the sample, `tableSample`, as `Stmt.setupTables` builds it).
+-/
 
 @[expose] public section
 
@@ -26,8 +27,8 @@ def stmt (labels : List Nat) : Stmt :=
 def ok (draw : Option Json) (count : Nat) (labels : List (List Nat)) : Bool :=
   (checkLabels draw count (labels.toArray.map stmt)).isOk
 
-#guard tableDraw (subset [0, 1, 2, 3]) 2 1 == subset [2, 3]
-#guard tableDraw (subset [1, 3]) 1 0 == subset [1, 3]
+#guard tableSample (subset [0, 1, 2, 3]) 2 1 == subset [2, 3]
+#guard tableSample (subset [1, 3]) 1 0 == subset [1, 3]
 
 #guard ok (some (subset [1, 3])) 1 [[1, 3]]
 #guard !ok (some (subset [1, 3])) 1 [[0, 1]]

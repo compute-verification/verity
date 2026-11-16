@@ -2,7 +2,7 @@ module
 
 public import Proofs.Properties.Verity.Sampled.Lines
 public import Proofs.Properties.Verity.Sampled.Binding
-public import Proofs.Properties.NetworkCertifier.Check.TransferBlocks
+public import Proofs.Properties.Certifier.Check.TransferBlocks
 public import Proofs.Core.Game.Tape
 import all Init.Data.Ord.String
 import all Lean.Data.Json.Basic
@@ -18,7 +18,7 @@ what the play's signatures are on (`signsPlay_dev`), so `Binding.logged_le` hold
 
 * **The lines** (`rootValue`, `releaseValue`, `helloValue`, `openValue`): the values the deployed challenger writes as
   its release log's lines (`LiveRecord._root` and `LiveRecord._release`, `LiveChallenger.sample_tree` and
-  `LiveChallenger.open_tree` in `verity/core/protocols/spot/challenger.py`), each line its value's
+  `LiveChallenger.open_tree` in `verity/protocols/proofs/spot/device/challenger.py`), each line its value's
   `Flock.canon` text (`lineOf`). Each value holds its keys in order and prints, so its line is its text
   (`canon_lineOf`), and it has the fields v2 reads (`root_value`, `release_plain`, `hello_value`, `open_value`).
 * **The printer** (`printLog`, `prints_printLog`): a log's lines, from what the device holds between releases (its
@@ -116,14 +116,14 @@ theorem sortedKeys_mkObj {l : List (String × Json)} (hl : (l.map (·.1)).Pairwi
 def Printed (d : Json) : Prop := sortedKeys d = true ∧ ∃ t, Flock.canon d = .ok t
 
 theorem printed_str (s : String) : Printed (.str s) :=
-  ⟨by unfold sortedKeys; rfl, Properties.NetworkCertifier.canon_str s⟩
+  ⟨by unfold sortedKeys; rfl, Properties.Certifier.canon_str s⟩
 
 theorem printed_nat (n : ℕ) : Printed (Lean.toJson n) :=
-  ⟨by unfold sortedKeys; rfl, Properties.NetworkCertifier.canon_nat n⟩
+  ⟨by unfold sortedKeys; rfl, Properties.Certifier.canon_nat n⟩
 
 theorem printed_mkObj {l : List (String × Json)} (hl : (l.map (·.1)).Pairwise (· < ·))
     (hv : ∀ p ∈ l, Printed p.2) : Printed (Json.mkObj l) :=
-  ⟨sortedKeys_mkObj hl fun p hp => (hv p hp).1, Properties.NetworkCertifier.canon_mkObj fun p hp => (hv p hp).2⟩
+  ⟨sortedKeys_mkObj hl fun p hp => (hv p hp).1, Properties.Certifier.canon_mkObj fun p hp => (hv p hp).2⟩
 
 theorem printed_spec (spec : Flock.CoinTree.Spec) : Printed spec.toJson := by
   refine printed_mkObj (by simp only [List.map_cons, List.map_nil]; decide) fun p hp => ?_
@@ -133,7 +133,7 @@ theorem printed_spec (spec : Flock.CoinTree.Spec) : Printed spec.toJson := by
   · exact printed_nat _
   · exact printed_str _
   · refine ⟨Properties.Challenger.CanonRead.sortedKeys_arr.2 fun x hx => ?_,
-      Properties.NetworkCertifier.canon_arr fun x hx => ?_⟩ <;>
+      Properties.Certifier.canon_arr fun x hx => ?_⟩ <;>
     · obtain ⟨s, -, rfl⟩ := Array.mem_map.1 hx
       first | exact (printed_str s).1 | exact (printed_str s).2
 
@@ -1010,7 +1010,7 @@ theorem printsLog_dev (S : Exchange → RunSetup) (o : Exchange) : Lines.PrintsL
 
 /-- **`Binds` at v2's read, at the device's history at each play** (`Binding.binds_of_prints`): at every setup, each
 play's history printed its log (`printsLog_dev`). -/
-theorem binds_dev {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α)
+theorem binds_dev {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α)
     (k : Verity.Registration.Composite) (S : Exchange → RunSetup) (θ : ByteArray) :
     Binding.Binds V k Binding.readsV2 (dev S) θ :=
   Binding.binds_of_prints V k (dev S) θ fun o _ => printsLog_dev S o
@@ -1085,7 +1085,7 @@ them in a play (`ledger_le`). `draws` are the bits it samples at the close, and 
 A deployment opens only the auditor's live window: the window its ledger's open names (`OpensOn`'s `w`) is the one the
 auditor runs, never one the prover's side chooses, since nothing the verifier keys on comes from the prover's side.
 Here `opens θ a` reads the prover's request `a`, and nothing in this structure ties the window it opens to the
-auditor's. `logged_le_dev` reads only the play's log (`Binding.Logged`), so it holds at every `opens`; the leg's
+auditor's. `logged_le_dev` reads only the play's log (`Binding.Logged`), so it holds at every `opens`; the subprotocol's
 assembly takes the live-window rule as a hypothesis or a field. -/
 structure Deployment where
   run : ByteArray → ByteArray → List Release → ByteArray → List Bool → RunSetup
@@ -1156,7 +1156,7 @@ at a vocabulary whose signer at the parameters is the deployment's at the vocabu
 signer signs is one a history of the setup's ledger lines, or of the run that released the play's log, signs
 (`Deployment.signer`), and the device's history at the play holds that run (`dev_play`) and those lines under the
 parameters' key. -/
-theorem signsPlay_dev {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α) (P : Deployment)
+theorem signsPlay_dev {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α) (P : Deployment)
     (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (hD : V.signer θ = P.signer V.families θ) :
     Binding.SignsPlay V (dev (P.setupOf V.families)) θ F c := by
   intro o ho key hk m hm
@@ -1206,7 +1206,7 @@ theorem signsPlay_dev {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintyp
 accepted play whose log v2 read isn't the device's is at most as likely as the read finder's collision plus the
 forger's forgery (`Binding.logged_le`), the device's history at each play having printed the play's log (`binds_dev`)
 and signed what the play's signatures are on (`signsPlay_dev`). -/
-theorem logged_le_dev {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α)
+theorem logged_le_dev {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α)
     (T : PinnedTables) (k : Verity.Registration.Composite) (P : Deployment) (θ : ByteArray) (F : Array ByteArray)
     (c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (hD : V.signer θ = P.signer V.families θ) :
     Game.prob (fun o => V.Verdict k .sampled o ∧ ¬ Binding.Logged Binding.readsV2 o) (V.game θ F c) σ ≤

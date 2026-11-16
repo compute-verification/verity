@@ -3,9 +3,9 @@
 Three ways to state `ScaledMmFp8Block_v2{K,N,128}` for Flock (`verity_flock.multi_unit`), measured side by side on CPUs at
 each shape `K:N:n` (n instances, one x row each):
 
-- `c`: one statement, N * K/128 k-step units and a scale stage of N slots per VU, the stage returning the outputs;
-- `b`: two statements joined by a row, the writer's units returning temp and s and the reader's units the scale stage;
-- `a`: two tables with glue, `c`'s unit and stage circuits as tables and every stage port a glue relation (no rows, no `--zk`).
+- `c`: one statement, N * K/128 k-step proof blocks and a scale stage of N slots per VU, the stage returning the outputs;
+- `b`: two statements joined by a row, the writer's proof blocks returning temp and s and the reader's proof blocks the scale stage;
+- `a`: two tables with glue, `c`'s proof block and stage circuits as tables and every stage port a glue relation (no rows, no `--zk`).
 
 For each shape, `stage.py` stages `c` and `b` from synthetic values (checked against the served kernel's numpy twin and, when
 small enough, the Definition's evaluation); `prove.py` runs one loopback session of each without `--zk` and one with it,
@@ -22,7 +22,7 @@ research run --pool proofs --cwd source -- bash benchmarks/multi_unit/job.sh
 
 Its settings are environment variables: `MU_SHAPES` (default `1024:4:4 6144:16:2`), `MU_SELFTEST`, `MU_SELFTEST_ALL`,
 `MU_CASES` and `MU_CACHE` (where the builds are cached). It builds with `benchmarks/pouw/hidden_zk/job.sh` (sourced: flock-circuit,
-the Lean `flock-verify`, a venv with numpy) and builds flock-live's tests from an upstream Flock checkout with `verity/protocols/proofs/flock/prover`'s patches.
+the Lean `verity-verify-proof`, a venv with numpy) and builds flock-live's tests from an upstream Flock checkout with `verity/protocols/proofs/flock/prover`'s patches.
 Results go to `$RESEARCH_RUN_DIR/out`, one directory per shape (`k<K>-n<N>-i<n>/`), and scratch to a temporary directory the job
 removes.
 

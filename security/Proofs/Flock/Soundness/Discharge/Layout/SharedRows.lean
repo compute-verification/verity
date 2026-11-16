@@ -15,9 +15,9 @@ set_option Elab.async false
 
 A shared-row population keeps its tables' rows as its `b ‖ c` and reads instance `i`'s row `p` at table `p`'s row
 `refs[i · np + p]` (`Public.digest`); `HmRow.drawn` keeps the rows and takes the proved units' refs. So a sampled instance's
-`b ‖ c` is its proved unit's in the population (`drawn_digestW`), and every one is 128 bytes (`pop_digest_sizeW`:
+`b ‖ c` is its proved unit's in the population (`sampled_digestW`), and every one is 128 bytes (`pop_digest_sizeW`:
 `HmRow.loadPublic` checks every ref against its table's count, and the tables' rows are `BC_BYTES`-long pieces of the
-body, `loadPublic_shared`). `bc_drawnS` is `bc_drawn` without `pop.tables = none`: a registered value's rows are read
+body, `loadPublic_shared`). `bc_sampledS` is `bc_sampled` without `pop.tables = none`: a registered value's rows are read
 from a shared-row file's tables (`Flock.Registered.check` refuses any other), so a statement with registered reads
 needs it. The shared-row lemmas keep their names in `Hidden`, where the hidden-output path first needed them.
 -/
@@ -162,16 +162,16 @@ theorem pop_digest_sizeW {tags : Tags} {c : Circuit} {file : ByteArray} {pop : P
 
 /-- **Instance `r`'s `b ‖ c` in a sampled statement is its proved unit's in the population's**, with or without shared
 rows. -/
-theorem drawn_digestW {tags : Tags} {c : Circuit} {file : ByteArray} {pop pub : Public} {d : Lean.Json}
-    {D : Draw.UnitDraw} (hload : HmRow.loadPublic tags c file = .ok pop) (h : HmRow.drawn c pop d = .ok pub)
-    (hD : Draw.UnitDraw.ofJson d = .ok D) (hlt : ∀ u ∈ D.proved, u < D.population) {r p : ℕ}
+theorem sampled_digestW {tags : Tags} {c : Circuit} {file : ByteArray} {pop pub : Public} {d : Lean.Json}
+    {D : Draw.UnitSample} (hload : HmRow.loadPublic tags c file = .ok pop) (h : HmRow.drawn c pop d = .ok pub)
+    (hD : Draw.UnitSample.ofJson d = .ok D) (hlt : ∀ u ∈ D.proved, u < D.population) {r p : ℕ}
     (hr : r < D.proved.size) (hp : p < c.ports.size) :
     pub.digest r p c.ports.size = pop.digest D.proved[r] p c.ports.size := by
   cases htab : pop.tables with
-  | none => exact drawn_digest h hD htab (loadPublic_digests hload htab).1 hlt hr hp
+  | none => exact sampled_digest h hD htab (loadPublic_digests hload htab).1 hlt hr hp
   | some t =>
     obtain ⟨hrs, -, -, -⟩ := (loadPublic_shared hload).2 t htab
-    obtain ⟨D', hD', hpopn, -, hptab, hdig⟩ := drawn_spec h
+    obtain ⟨D', hD', hpopn, -, hptab, hdig⟩ := sampled_spec h
     rw [hD] at hD'
     cases hD'
     rw [htab] at hptab hdig
@@ -186,18 +186,18 @@ theorem drawn_digestW {tags : Tags} {c : Circuit} {file : ByteArray} {pop pub : 
 
 /-- **A sampled statement's `hm96` chunk at block `o`, template instance `g`** is, at a proved unit, that unit's
 population `b ‖ c`, with or without shared rows. -/
-theorem bcChunk_drawnW {tags : Tags} {c : Circuit} {file : ByteArray} {pop pub : Public} {d : Lean.Json}
-    {D : Draw.UnitDraw} (hload : HmRow.loadPublic tags c file = .ok pop) (h : HmRow.drawn c pop d = .ok pub)
-    (hD : Draw.UnitDraw.ofJson d = .ok D) (hlt : ∀ u ∈ D.proved, u < D.population) {o g p : ℕ}
+theorem bcChunk_sampledW {tags : Tags} {c : Circuit} {file : ByteArray} {pop pub : Public} {d : Lean.Json}
+    {D : Draw.UnitSample} (hload : HmRow.loadPublic tags c file = .ok pop) (h : HmRow.drawn c pop d = .ok pub)
+    (hD : Draw.UnitSample.ofJson d = .ok D) (hlt : ∀ u ∈ D.proved, u < D.population) {o g p : ℕ}
     (hr : o * c.g + g < D.proved.size) (hp : p < c.ports.size) :
     bcChunk c pub o g p = pop.digest D.proved[o * c.g + g] p c.ports.size := by
-  obtain ⟨D', hD', -, hn, -, -⟩ := drawn_spec h
+  obtain ⟨D', hD', -, hn, -, -⟩ := sampled_spec h
   rw [hD] at hD'
   cases hD'
   unfold bcChunk Circuit.instOf
   rw [hn]
   simp only [hr, ↓reduceIte]
-  exact drawn_digestW hload h hD hlt hr hp
+  exact sampled_digestW hload h hD hlt hr hp
 
 end FlockSoundness.Discharge.Hidden
 
@@ -205,13 +205,13 @@ namespace FlockSoundness.Discharge.Layout
 
 open Refine FlockSoundness.Discharge.Hidden
 
-/-- **`bc_drawn` with or without shared rows**: the `b ‖ c` a satisfying witness of a sampled statement holds at a proved
+/-- **`bc_sampled` with or without shared rows**: the `b ‖ c` a satisfying witness of a sampled statement holds at a proved
 unit's `hm96` slot is the unit's `b ‖ c` in the registered population's public file, at every row. -/
-theorem bc_drawnS {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
+theorem bc_sampledS {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
     {tables : List (String × ByteArray)} {d : Lean.Json} {partition : Option Lean.Json} {program : Option ByteArray}
     {st : Stmt} (h : Stmt.setupH tags circuitFile publicFile coins tables (some d) partition program = .ok st)
     {pop : Public} (hpop : HmRow.loadPublic tags st.c publicFile = .ok pop)
-    {D : Draw.UnitDraw} (hD : Draw.UnitDraw.ofJson d = .ok D) (hlt : ∀ u ∈ D.proved, u < D.population)
+    {D : Draw.UnitSample} (hD : Draw.UnitSample.ofJson d = .ok D) (hlt : ∀ u ∈ D.proved, u < D.population)
     (L : FlockSoundness.Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
     (hregs : ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs)
     {z : Model.Witness (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
@@ -220,18 +220,18 @@ theorem bc_drawnS {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Co
     Binding.bytesAt z (fun (j : Fin 128) (t : Fin 8) =>
         (L.model regs).addr o (inBlockOr st.c.kLog (bcAddr st.c g p j.val t.val))) =
       (pop.digest D.proved[o.val * st.c.g + g] p st.c.ports.size).data.toList := by
-  obtain ⟨pop', hpop', hdr⟩ := setupH_drawn h
+  obtain ⟨pop', hpop', hdr⟩ := setupH_sampled h
   rw [hpop] at hpop'
   cases hpop'
   have hpopn : D.population = pop.n := by
-    obtain ⟨D', hD', hpn, -⟩ := drawn_spec hdr
+    obtain ⟨D', hD', hpn, -⟩ := sampled_spec hdr
     rw [hD] at hD'
     cases hD'
     exact hpn
-  rw [← bcChunk_drawnW hpop hdr hD hlt hr hp]
+  rw [← bcChunk_sampledW hpop hdr hD hlt hr hp]
   refine bc_pinned L regs hregs (setupH_regions h) hz o hg hg2 hp fun g' hg' => ?_
   have hr' : o.val * st.c.g + g' < D.proved.size := by omega
-  rw [bcChunk_drawnW hpop hdr hD hlt hr' hp]
+  rw [bcChunk_sampledW hpop hdr hD hlt hr' hp]
   exact pop_digest_sizeW hpop (by rw [← hpopn]; exact hlt _ (Array.getElem_mem hr')) hp
 
 end FlockSoundness.Discharge.Layout

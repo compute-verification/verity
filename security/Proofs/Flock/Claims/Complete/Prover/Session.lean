@@ -123,7 +123,7 @@ def recordJson (hs : Hashes M) (spec : SessionSpec) (rootB : Array ByteArray) (p
   let mut pf : Array Json := #[]
   for ((_, _, name), b) in want.zip proofs do
     pf := pf.push (Json.mkObj [("stream", Json.str name), (dk, hexJ (← spec.dgWith hs b))])
-  let draw := spec.unitDraw.getD Json.null
+  let draw := spec.unitSample.getD Json.null
   let j := Json.mkObj ([("kind", Json.str "flock-live-session/v1"), ("aborted", Json.null), ("hello", Json.str hello),
     ("config", Json.mkObj [("require_link", Json.bool true)]), ("link_mode", Json.str "exchange"), ("link", link),
     ("unit_draw", draw), ("streams", Json.arr ss), (s!"link_{dk}", hexJ (← spec.dgWith hs lb)),

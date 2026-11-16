@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # One-stage audit, run A7, on a CPU machine: the requirement's plan and memory-map units under the stratified sampling design, wired to
-# the remote bandwidth audit's ledger (a7.py), whose check 3 on each sampled receipt is proved by the check-3 units
-# (`remote_bandwidth.opening`), on hidden_zk's builds (its job.sh, sourced: Flock's flock-circuit and the Lean
-# flock-verify, cached under $A7_CACHE). From a clone, since the verifier builds the sampled-proofs Lean in the
+# PoUB's ledger (a7.py), whose check 3 on each sampled receipt is proved by the check-3 units
+# (`poub.opening`), on hidden_zk's builds (its job.sh, sourced: Flock's flock-circuit and the Lean
+# verity-verify-proof, cached under $A7_CACHE). From a clone, since the verifier builds the SPOT Lean in the
 # tree:
 #   A7_MEM_GB=96 bash benchmarks/one_stage/a7.sh
 #   (a job run from a clone of the tree)
@@ -15,15 +15,15 @@
 # their witness rows bound to canonical commitments, and the ledger takes them as its requirement link
 # (`audit.RequirementLink`): its ε the most share of the linked credit the units its sample leaves unproved can carry, its
 # δ the sample's. Checks 1-3 and 5 on each sampled receipt are proved, not opened, in a second statement, by the opening
-# unit (`verity.protocols.accounting.poub.verifier.commitments.gates.block_check`).
+# unit (`verity.protocols.resource_accounting.memory.poub.verifier.commitments.gates.block_check`).
 set -uo pipefail
 export HZ_CONFIGS=a7 HZ_MEM_GB=${A7_MEM_GB:?}
 [ -n "${A7_CACHE:-}" ] && export HZ_CACHE=$A7_CACHE
 source benchmarks/pouw/hidden_zk/job.sh
 export PATH=$HOME/.elan/bin:$PATH
-export PYTHONPATH=$SRC:$SRC/verity/protocols/proofs/flock/prover/python:$SRC/adapters/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
+export PYTHONPATH=$SRC:$SRC/verity/protocols/proofs/flock/prover/python:$SRC/adapters/vllm:$SRC/adapters/torch:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
 setup
-(cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
+(cd verity/protocols/proofs/spot/verifier/lean && lake build spot-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
 log "a7: k ${A7_K:-default}, steps ${A7_STEPS:-default}, samples ${A7_SAMPLES:-default}"
 "$PY" benchmarks/one_stage/a7.py --bin "$BIN" --lean "$LEAN" --out "$W/a7" ${A7_K:+--k "$A7_K"} ${A7_STEPS:+--steps "$A7_STEPS"} \

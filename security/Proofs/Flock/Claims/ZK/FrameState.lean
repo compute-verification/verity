@@ -66,15 +66,15 @@ transport (`LeanRelease.prog`) and the coins the stream answered (`coinsOf`). Th
 namespace Claims.ZKServer
 
 open _root_.Flock (F128)
-open _root_.Flock.Firewall.Frame (Cfg Masker roundFree check passes firstDiff inFree)
+open _root_.Flock.ZkServer.Frame (Cfg Masker roundFree check passes firstDiff inFree)
 open FlockSoundness.Refine (Frame encs)
 
 /-! ## The frame's check at level 0 -/
 
 theorem round_of_roundFree {c : Cfg} {s : Masker} {r : ByteArray} {n : ℕ} {o : ByteArray} {t : Masker}
     {fr : Array ℕ} (h : roundFree c s r n = .ok (o, t, fr)) :
-    _root_.Flock.Firewall.Frame.round c s r n = .ok (o, t) := by
-  unfold _root_.Flock.Firewall.Frame.round
+    _root_.Flock.ZkServer.Frame.round c s r n = .ok (o, t) := by
+  unfold _root_.Flock.ZkServer.Frame.round
   rw [h]
   rfl
 
@@ -110,7 +110,7 @@ theorem passes_eq {c : Cfg} {s : Masker} {v r : ByteArray} {n : ℕ} {o : ByteAr
 /-- The frame's `check` passes the device round only where `passes` does. -/
 theorem check_none_passes {c : Cfg} {s : Masker} {v r : ByteArray} {n : ℕ} {out : ByteArray} {s' : Masker}
     (h : check c s v r n = .ok (out, s', none)) : passes c s v r n = .ok none := by
-  unfold check _root_.Flock.Firewall.Frame.standIn at h
+  unfold check _root_.Flock.ZkServer.Frame.standIn at h
   cases hs : s.stopped <;> simp only [hs, Bool.false_eq_true, ↓reduceIte] at h
   · cases hp : passes c s v r n with
     | error e => simp only [hp] at h; cases h
@@ -118,11 +118,11 @@ theorem check_none_passes {c : Cfg} {s : Masker} {v r : ByteArray} {n : ℕ} {ou
       simp only [hp] at h
       cases w with
       | some w =>
-        cases hr : _root_.Flock.Firewall.Frame.round c { s with stopped := true } r n with
+        cases hr : _root_.Flock.ZkServer.Frame.round c { s with stopped := true } r n with
         | error e => simp only [hr] at h; cases h
         | ok x => simp only [hr] at h; cases h
       | none => rfl
-  · cases hr : _root_.Flock.Firewall.Frame.round c { s with stopped := true } r n with
+  · cases hr : _root_.Flock.ZkServer.Frame.round c { s with stopped := true } r n with
     | error e => simp only [hr] at h; cases h
     | ok x => simp only [hr] at h; cases h
 
@@ -130,7 +130,7 @@ theorem check_none_passes {c : Cfg} {s : Masker} {v r : ByteArray} {n : ℕ} {ou
 `round` returns on it, of the rep as it is or as a stopped rep's. -/
 theorem check_state {c : Cfg} {s : Masker} {v r : ByteArray} {n : ℕ} {o out : ByteArray} {t s' : Masker}
     {why : Option String} (hr : roundFree c s r n = .ok (o, t, #[])) (h : check c s v r n = .ok (out, s', why)) :
-    (out, s') = (o, t) ∨ _root_.Flock.Firewall.Frame.round c { s with stopped := true } r n = .ok (out, s') := by
+    (out, s') = (o, t) ∨ _root_.Flock.ZkServer.Frame.round c { s with stopped := true } r n = .ok (out, s') := by
   cases why with
   | some w => exact .inr (check_some h)
   | none =>
@@ -150,7 +150,7 @@ theorem check_l0 {c : Cfg} {m t : Masker} {v r : ByteArray} {n : ℕ} {st : Bool
   rcases check_state ho h with he | he
   · exact ⟨st, by cases he; rfl⟩
   · obtain ⟨o', ho'⟩ := hr true
-    have he' : _root_.Flock.Firewall.Frame.round c { m with stopped := true } r n = .ok (out, s') := he
+    have he' : _root_.Flock.ZkServer.Frame.round c { m with stopped := true } r n = .ok (out, s') := he
     rw [round_of_roundFree ho'] at he'
     cases he'
     exact ⟨true, rfl⟩
@@ -162,7 +162,7 @@ inner proof, with a value of the layout still unabsorbed, it takes the round's c
 theorem answer_l0_mid (c : Cfg) (s : Masker) (cs : Array F128) (hn : s.owed = some cs.size) (hi : s.inner = none)
     (hl : s.l0 = true) (hp : s.pos ≠ c.order.size) :
     s.answer c cs = .ok { s with owed := none } := by
-  unfold _root_.Flock.Firewall.Frame.Masker.answer
+  unfold _root_.Flock.ZkServer.Frame.Masker.answer
   simp [hn, hi, hl, hp] <;> rfl
 
 /-- **At level 0's last masked value, `ρ_0`'s words are its first `ρ` coins**: with every value of the layout absorbed
@@ -170,8 +170,8 @@ and no `ρ` coin yet, the frame keeps the round's two coins as `ρ`. -/
 theorem answer_rho_first (c : Cfg) (s : Masker) (a b : F128) (hn : s.owed = some 2) (hi : s.inner = none)
     (hl : s.l0 = true) (hp : s.pos = c.order.size) (hr : s.rho = #[]) :
     s.answer c #[a, b] = .ok { s with owed := none, rho := #[a, b] } := by
-  unfold _root_.Flock.Firewall.Frame.Masker.answer
-  simp [hn, hi, hl, hp, _root_.Flock.Firewall.Frame.rhoCoins, hr, _root_.Flock.Firewall.Frame.RHO_COINS] <;> rfl
+  unfold _root_.Flock.ZkServer.Frame.Masker.answer
+  simp [hn, hi, hl, hp, _root_.Flock.ZkServer.Frame.rhoCoins, hr, _root_.Flock.ZkServer.Frame.RHO_COINS] <;> rfl
 
 namespace LeanRelease
 
@@ -189,7 +189,7 @@ after `h` at the state `m`, round `h.length` is a frame round and the frame's ch
 the state of the frame of the rep that released it, after the history with that release and the stream's answer `a`,
 is the state the frame's check of a device round `v`, of a stopped rep or not, returned with that release, but for
 `stopped`, which the release does not read. A named hypothesis, one of the transport's trusts beside `ProgReads` and of
-its kind: `prog` is the state the session loop's requests leave the rep's frame in (`Flock.Firewall.Frames`, on the
+its kind: `prog` is the state the session loop's requests leave the rep's frame in (`Flock.ZkServer.Frames`, on the
 schedule `Drive.reqs` fixes), which a release takes as given. The frame's step (`Frame.step`) sets its state, at a round
 that leaves, to what `check` returns at the statement's scheduled round (`Place.sched`), to `round`'s of a stopped rep at
 the rep's stop (`Place.fail`: `check`'s of a stopped rep, where the loop sends the scheduled round) and to `round`'s at

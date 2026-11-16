@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One-stage audit, run A11, on a CPU machine: GLM-5.3 TP8 B1's served values through the one-stage audit (a11.py), or its census
 # and lowering probe (a11_kinds.py), on hidden_zk's builds (its job.sh, sourced: Flock's flock-circuit and the Lean
-# flock-verify, cached under $A11_CACHE). From a clone, since the verifier builds the sampled-proofs Lean in the tree:
+# verity-verify-proof, cached under $A11_CACHE). From a clone, since the verifier builds the SPOT Lean in the tree:
 #   A11_MODE=kinds|audit A11_MEM_GB=256 bash benchmarks/one_stage/a11.sh
 #   (a job run from a clone of the tree, 32 CPUs, 256 GB, up to 240 min, with its inputs sent)
 # kinds: a11_kinds.py on each sent descriptor (inputs/*.json.gz), JSON in $OUT/kinds-<name>.json.
@@ -21,10 +21,10 @@ export HZ_CACHE=${A11_CACHE:-$HOME/.cache/verity-a11}
 mkdir -p "$HZ_CACHE"
 source benchmarks/pouw/hidden_zk/job.sh
 export PATH=$HOME/.elan/bin:$PATH
-export PYTHONPATH=$SRC:$SRC/verity/protocols/proofs/flock/prover/python:$SRC/adapters/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
+export PYTHONPATH=$SRC:$SRC/verity/protocols/proofs/flock/prover/python:$SRC/adapters/vllm:$SRC/adapters/torch:$SRC/tools/config:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
 IN=${RESEARCH_RUN_DIR:?}/inputs
 command -v research >/dev/null && research keep "$HZ_CACHE" --owner @circuits --expires 4d --priority low --root / \
-  --why "A11's builds (flock-circuit, flock-verify, the venv), keyed by their inputs" >> "$OUT/job.log" 2>&1
+  --why "A11's builds (flock-circuit, verity-verify-proof, the venv), keyed by their inputs" >> "$OUT/job.log" 2>&1
 case ${A11_MODE:?} in
 kinds)
   PY=$(cached venv numpy2.5.3-blake3-1.0.9 build_python)/bin/python
@@ -44,11 +44,11 @@ kinds)
   ;;
 audit)
   setup
-  (cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
+  (cd verity/protocols/proofs/spot/verifier/lean && lake build spot-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
     || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
   TARG=()
   if [ -n "${A11_LAYOUT:-}" ]; then
-    TU=$(cached tmplunit "$(lean_key "$SRC/verity/protocols/proofs/flock/prover/tests/lean/TmplUnit.lean")" build_tmpl_unit)/.lake/build/bin/flock-tmpl-unit
+    TU=$(cached tmplunit "$(lean_key "$SRC/tests/verity/protocols/proofs/flock/prover/lean/TmplUnit.lean")" build_tmpl_unit)/.lake/build/bin/flock-tmpl-unit
     [ -x "$TU" ] || { log "flock-tmpl-unit build FAILED: $(tail -20 "$OUT/build-tmplunit.log")"; exit 1; }
     TARG=(--layout "$A11_LAYOUT" --tmpl-unit-bin "$TU")
   fi

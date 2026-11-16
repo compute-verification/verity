@@ -1,4 +1,4 @@
-# Two Intel Xeon Platinum 8468 sockets, the H200 nodes' host: the one source of its numbers (verity/hardware/README.md).
+# Two Intel Xeon Platinum 8468 sockets, the H200 nodes' host: the one source of its numbers (hardware/README.md).
 # Each number is { value, unit, mark, source }. mark: "ceiling" (no program on this host exceeds it, whatever firmware
 # it runs: what the model's premises need), "measurement" (a measured value, so only a lower bound on the ceiling) or
 # "placeholder" (neither, open). A host card is the server's CPUs and DRAM; the GPUs it carries are their own cards.

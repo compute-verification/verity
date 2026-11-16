@@ -23,7 +23,7 @@ from typing import Any
 @dataclass
 class _StepJob:
     step: int
-    metas: list                             # the step's `native_host.TensorMeta`s, in tree order
+    metas: Any                              # the step's `native_host.TensorMeta`s, in tree order, or a cached plan's record of them
     event: Any
     t_step_end: float = 0.0
     backlog: int = 0

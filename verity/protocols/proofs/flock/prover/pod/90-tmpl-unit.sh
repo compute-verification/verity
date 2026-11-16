@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # A templated statement end to end: RoPE d64 staged as verity/flock-circuit/tmpl (tests/tmpl_statement.py), its
 # unit read at layout LAYOUT by Lean's `flock-tmpl-unit` (tests/lean/TmplUnit.lean: the rows at Tmpl.posMap, an ORDER
-# line), proved by the CPU flock-circuit (--tmpl-unit) in one loopback session per mode, then Lean's `flock-verify verify` on each. The verifier
+# line), proved by the CPU flock-circuit (--tmpl-unit) in one loopback session per mode, then Lean's `verity-verify-proof verify` on each. The verifier
 # covers a templated statement only under --zk (`ProvedScope.scopeOkT`): the zk session, sampled (--draw subset:N, every
 # unit) and verified with the statement's partition and program (tmpl_statement.py's partition.json and program.json),
 # must be accepted, and the m0 one refused as a templated statement without --zk, by Lean and by the live server (its
-# LIVE line) alike. The zkfw session is the zk one proved behind the ZK server (FC_FIREWALL=1, Lean's flock-firewall
+# LIVE line) alike. The zkfw session is the zk one proved behind the ZK server (FC_ZK_SERVER=1, Lean's flock-zk-server
 # setting its Hello up at the templated statement with the partition and program), and must be accepted too. Each
 # session's coin tree is sampled and opened by its own challenger (challenger.sh: serve --tree-from,
 # the m0 session's under FC_COINS=tree), and its record held to that challenger's release log. Run from the
@@ -41,21 +41,21 @@ unset CARGO_TARGET_DIR
 trap 'rm -rf $S' EXIT
 { lscpu | grep -E 'Model name|^CPU\(s\)'; echo "pinned=$TU_PINNED rayon=$RAYON_NUM_THREADS slices=${SLICES:-}"; } > $O/host.txt 2>&1
 
-# Lean's flock-verify, and beside it the prover's flock-tmpl-unit (tests/lean/TmplUnit.lean, which unrolls the unit and so
+# Lean's verity-verify-proof, and beside it the prover's flock-tmpl-unit (tests/lean/TmplUnit.lean, which unrolls the unit and so
 # is no part of the verifier), built once per source, while the prover builds
-LSHA=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py key verity/protocols/proofs/flock/verifier $REPO/verity/protocols/proofs/flock/prover/tests/lean/TmplUnit.lean)
-LEAN_BIN=$L/lean-$LSHA/flock-verify; UNIT_BIN=$L/lean-$LSHA/flock-tmpl-unit; FW_BIN=$L/lean-$LSHA/flock-firewall
+LSHA=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py key verity/protocols/proofs/flock/verifier $REPO/tests/verity/protocols/proofs/flock/prover/lean/TmplUnit.lean)
+LEAN_BIN=$L/lean-$LSHA/verity-verify-proof; UNIT_BIN=$L/lean-$LSHA/flock-tmpl-unit; FW_BIN=$L/lean-$LSHA/flock-zk-server
 (
   export PATH=$HOME/.elan/bin:$PATH
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
   exec 9>$L/lean.lock; flock 9
   if [ ! -x $LEAN_BIN ] || [ ! -x $UNIT_BIN ] || [ ! -x $FW_BIN ]; then
     rm -rf $L/lean-src && LEAN_SRC=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py copy verity/protocols/proofs/flock/verifier $L/lean-src) \
-      && cp verity/protocols/proofs/flock/prover/tests/lean/TmplUnit.lean $LEAN_SRC/ \
+      && cp tests/verity/protocols/proofs/flock/prover/lean/TmplUnit.lean $LEAN_SRC/ \
       && printf '\n[[lean_exe]]\nname = "flock-tmpl-unit"\nroot = "TmplUnit"\n' >> $LEAN_SRC/lakefile.toml \
-      && (cd $LEAN_SRC && lake build flock-verify flock-tmpl-unit flock-firewall) && mkdir -p $L/lean-$LSHA \
-      && cp $LEAN_SRC/.lake/build/bin/flock-verify $LEAN_BIN && cp $LEAN_SRC/.lake/build/bin/flock-tmpl-unit $UNIT_BIN \
-      && cp $LEAN_SRC/.lake/build/bin/flock-firewall $FW_BIN
+      && (cd $LEAN_SRC && lake build verity-verify-proof flock-tmpl-unit flock-zk-server) && mkdir -p $L/lean-$LSHA \
+      && cp $LEAN_SRC/.lake/build/bin/verity-verify-proof $LEAN_BIN && cp $LEAN_SRC/.lake/build/bin/flock-tmpl-unit $UNIT_BIN \
+      && cp $LEAN_SRC/.lake/build/bin/flock-zk-server $FW_BIN
   fi
 ) > $O/build-lean.log 2>&1 &
 LP=$!
@@ -81,16 +81,16 @@ B=$BIN/flock-circuit; sha256sum $B | tee $O/binary.sha256
 UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $UV ] || { curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1; UV=$HOME/.local/bin/uv; }
 [ -x $W/py/bin/python ] || { $UV venv -q --python 3.12 $W/py && $UV pip install -q --python $W/py/bin/python numpy blake3; } || exit 1
-export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm
+export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch
 CHALLENGER_PY=python3
 challenger_built || exit 1
 
 D=$S/stage; N=8; LAYOUT=${LAYOUT:-iv}
-python3 verity/protocols/proofs/flock/prover/tests/tmpl_statement.py template --out $D > $O/template.json 2> $O/template.err || { tail -20 $O/template.err; exit 1; }
+python3 tests/verity/protocols/proofs/flock/prover/tmpl_statement.py template --out $D > $O/template.json 2> $O/template.err || { tail -20 $O/template.err; exit 1; }
 wait $LP; [ -x $LEAN_BIN ] && [ -x $UNIT_BIN ] && [ -x $FW_BIN ] || { tail -20 $O/build-lean.log; exit 1; }
 $UNIT_BIN $D/unit.tmpl --layout $LAYOUT --out $D/unit.placed > $O/tmpl.txt 2>&1 || { cat $O/tmpl.txt; exit 1; }
 grep -h '^TMPL ' $O/tmpl.txt | cut -c6- > $D/tmpl.json
-python3 verity/protocols/proofs/flock/prover/tests/tmpl_statement.py stage --out $D --tmpl $D/tmpl.json --layout $LAYOUT > $O/stage.json 2> $O/stage.err \
+python3 tests/verity/protocols/proofs/flock/prover/tmpl_statement.py stage --out $D --tmpl $D/tmpl.json --layout $LAYOUT > $O/stage.json 2> $O/stage.err \
   || { tail -20 $O/stage.err; exit 1; }
 mkdir -p $D/tables
 PIN=$(sha512sum $D/circuit.txt | cut -d' ' -f1)
@@ -99,8 +99,8 @@ for mode in ${MODES:-m0 zk zkfw}; do
   Z=; [ $mode != m0 ] && Z=--zk
   C=(--coins tree); [ $mode != m0 ] && C=()
   DRAW=(); [ $mode != m0 ] && DRAW=(--draw subset:$N)
-  PENV=(); [ $mode = zkfw ] && PENV=(FC_FIREWALL=1 FC_HOST_WITNESS=1 FC_FIREWALL_LEAN=$FW_BIN
-    FC_FIREWALL_STATEMENT=verity/flock-circuit/tmpl "FC_FIREWALL_HELLO_ARGS=--partition $D/partition.json --program $D/program.json")
+  PENV=(); [ $mode = zkfw ] && PENV=(FC_ZK_SERVER=1 FC_HOST_WITNESS=1 FC_ZK_SERVER_LEAN=$FW_BIN
+    FC_ZK_SERVER_STATEMENT=verity/flock-circuit/tmpl "FC_ZK_SERVER_HELLO_ARGS=--partition $D/partition.json --program $D/program.json")
   U=(--circuit $D/circuit.txt --tmpl-unit $D/unit.placed --tables $D/tables)
   $B statement $Z "${U[@]}" --instances $D/pub-$N.bin > $O/statement-$mode.txt 2>&1
   challenger_start $O/challenger-$mode || exit 1

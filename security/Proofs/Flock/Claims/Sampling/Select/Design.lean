@@ -27,8 +27,8 @@ theorem nat_toJson (m : ℕ) : nat? (Lean.toJson m) = some m := by
   simp [nat?, int?, Lean.toJson, Lean.JsonNumber.fromNat]
 
 /-- **`Flock.Draw.derive`'s bounds**: `1 ≤ k ≤ N`. -/
-theorem derive_bounds (k : ℕ) (S : Array (String × Array (ℕ × ℕ))) (law' : Flock.Draw.Law)
-    (h : Flock.Draw.derive k S = .ok law') : 1 ≤ k ∧ k ≤ strataSize S := by
+theorem derive_bounds (k : ℕ) (S : Array (String × Array (ℕ × ℕ))) (samplingDesign' : Flock.Draw.SamplingDesign)
+    (h : Flock.Draw.derive k S = .ok samplingDesign') : 1 ≤ k ∧ k ≤ strataSize S := by
   unfold Flock.Draw.derive at h
   dsimp only at h
   split at h
@@ -37,14 +37,14 @@ theorem derive_bounds (k : ℕ) (S : Array (String × Array (ℕ × ℕ))) (law'
     simp only [size_rs, size_strata, Bool.or_eq_true, decide_eq_true_eq, not_or, not_lt] at hc
     omega
 
-/-- **`Flock.Draw.deriveWork`'s law, with its refusals**: each stratum its ranges and a floor from the table, the
+/-- **`Flock.Draw.deriveWork`'s sampling design, with its refusals**: each stratum its ranges and a floor from the table, the
 population doing some work. -/
 theorem deriveWork_wf (k : ℕ) (S : Array (String × Array (ℕ × ℕ))) (tab : Array (String × ℕ × ℕ))
-    (law' : Flock.Draw.Law) (h : Flock.Draw.deriveWork k S tab = .ok law') :
+    (samplingDesign' : Flock.Draw.SamplingDesign) (h : Flock.Draw.deriveWork k S tab = .ok samplingDesign') :
     ∃ ws : Array Flock.Draw.WorkStratum,
       List.Forall₂ (fun p (w : Flock.Draw.WorkStratum) => w.units = p.2 ∧ ∃ e ∈ tab, w.floor = e.2.2) S.toList
         ws.toList ∧ Flock.Draw.totalWork ws ≠ 0 ∧
-      law' = .work k (ws.map fun s => { s with k := Flock.Draw.workK k s.work s.size (Flock.Draw.totalWork ws) s.floor }) := by
+      samplingDesign' = .work k (ws.map fun s => { s with k := Flock.Draw.workK k s.work s.size (Flock.Draw.totalWork ws) s.floor }) := by
   unfold Flock.Draw.deriveWork at h
   dsimp only at h
   split at h
@@ -380,14 +380,14 @@ theorem partition_covered (d : Program) (query : Lean.Json) (rs : Array Flock.Te
 /-- **The population's first stage is well formed over its strata**: the sampling design the sample samples, over strata of sizes
 `ns` summing to `n`, each of at least one unit. -/
 theorem first_wf (d : Program) (query : Json) (table : Option Json) (n : ℕ) (named : Json)
-    (derived : Option Flock.Draw.Law) (parsed : Flock.Draw.Law) (S : Array (String × Array (ℕ × ℕ)))
+    (derived : Option Flock.Draw.SamplingDesign) (parsed : Flock.Draw.SamplingDesign) (S : Array (String × Array (ℕ × ℕ)))
     (hS : Partition.strata d query = .ok S)
-    (hd : Draw.deriveLaw d query named table = .ok derived) (hp : Draw.flockLaw (lawObj named derived) n = .ok parsed)
+    (hd : Draw.deriveSamplingDesign d query named table = .ok derived) (hp : Draw.flockSamplingDesign (samplingDesignObj named derived) n = .ok parsed)
     (hsum : strataSize S = n) (hpos : ∀ m ∈ S.toList.map (fun p => rsSize p.2), 1 ≤ m) :
     (oneStageOf (derived.getD parsed)).WellFormed (S.toList.map fun p => rsSize p.2) := by
   have hsum' : (S.toList.map fun p => rsSize p.2).sum = n := hsum
-  rcases deriveLaw_cases d query named table derived hd with ⟨rfl, hk1, hk2⟩ | ⟨S', k, law', hS', rfl, hlaw⟩
-  · rcases flockLaw_cases _ _ _ hp with ⟨k, rfl, hk, -, hk0⟩ | ⟨a, b, rfl, hb, hab⟩ | hk | hk
+  rcases deriveSamplingDesign_cases d query named table derived hd with ⟨rfl, hk1, hk2⟩ | ⟨S', k, samplingDesign', hS', rfl, hlaw⟩
+  · rcases flockSamplingDesign_cases _ _ _ hp with ⟨k, rfl, hk, -, hk0⟩ | ⟨a, b, rfl, hb, hab⟩ | hk | hk
     · exact ⟨hk0, by rw [hsum']; exact hk⟩
     · exact ⟨hb, hab⟩
     · exact absurd hk hk1
@@ -395,10 +395,10 @@ theorem first_wf (d : Program) (query : Json) (table : Option Json) (n : ℕ) (n
   · rw [hS] at hS'
     obtain rfl := Except.ok.inj hS'
     rcases hlaw with hder | ⟨t, tab, ht, hwork⟩
-    · obtain ⟨hk1, hkn⟩ := derive_bounds k _ law' hder
-      obtain rfl := derive_ok k _ law' hder
+    · obtain ⟨hk1, hkn⟩ := derive_bounds k _ samplingDesign' hder
+      obtain rfl := derive_ok k _ samplingDesign' hder
       exact ⟨hk1, by rw [hsum']; rw [hsum] at hkn; exact hkn, hpos⟩
-    · obtain ⟨ws, hF, htot, rfl⟩ := deriveWork_wf k _ tab law' hwork
+    · obtain ⟨ws, hF, htot, rfl⟩ := deriveWork_wf k _ tab samplingDesign' hwork
       have hunits := units_of_forall₂ _ _ (hF.imp fun _ _ h => h.1)
       have hsz : S.toList.map (fun p => rsSize p.2) = ws.toList.map (·.size) := by
         have := congrArg (List.map rsSize) hunits

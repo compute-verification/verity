@@ -1,6 +1,6 @@
 """PoUB beside sbench's served arms on the GPU they share (`sbench.py --bw-passes GIB`, `dbw.py`).
 
-One process stands in for the auditor: PoUB's own verifier (`verity/protocols/accounting/poub/verifier/session/verifier.py`'s
+One process stands in for the auditor: PoUB's own verifier (`verity/protocols/resource_accounting/memory/poub/verifier/session/verifier.py`'s
 `Verifier`, its coins from an in-process challenger, the Lean verifier deciding) on a loopback socket. Its
 prover is `prover.py`, unmodified, on the GPU sbench leased (CUDA_VISIBLE_DEVICES inherited) and on --prover-cpus,
 over a store of GIB GiB of seeded payload under kv.cu's p1024 masked codec (`device.py`, the store `run.sh` registers on
@@ -31,13 +31,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from verity.protocols.accounting.poub.verifier import audit
-from verity.protocols.accounting.poub.verifier.session import verifier as V
-from verity.protocols.accounting.poub.verifier.session import wire
+from verity.device import load_card
+from verity.protocols.resource_accounting.memory.poub.verifier import audit, timing
+from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier as V
+from verity.protocols.resource_accounting.memory.poub.verifier.session import wire
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-RS = ROOT / "benchmarks" / "remote_session"
 
 EVENTS = os.fdopen(os.dup(1), "w", buffering=1)
 os.dup2(2, 1)
@@ -78,13 +78,14 @@ def main() -> int:
     ap.add_argument("--gib", type=float, default=24.0, help="the store, whole 1 GiB chunks")
     ap.add_argument("--lib", help="session.so (without it the prover's options name its backend: --cpu BLOCKS)")
     ap.add_argument("--kv", help="kv.so (p1024, masked)")
-    ap.add_argument("--lean-exe", type=Path, help="a built remote-audit-verifier (default: the verifier builds it)")
+    ap.add_argument("--lean-exe", type=Path, help="a built poub-verifier (default: the verifier builds it)")
     ap.add_argument("--jitter-ms", type=float, default=50.0)
     ap.add_argument("--quantile", default="max", choices=("p50", "p99", "p999", "max"))
     ap.add_argument("--pings", type=int, default=1000)
     ap.add_argument("--pace-pass-ms", type=float, default=0.0,
                     help="a paced stretch's groups are counted at this pass (0: the calibration's median)")
-    ap.add_argument("--hbm-bytes", type=int, default=V.GPU_HBM_BYTES, help="the memory line's capacity: one GPU's")
+    ap.add_argument("--hbm-bytes", type=int, default=load_card("rtx-pro-6000-server")["store"]["dram"]["value"],
+                    help="the memory line's capacity: one GPU's, its card's `store.dram`")
     ap.add_argument("--prover-py", default=sys.executable)
     ap.add_argument("--prover-cpus", help="the prover's cores (taskset -c; default this process's)")
     ap.add_argument("prover_args", nargs="*",
@@ -100,7 +101,7 @@ def main() -> int:
         name, _, value = a.prover_args.pop(0).partition("=")
         own[name] = value
     store = ["--lib", a.lib, "--kv", a.kv, "--gib", str(a.gib)] if a.lib else []
-    cmd = [a.prover_py, str(RS / "prover.py"), "--connect", f"127.0.0.1:{port}", "--out", str(a.out / "prover"),
+    cmd = [a.prover_py, str(ROOT / "verity/protocols/resource_accounting/memory/poub/prover/remote_session/prover.py"), "--connect", f"127.0.0.1:{port}", "--out", str(a.out / "prover"),
            "--plan", a.plan, *store, *a.prover_args]
     if a.prover_cpus:
         cmd = ["taskset", "-c", a.prover_cpus, *cmd]
@@ -140,9 +141,9 @@ def main() -> int:
         return head, body, stamp
 
     conn.send, conn.recv = sent, got
-    v = V.Verifier(conn, source=os.urandom(32), windows=1, window_ns=10 ** 9, samples=2773, delta=2.0 ** -40,
-                   jitter_ns=round(a.jitter_ms * 1e6), log=lambda m: print(m, flush=True), hbm_bytes=a.hbm_bytes,
-                   lean_exe=a.lean_exe)
+    v = V.Verifier(conn, figures=timing.RTX_PRO_6000_NODE, source=os.urandom(32), windows=1, window_ns=10 ** 9,
+                   samples=2773, delta=2.0 ** -40, jitter_ns=round(a.jitter_ms * 1e6), log=lambda m: print(m, flush=True),
+                   hbm_bytes=a.hbm_bytes, lean_exe=a.lean_exe)
     try:
         reg, cal = v.register()
     except (audit.RegistryError, ValueError, wire.Closed) as e:

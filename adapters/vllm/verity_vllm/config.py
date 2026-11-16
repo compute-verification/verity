@@ -168,7 +168,7 @@ class RowId:
             pfx = _ROW_INT_PREFIX.get(name)
             if pfx is None:
                 vals[name] = tok
-            elif tok.startswith(pfx) and tok[len(pfx):].isdigit():
+            elif tok.startswith(pfx) and tok[len(pfx):].isdecimal():
                 vals[name] = int(tok[len(pfx):])
             else:
                 raise ValueError(f"row id {row!r}: field {name} is {tok!r}, expected {pfx}<N>")
@@ -214,9 +214,9 @@ def row_target(row: str) -> str | None:
 
 
 #: The protocols a run can enable (`verity_vllm.protocols`), in install order, innermost first: PoUW replaces the
-#: linear layers' GEMMs, POUS decodes the weights those GEMMs read, sampled proofs commits what the model computed.
+#: linear layers' GEMMs, POUS decodes the weights those GEMMs read, SPOT commits what the model computed.
 PROTOCOLS = ("pouw", "pous", "sampled-proofs")
-#: The set a row runs when its target declares none: sampled proofs alone, the Commit under its committer's scheme
+#: The set a row runs when its target declares none: SPOT alone, the Commit under its committer's scheme
 #: (rows-sha512 by default, `pipeline.commit --commit-scheme`).
 DEFAULT_ROW_PROTOCOLS = ("sampled-proofs:rows-sha512",)
 _SCHEME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/+-]*")
@@ -376,7 +376,7 @@ def _fetch(paths: list[Path]) -> None:
         if missing := [rel for p, rel in zip(ps, rels) if not p.is_file()]:
             raise RuntimeError(f"{', '.join(missing)}: stored workloads, not here, and `research data fetch-fixtures` could not fetch "
                                f"them (rc {r.returncode}: {(r.stderr or r.stdout).strip()[-300:]}); fetch them where the evidence store "
-                               "is reachable, or name the public export with $RESEARCH_PUBLIC_URL")
+                               "is reachable, or name the store's public half with $RESEARCH_PUBLIC_URL")
 
 
 def workload_file(path: str | Path) -> Path:
@@ -713,7 +713,7 @@ class CommitConfig:
     commit_timeout: int | None = option("--commit-timeout", env="COMMIT_TIMEOUT", type=int, default=None,
                                         help="seconds (default scales with B and the envelope; TP: 7200)")
     vu_export: str = option("--vu-export", env="VU_EXPORT", default="1",
-                            help="0 opts out: the Commit exports a sample of the row's VUs as instance sets (verity_vllm.pipeline.vu_export)")
+                            help="0 opts out: the Commit exports a sample of the row's VUs as input sets (verity_vllm.pipeline.vu_export)")
     serving_rows: str | None = option("--serving-rows", env="SERVING_ROWS", default=None, metavar="PARTITION_JSON",
                                       help="opt in, never the record: the Commit also commits every unit of this partition file's templates "
                                            "in M0's serving row format (verity_vllm.pipeline.serving_rows), fixed before serving; a "
@@ -729,7 +729,7 @@ class CommitConfig:
                                                  help="the committer's key file SERVING_ROWS_TABLES is registered under (--new-key's)")
     remote_verifier: str | None = option("--remote-verifier", env="REMOTE_VERIFIER", default=None, metavar="HOST:PORT",
                                          help="the PoUB session's verifier: the Commit proves its store to it in lockstep "
-                                              "with its first instrumented run (verity_vllm.protocols.remote_bandwidth.remote; single-GPU rows)")
+                                              "with its first instrumented run (verity_vllm.protocols.poub.remote; single-GPU rows)")
     norm_tap: str = option("--norm-tap", env="NORM_TAP", default="1",
                            help="0 opts out, for A/B only: by default the row commits one scale per norm Call row (verity_vllm.query."
                                 "norm_scales) through the norm-scale tap (acquire.sources.norm_scale_source) when its manifest names norm scales")

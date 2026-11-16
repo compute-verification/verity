@@ -23,7 +23,7 @@ releases its own hold once it does (gate()); the lease pools' GPU holders use th
 a Job created while GPU quota is free is admitted in the same second, before any tick, so a lane must not resubmit a held Commit. `--dry-run` prints what it would do.
 
 Runs on vy-nebius-1 as research, from the deployed sky/, as the unit vy-commit-release (pods/nebius/units/), which appends its
-output to ~/commit-release/log. Its state (released, seen-inactive, no-release, cap-150, gpu-held) is in $VY_PACER_DIR, default ~/commit-release.
+output to ~/commit-release/log. Its state (released, seen-inactive, no-release, limit-150, gpu-held) is in $VY_PACER_DIR, default ~/commit-release.
 """
 import json
 import os
@@ -51,7 +51,8 @@ LIMIT_GB, LIMIT_LOW_GB, LIMIT_DROP_PCT = 2000, 150, 78  # the 78% drop latch and
 LIMIT_ROOM_PCT = 75   # the limit follows the disk, 3 points under the latch
 ROOT = Path(os.environ.get("VY_PACER_DIR", str(Path.home() / "commit-release")))
 NO_RELEASE = ROOT / "no-release"   # while it exists, nothing is released (new arrivals still wait deactivated)
-LIMIT_LATCH = ROOT / "cap-150"  # the drop is a latch: delete this file to go back to LIMIT_GB
+LIMIT_LATCH = ROOT / "limit-150"  # the drop is a latch: delete this file to go back to LIMIT_GB
+OLD_LATCH = ROOT / "cap-150"      # the latch under its name before the rename: the pacer renames it
 TICK_S, LOG_EVERY_S = 10, 60
 _last_tick = {"summary": None, "t": 0.0}
 STATE = ROOT / "released"
@@ -70,9 +71,21 @@ def log(msg):
     print(f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} {'DRY ' if DRY else ''}{msg}", flush=True)
 
 
+#: what the bundle reads run as root, by the paths sudo grants: bundles_gb probes each before reading
+FIND, XARGS, DU = "/usr/bin/find", "/usr/bin/xargs", "/usr/bin/du"
+BUNDLES = (f"sudo -n {FIND} /workspace/jobs/cov /workspace/jobs/probe-jit -xdev -name 'replay_bundle_p*' -prune -print0 2>/dev/null"
+           f" | sudo -n {XARGS} -0r {DU} -sb 2>/dev/null | awk '{{t+=$1}} END {{print t+0}}'")
+WRITTEN = f"sudo -n {DU} -sbc {{}}/commit/replay_bundle_p* 2>/dev/null | tail -1"
+
+
 def bundles_gb():
-    r = subprocess.run("sudo find /workspace/jobs/cov /workspace/jobs/probe-jit -xdev -name 'replay_bundle_p*' -prune -print0 2>/dev/null"
-                       " | sudo xargs -0r du -sb 2>/dev/null | awk '{t+=$1} END {print t+0}'", shell=True, capture_output=True, text=True)
+    """Raises where sudo refuses a read (BUNDLES, and WRITTEN in written_gb) to this login, as after a lock-out
+    (pods/nebius/lockout): their errors go to /dev/null, so a refusal would read as 0 GB and release Commits into a full disk."""
+    for tool in (FIND, XARGS, DU):
+        if subprocess.run(["sudo", "-n", "-l", tool], capture_output=True).returncode:
+            raise SystemExit(f"release.py: sudo refuses {tool} to this login, so the bundles can't be measured; nothing released. "
+                             "A locked node grants only `vy-sudo du-bundles` (pods/nebius/lockout): run the pacer as a root unit")
+    r = subprocess.run(BUNDLES, shell=True, capture_output=True, text=True)
     return int(r.stdout.strip() or 0) / 1e9
 
 
@@ -93,8 +106,7 @@ def written_gb(w):
     """What an unfinished Commit's bundle already holds on disk (it's counted in bundles_gb), so its estimate counts only the rest."""
     if not w.get("sweep") or not w.get("row"):
         return 0.0
-    r = subprocess.run(f"sudo du -sbc {w['sweep']}/{w['row']}/commit/replay_bundle_p* 2>/dev/null | tail -1", shell=True,
-                       capture_output=True, text=True)
+    r = subprocess.run(WRITTEN.format(f"{w['sweep']}/{w['row']}"), shell=True, capture_output=True, text=True)
     parts = r.stdout.split()
     return int(parts[0]) / 1e9 if parts and parts[0].isdigit() else 0.0
 
@@ -132,8 +144,9 @@ def learned():
     global _learned
     if _learned is None:
         try:
-            _learned = {k: float(v) for k, v in json.loads(SIZES.read_text()).items()}
-        except (OSError, ValueError):
+            _learned = {k: float(v) for k, v in json.loads(SIZES.read_text()).items()} if SIZES.exists() else {}
+        except (OSError, ValueError) as e:
+            log(f"{SIZES} unread, so no size is learned yet ({type(e).__name__}: {e})")
             _learned = {}
     return _learned
 
@@ -143,8 +156,9 @@ def learn(flying, written, jobs):
     GB per (batch x tokens) if its Job succeeded. A bundle on disk is no measure: its replay deletes it and may keep leaves, and
     a failed Commit's is partial."""
     try:
-        track = json.loads(TRACK.read_text())
-    except (OSError, ValueError):
+        track = json.loads(TRACK.read_text()) if TRACK.exists() else {}
+    except (OSError, ValueError) as e:
+        log(f"{TRACK} unread, so tracking starts again ({type(e).__name__}: {e})")
         track = {}
     for w in flying:
         t = track.setdefault(w["row"], {"gb": 0.0, "job": w.get("job", "")})
@@ -285,11 +299,14 @@ def tick():
     big = sum(1 for w in ws if (w["admitted"] or w["name"] in released) and batch(w["row"]) >= 8)
     gb = bundles_gb()
     disk = disk_pct()
-    if disk >= LIMIT_DROP_PCT and not LIMIT_LATCH.exists():
+    if OLD_LATCH.exists() and not DRY:
+        log(f"{OLD_LATCH} is the latch under its older name: renamed {LIMIT_LATCH}")
+        OLD_LATCH.replace(LIMIT_LATCH)
+    if disk >= LIMIT_DROP_PCT and not (LIMIT_LATCH.exists() or OLD_LATCH.exists()):
         log(f"disk {disk:.1f}% reached {LIMIT_DROP_PCT}%: the bundle limit drops to {LIMIT_LOW_GB} GB until {LIMIT_LATCH} is removed")
         if not DRY:
             LIMIT_LATCH.write_text(f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} disk {disk:.1f}%\n")
-    latched = LIMIT_LATCH.exists() or disk >= LIMIT_DROP_PCT
+    latched = LIMIT_LATCH.exists() or OLD_LATCH.exists() or disk >= LIMIT_DROP_PCT
     limit = LIMIT_LOW_GB if latched else room_limit(gb)
     flying = [w for w in ws if w["admitted"] or w["name"] in released]
     written = {w["name"]: written_gb(w) for w in flying}

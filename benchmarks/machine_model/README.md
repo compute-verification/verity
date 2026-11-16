@@ -56,12 +56,14 @@ own and changes with it.
   `lines(s, peaks)`.
 - **`data/` by path**, for a probe or a calculator that reads one file without the package: `census/`, `rows.csv`,
   `floors.csv`, `table.toml`, `citations.toml`, `designs.toml`, `cover/` and `devices/sm_NN/` ("Layout"). One test
-  outside this directory, `benchmarks/pouw/tests/test_census_cover.py`, also reads every table of class counts the
+  outside this directory, `tests/benchmarks/pouw/test_census_cover.py`, also reads every table of class counts the
   data holds: `honest/`, `designs/` and `headline.toml` by path, and `attacks/` through `all_attacks`.
 
 What it uses: scipy (pinned: a vector's margin is read at the vertex its LP solver returns) and numpy; a device's card
 file through `verity.device`, imported only where a ceiling is read (`model.card`, the card table, the opcode
-table), so only `theta`, `cover` and `render`'s `theta` section need `verity`; and nothing else of the workspace. A
+table, a data sheet's `card` lines, a device table route with no clock of its own, and the Lean headline families'
+f_max, pipes and peaks), so only `theta`, `cover`, `sheet`, `lean-headline`, `eps --lookups` on sm_90 and sm_100 and
+`render`'s `theta` and `table` sections need `verity`; and nothing else of the workspace. A
 design's perplexity arm and a sheet's Lean module are named in the data by path and never read by a computation. It
 measures nothing: no command starts a process, reads the environment or the network, or needs a GPU.
 
@@ -101,8 +103,8 @@ the vector fails its check or doesn't reproduce a published number.
 Every command prints to standard output and writes no file, `sheet --lean` included (it prints the Lean module), with
 two exceptions: `adopt` rewrites, in the data directory it is given, the census files of the epochs it touches and
 `rows.csv` ("Adopt a probe's census"), and `lean-headline` with neither `--check` nor `--numbers` writes the Lean
-files of the families' headline instances, `security/Definitions/Accounting/Headline/Sm120.lean` and
-`Sm120Measured.lean` and the five `Sm*.lean` of `security/Definitions/Accounting/HeadlineDc/`; `--json F` writes the
+files of the families' headline instances, `security/Definitions/Pouw/Headline/Sm120.lean` and
+`Sm120Measured.lean` and the five `Sm*.lean` of `security/Definitions/Pouw/HeadlineDc/`; `--json F` writes the
 data-centre families' readings to `F`.
 
 ## Layout
@@ -132,7 +134,7 @@ data-centre families' readings to `F`.
 - `data/forms.toml`: the MMA forms the cheater's tensor route mixes: each census kind's shape, split, sparsity, why its
   product is exact, and its SASS.
 - `data/table.toml`: the cheater's table route: lane instructions and L2 bytes a word, and the L2 bandwidth it is bound
-  by.
+  by, with the SMs and the clock it was measured at (the node's lock, not the card file's `clock.sm`).
 - `data/headline.toml`: each GPU family's design of record, the vector each reading prices it on, the conditions no
   computation shows, and its scope.
 - `data/theta.toml`: the card table: every tensor rate by format and shape, every lane pipe, the register file, shared
@@ -219,7 +221,7 @@ XOR-in folds' per-row keys did, and neither fold is an ε design ("ε in the ten
 
 ## Measure a facet
 
-A facet is measured by a microbenchmark that knows nothing about any algorithm (`../pouw/opcode_probe/`, on `../pouw/gpu_kit/`).
+A facet is measured by a microbenchmark that knows nothing about any algorithm (`../pouw/opcode_probe/`, on `../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/gpu_kit/`).
 Its numbers enter `data/` only from a run that passes every gate below. A refused probe stays in the run as a visible
 failure.
 
@@ -319,7 +321,7 @@ Beside its names, a design file has these keys:
 - `honest`, `L`, `work` (folded MMAs) and `plain` (unfolded MMAs beside them).
 - `[fold]` and `[filler]`: lane instructions a word by class. A filler runs on lanes. It states `p`, the probability a
   deficient block of it passes its check, and `luck`, the theorem that proves it: 0 for a receipt the check recomputes
-  (`Accounting.Guarantees.FillerLuck.PinnedFillBlocksDeficit`), 0.854 for pfill's cells (`FillerBlocksDeficit`), or `p =
+  (`ResourceAccounting.Guarantees.FillerLuck.PinnedFillBlocksDeficit`), 0.854 for pfill's cells (`FillerBlocksDeficit`), or `p =
   1` with no `luck`, no luck credit.
 - `[operands]`: the noise's operand-delivery floor φ_del.
 - `unit`: a proof block of `data/adapt.toml`, whole dot products by default.
@@ -338,7 +340,7 @@ for the design's noise, an arm that isn't a spec, and a filler off lanes.
 ## ε in the tensor–scalar model
 
 `eps` reports two layers that are never mixed. The protocol with 100% checking, every word and operand verified, has the
-core ε (`--checking full`, the default), Corollary D3's (`Accounting.Guarantees.TS.FloorCreditD3`):
+core ε (`--checking full`, the default), Corollary D3's (`ResourceAccounting.Guarantees.TS.FloorCreditD3`):
 
     1 − ε_core = (1 − ε_skip − ε_mand − ε_machine − ε_luck)(1 − ε_sched)(1 − ε_clock)
 
@@ -366,7 +368,7 @@ record, never to compare designs. `solve` prints τ, the price vectors' real-tim
   kernel, else the measured kernel's time plus the model's difference between the design and that kernel, else the
   model's alone.
 - **q***: the fewest lane instructions, past the fold, of a right fresh committed word whose computation reads no
-  data-dependent address. Assumed, never measured (`ScalarRoute`, `Accounting.Assumptions.TS`). `--q`, default 8.
+  data-dependent address. Assumed, never measured (`ScalarRoute`, `ResourceAccounting.Assumptions.TS`). `--q`, default 8.
 - **q*_T, b_T**: a table word's lane instructions, and the bytes it reads from its memory level. `data/table.toml`,
   `--lookup-q`, `--lookup-bytes`.
 - **q*_U**: q* on the uniform datapath, in uniform instructions. `--q-uniform`, default q*.
@@ -403,7 +405,7 @@ The other options:
 ## The headline is per node
 
 `machine-model headline`'s ε, and the Lean headline guarantees exported from this data
-(`Accounting.Guarantees.TS.Sm120SheetHeadline` and `Sm120MeasuredHeadline`), bound work done by the node: an accepted
+(`ResourceAccounting.Guarantees.TS.Sm120SheetHeadline` and `Sm120MeasuredHeadline`), bound work done by the node: an accepted
 window's node, its GPUs, host CPU and peer GPUs together, performed at least (1 − ε) of the work the window credits. The
 device that did it is left to the attribution layer. The floor argument places no work: every credited word is a fresh
 function of the post-coin noise, so it was computed after the coin, but nothing ties a committed tile to the GPU that
@@ -444,7 +446,8 @@ directory follows these rules:
   - `honest/`: its honest kernel at each L. `[mma] class` names the MMA's census class (sm_120's is `MMA`).
   - `designs.toml` and `designs/`: each design at each L, with the device's honest kernel, operand floor φ_del, clock
     and ε_clock, luck budget and baseline. The noise, ε_skip and ε_mand are sm_120's design's.
-  - `table.toml`: the table route at the device's SMs and f_max. Without an `l2`, the route is bound by its slots alone.
+  - `table.toml`: the table route, at the card file's `sm.count` and `clock.sm`. Without an `l2`, the route is bound by
+    its slots alone.
 
   `data/adapt.toml` holds for every device. A census with no uniform-datapath line (`UNI`) closes the uniform route.
 
@@ -457,11 +460,12 @@ the sheet's uniform pipe is the census's UP line. `eps --vector DS-NN` prices a 
 sm_120's is `DS-120`, an epoch of its own whose lines close where they open, so it moves no other vector; sm_90's and
 sm_100's are in `data/devices/sm_90/census/DS-90.csv` and `data/devices/sm_100/census/DS-100.csv`.
 
-A device's data-sheet constants are its `sheet.toml`, each with the document that states it and its grade:
+A device's data-sheet constants are its `sheet.toml`, each with the document that states it and its grade, and its
+value read from the card file (`card = "EXPR"`) where the card holds it:
 
 - `machine-model --device sm_90 sheet` derives every DS line from it, checks them against the census file, and checks
   each per-clock peak against the figure its document prints at the clock it's quoted at.
-- `sheet --lean` prints the Lean module `sheet.toml` names (`security/Definitions/Accounting/Sheets/`), which the tests
+- `sheet --lean` prints the Lean module `sheet.toml` names (`security/Definitions/Registration/Sheets/`), which the tests
   hold to that output and whose `machine_eq_census` proves the machine is the census.
 - `sheet --eps` prices the headline design's sheet reading on the sheet's own lines, with each peak read per second at
   f_max, and finds how much slower every tensor line can be before that ε moves; `sheet --eps --uni C …` prices it with

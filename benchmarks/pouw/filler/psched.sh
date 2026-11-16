@@ -13,7 +13,7 @@
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
-D=benchmarks/pouw/filler
+D=benchmarks/pouw/filler K=verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler
 export B; B=$(mktemp -d /tmp/psched.XXXXXX); trap 'rm -rf "$B"' EXIT
 export PS_ARMS=${PS_ARMS:-"32:2048:92:fixed:8:4:256:0.8"}
 export PS_REPS=${PS_REPS:-15} PS_PGATE_S=${PS_PGATE_S:-"128 256"}
@@ -27,7 +27,7 @@ export DFILL_COINS; DFILL_COINS=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
 echo "$DFILL_COINS" > "$O/coins.txt"
 nvcc --version | tail -2 > "$O/nvcc.txt"
 # shellcheck disable=SC2086
-nvcc -O3 -std=c++17 ${PS_NVCC--DDFILL_V1} -gencode arch=compute_120a,code=sm_120a -Xptxas -v -o "$B/dcap" $D/dcap.cu -lcublasLt -lnvidia-ml -ldl \
+nvcc -O3 -std=c++17 ${PS_NVCC--DDFILL_V1} -gencode arch=compute_120a,code=sm_120a -Xptxas -v -o "$B/dcap" $K/dcap.cu -lcublasLt -lnvidia-ml -ldl \
   > "$O/build.log" 2>&1 || { grep -E "error" "$O/build.log" | head -40; tail -20 "$O/build.log"; exit 4; }
 grep -A2 -E "Compiling entry function '_Z7dfill_" "$O/build.log" | grep -E "spill|Used" | head -12
 cuobjdump -sass "$B/dcap" | awk '/Function : /{p = /dfill_[kp]/} p' > "$O/sass-dfill.txt" 2>&1

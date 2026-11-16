@@ -51,8 +51,8 @@ from typing import Any
 
 import numpy as np
 
-from verity.commitments.windows import interface as IF
-from verity.commitments.windows import rows as CS
+from verity.commitments.periods import interface as IF
+from verity.commitments.periods import rows as CS
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.pipeline import slice_rows as SL
 from verity_vllm.pipeline.serving_templates import EXPERTS, shard_block, template
@@ -395,7 +395,7 @@ def commit_tables(plan: Plan, store: Any, weights: Callable, arrivals: Mapping[s
     held, under ``committer``'s secret ``key`` at the ``program`` and ``nonces`` its registration names (`committer`), by
     parameter.  Refused for a table the registration names no nonce for."""
     from verity.protocols.proofs.spot.verifier.one_stage import registered as G
-    from verity_vllm.protocols.pouw.h1 import registered as H1R
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import registered_commit
 
     out: dict[str, Any] = {}
     nonces, key = committer["nonces"], bytes(committer["key"])
@@ -415,7 +415,7 @@ def commit_tables(plan: Plan, store: Any, weights: Callable, arrivals: Mapping[s
             g = json.dumps(x[2]["args"][arg])
             if held is None or held[0] != g:
                 held = (g, _stack(slices, x, store, weights, int((arrivals or {}).get(x[0], 0)), arg, 8 if of == "w" else 32))
-            out[param] = H1R.commit(committer["program"], param, table_words(held[1], of, E, N, K, G_, n, b), key,
+            out[param] = registered_commit(committer["program"], param, table_words(held[1], of, E, N, K, G_, n, b), key,
                                     int(nonces[param]), keep_rows=True, schema=G.SCHEMA_SEG)
     return out
 
@@ -432,14 +432,16 @@ def commit_bnk(committer: Mapping[str, Any], label: str, K: int, field: Callable
     served), committed as core's ``registered.Registered`` of ``hm96-sha512/row/v2`` rows with its rows held, under
     ``committer``'s key at the program and nonce its registration names, once a process: a value this process committed is
     handed back as held and ``field`` is not called.  Refused for a parameter the registration names no nonce for."""
-    from verity_vllm.protocols.pouw.h1 import registered as H1R
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+        registered_commit,
+    )
 
     param = bnk_param(label, K)
     if param not in committer["nonces"]:
         raise ValueError(f"{param}: the committer's registration names no nonce for the value (records.expert_tables)")
     at = (bytes(committer["key"]), str(committer["program"]), param, int(committer["nonces"][param]))
     if at not in _BNK:
-        _BNK[at] = H1R.commit(at[1], param, bnk_words(field()), at[0], at[3], keep_rows=True)
+        _BNK[at] = registered_commit(at[1], param, bnk_words(field()), at[0], at[3], keep_rows=True)
     return _BNK[at]
 
 
@@ -453,7 +455,7 @@ def commit_shard(committer: Mapping[str, Any], label: str, H: int, shard: Callab
     registration holds the shard's tables at its one width, and a table at any other is none of its."""
     from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
-    from verity_vllm.protocols.pouw.h1 import registered as H1R
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import registered_commit
 
     nonces, key, W = committer["nonces"], bytes(committer["key"]), shard_block(H)
     out: dict[str, Any] = {}
@@ -467,7 +469,7 @@ def commit_shard(committer: Mapping[str, Any], label: str, H: int, shard: Callab
             if words is None:
                 words = shard()
             V, start = committer["vocab"][param]
-            _SHARDS[at] = H1R.commit(at[1], param, shard_words(words, V, start, b), key, at[3], keep_rows=True,
+            _SHARDS[at] = registered_commit(at[1], param, shard_words(words, V, start, b), key, at[3], keep_rows=True,
                                      schema=G.SCHEMA_SEG)
         out[param] = _SHARDS[at]
     return out
@@ -544,7 +546,7 @@ class Reader:
     def pair(self, x: Row) -> dict[str, Any]:
         """Pair row ``x``'s operands: its activation, scales, routed weight, expert, that expert's weight and scale rows and the
         row's served words, which the twin of the row on them must be."""
-        from verity.definitions.numerics.fp8_moe_rows import TWIN_DOT_OF, moe_expert_fp8_block_row
+        from verity_vllm.definitions.numerics.fp8_moe_rows import TWIN_DOT_OF, moe_expert_fp8_block_row
         from verity_vllm.query.program_view import spec_statics
 
         rid, _pi, r, d = x

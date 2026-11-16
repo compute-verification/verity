@@ -156,7 +156,7 @@ def rejSD : Sampling.Deploy Unit Unit Unit where
   commit := ⟨fun _ _ => .ret true, fun _ _ _ => []⟩
   universal _ := ⟨[], []⟩
   flock := rejD
-  stage2 _ := ∅
+  secondStage _ := ∅
   checked _ _ := []
   rounds _ _ := ∅
   session _ _ _ := none

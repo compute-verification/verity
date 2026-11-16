@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+__all__ = ["only_arm_summary", "replay_host", "replay_k_per_rank"]
+
 
 def replay_k_per_rank(k: int | None, world: int) -> dict[str, int] | None:
     """The config run's k units split over the ranks: rank r takes k // W, one more for r < k % W."""

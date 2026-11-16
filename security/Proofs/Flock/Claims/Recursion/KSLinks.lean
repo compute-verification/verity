@@ -94,7 +94,7 @@ def drawsOf {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.D
 
 /-- What the link finder reads at a sample: the run's coins, the run's messages, and `E_O`'s outer witnesses there (none
 where it gives up). -/
-noncomputable def drawView (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
+noncomputable def sampleView (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) : (ℕ → Coin) × List (Msg × Out) × List Flock.Wit :=
   (coinSeq d.1, (run H P D.V x ω d.1).msgs, ((EO D I DO decO).eval H P x ω d.1 d.2).1.getD [])
@@ -105,7 +105,7 @@ noncomputable def linkInputs (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin
     (ins : (Msg → Msg) → Msg → List ((ℕ → Coin) × List (Msg × Out) × List Flock.Wit) → W → Tb → List Msg)
     {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (r₀ : Fin (D.V.k x) → Coin) (c : (E H D I DO decO).C x) (w : W)
     (rs : Tb) : List Msg :=
-  ins H x ((drawsOf r₀ c).map (drawView H D I DO decO P x ω)) w rs
+  ins H x ((drawsOf r₀ c).map (sampleView H D I DO decO P x ω)) w rs
 
 /-- **`B_L`, the link finder** (extraction-based): sample the tape, the judged run's coins and `E*`'s; run `E*` with the
 table's rows (`EL`); where it extracts `(w, rows)`, run `E_O` at each sample `E*` may serve and output the first

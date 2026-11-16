@@ -61,7 +61,7 @@ import sys
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -95,7 +95,7 @@ clock = time.time
 
 
 def iso(t: float) -> str:
-    return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.fromtimestamp(t, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def utc(s: Any, what: str) -> float:
@@ -179,9 +179,12 @@ def parse_target(doc: Any, name: str) -> dict[str, Any]:
 # ---- files ------------------------------------------------------------------------------------------------------------------------------
 
 def read_json(p: Path) -> Any:
+    if not p.exists():
+        return None
     try:
         return json.loads(p.read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"keeper: {p} unread, read as none ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
 
 
@@ -270,7 +273,7 @@ def daily(spec: str, t: float) -> list[tuple[float, float]]:
     if not m:
         raise ValueError(f"KEEPER_DAILY_HOLD {spec!r} is not HH:MM-HH:MM")
     h0, m0, h1, m1 = map(int, m.groups())
-    day = datetime.fromtimestamp(t, timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    day = datetime.fromtimestamp(t, UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     out = []
     for d in range(-1, 4):
         s, e = day + timedelta(days=d, hours=h0, minutes=m0), day + timedelta(days=d, hours=h1, minutes=m1)
@@ -302,7 +305,8 @@ def grants() -> dict[str, float]:
         try:
             kv = dict(f.split("=", 1) for f in p.read_text().split(" cmd=", 1)[0].split() if "=" in f)
             since = utc(kv.get("since"), "since")
-        except (OSError, ValueError):
+        except (OSError, ValueError) as e:
+            print(f"keeper: {p.name} skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         if kv.get("run", "-") != "-":
             out[kv["run"]] = min(since, out.get(kv["run"], since))
@@ -340,8 +344,9 @@ def workload_in(pgid: int, run_dir: Path) -> bool:
             if int(Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[2]) == pgid \
                     and want in Path(f"/proc/{pid}/environ").read_bytes().split(b"\0"):
                 return True
-        except (OSError, IndexError, ValueError):
-            continue
+        except (OSError, IndexError, ValueError) as e:
+            if Path(f"/proc/{pid}").exists():
+                print(f"keeper: pid {pid} unread, so not counted in group {pgid} ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
     return False
 
 
@@ -411,7 +416,8 @@ def manual_cancel(run_dir: Path) -> bool:
     for line in text(run_dir / "events.jsonl").splitlines():
         try:
             rec = json.loads(line)
-        except ValueError:
+        except ValueError as e:
+            print(f"keeper: a line of {run_dir / 'events.jsonl'} is not JSON, skipped ({e})", file=sys.stderr, flush=True)
             continue
         if isinstance(rec, dict) and rec.get("kind") == "cancel_intent" and rec.get("actor") == "manual":
             return True
@@ -478,7 +484,7 @@ def stop_overruns(name: str, st: dict[str, Any], spans: list[tuple[str, float, f
 def new_run_id(now: float) -> str:
     """`research run`'s id format (runs.new_run_id), unused under the runs root and the requests."""
     while True:
-        rid = f"r{datetime.fromtimestamp(now, timezone.utc):%Y%m%d-%H%M%S}-{secrets.token_hex(2)}"
+        rid = f"r{datetime.fromtimestamp(now, UTC):%Y%m%d-%H%M%S}-{secrets.token_hex(2)}"
         if not (ROOT / "runs" / rid).exists() and not (ROOT / "requests" / rid).exists():
             return rid
 

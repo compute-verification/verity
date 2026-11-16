@@ -29,7 +29,7 @@ answered its sample by the deadline, and none when the prover could rebuild the 
 advice, timing advice, inputs, every refused port-window charged at its link's full capacity, so it fails closed, and
 everything a block out for maintenance held), and the failure probability (the sum of the claims' deltas). Beside the
 covert budget, which is only what goes beyond the committed computation, it reports the export (λ_out, `export_bits`):
-the committed bits that crossed a certified boundary out of a block, by port. They count as novel information read by
+the committed bits that crossed a certified boundary out of a block, by port. They count as fresh input read by
 their receivers once the declaration's certifiers cover every link; until then the export is reported
 as not applicable, with the uncovered links named.
 
@@ -56,7 +56,7 @@ from .memory import answer_time, fill_rate, into, regen_time
 from .physical import Assumption, Datacenter, Port
 from .time import Interval
 
-#: the premise that no undeclared compute is reachable from a block
+#: the premise that no unregistered hardware is reachable from a block
 FLEET_CLOSED = Assumption("fleet-closed", 1, "premise", "declared")
 #: salt custody (unproved): a salt the block's certifier releases only into it pins the work that depends on it, while
 #: k, the bits that could carry it out before registration, stays at most this many
@@ -137,13 +137,13 @@ class Account:
 
     @property
     def export_bits(self) -> float:
-        """The export, λ_out: the committed bits that crossed a certified boundary out of a block, novel information
+        """The export, λ_out: the committed bits that crossed a certified boundary out of a block, fresh input
         read by their receivers. Charged only when the declaration's certifiers cover every link (`export_charged`)."""
         return sum(self.exported.values())
 
     @property
     def export_charged(self) -> bool:
-        """Whether the export is charged: only once network certifiers cover every link, and not
+        """Whether the export is charged: only once network attesters cover every link, and not
         applicable while `uncovered` names any."""
         return not self.uncovered
 
@@ -156,7 +156,7 @@ class Account:
     def sound(self) -> bool:
         """No refused port-window and nothing overcredited: the AND over this model's own record check
         (`claims.check_records`), with no ε or share credit. The network verdict of record is the certifier's
-        `LinkWindows.network_verdict` (`verity/protocols/accounting/certifier/verifier/service.py`), the same AND over a link's outcomes
+        `TransferBlocks.network_verdict` (`verity/protocols/resource_accounting/network/verifier/service.py`), the same AND over a link's outcomes
         of record; this model builds no proof-system streams, so it doesn't read it."""
         return not self.refused and not self.overcredited
 

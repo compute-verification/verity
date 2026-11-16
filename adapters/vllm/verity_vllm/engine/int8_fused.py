@@ -2,7 +2,7 @@
 `quant_rows`, one Triton kernel bit for bit `int8_exact.quantize_rows`, and `scaled_mm`, one Triton GEMM whose epilogue is
 `int8_exact.dequantize`, so the exact linear is two launches a call (stock vLLM int8's count) instead of the torch bodies'
 roughly fourteen.  Both write into caller-owned buffers, allocate nothing and are graph-capturable once compiled.  Built and
-gated in `benchmarks/hash/exactlin` (kgate.py: bit-exact against int8_exact on the served shapes; replay.py: against the
+gated in `benchmarks/kernels/exactlin` (kgate.py: bit-exact against int8_exact on the served shapes; replay.py: against the
 Definitions' replay evaluators).
 
 For x [M, K] bf16, W [N, K] int8 and s_w [N] float32 (`engine.int8_exact`'s statement):
@@ -61,6 +61,9 @@ from verity_vllm.engine import int8_wgmma
 from verity_vllm.engine.int8_exact import UNIT, ZY_BYTES, zy_units
 from verity_vllm.engine.profiles.int8_gemm_configs import CONFIGS
 from verity_vllm.engine.profiles.int8_quant_plans import PRODUCER_WARPS, QUANT_PLANS
+
+__all__ = ["CONFIGS", "Cfg", "Workspace", "arch", "default_cfg", "pick", "product_zy", "ptx_check", "scaled_mm",
+           "scaled_mm_zy"]
 
 OPTS = {"enable_fp_fusion": False, "enable_reflect_ftz": False}
 
@@ -478,7 +481,7 @@ class Workspace:
     """The int32 partial sums and per-tile counters a split-K launch needs, zero between calls; one per device, sized
     once, so a call allocates nothing."""
 
-    def __init__(self, device, words: int = 64 * 32768, tiles: int = 1 << 16):
+    def __init__(self, device: torch.device | str | int, words: int = 64 * 32768, tiles: int = 1 << 16) -> None:
         self.ws = torch.zeros(words, dtype=torch.int32, device=device)
         self.cnt = torch.zeros(tiles, dtype=torch.int32, device=device)
 
@@ -548,7 +551,7 @@ def add_norm_quant(x: torch.Tensor, residual: torch.Tensor, weight: torch.Tensor
 
 
 def scaled_mm(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor,
-              cfg: Cfg | None = None, work: Workspace | None = None):
+              cfg: Cfg | None = None, work: Workspace | None = None) -> triton.compiler.CompiledKernel:
     """xq [M, K] int8, s_a [M] f32, w [N, K] int8 (row-major), s_w [N] or [N, 1] f32 -> y [M, N] bf16, in place.  A
     split-K `cfg` needs `work`."""
     m, k = xq.shape
@@ -578,7 +581,7 @@ def scaled_mm(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.T
 
 
 def scaled_mm_zy(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor, zy: torch.Tensor,
-                 rows: int, cfg: Cfg | None = None, work: Workspace | None = None):
+                 rows: int, cfg: Cfg | None = None, work: Workspace | None = None) -> triton.compiler.CompiledKernel:
     """`scaled_mm` into y, and zy [units, ZY_BYTES] uint8, the call's records over `rows` slots (`int8_exact.zy_records`),
     from the same accumulator, in place."""
     m, k = xq.shape
@@ -616,7 +619,7 @@ def linear(x: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor, xq: torch.Tensor
     scaled_mm(xq, s_a, w, s_w, y)
 
 
-def ptx_check(compiled) -> dict:
+def ptx_check(compiled: triton.compiler.CompiledKernel) -> dict:
     """What the PTX of a compiled kernel (a launch's return value) says about its float semantics."""
     ptx = compiled.asm["ptx"]
     name = compiled.metadata.name

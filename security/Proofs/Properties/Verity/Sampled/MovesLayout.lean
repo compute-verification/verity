@@ -8,7 +8,7 @@ public import Proofs.Properties.Verity.Sampled.Held
 # `MovesReach` at the session's layout
 
 At the readings and the decoders at the session's layout (`Live.layout`, `Live.tables`) and the sample-coupled coin map
-under `fieldEnc`, every clause of `MovesOf` holds at one witness of the joint law's support off the link's and the
+under `fieldEnc`, every clause of `MovesOf` holds at one witness of the joint distribution's support off the link's and the
 rounds' empty classes (`ReachesOff`): one widened sample, one set of link points and one set of rep rounds, since the
 three sit together inside the writer's output.
 
@@ -18,7 +18,7 @@ three sit together inside the writer's output.
 * **`MovesOf` at a witness** (`ReachesOff.movesOf`): the rep rounds (`firstStop_reps_verdict`) fix the outcome as the
   writer's; the trace's first stop fixes a cut (`firstStop_fixes`), the link points are released after a log `L₀` in
   order (`firstStop_order`), and that release is the log's first opening (`firstOpened_link`). Then the record decodes
-  to the session's sample file at the sample (`recordDraw_firstStop`), the roots decoded at the first stop are the
+  to the session's sample file at the sample (`recordSample_firstStop`), the roots decoded at the first stop are the
   record's `root_B` (`firstStop_rootB`), the link points are the record's (`link_pts`), and the proof files are v2's
   (`proofs_of_sent`).
   The order the record's sample and the first stop take, that the sample's coins precede every opening and that the first
@@ -42,7 +42,7 @@ open FlockSoundness.Refine (ebind_ok Ret)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-! ## The digest each opening of a rep stream answers -/
 
@@ -178,13 +178,13 @@ theorem SetsUp.popTied {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {
 
 -- `decodersAt`'s roots search `List.finRange A.rounds`, which unification would otherwise unfold at `A.rounds`'s value
 attribute [local irreducible] Live.rounds Live.N in
-/-- **`MovesOf` at a witness of the joint law's support, at the session's layout**: at the readings and the decoders at
+/-- **`MovesOf` at a witness of the joint distribution's support, at the session's layout**: at the readings and the decoders at
 `Live.layout` and `Live.tables`, and at the sample-coupled coin map under `fieldEnc`, an outcome off the link's and the
 rounds' empty classes, beside a play that the sampled verdict accepts, that misses nowhere and whose log v2's check read
 is the device's, is the writer's at the widened sample, the decoded registration and an outcome whose moves are those
-v2's files decode to (`MovesOf`). It takes, for the record's sample (`recordDraw_firstStop`, at the session tied to v2's
-verifier, `SetsUp.popTied`, at v2's log at its coins, `drawReadAll_coinsRead`, and at v2's hold on the record's sample,
-`drawHeld`), that v2 reads the sample's coins of the family `label` answering `after` (`hN`), and, for the rep rounds
+v2's files decode to (`MovesOf`). It takes, for the record's sample (`recordSample_firstStop`, at the session tied to v2's
+verifier, `SetsUp.popTied`, at v2's log at its coins, `sampleReadAll_coinsRead`, and at v2's hold on the record's sample,
+`sampleHeld`), that v2 reads the sample's coins of the family `label` answering `after` (`hN`), and, for the rep rounds
 (`firstStop_reps_verdict`), that the log opens only the record's rounds. v2's order refusal, which the sampled verdict
 passed, gives that every release of that family precedes every opening (`freshBefore_verdict`) and that the device's
 log opens the session stream first (`linkFirst_verdict`). That the log has an opening and that its
@@ -246,7 +246,7 @@ theorem ReachesOff.movesOf {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} 
   refine ⟨_, _, _, ho, fun text proofs spec sts sess hrec hpr hs hd =>
     ⟨?_, ?_, ?_, hreps text proofs spec sts sess hrec hpr hs hd, proofs_of_sent reg A.layout hpr⟩⟩
   · rw [sample_extend]
-    exact recordDraw_firstStop fieldEnc hA hA.popTied (drawReadAll_coinsRead k) (drawHeld k)
+    exact recordSample_firstStop fieldEnc hA hA.popTied (sampleReadAll_coinsRead k) (sampleHeld k)
       (readingAt_picks A.tables A.layout record recordDigest) hm hsrc ω
       (firstStop_playReaches V θ F c A _ σ _ ω hr) hv hl hN hP hrec
   · exact firstStop_rootB hA rfl rfl hr hn hv hl hfirst hLA hc h₀ hrec hs hd

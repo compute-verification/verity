@@ -32,12 +32,12 @@ import Proofs.Flock.Soundness.Refine.Seam
 # The decoder is right at a plain session of `J` hidden-output tables
 
 `decodesOnPHJ_exec`: `PlainJ.decodesOnPJ_exec` under hidden outputs, the plain counterpart of the decoder
-`ZkHidden.zk_session_soundHJ` reads (without its masks). At an outcome flock-verify accepts, at table `j`:
+`ZkHidden.zk_session_soundHJ` reads (without its masks). At an outcome verity-verify-proof accepts, at table `j`:
 
 * `RecordsLiveJ` gives the record's sample `dj S`, the proof files, the link points, and table `j`'s root and streams.
 * `setupOf_tablePHJ` sets table `j` up with setupHidden under `tagsAt` at `drawJ` (`HiddenExec.setupTables_okH` at one
-  table, `ZkHidden.setupTables_partsH` at several); `DrawOkPHJ` gives its proved units and link points, so a
-  `DrawSetupH` exists (`HiddenExec.drawSetupH_of_setupHiddenI`), and `planPHJ`'s table `j` is its table
+  table, `ZkHidden.setupTables_partsH` at several); `SampleOkPHJ` gives its proved units and link points, so a
+  `SampleSetupH` exists (`HiddenExec.sampleSetupH_of_setupHiddenI`), and `planPHJ`'s table `j` is its table
   (`tablePHJ_of`), `stmtOf` of setupHidden's statement.
 * `accepts_reps_atH` (`DecodeZLJ.accepts_reps_at` under hidden outputs, from the acceptance lemmas without `hh`) gives
   each rep's run and rounds and the salted verdict; `repRun_at` makes each run a `RepRun` for `decJ`, and
@@ -59,7 +59,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 variable {n mPts : ℕ} {Reg : Type}
 
-/-- **flock-verify sets table `j` up under its tags at its sample, under hidden outputs**, without `--zk`
+/-- **verity-verify-proof sets table `j` up under its tags at its sample, under hidden outputs**, without `--zk`
 (`PlainJ.setupOf_tablePJ` with `setupHidden`, `ZkHidden.setupOf_tableJH` at the plain inputs): at the record's sample `d`,
 `setupTables` at `I` has `nTab I` tables, table `j` setupHidden's statement under `tagsAt` at `drawJ`. -/
 theorem setupOf_tablePHJ {I : Inputs} {record : String} {d : Lean.Json} {spec : SessionSpec} {sts : Array Flock.Stmt}
@@ -81,7 +81,7 @@ theorem setupOf_tablePHJ {I : Inputs} {record : String} {d : Lean.Json} {spec : 
     obtain ⟨-, -, population, units, hD1, -, -, -, hsz, hall⟩ := ZkHidden.setupTables_partsH hh hc1 hs
     obtain ⟨u, hu, -, hpop, hun⟩ := hD1 _ hd
     refine ⟨by simp only [nTab, hc, ite_false]; exact hsz, fun j hj => ?_⟩
-    have hpart : drawJ I d j = Tables.partDraw population units I.count j := by
+    have hpart : drawJ I d j = Tables.partSample population units I.count j := by
       simp only [drawJ, hc, ite_false]
       unfold partJson
       rw [hu]
@@ -92,7 +92,7 @@ theorem setupOf_tablePHJ {I : Inputs} {record : String} {d : Lean.Json} {spec : 
     rw [e1, hpart]
     exact hall j hj
 
-/-- **flock-verify's acceptance under hidden outputs, table by table and rep by rep** (`DecodeZLJ.accepts_reps_at`
+/-- **verity-verify-proof's acceptance under hidden outputs, table by table and rep by rep** (`DecodeZLJ.accepts_reps_at`
 under hidden outputs): the acceptance lemmas without `hh` (`accepts_verdict_leafAny`, `accepts_rep_roundsAny`,
 `setupTables_pointsAny`) at every table `j`, the verdict at `leaf512` under `hm96-sha512/v1` leaves (`leafOfId_hm96`). -/
 theorem accepts_reps_atH {I : Inputs} {t : Exec.Transcript}
@@ -159,7 +159,7 @@ private theorem stmtOf_congr {a b : Flock.Stmt} (h : a = b) (ha : StmtWF a) (hb 
   rfl
 
 variable {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-  (x₀ : HiddenExec.DrawSetupH (inputsPJ I 0) mPts S₀ d₀)
+  (x₀ : HiddenExec.SampleSetupH (inputsPJ I 0) mPts S₀ d₀)
 
 set_option maxHeartbeats 4000000 in
 /-- **The decoder is right at a plain session of `J` hidden-output tables** (the decoder premise at `--plain-tables --session-tables J`
@@ -168,10 +168,10 @@ setting each table up at `mPts` link points, `DecodesOnJ` holds at `planPHJ` wit
 streams, single coins as field elements, no final messages, table `j`'s cap from its root `root_B[j]` (`capOfRoot`) and
 its openings `opnPHJ`. -/
 theorem decodesOnPHJ_exec (ht : I.tags.typed = false) {c : Flock.Circuit}
-    (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) (L : Law n)
+    (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) (L : SamplingDesign n)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planPHJ (Reg := Reg) dj x₀ S R).length mPts → Exec.Transcript)
     (hT : TagsOkZHJ I) (hwr : RecordsLiveJ I dj (fun S R => (planPHJ (Reg := Reg) dj x₀ S R).length) wr)
-    (hdraw : ∀ ω, DrawOkPHJ I dj mPts (L.draw ω)) :
+    (hdraw : ∀ ω, SampleOkPHJ I dj mPts (L.draw ω)) :
     DecodesOnJ H512 enc512 leaf512 (planPHJ dj x₀) I wr (opnPHJ I (planPHJ dj x₀) dj) (decJ (planPHJ dj x₀))
       (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) L := by
   intro ω R j o hacc
@@ -189,9 +189,9 @@ theorem decodesOnPHJ_exec (ht : I.tags.typed = false) {c : Flock.Circuit}
   have hm : 13 ≤ sts[j.val].m := by have := exec_fast100_ge hf; omega
   have hdl : sts[j.val].merkle.digestLen = 64 := by
     rw [HiddenExec.setupHidden_hm96 ((tagsAt_merkleLeaf _ _ _).trans hl) hst]; rfl
-  obtain ⟨pop, -, hdr⟩ := HiddenExec.setupHidden_drawn hst
-  obtain ⟨D, hD, -⟩ := Layout.drawn_spec (c := { sts[j.val].c with outPorts := #[] }) hdr
-  obtain ⟨x, hx⟩ := HiddenExec.drawSetupH_of_setupHiddenI (I := inputsPJ I j.val)
+  obtain ⟨pop, -, hdr⟩ := HiddenExec.setupHidden_sampled hst
+  obtain ⟨D, hD, -⟩ := Layout.sampled_spec (c := { sts[j.val].c with outPorts := #[] }) hdr
+  obtain ⟨x, hx⟩ := HiddenExec.sampleSetupH_of_setupHiddenI (I := inputsPJ I j.val)
     (S := partS I (dj (L.draw ω)) (L.draw ω) ⟨j.val, hjn⟩) (mPts := mPts) (PlainJ.typedPJ ht j.val)
     ((ZkHidden.parseH_tagsAt ht I.count j.val I.circuitFile I.tables).trans hc) hst hf hD ((hdraw ω ⟨j.val, hjn⟩).1 D hD) hmP
   obtain ⟨y, hyx, e⟩ := tablePHJ_of dj x₀ (S := L.draw ω) (j := ⟨j.val, hjn⟩) x

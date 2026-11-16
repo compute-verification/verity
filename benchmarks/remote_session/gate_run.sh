@@ -22,7 +22,7 @@
 #                  snapshot core's pin names, gate run 7's engine and node settings, VERIFIER_SSH to the verifier host's
 #                  tunnel account; once leased it waits up to TUNNEL_WAIT_S for the host's verifier to listen.
 #   4. fire        gate.sh fire on GATE_ON: once the prover holds its GPUs, probe again, period-open (circuit of
-#                  COMMIT's remote_bandwidth tree, MODEL unless BIND=0), the host's run, period-close, auditor.sh (the
+#                  COMMIT's poub tree, no model), the host's run, period-close, auditor.sh (the
 #                  line of record, its auditor_line.json and credit.md in the fire run's out/).
 #   whatif         gate_whatif.sh at origin/main's head on WHATIF_ON over the fire run's artifact (the host run in it,
 #                  its ledger and pins) and the prover's; RUN_ART, SUB, AUDITOR_ART and PROVER_ART name others.
@@ -34,20 +34,20 @@
 # gate.sh's, under that machine's user's ~/.ssh), PROVER_SSH how GATE_ON reaches PROVER_NODE to read its lease (empty:
 # GATE_ON's /etc/vy/peers line), MAXMIN the prover's `gpu-lease --max-min` (a lease that would run into a booked window
 # of the node's waits it out), CHECKPOINT=0 skips step 1 and GATE_MEM=0 reserves no memory for the gate steps or whatif.
+# GATE_POOL (default research; empty: none) is the pool of GATE_ON's and WHATIF_ON's check slots the gate steps and
+# whatif run in (`research run --pool`), the one way a machine with /etc/vy/runs-via-slot takes a run.
 # LEASE_ON names the GPUs the prover leases (`gpu-lease --on`, default any ENGINES free ones) and LEASE_MEM_GB its host
 # memory (default 32 GB an engine and HOST_GIB more). HOST_GIB (whole GiB, default 0: none) is the store's host part,
 # the node's `--host-gib`: host memory the prover holds beside the cards' and reads in every pass, split among the
 # engines' cards in whole 1 GiB chunks, the first cards taking what is left over. LEAF_CTAS (a positive integer, default
 # unset: today's pass) asks the node for the leaf pass on that many reading CTAs, the node's `--leaf-ctas`: each card's
 # shard is hashed by the warps that read it (`rs_leaf_pass`), a host part still by today's pass, and the prover's gate
-# checks it before the first coin; the store refuses it where h0 is over 8. BIND (default 1) binds the verifier's
-# store to ROLE's pinned checkpoint (gate.sh's MODEL), and the period signs MODEL; BIND=0 binds it to none and the
-# period signs no model, so the verifier holds no checkpoint, the store is the developer's choice, and the line of
-# record credits nothing, its `bound` check failing. LEASE_BY (a UTC time) is when the
+# checks it before the first coin; the store refuses it where h0 is over 8. The verifier holds no checkpoint and the
+# period signs no model: the store is the developer's choice. LEASE_BY (a UTC time) is when the
 # prover must hold its GPUs, or nothing runs: the prover asks through gate_lease.sh (sent beside) from LEASE_FROM
 # (default now) and gives up a minute before LEASE_BY, and fire opens no period for a lease that began after it.
 # ARENA_GIB (default 62) is each engine's weights arena
-# (`engine.py --arena-gib`) and so the host's ARENA_BLOCKS, its 4 KiB blocks, and UTIL (default 0.8) vLLM's share of a
+# (`engine.py --arena-gib`), and UTIL (default 0.8) vLLM's share of a
 # card (`--util`); PACED is the host run's sessions (default gate.sh's four), one word a session of PLAN, and
 # PACE_PASS_MS the pass the host counts their groups at (default gate.sh's): it splits a stretch's samples among
 # T_MS/(K·PACE_PASS_MS) groups, so where the node's pass is longer than it, as a larger arena's is, the groups take
@@ -91,7 +91,9 @@ need VY_CHALLENGER_1_HOST "the challenger host"
 need VY_AUDITOR_1_HOST "the verifier host"
 [ -n "${PROVER_SSH+given}" ] || need VY_NEBIUS_2_HOST "the prover's node, or PROVER_SSH (empty: GATE_ON's /etc/vy/peers line)"
 PROVER_SSH=${PROVER_SSH--o StrictHostKeyChecking=accept-new -i /home/research/.ssh/vy-cluster -o IdentitiesOnly=yes research@${VY_NEBIUS_2_HOST:-}}
-MAXMIN=${MAXMIN:-90} CHECKPOINT=${CHECKPOINT:-1} GATE_MEM=${GATE_MEM:-1}
+MAXMIN=${MAXMIN:-90} CHECKPOINT=${CHECKPOINT:-1} GATE_MEM=${GATE_MEM:-1} GATE_POOL=${GATE_POOL-research}
+POOL=()
+[ -z "$GATE_POOL" ] || POOL=(--pool "$GATE_POOL" --as memory-accounting)
 WHATIF_ON=${WHATIF_ON:-vy-nebius-cpu-4}
 ROLE=${ROLE:-QWEN25_32B_BF16} ENGINES=${ENGINES:-8} PORT=${PORT:-7951}
 HOST_GIB=${HOST_GIB:-0}
@@ -104,7 +106,6 @@ case $LEAF_CTAS in
   '' | [1-9] | [1-9][0-9] | [1-9][0-9][0-9]) ;;
   *) echo "LEAF_CTAS is $LEAF_CTAS: the leaf pass's reading CTAs, 1 to 999, or unset for today's pass"; exit 3 ;;
 esac
-BIND=${BIND:-1}
 bash "$HERE/gate.sh" form || exit 3
 LEASE_ON=${LEASE_ON:-} LEASE_MEM_GB=${LEASE_MEM_GB:-$((32 * ENGINES + HOST_GIB))} LEASE_BY=${LEASE_BY:-}
 LEASE_FROM=${LEASE_FROM:-}
@@ -128,7 +129,7 @@ trap 'git -C "$ROOT" worktree remove --force "$W" > /dev/null 2>&1; rm -rf "$W"'
 git -C "$ROOT" worktree add -q --detach "$W" "$TREE" || exit 3
 read -r REPO REV < <(python3 -c 'import json, sys
 e = json.load(open(sys.argv[1]))[sys.argv[2]]
-print(e["repo"], e["revision"])' "$W/verity/protocols/accounting/pouw/verifier/lean/check/models.json" "$ROLE") \
+print(e["repo"], e["revision"])' "$W/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/models.json" "$ROLE") \
   || { echo "core's pin at $TREE has no role $ROLE"; exit 3; }
 SNAP=/workspace/hf/hub/models--${REPO//\//--}/snapshots/$REV
 echo "period $PERIOD, COMMIT $COMMIT, $ROLE at $SNAP on $PROVER_NODE, gate key on $GATE_ON${DRY:+ (dry run)}"
@@ -144,7 +145,7 @@ on_node() {
   local wait=$1 run=$2
   shift 2
   NODE_CMD=("$@")
-  [ -z "$SLOTS" ] || NODE_CMD=(env "CHECK_SLOTS=$SLOTS" python3 tools/verity/check/slot.py --by memory-accounting
+  [ -z "$SLOTS" ] || NODE_CMD=(env "CHECK_SLOTS=$SLOTS" python3 tools/check/slot.py --by memory-accounting
     --wait-max "$wait" --run-max "$run" -- "$@")
 }
 
@@ -163,9 +164,9 @@ launch() {
 }
 
 GATE_ENV=(--env "COMMIT=$COMMIT" --env "PERIOD=$PERIOD" --env "PIN=$PIN" ${GATE_KEY:+--env "GATE_KEY=$GATE_KEY"}
-  --env "MODEL=$ROLE" --env "BIND=$BIND" --env "ENGINES=$ENGINES" --env "PORT=$PORT" --env "PROVER_NODE=$PROVER_NODE"
+  --env "ENGINES=$ENGINES" --env "PORT=$PORT" --env "PROVER_NODE=$PROVER_NODE"
   ${PROVER_SSH:+--env "PROVER_SSH=$PROVER_SSH"} ${DRY:+--env DRY=1} ${CIRCUIT:+--env "CIRCUIT=$CIRCUIT"}
-  ${LEASE_BY:+--env "LEASE_BY=$LEASE_BY"} --env "ARENA_BLOCKS=$((ARENA_GIB * 262144))" ${PACED:+--env "PACED=$PACED"}
+  ${LEASE_BY:+--env "LEASE_BY=$LEASE_BY"} ${PACED:+--env "PACED=$PACED"}
   ${PACE_PASS_MS:+--env "PACE_PASS_MS=$PACE_PASS_MS"} ${SESSIONS:+--env "SESSIONS=$SESSIONS"}
   ${WINDOWS:+--env "WINDOWS=$WINDOWS"} ${WINDOW_MS:+--env "WINDOW_MS=$WINDOW_MS"} ${SAMPLES:+--env "SAMPLES=$SAMPLES"}
   --env "VY_CHALLENGER_1_HOST=${VY_CHALLENGER_1_HOST:-}" --env "VY_AUDITOR_1_HOST=${VY_AUDITOR_1_HOST:-}")
@@ -175,7 +176,7 @@ gate_step() {
   local name=$1 verb=$2 mem=(--mem-gb "$3" --mem-wait 3600)
   shift 3
   [ -z "$DRY" ] && [ "$GATE_MEM" != 0 ] || mem=()
-  launch "$name" --on "$GATE_ON" --cwd clone --send "$HERE/gate.sh" --send "$HERE/main_line.sh" "${GATE_ENV[@]}" \
+  launch "$name" --on "$GATE_ON" "${POOL[@]}" --cwd clone --send "$HERE/gate.sh" --send "$HERE/main_line.sh" "${GATE_ENV[@]}" \
     "${mem[@]}" "$@" -- bash -lc "bash \"\$RESEARCH_RUN_DIR/inputs/gate.sh\" $verb"
 }
 
@@ -194,7 +195,7 @@ if [ "$VERB" = whatif ]; then
   PROVER_ART=${PROVER_ART:-$(art "$prover")} || { echo "no artifact for $prover yet"; exit 3; }
   WM=(--mem-gb 16)
   [ "$GATE_MEM" != 0 ] || WM=()
-  launch whatif --on "$WHATIF_ON" --cwd clone "${WM[@]}" --timeout 30m --store-read --wait \
+  launch whatif --on "$WHATIF_ON" "${POOL[@]}" --cwd clone "${WM[@]}" --timeout 30m --store-read --wait \
     --env "RUN_ART=$RUN_ART" --env "SUB=${SUB:?}" --env "AUDITOR_ART=$AUDITOR_ART" --env "PROVER_ART=$PROVER_ART" \
     --env "PERIOD=$PERIOD" --env "PIN=$PIN" --env "COMMIT=$COMMIT" -- bash benchmarks/remote_session/gate_whatif.sh
   exit $?
@@ -217,11 +218,7 @@ fi
 if [ "$VERB" = prover ]; then
   :
 elif [ "$CHECKPOINT" = 0 ]; then
-  if [ "$BIND" = 0 ]; then
-    echo "== 1. checkpoint skipped (CHECKPOINT=0), and BIND=0: nothing checks that the node serves the pin's checkpoint"
-  else
-    echo "== 1. checkpoint skipped (CHECKPOINT=0): the host's binding still refuses a store that isn't the pin's"
-  fi
+  echo "== 1. checkpoint skipped (CHECKPOINT=0): nothing checks that the node serves the pin's checkpoint"
 else
   echo "== 1. checkpoint on $PROVER_NODE${FETCH:+ (FETCH: what the snapshot lacks is fetched first)}"
   on_node "$CHECKPOINT_WAIT_S" 1200 bash -lc 'bash "$RESEARCH_RUN_DIR/inputs/checkpoint.sh"'

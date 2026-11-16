@@ -22,7 +22,7 @@ import all Init.Data.Array.Basic
 
 namespace Flock.Bridge.Spec
 
-open Properties.NetworkCertifier.Bytes (bs bs_append bs_length)
+open Properties.Certifier.Bytes (bs bs_append bs_length)
 
 theorem bitsVal_eq : ∀ b : List Bool, HmRow.bitsVal b = Hash.RowSeg.bitsVal b
   | [] => rfl

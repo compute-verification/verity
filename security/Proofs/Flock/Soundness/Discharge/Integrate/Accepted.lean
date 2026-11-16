@@ -13,23 +13,23 @@ import Proofs.Flock.Soundness.Refine.Setup
 import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
-# A sample flock-verify accepts sets up
+# A sample verity-verify-proof accepts sets up
 
-`tableAt` is setupH's statement at a sample with a `DrawSetup`, and unsatisfiable elsewhere. A `DrawSetup` is more than
+`tableAt` is setupH's statement at a sample with a `SampleSetup`, and unsatisfiable elsewhere. A `SampleSetup` is more than
 setupH's acceptance: the sample proves the sampled proof blocks, `0 < c.g`, the proved units fit the blocks, `m` has a `fast100`
 schedule of at least two levels, and the statement's link points are `mPts`. All but the first and the last follow
 from a one-table acceptance:
 * `0 < c.g`: `HmRow.check` takes the unit range's `c.g · c.upv` slots to be a power of two when the unit returns the
   outputs (`g_pos`);
 * the blocks: setupH's `nbl` is at least `log2ceil ⌈n / c.g⌉`, and a sampled statement's `n` is the sample's proved units
-  (`setupH_n`, `Layout.drawn_spec`);
-* the schedule: flock-verify ran `fast100` on the table's `m` (`verify_one_ok`), and every executable `fast100` schedule
+  (`setupH_n`, `Layout.sampled_spec`);
+* the schedule: verity-verify-proof ran `fast100` on the table's `m` (`verify_one_ok`), and every executable `fast100` schedule
   is `Accounting.fast100`'s (`fast100_schedOf`) with at least two levels (`fast100_two`).
 
-`drawSetup_of_accepts`: a one-table acceptance whose record's sample is `d` gives setupH's statement at `d` and the
-sample `D`, and a `DrawSetup` whenever `D` proves `S` and the statement's link points are `mPts`. `tableAt_of_accepts`:
-then `tableAt`'s table at `S` is `stmtOf` of the statement flock-verify accepted. The link points are setupH's
-`PT_LOCAL + nbl`, a function of `|D.proved|` and `c.g` (`Exec.setupH_mPts_drawn`).
+`sampleSetup_of_accepts`: a one-table acceptance whose record's sample is `d` gives setupH's statement at `d` and the
+sample `D`, and a `SampleSetup` whenever `D` proves `S` and the statement's link points are `mPts`. `tableAt_of_accepts`:
+then `tableAt`'s table at `S` is `stmtOf` of the statement verity-verify-proof accepted. The link points are setupH's
+`PT_LOCAL + nbl`, a function of `|D.proved|` and `c.g` (`Exec.setupH_mPts_sampled`).
 -/
 
 @[expose] public section
@@ -112,17 +112,17 @@ variable {I : Inputs} {mPts n : ℕ} {S : Finset (Fin n)} {d : Lean.Json} {c : F
   (ht : I.tags.typed = false) (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
 include ht hc ho
 
-/-- **A `DrawSetup` from setupH's acceptance at a sample**, a `fast100` schedule of its `m`, the sample proving `S`, and its
+/-- **A `SampleSetup` from setupH's acceptance at a sample**, a `fast100` schedule of its `m`, the sample proving `S`, and its
 link points `mPts`. -/
-theorem drawSetup_of_setupH {st : Stmt}
+theorem sampleSetup_of_setupH {st : Stmt}
     (h : Stmt.setupH I.tags I.circuitFile I.publicFile I.coins I.tables (some d) I.partition I.program = .ok st)
-    {sch : Flock.Schedule} (hf : Flock.fast100 st.m = some sch) {D : Draw.UnitDraw}
-    (hD : Draw.UnitDraw.ofJson d = .ok D) (hS : ∀ u ∈ S, u.val ∈ D.proved) (hmPts : st.mPts = mPts) :
-    ∃ x : DrawSetup I mPts S d, x.st = st := by
+    {sch : Flock.Schedule} (hf : Flock.fast100 st.m = some sch) {D : Draw.UnitSample}
+    (hD : Draw.UnitSample.ofJson d = .ok D) (hS : ∀ u ∈ S, u.val ∈ D.proved) (hmPts : st.mPts = mPts) :
+    ∃ x : SampleSetup I mPts S d, x.st = st := by
   have hcst : st.c = c := Except.ok.inj (((setupH_spec ht h).1).symm.trans hc)
   have hg : 0 < st.c.g := hcst ▸ g_pos hc ho
-  obtain ⟨pop, -, hdr⟩ := Layout.setupH_drawn h
-  obtain ⟨D', hD', -, hn, -⟩ := Layout.drawn_spec hdr
+  obtain ⟨pop, -, hdr⟩ := Layout.setupH_sampled h
+  obtain ⟨D', hD', -, hn, -⟩ := Layout.sampled_spec hdr
   rw [hD] at hD'
   cases hD'
   obtain ⟨hn', hnbl⟩ := setupH_n h
@@ -133,35 +133,35 @@ theorem drawSetup_of_setupH {st : Stmt}
   exact ⟨⟨st, h, D, hD, hS, hg, hblk, st.m, k0, l₀, l₁, rest, ext, hsch,
     by have := exec_fast100_ge hf; omega, hmPts⟩, rfl⟩
 
-/-- **A sample flock-verify accepts sets up.** A one-table acceptance whose record's sample is `d`: setupH accepted its
+/-- **A sample verity-verify-proof accepts sets up.** A one-table acceptance whose record's sample is `d`: setupH accepted its
 inputs at `d` (`st`), the sample decodes (`D`), and whenever `D` proves `S` and `st`'s link points are `mPts`, a
-`DrawSetup` at `d` has statement `st`. -/
-theorem drawSetup_of_accepts (hh : I.tags.hiddenOutputs = false) (hc1 : I.count ≤ 1) {t : Exec.Transcript}
+`SampleSetup` at `d` has statement `st`. -/
+theorem sampleSetup_of_accepts (hh : I.tags.hiddenOutputs = false) (hc1 : I.count ≤ 1) {t : Exec.Transcript}
     (h : Accepts I t)
     (hd : recordDraw t.record = some d) :
     ∃ st D, Stmt.setupH I.tags I.circuitFile I.publicFile I.coins I.tables (some d) I.partition I.program = .ok st ∧
-      Draw.UnitDraw.ofJson d = .ok D ∧
-      ((∀ u ∈ S, u.val ∈ D.proved) → st.mPts = mPts → ∃ x : DrawSetup I mPts S d, x.st = st) := by
+      Draw.UnitSample.ofJson d = .ok D ∧
+      ((∀ u ∈ S, u.val ∈ D.proved) → st.mPts = mPts → ∃ x : SampleSetup I mPts S d, x.st = st) := by
   obtain ⟨st, hst, hv⟩ := accepts_one hh hc1 h
   rw [hd] at hst
   obtain ⟨-, sch, -, -, hf, -, -⟩ := verify_one_ok hv
-  obtain ⟨pop, -, hdr⟩ := Layout.setupH_drawn hst
-  obtain ⟨D, hD, -⟩ := Layout.drawn_spec hdr
-  exact ⟨st, D, hst, hD, fun hS hm => drawSetup_of_setupH ht hc ho hst hf hD hS hm⟩
+  obtain ⟨pop, -, hdr⟩ := Layout.setupH_sampled hst
+  obtain ⟨D, hD, -⟩ := Layout.sampled_spec hdr
+  exact ⟨st, D, hst, hD, fun hS hm => sampleSetup_of_setupH ht hc ho hst hf hD hS hm⟩
 
-/-- **At a sample flock-verify accepts, the headline's table is `stmtOf` of the statement it accepted**: when the
+/-- **At a sample verity-verify-proof accepts, the headline's table is `stmtOf` of the statement it accepted**: when the
 session's record carries the challenger's sample `dj S`, that sample proves `S`, and setupH's statement at it has link
 points `mPts`. -/
 theorem tableAt_of_accepts (hh : I.tags.hiddenOutputs = false) (hc1 : I.count ≤ 1) (dj : Finset (Fin n) → Lean.Json)
     {S₀ : Finset (Fin n)}
-    (x₀ : DrawSetup I mPts S₀ (dj S₀)) {t : Exec.Transcript} (h : Accepts I t)
+    (x₀ : SampleSetup I mPts S₀ (dj S₀)) {t : Exec.Transcript} (h : Accepts I t)
     (hd : recordDraw t.record = some (dj S))
-    (hS : ∀ D, Draw.UnitDraw.ofJson (dj S) = .ok D → ∀ u ∈ S, u.val ∈ D.proved)
+    (hS : ∀ D, Draw.UnitSample.ofJson (dj S) = .ok D → ∀ u ∈ S, u.val ∈ D.proved)
     (hmPts : ∀ st, Stmt.setupH I.tags I.circuitFile I.publicFile I.coins I.tables (some (dj S)) I.partition I.program =
       .ok st → st.mPts = mPts) :
     ∃ st, Stmt.setupH I.tags I.circuitFile I.publicFile I.coins I.tables (some (dj S)) I.partition I.program = .ok st ∧
       ∃ hwf : StmtWF st, (tableAt ht dj x₀ S).T.S = stmtOf st hwf (regionsOf st) := by
-  obtain ⟨st, D, hst, hD, hx⟩ := drawSetup_of_accepts ht hc ho hh hc1 h hd
+  obtain ⟨st, D, hst, hD, hx⟩ := sampleSetup_of_accepts ht hc ho hh hc1 h hd
   obtain ⟨x, rfl⟩ := hx (hS D hD) (hmPts _ hst)
   obtain ⟨y, hy, e⟩ := tableAt_stmtOf ht dj x₀ x
   exact ⟨x.st, hst, hy ▸ ⟨y.wf.1, e⟩⟩

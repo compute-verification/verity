@@ -31,10 +31,10 @@ ALLOWED_EXTRA = (
     "security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
 )
 #: One file per entry behind an index document, so that no one document outgrows its cap: {directory: its index}. Flock
-#: soundness's detail behind its named assumptions (its ``ASSUMPTIONS.md`` states them in full) and the network certifier's sections (``protocol/<topic>.md``, each
+#: soundness's detail behind its named assumptions (its ``ASSUMPTIONS.md`` states them in full) and the network attester's sections (``protocol/<topic>.md``, each
 #: keeping its heading in ``PROTOCOL.md`` with a one-line pointer).
 SPLIT_DOCUMENT_DIRS = {"security/Proofs/Flock/Soundness/assumption-notes/": "security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
-                       "verity/protocols/accounting/certifier/verifier/protocol/": "verity/protocols/accounting/certifier/verifier/PROTOCOL.md"}
+                       "verity/protocols/resource_accounting/network/verifier/protocol/": "verity/protocols/resource_accounting/network/verifier/PROTOCOL.md"}
 #: Generated output, by where it sits or what it is: no tracked path has one of these directories, suffixes or stamps.
 GENERATED_DIRS = frozenset({"reports", "results", "renders", "previews", "plots", "evidence", "assets", "outputs"})
 GENERATED_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".pdf", ".html", ".htm"})
@@ -67,12 +67,18 @@ CODE_SUFFIXES = SOURCE_SUFFIXES | {".lean", ".cuh", ".cpp", ".md"}
 #: artifacts.json instead and fetched (`research data fetch-fixtures`).
 ALLOWLIST = {
     "benchmarks/census/workloads.json": 384 * 1024,
-    "adapters/vllm/tests/lint/allowlists/mypy.json": 448 * 1024,  # shrink-only: the integration's mypy errors
+    "tests/adapters/vllm/tests/lint/allowlists/mypy.json": 448 * 1024,  # shrink-only: the integration's mypy errors
     "adapters/vllm/manifests/checkpoints.json": 320 * 1024,
     "tests/lint/allowlists/repo_retired_terms.json": 512 * 1024,
-    "tools/research/src/research/store/moves.json": 320 * 1024,  # the paths of every layout move: it only grows
-    "adapters/vllm/tests/lint/allowlists/ruff_vllm.json": 512 * 1024,  # shrink-only: ruff's findings under vLLM's rules
+    # the paths of every layout move: one record a move, read in order (tools_registry.former_modules), and the branch
+    # `architecture` makes many; its limit holds the records that branch adds until it closes, at the rate it adds them
+    "tools/research/src/research/store/moves.json": 576 * 1024,
+    "tests/adapters/vllm/tests/lint/allowlists/ruff_vllm.json": 512 * 1024,  # shrink-only: ruff's findings under vLLM's rules
     "verity/circuits/ops/tables/mufu_tanh_sm89.xzblocks": 448 * 1024,
+    # GLM-5.3's block card and its sparse-attention partition card: each key block's values units and key rows' writers
+    # are a type a column block
+    "benchmarks/sampling_plan/glm53_blocks.json": 448 * 1024,
+    "benchmarks/spot_figures/cards/partition.glm-5.3.64864861b277.json": 320 * 1024,
 }
 AUDIT_RECORD = "lean-audit.json"
 #: A Lean package's audit record must stay in Git, since the audit compares the build against it and `--update`'s diff is
@@ -133,7 +139,7 @@ def test_generated_output_patterns() -> None:
     assert generated_output("benchmarks/numerical/plot_overhead.png") == "a .png render"
     assert generated_output("adapters/vllm/20260929T0300Z-tables.json") == "a stamped render or note"
     assert generated_output("benchmarks/numerical/python/verity_numerical/bench/contract.py") is None
-    assert generated_output("tools/research/tests/fixtures/run_v0.2/out/result.json") is None
+    assert generated_output("tests/tools/research/fixtures/run_v0.2/out/result.json") is None
 
 
 def test_no_generated_output() -> None:
@@ -152,7 +158,7 @@ def split_dir(path: str) -> str | None:
 
 
 def markdown_cap(path: str) -> int:
-    """The markdown file ``path``'s cap in bytes.  The merge queue's landing gate (`tools/verity/check/gates/markdown_caps.py`)
+    """The markdown file ``path``'s cap in bytes.  The merge queue's landing gate (`tools/check/gates/markdown_caps.py`)
     reads it and `markdown_over_cap` from this file at `main`, so keep both importable with the standard library alone."""
     if os.path.basename(path) == "SKILL.md":
         return OVERSIZE_SKILLS.get(path, SKILL_SIZE_CAP)
@@ -183,7 +189,7 @@ def test_markdown_over_cap_says_by_how_much_and_where_detail_goes(monkeypatch) -
     for p in (soundness + "ASSUMPTIONS.md", soundness + "assumption-notes/e2e-checklist.md"):
         assert markdown_over_cap(p, MD_SIZE_CAP + 7).endswith(f", 7 bytes over; move detail to one file per entry under {soundness}assumption-notes/")
     assert markdown_over_cap(soundness + "README.md", MD_SIZE_CAP + 1).endswith("the notes store (cite it by note:<id>)")
-    certifier = "verity/protocols/accounting/certifier/verifier/"
+    certifier = "verity/protocols/resource_accounting/network/verifier/"
     assert markdown_over_cap(certifier + "PROTOCOL.md", PROTOCOL_SIZE_CAP + 1).endswith(f"one file per entry under {certifier}protocol/")
     assert markdown_over_cap(certifier + "protocol/calibration.md", MD_SIZE_CAP + 1).endswith(f"{certifier}protocol/")
     assert markdown_over_cap(".agents/skills/x/SKILL.md", SKILL_SIZE_CAP) is None
@@ -234,7 +240,7 @@ def _testpaths(tracked: list[str]) -> list[str]:
 
 
 def test_every_test_file_is_in_a_suite() -> None:
-    """`tools/verity/check/suites.py` runs suites, so a test file outside every suite's testpaths would never run. A suite is a
+    """`tools/check/suites.py` runs suites, so a test file outside every suite's testpaths would never run. A suite is a
     directory whose pyproject.toml configures pytest; give a new package one, or put the test in the package it tests. A module
     named as a test file that defines no test (the graph's `test-file` family's lister and runner) is none."""
     tracked = _tracked()
@@ -267,8 +273,7 @@ CREDENTIAL_PAIRS = {("api", "key"), ("access", "key"), ("secret", "key"), ("priv
 #: A file holds a credential name only if its lowercased text holds one of these.
 _NAME_HINTS = ("secret", "token", "passw", "credential", "apikey", "api_key", "api-key", "accesskey", "access_key", "access-key",
                "privatekey", "private_key", "private-key")
-#: Binary data, never read; and data files (vectors, fixtures), read only for the fixed credential formats.
-_BINARY = frozenset({".bin", ".npy", ".npz", ".lgto", ".neg", ".proof", ".gz", ".png", ".pdf", ".olean", ".ilean", ".tar", ".zip"})
+#: Data files (vectors, fixtures), read only for the fixed credential formats.
 _DATA = frozenset({".json", ".jsonl", ".csv"})
 #: Values that say they are not real: documented examples (AWS's SigV4 test vector keys contain EXAMPLE) and placeholders.
 PLACEHOLDER = re.compile(r"EXAMPLE|example|dummy|DUMMY|fake|FAKE|placeholder|redacted|xxxx|XXXX|\*\*\*\*|[<{$]")
@@ -290,11 +295,13 @@ def test_no_secret_like_literals() -> None:
     """No tracked file holds something a secret scanner reads as a credential. A dummy credential is short and says what it is
     (`"dummy"`, `"not-to-be-copied"`); a test that needs a realistic one, to test redaction or scanning, splits it into adjacent
     string literals, which Python joins and no scanner reads as one."""
+    from research.addresses import BINARY
+
     offenders, formats = [], list(CREDENTIAL_FORMATS)
     for p in _tracked():
         path, suffix = ROOT / p, os.path.splitext(p)[1]
         try:
-            if suffix in _BINARY or path.stat().st_size > 1024 * 1024:
+            if suffix in BINARY or path.stat().st_size > 1024 * 1024:
                 continue
             text = path.read_text()
         except (FileNotFoundError, IsADirectoryError, UnicodeDecodeError):
@@ -369,8 +376,8 @@ def test_tracked_data_within_budget() -> None:
 #: Tracked files an ignore line covers, each added on purpose (`git add -f`): a fixture whose name a pattern for run
 #: outputs or archives matches.
 IGNORED_TRACKED = frozenset({
-    "tools/research/tests/fixtures/run_v0.2/out/proof.bin",
-    "tools/research/tests/fixtures/run_v0.2/out/verify.jsonl",
+    "tests/tools/research/fixtures/run_v0.2/out/proof.bin",
+    "tests/tools/research/fixtures/run_v0.2/out/verify.jsonl",
 })
 
 

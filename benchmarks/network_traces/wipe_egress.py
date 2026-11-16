@@ -1,8 +1,8 @@
-"""wipe-egress: the network certifier's count of what can leave a node on the link its network certifier relays over a
-memory wipe's session [t0, t1), read off the gate's network certifier run (`vy-challenger-gate warden-rehearse`,
+"""wipe-egress: the network attester's count of what can leave a node on the link its network attester relays over a
+memory wipe's session [t0, t1), read off the gate's network attester run (`vy-challenger-gate warden-rehearse`,
 `wipe_gate.sh`), as a ``wipe-egress/v1`` record, ``covered`` or not ("What it reads"). The record is all this script
 writes: what the wipe's reader does with one is its own function, `wipe_monitoring.counted`
-(`verity/protocols/accounting/pous/verifier/wipe_monitoring.py`), and is stated there.
+(`verity/protocols/resource_accounting/memory/pous/verifier/wipe_monitoring.py`), and is stated there.
 
     python wipe_egress.py RUN --t0-ns T0 --t1-ns T1 [--pad-ms 1000] [--out FILE]
 
@@ -10,21 +10,22 @@ RUN is the gate's `fetch RUN` bundle (a gzipped tar) or the directory it unpacks
 T1 are the wipe's session on its challenger host's real-time clock, in Unix ns. It prints the record (and writes it to
 FILE), and exits 0 when the record is covered, 1 when it isn't.
 
-**The count.** The network certifier's schedule (`WardenParams`) fixes what each 3.2 s execution phase can carry out of
+**The count.** The network attester's schedule (`NetworkAttesterParams`) fixes what each 3.2 s execution phase can carry out of
 the node: its egress record's ``lanes · slots`` cells a bucket and its fails record's ``lanes``, each of B bytes, for
 ``window`` buckets (`capacity_bits`, 2,621,440 bits at the scan's schedule). The record's windows are every execution
-phase that meets [t0 − pad, t1 + pad), counted from the deployment's ``origin_unix`` on the network certifier host's
+phase that meets [t0 − pad, t1 + pad), counted from the deployment's ``origin_unix`` on the network attester host's
 clock (`covering`); the pad (`PAD_NS`, 1 s) is how far the two hosts' clocks may disagree. ``egress_bits`` is the
 windows' capacity, ``egress_mib`` it in the wipe's units (`streamed_wipe.EGRESS_UNIT_BITS`), rounded up. With no compute
 audit over the wipe nothing in the cells is bound to a computation, so all of it is free: ``K`` is ``egress_bits``, and
 ``delta`` is 0, since nothing was sampled.
 
 **What it reads.** Only what the gate publishes: ``end.json``'s verdict and its SHA-512 of each ``out/`` file, the
-deployment (``out/deployment.json``: the network certifier's key, session, schedule and origin) and the certificates
-alone (``out/certificates.jsonl``, each signing a salted digest). The cells' counts are witness and never enter the
-record. It is ``covered`` when the gate's check accepted the run, ``out/``'s two files are the ones ``end.json`` hashed,
-the schedule is the one its digest names, the windows lie within the session, and each window has its egress and fails
-certificates verifying under the deployment's key in its session; ``why`` names each failure.
+deployment (``out/deployment.json``: the network attester's key, session, schedule and origin) and the certificates
+alone (``out/certificates.jsonl``, each signing a salted digest). The gate publishes a run's certificates only when
+its check accepted it: of a run it didn't, none is read and the record isn't covered. The cells' counts are witness
+and never enter the record. It is ``covered`` when the gate's check accepted the run, ``out/``'s two files are the
+ones ``end.json`` hashed, the schedule is the one its digest names, the windows lie within the session, and each window
+has its egress and fails certificates verifying under the deployment's key in its session; ``why`` names each failure.
 """
 
 from __future__ import annotations
@@ -37,25 +38,27 @@ import tarfile
 from fractions import Fraction
 from pathlib import Path
 
-import certifier_serve as cs
-from verity.protocols.accounting.certifier.verifier.certificate import Direction
-from verity.protocols.accounting.certifier.verifier.warden import WardenParams
-from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
+
+from verity.protocols.resource_accounting.network.verifier import record_files as RF
+from verity.protocols.resource_accounting.network.verifier.certificate import Direction
+from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
+from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
 
 FORMAT = "wipe-egress/v1"
-#: how far the wipe challenger host's clock and the network certifier host's may disagree
+#: how far the wipe challenger host's clock and the network attester host's may disagree
 PAD_NS = 1_000_000_000
 #: the bundle's files the count reads, by their path under the run's directory
 END, DEPLOYMENT, CERTIFICATES = "end.json", "out/deployment.json", "out/certificates.jsonl"
 FILES = (END, DEPLOYMENT, CERTIFICATES)
 
 
-def capacity_bits(params: WardenParams) -> int:
+def capacity_bits(params: NetworkAttesterParams) -> int:
     """The most bits one execution phase carries out: every cell of its egress and fails records, B bytes each."""
     return sum(g.buckets * g.allocation * g.frame_bytes * 8 for g in (params.grid, params.fails_grid))
 
 
-def window_ns(params: WardenParams) -> int:
+def window_ns(params: NetworkAttesterParams) -> int:
     return params.window * params.bucket_ms * 1_000_000
 
 
@@ -90,35 +93,40 @@ def record(files: dict[str, bytes], t0: int, t1: int, pad: int = PAD_NS) -> dict
         raise ValueError(f"the wipe's window [{t0}, {t1}) is empty: t0 must be before t1")
     if pad < 0:
         raise ValueError(f"the pad is {pad} ns: it is at least 0")
-    missing = [name for name in FILES if name not in files]
+    missing = [name for name in (END, DEPLOYMENT) if name not in files]
     if missing:
         raise ValueError(f"the gate run has no {', '.join(missing)}: give its `fetch` bundle or the directory it unpacks to")
     end, dep = json.loads(files[END]), json.loads(files[DEPLOYMENT])
-    params = WardenParams(**dep["params"])
-    key, session = cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
+    accepted = (end.get("device") == "warden" and end.get("rc") == 0
+                and (end.get("verdict") or {}).get("accepted") is True)
+    if accepted and CERTIFICATES not in files:
+        raise ValueError(f"the gate run has no {CERTIFICATES}, which the gate publishes of a run its check accepted: "
+                         "give its `fetch` bundle or the directory it unpacks to")
+    params = NetworkAttesterParams(**dep["params"])
+    key, session = RF.read_public(dep["key"]), bytes.fromhex(dep["session"])
     origin, width, n = origin_ns(dep["origin_unix"]), window_ns(params), dep["windows"]
     windows = covering(origin, width, t0, t1, pad)
     why = []
-    if end.get("device") != "warden" or end.get("rc") != 0 or (end.get("verdict") or {}).get("accepted") is not True:
+    if not accepted:
         why.append(f"the gate's check didn't accept the run (device {end.get('device')}, rc {end.get('rc')}, "
                    f"accepted {(end.get('verdict') or {}).get('accepted')})")
     for name in (DEPLOYMENT, CERTIFICATES):
-        if hashlib.sha512(files[name]).hexdigest() != (end.get("files") or {}).get(Path(name).name):
+        if name in files and hashlib.sha512(files[name]).hexdigest() != (end.get("files") or {}).get(Path(name).name):
             why.append(f"{name} isn't the file the gate's end.json hashed")
     if params.digest.hex() != dep["digest"]:
         why.append("the deployment's schedule isn't the one its digest names")
     if windows.start < 0:
-        why.append(f"the window starts at link-window {windows.start}, before the session's origin")
+        why.append(f"the window starts at execution phase {windows.start}, before the session's origin")
     if windows.stop > n:
-        why.append(f"the window ends at link-window {windows.stop}, past the session's {n}")
+        why.append(f"the window ends at execution phase {windows.stop}, past the session's {n}")
     certificates = {}
-    for line in files[CERTIFICATES].decode().splitlines():
+    for line in files.get(CERTIFICATES, b"").decode().splitlines():
         doc = json.loads(line)
         if "certificate" in doc:
-            c = cs.certificate_from_json(doc["certificate"])
+            c = RF.certificate_from_json(doc["certificate"])
             certificates[(c.link, c.direction, c.window)] = c
     links, verified = (dep["link"], f"{dep['link']}-fails"), 0
-    for w in range(max(windows.start, 0), min(windows.stop, n)):
+    for w in range(max(windows.start, 0), min(windows.stop, n)) if CERTIFICATES in files else ():
         for link in links:
             c = certificates.get((link, Direction.EGRESS, w))
             if c is None:

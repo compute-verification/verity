@@ -1,6 +1,6 @@
-"""The tracked tree holds to its layout of record, `tests/tree.toml` (its header says what each part holds), at five
-levels: the root, `verity/`, `verity/protocols/`, each group's directory there (a directory of `verity/protocols/` that
-holds protocols: `proofs/`, `accounting/`, `policy/`) and each protocol's directory. Every tracked entry at those levels
+"""The tracked tree holds to its layout of record, `tests/tree.toml` (its header says what each part holds), at six
+levels: the root, `demos/`, `verity/`, `verity/protocols/`, each group's directory there (a directory of
+`verity/protocols/` that holds protocols: `proofs/`, `accounting/`, `policy/`) and each protocol's directory. Every tracked entry at those levels
 is in the tree or on the not-yet list; every not-yet line names a path the tree still holds, with where it goes, its
 owner and its day; and an entry the tree has that main doesn't hold yet names its owner and day until it lands. A stray entry
 fails; a line or an entry whose move landed only warns (`BOOKKEEPING` in `tests/conftest.py`), so a move is never
@@ -24,7 +24,7 @@ from test_repository import ROOT, _tracked
 LAYOUT = "tests/tree.toml"
 HANDLES = ".agents/skills/using-slack/registry.json"
 #: the not-yet list's length, its unowned lines and its arriving lines: each only shrinks, so lower it with the list
-NOT_YET_MAX = 9
+NOT_YET_MAX = 1
 UNOWNED_MAX = 0
 ARRIVING_MAX = 0
 UNOWNED = "unowned"
@@ -71,9 +71,9 @@ def tree(doc: dict) -> set[str]:
 
 
 def entries(doc: dict, tracked: list[str]) -> set[str]:
-    """The tracked entries at the five levels: each file's first component, and the component below `verity/`,
-    `verity/protocols/`, a group's directory and a protocol's directory."""
-    levels, out = {"verity", "verity/protocols"} | _groups(doc) | _protocols(doc), set()
+    """The tracked entries at the six levels: each file's first component, and the component below `demos/`,
+    `verity/`, `verity/protocols/`, a group's directory and a protocol's directory."""
+    levels, out = {"demos", "verity", "verity/protocols"} | _groups(doc) | _protocols(doc), set()
     for f in tracked:
         parts = f.split("/")
         out.add(parts[0])

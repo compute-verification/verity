@@ -65,6 +65,7 @@ from typing import Any
 
 from verity_vllm.config import RowId, UsageError, option
 from verity_vllm.pipeline import config_record as CR
+from verity_vllm.pipeline.cli import write
 from verity_vllm.pipeline.store_data import data, fetch, listing, selected_from
 
 __all__ = ["COMMANDS", "STAGED", "checkpoint", "data", "main"]
@@ -162,7 +163,8 @@ def programs(row: str, ranks: list[int] | None = None, *, part: list[str] | None
     """The row's Programs, {rank: {part: DecodedProgram}} (only `ranks` and the parts `part` names, when given), fetched from its Build
     (`evidence.build`, only the descriptors asked for) or read from a `bundle` (`records fetch`), and decoded through the registry
     (`program.boolean.load_program`).  A descriptor whose digest is not the record's is refused."""
-    from verity.definitions.boolean import load_program
+    from verity.circuits.ops.boolean.versions import load_program
+    import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
     rec = record(row, bundle)
     want = selected(rec, ranks, part)
     paths = [descriptor(rec, r, p) for r, ps in want.items() for p in ps]
@@ -601,35 +603,35 @@ def _pairs(flag: str, items: list[str], form: str) -> dict[str, str]:
 def main(a: PublishOptions | PullOptions | CaptureOptions | ShowOptions | ProgramsOptions | FetchOptions | StagedOptions
          | SwitchOptions) -> int:
     if isinstance(a, SwitchOptions):
-        print(json.dumps(switch(a.row, json.loads(Path(a.comparison).read_text()), run=a.run, trace=a.trace, tier=a.tier)["aot"]))
+        write(json.dumps(switch(a.row, json.loads(Path(a.comparison).read_text()), run=a.run, trace=a.trace, tier=a.tier)["aot"]))
         return 0
     if isinstance(a, PublishOptions):
         ev = evidence_of(a.build, manifest=a.manifest, match=a.match, match_run=a.match_run, commit=a.commit, commit_run=a.commit_run,
                          conformance=_pairs("--conformance", a.conformance, "PROPERTY=art:..."),
                          gaps=_pairs("--gap", a.gap, "PROPERTY=REASON"))
         summary = json.loads(Path(a.summary).read_text()) if a.summary else None
-        print(publish(a.row_dir, a.row, evidence=ev, tree=a.tree, by=a.by, summary=summary, tier=a.tier, newest=a.newest_captures))
+        write(publish(a.row_dir, a.row, evidence=ev, tree=a.tree, by=a.by, summary=summary, tier=a.tier, newest=a.newest_captures))
         return 0
     if isinstance(a, PullOptions):
         for art in a.art:
-            print(f"{pull(art, a.tier)} {art}")
+            write(f"{pull(art, a.tier)} {art}")
         return 0
     if isinstance(a, CaptureOptions):
         for prop, art in capture(a.run, a.property or None).items():
-            print(f"{prop}={art}")
+            write(f"{prop}={art}")
         return 0
     if isinstance(a, ShowOptions):
-        print(json.dumps(record(a.row) if a.row else {r: e.get("record") for r, e in index().items()}, indent=1, sort_keys=True))
+        write(json.dumps(record(a.row) if a.row else {r: e.get("record") for r, e in index().items()}, indent=1, sort_keys=True))
         return 0
     if isinstance(a, FetchOptions):
-        print(bundle(a.row, Path(a.to), a.rank or None, part=a.part or None))
+        write(str(bundle(a.row, Path(a.to), a.rank or None, part=a.part or None)))
         return 0
     if isinstance(a, StagedOptions):
-        print(staged(a.repo, a.revision, at=a.at, ref=a.ref, by=a.by), end="")
+        write(staged(a.repo, a.revision, at=a.at, ref=a.ref, by=a.by), end="")
         return 0
     src = Path(a.bundle) if a.bundle else None
     named = parts(record(a.row, src))
     for r in a.rank or sorted(named):
         for part, p in programs(a.row, [r], part=a.part or None, bundle=src)[r].items():
-            print(f"rank {r}  {part:28s} {named[r][part][:16]}  gates {p.gates}  definitions {len(p.defs)}", flush=True)
+            write(f"rank {r}  {part:28s} {named[r][part][:16]}  gates {p.gates}  definitions {len(p.defs)}")
     return 0

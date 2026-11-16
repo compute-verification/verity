@@ -4,7 +4,7 @@ index cd043ca8..b900f6cb 100644
 +++ b/backends/flock/live/src/bin/flock-circuit.rs
 @@ -771,9 +771,10 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
          srv.cfg.draw_law = None;
-         srv.cfg.draw_given = Some(draw.clone());
+         srv.cfg.sample_given = Some(draw.clone());
          let s = Arc::new(Mutex::new(srv));
 -        let (v, _) = session(st, inst, shared(InProc(s.clone())), &Plan { gpu, ..Plan::default() }, ProverSeed::from_os());
 +        let (v, proofs) = session(st, inst, shared(InProc(s.clone())), &Plan { gpu, ..Plan::default() }, ProverSeed::from_os());

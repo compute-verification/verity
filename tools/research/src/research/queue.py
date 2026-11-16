@@ -2,8 +2,10 @@
 PRs ready to land (marked ready at their heads, with a reviewer's land verdict or under the low-risk rule, drive.toml's
 `lowrisk_lane`) onto `main` as candidates, and moves `main` only to a candidate with no new failure (`research.vqueue`): each
 gating task passed, failed only where an unexpired allowance of policy.toml at its base covers, or fails on its base too, so
-`main`'s reds only shrink.  A failure the candidate's base doesn't share ejects its lone suspect, or bisects several, and the
-candidate and those above it are built again without them in the same tick.
+`main`'s reds only shrink; under the loop's `--gate verdict` a plain candidate lands on its members' land verdicts and the
+quick tier, and a red of `main`'s whole check after it reverts the one culprit (`vqueue_loop.Loop._plain`, `_main_red`).  A
+failure the candidate's base doesn't share ejects its lone suspect, or bisects several, and the candidate and those above it
+are built again without them in the same tick.
 
     research queue status [--json]                 each open PR as the verified queue admits it onto `main` (no `next`): what
                                                    it waits for, why it was refused, or that its head is on `main`;
@@ -11,7 +13,8 @@ candidate and those above it are built again without them in the same tick.
                                                    (`research.stale`); then
                                                    every open PR whose body names no Linear issue (`named_issue`: a key
                                                    after a Linear magic word, a bare key of a team main's Slack registry
-                                                   lists, or an `Issue: none: REASON` line); --json gives each its `issue`
+                                                   lists, or an `Issue: none: REASON` line); --json gives each its `issue`,
+                                                   stdout holding the JSON alone (the notices go to stderr)
     research queue sync [--dry-run]                rebuild `next` (Merges, below), refused unless `merge.on_drive` holds or with
                                                    --dry-run: the verified queue builds on `main`, never on `next`
     research queue eject PR --reason TEXT [--by HANDLE]
@@ -42,8 +45,8 @@ candidate and those above it are built again without them in the same tick.
                                                    the gate's fix; a warn gate's failure is printed as a warning and refuses
                                                    nothing), or, merged onto it in a temporary worktree, fails `pins.py
                                                    --stale`, tests/test_module_strings.py, test_pins.py, test_doc_paths.py,
-                                                   test_repository.py, tools/research/tests/test_pythonpath.py, a lint its
-                                                   change reaches (tests/test_no_wall_clock.py, adapters/vllm/tests/lint),
+                                                   test_repository.py, tests/tools/research/test_pythonpath.py, a lint its
+                                                   change reaches (tests/test_no_wall_clock.py, tests/adapters/vllm/tests/lint),
                                                    or `pytest --collect-only` in a suite
                                                    whose inputs its change touches, or breaks the build of a Lean module that
                                                    is or imports what it changes (on a warm Lean tree: here on a node, else
@@ -177,7 +180,7 @@ publishes what it builds for the candidate's audit), from a clean checkout, eith
 failure.  `--mark` (`MarkOnly`) writes the mark with no tier, and its candidate's check is the head's first full check.  Draft state is ignored: agents open PRs as drafts, and
 the ready label is what says one is done.  The hold label keeps a PR out whatever else holds.  The owner is the lane its body names
 on a `Lane {name}` line, else the Cursor agent id its body carries.  The rules file (`ci/queue.toml` on
-`main`, `tools/verity/check/queue.toml` until the repository move, or `--rules`) names the hold label, and may name the author
+`main`, `tools/check/queue.toml` until the repository move, or `--rules`) names the hold label, and may name the author
 and committer of the queue's commits (`author = { name = "NAME", email = "ADDRESS" }`, `Rules.identity`): `IDENTITY` where it
 names none.  Ready marks are read after
 pulling the target's labels from the store's remote; when that pull can't happen (no remote here, one
@@ -198,7 +201,7 @@ module only an unlanded PR adds, a workspace member without its REAL_ROOTS entry
 it carries that isn't admitted, a merge of an old `next` that carries a PR's head the PR no longer lands (closed, rebuilt
 without it, or withdrawn: `stale_carried`, after `old_next` for one closed unlanded), and a failure of
 `tests/test_repository.py` (a report-genre name), which the preflight runs too, as it runs the landing gates on the head; a
-warn gate's failure (a Markdown file over its cap) it prints as a warning, and so it prints what the vLLM integration's ratchet
+warn gate's failure (a Markdown file over its size limit) it prints as a warning, and so it prints what the vLLM integration's ratchet
 gate fails on the merged tree (`PREFLIGHT_RATCHET`), since the gate tells a new violation by its text and can take an honest
 change's violation for one.  A Lean change can pass its own Lean check and break
 a module that imports it (a changed signature, dropped premises, a dropped import), which its candidate's records run finds,
@@ -233,7 +236,7 @@ Merges.  A candidate is its base with one merge commit per member on top, each m
 is recorded under what it reads (`Queue._merge_key`): the parent's tree, not its commit, the head and their merge bases, with
 the merge's code, git and drivers; the same head merged again onto the same tree takes its record's tree, conflict, porting,
 rebuilt pins and lock drops, and only `git commit-tree` runs (`Queue._recorded`).  A merge whose only conflicts are in pins
-(`tools/verity/check/pins.py`'s `PINS`, generated sha256 listings of Lean inputs) is kept, each conflicted pin regenerated from
+(`tools/check/pins.py`'s `PINS`, generated sha256 listings of Lean inputs) is kept, each conflicted pin regenerated from
 the merged tree (`repinned`): two PRs that each change a pinned input both change its pin.  Two that each change what a JSON
 pin holds besides its digests (each adds vectors) conflict in it, since keeping either side's text drops the other's.  A PR
 whose head contains another open PR's head, or by ancestry an older one (a head the queue saw it at, or its branch merged in:
@@ -257,14 +260,15 @@ doesn't merge onto `main`, as after a move it lacks, goes into no candidate, and
 to rebase it onto `main` and to mark the new head, once a head (`Loop._conflicts`); `tools/move/restack.py` carries a branch
 across a move, and a land verdict carries to the restacked head when its own change, mapped across the move, is the same
 (Admission).  `research queue sync`'s regeneration of a move on `next` (`_regenerate`, which
-`tools/verity/check/move_check.py` must certify) and its restacks across one (`_merge_through`, `_restack`) build only
+`tools/check/move_check.py` must certify) and its restacks across one (`_merge_through`, `_restack`) build only
 `next`.  The preflight merges no move PR's head, and notes rather than refuses a conflict only in files a move changed.
 
 Landing.  The verified queue's loop (`research queue vqueue`, `research.vqueue_loop`) is the one landing path: it builds each
 candidate from `main` and the PRs ready to land, commits the lock records the candidate's records run regenerates
-(`research.vqueue_records`), and fast-forwards `main` only to a candidate with no new failure; it tells each owner what it
-refuses.  What reaches `main` and changes what a guarantee says sends the spec-change DM of what
-changed (`spec_alert`, after each move of `main`: `Landing._on_main`).
+(`research.vqueue_records`), and fast-forwards `main` only to a candidate with no new failure (of the quick tier alone, for a
+plain candidate under `--gate verdict`, whose whole check follows on `main`); it tells each owner what it refuses.  What
+reaches `main` and changes what a guarantee says sends the spec-change DM of what changed (`spec_alert`, after each move of
+`main`: `Landing._on_main`).
 
 Signed verdicts.  A label's `by` is whatever its writer said.  With drive.toml's `signed_verdicts` on at `main`, the loop counts a
 ready mark or land verdict only beside a `label_auth` label that authenticates it (`research.labelauth`, `StoreLabels`): a
@@ -337,18 +341,19 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Callable, Collection, Iterable
 
-from . import linear, quick_tier, waitcap
+from . import linear, quick_tier, suite_layout, waitcap
+from .telemetry import end_state
 from .gates import WORKTREES_LOCK, git_env, worktrees_shared
 from .store import ids, vocab
 
 BRANCH, SHADOW_BRANCH = "next", "queue-shadow"
 RULES = "ci/queue.toml"
-#: where the rules are until the repository move puts `tools/verity/check/` at `ci/`
-RULES_BEFORE_MOVE = "tools/verity/check/queue.toml"
+#: where the rules are until the repository move puts `tools/check/` at `ci/`
+RULES_BEFORE_MOVE = "tools/check/queue.toml"
 #: drive's flags of record (`DriveFlags`, `--config`)
-DRIVE_FLAGS = "tools/verity/check/drive.toml"
+DRIVE_FLAGS = "tools/check/drive.toml"
 #: the pins tool, whose `PINS` names the generated files a merge rebuilds (`repinned`): after the repository move, and before it
-PINS_FILES = ("ci/pins.py", "tools/verity/check/pins.py")
+PINS_FILES = ("ci/pins.py", "tools/check/pins.py")
 #: the codemod that puts the in-tree Lake packages' Lean on Lean's module system, and the one reading of a Lean header it reads
 #: with: a merge into a tree on the module system runs the codemod over the merged tree (`ported`)
 MODULES, HEADERS = "tools/verity/lean/modules.py", "tools/verity/lean/headers.py"
@@ -405,10 +410,13 @@ ISSUE_LINK_RE = re.compile(r"(?i)\b(?:refs?|references|part of|contributes to|to
 MOVE_TRAILER_RE = re.compile(r"^Move: (tools/move/[\w.-]+\.toml)$", re.M)
 #: the scripts a move runs, each as the landing branch has it (`move_scripts`): the move, its certificate, and carrying a branch
 #: across it
-RENAME, MOVE_CHECK, RESTACK = "tools/move/rename.py", "tools/verity/check/move_check.py", "tools/move/restack.py"
+RENAME, MOVE_CHECK, RESTACK = "tools/move/rename.py", "tools/check/move_check.py", "tools/move/restack.py"
 #: what those scripts import from their own checkout: `tools/move/`'s other scripts (rename.py's `layout`), and the pins list
 #: move_check.py reads to tell a pin's rewritten digest from an edit
-MOVE_DIR, MOVE_PINS = "tools/move/", "tools/verity/check/pins.py"
+MOVE_DIR, MOVE_PINS = "tools/move/", "tools/check/pins.py"
+#: the corrections to move commits' own records that `restack.py` reads from beside itself (its `MOVE_LINES`), before a
+#: commit's move line: so wherever it runs, the table of the same commit is written next to it (`restack_files`)
+MOVE_LINES = "tools/move/move_lines.toml"
 #: how long a restack job runs at most (`Queue._launch_restack`): `timeout` interrupts `restack.py` then, so it removes its
 #: scratch worktrees, and kills it a minute on; a job with no exit written `RESTACK_LOST_S` after its start died (its process
 #: gone, or its pid another's after a restart of the pod)
@@ -760,12 +768,12 @@ def _author_why(author: object) -> str | None:
 LANDINGS = ("review",)
 #: a landing or warn gate's path (`DriveFlags.landing_gates`, `DriveFlags.warn_gates`)
 GATE_PATH_RE = re.compile(r"[\w.-]+(?:/[\w.-]+)*\.py")
-#: the steps of a check (`tools/verity/check/check.py`), of which `DriveFlags.warn_steps` names some
+#: the steps of a check (`tools/check/check.py`), of which `DriveFlags.warn_steps` names some
 CHECK_STEPS = ("preflight-lock", "preflight-lints", "preflight-fixtures", "flock-circuit-build", "lean-build",
                "lean-unit-cut", "lean-agreement", "lean-audit", "lean-suites", "pytest", "circuit-check", "flock-rust-tests",
                "ratchet-gate")
-#: an entry of `DriveFlags.lowrisk_excludes`: a directory from the repository's root ending in `/`, one file's path from the
-#: root (a `/` before its end, no glob), or a file name glob (no `/`)
+#: an entry of `DriveFlags.lowrisk_excludes`, `DriveFlags.verdict_plain` or `DriveFlags.verdict_excludes`: a directory from the
+#: repository's root ending in `/`, one file's path from the root (a `/` before its end, no glob), or a file name glob (no `/`)
 LOWRISK_EXCLUDE_RE = re.compile(r"(?:[\w.-]+/)+(?:[\w.-]+)?|[\w.*?\[\]-]+")
 #: an entry of `DriveFlags.bottom_ring`: a handle as a post that starts with it rings it (`slack.NAME_TOKEN_RE`)
 HANDLE_RE = re.compile(r"@[a-z0-9][a-z0-9._-]*")
@@ -833,9 +841,9 @@ class DriveFlags:
     #: close each open PR nothing will land, its head carried by a landed PR of the same owner or its change already on
     #: `land_into` (`drive.Driver._unlandable`): "on"; "log", only log each it would close; "off"
     close_unlandable: str = "off"
-    #: the after-landing run as N runs at once, shard K of ci.toml's plan with N shards each (`drive.Driver.start_postland`):
+    #: the after-landing run as N runs at once, shard K of ci.toml's plan with N shards each (`vqueue_slim.start`):
     #: 1, or a plan's N; it takes about its longest shard rather than every step on one slot; "auto" or "auto:MAX", the shard
-    #: planner's N (`tools/verity/check/shards.py`), at most MAX (default its MAX_SHARDS), each shard `--shard auto:K/N`
+    #: planner's N (`tools/check/shards.py`), at most MAX (default its MAX_SHARDS), each shard `--shard auto:K/N`
     after_landing_shards: int | str = 1
     #: the keys a command line may override, of `COMMAND_LINE`
     command_line: tuple[str, ...] = ("on",)
@@ -846,6 +854,12 @@ class DriveFlags:
     #: what keeps a change off the low-risk lane (`lowrisk`): a directory from the root (ending in `/`), one file's path from
     #: the root, or a file name glob; none, the lane lands nothing
     lowrisk_excludes: tuple[str, ...] = ()
+    #: what the land verdicts gate (`research queue vqueue --gate verdict`, `vqueue_loop.Loop._plain`) keeps on the whole
+    #: check beyond `lowrisk_excludes`, written as it is: the gate reads both (`plain_excludes`); none, no candidate is plain
+    verdict_excludes: tuple[str, ...] = ()
+    #: the entries of `lowrisk_excludes` the land verdicts gate doesn't read, each written as it is there: what keeps a change
+    #: off the low-risk lane only so that a reader sees it, which a land verdict already is (`plain_excludes`)
+    verdict_plain: tuple[str, ...] = ()
     #: the task executor after landing (`research.executor`, `drive.Driver`): "off"; "shadow", each tip's task graph enqueued beside
     #: the after-landing run and their verdicts compared (`research queue shadow-report`); "on", its verdicts decide, with a run
     #: of `drive.SLIM_STEPS` alone beside it
@@ -870,6 +884,16 @@ class DriveFlags:
     signed_verdicts: str = "off"
     #: the restacks across a move the syncs run at once in the background, each `restack.py` on one head (`Queue._restack`)
     restack_jobs: int = 3
+
+    @property
+    def plain_excludes(self) -> tuple[str, ...]:
+        """What keeps a candidate on the whole check where the land verdicts gate: `lowrisk_excludes` without the entries of
+        `verdict_plain`, then `verdict_excludes`, each entry once, so a change the low-risk lane keeps off is plain only when
+        entries of `verdict_plain` alone keep it off.  With `lowrisk_excludes` or `verdict_excludes` empty, none: as `lowrisk`
+        reads no excludes, nothing is plain."""
+        if not (self.lowrisk_excludes and self.verdict_excludes):
+            return ()
+        return tuple(dict.fromkeys([x for x in self.lowrisk_excludes if x not in self.verdict_plain] + list(self.verdict_excludes)))
 
     @classmethod
     def parse(cls, text: str, source: str = "drive.toml", strict: bool = False) -> "DriveFlags":
@@ -908,7 +932,7 @@ class DriveFlags:
         if "after_landing_shards" in doc:
             v = doc["after_landing_shards"]
             if not (isinstance(v, str) and AUTO_SHARDS_RE.fullmatch(v)) and (type(v) is not int or v < 1):
-                raise bad("after_landing_shards", "a whole number, 1 or a shard plan's N in tools/verity/check/ci.toml, or "
+                raise bad("after_landing_shards", "a whole number, 1 or a shard plan's N in tools/check/ci.toml, or "
                                                   "\"auto\" or \"auto:MAX\" (the shard planner's N, at most MAX)")
             got["after_landing_shards"] = v
         for k, modes in (("executor", MODES), ("verdict_carry", MODES), ("close_unlandable", CLOSE_UNLANDABLE)):
@@ -933,14 +957,24 @@ class DriveFlags:
             if type(doc["restack_jobs"]) is not int or doc["restack_jobs"] < 1:
                 raise bad("restack_jobs", "a whole number, 1 or more")
             got["restack_jobs"] = doc["restack_jobs"]
-        if "lowrisk_excludes" in doc:
-            v = doc["lowrisk_excludes"]
-            if not (isinstance(v, list) and v and all(isinstance(x, str) and LOWRISK_EXCLUDE_RE.fullmatch(x)
-                                                         and ".." not in x.split("/") for x in v)):
-                raise bad("lowrisk_excludes", "a non-empty list of directories from the repository's root, each ending in `/`, "
-                                              "files' paths from it and file name globs, as [\"*.lean\", \"verity/core/\", "
-                                              "\"verity/__init__.py\"]")
-            got["lowrisk_excludes"] = tuple(v)
+        for k in ("lowrisk_excludes", "verdict_excludes", "verdict_plain"):
+            if k in doc:
+                v = doc[k]
+                if not (isinstance(v, list) and v and all(isinstance(x, str) and LOWRISK_EXCLUDE_RE.fullmatch(x)
+                                                             and ".." not in x.split("/") for x in v)):
+                    raise bad(k, "a non-empty list of directories from the repository's root, each ending in `/`, files' paths "
+                                 "from it and file name globs, as [\"*.lean\", \"verity/core/\", \"verity/__init__.py\"]")
+                got[k] = tuple(v)
+        if plain := got.get("verdict_plain"):
+            if dup := sorted({x for x in plain if plain.count(x) > 1}):
+                raise bad("verdict_plain", f"{', '.join(dup)} written more than once: keep each entry once")
+            if stray := [x for x in plain if x not in got.get("lowrisk_excludes", ())]:
+                raise bad("verdict_plain", f"{', '.join(stray)} is no entry of lowrisk_excludes: each entry is one of "
+                                           "lowrisk_excludes, written character for character as it is there; copy it from "
+                                           "there, or remove it")
+            if both := [x for x in plain if x in got.get("verdict_excludes", ())]:
+                raise bad("verdict_plain", f"{', '.join(both)} is also an entry of verdict_excludes, which keeps it on the "
+                                           "whole check: remove it from one of the two")
         if "bottom_ring" in doc:
             v = doc["bottom_ring"]
             if not (isinstance(v, list) and v and all(isinstance(x, str) and HANDLE_RE.fullmatch(x) for x in v)):
@@ -1210,14 +1244,20 @@ def scripts_at(repo: Path, at: str, paths: Iterable[str], suffix: str = ".py") -
 
 
 def move_scripts(repo: Path, at: str) -> dict[str, str]:
-    """{path: blob} of what judges a move at ``at``: `tools/move/`'s scripts (its maps are the moves' data, not code),
-    `move_check.py` and the pins list it reads."""
-    return scripts_at(repo, at, (MOVE_DIR, MOVE_CHECK, MOVE_PINS))
+    """{path: blob} of what judges a move at ``at``: `tools/move/`'s scripts (its maps are the moves' data, not code), the
+    corrections `restack.py` reads (`MOVE_LINES`, which change what it does), `move_check.py` and the pins list it reads."""
+    return {**scripts_at(repo, at, (MOVE_DIR, MOVE_CHECK, MOVE_PINS)), **scripts_at(repo, at, (MOVE_LINES,), "")}
 
 
-#: the scripts of `tools/move/` as `vqueue.meets` reads a change's files: a member below a move that changes one holds it back
-#: (`Queue._scripts_below`)
-MOVE_SCRIPTS = (f"{MOVE_DIR}*.py",)
+def restack_files(repo: Path, at: str) -> dict[str, str]:
+    """{path: blob} of ``at``'s `restack.py` and its corrections (`MOVE_LINES`), each where ``at`` has it: what every run of
+    `restack.py` the queue or carry starts is written out from (`write_scripts`), so the script reads the table beside it."""
+    return scripts_at(repo, at, (RESTACK, MOVE_LINES), "")
+
+
+#: the scripts of `tools/move/` and the corrections `restack.py` reads, as `vqueue.meets` reads a change's files, as
+#: `move_scripts` counts them: a member below a move that changes one holds it back (`Queue._scripts_below`)
+MOVE_SCRIPTS = (f"{MOVE_DIR}*.py", MOVE_LINES)
 
 
 def path_rows(text: str) -> list[tuple[str, str]]:
@@ -1249,7 +1289,7 @@ def gate_refusal(repo: Path, main: str, head: str, gates: Iterable[str],
     """What ``gates``, each a ``kind`` (a landing gate, or a warn gate, whose failure refuses nothing), say of ``head`` against
     ``main`` (each judges the change from their merge base): (each failure, with its fix and how to run the gate; each gate
     that couldn't judge, with why).  ``head`` is a PR's head, or with ``onto`` its merge onto that branch, as the sync judges
-    it: what the members below add counts too (a merge can take a file over its cap with the members below it, though its
+    it: what the members below add counts too (a merge can take a file over its limit with the members below it, though its
     head alone is under).  A gate exits 0 to pass, and 1 with `--json`'s `{"failures": [{"why": ..., "fix": [...]}]}` to
     fail; anything else is unable to judge."""
     what, merged = (head[:12], "") if onto is None else (f"its merge onto `{onto}` ({head[:12]})", f" on its merge onto `{onto}`")
@@ -1306,7 +1346,7 @@ LEAN_SOURCES = (".lean", "lakefile.lean", "lakefile.toml", "lean-toolchain", "la
 
 #: the analysis tree: a Lean change only here that touches no lock and no spec (`LEAN_SPEC`) is proofs, checked by the
 #: after-landing run, a failure blaming it; Lean anywhere else runs as code (Flock's verifier and the ZK server, the PoUS
-#: grader, the certifier program, the inference-only check, the remote audit's verifier), and a lock run follows its landing
+#: grader, the certifier program, the inference-only check, PoUB's verifier), and a lock run follows its landing
 LEAN_PROOFS_TREE = "security/"
 #: the spec: the Lean the guarantees' statements read, `security/`'s Definitions library, and the Lake files of its package.
 #: A change to it, like a lock's, is a Lean change with or without a lock change
@@ -1338,8 +1378,9 @@ def lowrisk(files: Iterable[str], excludes: Iterable[str]) -> bool:
     that ends in `/` (a directory from the repository's root: the verifiers and the soundness-path Python), is an entry with
     a `/` before its end (one file's path from the root: a package's `__init__.py`, which Python runs on every import below
     it, without the rest of its directory), or has a name an entry with no `/` matches as a glob (`*.lean`, every
-    `lean-audit.json`, the Lake files, `TRUSTED.sha256`).  ``files`` are the PR's own change, against its merge base with
-    `main`.  No excludes, nothing is low-risk; no file, nothing to land."""
+    `lean-audit.json`, the Lake files, `TRUSTED.sha256`).  A directory holds its tests under the root's `tests/` too, and
+    `tests/` holds only the root suite's own (`suite_layout.held`).  ``files`` are the PR's own change, against its merge
+    base with `main`.  No excludes, nothing is low-risk; no file, nothing to land."""
     dirs, paths, names = [], set(), []
     for x in excludes:
         if x.endswith("/"):
@@ -1348,9 +1389,9 @@ def lowrisk(files: Iterable[str], excludes: Iterable[str]) -> bool:
             paths.add(x)
         else:
             names.append(x)
-    files = list(files)
+    files, dirs = list(files), tuple(dirs)
     return bool(files and (dirs or paths or names)) and not any(
-        f.startswith(tuple(dirs)) or f in paths or any(fnmatch.fnmatchcase(PurePosixPath(f).name, n) for n in names)
+        suite_layout.held(f, dirs) or f in paths or any(fnmatch.fnmatchcase(PurePosixPath(f).name, n) for n in names)
         for f in files)
 
 
@@ -2696,14 +2737,14 @@ class Queue:
 
     def _launch_restack(self, head: str, mv: Move, of: str, tries: int = 1, since: float | None = None) -> bool:
         """Start `restack.py HEAD --move-commit MOVE --script rename.py --script-arg=--map --script-arg=MAP --json`, the landing
-        branch's copy run in the clone, in the background (`RESTACK_JOB`, `landing.detach`), unless this sync starts none or
+        branch's copy with its corrections beside it (`restack_files`) run in the clone, in the background (`RESTACK_JOB`, `landing.detach`), unless this sync starts none or
         `restack_jobs` run: whether it started.  It runs the move's base's `tools/move/` scripts, which `_regenerated` held to
         the landing branch's when it made the move.  A landing branch without the script is the restack's failure."""
         key = f"{head}:{mv.commit}"
         if not self._restack_starts or len(self._restacking) >= self.restack_jobs:
             return False
-        script = _git(self.workdir, "show", f"{self.base}:{RESTACK}", check=False)
-        if script.returncode:
+        files = restack_files(self.workdir, self.base)
+        if RESTACK not in files:
             self._restacks[key] = {"why": f"`{self.into}` has no {RESTACK}"}
             return False
         from .landing import LAUNCHES, detach
@@ -2711,8 +2752,7 @@ class Queue:
         root = Path(tempfile.gettempdir()) / LAUNCHES
         root.mkdir(parents=True, exist_ok=True)
         out = tempfile.mkdtemp(prefix="restack-", dir=root)
-        path = Path(out, "restack.py")
-        path.write_text(script.stdout, errors="surrogateescape")
+        path = write_scripts(self.workdir, files, Path(out)) / RESTACK
         argv = ["sh", "-c", RESTACK_JOB, "sh", out, sys.executable, str(path), head, "--move-commit", mv.commit, "--script", RENAME,
                 "--script-arg=--map", f"--script-arg={mv.map}", "--main", "refs/remotes/origin/main", "--json"]
         now = self.now()
@@ -3187,14 +3227,14 @@ class Queue:
 #: packages, so a change only to `verity_vllm/pipeline/` and `config.py` reruns hundreds of targets)
 _COLD_PREFIXES = ("verity/circuits/", "verity/circuits/ops/", "verity/circuits/silicon/",
                   "tools/verity/circuit_check/", "adapters/vllm/verity_vllm/", "verity/protocols/proofs/flock/prover/python/",
-                  "verity/protocols/accounting/pouw/verifier/", "verity/protocols/accounting/pous/verifier/", "tools/pous_grader/",
-                  "verity/protocols/accounting/pous/device/challenger_session.py", "verity/protocols/accounting/pous/device/memory_challenger.py",
-                  "verity/protocols/accounting/poub/verifier/commitments/",
+                  "verity/protocols/resource_accounting/compute/pouw/verifier/", "verity/protocols/resource_accounting/memory/pous/verifier/", "tools/pous_grader/",
+                  "verity/protocols/resource_accounting/memory/pous/attester/challenger_session.py", "verity/protocols/resource_accounting/memory/pous/attester/memory_challenger.py",
+                  "verity/protocols/resource_accounting/memory/poub/verifier/commitments/",
                   "verity/commitments/frame_v3/", "verity/commitments/gates/", "verity/commitments/hm96/",
                   "verity/commitments/__init__.py", "verity/commitments/advice.py", "verity/commitments/coin_tree.py",
                   "verity/commitments/domains.py", "verity/commitments/history.py", "verity/commitments/identity.py",
                   "verity/commitments/indexed.py", "verity/commitments/layout.py", "verity/commitments/limits.py",
-                  "verity/commitments/merkle.py", "verity/commitments/multiproof.py", "verity/commitments/pyproject.toml",
+                  "verity/commitments/merkle.py", "verity/commitments/multiproof.py", "tests/verity/commitments/pyproject.toml",
                   "verity/commitments/row_table.py", "verity/commitments/rowleaf.py", "verity/commitments/scheme.py",
                   "verity/commitments/window.py",
                   "verity/circuits/private_circuits/", "benchmarks/numerical/python/")
@@ -3874,7 +3914,7 @@ REMOTE_POLL_S = 30
 SLOT_NOT_STARTED = 75
 #: the remote tier's command, slot.py from the shipped tree as the launcher of a machine with /etc/vy/runs-via-slot accepts it
 #: (pods/nebius/slot_only.py's `through_slot`, which the suites that read this module may not read)
-SLOT = ("python3", "tools/verity/check/slot.py")
+SLOT = ("python3", "tools/check/slot.py")
 #: `research queue ready`'s exit when the tier never started: nothing failed, and nothing is marked
 READY_NOT_STARTED = 3
 #: what `place` asks a research pool for when node 2 is down: any slot of the pool fits, and the tier takes the slot's cores
@@ -3883,7 +3923,7 @@ SPILL_CPUS, SPILL_MEM_GB = 4, 16
 POOL_SLOTS = "/workspace/research/locks/{pool}/slots"
 #: a lane's own test run, which no landing needs (its candidate's full check decides whether a PR lands)
 LANE_RUN = ('`research run --on auto --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && '
-            'uv run tools/verity/check/suites.py --changed $(git fetch -q origin main && git merge-base HEAD FETCH_HEAD) --quick"`')
+            'uv run tools/check/suites.py --changed $(git fetch -q origin main && git merge-base HEAD FETCH_HEAD) --quick"`')
 
 
 class NotStarted(str):
@@ -3891,7 +3931,7 @@ class NotStarted(str):
 
 
 class StillGoing(str):
-    """`ready --on`'s caller stopped waiting at research.waitcap's cap with the tier's run still going: nothing failed or was
+    """`ready --on`'s caller stopped waiting at research.waitcap's limit with the tier's run still going: nothing failed or was
     cancelled, and `research queue judge RUN` marks the PR once the run has ended."""
 
 
@@ -3903,7 +3943,7 @@ def place(spec: str, repo: Path, read: Callable[[list[str]], dict] | None = None
     (``spill``, research.auto), as `MACHINE:POOL`. None when nothing could be placed. And why, with each machine skipped."""
     from .store import tools_registry
 
-    path = tools_registry.resolve("tools/verity/check/check.py", lambda p: (repo / p).is_file()) or "tools/verity/check/check.py"
+    path = tools_registry.resolve("tools/check/check.py", lambda p: (repo / p).is_file()) or "tools/check/check.py"
     s = importlib.util.spec_from_file_location("queue_check", repo / path)
     check = importlib.util.module_from_spec(s)
     sys.modules[s.name] = check
@@ -3935,11 +3975,32 @@ def _launch(argv: list[str], cwd: Path) -> subprocess.CompletedProcess:
     return subprocess.run(argv, cwd=cwd, capture_output=True, text=True)
 
 
+def quick_run(rid: str, on: str, wt: Path, at: str, base: str, *, merged: str | None = None, audit: list[str] | None = None,
+              by: str = "", project: str = "verity", wait_s: float = REMOTE_WAIT_S, timeout_s: float = REMOTE_TIMEOUT_S,
+              pool: str = "", priority: bool = False) -> list[str]:
+    """The `research run` of the quick tier at ``at`` (``wt``, a checkout of it, its `--source`) since ``base`` as run ``rid`` on
+    machine ``on`` (`RemoteQuickTier`): in a check slot of the machine (of its ``pool``'s), a `--priority` one with
+    ``priority``, waiting `wait_s` for it and running `timeout_s` in it; ``merged``, the PR head when ``at`` is its merge onto
+    ``base``; ``audit``, `LEAN_AUDIT` when it audits (`lean_audit`)."""
+    slot = (["env", f"CHECK_SLOTS={POOL_SLOTS.format(pool=pool)}"] if pool else []) + list(SLOT)
+    job = Path(quick_tier.__file__)
+    args = [*(x for d in LEAN_BUILDS for x in ("--lean", d)), "--head", at, "--base", base,
+            *(["--merged", merged] if merged else []), *(["--lean-audit", shlex.join(audit)] if audit else []),
+            "--", *QUICK_TIER]
+    opts = [*(["--priority"] if priority else []), *(["--by", by] if by else []), "--wait-max", f"{wait_s:g}",
+            "--run-max", f"{timeout_s:g}"]
+    return [sys.executable, "-m", "research", "run", "--id", rid, "--on", on, "--project", project,
+            "--source", str(wt), "--cwd", "source", "--send", str(job), "--require-result",
+            "--timeout", f"{wait_s + timeout_s:g}", "--custody-ttl", str(math.ceil(wait_s + timeout_s + REMOTE_GRACE_S)),
+            "--declared-output", "out/*", "--", *slot, *opts,
+            "--", "sh", "-c", f'exec python3 "$RESEARCH_RUN_DIR/inputs/{job.name}" {shlex.join(args)}']
+
+
 class RemoteQuickTier(QuickTier):
     """The quick tier as a `research run` on machine ``on`` (`auto` or `M1,M2`: the one `place` picks when the tier starts): a
     worktree of its own (`WORKTREE_SUFFIX`), checked out and cleaned as `QuickTier` does, is the run's `--source`, and the worktree's
     lock is held only while it is checked out and shipped, so several PRs' tiers run at once.  On the machine the run waits for a
-    free check slot (the shipped tree's `tools/verity/check/slot.py`, as `check.py --record --on` takes one, or in a pool the
+    free check slot (the shipped tree's `tools/check/slot.py`, as `check.py --record --on` takes one, or in a pool the
     machine's own copy where it has one, as `remote.launch` then names it: the run's command is slot.py's, which a machine with
     /etc/vy/runs-via-slot requires) and runs `quick_tier.py` (sent with the run) in that tree.
     The caller polls the run's records (`research fetch`) until it ends and judges the facts in its result.json as the local tier's are judged; a run that ends without them, with facts from another run
@@ -3947,12 +4008,12 @@ class RemoteQuickTier(QuickTier):
     (`NotStarted`), and neither did one with no machine to run on.  The tier has `timeout_s` from taking its slot (`--run-max`), so
     the run on the machine is bounded by the two together (`--timeout`), and the caller's wait by that plus REMOTE_GRACE_S of
     ``clock`` time (a fetch can take its ssh's own timeout, so polls are not counted), past which it ends with the poll under way.
-    The caller waits at most ``max_wait_s`` (research.waitcap's cap) of that: then the run goes on and the wait ends `StillGoing`."""
+    The caller waits at most ``max_wait_s`` (research.waitcap's limit) of that: then the run goes on and the wait ends `StillGoing`."""
 
     WORKTREE_SUFFIX = "-ship"
 
     def __init__(self, repo: Path, remote: str, on: str, *, by: str = "", project: str = "verity", root: Path | None = None,
-                 timeout_s: float = REMOTE_TIMEOUT_S, wait_s: float = REMOTE_WAIT_S, max_wait_s: float = waitcap.WAIT_CAP_S,
+                 timeout_s: float = REMOTE_TIMEOUT_S, wait_s: float = REMOTE_WAIT_S, max_wait_s: float = waitcap.WAIT_LIMIT_S,
                  poll_s: float = REMOTE_POLL_S, launch: Callable[[list[str], Path], subprocess.CompletedProcess] = _launch,
                  fetch: Callable[[Path], dict] | None = None, sleep: Callable[[float], None] = time.sleep,
                  clock: Callable[[], float] = time.monotonic, place: Callable[[str, Path], tuple[str | None, str]] = place):
@@ -3971,21 +4032,12 @@ class RemoteQuickTier(QuickTier):
                 return NotStarted(f"--on {on}: {why}")
             print(f"research queue: --on {on}: {got}: {why}", flush=True)
             on, _, pool = got.partition(":")
-        slot = (["env", f"CHECK_SLOTS={POOL_SLOTS.format(pool=pool)}"] if pool else []) + list(SLOT)
-        job = Path(quick_tier.__file__)
         rid = R.new_run_id()
         try:
             with self._checkout(pr) as (wt, at, base):
-                audit = lean_audit(self.repo, base, at)
-                args = [*(x for d in LEAN_BUILDS for x in ("--lean", d)), "--head", at, "--base", base,
-                        *([] if at == pr.head else ["--merged", pr.head]), *(["--lean-audit", shlex.join(audit)] if audit else []),
-                        "--", *QUICK_TIER]
-                opts = [*(["--by", self.by] if self.by else []), "--wait-max", f"{self.wait_s:g}", "--run-max", f"{self.timeout_s:g}"]
-                r = self.launch([sys.executable, "-m", "research", "run", "--id", rid, "--on", on, "--project", self.project,
-                                 "--source", str(wt), "--cwd", "source", "--send", str(job), "--require-result",
-                                 "--timeout", f"{self.wait_s + self.timeout_s:g}", "--custody-ttl", str(math.ceil(self.wait_s + self.timeout_s + REMOTE_GRACE_S)),
-                                 "--declared-output", "out/*", "--", *slot, *opts,
-                                 "--", "sh", "-c", f'exec python3 "$RESEARCH_RUN_DIR/inputs/{job.name}" {shlex.join(args)}'], wt)
+                r = self.launch(quick_run(rid, on, wt, at, base, merged=None if at == pr.head else pr.head,
+                                          audit=lean_audit(self.repo, base, at), by=self.by, project=self.project,
+                                          wait_s=self.wait_s, timeout_s=self.timeout_s, pool=pool), wt)
         except TierRefused as e:
             return str(e)
         if r.returncode:
@@ -4058,13 +4110,14 @@ def tier_report(d: Path, rid: str, on: str, status: dict):
 
 def judge_report(res, rid: str, on: str, head: str, status: dict, covers: Callable[[dict], bool] | None = None) -> str | None:
     """None when the report ``res`` of run ``rid``, ended with ``status``, shows the tier passed at ``head``, its failures all
-    ones ``covers`` allows (`allowed`); else what failed.  The run judged itself with no policy: `done`, exit 0 and validation
-    passed when it found no failure, and `done`, exit 1 and validation failed when every one it found is allowed."""
+    ones ``covers`` allows (`allowed`); else what failed.  The run judged itself with no policy: exit 0 and validation passed
+    when it found no failure, exit 1 and validation failed when every one it found is allowed; and it ended in the state the
+    runner records for that exit (`end_state`: `done`, `failed`)."""
     tier, output = res.doc.get("tier"), f"its output is in run {rid}'s log on {on}"
     if (why := quick_tier.judge(tier, head, output, covers)) is not None:
         return why
-    want = ("done", 0, "passed") if quick_tier.judge(tier, head, output) is None else ("done", 1, "failed")
-    if (status.get("state"), status.get("rc"), res.validation_status) != want:
+    rc, validation = (0, "passed") if quick_tier.judge(tier, head, output) is None else (1, "failed")
+    if (status.get("state"), status.get("rc"), res.validation_status) != (end_state(rc), rc, validation):
         return (f"run {rid}'s facts show a pass, but it ended {status.get('state')} (exit {status.get('rc')}) with validation "
                 f"{res.validation_status}")
     return None
@@ -4140,11 +4193,22 @@ def own_change(repo: Path, base: str, head: str) -> str | None:
 #: and `stage.py`'s word maps, `rename.py`) and `Layout-move:` (`stage.py`'s path maps, `layout.py`)
 MOVE_LINE_RE = re.compile(r"^(?:Move|Layout-move): (tools/move/[\w.-]+\.toml)(?: --no-lock)?$", re.M)
 #: `mapped_tree`'s program: with `tools/move/restack.py` from the directory argv[1], runs the move argv[3] on commit argv[2] as a
-#: restack runs one on a branch (`run_script`: its move line's script and arguments, its parent's `tools/move/`, in a scratch
-#: worktree), and prints the tree it leaves (`MAPPED_RE`)
+#: restack runs one on a branch (`run_script`: its move line's script and arguments, its parent's `tools/move/` and the map the
+#: move adds, `own_map`, in a scratch worktree), merges in what the move has beside its script's output on its parent (its hand
+#: changes and that map: `check_generated`) as restack.py's step `hand` does, and prints the tree it leaves (`MAPPED_RE`); by a
+#: restack.py from before own maps and hand changes, as that one ran a move
 _MAPPED = ("import sys; sys.path.insert(0, sys.argv[1]); import restack as R\n"
-           "R.SCRIPT, R.SCRIPT_ARGS = R.move_line(sys.argv[3], None)\n"
-           "print('mapped', R.run_script(sys.argv[2], R.move_base(sys.argv[3], None), sys.executable, None)[0])\n")
+           "x, m = sys.argv[2:4]\n"
+           "R.SCRIPT, R.SCRIPT_ARGS = R.move_line(m, None)\n"
+           "base = R.move_base(m, None)\n"
+           "own = getattr(R, 'own_map', lambda *a: None)(m, base, R.SCRIPT_ARGS, None)\n"
+           "tree = R.run_script(x, base, sys.executable, None, *([(m, own)] if own else []))[0]\n"
+           "if own or getattr(R, 'hand_of', lambda *a: [])(m, None):\n"
+           "    on_base = R.commit_tree(R.check_generated(m, base, sys.executable, None), [], 'the script on the base', None)\n"
+           "    tree, files = R.merge_trees(R.commit_tree(tree, [x], 'the script', None), m, None, base=on_base)\n"
+           "    if files:\n"
+           "        sys.exit('its hand changes conflict with the head in ' + ', '.join(files))\n"
+           "print('mapped', tree)\n")
 MAPPED_RE = re.compile(r"^mapped ([0-9a-f]{40,64})$", re.M)
 #: how long one move's script runs at most on one head (`mapped_tree`): a layout map on the whole tree, `uv lock` with it
 MAPPED_TIMEOUT_S = 1800.0
@@ -4176,17 +4240,18 @@ def scratch() -> tempfile.TemporaryDirectory:
 
 
 def mapped_tree(repo: Path, commit: str, move: str, restack: Path,
-                timeout: float = MAPPED_TIMEOUT_S) -> tuple[str | None, str]:
+                timeout: float = MAPPED_TIMEOUT_S, env: dict[str, str] | None = None) -> tuple[str | None, str]:
     """(the tree ``commit`` becomes once the move ``move`` runs on it as `tools/move/restack.py`, from the directory ``restack``,
-    runs it on a branch (`_MAPPED`), ''), or (None, why it couldn't).  It runs in a process group of its own, killed whole once
-    ``timeout`` seconds pass (`run_group`), with its scratch worktree in a `scratch` directory, which goes once it has run, and
-    with it the clone's record of a worktree a killed run left, forgotten under restack.py's lock (`WORKTREES_LOCK`).  The head's
-    own code runs there, which a reviewer passed (`UNLANDED`) but which needs none of the queue's credentials nor the store's keys
-    (`tree_env`), so the run gets none, and `gh` a config that isn't there."""
+    runs it on a branch (`_MAPPED`), with ``env`` in its environment for the merge of its hand changes: `cross_drivers`, ''), or
+    (None, why it couldn't).  It runs in a process group of its own, killed whole once ``timeout`` seconds pass (`run_group`),
+    with its scratch worktree in a `scratch` directory, which goes once it has run, and with it the clone's record of a worktree
+    a killed run left, forgotten under restack.py's lock (`WORKTREES_LOCK`).  The head's own code runs there, which a reviewer
+    passed (`UNLANDED`) but which needs none of the queue's credentials nor the store's keys (`tree_env`), so the run gets none,
+    and `gh` a config that isn't there."""
     with scratch() as d:
-        env = tree_env(_script_env())
         rc, out = run_group([sys.executable, "-c", _MAPPED, str(restack), commit, move], repo, timeout,
-                            env={**env, "TMPDIR": d, "GH_CONFIG_DIR": str(Path(d, "no-gh"))})
+                            env={**tree_env({**_script_env(), **(env or {})}), "TMPDIR": d,
+                                 "GH_CONFIG_DIR": str(Path(d, "no-gh"))})
         left = any(Path(d).iterdir())
     if left:
         with open(Path(repo, _out(repo, "rev-parse", "--git-common-dir")) / WORKTREES_LOCK, "a") as f:
@@ -4210,10 +4275,11 @@ def mapped_change(repo: Path, head: str, onto: str, moves: list[tuple[str, list[
     `tools/move/restack.py` carries a branch, from its merge base with ``onto``, ''), or (None, why it can't): it refuses a head
     with a commit of ``onto``'s that came after the last move's parent, as the restack does (`based-after`), and skips an
     earlier move such a head is based after, as a restack naming only the moves after it crosses; before each move it merges
-    the move's parent when it lacks it (with ``env`` in that git's environment: `cross_drivers`), a merge that must leave its
-    own change as it was (as a merge of `main` must, to keep a mark: `StoreLabels`), then the move's script runs on it
-    (`mapped_tree`, ``restack`` the directory holding main's `restack.py`), and the result takes the move as a second parent.
-    What a restack of ``head`` gives for its own change, when `main` since the last move touched none of it."""
+    the move's parent when it lacks it (with ``env`` in that git's environment, and in the merge of the move's hand changes:
+    `cross_drivers`), a merge that must leave its own change as it was (as a merge of `main` must, to keep a mark:
+    `StoreLabels`), then the move runs on it (`mapped_tree`, ``restack`` the directory holding main's `restack.py`), and the
+    result takes the move as a second parent.  What a restack of ``head`` gives for its own change, when `main` since the last
+    move touched none of it."""
     x = head
     for i, (move, parents) in enumerate(moves):
         if len(parents) != 1:
@@ -4235,24 +4301,39 @@ def mapped_change(repo: Path, head: str, onto: str, moves: list[tuple[str, list[
             x = _git(repo, "commit-tree", got[0], "-p", x, "-p", base, "-m", f"Merge {base}", env=IDENTITY).stdout.strip()
             if _own_onto(repo, onto, x) != before:
                 return None, f"its merge with {base[:12]}, the base of the move {move[:12]}, changes its own change"
-        tree, why = mapped_tree(repo, x, move, restack)
+        tree, why = mapped_tree(repo, x, move, restack, env=env)
         if tree is None:
             return None, f"the move {move[:12]}'s script fails on it: {why}"
         x = _git(repo, "commit-tree", tree, "-p", x, "-p", move, "-m", f"Mapped across {move}", env=IDENTITY).stdout.strip()
     return _own_onto(repo, onto, x), ""
 
 
+def move_lines_at(repo: Path, at: str) -> dict[str, dict]:
+    """``at``'s corrections to move commits' records (`MOVE_LINES`), by commit id: none where it has no table, or one that
+    doesn't parse, which `restack.py` refuses itself."""
+    r = _git(repo, "show", f"{at}:{MOVE_LINES}", check=False)
+    try:
+        data = tomllib.loads(r.stdout) if not r.returncode else {}
+    except tomllib.TOMLDecodeError as e:
+        print(f"research queue: {MOVE_LINES} at {at[:12]} doesn't parse ({e}); its corrections are left out, and restack.py refuses the table itself", file=sys.stderr)
+        return {}
+    return {k: v for k, v in data.items() if isinstance(v, dict)}
+
+
 def moves_between(repo: Path, onto: str, head: str) -> list[tuple[str, list[str]]]:
     """(commit, its parents) of each move ``onto`` has and ``head`` lacks, oldest first: each commit that isn't a merge with a
-    move line (`MOVE_LINE_RE`), as `tools/move/restack.py`'s `moves_on` finds those it carries a branch across, on whichever
-    parent of `main`'s merges it landed."""
-    log = _git(repo, "log", "--topo-order", "--reverse", "--no-merges", "-E", "--grep=^(Move|Layout-move): tools/move/",
-               "--format=%H %P%x00%B%x1e", onto, f"^{head}", check=False).stdout
+    move line (`MOVE_LINE_RE`), its entry's in ``onto``'s corrections where it has one (`move_lines_at`) and none whose entry
+    says `move = false`, as `tools/move/restack.py`'s `moves_on` finds those it carries a branch across, on whichever parent
+    of `main`'s merges it landed."""
+    lines = move_lines_at(repo, onto)
+    log = _git(repo, "log", "--topo-order", "--reverse", "--no-merges", "--format=%H %P%x00%B%x1e", onto, f"^{head}",
+               check=False).stdout
     found = []
     for rec in filter(None, (s.strip() for s in log.split("\x1e"))):
         line, _, body = rec.partition("\x00")
-        if MOVE_LINE_RE.search(body):
-            commit, *parents = line.split()
+        commit, *parents = line.split()
+        entry = lines.get(commit, {})
+        if entry.get("move") is not False and MOVE_LINE_RE.search(str(entry.get("line") or body)):
             found.append((commit, parents))
     return found
 
@@ -4419,7 +4500,7 @@ def map_one(repo: Path, head: str, onto: str, moves: list[tuple[str, list[str]]]
     directory, and ``env`` for its merges, or (None, why) for what it raised."""
     try:
         with scratch() as d:
-            restack = write_scripts(repo, scripts_at(repo, onto, [RESTACK]), Path(d)) / MOVE_DIR
+            restack = write_scripts(repo, restack_files(repo, onto), Path(d)) / MOVE_DIR
             return mapped_change(repo, head, onto, moves, restack, env)
     except (QueueError, OSError, subprocess.SubprocessError) as e:
         return None, f"{type(e).__name__}: {e}"
@@ -4535,12 +4616,29 @@ def restack_why(x: dict) -> str:
     return f"{RESTACK}: {x.get('status')}: {((x.get('error') or '').splitlines() or [''])[0][:300]}"
 
 
+def named_moves(repo: Path, head: str, main: str, moves: list[tuple[str, list[str]]]) -> list[tuple[str, list[str]]]:
+    """Those of ``moves`` that `tools/move/restack.py` carries ``head`` across when it finds them itself, which `cross_one`
+    names to it: it skips a move the branch it carries is based after (shares with ``main`` a commit the move's base lacks,
+    the moves it crossed among them) where a later move's base contains it, as `mapped_change` skips one, and refuses a named
+    move it is based after (`based-after`), since it never skips a named one."""
+    shared, out = _git(repo, "merge-base", "--all", head, main, check=False).stdout.split(), []
+    for i, (move, parents) in enumerate(moves):
+        later = [q[0] for _, q in moves[i + 1:] if len(q) == 1]
+        if (len(parents) == 1 and later and _out(repo, "rev-list", "-n1", *shared, f"^{parents[0]}")
+                and not _out(repo, "rev-list", "-n1", move, "--not", *later)):
+            continue
+        out.append((move, parents))
+        shared.append(move)
+    return out
+
+
 def cross_one(repo: Path, head: str, main: str, moves: list[tuple[str, list[str]]], onto: str | None = None,
               kept: bool = False, src: str | None = None, drivers: dict[str, str] | None = None) -> dict:
     """``head`` carried across ``moves`` by ``main``'s own `tools/move/restack.py`, run from a `scratch` directory as `map_one`
     runs it and as `mapped_tree` runs a move's script, without the queue's credentials or the store's keys (`tree_env`):
-    `--move-commit` each move, `--onto` ``onto`` (the crossed head of the PR below it in its stack), else ``main``, `--main`
-    ``main``, and `--kept` with ``kept``.  restack.py and the carry check's merge run with ``drivers`` in their environment (`cross_drivers`).
+    `--move-commit` each move it crosses (`named_moves`), `--onto` ``onto`` (the crossed head of the PR below it in its
+    stack), else ``main``, `--main` ``main``, and `--kept` with ``kept``.  restack.py and the carry check's merge run with
+    ``drivers`` in their environment (`cross_drivers`).
     {"new": the crossed head, "own": its own change, "key": `mapped_key` of ``src``} when restack.py says clean
     and the crossed head's own change from its merge base with ``main`` is the own change of ``src`` (the head whose labels
     would carry, default ``head``) mapped across the moves that base has and it lacks (`map_one`): the equality the loop
@@ -4548,13 +4646,14 @@ def cross_one(repo: Path, head: str, main: str, moves: list[tuple[str, list[str]
     word or the two changes, with "new" when restack.py was clean."""
     with scratch() as d:
         try:
-            restack = write_scripts(repo, scripts_at(repo, main, [RESTACK]), Path(d)) / RESTACK
+            restack = write_scripts(repo, restack_files(repo, main), Path(d)) / RESTACK
         except (QueueError, OSError) as e:
             return {"why": f"{type(e).__name__}: {e}"}
         if not restack.is_file():
             return {"why": f"{main[:12]} has no {RESTACK}"}
         env = tree_env(_script_env())
-        argv = [sys.executable, str(restack), head, *(a for m, _ in moves for a in ("--move-commit", m)), "--onto", onto or main,
+        named = named_moves(repo, head, main, moves)
+        argv = [sys.executable, str(restack), head, *(a for m, _ in named for a in ("--move-commit", m)), "--onto", onto or main,
                 "--main", main, "--json", *(("--kept",) if kept else ())]
         rc, out = run_group(argv, repo, RESTACK_WAIT_S,
                             env={**env, **(drivers or {}), "TMPDIR": d, "GH_CONFIG_DIR": str(Path(d, "no-gh"))})
@@ -4801,7 +4900,7 @@ def _depth(crossed: list[dict], c: dict) -> int:
 #: naming a module only an unlanded PR adds, stale Lake pins, a doc path, a workspace member without its REAL_ROOTS entry, and
 #: `check`'s preflight-lints on test_repository.py (a report-genre name)
 PREFLIGHT_TEST_PATHS = ("tests/test_module_strings.py", "tests/test_pins.py", "tests/test_doc_paths.py",
-                        "tests/test_repository.py", "tools/research/tests/test_pythonpath.py")
+                        "tests/test_repository.py", "tests/tools/research/test_pythonpath.py")
 
 
 def _by_suite(paths: tuple[str, ...]) -> tuple[tuple[str, tuple[str, ...]], ...]:
@@ -4823,7 +4922,7 @@ def reaches(paths: Iterable[str], reach: Iterable[str]) -> bool:
 PREFLIGHT_TESTS = _by_suite(PREFLIGHT_TEST_PATHS)
 #: lints the preflight runs on the merged tree only when the change reaches what they judge (`reaches`): they take about 20 s
 #: and 40 s, and a train that fails one of them loses its hour-long check
-PREFLIGHT_LINTS = (("tests/test_no_wall_clock.py", ("tests/",)), ("adapters/vllm/tests/lint", ("adapters/vllm/",)))
+PREFLIGHT_LINTS = (("tests/test_no_wall_clock.py", ("tests/",)), ("tests/adapters/vllm/tests/lint", ("adapters/vllm/",)))
 #: the vLLM integration's ratchet gate, which the preflight runs after its other checks of the merged tree and their run on
 #: the base, as a lint of `PREFLIGHT_LINTS` is, when the change reaches what it judges: the integration (its lints, lists, ruff
 #: config and noqa comments), the repository's lints and lists, the root ruff.toml, and the root pyproject.toml's ruff pin.
@@ -4879,7 +4978,7 @@ MERGED_ROOT: Path | None = None
 #: prints, as JSON, the paths of the suites `suites.py`'s `touched` selects for the change from commit argv[1] to tree argv[2]
 #: (`suites`) and, for each, the fetched registry entries under its inputs (`fixtures`), as `suites.py` picks what to fetch before
 #: it runs them: the repository's own suite reads tracked files only, so it needs none
-_TOUCHED = ("import json, sys; sys.path.insert(0, 'tools/verity/check'); import suites as S; pkgs = S.members(); "
+_TOUCHED = ("import json, sys; sys.path.insert(0, 'tools/check'); import suites as S; pkgs = S.members(); "
             "chosen = S.touched(S.discover(), pkgs, sys.argv[1], sys.argv[2], S.locked()); "
             "ins = {s: S.inputs_of(s, pkgs) for s in chosen}; own = {s: [p for p in ps if p != '.'] for s, ps in ins.items()}; "
             "fx = S.fetched_fixtures(sys.argv[2], {p for ps in own.values() for p in ps}); "
@@ -5010,9 +5109,16 @@ def root_failures(repo: Path, commit: str, sync: tuple[str, ...] | None = None,
                 r, why = run(list(sync), wt)
                 if r is None or r.returncode:
                     return why or f"`{' '.join(sync)}` exited {r.returncode}: {r.stdout.strip()[-300:]}"
-            return pytest_failures(run, python or str(wt / ".venv" / "bin" / "python"), wt, CROSS_ROOT_SUITE)
+            return pytest_failures(run, python or str(wt / ".venv" / "bin" / "python"), wt, root_suite(wt))
     except (QueueError, OSError, subprocess.SubprocessError) as e:
         return f"{type(e).__name__}: {e}"
+
+
+def root_suite(wt: Path) -> list[str]:
+    """`CROSS_ROOT_SUITE` on the tree at ``wt``, less each directory of its `tests/` the root suite doesn't own
+    (`suite_layout.root_owns`): the suites mirrored there, which `pytest tests` would otherwise collect as the root suite's."""
+    under = sorted(d.relative_to(wt).as_posix() for d in (wt / suite_layout.MIRROR).iterdir() if d.is_dir())
+    return [*CROSS_ROOT_SUITE, *(f"--ignore={d}" for d in under if not suite_layout.root_owns(d + "/"))]
 
 
 @dataclass
@@ -5341,11 +5447,12 @@ class LakeBuild:
     def _remote(self, node: str, wt: Path, files: list[str], left: float, wait: bool = True) -> tuple[int | None, str, str]:
         """`LEAN_BUILDER --build` as a `research run` of ``wt``'s HEAD on ``node``, waited for within ``left`` (without ``wait``,
         `--no-wait`: no free `build` slot there builds nothing); its exit status (None: it didn't end), its stdout, and where it
-        ran."""
+        ran. It stays on ``node`` (`--stay`): it builds that node's warm tree, and its output is read there by its run id."""
         from . import runs as R
 
         secs = f"{max(left - 10, 1):.0f}"
-        argv = [sys.executable, "-m", "research", "run", "--on", node, *(["--pool", self.pool, "--pool-wait", secs] if self.pool else []),
+        argv = [sys.executable, "-m", "research", "run", "--on", node, "--stay",
+                *(["--pool", self.pool, "--pool-wait", secs] if self.pool else []),
                 *(["--as", self.by] if self.by else []), "--project", "verity", "--source", str(wt), "--cwd", "clone",
                 "--timeout", f"{secs}s", "--wait", "--wait-every", "5", "--wait-max", secs, "--",
                 "python3", LEAN_BUILDER, *([] if wait else ["--no-wait"]), "--build", *files]
@@ -5934,7 +6041,7 @@ class Preflight:
                     f"once `main` has the other side, and push it")
         if kind == "pins":
             return (f"`pins.py --stale` on the merged tree: {shown}: regenerate each with its command, never by hand "
-                    f"(`python3 tools/verity/check/pins.py --regen`); when the head alone is fresh, the other side is a PR on "
+                    f"(`python3 tools/check/pins.py --regen`); when the head alone is fresh, the other side is a PR on "
                     f"`next`: regenerate once it lands")
         if kind == "tests":
             return (f"the invariant tests in {where} fail on the merged tree: {shown}: reproduce on `git merge origin/next` in a "
@@ -6002,8 +6109,8 @@ class Preflight:
                 out[name] = res
 
         if want("pins"):
-            if (wt / "tools/verity/check/pins.py").is_file():
-                r, why = self._run([sys.executable, "tools/verity/check/pins.py", "--stale"], wt, deadline)
+            if (wt / "tools/check/pins.py").is_file():
+                r, why = self._run([sys.executable, "tools/check/pins.py", "--stale"], wt, deadline)
                 got("pins", why if r is None else {} if r.returncode == 0 else
                     {ln.split(" is stale", 1)[0]: ln for ln in (r.stdout + r.stderr).splitlines() if ln.strip()}
                     or {f"exit {r.returncode}": f"pins.py --stale exited {r.returncode}"})
@@ -6908,7 +7015,8 @@ def main(argv: list[str]) -> int:
                     "and whose tools/move/restack.py crosses them (default origin/main)")
     ap.add_argument("--move-commit", action="append", default=[], metavar="SHA", help="cross: a move to cross, a commit of "
                     "--main with a `Move:` or `Layout-move:` line, repeated (default: every move --main has and a head lacks); "
-                    "a head lacking others besides crosses the named ones, as restack.py --move-commit crosses it")
+                    "a head crosses those of them restack.py crosses finding them itself, which skips one the branch it "
+                    "carries is based after where a later one's base holds it (`named_moves`)")
     ap.add_argument("--only", type=int, nargs="+", metavar="N", help="cross: only these PRs; one stacked on a PR it doesn't name "
                     "is skipped, as its stack doesn't cross")
     ap.add_argument("--push", action="store_true", help="cross: push each crossing that is clean to its PR's own branch, with a "
@@ -6935,7 +7043,7 @@ def main(argv: list[str]) -> int:
                     "warning), the rest on stderr")
     ap.add_argument("--on", metavar="MACHINE", help="ready: run the quick tier as a `research run` there, in a check slot (`auto` or "
                                                     "M1,M2: the one with a free check slot, as `check.py --on` picks), waiting for it "
-                                                    f"{waitcap.WAIT_CAP_S} s at most (then exit {waitcap.STILL_GOING}, the run going "
+                                                    f"{waitcap.WAIT_LIMIT_S} s at most (then exit {waitcap.STILL_GOING}, the run going "
                                                     "on: `judge RUN` marks the PR once it ends); judge: look "
                                                     "for a run another VM launched there only")
     ap.add_argument("--local", action="store_true", help="ready: run the quick tier here")
@@ -7169,8 +7277,10 @@ def main(argv: list[str]) -> int:
                 return lambda prs: stale_prs(q, prs, q.now(), got.stale_days,
                                              lambda n, h: [lab.ts for lab in labels.reviews(n, h)], keep=got.stale_keep)
 
-            entries = q.status(fetched=at_main, loop=True, reviews=labels.reviews)
-            teams = q.issue_teams()
+            # under --json, stdout is one JSON document a program parses: what the reading says goes to stderr
+            with contextlib.redirect_stdout(sys.stderr) if a.json else contextlib.nullcontext():
+                entries = q.status(fetched=at_main, loop=True, reviews=labels.reviews)
+                teams = q.issue_teams()
             if a.json:
                 print(json.dumps([{"pr": e.pr.number, "head": e.pr.head, "owner": e.pr.owner, "draft": e.pr.draft, "state": e.state,
                                    "why": e.why, "position": e.position, "commit": e.commit, "after": list(e.after),

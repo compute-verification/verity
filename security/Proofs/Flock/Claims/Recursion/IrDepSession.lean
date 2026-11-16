@@ -27,7 +27,7 @@ A probe run by hand, not a proof (`exempt` in `lean-audit.json`); what it evalua
 
 Prints one `IRDEP ` line of JSON on stdout and its progress on stderr:
 
-    cd Security/Proofs && lake env lean --run Flock/Claims/Recursion/IrDepSession.lean TREE K
+    cd security/Proofs && lake env lean --run Flock/Claims/Recursion/IrDepSession.lean TREE K
 
 or on a node's warm slot tree, `VERITY_IRDEP_ARGS='TREE K' python3 tools/verity/lean/lean_changed.py --try FILE`, whose
 `lake env lean FILE` runs the `#eval` below. `TREE` is the run's tree (`stage/`: `circuit.txt`, `pub-K.bin`,

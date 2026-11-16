@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Audit.Partitioning.Model
-import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Audit.SamplingDesign
 
 /-!
 # Exfiltration: what a certified leak forces
@@ -34,7 +34,7 @@ theorem locBits_mono (n : ℕ) {K K' : ℕ} (h : K ≤ K') : locBits n K ≤ loc
   exact_mod_cast Finset.sum_le_sum_of_subset (Finset.range_subset_range.2 (by omega))
 
 /-- **A certified leak below the `J`-th rung forces `miss J ≤ δ`.** -/
-theorem miss_le_of_certifies {n b J : ℕ} {L : Law n} {δ ℓ : ℝ} (hδ : 0 ≤ δ)
+theorem miss_le_of_certifies {n b J : ℕ} {L : SamplingDesign n} {δ ℓ : ℝ} (hδ : 0 ≤ δ)
     (hL : CertifiesLeak L (fun _ => b) δ ℓ) (hℓ : ℓ < (b : ℝ) * J + locBits n J) :
     (L.miss J).toReal ≤ δ := by
   obtain ⟨H, K, hH, hK, hle⟩ := hL

@@ -18,7 +18,7 @@ there when the workload exits and publishes to the store:
 
 - always, the run's logs and records (`custody.RUN_FILES`) and all of `$OUT` (`$RESEARCH_RUN_DIR/out`, whatever the cwd);
 - each `--declared-output GLOB` (quote it; `fnmatch` on paths relative to the run dir, so `*` crosses `/`);
-- other files in path order up to 256 MiB in all (`custody.UNDECLARED_CAP_BYTES`, kept for older launches; it drops to 0
+- other files in path order up to 256 MiB in all (`custody.UNDECLARED_LIMIT_BYTES`, kept for older launches; it drops to 0
   once lanes declare their outputs). The rest are listed in `meta.trimmed` by path, size and sha256, and custody prints
   `custody trimmed N undeclared file(s)`; a trimmed file is still pinned by hash, so changing it breaks `.custody`.
 
@@ -39,7 +39,8 @@ A local `research run` (no `--on`) publishes only its telemetry and the files it
    it (a build, a Lean `.lake`), or an absolute path; never a relative path that resolves against the run dir. On a machine
    every run of a commit shares the source tree, while a clone is the run's own, removed when it ends, and the workload
    imports its Python from it. A `--cwd source` run that builds Lean (`lake`, `check.py`, `suites.py`, `lean_changed.py`)
-   waits for the tree's lock until the run building there ends (`research/treelock.py`); `--cwd clone` doesn't wait.
+   waits for the tree's lock until the run building there ends (`research/treelock.py`), and only once it holds its own
+   slot, so a run in a pool's line holds no tree; `--cwd clone` doesn't wait.
    Locally only the cwd moves: an editable install imports from, and writes beside `__file__` in, the invoking checkout.
 2. **Keep results in `$OUT`, small:** numbers, JSON, logs, digests of big things. A large artifact that must survive (a
    model, a proof, a trace past about 100 MiB) goes there too: a node holds no store write key, so `research data put` in
@@ -65,8 +66,13 @@ research run --on auto --cwd source -- \
   bash -c 'd=$(mktemp -d); trap "rm -rf $d" EXIT; python bench.py --scratch "$d" --out "$OUT"'
 ~~~
 
+A shell script that pipes (`a 2>&1 | tee "$OUT/a.log"`) exits with the pipe's last command's status, so `research run`
+refuses it unless `pipefail` is on: start the script with `set -o pipefail;`, or drop the `| tee FILE` (the run's
+`stdout.log` already keeps the output), or pass `--allow-pipe` when the pipe's own exit code is meant.
+
 Try a long run's command on its machine for a minute first (`--timeout 2m --wait`), never on an agent VM (AGENTS.md
-"Tests"), and check that the run dir holds only your output directory beside the harness's files. A run `--on auto`
-sent to a pool that waits there on memory moves by itself to a pool that would start it now only while the VM that
-launched it is up and holds its asker, one of at most eight alive there: its launch and `research status RUN` say
-whether it has one.
+"Tests"), and check that the run dir holds only your output directory beside the harness's files. A run waiting in a
+pool's line, `--on auto` or sent by name with `--pool research` (no GPUs, no `--stay`), moves by itself to another
+machine's research pool where a place has stood 2 minutes, whatever it waits on, only while the VM that launched it is up
+and holds its asker, one of at most eight alive there: its launch and `research status RUN` say whether it has one. Say
+`--stay` for a run that fills or reads its machine's own caches, or whose output you read there by its run id.

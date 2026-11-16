@@ -53,7 +53,7 @@ namespace FlockSoundness.Discharge.Recursion
 open Game Audit Refine StrictCR
 open scoped ENNReal
 
-variable {n : ℕ} {L : Law n} {Reg Cm Reg₂ Reg' : Type} {I : Inner} {S : ℕ} {Vs : Fin S → VStmt}
+variable {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg₂ Reg' : Type} {I : Inner} {S : ℕ} {Vs : Fin S → VStmt}
 
 theorem valueAt_of_some {zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {vsrc : ValueSrc L Reg Cm Reg₂ I Vs} {R : Reg} {ω : L.Ω} {t : List (Cm × I.Coin)} {R₂ : Reg₂} {j : Fin S}
@@ -188,7 +188,7 @@ theorem prob_regTopValue_le
     (vsrc : ValueSrc L Reg Cm Reg₂ I Vs) (dg : ByteArray → ByteArray) (N : ℕ)
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
     {qX qT qV : ℝ} (hX : (regFinder zs dg N σ).CR Refine.H512 qX)
-    (hT : (topFinder wr st reg bcs' lv cap salt hstk zs σ).CR Refine.H512 qT)
+    (hT : (topFinder wr st reg bcs' zs σ).CR Refine.H512 qT)
     (hV : (valueFinder zs vsrc dg N σ).CR Refine.H512 qV) :
     prob (fun o => (RegColl zs o.1 o.2.1 o.2.2.1 o.2.2.2.1 ∨
         (AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ TopColl wr st reg bcs' o.2.2.1)) ∨
@@ -209,7 +209,7 @@ theorem prob_regTopValueSalt_le
     (vsrc : ValueSrc L Reg Cm Reg₂ I Vs) (dg : ByteArray → ByteArray) (N : ℕ)
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
     {qX qT qV qS : ℝ} (hX : (regFinder zs dg N σ).CR Refine.H512 qX)
-    (hT : (topFinder wr st reg bcs' lv cap salt hstk zs σ).CR Refine.H512 qT)
+    (hT : (topFinder wr st reg bcs' zs σ).CR Refine.H512 qT)
     (hV : (valueFinder zs vsrc dg N σ).CR Refine.H512 qV) (hS : (saltFinder lv cap salt zs σ).CR Refine.H512 qS) :
     prob (fun o => ((RegColl zs o.1 o.2.1 o.2.2.1 o.2.2.2.1 ∨
         (AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ TopColl wr st reg bcs' o.2.2.1)) ∨

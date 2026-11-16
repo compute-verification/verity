@@ -27,7 +27,7 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 /-!
 # The theorems of `Statements.lean`
 
-The tables' theorems hold from the session alone (`drawSetupZKH_of_acceptsU`, `tablesAtZKH_liveU`), so each circuit
+The tables' theorems hold from the session alone (`sampleSetupZKH_of_acceptsU`, `tablesAtZKH_liveU`), so each circuit
 form, `HmOut.parse`'s and the statement circuit's (`…St`, `HmOut.parseStmt`), reads them.
 -/
 
@@ -72,57 +72,57 @@ theorem acceptsZK_acceptedH : AcceptsZKAcceptedH := by
 theorem zk_schedOK : ZkSchedOK := zk_schedOK'
 
 /-- **A one-table hidden-output `--zk` acceptance at the challenger's sample sets the sample up**, from the session alone:
-with `ZkSchedOK`, a `DrawSetupZKH` at `dj S`. -/
-theorem drawSetupZKH_of_acceptsU (hsched : ZkSchedOK) {n mPts : ℕ} {I : Inputs} (ht : I.tags.typed = false)
+with `ZkSchedOK`, a `SampleSetupZKH` at `dj S`. -/
+theorem sampleSetupZKH_of_acceptsU (hsched : ZkSchedOK) {n mPts : ℕ} {I : Inputs} (ht : I.tags.typed = false)
     {dj : Finset (Fin n) → Lean.Json} {S : Finset (Fin n)} (hh : I.tags.hiddenOutputs = true) (hc1 : I.count ≤ 1)
-    {t : Exec.Transcript} (h : AcceptsZK I t) (hd : recordDraw t.record = some (dj S)) (hok : DrawOkZKH I dj mPts S) :
-    Nonempty (DrawSetupZKH I mPts S (dj S)) := by
+    {t : Exec.Transcript} (h : AcceptsZK I t) (hd : recordDraw t.record = some (dj S)) (hok : SampleOkZKH I dj mPts S) :
+    Nonempty (SampleSetupZKH I mPts S (dj S)) := by
   obtain ⟨st, hst, hshape, hv⟩ := acceptsZK_oneAny I t hc1 h
   rw [setupOne_hidden ((zkTags_hiddenOutputs I).trans hh), hd] at hst
   obtain ⟨-, sess, schs, -, -, -, -, -, hall⟩ := zk_verify_ok _ _ _ _ hv
   obtain ⟨hs0, cap, hz, -⟩ := hall 0 (by simp)
-  have hz' : Flock.Zk.schedule st.m = .ok (schs[0].1, schs[0].2) := by simp only [List.getElem_toArray] at hz; exact hz
+  have hz' : Flock.Zk.schedule st.wideLeaf st.m = .ok (schs[0].1, schs[0].2) := by simp only [List.getElem_toArray] at hz; exact hz
   obtain ⟨sch, hf⟩ := fast100_of_schedule hz'
-  obtain ⟨pop, -, hdr⟩ := setupHidden_drawn hst
-  obtain ⟨D, hD, -⟩ := Layout.drawn_spec (c := { st.c with outPorts := #[] }) hdr
-  obtain ⟨x, rfl⟩ := drawSetupH_of_setupHiddenU (I := zkInputs I) ((zkTags_typed I).trans ht) hst hf hD
+  obtain ⟨pop, -, hdr⟩ := setupHidden_sampled hst
+  obtain ⟨D, hD, -⟩ := Layout.sampled_spec (c := { st.c with outPorts := #[] }) hdr
+  obtain ⟨x, rfl⟩ := sampleSetupH_of_setupHiddenU (I := zkInputs I) ((zkTags_typed I).trans ht) hst hf hD
     (hok.1 D hD) (hok.2 _ hst)
   obtain ⟨h1, h2, h3, h4, h5, h6⟩ := hsched x.st _ _ x.wf.1 x.wf.2 x.hm hshape hz'
   exact ⟨⟨x, _, _, hz', h1, h2, h3, h4, h5, h6 _⟩⟩
 
 set_option linter.unusedVariables false in
 /-- **A one-table hidden-output `--zk` acceptance at the challenger's sample sets the sample up**: with `ZkSchedOK`, a
-`DrawSetupZKH` at `dj S`, wherever the outputs are returned. -/
-theorem drawSetupZKH_of_acceptsI (hsched : ZkSchedOK) {n mPts : ℕ} {I : Inputs} (ht : I.tags.typed = false)
+`SampleSetupZKH` at `dj S`, wherever the outputs are returned. -/
+theorem sampleSetupZKH_of_acceptsI (hsched : ZkSchedOK) {n mPts : ℕ} {I : Inputs} (ht : I.tags.typed = false)
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
     {dj : Finset (Fin n) → Lean.Json} {S : Finset (Fin n)} (hh : I.tags.hiddenOutputs = true) (hc1 : I.count ≤ 1)
-    {t : Exec.Transcript} (h : AcceptsZK I t) (hd : recordDraw t.record = some (dj S)) (hok : DrawOkZKH I dj mPts S) :
-    Nonempty (DrawSetupZKH I mPts S (dj S)) :=
-  drawSetupZKH_of_acceptsU hsched ht hh hc1 h hd hok
+    {t : Exec.Transcript} (h : AcceptsZK I t) (hd : recordDraw t.record = some (dj S)) (hok : SampleOkZKH I dj mPts S) :
+    Nonempty (SampleSetupZKH I mPts S (dj S)) :=
+  sampleSetupZKH_of_acceptsU hsched ht hh hc1 h hd hok
 
 set_option linter.unusedVariables false in
-/-- `drawSetupZKH_of_acceptsI` at the statement circuit (`HmOut.parseStmt`). -/
-theorem drawSetupZKH_of_acceptsISt (hsched : ZkSchedOK) {n mPts : ℕ} {I : Inputs} (ht : I.tags.typed = false)
+/-- `sampleSetupZKH_of_acceptsI` at the statement circuit (`HmOut.parseStmt`). -/
+theorem sampleSetupZKH_of_acceptsISt (hsched : ZkSchedOK) {n mPts : ℕ} {I : Inputs} (ht : I.tags.typed = false)
     {c : Flock.Circuit} (hc : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c)
     {dj : Finset (Fin n) → Lean.Json} {S : Finset (Fin n)} (hh : I.tags.hiddenOutputs = true) (hc1 : I.count ≤ 1)
-    {t : Exec.Transcript} (h : AcceptsZK I t) (hd : recordDraw t.record = some (dj S)) (hok : DrawOkZKH I dj mPts S) :
-    Nonempty (DrawSetupZKH I mPts S (dj S)) :=
-  drawSetupZKH_of_acceptsU hsched ht hh hc1 h hd hok
+    {t : Exec.Transcript} (h : AcceptsZK I t) (hd : recordDraw t.record = some (dj S)) (hok : SampleOkZKH I dj mPts S) :
+    Nonempty (SampleSetupZKH I mPts S (dj S)) :=
+  sampleSetupZKH_of_acceptsU hsched ht hh hc1 h hd hok
 
 set_option linter.unusedVariables false in
-/-- `drawSetupZKH_of_acceptsI` where the unit returns the outputs. -/
-theorem drawSetupZKH_of_accepts (hsched : ZkSchedOK) {n mPts : ℕ} {I : Inputs} (ht : I.tags.typed = false)
+/-- `sampleSetupZKH_of_acceptsI` where the unit returns the outputs. -/
+theorem sampleSetupZKH_of_accepts (hsched : ZkSchedOK) {n mPts : ℕ} {I : Inputs} (ht : I.tags.typed = false)
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
     {dj : Finset (Fin n) → Lean.Json} {S : Finset (Fin n)} (hh : I.tags.hiddenOutputs = true) (hc1 : I.count ≤ 1)
-    {t : Exec.Transcript} (h : AcceptsZK I t) (hd : recordDraw t.record = some (dj S)) (hok : DrawOkZKH I dj mPts S) :
-    Nonempty (DrawSetupZKH I mPts S (dj S)) :=
-  drawSetupZKH_of_acceptsI hsched ht hc hh hc1 h hd hok
+    {t : Exec.Transcript} (h : AcceptsZK I t) (hd : recordDraw t.record = some (dj S)) (hok : SampleOkZKH I dj mPts S) :
+    Nonempty (SampleSetupZKH I mPts S (dj S)) :=
+  sampleSetupZKH_of_acceptsI hsched ht hc hh hc1 h hd hok
 
 theorem tablesAtZKH_liveU_of (hsched : ZkSchedOK) {n mPts : ℕ} {Reg : Type} :
     TablesAtZKHLiveU (n := n) (mPts := mPts) (Reg := Reg) := by
   intro I ht dj S₀ y₀ wr hh hc1 hrec S R o hok h
   obtain ⟨hd, -, -⟩ := hrec S R o h
-  have hne := drawSetupZKH_of_acceptsU hsched ht hh hc1 h hd hok
+  have hne := sampleSetupZKH_of_acceptsU hsched ht hh hc1 h hd hok
   refine ⟨(Classical.choice hne).x.st, (Classical.choice hne).sch, (Classical.choice hne).tPad,
     (Classical.choice hne).x.wf.1, (Classical.choice hne).x.wf.2, (Classical.choice hne).x.h,
     (Classical.choice hne).hz, Classical.choice hne, rfl, rfl, rfl, ?_, fun points hpts hsz => ?_⟩

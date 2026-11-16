@@ -3,6 +3,7 @@ module
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
 public import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
+public import Proofs.Flock.Soundness.Refine.WideLeafChecks
 import Mathlib.Tactic.ENatToNat
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
@@ -49,18 +50,24 @@ theorem le64_size (x : UInt64) : (le64 x).size = 8 := by
 
 /-- `fast100`'s schedules: `m` from 22 to 35, and per level fewer than 64 columns, 1 to 255 queries and a cap below
 8. -/
-theorem fast100_small (m : ℕ) (s : Flock.Schedule) (hs : Flock.fast100 m = some s) :
+theorem fast100At_small (wide : Bool) (m : ℕ) (s : Flock.Schedule) (hs : Flock.fast100At wide m = some s) :
     22 ≤ s.m ∧ s.m ≤ 35 ∧ ∀ lv ∈ s.levels, lv.cols < 64 ∧ 0 < lv.q ∧ lv.q < 256 ∧ lv.cap < 8 := by
   by_cases hm : m < 40
-  · have key : ∀ m : Fin 40, ∀ s ∈ Flock.fast100 m.val, (decide (22 ≤ s.m ∧ s.m ≤ 35) &&
+  · have key : ∀ (w : Bool) (m : Fin 40), ∀ s ∈ Flock.fast100At w m.val, (decide (22 ≤ s.m ∧ s.m ≤ 35) &&
         s.levels.all fun lv => decide (lv.cols < 64 ∧ 0 < lv.q ∧ lv.q < 256 ∧ lv.cap < 8)) = true := by
       decide +kernel
-    have h := key ⟨m, hm⟩ s hs
+    have h := key wide ⟨m, hm⟩ s hs
     rw [Bool.and_eq_true, decide_eq_true_iff] at h
     refine ⟨h.1.1, h.1.2, fun lv hlv => ?_⟩
     obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 hlv
     simpa using Array.all_eq_true.1 h.2 i hi
-  · rw [Refine.exec_fast100_none m (by omega)] at hs; cases hs
+  · have hn := Refine.fast100At_isSome (wide := wide) m
+    rw [hs, Refine.exec_fast100_none m (by omega)] at hn
+    simp at hn
+
+theorem fast100_small (m : ℕ) (s : Flock.Schedule) (hs : Flock.fast100 m = some s) :
+    22 ≤ s.m ∧ s.m ≤ 35 ∧ ∀ lv ∈ s.levels, lv.cols < 64 ∧ 0 < lv.q ∧ lv.q < 256 ∧ lv.cap < 8 :=
+  fast100At_small false m s hs
 
 /-! ## Carrying at a coin pattern -/
 

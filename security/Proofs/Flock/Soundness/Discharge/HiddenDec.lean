@@ -10,7 +10,7 @@ public import Proofs.Flock.Soundness.Discharge.HiddenDec.Assemble
 (`hiddenOutputs = true`, `Stmt.setupHidden`), at `flock_headline_exec_hidden`'s tables `tablesAtH`
 (`Discharge/HiddenExec`).
 
-* `Statements.lean`: the frozen statements (`TagsOkH`, `DrawOkH`, `opnAtH`, `DecodesOnExecH`).
+* `Statements.lean`: the frozen statements (`TagsOkH`, `SampleOkH`, `opnAtH`, `DecodesOnExecH`).
 * `Assemble.lean`: `decodesOn_execH`.
 -/
 

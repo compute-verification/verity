@@ -17,7 +17,7 @@ its single gates are the constant, the zero, and each unit's public gates (`Layo
 public input word's in the population's public file (`pubBitOf`):
 
 * `pub_siteHP`: at a sampled proof block's site (`BcSiteHP`), a stacked unit input whose key is bit `t` of public word `q` holds
-  bit `t` of word `q` of the proved unit's public inputs (`pub_block`, `Hidden.inVal_drawnP`);
+  bit `t` of word `q` of the proved unit's public inputs (`pub_block`, `Hidden.inVal_sampledP`);
 * `rowOfHP`, `keyReadersHP`: `Layout.Readers.ofRows` at those rows, at each sampled proof block's site (`siteAddrHP`), and single
   gates with `Layout.keyGateP (pubBitOf pi popOf) (fun _ _ => false)`; a public gate is no row's bit (`rowOfHP_pub`);
 * `keyProgHP_copies`: Δ's copies, from `copy_siteHP` at an input row (its key a message bit, so off a public leaf) and
@@ -41,7 +41,7 @@ variable {c : Flock.Circuit} {hU : Built c.unit} {n : ℕ} {pi : HmIn.Ports}
 /-- **A sampled proof block's input at a public leaf holds its public word's bit**: in a satisfying witness of an accepted
 statement at public inputs, at a site (`BcSiteHP`: block `o`, template instance `g`, proved unit `u`), a stacked unit
 input whose key is bit `t` of public word `q` holds bit `t` of word `q` of `u`'s public inputs in the population's
-public file (`pub_block`, `Hidden.inVal_drawnP`). -/
+public file (`pub_block`, `Hidden.inVal_sampledP`). -/
 theorem pub_siteHP {T : Model.Statement} {a : AcceptedHP T} {pop : Public} {o : Fin (2 ^ T.nbl)} {g u : ℕ}
     (hs : BcSiteHP a pop o g u) {z : Witness T.m} (hz : T.Satisfies z) (hg : g < a.st.c.g) (x : Fin a.rows.w)
     (hx : x.val < a.rows.nIn) {q t : ℕ} (hk : Aliased.srcKeyP a.st.c a.pi x.val = .pub q t) :
@@ -77,7 +77,7 @@ theorem pub_siteHP {T : Model.Statement} {a : AcceptedHP T} {pop : Public} {o : 
   have hq' : (pi.leaves.getD ((g * st.c.upv + x.val / (st.c.unit.inWords * WORD)) % st.c.upv) #[]).getD p (-1) =
       Aliased.pubLeaf st.c pi x.val := by
     rw [hmd]; exact hq
-  have hiv := Hidden.inVal_drawnP s hpop hD hlt (b := o.val) hkc (by rw [hdv]) hr hq' hpub
+  have hiv := Hidden.inVal_sampledP s hpop hD hlt (b := o.val) hkc (by rw [hdv]) hr hq' hpub
   simp only [AcceptedHP.col, Fin.cast_eq_self]
   rw [hb, hiv]
 

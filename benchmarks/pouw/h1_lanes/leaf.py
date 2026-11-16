@@ -96,20 +96,22 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "h1_prove"))
 
-import h1unit as U  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.prover.lowering import h1unit as U  # noqa: E402
+
+import h1form as F  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.circuits.defs import CompositeDefinition, bind  # noqa: E402
 from verity.circuits.program import Program  # noqa: E402
 from verity.circuits.refs import Coll, concat  # noqa: E402
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
-from verity.protocols.accounting.pouw.prover.circuit import h1tile as H  # noqa: E402
-from verity.protocols.accounting.pouw.prover.circuit import h1window as HW  # noqa: E402
-from verity.protocols.accounting.pouw.prover.circuit import h1zy as Z  # noqa: E402
-from verity.protocols.accounting.pouw.verifier import leaf_lanes as LL  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1tile as H  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1window as HW  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1zy as Z  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.verifier import leaf_lanes as LL  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import produced as PR  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R  # noqa: E402
 
 if TYPE_CHECKING:
     from verity.circuits.defs import SpecializedDefinition
@@ -143,7 +145,7 @@ HELD = {"other-registration-file-held": "other-registration-file"}
 #: the combine row ``combine-skips-p5-bit``'s circuit leaves a bit of unread
 LAZY_ROW = 5
 def tile(k: int) -> Any:
-    return HW.h1_tile(k, RC, H.PouwH1Tile3 if U.tile() == "v3" else None)
+    return HW.h1_tile(k, RC, H.PouwH1Tile3 if F.tile() == "v3" else None)
 
 
 def f32(x: np.ndarray | Sequence[float] | float) -> np.ndarray:
@@ -277,7 +279,7 @@ def register(prog: str, leaf: Leaf, place: dict) -> tuple[dict, tuple, list[int]
     regs = {LL.A: commit(LL.A, code_words(leaf.a, leaf.sa).tolist()), LL.B: commit(LL.B, code_words(leaf.b, leaf.sw).tolist()),
             LL.ZY: commit(LL.ZY, [U.record_words(*leaf.zy).tolist()])}
     roots = (hashlib.sha512(ROOTS_TAG + regs[LL.A].root).digest(), regs[LL.B].root)
-    z, receipt = H.reference(leaf.a, leaf.b, leaf.salt, leaf.position, roots, stream=U.tile() == "v3")
+    z, receipt = H.reference(leaf.a, leaf.b, leaf.salt, leaf.position, roots, stream=F.tile() == "v3")
     assert [v & 0xFFFFFFFF for v in z] == [v & 0xFFFFFFFF for v in leaf.zy[0]], "the record's z is the tile's"
     regs[LL.RECEIPT] = receipt_reg(prog, receipt, place)
     return regs, roots, list(receipt)
@@ -372,7 +374,7 @@ def stager(ctx: Ctx, kind: str, variant: str | None = None) -> UnitStager:
     else:
         name, rows = "unit/pouw-h1-combine", ([(f"p{x}", V2, 16 * ctx.wp, [f"{LL.PARTIALS}[{x}]"]) for x in range(LL.lanes(*RC))]
                                               + [(LL.RECEIPT, V2, 16 * ctx.wp, [LL.RECEIPT])])
-    st = U.stager(b.defn, name, rows, [(V2, (0,))], U.layout(), circuit=circuit, bind=b.bind)
+    st = U.stager(b.defn, name, rows, [(V2, (0,))], F.layout(), circuit=circuit, bind=b.bind)
     if hasattr(st.low, "template"):
         (circuit.parent / "unit.tmpl").write_text(TM.write(st.low.template))
         (circuit.parent / "unit.layout").write_text(st.meta["layout"])
@@ -625,7 +627,7 @@ def prepare(args: argparse.Namespace) -> None:
                     f"{r['statement']}\n")
     plan = {"checks": {tg: {**by[tg], "expect": EXPECT.get(tg, "ACCEPT")} for tg in checks}, "honest": honest}
     (work / "plan.json").write_text(json.dumps(plan, indent=1))
-    summary = {"k": args.k, "tile": U.tile(), "lanes": LL.lanes(*RC), "words": LL.words(args.k),
+    summary = {"k": args.k, "tile": F.tile(), "lanes": LL.lanes(*RC), "words": LL.words(args.k),
                "programs": {kind: P.program_digest(b.program)
                             for kind, b in (("lane", ctx.lane), ("combine", ctx.combine), ("lazy", ctx.lazy))},
                "place": ctx.place, "registration": A.registration, "draw": A.sample, "produced": A.record, "produced_check": produced_check,
@@ -721,10 +723,10 @@ def cost(args: argparse.Namespace) -> None:
             + [(LL.ADMIT, [LL.ADMIT]), (LL.ZY, [LL.ZY]), (LL.PARTIALS, [LL.PARTIALS]), ("pub", list(LL.PUBLIC))])
     units = {"combine": (Z.combine(t), [(f"p{x}", [f"{LL.PARTIALS}[{x}]"]) for x in range(n)] + [(LL.RECEIPT, [LL.RECEIPT])]),
              "lane": (Z.lane(t), lane)}
-    out = {"k": args.k, "tile": U.tile(), "lanes": n, "words": LL.words(args.k)}
+    out = {"k": args.k, "tile": F.tile(), "lanes": n, "words": LL.words(args.k)}
     for name, (d, rows) in units.items():
         t0 = time.time()
-        low, _words = CS.unit_lowering(d, f"unit/pouw-h1-{name}", rows, (), structural=U.layout() is not None)
+        low, _words = CS.unit_lowering(d, f"unit/pouw-h1-{name}", rows, (), structural=F.layout() is not None)
         out[name] = {"ands": low.layout.counts["ands"], "seconds": round(time.time() - t0, 1)}
         print(f"{name}: {out[name]}", flush=True)
     out["leaf_ands"] = n * out["lane"]["ands"] + out["combine"]["ands"]

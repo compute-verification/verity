@@ -26,7 +26,7 @@ its change to the arm it names as its parent (`serve_tax.ARMS`):
 | `canonical-topk` | the canonical DSA top-k: `benchmarks/dsa_topk`'s plugin loaded and `VERITY_DSA_TOPK=canonical`, its counters kept on the node | `compiled` |
 | `two-stage` | the two-stage serve's launch line: `boundary-rows` with the canonical top-k and one attention layer's history tables in the boundary commitment (`serve_tax.TABLES`), built on rank 0 and kept in a private directory on the node (`servetax_plugin`), and prefix caching off, which the tables need | `boundary-rows` |
 | `two-stage-tick` | the two-stage serve's launch line admitting on the certified tick: `two-stage`'s data with the tick on, served by the corpus's client | `two-stage` |
-| `tick-certifier` | `tick` with the network certifier itself in front, under vLLM's client (two commands, below) | `tick` |
+| `tick-certifier` | `tick` with the network attester itself in front, under vLLM's client (two commands, below) | `tick` |
 | `prod` | nothing: `published`'s server, as the stock arm the arms made from it are costed over | `published` |
 | `prod-again` | nothing: `prod` in a second server lifetime, the noise floor of a cost over `prod` | `prod` |
 | `prod-record` | the scheduler's step trace on that server, as `record` is on `compiled`; each request's prompt ids and served ids, which a replay of a pass sent by vLLM's client is given and compared with; and the canonical DSA top-k, as `two-stage` has it (its counters kept on the node), which that replay runs under too | `prod` |
@@ -73,7 +73,8 @@ that command in two things, each with the recipe's own alternative:
 
 The values a recipe leaves to the operator (the requests at once, the cards' share of memory, the tokens a step) are
 vLLM's own defaults on the arm's line. A job that sets any of them adds the flags to that line alone with
-`PUBLISHED_ARGS=--FLAG=VALUE,...`, each flag once; the arm's `meta.json` holds the line it served (`server_argv`).
+`PUBLISHED_ARGS=--FLAG=VALUE,...`, each flag once; `--seed=N` takes the place of the line's `--seed 0`. The arm's
+`meta.json` holds the line it served (`server_argv`).
 
 The recipe's page asks for prefix caching off under a benchmark; the arm keeps it on, as a server has it, and each
 pass starts from an empty cache as every arm's does. A job that ends on `published` prints no cost: the arm is stock,
@@ -261,7 +262,7 @@ research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.
   top-k's own (`canonical-topk`). Each arm's cost is printed over stock and over the nearest arm above it that ran,
   at the number's load and rung, with its share of the whole for the arms from the measured one up to stock, and
   with what its step turns on: beside each such change the target's part for it, with no verdict, or `not in the
-  model` for a change the target has no part for (prefix caching off, the served ids, the network certifier
+  model` for a change the target has no part for (prefix caching off, the served ids, the network attester
   in front). A
   job of `compiled` alone prints no cost: it finds the rungs where stock is saturated and where its goodput peaks,
   which a later job's `--loads` names.
@@ -272,7 +273,7 @@ research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.
 - **What it leaves out.** `serve_tax.NO_ARM` lists what a served engine of ours changes that no arm turns on; the output
   prints it under the number, which counts none of it. The arms that need the corpus's client (the tick's fed by the
   stand-in certifier, and the restore arms' seeded sampling) aren't served by vLLM's.
-- **The arm behind the network certifier,** `tick-certifier`, is the tick arm with the certifier itself in front
+- **The arm behind the network attester,** `tick-certifier`, is the tick arm with the certifier itself in front
   (`serve_tax.CERTIFIER`), which vLLM's client drives through a shim (`cell_shim`). Two commands serve it, since the
   certifier never runs on the node it certifies: `--side server` there, `--side client` on the certifier's host.
   The certifier's schedule (`serve_tax.CELLS`) paces every answer, so its verdict is `not comparable`;

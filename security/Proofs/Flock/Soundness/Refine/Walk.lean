@@ -98,14 +98,20 @@ theorem ret_pure {γ : Type} (a : γ) (Q : γ → Prop) (h : Q a) : Ret (pure a 
 /-- A `let` that is not a join point, generalized. -/
 theorem ret_let {α γ : Type} (e : α) (b : α → V γ) (Q : γ → Prop) (h : ∀ x, Ret (b x) Q) : Ret (b e) Q := h e
 
+/-- A `let` whose value is headed by a kept constant, generalized with its equation. -/
+theorem ret_let_eq {α γ : Type} (e : α) (b : α → V γ) (Q : γ → Prop) (h : ∀ x, x = e → Ret (b x) Q) : Ret (b e) Q :=
+  h e rfl
+
 /-- A kept computation in tail position: what it returns, with its equation. -/
 theorem ret_tail {γ : Type} (x : V γ) (Q : γ → Prop) (h : ∀ a, x = .ok a → Q a) : Ret x Q := h
 
 open Lean Elab Tactic Meta in
 /-- One step of `ret_walk` on the goal `Ret m Q`, by `m`'s head; `none` when the goal is not a `Ret`. A computation
-headed by a constant in `keep`, bound or in tail position, keeps its equation `x = .ok a`; every other step forgets what
-it passed. -/
-meta def retStep (keep : Array Name) (g : MVarId) : TacticM (Option (List MVarId)) := g.withContext do
+headed by a constant in `keep`, bound or in tail position, keeps its equation `x = .ok a`, and a `let` whose value is
+headed by one keeps `x = v`; every other step forgets what it passed. With `body`, a join point's body is proved by
+`body` (of the goal `∀ xs, Ret (v xs) Q`) rather than left as a goal. -/
+meta def retStep (keep : Array Name) (g : MVarId) (body : Option (Expr → TacticM Expr) := none) :
+    TacticM (Option (List MVarId)) := g.withContext do
   let ty ← instantiateMVars (← g.getType)
   unless ty.isAppOfArity ``Ret 3 do return none
   let γ := ty.getArg! 0
@@ -125,11 +131,19 @@ meta def retStep (keep : Array Name) (g : MVarId) : TacticM (Option (List MVarId
       let isJp ← forallTelescopeReducing t fun _ r => isDefEq r vγ
       if isJp && v.consumeMData.isLambda then
         -- he : ∀ xs, Ret (v xs) Q;  hb : ∀ j, (∀ xs, Ret (j xs) Q) → Ret (b j) Q;  the step is `hb v he`
-        let he ← goal (← forallTelescopeReducing t fun xs _ => do mkForallFVars xs (ret (mkAppN v xs).headBeta))
+        let heTy ← forallTelescopeReducing t fun xs _ => do mkForallFVars xs (ret (mkAppN v xs).headBeta)
         let hb ← goal (← withLocalDeclD n t fun j => do
           let hj ← forallTelescopeReducing t fun xs _ => do mkForallFVars xs (ret (mkAppN j xs))
           withLocalDeclD `hj hj fun h => do mkForallFVars #[j, h] (ret (b.instantiate1 j)))
-        some <$> close (mkApp2 hb v he) [he, hb]
+        match body with
+        | some prove => some <$> close (mkApp2 hb v (← prove heTy)) [hb]
+        | none =>
+          let he ← goal heTy
+          some <$> close (mkApp2 hb v he) [he, hb]
+      else if keep.any v.getAppFn.isConstOf then
+        let h ← goal (← withLocalDeclD n t fun x => do
+          withLocalDeclD `hx (← mkEq x v) fun hx => do mkForallFVars #[x, hx] (ret (b.instantiate1 x)))
+        some <$> close (mkAppN (mkConst ``ret_let_eq) #[t, γ, v, .lam n t b .default, q, h]) [h]
       else
         let h ← goal (← withLocalDeclD n t fun x => do mkForallFVars #[x] (ret (b.instantiate1 x)))
         some <$> close (mkAppN (mkConst ``ret_let) #[t, γ, v, .lam n t b .default, q, h]) [h]
@@ -184,7 +198,7 @@ meta def retStep (keep : Array Name) (g : MVarId) : TacticM (Option (List MVarId
 open Lean Elab Tactic Meta in
 /-- `ret_walk [c, …]` walks the goal `Ret m Q` to every return of `m`, leaving the goal `Q a` at each `pure a` and at
 each computation in tail position headed by one of the constants; such a computation, bound or in tail position, keeps
-its equation as a hypothesis (see `retStep`). -/
+its equation as a hypothesis, as does a `let` whose value is headed by one (see `retStep`). -/
 elab "ret_walk" "[" cs:ident,* "]" : tactic => do
   let mut keep := #[]
   for c in cs.getElems do keep := keep.push (← realizeGlobalConstNoOverloadWithInfo c)
@@ -198,6 +212,38 @@ elab "ret_walk" "[" cs:ident,* "]" : tactic => do
       | some new => todo := new ++ rest
       | none => left := left.push g; todo := rest
   setGoals left.toList
+
+open Lean Elab Tactic Meta in
+/-- Walks `g` as `ret_walk` does, closing each goal it leaves with `leaf`, and proves each join point's body in its own
+goal, closed the same way and stated as an auxiliary theorem (`mkAuxTheorem`): resolving a proof's metavariables
+rebuilds what lies under each binder it introduces, so a block of join points proved in one term costs the square of
+its length, and one auxiliary theorem per join point costs only the steps between two. -/
+meta partial def retWalkAux (keep : Array Name) (leaf : Syntax) (g : MVarId) : TacticM Unit := do
+  let body (ty : Expr) : TacticM Expr := do
+    let work ← mkFreshExprSyntheticOpaqueMVar ty
+    let n ← forallTelescope ty fun xs _ => pure xs.size
+    retWalkAux keep leaf (← work.mvarId!.introNP n).2
+    mkAuxTheorem ty (← instantiateMVars work)
+  let mut todo := [g]
+  while true do
+    match todo with
+    | [] => break
+    | g :: rest =>
+      match ← retStep keep g body with
+      | some new => todo := new ++ rest
+      | none =>
+        unless (← Lean.Elab.Tactic.run g (evalTactic leaf)).isEmpty do
+          throwError "ret_walk_aux: the tactic for a return left goals"
+        todo := rest
+
+open Lean Elab Tactic Meta in
+/-- `ret_walk_aux [c, …] => tac` is `ret_walk [c, …]` followed by `tac` on each goal it leaves, with each join point's
+body proved as an auxiliary theorem (see `retWalkAux`). -/
+elab "ret_walk_aux" "[" cs:ident,* "]" " => " tac:tacticSeq : tactic => do
+  let mut keep := #[]
+  for c in cs.getElems do keep := keep.push (← realizeGlobalConstNoOverloadWithInfo c)
+  retWalkAux keep tac (← getMainGoal)
+  replaceMainGoal []
 
 open Lean Elab Tactic Meta in
 /-- `kernel_rfl` closes `a = b` with `Eq.refl a` and leaves `a ≡ b` to the kernel, which checks it when the declaration

@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.circuits.defs import bind
-from verity.definitions.registry import pouw_rows
+from verity_vllm.definitions.registry import pouw_rows
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import is_row_major
@@ -76,7 +76,7 @@ class PouwLinear:
 
 def with_protocols(profile: Profile, header: Any) -> Profile:
     """``profile`` with `PouwLinear` first when the run's header records a PoUW executor (``notes.protocols``, written by the
-    capture that installed it: `pipeline.m1_capture`); unchanged otherwise."""
+    capture that installed it: `pipeline.match_capture`); unchanged otherwise."""
     entries = ((getattr(header, "notes", None) or {}).get("protocols") or ())
     if not any(str(e).partition(":")[0] == "pouw" for e in entries):
         return profile

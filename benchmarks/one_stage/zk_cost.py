@@ -3,10 +3,10 @@ W8A8 coordinates (`ScaledMmS8Coordinate_v1{K, DOT=BlackwellS8ImmaDot32_v1}`) sta
 session proving k of them sampled by the verifier's Lean, with `flock-circuit prove --zk --gpu`, and the Lean verifier on the
 sessions.
 
-    python benchmarks/one_stage/zk_cost.py stage  --lean flock-verify --out DIR [--ks 4096,14336] [--sizes 1,8,64,512]
+    python benchmarks/one_stage/zk_cost.py stage  --lean verity-verify-proof --out DIR [--ks 4096,14336] [--sizes 1,8,64,512]
     python benchmarks/one_stage/zk_cost.py stage  --out DIR --units "fp8-coord:K=6144 router-row" [--sizes half,full] [--draws c]
     python benchmarks/one_stage/zk_cost.py prove  --bin flock-circuit --out DIR [--arms fw,nofw] [--cold 2] [--runs 3] [--cpu]
-    python benchmarks/one_stage/zk_cost.py verify --lean flock-verify --out DIR
+    python benchmarks/one_stage/zk_cost.py verify --lean verity-verify-proof --out DIR
     python benchmarks/one_stage/zk_cost.py fit    --out DIR [--run RUN_ID]
     python benchmarks/one_stage/zk_cost.py overhead --out DIR [--card rtx-pro-6000-server]
 
@@ -23,19 +23,19 @@ sessions.
   whatever its reason, is a failed check.
   A type staged as a templated statement (a table read: its stage's ``unit.tmpl``) is proved, served and verified at
   `TMPL_STATEMENT` on its unit rows, placed once by ``--tmpl-unit-bin`` (`flock-tmpl-unit`).
-* **Samples.** k in {1, 8, 64, c} (`--draws`), at most c, each by Lean `flock-verify draw --stratified k` over the statement's
+* **Samples.** k in {1, 8, 64, c} (`--draws`), at most c, each by Lean `verity-verify-proof draw --stratified k` over the statement's
   program and partition, on a development challenger's coins opened after the statement's partition digest and pin
-  (`a0.challenger_draw`), served from that file (`serve --zk --draw-file`). `--draws c` proves every unit: the cost of c
+  (`a0.challenger_sample`), served from that file (`serve --zk --draw-file`). `--draws c` proves every unit: the cost of c
   sampled proof blocks in one statement. An entry `k:arm+arm` runs only those arms at k (`c:dev+nofw 8:dev+nofw+fw`).
 * **Sessions.** Per point and arm, `--cold` processes proving one session each (`--runs 1 --warm 0`: one touched
   statement's prover) and one proving `--warm` + `--runs` sessions (the in-process session cost), the whole plan
   `--passes` times with each family's sizes in ABBA order, so that a drift in the node's load falls on every size alike.
   Each session records its prover's and ZK server's user and system seconds (their process trees', between the prover's
   LIVE lines) and the node's load, so that a session slowed by a busy node shows as one. Arm `fw` is the
-  design's path: the ZK server's send check on every session (`FC_FIREWALL=1`), which rechecks the host's witness; `nofw`
+  design's path: the ZK server's send check on every session (`FC_ZK_SERVER=1`), which rechecks the host's witness; `nofw`
   is the same with the check off. Both take the host's witness (`FC_HOST_WITNESS=1`), as proof_throughput's ZK point does,
   so their difference is the ZK server's. Arm `dev` leaves both unset: the device builds the witness, which the ZK server
-  can't recheck (flock-circuit refuses `FC_FIREWALL=1` without the host's witness).
+  can't recheck (flock-circuit refuses `FC_ZK_SERVER=1` without the host's witness).
 * **Overhead** (`overhead`): per served type and arm, the timed sessions' end-to-end seconds at k = c fitted as
   `fixed + marginal c` over its sizes, with the marginal's standard error, each of the session's parts (`PARTS`: witness,
   proving, the wait on the ZK server, the rest) fitted the same way, and a dot product's proof overhead: its GPU-seconds a
@@ -309,9 +309,9 @@ def stage(a) -> int:
             jsonl(out / "records" / "stage.jsonl", rec)
             statement = hashlib.sha512(canonical_json({"partition": P.digest(part), "pin": st["pin"]})).hexdigest()
             for k, arms in draws(c, a.draws):
-                law = D.derive(program, query, D.parse_design(f"stratified:{k}"))
-                p = a0.challenger_draw(a.lean, ["--program", str(sd / "program.json"), "--partition",
-                                                str(sd / "partition.json"), "--stratified", str(k)], law, c, statement,
+                sampling_design = D.derive(program, query, D.parse_design(f"stratified:{k}"))
+                p = a0.challenger_sample(a.lean, ["--program", str(sd / "program.json"), "--partition",
+                                                str(sd / "partition.json"), "--stratified", str(k)], sampling_design, c, statement,
                                        sd / f"draw-k{k}.log")
                 line = next((x for x in p.stdout.splitlines() if x.startswith("DRAW ")), None)
                 if line is None:
@@ -361,8 +361,8 @@ def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
     else:
         inst, pub, tables = str(d / f"inst-{c}.bin"), str(d / f"pub-{c}.bin"), ["--tables", str(d / "tables")]
         fw_files = {"partition_file": sd / "partition.json", "program_file": sd / "program.json"}
-    env = {"FC_HOST_WITNESS": None if arm == "dev" else "1", "FC_FIREWALL": "1" if arm == "fw" else "0",
-           **(a0.firewall_env(fw_files) if arm == "fw" else {})}
+    env = {"FC_HOST_WITNESS": None if arm == "dev" else "1", "FC_ZK_SERVER": "1" if arm == "fw" else "0",
+           **(a0.zk_server_env(fw_files) if arm == "fw" else {})}
     serve_log = open(o / "serve.log", "w")
     serve = subprocess.Popen([a.bin, "serve", "--zk", "--listen", f"127.0.0.1:{port}", "--out", str(o / "sessions"),
                               "--instances", pub, "--circuit", str(d / "circuit.txt"), *tables,
@@ -400,7 +400,7 @@ def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
             fw = {}
             for b in v.get("buckets") or []:
                 for key, x in (b or {}).items():
-                    if (key.startswith("t.firewall") or key.startswith("cpu.firewall")) and isinstance(x, (int, float)):
+                    if key.startswith(("t.zk_server", "cpu.zk_server", "t.firewall", "cpu.firewall")) and isinstance(x, (int, float)):
                         fw[key] = fw.get(key, 0.0) + float(x)
             lives.append({"t_emit_s": round(t, 3), "firewall": fw, "proof_bytes": sum(v.get("proof_bytes") or [0]),
                           **{x: v.get(x) for x in ("run", "warm", "accepted", "why", "prover_stopped", "e2e_s", "witness_s",
@@ -422,7 +422,7 @@ def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
            "accepted": rc == 0 and len(lives) == warm + runs and all(x["accepted"] is True for x in lives)}
     print(f"ZKCOST prove {pt.get('unit') or 'K=%s' % pt['K']} c={c} k={k} {arm} {mode}{rep}: rc {rc}, wall {usage['wall_s']:.2f} s, built {built} s, "
           f"e2e {[x['e2e_s'] and round(x['e2e_s'], 2) for x in lives]}, k_log {[x['k_log'] for x in lives]}, "
-          f"dense_m {[x['dense_m'] for x in lives]}, peak {peak_kb / 2**20:.1f} GiB (prover, serve and firewall summed), "
+          f"dense_m {[x['dense_m'] for x in lives]}, peak {peak_kb / 2**20:.1f} GiB (prover, serve and ZK server summed), "
           f"accepted {rec['accepted']}"
           + ("" if rec["accepted"] else f" ({[x['why'] for x in lives]}; {(o / 'prove.err').read_text()[-300:]!r})"), flush=True)
     return rec
@@ -771,7 +771,7 @@ def overhead(a) -> int:
     rec = {"schema": "verity/proof-overhead/v1", "definition": DEFINITION, "card": a.card, "gpu": gpu, "run": a.run,
            "settings": "flock-circuit prove --zk --gpu, one warm process (its timed sessions' end-to-end seconds), every staged "
                        "proof block drawn (k = c); dev: the device's witness, nofw: the host's, fw: the host's and the ZK server's "
-                       "send check (FC_FIREWALL=1)", "types": types}
+                       "send check (FC_ZK_SERVER=1)", "types": types}
     (out / "overhead.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     (out / "observations.json").write_text(json.dumps(obs, indent=1))
     rows = ["| type | definition | arm | sizes | fixed s | marginal ms | amortized ms | overhead (marginal) | overhead (amortized) | Lean |",

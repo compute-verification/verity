@@ -221,7 +221,7 @@ noncomputable def sksD (Coin : Type) : Deploy Coin Unit Unit where
   commit := rejCm
   universal _ := ⟨[], []⟩
   flock := Flock.ksD Coin
-  stage2 _ := ∅
+  secondStage _ := ∅
   checked _ _ := []
   rounds _ _ := ∅
   session _ _ _ := none
@@ -246,7 +246,7 @@ noncomputable def compSD (Coin : Type) : Deploy Coin Unit Unit where
   commit := accCm
   universal _ := ⟨[], []⟩
   flock := Flock.ksD Coin
-  stage2 _ := ∅
+  secondStage _ := ∅
   checked _ _ := []
   rounds _ _ := ∅
   session _ _ _ := none
@@ -274,7 +274,7 @@ def effSD (Coin : Type) : Deploy Coin (List Bool) Unit where
   commit := accCm
   universal _ := ⟨[], []⟩
   flock := Flock.effD Coin
-  stage2 _ := ∅
+  secondStage _ := ∅
   checked _ _ := []
   rounds _ _ := ∅
   session _ _ _ := none

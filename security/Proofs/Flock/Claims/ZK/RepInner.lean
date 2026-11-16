@@ -81,13 +81,13 @@ theorem fw_throw_bind {S : γ → δ → Prop} {e : String} {f : α → TMW PS �
     Fw S ((((throw e : TMW PS α) >>= f).run t).go l) y := by
   intro c t₂ L₂ h
   obtain ⟨_, _, _, h', _⟩ := run_ok h
-  rw [_root_.Flock.Firewall.Finish.throw_run_go] at h'
+  rw [_root_.Flock.ZkServer.Finish.throw_run_go] at h'
   cases h'
 
 theorem fw_throw {S : γ → δ → Prop} {e : String} {y : Except String (δ × Transcript) × Array Claims.Msg}
     {t : Transcript} {l : Array Claims.Msg} : Fw S (((throw e : TMW PS γ).run t).go l) y := by
   intro c t₂ L₂ h
-  rw [_root_.Flock.Firewall.Finish.throw_run_go] at h
+  rw [_root_.Flock.ZkServer.Finish.throw_run_go] at h
   cases h
 
 theorem fw_lift_pure_bind {S : γ → δ → Prop} {a : α} {f : α → TMW PS γ}

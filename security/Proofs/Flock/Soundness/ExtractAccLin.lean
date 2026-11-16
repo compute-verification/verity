@@ -301,7 +301,7 @@ theorem expect_conflictSucc (g : Game β) (s : Strategy g) (acc : β → Prop) (
       funext h, expect_const_mul]
   rfl
 
-/-- **The finder against the accepted law**: `ε · expectAcc_{k+1}[PairConflict] ≤ Pr[ConflictSucc] + (k + 1)/(eR)`. -/
+/-- **The finder against the accepted sampling design**: `ε · expectAcc_{k+1}[PairConflict] ≤ Pr[ConflictSucc] + (k + 1)/(eR)`. -/
 theorem conflict_succ_ge (g : Game β) (s : Strategy g) (acc : β → Prop) (op : β → P → Option V) (R k : ℕ)
     (hR : 1 ≤ R) :
     expect (ind acc) g s * expectAcc g s acc (k + 1) (ind (PairConflict op)) ≤

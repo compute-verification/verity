@@ -23,9 +23,9 @@ public import Proofs.Properties.Verity.Recursive.Assumptions
 /-!
 # SPOT's recursive configuration: the component's property and its target
 
-SPOT's recursive configuration (`VStar.Recursive`, `verity/sampled-proofs/recursive/v1`, the form
-`"form": "recursive"` of `VStar.Recursive.Sampled`'s parameters, which that component refuses until SPOT's
-soundness covers it, `VStar.Recursive.Sampled.RECURSIVE_REFUSED`) checks, on the prover's blobs,
+SPOT's recursive configuration (`VStar.Recursive`, `verity/sampled-proofs/recursive/v1`, a component of its own: SPOT's
+component refuses parameters and evidence naming the recursive form by name, `VStar.Recursive.Sampled.RECURSIVE_REFUSED`,
+and none of its cases is that form's) checks, on the prover's blobs,
 the recursive session that `Flock.Guarantees.RecursiveKSAt` is stated about. This module states two things.
 
 * **The property** (`acc_of_accepts`). Take a run of the deployed recursive verifier that `RecursiveKSAt` reads
@@ -38,8 +38,7 @@ the recursive session that `Flock.Guarantees.RecursiveKSAt` is stated about. Thi
     session (`Assumptions.Zk.RecordCustodyZKJ`).
   - `live-verifier` is admissible here only until the component reads the session's coins through the
     challenger's live-coin part's signed device log. Then `LiveCoins` follows from the log's signatures, and the premise goes.
-* **The target** (`spotRecursive`, stated and proved in `Proofs.Properties.Verity.Recursive.Target`): sampled
-  proofs at the recursive configuration, in `Vocab.Target k .sampled`'s form (`Properties.Verity.Game`) with the
+* **The target** (`spotRecursive`, stated and proved in `Proofs.Properties.Verity.Recursive.Target`): SPOT at the recursive configuration, in `Vocab.Target k .sampled`'s form (`Properties.Verity.Game`) with the
   recursive component's verdict (`RecVerdict`).
   - The game is causal (R5): the parameters, the registered circuit file and the commitment come first; then the
     device's releases, each after the bytes it answers; and the evidence last.
@@ -105,7 +104,7 @@ noncomputable def finalAt (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) (s 
     Option FlockDeploy.Final :=
   ((session IV st x s v).msgs.getLast?).bind fun m => FlockDeploy.finalOf m.1
 
-/-- The file name `flock-verify` gives a rep stream `w`'s proof (`Witness.lean`'s `{w.replace "/" "."}.bin`). -/
+/-- The file name `verity-verify-proof` gives a rep stream `w`'s proof (`Witness.lean`'s `{w.replace "/" "."}.bin`). -/
 def repName (w : String) : String := s!"{w.replace "/" "."}.bin"
 
 /-- **The blobs show the run.** In the run's view `v` at statement `x`, the recursive session's files that the compiled
@@ -482,17 +481,18 @@ theorem acc_of_accepts (wE w : Msg → ℝ) (b : Brings) (aux : Msg → ℕ → 
      RefusalsOf.transcript_of_compiled hacc hshow.1,
      RefusalsOf.rows_of_compiled hacc hrows⟩
 
-/-- **Sampled proofs' one-stage form is v2**: where the parameters name the one-stage form and `VStar.Recursive.Sampled`
+/-- **SPOT's one-stage form is v2**: where the parameters name the one-stage form and `VStar.Recursive.Sampled`
 accepts, the evidence is one-stage too and v2 (`Spot.OneStageZk.checkBlobs`) accepts the same commitment,
 evidence and blobs with the same public output and profile. So what is proved of v2's acceptance (`acceptMeans` at the
-coins it read, the sampled proofs bound) holds of the composed component's one-stage branch. -/
+coins it read, the SPOT bound) holds of the composed component's one-stage branch. -/
 theorem sampled_oneStage_accepts {p₀ : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment}
     {e : VStar.Recursive.Sampled.Evidence} {bs : Core.Blobs} {pub : Spot.OneStage.Public}
     {prof : Core.Integrity}
     (h : VStar.Recursive.Sampled.checkBlobs (.inl p₀) c e bs = .accept pub prof) :
     ∃ e₀, e = .inl e₀ ∧ Spot.OneStageZk.checkBlobs p₀ c e₀ bs = .accept pub prof := by
   cases e with
-  | inl e₀ => exact ⟨e₀, rfl, h⟩
+  | inl e₀ => exact ⟨e₀, rfl, (VStar.Recursive.Caller.gate_accept (show VStar.Recursive.Caller.gate c.record
+      p₀.base.verifier (Spot.OneStageZk.checkBlobs p₀ c e₀ bs) = .accept pub prof from h)).2⟩
   | inr e₁ => simp [VStar.Recursive.Sampled.checkBlobs] at h
 
 /-- `sampled_oneStage_accepts` at the component, `VStar.Recursive.Sampled.protocol`'s blob check. -/
@@ -506,40 +506,30 @@ theorem sampled_protocol_oneStage_accepts {p₀ : Spot.OneStageZk.Params}
 
 /-! ## The target -/
 
-open Accounting (Device)
+open ResourceAccounting (Device)
 
 variable {ι : Type} {d : Device ι} {α : Type} [Fintype α]
 
-/-- **Sampled proofs' case in what the prover sent composite `k`**: the three byte strings decode, and one of the cases
-is sampled proofs' component's (`VStar.Recursive.Sampled.protocol` on the blobs sent), as one of `k`'s components,
-with the parameters `a` `k` names for it and the commitment `cb` and evidence `eb` it carries. -/
-def SampledCase (k : Verity.Registration.Composite) (s : Verity.Sent) (a cb eb : ByteArray) : Prop :=
+/-- **The recursive audit's case in what the prover sent composite `k`**: the three byte strings decode, and one of the
+cases is the recursive audit's component's (`VStar.Recursive.protocol`, `verity/sampled-proofs/recursive/v1`, on the
+blobs sent), as one of `k`'s components, with the parameters `a` `k` names for it and the commitment `cb` and evidence
+`eb` it carries. -/
+def RecCase (k : Verity.Registration.Composite) (s : Verity.Sent) (a cb eb : ByteArray) : Prop :=
   ∃ ps b ev, Verity.Decoded s ps b ev ∧
     ∃ x ∈ Properties.Composition.triples (s.components k) ps ev,
-      x.1 = VStar.Recursive.Sampled.protocol.onBlobs (Core.Blobs.ofArray s.blobs) ∧
+      x.1 = VStar.Recursive.protocol.onBlobs (Core.Blobs.ofArray s.blobs) ∧
         x.2.1.params.toUTF8 = a ∧ x.2.2.commitment = cb ∧ x.2.2.evidence = eb
 
-/-- **The recursive configuration's verdict at composite `k`**: `Vocab.Verdict k .sampled` at a sampled-proofs case
-whose parameters name the recursive form (`recVerdict_verdict`). The conjuncts:
+/-- **The recursive configuration's verdict at composite `k`**. The conjuncts:
 * the committed files passed the commit phase's check (`Registered`, R6);
 * `k` accepted what the prover sent as a `same` composition (`SameAccepts`);
-* sampled proofs' component (`VStar.Recursive.Sampled.protocol`) accepts its own case in what the prover sent, on the
-  blobs sent (`SampledCase`, `DecodedAccepted`), and that case's parameters name the recursive form. -/
+* the recursive audit's component (`VStar.Recursive.protocol`) accepts its own case in what the prover sent, on the
+  blobs sent (`RecCase`, `DecodedAccepted`). -/
 def RecVerdict (V : Vocab d α) (k : Verity.Registration.Composite) (o : Verity.Exchange) : Prop :=
   V.Registered o.params o.files ∧ SameAccepts k o.sent ∧
-    ∃ a cb eb, SampledCase k o.sent a cb eb ∧
+    ∃ a cb eb, RecCase k o.sent a cb eb ∧
       Properties.Composition.DecodedAccepted
-        (VStar.Recursive.Sampled.protocol.onBlobs (Core.Blobs.ofArray o.sent.blobs)) a cb eb ∧
-      ∃ j p, Core.canonicalJson a = .ok j ∧ VStar.Recursive.Sampled.paramsOfJson j = .ok (.inr p)
-
-/-- **The recursive configuration's verdict is composite `k`'s sampled verdict**: `RecVerdict V k` is
-`Vocab.Verdict k .sampled` with the sampled case's form named. -/
-theorem recVerdict_verdict (V : Vocab d α) (k : Verity.Registration.Composite) {o : Verity.Exchange}
-    (h : RecVerdict V k o) : V.Verdict k .sampled o := by
-  obtain ⟨hreg, hrec, a, cb, eb, ⟨ps, b, ev, hdec, x, hx, h1, ha, hc, he⟩, hda, -⟩ := h
-  subst ha hc he
-  refine ⟨hreg, hrec, VStar.Recursive.Sampled.protocol, ?_, ps, b, ev, hdec, x, hx, h1, by rw [h1]; exact hda⟩
-  cases k <;> rfl
+        (VStar.Recursive.protocol.onBlobs (Core.Blobs.ofArray o.sent.blobs)) a cb eb
 
 /-- **The deployment** `RecursiveKSAt` is stated at (the weights, the brings and the challenger's live-coin part's record), with the
 inner decoder `decI` and the outer decoder `decO` that fix its extractor. -/
@@ -603,7 +593,7 @@ coupling of the device log (`Vocab.families`, `Vocab.coinsRead`) with the sessio
 * `out ξ s` is the play's outcome at `ξ`, at the tape and the session's coins `s`. The play's outcome under the
   device's uniform releases is distributed so (`prob_le`).
 * `drawOf ξ` is the units `ξ` samples.
-* Wherever sampled proofs' component accepts its case in what the prover sent `k`, at the recursive form, the
+* Wherever the recursive audit's component accepts its case in what the prover sent `k` (`RecCase`), the
   parameters and evidence it decodes name `x ξ`, and the blobs sent show the run and its staged rows are the
   component's (`names_shows`).
 * Each run of the session is part of one run of `σ`, so its SHA-512 calls are at most the strategy's, `V.cost`
@@ -622,11 +612,11 @@ structure SessionIn (V : Vocab d α) (q : Dep) (k : Verity.Registration.Composit
   drawOf : Ξ → Finset (Fin (V.units θ F))
   prob_le : ∀ E : Verity.Exchange → Prop, Game.prob E (V.game θ F c) σ ≤
     ENNReal.ofReal (Claims.Ex fun ξ => Claims.Pr fun s : Ω × (Fin (q.D.V.k (x ξ)) → Coin) => E (out ξ s))
-  names_shows : ∀ ξ s a cb eb j p e, SampledCase k (out ξ s).sent a cb eb →
+  names_shows : ∀ ξ s a cb eb j p e, RecCase k (out ξ s).sent a cb eb →
     Properties.Composition.DecodedAccepted
-      (VStar.Recursive.Sampled.protocol.onBlobs (Core.Blobs.ofArray (out ξ s).sent.blobs)) a cb eb →
-    Core.canonicalJson a = .ok j → VStar.Recursive.Sampled.paramsOfJson j = .ok (.inr p) →
-    VStar.Recursive.Sampled.evidenceOf eb = .ok (.inr e) →
+      (VStar.Recursive.protocol.onBlobs (Core.Blobs.ofArray (out ξ s).sent.blobs)) a cb eb →
+    Core.canonicalJson a = .ok j → VStar.Recursive.paramsOfJson j = .ok p →
+    VStar.Recursive.evidenceOf eb = .ok e →
     Names p e (Core.Blobs.ofArray (out ξ s).sent.blobs) (x ξ) ∧
       Shows q.Bd.IVStar q.st (x ξ) e.proofs (Core.Blobs.ofArray (out ξ s).sent.blobs)
         (Claims.run FlockDeploy.sha512 (P ξ) q.D.V (x ξ) s.1 s.2).seen ∧

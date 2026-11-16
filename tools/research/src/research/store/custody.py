@@ -17,7 +17,7 @@ published on the machine that ran it with a minted key, so custody no longer dep
                                                                           --older-min, the ended runs not on the remote after N minutes
 
 The record uploads the run's own files, everything under out/ (the workload's $OUT), the files matching its `--declared-output`
-globs, and undeclared files up to UNDECLARED_CAP_BYTES; every other file is listed (path, bytes, sha256) without bytes (`select`; how jobs declare outputs:
+globs, and undeclared files up to UNDECLARED_LIMIT_BYTES; every other file is listed (path, bytes, sha256) without bytes (`select`; how jobs declare outputs:
 .agents/skills/writing-runs/SKILL.md).  The listing is the record's `meta.trimmed` when it fits in TRIMMED_INLINE_BYTES, else the
 file TRIMMED_LISTING in the record's own tree, named by `meta.trimmed_listing` (`trimmed_of`).  A credential a run may be sent
 (CREDENTIALS) is deleted from the run dir before its record is taken, whatever the run's tool and however it ended, so no record
@@ -121,7 +121,7 @@ RUN_FILE_GLOBS = ("logs/stall-*.txt", "control/preserve/answers/*")
 #: in the record the run's machine takes, so custody of the launcher's copy neither checks it nor lets eviction remove it.
 LAUNCHER_RECORD = "remote.json"
 #: Undeclared files are uploaded (in path order) while their total stays within this; the rest are trimmed.  0 = never upload undeclared.
-UNDECLARED_CAP_BYTES = 256 << 20
+UNDECLARED_LIMIT_BYTES = 256 << 20
 #: A trimmed listing bigger than this goes in the record's tree: a manifest's meta is capped at 256 KiB (model.META_MAX_BYTES), and a
 #: `check` run lists thousands of files (r20261001-091202-7aa6: 3719 files, a 561 KB meta, so its passing attempt never published).
 TRIMMED_INLINE_BYTES = 64 << 10
@@ -138,19 +138,19 @@ def declared_globs(run_dir: Path) -> list[str]:
     return [f"{OUT_DIR}/*", *(str(g) for g in (job.get("execution") or {}).get("declared_outputs") or [])]
 
 
-def select(run_dir: Path, cap: int | None = None) -> tuple[list[str], list[dict[str, Any]]]:
+def select(run_dir: Path, limit: int | None = None) -> tuple[list[str], list[dict[str, Any]]]:
     """(files the run record uploads, [{path, bytes, sha256}] of the files it only lists): the run's own files, every file matching a
     declared glob (`declared_globs`; fnmatch on the path relative to the run dir, so `*` crosses `/`: `out/*` is all of out/, `*` is
-    everything), and undeclared files up to `cap` bytes in total."""
+    everything), and undeclared files up to `limit` bytes in total."""
     d = Path(run_dir)
-    cap = UNDECLARED_CAP_BYTES if cap is None else cap
+    limit = UNDECLARED_LIMIT_BYTES if limit is None else limit
     globs = declared_globs(d)
     kept, trimmed, used = [], [], 0
     for rel in run_files(d):
         size = (d / rel).stat().st_size
         if is_run_file(rel) or any(fnmatch.fnmatchcase(rel, g) for g in globs):
             kept.append(rel)
-        elif used + size <= cap:
+        elif used + size <= limit:
             used += size
             kept.append(rel)
         else:
@@ -180,7 +180,7 @@ def stage(run_dir: Path, into: Path, rels: list[str] | None = None) -> list[str]
 
 
 #: What a run may be sent that grants access until it expires, as globs relative to its run dir and its request dir: the presigned URLs
-#: of the Lean bundles a check or a Lean records run is sent (`tools/verity/check/check.py` LEAN_DEPS_URLS, `research.cli.lean_records_urls`),
+#: of the Lean bundles a check or a Lean records run is sent (`tools/check/check.py` LEAN_DEPS_URLS, `research.cli.lean_records_urls`),
 #: which a run of anything else never takes out of inputs/,
 #: and the temporary name a shipped tree's preflight writes that file under before replacing it; and those of the recorded checks'
 #: verdict packs (VERDICT_URLS) and of the agreement's pinned upstream build and inputs (AGREEMENT_URLS)
@@ -457,9 +457,12 @@ def divert_output(run_dir: Path, custody_dir: Path) -> bool:
 
 
 def _key_expiry(custody_dir: Path) -> str | None:
+    if not (Path(custody_dir) / CRED_FILE).exists():
+        return None
     try:
         return json.loads((Path(custody_dir) / CRED_FILE).read_text()).get("expires_utc")
-    except (OSError, ValueError, AttributeError):
+    except (OSError, ValueError, AttributeError) as e:
+        print(f"research data: {Path(custody_dir) / CRED_FILE} unread, so its key's expiry is not known ({type(e).__name__})", file=sys.stderr, flush=True)
         return None
 
 
@@ -777,9 +780,12 @@ def triage_row(st: Any, run_dir: Path, *, verify_remote: bool = False, now: floa
 
 
 def _read(p: Path) -> dict[str, Any] | None:
+    if not p.exists():
+        return None
     try:
         d = json.loads(p.read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"research data: {p} unread, read as none ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
     return d if isinstance(d, dict) else None
 

@@ -42,7 +42,7 @@ import Proofs.Flock.Claims.Recursion.VStar
 A V\* part's check is accepted, or its recorded calls collide with each other or with the compiled verifier's own
 SHA-512 evaluations at its V\* statement (`VStarB.PartChecksBV`; check 5's row commitments are among them). No witness
 records those evaluations, so the facts route 2C reads of V*'s parts escape to a collision among a sample's evaluations
-(`drawCalls`: its witnesses' recorded calls, the inner verifier's own at the sample's coins, `Deploy.callsAt`, and
+(`sampleCalls`: its witnesses' recorded calls, the inner verifier's own at the sample's coins, `Deploy.callsAt`, and
 `setupCalls` at the run's V\* statements):
 
 * `CallsLogCollAt`: `CallsLogColl` with the inner run's calls among those `callsAt` lists at the sample's coins (or a
@@ -135,14 +135,14 @@ def InnerAcceptsCollAtV (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (
     (D.innerView H x r ws).out = .acc ∨
       ∃ u v, findColl (D.calls x ws ++ setupCalls H D (runVstar H D I P x ω r)) = some (u, v) ∧ Collision H u v
 
-/-- **A collision among two samples' evaluations at `Be`'s fork at round `j`**: `forkColl` over `drawCalls`, the calls
+/-- **A collision among two samples' evaluations at `Be`'s fork at round `j`**: `forkColl` over `sampleCalls`, the calls
 the samples' witnesses record and the compiled verifier's own at their V\* statements. -/
 def forkCollV [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) {Ω : Type} (P : Prover Ω) (x : Msg) (j : ℕ)
     (t : Ω × (Fin (D.V.k x) → Coin) × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x × (EO D I DO decO).C x) :
     Prop :=
-  ∃ u v, findColl (drawCalls H D I DO decO P x t.1 (t.2.1, t.2.2.2.1) ++
-      drawCalls H D I DO decO P x t.1 (fork j t.2.1 t.2.2.1, t.2.2.2.2)) = some (u, v) ∧ Collision H u v
+  ∃ u v, findColl (sampleCalls H D I DO decO P x t.1 (t.2.1, t.2.2.2.1) ++
+      sampleCalls H D I DO decO P x t.1 (fork j t.2.1 t.2.2.1, t.2.2.2.2)) = some (u, v) ∧ Collision H u v
 
 /-- **`ForksBindAt` over the samples' evaluations**: at every sample of `Be`'s fork at round `j` where the inner views
 differ at message `j`, the two samples' evaluations collide (`forkCollV`). -/
@@ -152,28 +152,28 @@ def ForksBindAtV [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inne
     (t : Ω × (Fin (D.V.k x) → Coin) × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x × (EO D I DO decO).C x),
     OpensDiffer H D I DO decO P x j t → forkCollV H D I DO decO P x j t
 
-theorem drawCalls_eq [DecidableEq Col] {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
+theorem sampleCalls_eq [DecidableEq Col] {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
     {DO : Flock.Deploy Coin Col T} {decO : List (ℕ × Col) → List T} {Ω : Type} {P : Prover Ω} {x : Msg} {ω : Ω}
     {r : Fin (D.V.k x) → Coin} {c : (EO D I DO decO).C x} {ws : List Flock.Wit}
     (hg : EOGives H D I DO decO P x ω r c ws) :
-    drawCalls H D I DO decO P x ω (r, c) = D.callsAt H x r ws ++ setupCalls H D (runVstar H D I P x ω r) := by
-  have hw : drawWits H D I DO decO P x ω (r, c) = ws := by
+    sampleCalls H D I DO decO P x ω (r, c) = D.callsAt H x r ws ++ setupCalls H D (runVstar H D I P x ω r) := by
+  have hw : sampleWits H D I DO decO P x ω (r, c) = ws := by
     show ((EO D I DO decO).eval H P x ω r c).1.getD [] = ws
     rw [hg.2]; rfl
-  show D.callsAt H x r (drawWits H D I DO decO P x ω (r, c)) ++ setupCalls H D (runStmts H D I P x ω r) = _
+  show D.callsAt H x r (sampleWits H D I DO decO P x ω (r, c)) ++ setupCalls H D (runStmts H D I P x ω r) = _
   rw [hw]; rfl
 
-theorem drawCalls_true [DecidableEq Col] {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
+theorem sampleCalls_true [DecidableEq Col] {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
     {DO : Flock.Deploy Coin Col T} {decO : List (ℕ × Col) → List T} {Ω : Type} {P : Prover Ω} {x : Msg}
     (hT : CallsTrue H D I DO) (hN0 : CallsNil H D) (ω : Ω) (d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) :
-    ∀ e ∈ drawCalls H D I DO decO P x ω d, H e.1 = e.2 := fun e he =>
+    ∀ e ∈ sampleCalls H D I DO decO P x ω d, H e.1 = e.2 := fun e he =>
   (List.mem_append.1 he).elim (callsAt_true (decO := decO) (P := P) hT hN0 ω d e) (setupCalls_true H D _ e)
 
-theorem drawCalls_pair_true [DecidableEq Col] {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
+theorem sampleCalls_pair_true [DecidableEq Col] {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
     {DO : Flock.Deploy Coin Col T} {decO : List (ℕ × Col) → List T} {Ω : Type} {P : Prover Ω} {x : Msg}
     (hT : CallsTrue H D I DO) (hN0 : CallsNil H D) (ω : Ω) (d d' : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) :
-    ∀ e ∈ drawCalls H D I DO decO P x ω d ++ drawCalls H D I DO decO P x ω d', H e.1 = e.2 := fun e he =>
-  (List.mem_append.1 he).elim (drawCalls_true hT hN0 ω d e) (drawCalls_true hT hN0 ω d' e)
+    ∀ e ∈ sampleCalls H D I DO decO P x ω d ++ sampleCalls H D I DO decO P x ω d', H e.1 = e.2 := fun e he =>
+  (List.mem_append.1 he).elim (sampleCalls_true hT hN0 ω d e) (sampleCalls_true hT hN0 ω d' e)
 
 /-- A collision `forkColl` finds among the samples' recorded calls is one `forkCollV` finds among their evaluations. -/
 theorem forkCollV_of [DecidableEq Col] {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
@@ -184,7 +184,7 @@ theorem forkCollV_of [DecidableEq Col] {H : Msg → Msg} {D : Deploy Coin} {I : 
   obtain ⟨u, v, huv, -⟩ := h
   have hs := Option.isSome_iff_exists.2 ⟨_, huv⟩
   unfold forkCollV
-  refine VStar.coll_of_sub (drawCalls_pair_true hT hN0 _ _ _) (fun p hp => ?_) hs
+  refine VStar.coll_of_sub (sampleCalls_pair_true hT hN0 _ _ _) (fun p hp => ?_) hs
   rcases List.mem_append.1 hp with hp | hp
   · exact List.mem_append_left _ (List.mem_append_left _ (mem_callsAt hp))
   · exact List.mem_append_right _ (List.mem_append_left _ (mem_callsAt hp))
@@ -229,9 +229,9 @@ theorem Pr_innerRejects_le_forkV_at [DecidableEq Col] {H : Msg → Msg} {D : Dep
   rcases hA decO Ω P t.1 t.2.1 t.2.2.2.1 ws hg with hacc | ⟨u, v, huv, -⟩
   · exact absurd hacc hrej
   · unfold forkCollV
-    refine VStar.coll_of_sub (drawCalls_pair_true hT hN0 _ _ _) (fun p hp => List.mem_append_left _ ?_)
+    refine VStar.coll_of_sub (sampleCalls_pair_true hT hN0 _ _ _) (fun p hp => List.mem_append_left _ ?_)
       (Option.isSome_iff_exists.2 ⟨_, huv⟩)
-    rw [drawCalls_eq (ω := t.1) (r := t.2.1) (c := t.2.2.2.1) hg]
+    rw [sampleCalls_eq (ω := t.1) (r := t.2.1) (c := t.2.2.2.1) hg]
     exact mem_callsAt_append hp
 
 theorem PrBinnerV_nonneg [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)

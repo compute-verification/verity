@@ -109,10 +109,10 @@ theorem acc_row_bc (a : Placed.Accepted T) (ho : a.st.c.outNet = a.st.c.unitNet)
     (hv1 : ∀ p ∈ a.st.c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks)
     {z : Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g p : ℕ} (hg : g < a.st.c.g)
     (hp : p < a.st.c.ports.size) :
-    bytesOf (blockBit T z o) 128 (bcCol a.st.c g p) = Binding.commitString
+    bytesOf (chunkBit T z o) 128 (bcCol a.st.c g p) = Binding.commitString
       ((HmRow.rowPrefix a.st.c.ports[p]!.words).data.toList ++
-        bytesOf (blockBit T z o) (2 * a.st.c.ports[p]!.words) (Typed.msgCol a.st.c g p))
-      (bytesOf (blockBit T z o) 192 (saltCol a.st.c g p)) := by
+        bytesOf (chunkBit T z o) (2 * a.st.c.ports[p]!.words) (Typed.msgCol a.st.c g p))
+      (bytesOf (chunkBit T z o) 192 (saltCol a.st.c g p)) := by
   obtain ⟨tags, cf, pf, coins, tables, draw, partition, program, st, ht, h, regs, hT⟩ := a
   subst hT
   exact row_bc_setupH ht h ho hv1 hz o hg hp
@@ -120,11 +120,11 @@ theorem acc_row_bc (a : Placed.Accepted T) (ho : a.st.c.outNet = a.st.c.unitNet)
 /-- **A site address reads the block's bit**: in-block column `y` of block `o`, as an address of the accepted
 statement `T`. -/
 theorem bit_siteAddr (a : Placed.Accepted T) (z : Witness T.m) (o : Fin (2 ^ T.nbl)) {y : ℕ}
-    (hy : y < 2 ^ a.st.c.kLog) : FlockSoundness.bit (z (Layout.siteAddr a o y)) = blockBit T z o y := by
+    (hy : y < 2 ^ a.st.c.kLog) : FlockSoundness.bit (z (Layout.siteAddr a o y)) = chunkBit T z o y := by
   have hy' : y < 2 ^ T.kLog := by rw [← a.kLog_eq]; exact hy
   have hin : Layout.inBlockOr a.st.c.kLog y = ⟨y, hy⟩ := by
     simp only [Layout.inBlockOr, hy, ↓reduceDIte]
-  unfold blockBit Layout.siteAddr
+  unfold chunkBit Layout.siteAddr
   simp only [hy', ↓reduceDIte]
   rw [hin]
   rfl
@@ -133,7 +133,7 @@ theorem bit_siteAddr (a : Placed.Accepted T) (z : Witness T.m) (o : Fin (2 ^ T.n
 theorem ofFn_site (a : Placed.Accepted T) (z : Witness T.m) (o : Fin (2 ^ T.nbl)) (N : ℕ) (col : ℕ → ℕ → ℕ)
     (hcol : ∀ j < N, ∀ t < 8, col j t < 2 ^ a.st.c.kLog) :
     (List.ofFn fun j : Fin N => Binding.byteOf fun t => FlockSoundness.bit (z (Layout.siteAddr a o (col j.val t.val)))) =
-      bytesOf (blockBit T z o) N col := by
+      bytesOf (chunkBit T z o) N col := by
   unfold bytesOf
   congr 1
   funext j
@@ -145,7 +145,7 @@ theorem ofFn_site (a : Placed.Accepted T) (z : Witness T.m) (o : Fin (2 ^ T.nbl)
 theorem bytesAt_site (a : Placed.Accepted T) (z : Witness T.m) (o : Fin (2 ^ T.nbl)) (N : ℕ) (col : ℕ → ℕ → ℕ)
     (hcol : ∀ j < N, ∀ t < 8, col j t < 2 ^ a.st.c.kLog) :
     Binding.bytesAt z (fun (j : Fin N) (t : Fin 8) => Layout.siteAddr a o (col j.val t.val)) =
-      bytesOf (blockBit T z o) N col :=
+      bytesOf (chunkBit T z o) N col :=
   ofFn_site a z o N col hcol
 
 /-- **A row's `b ‖ c` at a sampled proof block's site**: in a satisfying witness of an accepted statement whose unit returns the

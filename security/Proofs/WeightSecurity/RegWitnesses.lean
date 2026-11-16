@@ -9,12 +9,12 @@ import Proofs.Flock.Claims.Witnesses.SamplingGenericCompiler
 /-!
 # The one-stage period's statements say something
 
-`CompilerPeriodReg`'s premises hold together, and `PeriodReg` fails where they don't.
+`CompilerMonitoringPeriodReg`'s premises hold together, and `MonitoringPeriodReg` fails where they don't.
 
-* `periodReg_honest`: at `twoL`'s windows, which sample both their proof blocks, every window meets `CompilerKSReg`'s
+* `monitoringPeriodReg_honest`: at `twoL`'s windows, which sample both their proof blocks, every window meets `CompilerKSReg`'s
   premises (`compilerKS_honest`), and the design misses a set `B` of proof blocks with probability at most `0^{|B|}`:
   `1` at `B = ∅` and `0` at every other (`two_Pa`).
-* `periodReg_nontrivial`: at `sksL`'s windows, which accept after one round and sample nothing, `PeriodReg` fails at
+* `monitoringPeriodReg_nontrivial`: at `sksL`'s windows, which accept after one round and sample nothing, `MonitoringPeriodReg` fails at
   `x = 0`. One window, played by `oneStrat` at the silent prover, leaves its committed incorrect set, which holds its
   proof block (`sksL_Freg`), undetected surely, while the bound is `0`: `ε_reg` is `0` at every prover
   (`sksL_εreg_all`).
@@ -58,10 +58,10 @@ theorem sksL_εreg_all (H : Msg → Msg) (x : Msg) (P : Prover Unit) : (sksL Coi
   rw [sksL_κs, hb, bconf_pr H (sksL Coin) (fun _ _ _ => rfl) Unit P x]
   simp
 
-/-- **`CompilerPeriodReg`'s premises hold together** at `twoL`'s windows and `x = 0`: `twoA` is knowledge sound, each
+/-- **`CompilerMonitoringPeriodReg`'s premises hold together** at `twoL`'s windows and `x = 0`: `twoA` is knowledge sound, each
 window's commitment binds and its sessions meet the contract (`compilerKS_honest`), and its design misses every
 nonempty set of its proof blocks surely (`two_Pa`). -/
-theorem periodReg_honest :
+theorem monitoringPeriodReg_honest :
     (twoA Bool).KS FlockDeploy.sha512 ∧
       (∀ _t : ℕ, (twoL Bool).commit.Binds FlockDeploy.sha512 ∧ (twoL Bool).Sessions FlockDeploy.sha512) ∧
       (0 : ℝ) ≤ 0 ∧ (0 : ℝ) ≤ 1 ∧
@@ -89,10 +89,10 @@ theorem periodReg_honest :
   · exact pow_nonneg le_rfl _
 
 open Classical in
-/-- **`PeriodReg` fails** at `sksL`'s windows and `x = 0`: one window, at the empty statement and the silent prover,
+/-- **`MonitoringPeriodReg` fails** at `sksL`'s windows and `x = 0`: one window, at the empty statement and the silent prover,
 leaves its committed incorrect set undetected surely, while the bound is `0`. -/
-theorem periodReg_nontrivial :
-    ¬ PeriodReg (O := Unit) (V := Unit) (Tick := Unit) (Adv := Unit) FlockDeploy.sha512 (fun _ => sksL Bool) 0 := by
+theorem monitoringPeriodReg_nontrivial :
+    ¬ MonitoringPeriodReg (O := Unit) (V := Unit) (Tick := Unit) (Adv := Unit) FlockDeploy.sha512 (fun _ => sksL Bool) 0 := by
   intro h
   let m : (Unit → Unit) × Unit × Unit := (fun _ => (), (), ())
   have hcnt : 1 ≤ oneRegCount FlockDeploy.sha512 (sksL Bool) [] silentP := by

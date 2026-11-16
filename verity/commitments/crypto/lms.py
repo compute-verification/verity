@@ -1,11 +1,11 @@
 """A stateful hash-based signature: LMS with LM-OTS (RFC 8554) over SHA-512, in plain Python, the scheme of the network
-certifier's certificates and the memory challenger's records, and the reference of their in-proof verifier
-(`verity.commitments.gates.lms`). Its security is the claim ``euf-cma/lms-sha512-n64`` (`verity.claims`).
+attester's certificates and the memory challenger's records, and the reference of their in-proof verifier
+(`verity.commitments.gates.lms`). Its security is the claim ``euf-cma/lms-sha512-n64``.
 
 **Use.** One key per device per role. ``keygen(DEPLOYED, seed)`` (seed: N = 64 secret bytes the device keeps), then once
 ``LeafState.create(path, public_key(key), DEPLOYED.H)``; to sign, ``sign(key, state, message)`` with ``state = LeafState(path,
 public_key(key), DEPLOYED.H)``; to check, ``verify(DEPLOYED, public, message, sig)``. The message is a role's digest
-(`certificate_message`, `memory_challenger_message`), never hand-rolled. A network certifier first starts its session on
+(`certificate_message`, `memory_challenger_message`), never hand-rolled. A network attester first starts its session on
 the state (``state.start(session)``), which refuses a session id the key has already started.
 
 **HSS: a device's identity and its parties' keys** (RFC 8554 §6 at two levels; NIST SP 800-208). A device's long-lived
@@ -16,7 +16,7 @@ the party's messages (`PartyKey`): one root per certification period (`period_ro
 only, and one public liveness record per execution phase (`liveness_message`). An `HssSignature` is the lower key, its
 certificate and the signature; `hss_verify` checks both levels, and `verify_liveness` a liveness record in the clear. Both
 levels are at ``DEPLOYED`` and both trees' states are `LeafState`s, so neither ever signs twice at a leaf, as long as its
-host never restores an earlier copy of the state (`faithful`, `verity.claims`).
+host never restores an earlier copy of the state (`faithful`, Lean's `ResourceAccounting.Assumptions.Parties.Faithful`).
 
 **The hash.** ``H(x) = SHA-512(x)``, the whole output: N = 64, nothing truncated. The one other N, `TOY_N` = 8 (the
 first word of SHA-512's output, asked for by name with ``toy=True``), is circuit-check's binding of the verifier and is never
@@ -219,7 +219,7 @@ def party_key_message(I: bytes, deployment: bytes, party: str, lower: bytes) -> 
 def period_root_message(I: bytes, deployment: bytes, party: str, attachment: bytes, link: str, period: int, count: int,
                         root: bytes) -> bytes:
     """The message a party's lower key (identifier ``I``) signs once per certification period: the tag
-    ``verity/period-root/v1``, the context the deployment's hash, the party's name, the attachment id the challenger drew,
+    ``verity/period-root/v1``, the context the deployment's hash, the party's name, the attachment id the challenger sampled,
     the link's name (for a party on no link, its device role), the period's index and the number of records under the root
     (u64 each, unprefixed), the record the root of the period's records tree (`verity.commitments.attest`)."""
     context = _period_context(deployment, party, attachment, link, period) + _u64(count, "a period's record count")
@@ -677,7 +677,7 @@ class PartyKey:
         self.attachment: bytes | None = None
 
     def start(self, attachment: bytes) -> None:
-        """Start this key's run of ``attachment`` (the attachment id the challenger drew), after the key's leaf state on
+        """Start this key's run of ``attachment`` (the attachment id the challenger sampled), after the key's leaf state on
         disk records it as started (`LeafState.start`), so that `period_root` and `liveness` sign for it; a no-op for the
         attachment already started here, and refused for one the state records already (this key's earlier run of it, or
         another signer's)."""

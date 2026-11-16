@@ -35,7 +35,7 @@ namespace FlockSoundness.Discharge.HiddenExec
 
 open Flock FlockLevel3 Model Audit Binding Placed Compose FlockSoundness.Discharge.Inst
 open FlockSoundness.Discharge.Layout (portRowW)
-open FlockSoundness.Discharge.Hm (blockBit blockBit_of_lt)
+open FlockSoundness.Discharge.Hm (chunkBit chunkBit_of_lt)
 
 /-! ## Δ at the input bits a wire fills -/
 
@@ -607,7 +607,7 @@ theorem out_copy_instH {T : Model.Statement} {c : Flock.Circuit} {n : ℕ} (a : 
   refine bit_inj _ _ ?_
   rw [hq, hk, hb', hb8, bit_siteAddrH ⟨tags, cf, pf, coins, tables, draw, partition, program, st, ht', h, L, hR, regs, rfl⟩
     z o' hin, Hidden.msgCol_delta st.c g (HmOut.nIn st.c + outPortOf st.c o) (2 * kk + t / 8) (t % 8), hmc, hsrc,
-    ← hcol, blockBit_of_lt _ z o' (Fin.isLt _)]
+    ← hcol, chunkBit_of_lt _ z o' (Fin.isLt _)]
 
 /-- **A composite column holding a pinned output's bit holds 0**: in a witness of an accepted statement on `c` with 0
 at the pinned bits (`hz0`, as `SitesH.pin`), distinct pinned columns (`hnd`), the composite column holding bit `t` of

@@ -218,7 +218,7 @@ theorem alignedT_lockLigPadZ (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ}
       subst hi₁ hi₂ hx₁ hx₂
       rcases x₂ with ⟨initial, s⟩
       refine .send _ fun ev => ?_
-      refine Lock.AlignedT.bind ?_ (Lock.AlignedT.same (drawKs A e))
+      refine Lock.AlignedT.bind ?_ (Lock.AlignedT.same (sampleKs A e))
       intro i₁' ρ₁ i₂' ρ₂ ρ h₁ h₂
       obtain ⟨hi₁', hρ₁⟩ := h₁
       obtain ⟨hi₂', hρ₂⟩ := h₂

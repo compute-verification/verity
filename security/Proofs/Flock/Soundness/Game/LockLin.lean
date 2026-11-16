@@ -48,7 +48,7 @@ def linkG (P : Type) [Fintype P] [Nonempty P] (g : Game α) (M : ℕ) : Game (P 
 /-- `s` in every run. -/
 def linkStrat (P : Type) [Fintype P] [Nonempty P] (g : Game α) (s : Strategy g) (M : ℕ) :
     Strategy (linkG P g M) :=
-  Strategy.bind (Game.draw P) _ (drawStrat P) fun p =>
+  Strategy.bind (Game.draw P) _ (sampleStrat P) fun p =>
     Strategy.map (fun x => (p, x)) (LinkFinder.finderG g M) (LinkFinder.finderStrat g s M)
 
 /-- **The link finder succeeds**: its first run opens its position `p`, and the first further run that opens `p` opens
@@ -123,7 +123,7 @@ theorem expect_linkG [Nonempty P] (g : Game α) (s : Strategy g) (M : ℕ) (F : 
       (∑ p, expect (fun x => F (p, x)) (LinkFinder.finderG g M) (LinkFinder.finderStrat g s M)) /
         Fintype.card P := by
   unfold linkG linkStrat
-  rw [expect_bind, Verity.Game.expect_draw]
+  rw [expect_bind, Verity.Game.expect_sample]
   congr 1
   exact Finset.sum_congr rfl fun p _ => expect_map _ _ _ _
 

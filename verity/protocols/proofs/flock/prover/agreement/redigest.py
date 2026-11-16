@@ -20,8 +20,8 @@ import hashlib, json, shutil, struct, sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import transcript_check as tc  # noqa: E402
-from record_text import session_text  # noqa: E402
+import transcript_check as tc
+from record_text import session_text
 
 
 def layout(b, zk=False):

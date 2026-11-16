@@ -120,7 +120,7 @@ theorem length_out {z : Var → Bool} {L : List (List Lin)} {xs : List F128} (hL
 
 theorem outWords_ge (sh : Flock.RecSparse.Shape) : 128 * (Flock.RecSparse.residualNames sh).length +
     16 * (if sh.stacked then sh.S else 0) ≤ 16 * Flock.RecSparse.outWords sh := by
-  unfold Flock.RecSparse.outWords Flock.RecSparse.F_WORDS Flock.RecSparse.ROW_BLOCK
+  unfold Flock.RecSparse.outWords Flock.RecSparse.F_WORDS Flock.RecSparse.ROW_CHUNK
   omega
 
 /-! ## Lists -/

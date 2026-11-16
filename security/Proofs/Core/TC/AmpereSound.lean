@@ -197,7 +197,7 @@ theorem ampere_step_lt (acc : Nat) (a b : List Nat) (hin : StepInputs AMPERE_BF1
   obtain ⟨V, hV, hsem, -⟩ := ampere_step_core .div acc a b hin w hw
   rw [hsem]; exact pack_lt V hV
 
-/-- A verification unit on the Ampere pipeline: every witness chain the relation accepts from `decode_state(acc)` outputs
+/-- A proof block on the Ampere pipeline: every witness chain the relation accepts from `decode_state(acc)` outputs
 the decode of the semantics' accumulator after the unit's steps. -/
 theorem ampere_unit_sound (align : Align) (acc : Nat) (hacc : acc < 2 ^ 32)
     (steps : List (List Nat × List Nat × Witness))

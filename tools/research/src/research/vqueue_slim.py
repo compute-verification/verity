@@ -78,11 +78,12 @@ from dataclasses import replace
 from pathlib import Path
 from typing import NamedTuple
 
+from . import quick_tier, suite_layout
 from .landing import (ACTIVE, AFTER_LANDING, AUTO_PLAN, KILLED_RC, KILLED_SAYS, LAUNCH_LOST_S, LEAN_AUDIT_RE, LEAN_STEP,
-                      NOT_STARTED, PLAN_WAIT_S, PREFLIGHT, SIGTERM_RC, SLIM_JUDGED, SLIM_STEPS, SUITE_STEPS, Landing, _epoch, _step_log,
+                      NOT_STARTED, OWN_TRAIN, PLAN_WAIT_S, PREFLIGHT, SIGTERM_RC, SLIM_JUDGED, SLIM_STEPS, SUITE_STEPS, Landing, _epoch, _step_log,
                       _suite_log, elsewhere, implicated, killed, lean_errors, not_run, shard_machines, shard_passed, shard_steps,
-                      step_named, step_paths, step_records, suite_named, suite_pyproject, suite_rows, tree_root)
-from .queue import _SUMMARY_RE, CHECK_STEPS, KEY_COMMAND, QueueError, _git
+                      step_named, step_paths, step_records, suite_named, suite_pyproject, suite_rows, tree_root, unread_suites)
+from .queue import _SUMMARY_RE, CHECK_STEPS, KEY_COMMAND, QueueError, _git, allowed, judge_report, tier_report
 from .reds import named
 from .store.fixtures import REPLICA_MAP, entries
 from .vqueue import FAIL, INFRA, KINDS, LIST_FAILED, MACHINE_KINDS, PASS, PENDING, STATES, Failed, Verdict, meets
@@ -90,9 +91,6 @@ from .vqueue_records import FAULT_RE
 
 #: a candidate's state from its two verdicts' (`combine`): the first of these either has
 ORDER = (FAIL, INFRA, PENDING, LIST_FAILED, PASS)
-#: the train.sh a candidate's check launches with: the loop's own, deployed with its pin, so a candidate's tree doesn't decide
-#: how its launch is waited for
-OWN_TRAIN = Path(__file__).resolve().parents[4] / "tools" / "verity" / "check" / "train.sh"
 #: a line of the loop's deselect list (`deselection`) that is a test's node id, its file's path from the repository's root
 DESELECT_RE = re.compile(r"(?!/|\.\./)[\w./-]+\.py::\S+")
 #: what declares lean-agreement's reads: the graph build family, whose lean-agreement task reads `VERIFIER`'s files and
@@ -112,6 +110,9 @@ FIXTURES_CODE = "tools/research/src/research"
 KEY_TAG = "verity-vqueue-slim-step/v1"
 #: a record's ``gate`` when its run is the check that gates (`start` with ``shards``)
 CHECK = "check"
+#: the record of a candidate's quick tier (`start_quick`), which gates a plain one where the land verdicts gate
+#: (`vqueue_loop.VERDICT_GATE`); its suites are pytest's, so its failures are that step's
+QUICK, QUICK_STEP = "quick", "pytest"
 #: `start`'s ``shards`` naming N shards of an auto plan of the candidate's tree
 AUTO_SHARDS = re.compile(r"auto:([1-9]\d*)")
 #: lean-audit's own failures of no package, in its log
@@ -126,10 +127,11 @@ AUDIT_BUILT_RE = re.compile(r"build: |lean: proved_in: \S+'s build did not pass 
 #: failure, not the tree's
 STORE_SAYS = re.compile(r"^\s*tamper: |the evidence store is not reachable", re.M)
 #: what a log prints when its machine failed it, beyond `vqueue_records.FAULT_RE`: `tele run` refusing a run its machine's cgroups
-#: would leave without a memory limit (`telemetry.cgroup.uncapped`)
-MACHINE_SAYS = re.compile(r"refused to start the workload: this machine caps each login session")
+#: would leave without a memory limit (`telemetry.cgroup.uncapped`), in its wording before and after its rename
+MACHINE_SAYS = re.compile(r"refused to start the workload: this machine (?:limits|caps) each login session")
 #: the code that decides every suite's verdict, which every suite's key holds (`suites.RUNNER`)
-SUITE_RUNNER = ("tools/verity/check/suites.py", "tools/verity/check/settings.py", "tools/verity/check/guard")
+SUITE_RUNNER = ("tools/check/suites.py", "tools/check/settings.py", "tools/check/guard",
+                "tools/research/src/research/suite_layout.py")
 #: a Lean file's imports: each module of each `import` line (`public`, `meta`, `private` and `all` as Lean 4 writes them),
 #: and each file it reads as it is compiled (`include_str`, relative to it)
 IMPORT_RE = re.compile(r"^\s*(?:public\s+|private\s+)?(?:meta\s+)?import\s+(?:all\s+)?([^\n]+)", re.M)
@@ -146,7 +148,7 @@ LEAN_FILES = "**/*.lean"
 #: runs them as the step does, so a change to one that took the verdict of the candidate below would land unrun and fail in
 #: the next candidate that audits, on that one's members.  What they load that every candidate's check runs (`settings.py`,
 #: `slot.py`) is no Lean input.  `tests/test_gate_paths.py` holds these to the step `check.py` declares
-LEAN_AUDIT_STEP = ("tools/verity/check/check.py", "tools/verity/check/lean_slot.py")
+LEAN_AUDIT_STEP = ("tools/check/check.py", "tools/check/lean_slot.py")
 #: the files whose directory is a Lean package's: a Lake package's lakefile, an audited one's lock
 LEAN_PACKAGE_FILES = ("lakefile.toml", "lakefile.lean", "lean-audit.json")
 #: the part of a check that replays every module of the security analysis's proofs, which `start`'s ``heavy_on`` sends to its
@@ -157,6 +159,9 @@ HEAVY_PART, HEAVY_REST = "lean-audit:security/Proofs", "lean-audit:*"
 CARRY_WAIT_S = 180
 #: what names the runs ``after`` holds to the candidate's check.py, whose launch sends their packs first (`check.carried_packs`)
 CARRY_ENV = "TRAIN_CARRY_FROM"
+#: what names the candidate a check is built on to its check.py, whose suites that candidate's check answers for where their
+#: key there is their key here (`start`'s ``suites_from``, `check.lender`)
+LEND_ENV = "TRAIN_SUITES_FROM"
 
 
 @functools.cache
@@ -199,7 +204,7 @@ def lean_inputs(files: Iterable[str]) -> tuple[str, ...]:
     when the declaration can't be loaded."""
     audit, files = _declaration(), sorted(set(files))
     under: dict[str, list[str]] = {f.rpartition("/")[0]: [] for f in files
-                                   if f.rpartition("/")[2] in LEAN_PACKAGE_FILES and not f.startswith(audit.LEAN_TOOL)}
+                                   if f.rpartition("/")[2] in LEAN_PACKAGE_FILES and not f.startswith((audit.LEAN_TOOL, f"tests/{audit.LEAN_TOOL}"))}
     if "" in under:
         return ("**",)
     for f in files:
@@ -243,18 +248,18 @@ def deselection(driver: Landing, listed: Path | None) -> Path | None:
 
 
 def declared_steps(driver: Landing, sha: str, steps: list[str]) -> list[str]:
-    """``steps`` but those candidate ``sha``'s own `tools/verity/check/ci.toml` declares no job of (`merge.declared`), one line
+    """``steps`` but those candidate ``sha``'s own `tools/check/ci.toml` declares no job of (`merge.declared`), one line
     logged naming them: check.py refuses a `--deferred` naming a job its tree doesn't declare, so sending one would fail the
     candidate's own check.  Every one of ``steps``, logged, when that ci.toml can't be read."""
     from .merge import declared
 
     if (jobs := declared(driver.repo, sha)) is None:
-        driver.q.log(f"research queue vqueue: candidate {sha[:12]}'s tools/verity/check/ci.toml can't be read: its --deferred "
+        driver.q.log(f"research queue vqueue: candidate {sha[:12]}'s tools/check/ci.toml can't be read: its --deferred "
                      f"keeps every step ({','.join(steps)})")
         return steps
     names = {t["name"] for t in jobs}
     if gone := [s for s in steps if s not in names]:
-        driver.q.log(f"research queue vqueue: candidate {sha[:12]}'s tools/verity/check/ci.toml declares no job "
+        driver.q.log(f"research queue vqueue: candidate {sha[:12]}'s tools/check/ci.toml declares no job "
                      f"{', '.join(gone)}, which check.py refuses: left out of its --deferred")
     return [s for s in steps if s in names]
 
@@ -328,9 +333,23 @@ def _carrying(runs: Iterable[str]):
         os.environ.pop(CARRY_ENV, None)
 
 
+@contextlib.contextmanager
+def _lending(sha: str | None):
+    """`LEND_ENV` naming ``sha`` while a launch starts, and in no launch after, as `_carrying` names its runs.  Only this sets
+    it in the loop's process."""
+    if not sha:
+        yield
+        return
+    os.environ[LEND_ENV] = sha
+    try:
+        yield
+    finally:
+        os.environ.pop(LEND_ENV, None)
+
+
 def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect: Path | None = None,
           audit_from: str | None = None, after: dict[str, float] | None = None, heavy_on: str = "",
-          avoid: Iterable[str] = ()) -> dict | None:
+          avoid: Iterable[str] = (), suites_from: str | None = None) -> dict | None:
     """Launch the run beside candidate ``sha``'s check, ``base`` the commit of `main` below it: `SLIM_STEPS` but those a run
     of every step of ``sha`` above ``base`` skips by name (lean-agreement, unless what it checks changed), with that run's
     keywords (`Landing.beside_args`: ratchet-gate judges the merges above ``base``), on the queue's machines (`Landing.on`).
@@ -338,7 +357,13 @@ def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect:
     preflights first), `--shard K/N` on shard K's machines (`shard_machines`) for each of that many, one whole run for 1;
     `auto:N` has the auto plan its shards launch by made first (`Landing.plan_shards`, ``plan``, which `judge` follows).
     With ``audit_from`` too, the candidate below whose check ran lean-audit (`audits`), its base or the one its base's check
-    took it from, whose verdict on it this one takes (`audited`): every step but lean-audit.  Each sends only the steps the
+    took it from, whose verdict on it this one takes (`audited`): every step but lean-audit.  With ``suites_from``, which
+    is ``base`` while it is a candidate in flight whose check that gates runs the suites (`lends_suites`), each launch names
+    it (`LEND_ENV`, `_lending`) and the record keeps it (``suites_from``): the candidate's check leaves out each suite whose
+    key in ``base``'s tree is its key in the candidate's (`suites.py --lend-from`), which ``base``'s check is running.  This
+    check's verdict then stands on that one's: it passes only once that check passed both suite steps (`borrowed`), and
+    ``base`` dropped drops its candidate.  Not with a ``deselect`` list in force, under which the two checks may run
+    different tests of a suite.  Each sends only the steps the
     candidate's own ci.toml declares as jobs (`declared_steps`).  With ``heavy_on`` (machines, a comma list) too, the check
     that gates sends the shard that audits `HEAVY_PART` (`heavy_shards`; the whole run, of one shard) to those machines
     alone, the others to theirs, and its record keeps them (``heavy_on``), so an auto plan's shards launched later do too, as
@@ -363,8 +388,12 @@ def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect:
     if audit_from and not n:
         raise ValueError(f"audit_from {audit_from[:12]}: only the check that gates (``shards``) runs lean-audit, so only it "
                          "can take another check's verdict on it")
+    if suites_from and (not n or suites_from != base):
+        raise ValueError(f"suites_from {suites_from[:12]}: only the check that gates (``shards``) of a candidate built on it "
+                         f"(its base is {base[:12]}) can leave suites to its check")
     kw, skip, flags = driver.beside_args(sha, base)
     if left := deselection(driver, deselect):
+        suites_from = None
         kw = {**kw, "deselect": str(left)}
         flags += f" --deselect {left} ({len(left.read_text().splitlines())} tests)"
     every = declared_steps(driver, sha, [s for s in (AFTER_LANDING if n else SLIM_STEPS) if not (audit_from and s == LEAN_STEP)])
@@ -376,12 +405,14 @@ def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect:
             + (f" as an auto plan's {n} shards" if auto else f" as {n} shards" if n > 1 else "")
             + (f" as candidate {sha[:12]}'s check" if n else f" beside candidate {sha[:12]}'s check")
             + (f", {LEAN_STEP} {audit_from[:12]}'s" if audit_from else "")
+            + (f", the suites keyed as in {suites_from[:12]} its check's" if suites_from else "")
             + (f", {HEAVY_PART}'s shard on {heavy_on}" if heavy_on else ""))
     if driver.dry_run or driver.q.shadow:
         driver.q.log(f"research queue vqueue: would launch {what}")
         return None
     rec = {"ids": [], "tip": sha, "base": base, "at": driver.now(), "steps": steps, **({"skip": skip} if skip else {}),
            **({"gate": CHECK} if n else {}), **({"lean_audit_from": audit_from} if audit_from else {}),
+           **({"suites_from": suites_from} if suites_from else {}), **({"deselect": True} if left else {}),
            **({"carry": sorted(after)} if after else {}), **({"heavy_on": heavy_on} if heavy_on else {}),
            **({"avoid": sorted(set(avoid))} if avoid else {})}
     go = {"what": what, "sent": sent, "kw": kw, "n": n, "auto": auto}
@@ -393,23 +424,95 @@ def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect:
     return rec if _go(driver, rec, go, gone) is None else None
 
 
+def start_quick(driver: Landing, sha: str, base: str, avoid: Iterable[str] = ()) -> dict | None:
+    """Launch candidate ``sha``'s quick tier since ``base`` (`Landing.launch_quick`: `queue.QUICK_TIER` on its own merge, as a
+    `research run`) on one of the queue's machines, the one its sha picks, so a start again takes the same one, but of those
+    ``avoid`` doesn't name (the machine its tier before ended in infra on, ``erred_on``) where that leaves any.  The record to
+    keep: ``ids`` (none while its detached launch runs, ``launch`` then), ``tip``, ``base``, ``at``, ``on``, ``steps``
+    (`QUICK_STEP`) and ``gate`` (`QUICK`), which `judge` reads by `_quick`.  None, logged, when it registered no run or
+    ``driver`` launches nothing (a dry run, or its queue's shadow)."""
+    if not driver.on:
+        raise ValueError("a candidate's quick tier needs the queue's machines: build the Landing with drive.toml's `on`")
+    ms = elsewhere(driver.on, avoid).split(",")
+    on = ms[int(sha[:8], 16) % len(ms)]
+    what = f"the quick tier of candidate {sha[:12]} since {base[:12]} on {on}"
+    if driver.dry_run or driver.q.shadow:
+        driver.q.log(f"research queue vqueue: would launch {what}")
+        return None
+    got, tail = driver._started(driver.launch_quick(driver.repo, sha, base, on))
+    if got is None:
+        driver.q.log(f"research queue vqueue: {what} registered no run: {tail}")
+        return None
+    driver.q.log(f"research queue vqueue: {what}: {' '.join(got['ids']) or 'launching'}")
+    return {**got, "tip": sha, "base": base, "at": driver.now(), "on": on, "steps": [QUICK_STEP], "gate": QUICK}
+
+
+def _quick(driver: Landing, rec: dict) -> Verdict:
+    """The verdict of the quick tier `start_quick` recorded in ``rec``: pending while it launches or runs, or its records can't
+    be fetched yet; once it ended, its result.json judged as `research queue ready` judges the remote tier
+    (`queue.judge_report`, each failure an allowance at ``base`` covers counting as passed): pass; fail, ended, when only suites
+    failed, one `Failed` of step `QUICK_STEP` as the check's (`read_suite` of each, what it declares at the candidate,
+    `suite_reads`), so `vqueue.decide` reads it as it reads the check's; infra when it registered no run, was lost, never ran
+    or ended without its facts (`queue.tier_report`), or failed on what no suite says (a Lean build, a checkout not at it);
+    infra of a run that was lost or ended keeps its machine as ``erred_on``, which a start again avoids (`start_quick`)."""
+    tip, base = rec["tip"], rec["base"]
+    if (tail := driver._resolve(rec, f"the quick tier of candidate {tip[:12]}")) is not None:
+        return _keep(rec, _down(rec, f"registered no run: {tail}"))
+    if "launch" in rec:
+        return Verdict(PENDING)
+    if not (ids := rec["ids"]):
+        return _keep(rec, _down(rec, "registered no run"))
+    states = driver.states(driver.repo, ids)
+    if driver._lost(rec, states):
+        return _keep(_erred(rec), _down(rec, "was lost"))
+    st, rc, *_ = states.get(ids[0]) or ("unknown", None)
+    if st in ACTIVE:
+        return Verdict(PENDING)
+    if (got := driver.fetch(ids[0], ["result.json"])) is None:
+        return Verdict(PENDING)
+    status, on = {"state": st, "rc": rc}, rec.get("on") or driver.on
+    res, why = tier_report(got[0], ids[0], on, status)
+    if why is not None:
+        return _keep(_erred(rec), _down(rec, f"{why}"))
+    covers = allowed(driver.repo, base)
+    if (why := judge_report(res, ids[0], on, tip, status, covers)) is None:
+        return _keep(rec, Verdict(PASS), [QUICK_STEP])
+    tier = res.doc.get("tier") or {}
+    rows = [r for r in tier.get("rows") or () if isinstance(r, dict) and r.get("status") == "failed"
+            and not (covers is not None and covers(r))]
+    if not rows or quick_tier.judge({**tier, "rc": 0}, tip) is not None:
+        return _keep(_erred(rec), _down(rec, f"failed on what no suite says: {why}"))
+    k = key(driver.repo, tip, QUICK_STEP) or f"{tip}:{QUICK_STEP}"
+    parts = [read_suite(r.get("name") or r.get("suite") or ".", r, "", unnamed(k),
+                        *suite_reads(driver.repo, tip, r.get("suite") or ".")) for r in rows]
+    return _keep(rec, Verdict(FAIL, (_failure(QUICK_STEP, k, key(driver.repo, base, QUICK_STEP), parts),), ended=True), [])
+
+
+def _erred(rec: dict) -> dict:
+    """``rec``, a quick tier's record, keeping the machine it ran on as ``erred_on``."""
+    if rec.get("on"):
+        rec["erred_on"] = [rec["on"]]
+    return rec
+
+
 def _go(driver: Landing, rec: dict, go: dict, gone: list[str]) -> str | None:
     """Launch what `start` made ``go`` of into ``rec`` (``at`` then): an auto plan's job (``plan``), each shard of ``n``
-    (`_launch`), or one run, each launch naming ``rec``'s ``carry`` (`_carrying`), the shard that audits `HEAVY_PART` (the
+    (`_launch`), or one run, each launch naming ``rec``'s ``carry`` (`_carrying`) and ``suites_from`` (`_lending`), the
+    shard that audits `HEAVY_PART` (the
     whole run, of one) on ``rec``'s ``heavy_on``; ``gone``, the runs it waited for in vain, kept as ``carry_without``.  None,
     logged, once launched; the tail of a launch that registered no run, logged."""
-    sha, sent, kw, n, carry = rec["tip"], go["sent"], go["kw"], go["n"], rec.get("carry") or ()
+    sha, sent, kw, n, carry, lend = rec["tip"], go["sent"], go["kw"], go["n"], rec.get("carry") or (), rec.get("suites_from")
     heavy_on, avoid = rec.get("heavy_on") or "", rec.get("avoid") or ()
     if go["auto"]:
         got, tail = {"ids": [], "plan": {**driver.plan_shards(driver.repo, sha, sent, n=n), "n": n, "deferred": sent,
                                          "kw": kw}}, ""
     elif n > 1:
-        got, tail = _launch(driver, sha, sent, kw, n, carry=carry, heavy_on=heavy_on, avoid=avoid)
+        got, tail = _launch(driver, sha, sent, kw, n, carry=carry, heavy_on=heavy_on, avoid=avoid, lend=lend)
         if got is not None and not any("launch" in r for r in got["shards"]):
             _grouped(got)
     else:
-        with _carrying(carry):
-            got, tail = driver._started(driver.launch_postland(driver.repo, sha, elsewhere(heavy_on or driver.on, avoid), sent,
+        with _carrying(carry), _lending(lend):
+            got, tail = driver._started(driver.launch_after_landing(driver.repo, sha, elsewhere(heavy_on or driver.on, avoid), sent,
                                                                **kw, train_from=OWN_TRAIN))
     if got is None:
         driver.q.log(f"research queue vqueue: {go['what']} registered no run: {tail}")
@@ -435,10 +538,11 @@ def _waited(driver: Landing, rec: dict) -> Verdict:
 
 def _launch(driver: Landing, sha: str, sent: str, kw: dict, n: int, plan: str | None = None,
             carry: Iterable[str] = (), heavy_on: str = "", doc: dict | None = None,
-            avoid: Iterable[str] = ()) -> tuple[dict | None, str]:
+            avoid: Iterable[str] = (), lend: str | None = None) -> tuple[dict | None, str]:
     """Each of ``n`` shards of candidate ``sha``'s check launched on its machines (`shard_machines`): `--shard K/N` of ci.toml's
     plan, or of the auto plan ``doc`` whose file is ``plan``, `--shard auto:K/N` with it, each naming the runs ``carry``
-    (`_carrying`); with ``heavy_on``, the shards that audit `HEAVY_PART` (`heavy_shards`) on those machines instead; each
+    (`_carrying`) and the candidate ``lend`` whose check answers for suites keyed as there (`_lending`); with
+    ``heavy_on``, the shards that audit `HEAVY_PART` (`heavy_shards`) on those machines instead; each
     shard's machines but ``avoid``'s where another remains (`landing.elsewhere`).  The record of every shard's launch
     (``shards``); None with the tail of one that registered no run, the others' runs cancelled."""
     ons = shard_machines(driver.on, n)
@@ -446,8 +550,8 @@ def _launch(driver: Landing, sha: str, sent: str, kw: dict, n: int, plan: str | 
         heavy = heavy_shards(driver, sha, n, doc)
         ons = [heavy_on if k in heavy else on for k, on in enumerate(ons, 1)]
     ons = [elsewhere(on, avoid) for on in ons]
-    with _carrying(carry):
-        got = [driver._started(driver.launch_postland(driver.repo, sha, on, sent, **kw, shard=f"{'auto:' * bool(plan)}{k}/{n}",
+    with _carrying(carry), _lending(lend):
+        got = [driver._started(driver.launch_after_landing(driver.repo, sha, on, sent, **kw, shard=f"{'auto:' * bool(plan)}{k}/{n}",
                                                       **({"shard_plan": plan} if plan else {}), train_from=OWN_TRAIN))
                for k, on in enumerate(ons, 1)]
     if any(r is None for r, _ in got):
@@ -500,7 +604,7 @@ def _planned(driver: Landing, rec: dict, what: str) -> Verdict:
         why = f"has {doc['n']} shards, not {plan['n']}"
     got, tail = (None, f"its auto plan {why}") if why is not None else _launch(
         driver, rec["tip"], plan["deferred"], plan["kw"], plan["n"], str(Path(plan["out"]) / AUTO_PLAN), rec.get("carry") or (),
-        heavy_on=rec.get("heavy_on") or "", doc=doc, avoid=rec.get("avoid") or ())
+        heavy_on=rec.get("heavy_on") or "", doc=doc, avoid=rec.get("avoid") or (), lend=rec.get("suites_from"))
     if got is None:
         abandon(rec)
         return _keep(rec, _down(rec, f"registered no run: {tail}"))
@@ -528,7 +632,9 @@ def judge(driver: Landing, rec: dict | None) -> Verdict:
     the candidate's steps ran: it registered no run, whatever ended its launcher; it never ran; or it ended without passing
     them and no run of it that failed (not a twin that never took a slot) recorded a step, as check.py refusing its own
     plan does.  Once its runs ended, ``rec`` keeps the machines those that failed ran on (``erred_on``), which a launch
-    again avoids (`start`'s ``avoid``).  Once it ended, pass when it passed each of them (the check that gates: in
+    again avoids (`start`'s ``avoid``).  The check that gates, ended, is pending while a suite step it is judged on failed
+    with no suite record of it fetched after its run ended (`landing.unread_suites`), and read as below once that fetch
+    brought its reports.  Once it ended, pass when it passed each of them (the check that gates: in
     every shard that holds it, `shard_passed`), a step that failed only on what an unexpired allowance of policy.toml at
     ``base`` covers counting as passed, so no candidate's allowance covers its own failure; fail with each of them it failed
     (a `Failed`: ``step NAME``, the step's content key at the candidate, the paths that failure names its culprit by,
@@ -545,6 +651,8 @@ def judge(driver: Landing, rec: dict | None) -> Verdict:
         return _kept(rec["verdict"])
     if "wait" in rec:
         return _waited(driver, rec)
+    if rec.get("gate") == QUICK:
+        return _quick(driver, rec)
     tip, check = rec["tip"], rec.get("gate") == CHECK
     what = f"the run of {', '.join(rec['steps'])} " + (f"as candidate {tip[:12]}'s check" if check else
                                                       f"beside candidate {tip[:12]}'s check")
@@ -589,10 +697,13 @@ def judge(driver: Landing, rec: dict | None) -> Verdict:
         return _keep(rec, _down(rec, f"never ran or was stopped ({why})", launch=True))
     base = rec.get("base")
     allow = base or tip
+    dirs = [d for ds in driver._shards(rec) for d in ds]
     if check:
         judged = _gate(driver, rec)
+        if not lost and any(unread_suites(d) & {*judged} for d in dirs):
+            return Verdict(PENDING)
         view = shard_steps(driver._shards(rec), [any(states[r][1] == 0 for r in g) for g in rec.get("groups") or [ids]])
-        passes = shard_passed(view, driver._allowed_steps(allow, [d for ds in driver._shards(rec) for d in ds]))
+        passes = shard_passed(view, driver._allowed_steps(allow, dirs))
         missed = [s for s in judged if s not in passes]
     else:
         off = driver._policy(tip).off_gate
@@ -600,7 +711,6 @@ def judge(driver: Landing, rec: dict | None) -> Verdict:
         missed = driver._unrun(ids, judged, allow)
     if not missed:
         return _keep(rec, Verdict(PASS), judged)
-    dirs = [d for ds in driver._shards(rec) for d in ds]
     ok = driver._every_shard(rec, states, lambda rc: rc == 0) or (
         driver._every_shard(rec, states, lambda rc: rc in (0, 1)) and driver._only_allowed(rec, allow))
     if not ok and (lost or any(isinstance(rc, int) and (rc < 0 or (rc > 128 and rc != SIGTERM_RC))
@@ -646,7 +756,8 @@ def _early(driver: Landing, rec: dict, states: dict) -> Verdict:
     (`_gate`) that such a run failed, not by a signal, or a suite of which it failed a named test, uncovered by an allowance
     at its base, read as once every shard ended (`failing`), from their dirs as this tick read them (`Landing.evidence`,
     `landing.Reads`: the Landing's own cache holds what the end's reading reads).  A suite failed beyond its tests alone, as a stop marks each suite it
-    cuts short, waits for the end.  Never kept, so not ``ended``: `vqueue.decide` reads a fail whose every failure is
+    cuts short, waits for the end, and a suite step that failed with no suite record of it fetched after its run ended
+    (`landing.unread_suites`) waits for that fetch.  Never kept, so not ``ended``: `vqueue.decide` reads a fail whose every failure is
     inherited as pending until the check ends.  ``rec`` holds it (``early``: its failures as `_keep` keeps a verdict's, with
     ``at``, when the first was written: a failed step's end, a failed suite's log's last write), which the check above reads
     (`based`)."""
@@ -662,10 +773,10 @@ def _early(driver: Landing, rec: dict, states: dict) -> Verdict:
     for d in dirs:
         if implicated(d) is None and killed(d):
             continue                                     # a kill, as `judge` reads it at the end: infra, never an early red
-        ended = {st.get("step"): st for st in step_records(d)}
+        ended, unread = {st.get("step"): st for st in step_records(d)}, unread_suites(d)
         for s in _gate(driver, rec):
             if (st := ended.get(s)) is not None:
-                if (st.get("status") != "failed" or not_run(st) or s in allowed
+                if (st.get("status") != "failed" or not_run(st) or s in allowed or s in unread
                         or isinstance(rc := st.get("rc"), int) and (rc < 0 or rc in KILLED_RC)):
                     continue
                 at.append(_epoch(st.get("ended_utc")) or driver.now())
@@ -900,14 +1011,14 @@ def suite_reads(repo: Path, commit: str, suite: str) -> tuple[frozenset[str] | N
     """(every path suite ``suite`` (its directory) may read at ``commit``, the directories among them), as `suites.py`'s
     `inputs_of` allows its guard: its directory and its declared inputs; unless it declares `inputs_only`, what each workspace
     package it depends on ships (`_ships`), its dependencies, extras and dependency groups and theirs but their groups
-    (`suites.closure`); the workspace's pyproject.toml, `SUITE_RUNNER` and `ENV`.  (None, none) for the repository's own
-    suite, whose directory is the tree."""
+    (`suites.closure`), each with its tests under the root's `tests/` (`suite_layout.mirrors`); the workspace's
+    pyproject.toml, `SUITE_RUNNER` and `ENV`.  (None, none) for the repository's own suite, whose directory is the tree."""
     suite = suite.strip("/") or "."
     if suite == ".":
         return None, frozenset()
     data = suite_pyproject(repo, commit, suite)
     tests = data.get("tool", {}).get("verity", {}).get("tests", {})
-    out = {suite, *map(str, tests.get("inputs") or ()), "pyproject.toml", *SUITE_RUNNER, *ENV}
+    ins = {suite, *map(str, tests.get("inputs") or ())}
     if tests.get("inputs_only") is not True:
         pkgs, seen = _members(repo, commit), set()
         todo = [n for n in _requires(data) if n in pkgs]
@@ -916,9 +1027,11 @@ def suite_reads(repo: Path, commit: str, suite: str) -> tuple[frozenset[str] | N
                 continue
             seen.add(n)
             todo += [r for r in _requires(suite_pyproject(repo, commit, pkgs[n]), groups=False) if r in pkgs]
-        out |= {p for n in seen if pkgs[n] != suite for p in _ships(repo, commit, pkgs[n])}
+        ins |= {p for n in seen if pkgs[n] != suite for p in _ships(repo, commit, pkgs[n])}
     r = _git(repo, "rev-parse", "--verify", "-q", f"{commit}^{{tree}}", check=False)
     files = [p for p, _ in _files(repo, r.stdout.strip())] if not r.returncode else []
+    out = ins | suite_layout.mirrors(ins, lambda p: _is_file(files, p) or _is_dir(files, p))
+    out |= {"pyproject.toml", *SUITE_RUNNER, *ENV}
     return frozenset(out), frozenset(p for p in out if "*" not in p and "?" not in p and _is_dir(files, p))
 
 
@@ -930,8 +1043,12 @@ def _is_dir(files: list[str], path: str) -> bool:
     return i < len(files) and files[i].startswith(path.rstrip("/") + "/")
 
 
-def _norm(name: str) -> str:
-    return re.sub(r"[-_.]+", "-", name).lower()
+def _is_file(files: list[str], path: str) -> bool:
+    """Whether ``path`` is a file of the tree whose files (in git's order) are ``files``."""
+    import bisect
+
+    i = bisect.bisect_left(files, path)
+    return i < len(files) and files[i] == path
 
 
 def _requires(data: dict, groups: bool = True) -> list[str]:
@@ -940,16 +1057,16 @@ def _requires(data: dict, groups: bool = True) -> list[str]:
     project = data.get("project", {})
     reqs = [*project.get("dependencies", []), *(r for extra in project.get("optional-dependencies", {}).values() for r in extra)]
     reqs += [r for g in data.get("dependency-groups", {}).values() if groups for r in g if isinstance(r, str)]
-    return [_norm(m[0]) for r in reqs if (m := re.match(r"[A-Za-z0-9][A-Za-z0-9._-]*", r))]
+    return [suite_layout.norm(m[0]) for r in reqs if (m := re.match(r"[A-Za-z0-9][A-Za-z0-9._-]*", r))]
 
 
 def _members(repo: Path, commit: str) -> dict[str, str]:
     """{distribution: directory} of the workspace packages at ``commit`` (`suites.members`), the root's own under "."."""
     root = suite_pyproject(repo, commit, ".")
-    out = {_norm(n): "." for n in [root.get("project", {}).get("name")] if isinstance(n, str)}
+    out = {suite_layout.norm(n): "." for n in [root.get("project", {}).get("name")] if isinstance(n, str)}
     for path in root.get("tool", {}).get("uv", {}).get("workspace", {}).get("members", []):
         if isinstance(n := suite_pyproject(repo, commit, path).get("project", {}).get("name"), str):
-            out[_norm(n)] = path
+            out[suite_layout.norm(n)] = path
     return out
 
 
@@ -1319,6 +1436,48 @@ def audits(driver: Landing, rec: dict | None) -> bool:
     """Whether ``rec`` records the check that gates judged on lean-audit (`_gate`), whose verdict on it a check built on its
     candidate, or on one that took it from this one's, may take in place of running it (`start`'s ``audit_from``)."""
     return rec is not None and rec.get("gate") == CHECK and LEAN_STEP in _gate(driver, rec)
+
+
+def answers_suites(rec: dict | None) -> bool | None:
+    """Whether the check ``rec`` records passed both suite steps (`SUITE_STEPS`), every test of them, so that it answers for
+    the suites a check left to it (`start`'s ``suites_from``): the check that gates, launched with no deselect list, its
+    kept verdict's ``passed`` holding both.  None while it keeps no verdict: it may yet.  False for any other, which never
+    will: a check that failed one, though its candidate landed on that failure as inherited; one that ended in infra; one
+    that ran under a deselect list; a run that isn't the check that gates."""
+    if rec is None:
+        return None
+    if rec.get("gate") != CHECK or rec.get("deselect"):
+        return False
+    if not isinstance(got := rec.get("verdict"), dict):
+        return None
+    return set(SUITE_STEPS) <= set(got.get("passed") or ())
+
+
+def lends_suites(driver: Landing, rec: dict | None, main: dict | None) -> bool:
+    """Whether a check built on the candidate of the check ``rec`` records may leave suites to it (`start`'s
+    ``suites_from``): it is the check that gates, judged on both suite steps (`_gate`, `SUITE_STEPS`), launched with no
+    deselect list, its candidate's policy its base's, so that an allowance it is judged under is one the check built on it
+    is judged under too, and ``main``, the record of the check of `main` below the chain, passed both
+    (`answers_suites`).  These only keep a check from leaving suites to one that won't answer for them, which costs it a
+    second start: what its pass counts on is the lender's verdict itself (`borrowed`)."""
+    if rec is None or rec.get("gate") != CHECK or rec.get("deselect") or not set(SUITE_STEPS) <= set(_gate(driver, rec)):
+        return False
+    if driver._policy(rec["tip"]) != driver._policy(rec.get("base") or rec["tip"]):
+        return False
+    return answers_suites(main) is True
+
+
+def borrowed(v: Verdict, rec: dict | None, source: dict | None) -> Verdict:
+    """``v``, `judge`'s verdict of the check ``rec`` records, where that check left suites to the check of the candidate it
+    is built on (``suites_from``): ``v`` once ``source``, that candidate's record as judged now, or the record of the check
+    of `main` once it has landed, answers for them (`answers_suites`); until then ``v`` never passes, a pass pending and
+    a fail not ended, which `vqueue.decide` holds while every failure is inherited.  So the candidate lands only where a
+    check that gates passed each suite it left out, under the key it has in its own tree.  A ``source`` that never will
+    answer holds it for good: the loop starts its check again once that candidate has landed, to run them itself
+    (`vqueue_loop.Loop._beside`)."""
+    if not rec or not rec.get("suites_from") or answers_suites(source):
+        return v
+    return Verdict(PENDING) if v.state == PASS else replace(v, ended=False) if v.state == FAIL else v
 
 
 def _audit(rec: dict | None) -> tuple[Failed, ...] | None:

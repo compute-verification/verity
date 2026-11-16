@@ -151,11 +151,11 @@ abbrev Release (T : Claims.ZKMal.CoinLayer.TableData) : Type := Claims.ZKServer.
 
 /-- The transport's frame state at each statement and coins (`zk_server_lean_loop`'s `pc`). -/
 abbrev PC (T : Claims.ZKMal.CoinLayer.TableData) : Type :=
-  Claims.Msg → List (Sess T).Coin → _root_.Flock.Firewall.Frame.Masker
+  Claims.Msg → List (Sess T).Coin → _root_.Flock.ZkServer.Frame.Masker
 
 /-- The transport's checked frame state (`zk_server_lean_loop`'s `fc`). -/
 abbrev FC (T : Claims.ZKMal.CoinLayer.TableData) : Type :=
-  Claims.Msg → List (Sess T).Coin → Except String _root_.Flock.Firewall.Frame.Masker
+  Claims.Msg → List (Sess T).Coin → Except String _root_.Flock.ZkServer.Frame.Masker
 
 /-- The session with the release's stops, which the server's simulator and its error read. -/
 abbrev Stops (T : Claims.ZKMal.CoinLayer.TableData) (L : Release T) (pc : PC T) (fc : FC T) :

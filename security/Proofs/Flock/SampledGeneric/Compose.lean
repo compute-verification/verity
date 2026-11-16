@@ -27,7 +27,7 @@ namespace FlockSoundness.SampledGeneric
 open Game Audit LinkFinder
 open scoped ENNReal
 
-variable {n : ℕ} {Reg : Type} {Dh : Type} {Hc : List UInt8 → Dh} {B : Binding Reg Hc} {L : Law n}
+variable {n : ℕ} {Reg : Type} {Dh : Type} {Hc : List UInt8 → Dh} {B : Binding Reg Hc} {L : SamplingDesign n}
   {PS : ProofSystem n Reg}
 
 theorem mem_incorrect {Correct : Reg → B.Trace → Fin n → Prop} {R : Reg} {X : B.Trace} {u : Fin n} :
@@ -46,7 +46,7 @@ trace, "wrong" is the incorrect set at the registration, and the binding error i
 registration and `⊤` at any other. -/
 noncomputable def analysis (h : Ex.Covers Correct) : ExtractionAnalysis L Reg PS.session where
   Tr := Reg × B.Trace
-  wrong Xt := incorrect B Correct Xt.1 Xt.2
+  incorrect Xt := incorrect B Correct Xt.1 Xt.2
   committed R τ := (R, Xc R τ)
   ks := Ex.ks
   link S R τ u Xt := if Xt.1 = R then Ex.link S R τ u Xt.2 else ⊤
@@ -155,7 +155,7 @@ theorem Flock.SecurityProofs.GenericSampledKSEscape : Flock.Guarantees.GenericSa
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.SampledGeneric in
 /-- **The count curve** (`Flock.Guarantees.GenericSampledKSCount`): `GenericSampledKS` at `|F| ≥ K`, whose sampling
-term is at most `miss(K)` (`Audit.Law.escape_le_miss`). -/
+term is at most `miss(K)` (`Audit.SamplingDesign.escape_le_miss`). -/
 theorem Flock.SecurityProofs.GenericSampledKSCount : Flock.Guarantees.GenericSampledKSCount := by
   intro n Reg Dh Hc L PS B Correct Ex Tr Xc M hcov hop hwf hT hX hM K σ hCR
   refine (Flock.SecurityProofs.GenericSampledKS n Reg Dh Hc L PS B Correct Ex Tr Xc M hcov hop hwf hT hX hM σ

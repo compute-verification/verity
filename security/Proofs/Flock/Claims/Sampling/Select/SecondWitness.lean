@@ -32,7 +32,7 @@ set_option backward.privateInPublic.warn false
 
 open Spot
 open private Array.qpartition.loop Array.qsort.sort from Init.Data.Array.QSort.Basic
-open private Spot.Draw.STRATUM_KEYS Spot.Draw.WORK_STRATUM_KEYS Spot.Draw.lawKeys
+open private Spot.Draw.STRATUM_KEYS Spot.Draw.WORK_STRATUM_KEYS Spot.Draw.samplingDesignKeys
   Spot.Draw.stratum? from Spot.Draw
 
 namespace Properties.Spot.SecurityProofs
@@ -294,9 +294,9 @@ theorem subset_fn : Flock.Draw.subset = subsetFn := by
 two proof blocks, one sampled, on 82 zero bytes (its stratum's `need`). The kernel evaluates `selectSecond`
 (`decide +kernel`) once its well-founded sorts and canonical JSON, its `repeat` and its map are their fuelled twins. -/
 theorem secondMisses_honest : (Select.selectSecond #[0] #[2] #[1] ⟨Array.replicate 82 0⟩).isOk = true := by
-  unfold Select.selectSecond Draw.drawFirstRead Draw.drawUnits Flock.Draw.drawWith Flock.Draw.stratifiedWith
-    Draw.flockLaw Draw.strataProblem Flock.Draw.workProblem Draw.checkDraw Draw.checkDrawFull
-    Draw.strataMessage Draw.sameLaw Draw.lawOf Spot.Draw.lawKeys Spot.Draw.stratum?
+  unfold Select.selectSecond Draw.sampleFirstRead Draw.sampleUnits Flock.Draw.drawWith Flock.Draw.stratifiedWith
+    Draw.flockSamplingDesign Draw.strataProblem Flock.Draw.workProblem Draw.checkDraw Draw.checkSampleFull
+    Draw.strataMessage Draw.sameSamplingDesign Draw.samplingDesignOf Spot.Draw.samplingDesignKeys Spot.Draw.stratum?
     Spot.Draw.STRATUM_KEYS Spot.Draw.WORK_STRATUM_KEYS keys? sortStrings jeq
   simp only [onWith_fuel _ _ _ 2, canon_fuel 16, qsort_fuel, subset_fn]
   decide +kernel

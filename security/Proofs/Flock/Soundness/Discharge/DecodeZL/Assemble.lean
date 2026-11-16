@@ -28,7 +28,7 @@ import Proofs.Flock.Soundness.Refine.Setup
 /-!
 # The decoder is right at the headline's samples
 
-`decodesOn_exec`: `DecodesOn` at the plain headline's tables, from `decodesOnOfRuns`. At an outcome flock-verify
+`decodesOn_exec`: `DecodesOn` at the plain headline's tables, from `decodesOnOfRuns`. At an outcome verity-verify-proof
 accepts:
 
 * `accepts_reps`: the one table's statement `st` (setupH at the record's sample), and for each rep its stream, its decoded
@@ -49,7 +49,7 @@ open FlockSoundness.Discharge.Integrate
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **flock-verify's acceptance of a one-table session, rep by rep**: setupH's statement `st` at the record's sample,
+/-- **verity-verify-proof's acceptance of a one-table session, rep by rep**: setupH's statement `st` at the record's sample,
 the record's spec and session, the table's `fast100` schedule, and at `st`'s link claims: each rep's stream and decoded
 proof, its run on the stream's coins with the proof's messages, its stream's rounds retaining `repFrames`' chunks, and
 the salted verdict on the two runs at `capOfRoot` of the table's root and `opnOf` of the two proof files. -/
@@ -115,7 +115,7 @@ theorem accepts_reps {I : Inputs} {t : Exec.Transcript} (hh : I.tags.hiddenOutpu
 
 /-- The headline's tables put the link claims at `PT_LOCAL`, at a sample that sets up and at a refused one. -/
 theorem tableAt_ptLocal {n mPts : ℕ} {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json)
-    {S₀ : Finset (Fin n)} (x₀ : DrawSetup I mPts S₀ (dj S₀)) (S : Finset (Fin n)) :
+    {S₀ : Finset (Fin n)} (x₀ : SampleSetup I mPts S₀ (dj S₀)) (S : Finset (Fin n)) :
     (tableAt ht dj x₀ S).T.ptLocal = PT_LOCAL := by
   rcases tableAt_cases ht dj x₀ S with ⟨x, e⟩ | e <;> rw [e] <;> rfl
 

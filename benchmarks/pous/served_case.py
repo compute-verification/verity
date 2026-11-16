@@ -2,7 +2,7 @@
 kept outputs: each piece's case, ``case.json``, the ``{"commitment", "evidence", "params"}`` its Lean component's
 ``serve`` reads (the commitment and evidence hex, no blobs), and that component's own answer on it, ``answer.json``,
 whose commitment is the component's digest of the case's commitment: its Lean's with ``--exe``; else PoUS's Python's,
-which its Lean is difftested against, and the wipe's leg's own. Both go to the piece's private directory (0700, its files 0600), which is then the
+which its Lean is difftested against, and the wipe's subprotocol's own. Both go to the piece's private directory (0700, its files 0600), which is then the
 directory composite.py takes as ``--piece``.
 
     served_case.py --window DIR [--private P] [--exe LEAN] [--hf-home H] [--p2-lib LIB] [--device cuda]
@@ -17,7 +17,7 @@ directory composite.py takes as ``--piece``.
   commitment to ``W``, the salt and ``C*``. ``C*`` is encoded again from the served snapshot at the kept salt
   (`reencode`), on ``--device`` as the piece encoded it (the vLLM adapter; ``libp2v1.so`` from ``--p2-lib`` on a GPU),
   and is refused unless it gives the kept commitment, root and table.
-* **The wipe** (`verity/wipe/v0`, `streamed_wipe/served_wipe.sh`): ``DIR/answer.json`` and the case its leg wrote,
+* **The wipe** (`verity/wipe/v0`, `streamed_wipe/served_wipe.sh`): ``DIR/answer.json`` and the case its subprotocol wrote,
   ``wipe.case.json``, in the private directory or else in ``DIR``. The private directory is by default
   ``SERVE_DIR/private/wipe``, ``SERVE_DIR`` the one ``DIR/served.json`` names.
 
@@ -49,10 +49,11 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.accounting.pous.device import memory_challenger as mc
-from verity.protocols.accounting.pous.verifier import period
-from verity.protocols.accounting.pous.verifier import run as R
-from verity.protocols.accounting.pous.verifier import wipe_party, wipe_period
+from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
+from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.verifier import period
+from verity.protocols.resource_accounting.memory.pous.verifier import run as R
+from verity.protocols.resource_accounting.memory.pous.verifier import wipe_party, wipe_period
 from verity.commitments import advice
 from verity.commitments.identity import canonical_json_bytes
 
@@ -174,6 +175,20 @@ def _dump(f: Any, doc: Mapping[str, Any]) -> None:
     f.write(("}" if doc else "{}") + "\n")
 
 
+class _Count:
+    n = 0
+
+    def write(self, s: str) -> None:
+        self.n += len(s)
+
+
+def line_bytes(case: Mapping[str, Any]) -> int:
+    """The bytes of ``case``'s line as `write` writes it, the line its Lean reads."""
+    count = _Count()
+    _dump(count, case)
+    return count.n
+
+
 def write(private: Path, case: Mapping[str, Any], answer: Mapping[str, Any]) -> Path:
     """``case.json`` and ``answer.json`` into ``private`` (0700, each file 0600): the piece composite.py reads."""
     private.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -188,7 +203,8 @@ def write(private: Path, case: Mapping[str, Any], answer: Mapping[str, Any]) -> 
 
 
 def reencode(repo: str, rev: str, published: R.Setup, point: R.Point, digests: bytes, *, hf_home: Path,
-             device: str = "cuda", p2_lib: str | None = None, pins: Path | None = None) -> period.SetupInputs:
+             device: str = "cuda", p2_lib: str | None = None,
+             pins: Sequence[Path] | None = None) -> period.SetupInputs:
     """Setup's own inputs encoded again as the piece encoded them (`served_piece.py`): the linears of ``repo``'s snapshot
     at ``rev`` held to the pin, committed (the vLLM adapter's ``W``), and ``C*`` encoded at the kept salt; refused unless
     they give the kept commitment to ``W``, point, root and table."""
@@ -210,9 +226,9 @@ def reencode(repo: str, rev: str, published: R.Setup, point: R.Point, digests: b
     pous.linear_types = SP._linear_types
     try:
         _, _, tensors = pous._plaintext(SP.ENTRY, model)
-        layout, commitment = pous._commit(pous.DEFAULT_SCHEME, tensors)
+        layout, commitment = ws.commit(pous.DEFAULT_SCHEME, tensors)
         _need(commitment == published.commitment, "the snapshot's W is not the one setup committed to")
-        store = pous._encode(layout, tensors, commitment, published.salt, "the kept salt", p2_lib)
+        store = ws.encode(layout, tensors, commitment, published.salt, "the kept salt", p2_lib)
         try:
             _need((store.point.params, store.point.limit_ns) == (point.params, point.limit_ns),
                   f"C* is at {store.point}, not at the run's point {point} (the challenge count aside)")
@@ -230,7 +246,8 @@ def pous_piece(window: Path, private: Path | None = None, *, schemes: Mapping[st
                **encode: Any) -> tuple[Path, dict[str, Any]]:
     """PoUS's piece from the public ``window`` and its private directory (module docstring); setup's own inputs are
     ``inputs`` when given, else `reencode`'s, with ``encode`` its keywords, and the answer is the Lean's with ``exe``
-    (`judged`). Returns the private directory and the answer written there."""
+    (`judged`), else the Python's reject or undecided and undecided for its accept (`period.unjudged`), as the run
+    with no Lean kept it. Returns the private directory and the answer written there."""
     public, summary = _json(window / ANSWER), _json(window / "pous.json")
     if private is None:
         _need(bool(summary.get("private")), f"{window}/pous.json names no private directory: the run's session didn't "
@@ -262,20 +279,20 @@ def pous_piece(window: Path, private: Path | None = None, *, schemes: Mapping[st
     case = period.case(point, sid, trusted, published, digests, session, period.setup_case(point.params, *inputs))
     del inputs
     got = pous_answer(case, schemes=schemes, protocol=public["protocol"])
-    _need(got == inner, f"the run protocol answers the case {got['verdict']} ({got['reason']}), not as the run did "
-                        f"({inner['verdict']}: {inner['reason']})")
-    got = judged(case, got, exe)
+    _need(inner in (got, period.unjudged(got)), f"the run protocol answers the case {got['verdict']} ({got['reason']}), "
+                                                f"not as the run did ({inner['verdict']}: {inner['reason']})")
+    got = judged(case, got, exe) if exe is not None else period.unjudged(got)
     return write(private, case, got), got
 
 
-#: the answer fields the wipe's verifier and its Lean agree on, as `wipe_period.leg` holds them (the reasons may differ)
+#: the answer fields the wipe's verifier and its Lean agree on, as `wipe_run.subprotocol` holds them (the reasons may differ)
 WIPE_FIELDS = ("commitment", "protocol", "public", "verdict")
 
 
 def wipe_piece(window: Path, private: Path | None = None, *, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
                exe: str | os.PathLike | None = None) -> tuple[Path, dict[str, Any]]:
     """The wipe's piece from its public ``window`` and its kept case (module docstring). The answer written is the
-    leg's own, the public one without the placement the run added to its profile (the Lean's when the leg ran its
+    subprotocol's own, the public one without the placement the run added to its profile (the Lean's when the subprotocol ran its
     judge), or with ``exe`` the Lean's now (`judged`). Returns the private directory and that answer."""
     public = _json(window / ANSWER)
     served = _json(window / "served.json") if (window / "served.json").is_file() else {}
@@ -303,7 +320,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--window", type=Path, required=True, help="the piece's public directory (its answer.json)")
     ap.add_argument("--private", type=Path, help="its private directory (default: the one the run kept)")
     ap.add_argument("--hf-home", type=Path, help="PoUS (required): the HF cache the serve read its snapshot from")
-    ap.add_argument("--p2-lib", help="PoUS: libp2v1.so's directory (benchmarks/torch_gpu/p2_stage/build.sh's lib/)")
+    ap.add_argument("--p2-lib", help="PoUS: libp2v1.so's directory (verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh's lib/)")
     ap.add_argument("--device", default="cuda", help="PoUS: where C* is encoded again")
     ap.add_argument("--exe", help="the component's Lean (pous-run-protocol, wipe-protocol), whose answer is written")
     a = ap.parse_args(argv)

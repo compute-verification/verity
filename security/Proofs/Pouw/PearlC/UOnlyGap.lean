@@ -1,12 +1,13 @@
 module
 
-public import Proofs.Pouw.PearlC.DeviceCapGap
-public import Definitions.Pouw.Guarantees.PearlC
+public import Proofs.Pouw.PearlC.DeviceInertBoundGap
+public import Proofs.Pouw.Lemmas.PearlCRecords
 public import Proofs.Pouw.PearlC.TTOutW1Variants
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.PearlC.DeviceRev1Gap
 import Proofs.Pouw.Prob
+public import Proofs.Pouw.PearlC.Records
 
 /-!
 # TT_OUT over U alone: it asserts more than the (C̃, U) row, and g from it
@@ -17,7 +18,7 @@ Staged; nothing pinned.
   `ρ ≤ 1`. So U-only is the stronger conjecture.
 * `gapFromTTOutU` and `pearlCGapDevUOnlyAt`: TT_OUT over U gives `G_g^U` at `g = 1 − (399/400)/ω`, the same ω as
   rev1, so g is rev1's: 0.51056% (v1) and 0.36162% (v2 at the cap 1/1,000) at 8192³ at sm_120's prices
-  (`pearlCGapUOnlySm120Rev1_8192`, `pearlCGapUOnlyUnpromotedCap1000_8192`).
+  (`pearlCGapUOnlySm120Rev1_8192`, `pearlCGapUOnlyUnpromotedInertShare1000_8192`).
 * `gapU_implies_gap`: `G_g^U` gives `G_g`, since a unit the (C̃, U) verifier accepts is one the U-only verifier
   accepts.
 -/
@@ -32,7 +33,7 @@ section
 variable {Q R S : Type}
 
 open Classical in
-theorem correctSet_subset_correctSetU (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) :
+theorem correctSet_subset_correctSetU (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Trace) :
     correctSet P U H s τ ⊆ correctSetU P U H s τ := by
   intro u hu
   unfold correctSet at hu
@@ -56,22 +57,22 @@ theorem gapU_implies_gap [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM
 theorem gapFromTTOutU [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
     (P : Protocol Q R S) (D : Layout → Prop) (g₀ Ω : ℝ) (δ : ℕ → ℕ → ℝ) (hΩ : 0 < Ω)
     (hW : ∀ U : Workload, U.InDomain P D → ∀ (H : Q → R) (s : S), ∀ u < U.layout.N, ∀ act : Codes,
-      P.actOK (U.layout.shape u) act → P.capOK H s U u act → P.Wref U.layout u ≤ Ω * P.credit H s U u act)
+      P.actOK (U.layout.shape u) act → P.inertBoundOK H s U u act → P.Wref U.layout u ≤ Ω * P.credit H s U u act)
     (hTT : TTOutU CM P D g₀ δ) : GGapU CM P D (1 - (1 - g₀) / Ω) δ := by
   intro U hU T hT q hq A hA
   classical
   refine le_trans (Pouw.pr_mono ?_) (hTT.2 U hU T hT q hq A hA)
   intro x hwin
   unfold WinsU at hwin
-  have hsum : ∑ u ∈ correctSetU P U x.1 x.2 (A.transcript U x.1 x.2), P.Wref U.layout u ≤
-      Ω * ∑ u ∈ correctSetU P U x.1 x.2 (A.transcript U x.1 x.2),
-        P.credit x.1 x.2 U u (actOf (A.transcript U x.1 x.2) u) := by
+  have hsum : ∑ u ∈ correctSetU P U x.1 x.2 (A.trace U x.1 x.2), P.Wref U.layout u ≤
+      Ω * ∑ u ∈ correctSetU P U x.1 x.2 (A.trace U x.1 x.2),
+        P.credit x.1 x.2 U u (actOf (A.trace U x.1 x.2) u) := by
     rw [mul_sum]
     refine sum_le_sum fun u hu => ?_
     unfold correctSetU at hu
     rw [mem_filter] at hu
     obtain ⟨hu, c, hc, hcor⟩ := hu
-    have hact : actOf (A.transcript U x.1 x.2) u = c.act := by simp [actOf, hc]
+    have hact : actOf (A.trace U x.1 x.2) u = c.act := by simp [actOf, hc]
     rw [hact]
     exact hW U hU x.1 x.2 u (mem_range.mp hu) c.act hcor.1 hcor.2.1
   have hden : 1 - (1 - (1 - g₀) / Ω) = (1 - g₀) / Ω := by ring
@@ -116,12 +117,12 @@ theorem ttOutPearlCDevRev1_of_uOnly [Fintype Q] [DecidableEq Q] [Fintype R] [Fin
   obtain ⟨hur, c, hc, _, hcap, _⟩ := hu
   obtain ⟨_, _, hk, _, hg, _⟩ := hU.2 u (mem_range.mp hur)
   have hcr := creditDevRev1_nonneg d hadd hbf (U.layout.shape u) hk hg
-  have hact : actOf (A.transcript U x.1 x.2) u = c.act := by simp [actOf, hc]
+  have hact : actOf (A.trace U x.1 x.2) u = c.act := by simp [actOf, hc]
   rw [hact]
-  have h1 : sem.unitDebitRev1 d x.1 x.2 U u c.act ≤ ρ * creditDevRev1 d (U.layout.shape u) := hcap
-  have h0 := unitDebitRev1_nonneg sem d hadd x.1 x.2 U u c.act
-  show (0 : ℝ) ≤ ((creditDevRev1 d (U.layout.shape u) - sem.unitDebitRev1 d x.1 x.2 U u c.act : ℚ) : ℝ)
-  have : (0 : ℚ) ≤ creditDevRev1 d (U.layout.shape u) - sem.unitDebitRev1 d x.1 x.2 U u c.act := by
+  have h1 : sem.unitInertWorkRev1 d x.1 x.2 U u c.act ≤ ρ * creditDevRev1 d (U.layout.shape u) := hcap
+  have h0 := unitInertWorkRev1_nonneg sem d hadd x.1 x.2 U u c.act
+  show (0 : ℝ) ≤ ((creditDevRev1 d (U.layout.shape u) - sem.unitInertWorkRev1 d x.1 x.2 U u c.act : ℚ) : ℝ)
+  have : (0 : ℚ) ≤ creditDevRev1 d (U.layout.shape u) - sem.unitInertWorkRev1 d x.1 x.2 U u c.act := by
     nlinarith
   exact_mod_cast this
 
@@ -137,17 +138,17 @@ theorem pearlCGapDevUOnlyAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype 
   have hW : ∀ U : Workload, U.InDomain (pearlCProtocolDevRev1 d sem ρ) (pearlCDomainDevAt d s) →
       ∀ (H : Q → R) (s' : S), ∀ u < U.layout.N, ∀ act : Codes,
         (pearlCProtocolDevRev1 d sem ρ).actOK (U.layout.shape u) act →
-        (pearlCProtocolDevRev1 d sem ρ).capOK H s' U u act →
+        (pearlCProtocolDevRev1 d sem ρ).inertBoundOK H s' U u act →
           (pearlCProtocolDevRev1 d sem ρ).Wref U.layout u ≤
             (ω : ℝ) * (pearlCProtocolDevRev1 d sem ρ).credit H s' U u act := by
     intro U hU H s' u hu act _ hcap
     have hsh : U.layout.shape u = s := hU.2.2 u hu
-    have hc : sem.unitDebitRev1 d H s' U u act ≤ ρ * creditDevRev1 d (U.layout.shape u) := hcap
+    have hc : sem.unitInertWorkRev1 d H s' U u act ≤ ρ * creditDevRev1 d (U.layout.shape u) := hcap
     show (wrefDevRev1 d (U.layout.shape u) : ℝ) ≤
-      (ω : ℝ) * ((creditDevRev1 d (U.layout.shape u) - sem.unitDebitRev1 d H s' U u act : ℚ) : ℝ)
+      (ω : ℝ) * ((creditDevRev1 d (U.layout.shape u) - sem.unitInertWorkRev1 d H s' U u act : ℚ) : ℝ)
     rw [hsh] at hc ⊢
     rw [hω]
-    have : ω * ((1 - ρ) * creditDevRev1 d s) ≤ ω * (creditDevRev1 d s - sem.unitDebitRev1 d H s' U u act) :=
+    have : ω * ((1 - ρ) * creditDevRev1 d s) ≤ ω * (creditDevRev1 d s - sem.unitInertWorkRev1 d H s' U u act) :=
       mul_le_mul_of_nonneg_left (by linarith) hω0.le
     exact_mod_cast this
   have hmono : TTOutU CM (pearlCProtocolDevRev1 d sem ρ) (pearlCDomainDevAt d s) (1 / 400) δPearlC :=
@@ -169,7 +170,7 @@ theorem pearlCGapUOnlySm120Rev1_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] 
     (by norm_num) hTT
 
 /-- **v2 at the cap 1/1,000 with U-only binding, 8192³**, at sm_120's prices: `g = 216793/59950000`. -/
-theorem pearlCGapUOnlyUnpromotedCap1000_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
+theorem pearlCGapUOnlyUnpromotedInertShare1000_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 0) (hp : d.prices = Prices.sm120)
     (hTT : TTOutPearlCDevUOnly CM d sem (1 / 1000)) :
     GGapU CM (pearlCProtocolDevRev1 d sem (1 / 1000)) (pearlCDomainDevAt d sh8192) ((216793 / 59950000 : ℚ) : ℝ)
@@ -185,7 +186,7 @@ theorem Pouw.SecurityProofs.PearlC.GapUOnlySm120Rev1_8192 : Pouw.Guarantees.Pear
     @Pouw.PearlC.pearlCGapUOnlySm120Rev1_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) d sem hG hp
       (Pouw.PearlC.TTOutW1.ttOutPearlCDevUOnly_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.GapUOnlyUnpromotedCap1000_8192 : Pouw.Guarantees.PearlC.GapUOnlyUnpromotedCap1000_8192 :=
+theorem Pouw.SecurityProofs.PearlC.GapUOnlyUnpromotedInertShare1000_8192 : Pouw.Guarantees.PearlC.GapUOnlyUnpromotedInertShare1000_8192 :=
   fun sha fetch salt d sem hG hp hTT =>
-    @Pouw.PearlC.pearlCGapUOnlyUnpromotedCap1000_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) d sem hG hp
+    @Pouw.PearlC.pearlCGapUOnlyUnpromotedInertShare1000_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) d sem hG hp
       (Pouw.PearlC.TTOutW1.ttOutPearlCDevUOnly_of_w1 hTT)

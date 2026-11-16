@@ -13,7 +13,7 @@ public import Proofs.Pous.Continuous.BandTimeAverage
 /-!
 # The continuous audit
 
-The game is `Security/Definitions/Pous/Model/Continuous.lean` (trusted): an explicit memory challenger and a
+The game is `security/Definitions/Pous/Model/Continuous.lean` (trusted): an explicit memory challenger and a
 responder that runs on its clock. The statements are `Pous.Guarantees.PerAnswer`, `Pous.Guarantees.ContinuousAudit`,
 `Pous.Guarantees.ContinuousComplete`, `Pous.Guarantees.ContinuousTimeAverage` and
 `Pous.Guarantees.BandFamilyContinuousTimeAverage`.

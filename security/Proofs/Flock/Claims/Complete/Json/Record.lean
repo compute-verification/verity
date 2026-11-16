@@ -93,7 +93,7 @@ def recordList (spec : SessionSpec) (h : ByteArray → ByteArray) (rootB : Array
     (points : Array (Array F128)) (streams : Array (Array Round)) (proofs : Array ByteArray) : List (String × Json) :=
   [("kind", Json.str "flock-live-session/v1"), ("aborted", Json.null), ("hello", Json.str spec.hello),
     ("config", Json.mkObj [("require_link", Json.bool true)]), ("link_mode", Json.str "exchange"),
-    ("link", linkObj spec h rootB points), ("unit_draw", spec.unitDraw.getD Json.null),
+    ("link", linkObj spec h rootB points), ("unit_draw", spec.unitSample.getD Json.null),
     ("streams", Json.arr ((spec.repStreams.zip streams).map (streamObj spec h rootB))),
     (s!"link_{spec.dk}", hexJ (dgOf spec h (lbOf spec rootB points))),
     (s!"proof_{spec.dk}", Json.arr ((spec.repStreams.zip proofs).map (proofObj spec h)))]
@@ -209,7 +209,7 @@ theorem good_linkObj {spec : SessionSpec} {t : String} (ht : spec.tables = #[t])
 /-- **The record is printable** when the statement's sample is. -/
 theorem good_recordObj {spec : SessionSpec} {t : String} (ht : spec.tables = #[t]) (h : ByteArray → ByteArray)
     (rb : ByteArray) (points : Array (Array F128)) (streams : Array (Array Round)) (proofs : Array ByteArray)
-    (hd : Good (spec.unitDraw.getD Json.null)) : Good (recordObj spec h #[rb] points streams proofs) := by
+    (hd : Good (spec.unitSample.getD Json.null)) : Good (recordObj spec h #[rb] points streams proofs) := by
   refine good_mkObj (recordList_distinct spec h _ points streams proofs) ?_
   simp only [recordList, List.mem_cons, List.mem_nil_iff, or_false, forall_eq_or_imp, forall_eq]
   refine ⟨.str _, .null, .str _, good_mkObj (by simp) (by simp; exact .bool true), .str _, good_linkObj ht h rb points,

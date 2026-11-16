@@ -20,6 +20,7 @@ from pathlib import Path
 
 from verity_vllm import settings
 from verity_vllm.config import option
+from verity_vllm.pipeline.cli import write
 
 __all__ = ["Options", "main"]
 
@@ -68,7 +69,7 @@ def build_result(d: Path, row: str, role: str, stages: list[str], run_id: str | 
     for s in requested:
         m = re.search(r"wall=(\d+)s", v.get(s, ("", ""))[1])
         if m:
-            meas.append({"name": f"{s}_wall", "value": int(m.group(1)), "unit": "s"})
+            meas.append({"name": f"proofs/one-stage.{s}-wall", "value": int(m.group(1)), "unit": "s"})
     files: list[str] = []
     if run_dir is not None:
         ev = run_dir / "evidence"
@@ -112,7 +113,7 @@ def main(a: Options) -> int:
         tmp = run_dir / "result.json.tmp"
         tmp.write_text(json.dumps(doc, indent=1, sort_keys=True))
         os.replace(tmp, run_dir / "result.json")
-        print(f"research_result: {run_dir / 'result.json'} validation={doc['validation']['status']}")
+        write(f"research_result: {run_dir / 'result.json'} validation={doc['validation']['status']}")
     except Exception as e:  # noqa: BLE001 -- never mask the row's own verdicts
         print(f"research_result: FAILED to write result.json: {type(e).__name__}: {e}", file=sys.stderr)
     return 0

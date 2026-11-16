@@ -120,7 +120,7 @@ theorem value_repZP_perm {N : ℕ} (dom : Fin N ↪ F) (s nP q : ℕ) (pos : F �
 
 /-! ## The primed table -/
 
-/-- **Rep `r` of the primed table** (`repZP` over the masked rep, its rows in flock-verify's order, as
+/-- **Rep `r` of the primed table** (`repZP` over the masked rep, its rows in verity-verify-proof's order, as
 `repMaskedZC`'s). -/
 noncomputable def repZPAt (A : Arith F K) (T : TabZK F mPts) (C₀ : Oracle F) (r : ℕ)
     (extra : List (Claim F T.S.m)) : Game Bool :=

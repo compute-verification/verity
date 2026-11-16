@@ -38,7 +38,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # `hm96-sha512/v1` over a hash (trusted)
 
-The hiding leaf (`verity/ml/commitments/hm96/PROTOCOL.md` §1 and §2, at `hm96-sha512/v1`'s sizes), with the hash a
+The hiding leaf (`verity/commitments/hm96/PROTOCOL.md` §1 and §2, at `hm96-sha512/v1`'s sizes), with the hash a
 parameter `H` (SHA-512 is the instance of record; the verifier's code is `Flock.Hm96`). For an inner digest `x`, a
 192-byte salt `y` and the verifier's key:
 

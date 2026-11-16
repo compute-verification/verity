@@ -140,7 +140,7 @@ class VocabRangeSource:
                  "tensors": self.stats["tensors"], "rows": self.stats["rows"], "errors": self.stats["errors"],
                  "evidence": (f"vocabulary-range source: `<embedding module>/{VR.MEMBER}` of {len(self.sites)} sites, computed from the launch's "
                               "token ids (no kernel change); every value == the IR's EmbeddingShard_v1 value and the kernel's zero rows agree: "
-                              "verity_vllm.properties.vocab_range_exactness")}]
+                              "tests.properties.vocab_range_exactness")}]
 
 
 def attach(com: Any, enabled: bool, manifest: Mapping[str, Any] | None, required_classes: tuple[str, ...], *,

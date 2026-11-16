@@ -1,6 +1,6 @@
 """The test-file family: one task per test file of every suite, which `runners/test_file.py` runs alone under the suites' read guard.
 
-Suites are what `tools/verity/check/suites.py` finds (`discover`): each directory whose `pyproject.toml` configures pytest, the
+Suites are what `tools/check/suites.py` finds (`discover`): each directory whose `pyproject.toml` configures pytest, the
 repository's own at the root, but those check runs after its Lean steps (`build.lean_suites`, `suites.AFTER_LEAN`), which the
 build family's lean-suites tasks run whole once lean-build has built what they need. A suite's test files are its `test_*.py`
 under its `testpaths`, outside a data directory
@@ -60,6 +60,7 @@ from __future__ import annotations
 import ast
 import bisect
 import fnmatch
+import importlib.util
 import json
 import math
 import posixpath
@@ -70,10 +71,24 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
+from .. import ROOT
+
+
+def _suite_layout():
+    """`research.suite_layout` (stdlib only), loaded by its path in this checkout, so the graph depends on that one file and
+    not on the research distribution."""
+    spec = importlib.util.spec_from_file_location("suite_layout_for_verity_graph",
+                                                  ROOT / "tools" / "research" / "src" / "research" / "suite_layout.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
+suite_layout = _suite_layout()
 KIND = "test-file"
 #: the read guard the runner loads into pytest, the one `suites.py` loads
-GUARD = ("tools/verity/check/guard/verity_suite_guard.py", "tools/verity/check/guard/child/sitecustomize.py",
-         "tools/verity/check/guard/child/verity_suite_reads.py")
+GUARD = ("tools/check/guard/verity_suite_guard.py", "tools/check/guard/child/sitecustomize.py",
+         "tools/check/guard/child/verity_suite_reads.py")
 REGISTRY = "artifacts.json"
 #: what `suites.py`'s guard lets every suite read besides its inputs (`suites.STORE_READS`; every pyproject.toml and the lockfile,
 #: `suites.metadata`, are the tree's `pyprojects` and the py env's spec)
@@ -148,8 +163,7 @@ def _join(d: str, name: str) -> str:
     return f"{d}/{name}" if d else name
 
 
-def _norm(name: str) -> str:
-    return re.sub(r"[-_.]+", "-", name).lower()
+_norm = suite_layout.norm
 
 
 def _up(path: str | None, n: int) -> str | None:
@@ -641,7 +655,7 @@ class Imports:
 
     def named(self, path: str) -> list[str]:
         """The repository files under the paths file ``path`` names: string parts joined by `/` or one string holding one
-        (`"verity" / "core"`, `"tools/verity/check"`), each from its directory or the nearest one above it, and string parts
+        (`"verity" / "core"`, `"tools/check"`), each from its directory or the nearest one above it, and string parts
         joined to a path it builds (`VERIFIER / "agree.py"`, `VERIFIER = HERE.parent / "verifier"`)."""
         if (got := self._paths.get(path)) is None:
             text = self.tree.text(path)
@@ -869,8 +883,12 @@ class Imports:
 
 
 def discover(tree: Tree) -> list[Suite]:
-    """Every suite, as `suites.discover` finds them: each directory whose `pyproject.toml` configures pytest."""
-    out = []
+    """Every suite, as `suites.discover` finds and names them: each directory whose `pyproject.toml` configures pytest."""
+    def pyproject(d: str) -> dict:
+        f = _join("" if d == "." else d, "pyproject.toml")
+        return tree.toml(f) if f in tree.files else {}
+
+    out, dirs = [], suite_layout.member_dirs(pyproject)
     for f in tree.sorted:
         if f != "pyproject.toml" and not f.endswith("/pyproject.toml"):
             continue
@@ -884,7 +902,7 @@ def discover(tree: Tree) -> list[Suite]:
         tests = data["tool"].get("verity", {}).get("tests", {})
         testpaths = tuple(_join(base, t.strip("/")) if t not in (".", "") else base for t in cfg.get("testpaths", ["."]))
         pythonpath = tuple("" if (p := posixpath.normpath(_join(base, x))) == "." else p for x in cfg.get("pythonpath", []))
-        out.append(Suite("repository" if path == "." else _norm(project["name"]) if project else path, path, testpaths,
+        out.append(Suite(suite_layout.suite_name(path, project, dirs), path, testpaths,
                          pythonpath, tuple(tests.get("inputs", [])), math.ceil(tests["timeout_s"]) if tests.get("timeout_s") else None,
                          tests.get("worker_gb") or None, _reads(f, tests.get("reads", [])), _strings(f, tests, "untraced")))
     return out
@@ -915,8 +933,10 @@ def _under(path: str, d: str) -> bool:
 
 
 def suite_tests(tree: Tree, suite: Suite, suites: list[Suite]) -> list[str]:
-    """``suite``'s test files: its `test_*.py` under its test paths, outside a data directory and the suites nested in it."""
-    nested = [s.dir for s in suites if s.path != suite.path and suite.path != "." and _under(s.dir, suite.dir)]
+    """``suite``'s test files: its `test_*.py` under its test paths, outside a data directory and the suites nested in it (the
+    root's: those under its test paths)."""
+    nested = [s.dir for s in suites if s.path != suite.path and _under(s.dir, suite.dir)
+              and (suite.path != "." or any(_under(s.dir, t) for t in suite.testpaths))]
     out = []
     for t in suite.testpaths:
         for f in tree.under(t):
@@ -931,9 +951,10 @@ def declared(tree: Tree, suite: Suite, suites: list[Suite], fixtures: list[str])
     """The suite's declared inputs, Python included: the guard holds the suite to them, and its tests load some of that Python by
     a path or a name they compute (circuit-check's sidecars), which no closure follows. Its own directory's files but their
     Python and the suites nested in it (`suites.inputs_of` always holds the directory); Markdown under a directory only when it
-    lists a `.md`; and the fixture registry when a fetched fixture is under the suite or one of its inputs."""
+    lists a `.md`; and the fixture registry when a fetched fixture is under the suite or one of its inputs. An input `X` holds
+    its tests at `tests/X` too (`suite_layout.mirrors`)."""
     out: set[str] = set()
-    for p in suite.inputs:
+    for p in [*suite.inputs, *sorted(suite_layout.mirrors(suite.inputs, lambda q: bool(tree.under(q))))]:
         p = p.strip("/")
         if p in tree.files:
             out.add(p)
@@ -985,7 +1006,8 @@ def whole(tree: Tree, suite: Suite, suites: list[Suite]) -> list[str]:
     """What `suites.py`'s guard lets the suite read: what it keys the suite on (`suites.inputs_of`, less `suites.dropped`), the
     files of its directory but the suites nested in it that no other path of it covers, of each workspace package it depends on
     (its dependencies, extras and dependency groups, and theirs but groups: the package's `[tool.verity.tests] exports`, else
-    its directory), but with `inputs_only = true`, and of its declared inputs; and what it lets every suite read and keys a pass
+    its directory), but with `inputs_only = true`, and of its declared inputs, each with its tests at `tests/X`
+    (`suite_layout.mirrors`); and what it lets every suite read and keys a pass
     on only when the tests read it, every pyproject.toml and `STORE_READS`. A test file that starts a program the guard can't
     trace is keyed on it."""
     root = tree.toml("pyproject.toml")
@@ -1015,6 +1037,7 @@ def whole(tree: Tree, suite: Suite, suites: list[Suite]) -> list[str]:
                 continue
             exports = data[m].get("tool", {}).get("verity", {}).get("tests", {}).get("exports")
             paths.update(exports if exports is not None else [m] if m else _wheel(data[m]).get("packages", []))
+    paths |= suite_layout.mirrors(paths, lambda p: bool(tree.under(p)))
     other = [p for p in paths if p != suite.dir]
     cut = [s.dir for s in suites if s.path != suite.path and suite.path != "." and _under(s.dir, suite.dir)
            and not any(_under(s.dir, o) for o in other)]

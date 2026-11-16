@@ -5,7 +5,7 @@ public import Proofs.Flock.SessionLoop.SampledAudit
 /-!
 # A sampled audit's view at any values, at the deployed held relay's frames
 
-What leaves a session for the auditor is the deployed held relay's frames: `Flock.Firewall.Session.relay` sends each
+What leaves a session for the auditor is the deployed held relay's frames: `Flock.ZkServer.Session.relay` sends each
 request's frame, the loop's proofs and `Finish` on the auditor's connection, which `Relay.out` models. Those frames
 are not the session loop's messages. `Flock.Guarantees.SampledAuditAnyRelayDeployed` is `SampledAuditAnyDeployed`
 at those frames. The `ℓ` sampled sessions each go through the held relay at their setup, and the audit's view is

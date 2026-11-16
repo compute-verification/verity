@@ -6,7 +6,7 @@
 #     [MAX_MODEL_LEN=40960] [KV_CACHE_DTYPE=fp8] [FLASHINFER=0] [LDCONFIG=1] (--send fi_smoke.py: run it first) [SAVER=boundary:save_edge]
 #     [LOADER=boundary:load_edge] [PERMUTE=1] [KEEP=1] [MAX_MIN=150] [DUMP=1] [NUM_GPU_BLOCKS=N] [RESTORE=0] [THEN=SCRIPT]
 #     bash benchmarks/serve_tax/tp_restore.sh
-# PLAN_FILE, a ready plan (the replay ladder's production plan: ShareGPT, multi-turn and long prompts, each request greedy
+# PLAN_FILE, a ready plan (the replay ladder's serving plan: ShareGPT, multi-turn and long prompts, each request greedy
 # or sampled), is served as it is in each of ARMS: ``mixed``, each request with its own sampling and UNSEEDED_SHARE of the
 # sampled ones unseeded; ``unseeded``, every request with the generation config's sampling and no seed, which vLLM samples
 # with FlashInfer's sampler. Without PLAN_FILE the one arm is SAMPLING, its plan (OUT/plan.jsonl) made before the GPUs are
@@ -51,7 +51,7 @@ unset NCCL_P2P_DISABLE VLLM_USE_DEEP_GEMM
 [ -d /workspace/cp/hf ] && hf=/workspace/cp/hf || hf=/workspace/hf
 export HF_HOME=${HF_HOME:-$hf} HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 TOKENIZERS_PARALLELISM=false PYTHONHASHSEED=0
 # DeepGEMM and FlashInfer JIT-compile with CUDA_HOME's nvcc: the newest toolkit under /usr/local unless CUDA_HOME names one.
-# vLLM uses FlashInfer only with flashinfer-cubin installed or nvcc on PATH; FLASHINFER=1 (the default, as a production
+# vLLM uses FlashInfer only with flashinfer-cubin installed or nvcc on PATH; FLASHINFER=1 (the default, as a serving
 # install with a CUDA toolkit has it) puts the nvcc on PATH: FlashInfer's sampler, autotune and fused all-reduce + RMSNorm.
 # FLASHINFER=0 leaves it off, and its sampler too.
 CUDA_HOME=${CUDA_HOME:-$(ls -d /usr/local/cuda-[0-9]*.[0-9]* 2>/dev/null | sort -V | tail -1)}

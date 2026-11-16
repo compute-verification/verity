@@ -39,7 +39,7 @@ theorem liveRefine_ofLoop (T : CoinLayer.TableData) (vs : (CoinLayer.session Loo
       ((CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand))
     (real : Msg → Flock.Wit →
       (CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand →
-      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+      ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (wk : (ofLoop T L₀ real).toSrv.Worker) (x : Msg) (w : Flock.Wit)
     (hE : LiveRoundEqOwn (CoinLayer.session Loop.loopNr T) vs (ofLoop T L₀ real) CoinOpen.shaH wk x w) :
     (ofLoop T L₀ real).LiveRefine CoinOpen.shaH
@@ -64,7 +64,7 @@ theorem liveRefine_ofLoopLink (vs : (CoinLayer.session Loop.loopNr Masked.dataE)
       ℕ → V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))
     (real : Msg → Flock.Wit →
       (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
-      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+      ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (wk : (ofLoopLink L₀ src real).toSrv.Worker) (x : Msg) (w : Flock.Wit)
     (hE : LiveRoundEqOwn (CoinLayer.session Loop.loopNr Masked.dataE) vs (ofLoopLink L₀ src real) CoinOpen.shaH wk x w) :
     (ofLoopLink L₀ src real).LiveRefine CoinOpen.shaH

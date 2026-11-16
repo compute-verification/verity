@@ -1,11 +1,11 @@
 """The routed served-rows tie (`served_tie.ServedRowsTie_v2`) on a sealed served window's real rows, proved in zero
 knowledge: the window's P / G units by Flock `prove --zk` behind the Lean ZK server and held by Lean `verify --zk`, through
-N2-ZK's audit path (`benchmarks/network_traces/n2_zk.py`: its stager, ZK server and received-pieces scan); and the cost.
+N2-ZK's audit path (`verity/protocols/resource_accounting/network/prover/n2_zk.py`: its stager, ZK server and received-pieces scan); and the cost.
 
     python benchmarks/prove_path/served_tie_zk.py cost [--out DIR]
     python benchmarks/prove_path/served_tie_zk.py build --class slice|9c10|served --g G [--out DIR]
     python benchmarks/prove_path/served_tie_zk.py prove --serve-run DIR --window K [--g G] [--blocks all|executed] [--per N]
-      --bin flock-circuit --lean flock-verify --out DIR [--dry]
+      --bin flock-circuit --lean verity-verify-proof --out DIR [--dry]
     python benchmarks/prove_path/served_tie_zk.py rescan --serve-run DIR --window K [--g G] [--blocks ...] [--per N]
       --from PROVE_OUT --out DIR
 
@@ -27,7 +27,7 @@ N2-ZK's audit path (`benchmarks/network_traces/n2_zk.py`: its stager, ZK server 
   not yet a proof row's.
   The received-pieces scan (`leak_scan.public_pieces`, `a8.received`) fails a statement on a ``leaked`` piece, whatever its
   row or its bytes, under the rule every zero-knowledge driver's scan follows (`leak_scan.scan`,
-  ``benchmarks/network_traces/leak_scan.py``): a find counts only inside one field of Flock's proof format
+  ``verity/protocols/resource_accounting/network/prover/leak_scan.py``): a find counts only inside one field of Flock's proof format
   (`redigest.layout`) or one record of a round message, and is excused only by what the statement fixes. The staged circuit's pieces are left
   out before the scan (`public_pieces`).
 * **rescan**: a finished ``prove``'s statements scanned again (`leak_scan.rescan`): the verifier's files searched afresh
@@ -47,12 +47,13 @@ from types import SimpleNamespace
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-sys.path[:0] = [str(HERE), str(REPO / "benchmarks/network_traces")]
+sys.path[:0] = [str(HERE), str(REPO)]
 
-import leak_scan as LS  # noqa: E402
+from benchmarks.network_traces import zk_drivers  # noqa: E402
+from verity.protocols.resource_accounting.network.prover import leak_scan as LS, n2_zk as N2  # noqa: E402
 import served_tie_window as STW  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import served_rows as SR  # noqa: E402
-from verity.protocols.accounting.certifier.prover import served_tie as ST  # noqa: E402
+from verity_vllm.compiler import served_rows as SR  # noqa: E402
+from verity_vllm.compiler import served_tie as ST  # noqa: E402
 
 CLASSES = {
     "slice": dict(R=2, P=7, IW=6, L=4096, T=256, IB=8, PB=8),
@@ -62,10 +63,17 @@ CLASSES = {
 GS = {"slice": (7, 1), "9c10": (256, 8, 1), "served": (256, 16, 1)}
 OPENED = ("o0", "pub")
 NEGATIVES = ("start", "short", "id", "other")
+#: what a member's session reports of its proving, as its row keeps it
+TIMING = ("e2e_s", "wait_s", "witness_s", "prove_total_s", "proof_bytes", "wire_sent", "wire_recv", "k_log", "nbl",
+          "dense_m", "units", "ands_per_vu", "prover", "gpu")
 
 
 def log(msg: str) -> None:
     print(f"STZK {time.strftime('%H:%M:%SZ', time.gmtime())} {msg}", flush=True)
+
+
+def _per(x, n: int):
+    return None if x is None else round(x / n, 3)
 
 
 ALL_PAIRS_MEASURED = {"9c10": 649_079}
@@ -279,9 +287,9 @@ def audit(M, N2, a, sg, m: dict, units: list, w: int, run_root: bytes, out: Path
                                         and (live or {}).get("roots") == fv["roots"] and v.ok,
                                         "why": ((record or {}).get("verdict") or {}).get("why"), "draw_check": v.to_json()}}
     lv = a0.lean_verify(a.lean, m, n, sdir, zk=True)
-    verdicts[f"lean-verify/{name}"] = {**lv, "tool": "flock-verify verify --zk --archive --partition --program"}
+    verdicts[f"lean-verify/{name}"] = {**lv, "tool": "verity-verify-proof verify --zk --archive --partition --program"}
     proved = a0.proved_units(m["header"], live or {})
-    timing = {k: (live or {}).get(k) for k in N2.TIMING}
+    timing = {k: (live or {}).get(k) for k in TIMING}
     statement = {name: {"session_s": proc["wall_s"], **{k: (live or {}).get(k) for k in ("circuit_sha512", "statement_digest",
                                                                                          "sigma")},
                         "timing": timing, "process": proc, "lean_verify_s": lv.get("verify_s")}}
@@ -320,8 +328,8 @@ def audit(M, N2, a, sg, m: dict, units: list, w: int, run_root: bytes, out: Path
             "audit": {k: result.get(k) for k in ("accepted", "complete", "wrong_units")},
             "verdicts": {k: y.get("accepted") for k, y in verdicts.items()}, "why": {k: y.get("why") for k, y in verdicts.items()},
             "timing": statement[name], "lean_verify_s": lv.get("verify_s"), "proof_bytes": proofs,
-            "per_unit": {"prove_total_s": N2._per(timing.get("prove_total_s"), n), "proof_bytes": N2._per(sum(proofs) if proofs else None, n),
-                         "lean_verify_s": N2._per(lv.get("verify_s"), n)}}
+            "per_unit": {"prove_total_s": _per(timing.get("prove_total_s"), n), "proof_bytes": _per(sum(proofs) if proofs else None, n),
+                         "lean_verify_s": _per(lv.get("verify_s"), n)}}
 
 
 def blobs_of(units: list, salts: dict) -> tuple[dict[str, bytes], set[str]]:
@@ -377,7 +385,7 @@ def prove(a) -> int:
     if a.dry or not ref_ok:
         return 0 if ref_ok else 1
 
-    N2 = __import__("n2_zk")
+    zk_drivers.install()
     M = N2._one_stage()
     defn = ST.unit(**d.st)
     secret = os.urandom(32)
@@ -439,10 +447,10 @@ def rescan(a) -> int:
     """`prove`'s statements under `--from` scanned again (`leak_scan.rescan`): the verifier's files each one kept searched
     afresh for its pieces, recomputed from the sealed run as `prove` cut them (its units, then the honest blocks it filled
     the statement with, and their ``srv`` salts, less the pieces the circuit holds: the kept one, else the statement
-    lowered again and held to the run's pin). A found salt `prove` drew isn't recomputed, so its summary's find of it
+    lowered again and held to the run's pin). A found salt `prove` sampled isn't recomputed, so its summary's find of it
     stays and reads leaked."""
     d = units_of(a)
-    N2 = __import__("n2_zk")
+    zk_drivers.install()
     M = N2._one_stage()
     src, out = Path(getattr(a, "from")), Path(a.out)
     summary = json.loads((src / "summary.json").read_text())

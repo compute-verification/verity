@@ -5,7 +5,7 @@ public import Lms.Verify
 /-!
 # LMS signing (RFC 8554 over SHA-512), from the private seed
 
-Executable forms of `verity/ml/crypto/lms.py`'s key derivation and stateless signing: the one-time keys from the seed
+Executable forms of `verity/commitments/crypto/lms.py`'s key derivation and stateless signing: the one-time keys from the seed
 (RFC 8554 Appendix A: `x_q[i] = H(I ‖ u32(q) ‖ u16(i) ‖ u8(0xff) ‖ SEED)`), the tree (`key`, `keygen`, with
 `I = SHA-512("verity/lms/v0/I" ‖ SEED)[:16]`), the public key `I ‖ T[1]`, a signature's encoding, and `signAt`, the
 signature at leaf q (`lms.sign_at`). Which leaf to use is the signer's state, `lms.LeafState.reserve`, which stays with

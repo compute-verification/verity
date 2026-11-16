@@ -1,5 +1,5 @@
 // SHA-512 Merkle trees for verity/flock-circuit (FIPS 180-4; installed by verity/protocols/proofs/flock/prover/cuda_sha512_patch.py, with the
-// GPU's one SHA-512, verity/circuits/kernels/sha512.cuh, beside it).
+// GPU's one SHA-512, verity/commitments/cuda/sha512.cuh, beside it).
 //   leaf i = SHA-512(bytes [i*leaf_size, (i+1)*leaf_size)),  node = SHA-512(left || right),  64-byte digests in standard
 //   (big-endian) byte order; the flat layout of merkle.cuh: leaves, then each level above, root last (2n-1 nodes).
 #pragma once
@@ -10,7 +10,7 @@
 #include <map>
 #include <vector>
 
-#include "../../../../../circuits/kernels/sha512.cuh"
+#include "../../../../../commitments/cuda/sha512.cuh"
 
 // the big-endian 64-bit word of 8 message bytes held as two little-endian u32 loads
 __device__ __forceinline__ uint64_t s512_be(uint32_t a, uint32_t b) { return sx::be64(a, b); }

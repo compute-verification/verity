@@ -7,7 +7,7 @@
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
-D=benchmarks/pouw/filler
+D=benchmarks/pouw/filler K=verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler
 export B; B=$(mktemp -d /tmp/foldprobe.XXXXXX); trap 'rm -rf "$B"' EXIT
 export PF_R_LIST=${PF_R_LIST:-"1 2 3 4 6 8"} PF_NCU_R=${PF_NCU_R:-"1 2 4"} PF_S=${PF_S:-256}
 export PF_FOLD=${PF_FOLD:-XIN13}   # XIN13 or LI
@@ -22,7 +22,7 @@ for R in $PF_R_LIST; do [ "$R" -gt "$Rmax" ] && Rmax=$R; done
 
 for R in $PF_R_LIST; do
   nvcc -O3 -std=c++17 $FOLDFLAG -DPF_ROUNDS="$R" -gencode arch=compute_120a,code=sm_120a -Xptxas -v \
-    -o "$B/dcap_$R" $D/dcap.cu -lcublasLt -lnvidia-ml -ldl > "$O/build-R$R.log" 2>&1 \
+    -o "$B/dcap_$R" $K/dcap.cu -lcublasLt -lnvidia-ml -ldl > "$O/build-R$R.log" 2>&1 \
     || { echo "build R=$R failed"; grep -E "error" "$O/build-R$R.log" | head -20; exit 4; }
   cuobjdump -sass "$B/dcap_$R" | awk '/Function : /{p = /dfill_k/} p' > "$O/sass-R$R.txt" 2>&1
   # the fold loop's op count a MMA: SHF (rotl), LOP3 (xor), IMAD (mul-add) in the dfill_k<4> body

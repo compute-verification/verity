@@ -44,10 +44,13 @@ Pods = Callable[[], dict[str, tuple[str, str, str | None]]]
 
 
 def _read(path: str, binary: bool = False) -> str | bytes | None:
+    """The file's contents; None when its process is gone or isn't this user's to read, and when it fails otherwise, said."""
     try:
         with open(path, "rb" if binary else "r") as f:
             return f.read()
-    except OSError:
+    except OSError as e:
+        if os.access(path, os.R_OK):
+            print(f"write_probe: {path} unread ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
 
 
@@ -66,7 +69,9 @@ def snapshot(proc: str = "/proc") -> dict[tuple[int, str], dict[int, int]]:
         f = _stat_fields(proc, int(p))
         try:
             tids = os.listdir(f"{proc}/{p}/task")
-        except OSError:
+        except OSError as e:
+            if os.path.exists(f"{proc}/{p}"):
+                print(f"write_probe: pid {p}'s threads unlisted ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         if not f or len(f) < 20:
             continue
@@ -84,13 +89,17 @@ def write_paths(pid: int, proc: str = "/proc", limit: int = 3) -> list[str]:
     """Up to `limit` files under /workspace the process holds open for writing."""
     try:
         fds = os.listdir(f"{proc}/{pid}/fd")
-    except OSError:
+    except OSError as e:
+        if os.access(f"{proc}/{pid}/fd", os.R_OK | os.X_OK):
+            print(f"write_probe: pid {pid}'s descriptors unlisted ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return []
     paths = []
     for fd in fds:
         try:
             target = os.readlink(f"{proc}/{pid}/fd/{fd}")
-        except OSError:
+        except OSError as e:
+            if os.path.lexists(f"{proc}/{pid}/fd/{fd}"):
+                print(f"write_probe: pid {pid}'s descriptor {fd} unread ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         m = re.search(r"^flags:\s*([0-7]+)", _read(f"{proc}/{pid}/fdinfo/{fd}") or "", re.M)
         if target.startswith(WORKSPACE + "/") and m and int(m.group(1), 8) & 3:
@@ -141,7 +150,8 @@ def kube_pods(kubeconfig: str = KUBECONFIG) -> dict[str, tuple[str, str, str | N
         r = subprocess.run(["kubectl", "get", "pods", "-A", "-o", "json"], capture_output=True, text=True, timeout=60,
                            env={**os.environ, "KUBECONFIG": kubeconfig})
         items = json.loads(r.stdout)["items"]
-    except (OSError, ValueError, KeyError, subprocess.SubprocessError):
+    except (OSError, ValueError, KeyError, subprocess.SubprocessError) as e:
+        print(f"write_probe: kubectl's pods unread, so no pod is named ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return {}
     return {p["metadata"]["uid"]: (p["metadata"]["namespace"], p["metadata"]["name"],
                                    (p["metadata"].get("labels") or {}).get("kueue.x-k8s.io/cluster-queue-name")) for p in items}
@@ -284,7 +294,8 @@ def relay(ns: argparse.Namespace) -> int:
             for n, ln in enumerate(lines[1:], seen + 1):
                 try:
                     row = json.loads(ln)
-                except ValueError:
+                except ValueError as e:
+                    print(f"write_probe relay: row {n} of unmatched.jsonl is not JSON, skipped ({e})", file=sys.stderr, flush=True)
                     continue
                 last = state["posted"].get(row["key"], 0)
                 if time.time() - last >= 3600:

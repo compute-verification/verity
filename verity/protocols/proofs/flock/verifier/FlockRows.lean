@@ -1,7 +1,8 @@
-/- The `flock-rows` executable: `Flock.Rows.cmd`. -/
 module
 
 public import Flock.Rows
+
+/-! The `flock-rows` executable: `Flock.Rows.cmd`. -/
 
 @[expose] public section
 

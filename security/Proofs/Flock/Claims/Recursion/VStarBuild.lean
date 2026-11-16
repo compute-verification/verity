@@ -127,7 +127,7 @@ def wordsBytes (ws : Array ℕ) : ByteArray :=
   ⟨(Array.range (2 * ws.size)).map fun i =>
     if i % 2 = 0 then (ws[i / 2]! % 256).toUInt8 else (ws[i / 2]! / 256 % 256).toUInt8⟩
 
-/-- **The tops** (`VStar.In.Src.tops`), by rep and level, each node (a top row's first 32 words, `Firewall.topRows`'
+/-- **The tops** (`VStar.In.Src.tops`), by rep and level, each node (a top row's first 32 words, `ZkServer.topRows`'
 inverse) with its salt: level 0's, round `0`'s rows, the one tree both reps share; each later level's, the schedule's
 next top (`topSizes`' order), at rep `rep`'s round committing it, the rows after the round's earlier tops. -/
 def topsOf (rs : Array RecVStar.SchedRound) (rr : ℕ → List _root_.VStar.In.Row) :

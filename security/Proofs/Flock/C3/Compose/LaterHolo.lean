@@ -24,7 +24,7 @@ import Proofs.Flock.C3.RegLevels.LgHeld
 
 `laterCoins_holo`: `laterCoins_of_held` at the verifier's map (`holoMap`) at one run. The encodings are the map's
 (`coinsEncoded_holoMap`, `coinWordsEncoded_holoMap`, `pointsEncoded_holoMap`), the sparse phases' stages are
-`stageHeldW_sparse` from their starts (`sparseDrawnAt_holo`, `stageStarts`), and R's opening's and R's Ligerito's are
+`stageHeldW_sparse` from their starts (`sparseSampledAt_holo`, `stageStarts`), and R's opening's and R's Ligerito's are
 `stagesHeld_of_run`'s, within the history's rounds where the stages take `holoCTs`' count (`coins_total_holo`).
 `stageCoins_holo_held`: `stageCoins_holo` at `holoMap` with `hlater` from `laterCoins_holo` at every accepted outer
 proof and `hlt` from `srcLevelTie_of_maps`, both at R's run in V*'s sessions (`MapsAt`) at the `C3` the verifier
@@ -44,7 +44,7 @@ open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled
 open FlockC3.Reps (nCoins StageHeld StageHeldW SrcRepTie repsOfVals UnitVals ProofOfVals SetupOfVals FramesOfVals
-  RepRoundsHeld RepsDrawn CoinsEncoded)
+  RepRoundsHeld RepsSampled CoinsEncoded)
 open Flock.Guarantees (holoCTs holoKinds heldBefore holoRounds c3Of)
 
 theorem sparse_c3Of {ish : RecVStar.Inner} {cs : RecVStar.InnerCommits} {c3 : RecCoins.C3} {sp : RecSparse.Shape}
@@ -101,7 +101,7 @@ end held
 
 /-- **`LaterCoins` at the verifier's map at one run** (`laterCoins_of_held` at `holoMap`): the link points the
 record's (`hdec`, `hu`), the sparse stages `stageHeldW_sparse` at `sparseCoins`' coins (`hss`) from
-`sparseDrawnAt_holo`'s starts (`stageStarts`), and R's stages `stagesHeld_of_run` at R's run (`hrun`, `hz`,
+`sparseSampledAt_holo`'s starts (`stageStarts`), and R's stages `stagesHeld_of_run` at R's run (`hrun`, `hz`,
 `hleft`), where the stages take `holoCTs`' count (`htot`). -/
 theorem laterCoins_holo {st : Flock.Stmt} {hp : HoloParams} {Cm : Type}
     {t : List (Cm × ((k : Fin (1 + (Exec.kindCoinTys (holoKinds (holoAt st hp))).length)) → holoCTs st hp k))}
@@ -132,7 +132,7 @@ theorem laterCoins_holo {st : Flock.Stmt} {hp : HoloParams} {Cm : Type}
     (hx : cs.stream? "stacked/rep0" = some x) (hxs : x.coins.size = rs.size)
     (hrun : RecOpening.run osh (FlockC3.RegLevels.msgsO osh w (FlockC3.RegLevels.opsAt
         (FlockC3.RegLevels.readMaps M osh.sched) osh Lb kap c3 unit w)) (FlockC3.Opening.claimsO osh w c3 unit) 0
-      (RecAlgebra.CoinSource.ofRounds (FlockC3.Opening.rep0 c3 unit)) = .ok (res, k₁))
+      (RecAlgebra.RoundCoins.ofRounds (FlockC3.Opening.rep0 c3 unit)) = .ok (res, k₁))
     (hz : ∀ y ∈ res, y = 0) (hleft : FlockC3.RegLevels.MapsLeft M zs Lb osh unit c3 w kap e0 sb e cap₀ u)
     (htot : 1 + nCoins (u.ts 0) + nCoins (u.ts 1) + nCoins (u.sp 0) + nCoins (u.sp 1) + nCoins u.op + nCoins u.lg =
       1 + (Exec.kindCoinTys (holoKinds (holoAt st hp))).length) :
@@ -148,7 +148,7 @@ theorem laterCoins_holo {st : Flock.Stmt} {hp : HoloParams} {Cm : Type}
     obtain ⟨w, sc, hsc, he⟩ := hss x
     rw [he]
     exact FlockC3.Sparse.stageHeldW_sparse w (by rw [hcm]; exact hh) (by rw [hcm]; exact hcnt) (sparse_c3Of hsp hc3)
-      hsc (FlockC3.Sparse.sparseDrawnAt_holo x hsp hrep ⟨_, FlockC3.RegLevels.holoStreams_four hrep hsp hsh hrs⟩ hc
+      hsc (FlockC3.Sparse.sparseSampledAt_holo x hsp hrep ⟨_, FlockC3.RegLevels.holoStreams_four hrep hsp hsh hrs⟩ hc
         hA hshape htblS)
   obtain ⟨h4, h5⟩ := FlockC3.RegLevels.stagesHeld_of_run (t := t) hh hc3 hrep hsp hsh hcl hrs hx hxs htbl hts hss'
     hrun hz hleft htot.le
@@ -162,7 +162,7 @@ theorem laterCoins_holo {st : Flock.Stmt} {hp : HoloParams} {Cm : Type}
 
 section src
 
-variable {nT : ℕ} {T : Fin nT → Type} {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : Law n}
+variable {nT : ℕ} {T : Fin nT → Type} {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : SamplingDesign n}
   {Reg Cm Reg' Reg₂ : Type} {S : ℕ} {stmt : Fin S → VStar.Stmt} {Vs : Fin S → VStmt}
 
 local notation "ℐ" => holoInnerAt T (holoCTs st hp) st hp
@@ -247,7 +247,7 @@ at R's run from `MapsAt`'s session (`run_of_sessionAt`) at the `C3` of the verif
 total from their ties (`coins_total_holo`), the history's length from `hleaf` (`(ℐ).r` is the table's coin kinds'
 `1 + length` and one more, by `schedInner`), and `hlt` from `MapsAt` (`srcLevelTie_of_maps`). The reps' rounds are
 encoded and sampled at the map's one-round samples (`coinsEncoded_holoMap`; `hdr` at `holoSelOne`, as
-`repsDrawn_holoMapAt` gives it). The link points are the record's (`recordPoints_of`): it decodes (`hrec`, a
+`repsSampled_holoMapAt` gives it). The link points are the record's (`recordPoints_of`): it decodes (`hrec`, a
 hypothesis) and the run's points are the history's first coin
 (`hpts`, `PointsFromHistory`). -/
 theorem stageCoins_holo_held {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
@@ -273,7 +273,7 @@ theorem stageCoins_holo_held {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → 
     (hf : FramesOfVals zs dg N k Rw sh rep vals)
     (hcus : FlockSoundness.Assumptions.InnerRecordCustody wr held sparse (Flock.Guarantees.holoMap st hp Cm ish tbl bc))
     (hheldR : RepRoundsHeld zs dg N k Rw sh rep wr held s ix)
-    (hdr : RepsDrawn zs dg N k Rw sh rep vals (holoSelOne ish tbl) s ix)
+    (hdr : RepsSampled zs dg N k Rw sh rep vals (holoSelOne ish tbl) s ix)
     (hrt : SrcRepTie zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)))
     (hst : FlockC3.Sparse.SrcSparseTie zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)))
     (hot : AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun _ u => ∃ sh w ops,

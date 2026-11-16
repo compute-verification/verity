@@ -6,7 +6,7 @@ public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
 # The headline over hidden-output sessions, with every open guarantee named
 
 `Prog.flock_headline_live_on` at the one-table plan of a hidden-output session's inputs (`planAtH`, `tablesAtH`): at a
-sample flock-verify sets up under hidden outputs, the table is `stmtOf` of the `Stmt.setupHidden` statement it accepted
+sample verity-verify-proof sets up under hidden outputs, the table is `stmtOf` of the `Stmt.setupHidden` statement it accepted
 (`tableAtH_of_accepts`), and elsewhere no witness satisfies it (`tableAtH_unsat`).
 
 `flock_headline_hidden` is that instance for any program `p`, outputs `outs`, places `pp`, constant and zero gates and
@@ -31,19 +31,19 @@ open scoped ENNReal
 local notation "𝔽" => FlockLevel3.GF128
 
 variable {n : ℕ} {I : Inputs} {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-  (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
+  (x₀ : SampleSetupH I mPts S₀ (dj S₀)) {Reg : Type}
 
 /-- **The headline over hidden-output sessions.** Let `I` be a verify command's inputs (one table) under a tag with
 hidden outputs, and let the challenger write sample `S` as the JSON `dj S` (`x₀` one sample it sets up with
 `Stmt.setupHidden`). Let the units be sampled with `Flock.Draw.drawWith`'s stratified sampling design on the challenger's coins, a
 byte source A3 makes uniform, and let each sample's session be the challenger's one table (`liveTable`, A6), written out
-by `wr`. Against any live prover `τ`, flock-verify accepts with at least `K` incorrect proof blocks of the program `p`, at the
-simulated prover's committed values, with probability at most `miss(K) + ε_ks + δ_link`, given the program's places,
+by `wr`. Against any live prover `τ`, verity-verify-proof accepts with at least `K` incorrect proof blocks of the program `p`, at the
+simulated prover's committed values, with probability at most `miss(K) + ε_ks + ε_bind`, given the program's places,
 constant and zero columns and binding at the hidden tables (`pp`, `hConst`, `hZero`, `lay`, `rs`, `hHm`) and `hdec`. -/
 theorem flock_headline_hidden {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}
     {N' : ℕ} (p : FlockSoundness.Prog N' n) (outs : Finset (Fin N'))
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
+    (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     (pp : ProgPlaces p outs (planAtH (Reg := Reg) dj x₀) (tabAtH dj x₀))
@@ -60,28 +60,28 @@ theorem flock_headline_hidden {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List U
     (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
     (capOf : Finset (Fin n) → Reg → ByteArray → (Fin 1 → Cap Dig)) (N : ℕ)
     (hdec : DecodesOn H512 enc512 Lp (tablesAtH dj x₀) I wr opn dec one fin capOf
-      (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop))
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)))
+      (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)))
     (hCR : LinkCRL (p.partition outs) H512 enc512 Lp (planAtH dj x₀) (tabAtH dj x₀) (rs.binding hHm)
       (reg (simAuditOn H512 enc512 Lp (tablesAtH dj x₀) I wr opn dg dec one fin capOf N hdec τ))
       (cont (simAuditOn H512 enc512 Lp (tablesAtH dj x₀) I wr opn dg dec one fin capOf N hdec τ)) k Rw M t')
     {qF qS : ℝ} (hKS : ∀ ω j, TableCRL execArith H512 enc512 Lp
-      (planAtH dj x₀ ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω)
+      (planAtH dj x₀ ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω)
         (reg (simAuditOn H512 enc512 Lp (tablesAtH dj x₀) I wr opn dg dec one fin capOf N hdec τ))) j
       (batchStratL H512 enc512 Lp (planAtH dj x₀)
         (cont (simAuditOn H512 enc512 Lp (tablesAtH dj x₀) I wr opn dg dec one fin capOf N hdec τ) ω)) qF qS) :
     prob (fun o => LiveAccepts I o ∧
-        K ≤ ((p.partition outs).wrong
+        K ≤ ((p.partition outs).incorrect
           (Xpub ones zeros
             (XplurL (p.partition outs) H512 enc512 Lp (planAtH dj x₀) (tabAtH dj x₀) (rs.binding hHm)
               (reg (simAuditOn H512 enc512 Lp (tablesAtH dj x₀) I wr opn dg dec one fin capOf N hdec τ))
               (cont (simAuditOn H512 enc512 Lp (tablesAtH dj x₀) I wr opn dg dec one fin capOf N hdec τ))
               k Rw))).card)
-        (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
-      (Law.stratified σs ks hks).miss K +
-        StrictCR.ksAvgStrict (planAtH dj x₀) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
+        (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
+      (SamplingDesign.stratified σs ks hks).miss K +
+        StrictCR.ksAvgStrict (planAtH dj x₀) (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
           (reg (simAuditOn H512 enc512 Lp (tablesAtH dj x₀) I wr opn dg dec one fin capOf N hdec τ)) +
-        (p.partition outs).linkBoundE (L := Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop)
+        (p.partition outs).linkBoundE (L := SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop)
           (planAtH dj x₀) (tabAtH dj x₀) (rs.binding hHm) k Rw M ρ t' :=
   p.flock_headline_live_onX outs σs ks hks St hS Kd pop Lb src hA3 (tablesAtH dj x₀) (tabAtH dj x₀) pp ones hConst
     zeros hZero lay rs hHm hk hRw hM hρ hr ht' K I wr opn dg dec one fin capOf N hdec τ hCR hKS

@@ -39,8 +39,8 @@ open Flock FlockSoundness.Refine
 
 /-! ## A record's rounds of some coins -/
 
-/-- A record with no round of no coins, which `CoinSource.ofRounds` reads as recorded: it skips a round of no coins
-(RecAlgebra.lean, `CoinSource.ofRounds`), and a record whose rounds have `run`'s sizes has none (`verifierRows_schedule`). -/
+/-- A record with no round of no coins, which `RoundCoins.ofRounds` reads as recorded: it skips a round of no coins
+(RecAlgebra.lean, `RoundCoins.ofRounds`), and a record whose rounds have `run`'s sizes has none (`verifierRows_schedule`). -/
 def NoEmpty (rounds : Array (Array F128)) : Prop := ∀ r ∈ rounds, r.size ≠ 0
 
 theorem filter_noEmpty {rounds : Array (Array F128)} (h : NoEmpty rounds) : rounds.filter (·.size ≠ 0) = rounds :=
@@ -55,8 +55,8 @@ theorem noEmpty_of_sizes {rounds : Array (Array F128)} {ns : List Nat} (h : roun
   exact hn _ (List.mem_map_of_mem (Array.mem_toList_iff.mpr hr))
 
 theorem ofRounds_filter (rounds : Array (Array F128)) :
-    CoinSource.ofRounds (rounds.filter (·.size ≠ 0)) = CoinSource.ofRounds rounds := by
-  unfold CoinSource.ofRounds
+    RoundCoins.ofRounds (rounds.filter (·.size ≠ 0)) = RoundCoins.ofRounds rounds := by
+  unfold RoundCoins.ofRounds
   rw [filter_noEmpty (noEmpty_filter rounds)]
 
 /-! ## K values as the verifier's words -/
@@ -387,13 +387,13 @@ theorem finalProg_of_finalOK {sch : Schedule} {sws : Array Switched} {yr : Array
 (`ligeritoRun`) ends in a state on which the verifier's final check passes (`FinalOK`), having read every message
 and OOD value (Ligerito.lean:227, 274), and the final weights it returns are the verifier's. -/
 theorem ligerito_checks {sch : Schedule} {M : Messages F128} {tIn : F128} {sws : Array Switched} {k k' : Nat}
-    {src : CoinSource} {lgr : Array F128} {lg : LgPts}
+    {src : RoundCoins} {lgr : Array F128} {lg : LgPts}
     (h : ligerito sch M tIn sws k src = .ok ((lgr, lg), k')) (hz : ∀ x ∈ lgr, x = 0) :
     ∃ (ext : Nat) (st : LSt F128),
       (ligeritoRun sch M).run
           { s := kofF tIn, q := ((Val.zero, Val.zero), (Val.zero, Val.zero), (Val.zero, Val.zero)) } k src =
         .ok (((lg.initCh, lg.levels, ext), st), k') ∧
-      src.drawnAll k' = true ∧ st.msg = M.msgs.size ∧ st.ood = M.ood.size ∧ lg.oods = st.oods ∧
+      src.sampledAll k' = true ∧ st.msg = M.msgs.size ∧ st.ood = M.ood.size ∧ lg.oods = st.oods ∧
       lg.conss = st.conss ∧ FinalOK sch sws M.yr lg.initCh lg.levels ext st ∧
       ∀ vst : LState, vst.oods = st.oods → vst.conss = st.conss →
         lg.res = resE (basis sws) sch.n lg.initCh lg.levels ext vst := by
@@ -403,7 +403,7 @@ theorem ligerito_checks {sch : Schedule} {M : Messages F128} {tIn : F128} {sws :
   cases ha
   obtain ⟨b, k₃, hb, h⟩ := cm_bind h
   cases hb
-  by_cases cd : src.drawnAll k₁ = true
+  by_cases cd : src.sampledAll k₁ = true
   swap
   · rw [ite_eq_left (by simpa using cd)] at h
     obtain ⟨_, _, h0, _⟩ := cm_bind h
@@ -456,9 +456,9 @@ theorem ligerito_of_residuals {sh : Shape} {w comb : Array F128} {cons : Nat →
     ∃ (k₀ ext : Nat) (st : LSt F128) (k' : Nat),
       (ligeritoRun sh.sched (decoded sh w comb cons)).run
           { s := kofF (valOf sh w comb cons .T),
-            q := ((Val.zero, Val.zero), (Val.zero, Val.zero), (Val.zero, Val.zero)) } k₀ (CoinSource.ofRounds rounds) =
+            q := ((Val.zero, Val.zero), (Val.zero, Val.zero), (Val.zero, Val.zero)) } k₀ (RoundCoins.ofRounds rounds) =
         .ok (((info.lg.initCh, info.lg.levels, ext), st), k') ∧
-      (CoinSource.ofRounds rounds).drawnAll k' = true ∧ st.msg = (decoded sh w comb cons).msgs.size ∧
+      (RoundCoins.ofRounds rounds).sampledAll k' = true ∧ st.msg = (decoded sh w comb cons).msgs.size ∧
       st.ood = (decoded sh w comb cons).ood.size ∧ info.lg.oods = st.oods ∧ info.lg.conss = st.conss ∧
       FinalOK sh.sched info.rs.sws (decoded sh w comb cons).yr info.lg.initCh info.lg.levels ext st := by
   obtain ⟨rs', k, hrun, hres'⟩ := residuals_eq_run w comb cons hrows hS hw hc hacc

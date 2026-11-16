@@ -21,7 +21,7 @@ node lowers either: no occurrence. A linear is one
 `triton_launch` GEMM, or under the exact-int8 linears `row_quant` then `scaled_mm`. An fx node is named by its op, counted over
 the request (`embedding`, `embedding_1`, ...). Every node of the emitted body is held to the kind its place names
 (`build._Specs`), so a body these names don't fit is refused, never misnamed; the dead units' Calls are named, then dropped with
-them (`prune.kept_records`). Anything else (the fused MoE, q/k norms, biases, Gemma-2's chains and caps, an activation other than
+them (`prune.kept_records`). Anything else (the fused MoE, q/k norms, biases, Gemma-2's chains and logit soft caps, an activation other than
 SiLU, a sliding window, a step wrapper, tensor parallelism, the DSA and DSV4 decoders) is `Unexpressible`: its names are its
 trace's.
 
@@ -43,9 +43,9 @@ from typing import Any
 from verity.circuits.codec import encode_program, program_digest
 from verity.circuits.types import RecordType
 
-from verity_vllm.correspondence.runtime import NAMESPACE, SCHEMA, correspondence_digest
+from verity_torch.correspondence.runtime import NAMESPACE, SCHEMA, correspondence_digest
 from verity_vllm.pipeline.build_instances import write_instances
-from verity_vllm.program.prune import kept_records
+from verity_torch.prune import kept_records
 
 from .build import BuildResult, _Decoder, build_program, decoder
 from .common import Unexpressible, kind
@@ -217,9 +217,9 @@ def _forward(w: _Walk, S: Any, C: Any, M: int, p0: int) -> None:
             w.call(lambda f: id(f) in attn, "attention", occ, hint, w.slots(views, r, True), hint=hint)
         linear(S.o, p + "self_attn.o_proj", qw, H)
         fused(p + "post_attention_layernorm")
-        linear(S.gate_up, p + "mlp.gate_up_proj", H, 2 * C.I)
-        w.rows(S.silu, "SiluMul", "silu_and_mul", p + "mlp.act_fn", M, [_view((M, C.I), bf)], ((0, "other"),))
-        linear(S.down, p + "mlp.down_proj", C.I, H)
+        linear(S.gate_up, p + "mlp.gate_up_proj", H, 2 * C.INTER)
+        w.rows(S.silu, "SiluMul", "silu_and_mul", p + "mlp.act_fn", M, [_view((M, C.INTER), bf)], ((0, "other"),))
+        linear(S.down, p + "mlp.down_proj", C.INTER, H)
     fused(f"{WRAPPER}model.norm")
 
 

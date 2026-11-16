@@ -188,7 +188,7 @@ theorem PrBadGood_le_abort_rej {H : Msg → Msg} {D : Deploy Coin} {I : Inner Co
     have hΦ : UnifMap (fun s : Ω × ((Fin (I.V.k (xI D x)) → Coin) × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) ×
         (Fin (I.waits (xI D x)) → Fin (I.cap (xI D x)) →
           (Fin (I.V.k (xI D x)) → Coin) × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) =>
-        (s.1, (extendDraw s.2.1).1, (extendDraw s.2.1).2, fun i j => extendDraw (s.2.2 i j))) := by
+        (s.1, (extendSample s.2.1).1, (extendSample s.2.1).2, fun i j => extendSample (s.2.2 i j))) := by
       let e : Ω × ((Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) ×
           (Fin (I.waits (xI D x)) → Fin (I.cap (xI D x)) → (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) ≃
           Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x ×
@@ -197,15 +197,15 @@ theorem PrBadGood_le_abort_rej {H : Msg → Msg} {D : Deploy Coin} {I : Inner Co
           invFun := fun s => (s.1, (s.2.1, s.2.2.1), s.2.2.2)
           left_inv := fun _ => rfl
           right_inv := fun _ => rfl }
-      exact (UnifMap.self.prod ((unifMap_extendDraw (hR x)).prod
-        (UnifMap.pi (UnifMap.pi (unifMap_extendDraw (hR x)) _) _))).comp (UnifMap.equiv e)
+      exact (UnifMap.self.prod ((unifMap_extendSample (hR x)).prod
+        (UnifMap.pi (UnifMap.pi (unifMap_extendSample (hR x)) _) _))).comp (UnifMap.equiv e)
     rw [← hΦ.Pr Yb]
     refine Pr_congr fun s => ?_
-    show (innerF H D I DO decO P x decC s.1 (extendDraw s.2.1)).out = .acc ∧
+    show (innerF H D I DO decO P x decC s.1 (extendSample s.2.1)).out = .acc ∧
       ¬ I.R.ext (xI D x) ((erepProg (I.waits (xI D x)) (I.k (xI D x)) (I.cap (xI D x)) I.opens
-        (I.assemble (xI D x)) (I.check (xI D x)) (extendDraw s.2.1) (fun i j => extendDraw (s.2.2 i j))).eval H
+        (I.assemble (xI D x)) (I.check (xI D x)) (extendSample s.2.1) (fun i j => extendSample (s.2.2 i j))).eval H
           (innerF H D I DO decO P x decC s.1)).1 ↔ _
-    have hf : (fun d => innerF H D I DO decO P x decC s.1 (extendDraw d)) =
+    have hf : (fun d => innerF H D I DO decO P x decC s.1 (extendSample d)) =
         abortRun H (innerP H D I DO decO P x decC) I.V (xI D x) (keepA H D I DO decO P x) s.1 :=
       funext fun d => (abortRun_eq (hR x) s.1 d).symm
     rw [erepProg_eval_comp, hf, ← abortRun_eq (hR x)]

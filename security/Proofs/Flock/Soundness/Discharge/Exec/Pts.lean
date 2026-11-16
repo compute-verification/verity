@@ -14,7 +14,7 @@ import Proofs.Flock.Soundness.Refine.Walk
 
 `setupH` sets `m_pts = PT_LOCAL + nbl`, and `nbl` is read off the number of units the statement proves and the
 circuit's `g` (`setupH_facts`, `mPtsOf`). For a sampled session that number is the sample's proved units, its sampled proof blocks
-and their closure (`drawn_n`, `setupH_mPts_drawn`). The circuit is the circuit file's parse whatever the sample, so two
+and their closure (`sampled_n`, `setupH_mPts_sampled`). The circuit is the circuit file's parse whatever the sample, so two
 samples that prove as many units set up at the same `m_pts` (`setupH_mPts_eq`), namely `mPtsOf c.g N₀` for `N₀` proved
 units (`setupH_mPts_of_proved`). A sample's proved units include its closure, so under a sampling design with a closure `m_pts` can
 differ between samples of the same size.
@@ -117,10 +117,10 @@ theorem setupH_facts (h : Stmt.setupH tags cf pf coins tables draw partition pro
   exact ⟨hc, fun d hd => ⟨pop, hpub d hd⟩, rfl⟩
 
 set_option maxHeartbeats 4000000 in
-/-- **A sampled public file has the sample's proved units** (`Flock.Statement`): its units are `UnitDraw.proved`, the sampled proof blocks and
+/-- **A sampled public file has the sample's proved units** (`Flock.Statement`): its units are `UnitSample.proved`, the sampled proof blocks and
 their closure. -/
-theorem drawn_n {c : Circuit} {pop pub : Public} {d : Json} (h : HmRow.drawn c pop d = .ok pub) :
-    ∃ ud, Draw.UnitDraw.ofJson d = .ok ud ∧ pub.n = ud.proved.size := by
+theorem sampled_n {c : Circuit} {pop pub : Public} {d : Json} (h : HmRow.drawn c pop d = .ok pub) :
+    ∃ ud, Draw.UnitSample.ofJson d = .ok ud ∧ pub.n = ud.proved.size := by
   unfold HmRow.drawn at h
   dsimp only at h
   simp only [throw_bind'] at h
@@ -131,20 +131,20 @@ theorem drawn_n {c : Circuit} {pop pub : Public} {d : Json} (h : HmRow.drawn c p
     exact ⟨_, by assumption, rfl⟩
 
 /-- **`m_pts` at a sampled session** is `mPtsOf` of the circuit's `g` and the number of units the sample proves. -/
-theorem setupH_mPts_drawn {d : Json} (h : Stmt.setupH tags cf pf coins tables (some d) partition program = .ok st) :
-    ∃ ud, Draw.UnitDraw.ofJson d = .ok ud ∧ st.mPts = mPtsOf st.c.g ud.proved.size := by
+theorem setupH_mPts_sampled {d : Json} (h : Stmt.setupH tags cf pf coins tables (some d) partition program = .ok st) :
+    ∃ ud, Draw.UnitSample.ofJson d = .ok ud ∧ st.mPts = mPtsOf st.c.g ud.proved.size := by
   obtain ⟨-, hd, hm⟩ := setupH_facts h
   obtain ⟨pop, hpub⟩ := hd d rfl
-  obtain ⟨ud, hud, hn⟩ := drawn_n hpub
+  obtain ⟨ud, hud, hn⟩ := sampled_n hpub
   exact ⟨ud, hud, by rw [hm, hn]⟩
 
 /-- **`m_pts` from the circuit and the sample's proved count**: at a sample `d` whose decoding proves `N₀` units, every
 statement `setupH` accepts has `m_pts = mPtsOf c.g N₀`, `c` the circuit file's parse. -/
 theorem setupH_mPts_of_proved {c : Circuit} {d : Json} {N₀ : ℕ}
     (hc : (if tags.typed then HmRow.parseTyped tags cf tables else HmRow.parse tags cf tables) = .ok c)
-    (hD : ∀ D, Draw.UnitDraw.ofJson d = .ok D → D.proved.size = N₀)
+    (hD : ∀ D, Draw.UnitSample.ofJson d = .ok D → D.proved.size = N₀)
     (h : Stmt.setupH tags cf pf coins tables (some d) partition program = .ok st) : st.mPts = mPtsOf c.g N₀ := by
-  obtain ⟨ud, hud, hm⟩ := setupH_mPts_drawn h
+  obtain ⟨ud, hud, hm⟩ := setupH_mPts_sampled h
   have e := (setupH_facts h).1
   rw [hc] at e
   rw [hm, ← Except.ok.inj e, hD ud hud]
@@ -152,13 +152,13 @@ theorem setupH_mPts_of_proved {c : Circuit} {d : Json} {N₀ : ℕ}
 /-- **Two samples that prove as many units set up at the same `m_pts`**, at the same tags, circuit file and tables:
 the circuit is the circuit file's parse at both. -/
 theorem setupH_mPts_eq {pf' : ByteArray} {coins' : Coins} {d d' : Json} {partition' : Option Json}
-    {program' : Option ByteArray} {st' : Stmt} {ud ud' : Draw.UnitDraw}
+    {program' : Option ByteArray} {st' : Stmt} {ud ud' : Draw.UnitSample}
     (h : Stmt.setupH tags cf pf coins tables (some d) partition program = .ok st)
     (h' : Stmt.setupH tags cf pf' coins' tables (some d') partition' program' = .ok st')
-    (hud : Draw.UnitDraw.ofJson d = .ok ud) (hud' : Draw.UnitDraw.ofJson d' = .ok ud')
+    (hud : Draw.UnitSample.ofJson d = .ok ud) (hud' : Draw.UnitSample.ofJson d' = .ok ud')
     (hsz : ud.proved.size = ud'.proved.size) : st.mPts = st'.mPts := by
-  obtain ⟨u, hu, hm⟩ := setupH_mPts_drawn h
-  obtain ⟨u', hu', hm'⟩ := setupH_mPts_drawn h'
+  obtain ⟨u, hu, hm⟩ := setupH_mPts_sampled h
+  obtain ⟨u', hu', hm'⟩ := setupH_mPts_sampled h'
   rw [hud] at hu
   rw [hud'] at hu'
   cases hu

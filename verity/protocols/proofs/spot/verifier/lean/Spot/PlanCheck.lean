@@ -3,7 +3,7 @@ module
 /-!
 # The planner's one-stage designs, checked (`Spot.PlanCheck`)
 
-The sampling planner (`verity/core/protocols/spot/optimize.py`) picks designs in floating point. This module
+The sampling planner (`verity/protocols/proofs/spot/prover/optimize.py`) picks designs in floating point. This module
 checks a one-stage design in exact arithmetic and returns what it certifies at δ, or refuses it:
 
 * `leakBound`: `units` units, each exporting at most `width` bits and sampled independently with probability

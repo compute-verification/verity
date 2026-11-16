@@ -8,8 +8,9 @@ a ``CUT`` row's batched members, a ``PARTS`` row's parts and a ``STAGES`` row's 
 coordinate or its K-chunks of one width, and a ``CHAINS`` row's one slot is a way its key blocks are served
 (`serving_rows.chain_ways`): each key block its scores unit and values units of `CHAIN_COLS` columns and its key rows'
 writers, the way the served partition names, before whole key blocks. A unit template fits when it binds, Flock has a piece for every leaf, its block
-(`m1_families.block`) is at most `m1_families.K_MAX` and its outputs fit a public size class (`partition.unit_class`). The
-row itself is taken when it fits, else each slot's coarsest fitting option. A ``COLS`` or ``WIDE_COORDS`` row, and a
+(`m1_families.block`) is at most `m1_families.K_MAX` and its outputs fit a public size class (`partition.size_class`). The
+row itself is taken when it fits and is no longer than its family's `WHOLE_UP_TO`, else each slot's coarsest fitting
+option (a fitting row past `WHOLE_UP_TO` whole when no option fits). A ``COLS`` or ``WIDE_COORDS`` row, and a
 split's ``COLS`` or ``WIDE_COORDS`` slot (the block-scaled FP8 GEMM's coordinates of c outputs), instead take the fitting
 width of least leakage-weighted proving cost (`width_pick`, the row's own width among them). A row
 with a slot that has none is a gap, with its finest option's reason. A row whose Definition has no gate (a gather) or no
@@ -31,7 +32,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from m1_families import K_MAX
-from verity.protocols.proofs.spot.prover.optimize import row_ands, unit_class
+from verity.protocols.proofs.spot.prover.optimize import row_ands, size_class
 from verity.circuits.call_scope import spec_base, spec_statics
 from verity_flock import ir_lower as IL
 from verity_vllm.pipeline import serving_rows as ST
@@ -47,6 +48,10 @@ WIDTH_FLOOR = 22
 #: the columns of a values unit where a ``CHAINS`` row's key blocks are served as scores and values units: the served
 #: partition's width, the combine's column block, so a split's end reads one values unit's row whole
 CHAIN_COLS = 64
+#: the longest row of a family taken whole, by a static of its spec: past it a row's whole statement, though its block is at
+#: most `K_MAX`, stages past a staging job's memory while its family's units stage, so it is cut like the family's longer
+#: rows (each slot's coarsest fitting option), and taken whole only when no option fits
+WHOLE_UP_TO = {"SparseMlaSplit_v1": ("T", 3), "DsaMqaLogits_v3": ("N", 36)}
 
 
 def misfit(e: dict) -> str | None:
@@ -60,7 +65,7 @@ def misfit(e: dict) -> str | None:
         return f"its rows alone need a 2^{b['rows_log']} block"
     if b["est_log"] > K_MAX:
         return f"a 2^{b['est_log']} block at {e['ands']:,} ANDs"
-    if unit_class(sum(b["out_bits"])) is None:
+    if size_class(sum(b["out_bits"])) is None:
         return f"{sum(b['out_bits']):,} output bits, past the widest size class"
     return None
 
@@ -93,10 +98,16 @@ def slots(spec: str, units: list[dict]) -> list[list[list[dict]]]:
     return [[[u] for u in units]] if units else []
 
 
+def past_whole(spec: str) -> bool:
+    """Whether row ``spec`` is longer than its family's `WHOLE_UP_TO`."""
+    bound = WHOLE_UP_TO.get(spec_base(spec))
+    return bound is not None and spec_statics(spec)[bound[0]] > bound[1]
+
+
 def leak_cost(units: list[dict]) -> float:
-    """What the sampled-proofs planner pays to prove ``units`` (each taken ``n`` times), up to one factor: a type's samples
+    """What the SPOT planner pays to prove ``units`` (each taken ``n`` times), up to one factor: a type's samples
     grow with its blocks' outputs at their size class plus `LOCATION_BITS`, and each sample's proving with its block's rows."""
-    return sum(u["n"] * (unit_class(sum(u["block"]["out_bits"])) + LOCATION_BITS) * 2 ** u["block"]["est_log"] for u in units)
+    return sum(u["n"] * (size_class(sum(u["block"]["out_bits"])) + LOCATION_BITS) * 2 ** u["block"]["est_log"] for u in units)
 
 
 def widths(spec: str) -> bool:
@@ -127,13 +138,15 @@ def cut(spec: str, f: dict) -> tuple[str, list[dict], str | None]:
     ss = slots(spec, e.get("units", []))
     if widths(spec) and (pick := width_pick([whole, *(ss[0] if ss else [])])) is not None:
         return ("row" if pick == whole else "split"), pick, None
-    if why is None:
+    if why is None and not (ss and past_whole(spec)):
         return "row", whole, None
     got = []
     for opts in ss:
         wide = all(widths(u["spec"]) for o in opts for u in o)
         pick = width_pick(opts) if wide else next((o for o in opts if all(misfit(u) is None for u in o)), None)
         if pick is None:
+            if why is None:
+                return "row", whole, None
             worst = next((u for u in (opts[-1] if opts else []) if misfit(u) is not None), None)
             return "gap", [], f"{why}; finest split {worst['spec']}: {misfit(worst)}" if worst else why
         got += pick
@@ -144,7 +157,7 @@ def _per_unit(u: dict) -> dict:
     b = u["block"]
     out = sum(b["out_bits"])
     nbytes = [-(-x // 8) for x in b["in_bits"]] + [2 * -(-x // 16) for x in b["out_bits"]]
-    return {"out_bits": out, "class_bits": unit_class(out), "in_bits": sum(b["in_bits"]), "ands": u["ands"],
+    return {"out_bits": out, "class_bits": size_class(out), "in_bits": sum(b["in_bits"]), "ands": u["ands"],
             "macs": u.get("macs", 0), "reads": u.get("reads", 0), "asserts": u.get("asserts", 0), "rows": nbytes,
             "row_bytes": sum(nbytes), "open_ands": sum(row_ands(x) for x in nbytes), "k_log": b["est_log"],
             "rows_log": b["rows_log"]}
@@ -276,7 +289,7 @@ def table(c: dict) -> str:
 
 
 def card(c: dict) -> dict:
-    """The planner's card (`benchmarks/sampling_plan/glm53.py` reads it): per proof-block Definition its counts in one
+    """The planner's card (`verity/protocols/proofs/spot/prover/cost/glm53.py` reads it): per proof-block Definition its counts in one
     request, output bits, ANDs, MACs, opened rows' bytes and staged block log2, and the gaps by row family
     (`gap_families`)."""
     keep = ("family", "prefill", "decode", "out_bits", "ands", "macs", "rows", "k_log")

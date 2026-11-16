@@ -10,7 +10,7 @@ the closed form below against the same arithmetic on uniform sessions, and only 
 `COST_MODEL_JSON` is a `spot.costfit` record whose observations include `BlockOpeningCheck_v1`'s sessions.
 
 With o openings proved a second, d of them a group of k passes at r passes a second, and β = B/d, where
-B = −S·expm1(ln δ/S) ≈ ln(1/δ) is `audit.pooled`'s budget over S draws, the line loses this many blocks over a span
+B = −S·expm1(ln δ/S) ≈ ln(1/δ) is `audit.pooled`'s budget over S samples, the line loses this many blocks over a span
 Θ, as a fraction of the store's N blocks:
 
     sampling, snapshot        B / S_Θ                                     S_Θ the openings sampled over Θ
@@ -48,10 +48,15 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
-from verity.protocols.accounting.poub.verifier import audit, ledger, timing  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier import audit, ledger  # noqa: E402
 from verity.protocols.proofs.spot.prover import costfit  # noqa: E402
 
-from verity.protocols.accounting.poub.verifier.session import wire  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier.session import wire  # noqa: E402
+
+import sheets  # noqa: E402
+
+FIGURES = sheets.figures()
+"""The node's figures, from its data sheets (`sheets.figures`)."""
 
 LN = -math.log(audit.DELTA)
 BLOCK = 4096
@@ -102,7 +107,7 @@ def span_line(g: SimpleNamespace, lo: int, hi: int, *, wrong: float, blocks: int
 
 
 def record_of(windows: list[tuple[int, int]], per_coin: int = 1) -> SimpleNamespace:
-    """What `audit.pooled` reads of a record: each window's receipts and draws, and the windows an openings coin
+    """What `audit.pooled` reads of a record: each window's receipts and samples, and the windows an openings coin
     selects over (`groups_per_coin`)."""
     return SimpleNamespace(groups_per_coin=per_coin, windows=[SimpleNamespace(receipts=u, profile=SimpleNamespace(
         delta=audit.DELTA, drawn={"receipt": d})) for u, d in windows])
@@ -180,10 +185,10 @@ def check_closed_form() -> list[dict]:
     one openings coin sampling over m groups (d = s/m), at two groups in flight and at one (each root c after its coin,
     the next coin a period after it). It holds while the wrong receipts fit in the stretch (β < G)."""
     out = []
-    for s, m, G, W, k, r, c, N, f in ((1, 1, 40, 3, 1, 8.0, 0.057, 10_000, 2), (2, 1, 40, 3, 2, 12.0, 0.03, 10_000, 2),
+    for s, m, G, W, k, r, c, N, f in ((1, 1, 80, 3, 1, 8.0, 0.057, 10_000, 2), (2, 1, 40, 3, 2, 12.0, 0.03, 10_000, 2),
                                       (64, 1, 12, 4, 1, 11.89, 0.057, 10_000, 2),
                                       (232, 1, 12, 7, 1, 15.0, 0.06, 130_023, 2),
-                                      (1, 4, 400, 3, 1, 8.0, 0.057, 10_000, 2), (1, 1, 40, 3, 1, 8.0, 0.057, 10_000, 1),
+                                      (1, 4, 400, 3, 1, 8.0, 0.057, 10_000, 2), (1, 1, 80, 3, 1, 8.0, 0.057, 10_000, 1),
                                       (64, 1, 12, 4, 1, 11.89, 0.057, 10_000, 1),
                                       (1, 4, 400, 3, 2, 8.0, 0.2, 10_000, 1)):
         d = s / m
@@ -252,7 +257,7 @@ def points(recorded: list[dict]) -> dict:
 
 def pass_s(p: dict) -> float:
     """A pass: each GPU reads its shard."""
-    return p["shard_bytes"] / timing.GPU_READ_BYTES_PER_S
+    return p["shard_bytes"] / FIGURES.gpu_read_bytes_per_s
 
 
 def c_at(p: dict, flight: int) -> float:
@@ -343,8 +348,8 @@ def solve(p: dict, prices: dict, eps: float, *, theta: float, line_rule: bool, f
 def coin_check(p: dict, s: dict) -> dict:
     """A plan `s` sampled g = `s["per_coin"]` groups a coin, read by the code: its closed form's held-over-time sampling
     term against `span_line`'s arithmetic on the uniform session it describes (whole coins over Θ, then one more),
-    whose wrong receipts are `audit.pooled`'s on a record of each group's receipts and draws naming `groups_per_coin`
-    (all of a coin's draws on its last group, as `AuditRun.close` may share them: the code pools them over the coin's
+    whose wrong receipts are `audit.pooled`'s on a record of each group's receipts and samples naming `groups_per_coin`
+    (all of a coin's samples on its last group, as `AuditRun.close` may share them: the code pools them over the coin's
     groups). At one group in flight (`s["flight"]` 1) each group's root comes `least_period` after its coin, before the
     next coin as a record naming f = 1 must have it. Refuses to go on unless they agree."""
     g, k, r, N, f = s["per_coin"], s["k"], s["r"], p["blocks"], s.get("flight", 2)
@@ -447,8 +452,8 @@ def main() -> None:
         pool = line_at(p32, o=o, d=d, k=k, r=r32, theta=10 * T)
         rows.append([f"{s_T:,}", k, f"{d:.3g}", pct(LN / s_T), pct(per["eps_held"]), pct(LN / (10 * s_T)),
                      pct(pool["eps_held"]), pct(per["rebuild_held"])])
-    md.append(f"\n## ε against openings proved a {T:g}-s window (δ = 2^-40, which reads {ledger.DELTA_FORM}), "
-              f"at 32B x8's {r32:.2f} passes/s\n")
+    md.append(f"\n## ε against openings proved a {T:g}-s window (δ = 2^{math.log2(audit.DELTA):.0f}, which reads "
+              f"{ledger.DELTA_FORM}), at 32B x8's {r32:.2f} passes/s\n")
     md.append(table(["openings a window", "k", "draws a group", "ε a window, snapshot", "ε a window, held",
                      "pooled over 10 windows, snapshot", "pooled over 10, held", "rebuilds held (a window)"], rows))
 
@@ -564,7 +569,7 @@ def main() -> None:
             meas = [arm for arm in MEMSAT["arms"] if arm[0] == r] if name.startswith("8B") else []
             sweep.append({"point": name, "r": r, "o": o, "k": k, "d": d, **two, "one_in_flight": one,
                           **costs(p, prices, o=o, r=r),
-                          "reads_over_R": r * p["blocks"] * BLOCK / timing.SPEC_BYTES_PER_S,
+                          "reads_over_R": r * p["blocks"] * BLOCK / FIGURES.spec_bytes_per_s,
                           "measured": {"serving_share": meas[0][0] * meas[0][1], "gamma_spec": meas[0][2],
                                        "tokens_per_s": meas[0][3]} if meas else None})
     def one(x: dict, cell: str) -> str:
@@ -609,7 +614,7 @@ def main() -> None:
     md.append(table(["", "measured unit", "deployed unit (modeled)"],
                     [["ANDs", f"{prices['ands']:,}", f"{prices['deployed_ands']:,.0f}"],
                      ["one fit", f"{prices['fit']:.4f}", f"{prices['fit_deployed']:.4f}"],
-                     ["device floor (firewall)", f"{prices['floor']:.4f}", f"{prices['floor_deployed']:.4f}"]]))
+                     ["device floor (ZK server)", f"{prices['floor']:.4f}", f"{prices['floor_deployed']:.4f}"]]))
 
     out = {"recorded": recorded, "uniform_checks": uniform, "prices": prices, "points": pts, "region": region,
            "sweep": sweep, "serve": serve, "per_coin": {"plans": coin_plans, "at_g1_rate": coin_fixed},

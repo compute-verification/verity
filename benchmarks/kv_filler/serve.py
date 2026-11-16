@@ -259,7 +259,7 @@ def main() -> int:
     ap.add_argument("--part-budget", type=int, default=1 << 15, help="part: a BASE kernel's units of 128 KiB")
     ap.add_argument("--wt-lib", help="--stack: a WT_RECEIPT build of codec_tensor's wt.cu at a full-slot field")
     ap.add_argument("--reader-lib", help="--stack: a build of codec_tensor's reader.cu")
-    ap.add_argument("--paged-lib", help="--stack: a build of vllm_encoded's paged.cu at wt.cu's field")
+    ap.add_argument("--paged-lib", help="--stack: a build of PoUB's prover's paged.cu at wt.cu's field")
     a = ap.parse_args()
     if a.stack and not (a.wt_lib and a.reader_lib and a.paged_lib):
         ap.error("--stack takes --wt-lib, --reader-lib and --paged-lib")

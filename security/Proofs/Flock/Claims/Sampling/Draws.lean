@@ -35,7 +35,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Audit.SamplingDesign
 import Proofs.Flock.Soundness.Game
 import Std.Tactic.BVDecide.Normalize.Prop
 
@@ -43,22 +43,22 @@ import Std.Tactic.BVDecide.Normalize.Prop
 # The sample bounds, as the claims read probabilities
 
 The sampling compiler's knowledge error carries the sample's term: if at least `t` regions are wrong, the verifier's sample
-misses all of them with probability at most its sampling design's bound. Each registered law (`Flock.Draw.Law`: `subset`,
+misses all of them with probability at most its sampling design's bound. Each registered sampling design (`Flock.Draw.SamplingDesign`: `subset`,
 `bernoulli`, `stratified`, `work`) has that bound proved already, in `ℝ≥0∞` over the audit layer's `prCoin`
-(`FlockSoundness.Audit.Law`). This file states each in `Claims.Pr`, the uniform average the claims use, through
+(`FlockSoundness.Audit.SamplingDesign`). This file states each in `Claims.Pr`, the uniform average the claims use, through
 `Pr_eq_toReal_prCoin`:
 
 * `subset_miss_eq`, `subset_miss_le`: a uniform `k`-subset misses `B` with probability `C(n − |B|, k)/C(n, k)`, at most
-  `C(n − t, k)/C(n, k)` when `t ≤ |B|` (`Law.subset_escape`);
+  `C(n − t, k)/C(n, k)` when `t ≤ |B|` (`SamplingDesign.subset_escape`);
 * `bernoulli_miss_eq`, `bernoulli_miss_le`: each unit sampled when its coin in `[0, den)` is below `num` misses `B` with
-  probability `((den − num)/den)^|B|`, at most `((den − num)/den)^t` (`Law.bernoulli_escape`);
+  probability `((den − num)/den)^|B|`, at most `((den − num)/den)^t` (`SamplingDesign.bernoulli_escape`);
 * `stratified_miss_eq`: independent uniform `k_s`-subsets of the strata miss `B` with probability
-  `∏ s C(n_s − m_s, k_s)/C(n_s, k_s)` (`Law.stratified_escape`), and `stratified_miss_le`: at most `(1 − π)^t` when every
+  `∏ s C(n_s − m_s, k_s)/C(n_s, k_s)` (`SamplingDesign.stratified_escape`), and `stratified_miss_le`: at most `(1 − π)^t` when every
   non-empty stratum samples at least a fraction `π` of its units;
 * `work_miss_le`: the work sampling design misses units doing at least `T` of the work `W` with probability at most
-  `((W − T)/W)^K` (`Law.work_escape_le`);
-* `miss_le_count`: any sampling design misses `B` with at most its count curve at `t ≤ |B|` (`Law.miss`), which
-  `Law.stratified_miss_eq_greedy` computes for the stratified and work laws.
+  `((W − T)/W)^K` (`SamplingDesign.work_escape_le`);
+* `miss_le_count`: any sampling design misses `B` with at most its count curve at `t ≤ |B|` (`SamplingDesign.miss`), which
+  `SamplingDesign.stratified_miss_eq_greedy` computes for the stratified and work sampling designs.
 
 `miss_le_of` turns each into its form at `δ`: a bound of at most `δ` at `t` is a miss probability of at most `δ`.
 -/
@@ -77,13 +77,13 @@ theorem Pr_eq_toReal_prCoin {α : Type} [Fintype α] (p : α → Prop) : Claims.
   unfold Claims.Pr Claims.prUniform
   congr 2
 
-/-- A sampling design's miss probability, in the claims' terms, is its escape. -/
-theorem Pr_miss_eq {n : ℕ} (L : Law n) (B : Finset (Fin n)) :
-    Claims.Pr (fun ω : L.Ω => Disjoint (L.draw ω) B) = (L.escape B).toReal :=
+/-- A sampling design's miss probability, in the claims' terms, is its missProb. -/
+theorem Pr_miss_eq {n : ℕ} (L : SamplingDesign n) (B : Finset (Fin n)) :
+    Claims.Pr (fun ω : L.Ω => Disjoint (L.draw ω) B) = (L.missProb B).toReal :=
   Pr_eq_toReal_prCoin _
 
-/-- A miss probability below an escape bound `e` that is finite. -/
-theorem Pr_miss_le {n : ℕ} (L : Law n) (B : Finset (Fin n)) {e : ℝ≥0∞} (he : e ≠ ⊤) (h : L.escape B ≤ e) :
+/-- A miss probability below an missProb bound `e` that is finite. -/
+theorem Pr_miss_le {n : ℕ} (L : SamplingDesign n) (B : Finset (Fin n)) {e : ℝ≥0∞} (he : e ≠ ⊤) (h : L.missProb B ≤ e) :
     Claims.Pr (fun ω : L.Ω => Disjoint (L.draw ω) B) ≤ e.toReal := by
   rw [Pr_miss_eq]
   exact ENNReal.toReal_mono he h
@@ -98,8 +98,8 @@ theorem miss_le_of {p b δ : ℝ} (h : p ≤ b) (hb : b ≤ δ) : p ≤ δ := h.
 theorem subset_miss_eq {n k : ℕ} (hk : k ≤ n) (B : Finset (Fin n)) :
     Claims.Pr (fun S : {S : Finset (Fin n) // S.card = k} => Disjoint S.1 B) =
       ((n - B.card).choose k : ℝ) / (n.choose k : ℝ) := by
-  have := Pr_miss_eq (Law.subset n k hk) B
-  rw [Law.subset_escape, ENNReal.toReal_div, ENNReal.toReal_natCast, ENNReal.toReal_natCast] at this
+  have := Pr_miss_eq (SamplingDesign.subset n k hk) B
+  rw [SamplingDesign.subset_escape, ENNReal.toReal_div, ENNReal.toReal_natCast, ENNReal.toReal_natCast] at this
   exact this
 
 /-- **The uniform `k`-subset misses `t` wrong regions** with probability at most `C(n − t, k)/C(n, k)`. -/
@@ -112,8 +112,8 @@ theorem subset_miss_le {n k t : ℕ} (hk : k ≤ n) {B : Finset (Fin n)} (ht : t
 /-! ## Bernoulli -/
 
 theorem bernFactor_zero (num den : ℕ) [NeZero den] :
-    (Law.bernFactor num den 0).toReal = ((den - num : ℕ) : ℝ) / den := by
-  unfold Law.bernFactor
+    (SamplingDesign.bernFactor num den 0).toReal = ((den - num : ℕ) : ℝ) / den := by
+  unfold SamplingDesign.bernFactor
   rw [mul_zero, zero_add, ENNReal.toReal_div, ENNReal.toReal_natCast, ENNReal.toReal_natCast]
 
 /-- **The Bernoulli sample misses `B`** with probability `((den − num)/den)^|B|`: unit `u` is sampled when its coin
@@ -121,8 +121,8 @@ theorem bernFactor_zero (num den : ℕ) [NeZero den] :
 theorem bernoulli_miss_eq {n num den : ℕ} [NeZero den] (h : num ≤ den) (B : Finset (Fin n)) :
     Claims.Pr (fun ω : Fin n → Fin den => Disjoint (univ.filter fun u => (ω u).val < num) B) =
       (((den - num : ℕ) : ℝ) / den) ^ B.card := by
-  have := Pr_miss_eq (Law.bernoulli n num den) B
-  rw [Law.bernoulli_escape h, ENNReal.toReal_pow, bernFactor_zero num den] at this
+  have := Pr_miss_eq (SamplingDesign.bernoulli n num den) B
+  rw [SamplingDesign.bernoulli_escape h, ENNReal.toReal_pow, bernFactor_zero num den] at this
   exact this
 
 /-- **The Bernoulli sample misses `t` wrong regions** with probability at most `((den − num)/den)^t`. -/
@@ -139,12 +139,12 @@ theorem bernoulli_miss_le {n num den t : ℕ} [NeZero den] (h : num ≤ den) {B 
 
 /-- **The stratified sample misses `B`** with probability `∏ s C(n_s − m_s, k_s)/C(n_s, k_s)`, with `n_s` the stratum's
 units and `m_s` those of `B`. -/
-theorem stratified_miss_eq {n m : ℕ} (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (Law.stratum σ s).card)
+theorem stratified_miss_eq {n m : ℕ} (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (SamplingDesign.stratum σ s).card)
     (B : Finset (Fin n)) :
-    Claims.Pr (fun ω : (Law.stratified σ k hk).Ω => Disjoint ((Law.stratified σ k hk).draw ω) B) =
-      ∏ s, (((Law.stratum σ s).card - (B.filter (σ · = s)).card).choose (k s) : ℝ) /
-        ((Law.stratum σ s).card.choose (k s) : ℝ) := by
-  rw [Pr_miss_eq, Law.stratified_escape, ENNReal.toReal_prod]
+    Claims.Pr (fun ω : (SamplingDesign.stratified σ k hk).Ω => Disjoint ((SamplingDesign.stratified σ k hk).draw ω) B) =
+      ∏ s, (((SamplingDesign.stratum σ s).card - (B.filter (σ · = s)).card).choose (k s) : ℝ) /
+        ((SamplingDesign.stratum σ s).card.choose (k s) : ℝ) := by
+  rw [Pr_miss_eq, SamplingDesign.stratified_escape, ENNReal.toReal_prod]
   refine Finset.prod_congr rfl fun s _ => ?_
   rw [ENNReal.toReal_div, ENNReal.toReal_natCast, ENNReal.toReal_natCast]
 
@@ -158,7 +158,7 @@ theorem choose_ratio_le_pow {N k b : ℕ} {π : ℝ} (hk : k ≤ N) (hb : b ≤ 
     simp [h0]
   have hC : (0 : ℝ) < N.choose k := by exact_mod_cast Nat.choose_pos hk
   have hNr : (0 : ℝ) < N := by exact_mod_cast hN
-  have key := Law.choose_sub_mul_pow_le N k b hb
+  have key := SamplingDesign.choose_sub_mul_pow_le N k b hb
   have h1 : ((N - b).choose k : ℝ) / (N.choose k : ℝ) ≤ (((N - k : ℕ) : ℝ) / N) ^ b := by
     rw [div_pow, div_le_div_iff₀ hC (by positivity)]
     exact_mod_cast key.trans_eq (mul_comm _ _)
@@ -168,13 +168,13 @@ theorem choose_ratio_le_pow {N k b : ℕ} {π : ℝ} (hk : k ≤ N) (hb : b ≤ 
 
 /-- **The stratified sample misses `t` wrong regions** with probability at most `(1 − π)^t`, when every non-empty
 stratum samples at least a fraction `π ≤ 1` of its units: each unit is sampled with probability at least `π`. -/
-theorem stratified_miss_le {n m t : ℕ} (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (Law.stratum σ s).card)
-    {π : ℝ} (hπ0 : 0 ≤ π) (hπ1 : π ≤ 1) (hπ : ∀ s, 0 < (Law.stratum σ s).card → π * (Law.stratum σ s).card ≤ k s)
+theorem stratified_miss_le {n m t : ℕ} (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (SamplingDesign.stratum σ s).card)
+    {π : ℝ} (hπ0 : 0 ≤ π) (hπ1 : π ≤ 1) (hπ : ∀ s, 0 < (SamplingDesign.stratum σ s).card → π * (SamplingDesign.stratum σ s).card ≤ k s)
     {B : Finset (Fin n)} (ht : t ≤ B.card) :
-    Claims.Pr (fun ω : (Law.stratified σ k hk).Ω => Disjoint ((Law.stratified σ k hk).draw ω) B) ≤ (1 - π) ^ t := by
+    Claims.Pr (fun ω : (SamplingDesign.stratified σ k hk).Ω => Disjoint ((SamplingDesign.stratified σ k hk).draw ω) B) ≤ (1 - π) ^ t := by
   classical
   rw [stratified_miss_eq]
-  have hb : ∀ s, (B.filter (σ · = s)).card ≤ (Law.stratum σ s).card := fun s =>
+  have hb : ∀ s, (B.filter (σ · = s)).card ≤ (SamplingDesign.stratum σ s).card := fun s =>
     card_le_card (filter_subset_filter _ (subset_univ B))
   have hsum : ∑ s, (B.filter (σ · = s)).card = B.card := by
     rw [← card_biUnion]
@@ -183,8 +183,8 @@ theorem stratified_miss_le {n m t : ℕ} (σ : Fin n → Fin m) (k : Fin m → �
       simp
     · intro s _ s' _ hss'
       exact disjoint_filter.2 fun u _ h h' => hss' (h.symm.trans h')
-  calc ∏ s, (((Law.stratum σ s).card - (B.filter (σ · = s)).card).choose (k s) : ℝ) /
-        ((Law.stratum σ s).card.choose (k s) : ℝ)
+  calc ∏ s, (((SamplingDesign.stratum σ s).card - (B.filter (σ · = s)).card).choose (k s) : ℝ) /
+        ((SamplingDesign.stratum σ s).card.choose (k s) : ℝ)
       ≤ ∏ s, (1 - π) ^ (B.filter (σ · = s)).card :=
         prod_le_prod₀ (fun s _ => by positivity) fun s _ => choose_ratio_le_pow (hk s) (hb s) (hπ s)
     _ = (1 - π) ^ B.card := by rw [prod_pow_eq_pow_sum, hsum]
@@ -194,19 +194,19 @@ theorem stratified_miss_le {n m t : ℕ} (σ : Fin n → Fin m) (k : Fin m → �
 
 /-- **The work sample misses units doing at least `T` of the work** `W` with probability at most `((W − T)/W)^K`. -/
 theorem work_miss_le {n m : ℕ} (σ : Fin n → Fin m) (w : Fin m → ℕ) (f : Fin m → ℕ) (K : ℕ) (hf : ∀ s, 1 ≤ f s)
-    (hW : 0 < Law.totalWork σ w) {B : Finset (Fin n)} {T : ℕ} (hT : T ≤ Law.workOf σ w B) :
-    Claims.Pr (fun ω : (Law.work σ w f K).Ω => Disjoint ((Law.work σ w f K).draw ω) B) ≤
-      (((Law.totalWork σ w - T : ℕ) : ℝ) / (Law.totalWork σ w : ℝ)) ^ K := by
-  have hW0 : (Law.totalWork σ w : ℝ≥0∞) ≠ 0 := by exact_mod_cast hW.ne'
+    (hW : 0 < SamplingDesign.totalWork σ w) {B : Finset (Fin n)} {T : ℕ} (hT : T ≤ SamplingDesign.workOf σ w B) :
+    Claims.Pr (fun ω : (SamplingDesign.work σ w f K).Ω => Disjoint ((SamplingDesign.work σ w f K).draw ω) B) ≤
+      (((SamplingDesign.totalWork σ w - T : ℕ) : ℝ) / (SamplingDesign.totalWork σ w : ℝ)) ^ K := by
+  have hW0 : (SamplingDesign.totalWork σ w : ℝ≥0∞) ≠ 0 := by exact_mod_cast hW.ne'
   refine (Pr_miss_le _ B (ENNReal.pow_ne_top (ENNReal.div_ne_top (ENNReal.natCast_ne_top _) hW0))
-    (Law.work_escape_le_of_le σ w f K hf hW hT)).trans_eq ?_
+    (SamplingDesign.work_escape_le_of_le σ w f K hf hW hT)).trans_eq ?_
   rw [ENNReal.toReal_pow, ENNReal.toReal_div, ENNReal.toReal_natCast, ENNReal.toReal_natCast]
 
-/-! ## Any law: its count curve -/
+/-! ## Any sampling design: its count curve -/
 
-/-- **Any law misses `t` wrong regions** with probability at most its count curve at `t`, the largest escape of a set
+/-- **Any sampling design misses `t` wrong regions** with probability at most its count curve at `t`, the largest missProb of a set
 of at least `t` units. -/
-theorem miss_le_count {n t : ℕ} (L : Law n) {B : Finset (Fin n)} (ht : t ≤ B.card) :
+theorem miss_le_count {n t : ℕ} (L : SamplingDesign n) {B : Finset (Fin n)} (ht : t ≤ B.card) :
     Claims.Pr (fun ω : L.Ω => Disjoint (L.draw ω) B) ≤ (L.miss t).toReal :=
   Pr_miss_le L B (ne_top_of_le_ne_top ENNReal.one_ne_top (L.miss_le_one t)) (L.escape_le_miss ht)
 

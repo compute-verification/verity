@@ -884,7 +884,7 @@ def RepOk : Prop :=
           (repSrcCut PE x (czExe PE x c') (cutC x wt ω p c') j r)
 
 theorem schOk_of {st : _root_.Flock.Stmt} (y : ZkHidden.ZkTab st) : SchOk (_root_.Flock.Setup.ofCircuit st) y.sch := by
-  obtain ⟨h1, -, h3, h4, -, ⟨hn, hL, -⟩, hlv, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ y.hz
+  obtain ⟨h1, -, h3, h4, -, ⟨hn, hL, -⟩, hlv, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ _ y.hz
   exact ⟨show 14 ≤ st.m by omega, by omega, h4, hL, fun j hj => (hlv j hj).q_ne_zero⟩
 
 section Generic
@@ -925,7 +925,7 @@ theorem repStreams_agree (hx : Live x) {n : ℕ} {s : FlockDeploy.Ins} {spec : _
         (_root_.Flock.Setup.ofCircuit (stAt x j)) (zkTab x j).sch e
         (repSrcCut PE x (czExe PE x c) (cut c) j r) (repSrcCut PE x (czExe PE x c') (cut c') j r)) :
     ∀ schs, ((FlockDeploy.tabsOf (stsOf x)).mapM fun st =>
-          (monadLift (_root_.Flock.Zk.schedule st.m) : _root_.Flock.V (_root_.Flock.Schedule × ℕ))) = .ok schs →
+          (monadLift (_root_.Flock.Zk.schedule st.wideLeaf st.m) : _root_.Flock.V (_root_.Flock.Schedule × ℕ))) = .ok schs →
         ∀ k (hk : k < spec.repStreams.size) i r w, spec.repStreams[k] = (i, r, w) → ∀ extras,
           (FlockDeploy.tabsOf (stsOf x))[i]!.extra (ptsOf (fun k i => slotAt c k i) spec) = .ok extras →
           SchOk (FlockDeploy.tabsOf (stsOf x))[i]! schs[i]!.1 ∧
@@ -954,7 +954,7 @@ theorem repStreams_agree (hx : Live x) {n : ℕ} {s : FlockDeploy.Ins} {spec : _
       rw [FlockDeploy.tabsOf, Array.size_map]; exact lt_of_jOf ⟨k / 2, hj⟩
     have h1 := hget (k / 2) hlt (hsz ▸ hlt)
     rw [← getElem!_pos (FlockDeploy.tabsOf (stsOf x)) (k / 2) hlt, htab] at h1
-    have h2 : (_root_.Flock.Zk.schedule (stAt x ⟨k / 2, hj⟩).m : _root_.Flock.V _) = .ok schs[k / 2] := h1
+    have h2 : (_root_.Flock.Zk.schedule (stAt x ⟨k / 2, hj⟩).wideLeaf (stAt x ⟨k / 2, hj⟩).m : _root_.Flock.V _) = .ok schs[k / 2] := h1
     rw [(zkTab x ⟨k / 2, hj⟩).hz] at h2
     rw [getElem!_pos schs (k / 2) (hsz ▸ hlt), ← Except.ok.inj h2]
   rw [htab] at hext
@@ -964,7 +964,7 @@ theorem repStreams_agree (hx : Live x) {n : ℕ} {s : FlockDeploy.Ins} {spec : _
   rw [htab, hsch, tabSrcCut_rep _ _ hj hr, tabSrcCut_rep _ _ hj hr]
   refine ⟨schOk_of _, ?_, ?_⟩
   · have hk6 := (zkTab x ⟨k / 2, hj⟩).wf.1.hk6
-    have hm := (FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ (zkTab x ⟨k / 2, hj⟩).hz).1
+    have hm := (FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ _ (zkTab x ⟨k / 2, hj⟩).hz).1
     rw [FlockComplete.ZkTables.repStart_succ, hst]
     unfold FlockDeploy.repRounds
     simp only [↓reduceIte, (zkTab x ⟨k / 2, hj⟩).hz]

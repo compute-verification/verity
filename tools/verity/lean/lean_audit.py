@@ -26,9 +26,9 @@ each file under its path relative to its package (a module's is its name), never
   lakefile's `require ... path = "P"` and the manifest's `"dir": "P"` name such a package, the key reads P as that
   package's own content key (`content_key`), so moving it and rewriting the paths to it keeps every key. A path spelled
   otherwise stays a path in the key;
-- `tools/verity/lean/` (the auditor and this file) and `tools/verity/check/common.py`, the helpers it imports, at their paths in the
+- `tools/verity/lean/` (the auditor and this file) and `tools/check/common.py`, the helpers it imports, at their paths in the
   repository: not `check.py`, which only launches it, so an edit to `check.py` alone keeps every package's verdict. Nor
-  `tools/verity/lean/tests/` (the controls, which the `tools/verity/lean` suite runs), its `*.md`, or the files `NOT_READ` lists
+  `tests/tools/verity/lean/` (the controls, which the `tools/verity/lean` suite runs), its `*.md`, or the files `NOT_READ` lists
   (the merge driver, the Lean fast path, the daily publish, ...), which the audit never reads: the scratch tree leaves them
   out too, so a read of one would fail there.
 A `git mv` of a package with its content unchanged is therefore no miss, and its kept pass answers at the new path. What the
@@ -79,7 +79,8 @@ one imported (`check.verdicts_fetched`) is reused (`check.py --replay-cache`, `l
 `REPLAYS_KEPT` last used kept), so a change to a few modules replays those and what imports them, and a dependency's
 modules go through the kernel once per change of their `.olean` files. With `--fresh` the replay cache is
 the scratch tree's, so the packages of one run share it and nothing outlives the run. Lean gets this
-machine's CPUs (`LEAN_NUM_THREADS`): inside a pod, its default counts the host's.
+machine's CPUs (`LEAN_NUM_THREADS`): inside a pod, its default counts the host's; a heavy build runs as many of them as
+what the run reserved holds (`check.py`'s `build_threads`).
 
 The audits of `security` and `security/Proofs` (`UNREAD_FACTS`) also write what each constant of the analysis mentions
 (`check.py`'s `unread_facts`), and their passes are stored, and reused, only with those facts beside them (`unread/` in
@@ -145,7 +146,7 @@ def _module(path: Path, name: str):
 
 #: every file this step loads is in `inputs`: `tools/verity/lean/` (this module among them), `common.py` and the task graph's
 #: contract, which `module_keys` loads (`test_lean_audit.py` holds it)
-COMMON = _module(ROOT / "tools" / "verity" / "check" / "common.py", "check_common_for_lean_audit")
+COMMON = _module(ROOT / "tools" / "check" / "common.py", "check_common_for_lean_audit")
 MK = _module(Path(__file__).resolve().parent / "module_keys.py", "lean_module_keys_for_lean_audit")
 SETTINGS = _module(Path(__file__).resolve().parent / "settings.py", "lean_settings_for_lean_audit")
 #: the task graph's contract, which `module_keys` keys each module with (`module_keys.CONTRACT`)
@@ -200,7 +201,7 @@ def _sha(p: Path) -> str:
 
 def packages(files: list[str]) -> list[str]:
     """The audited packages: directories whose tracked files include a `lean-audit.json`, the auditor's fixtures aside."""
-    return sorted({f.rsplit("/", 1)[0] for f in files if f.endswith("/lean-audit.json") and not f.startswith(LEAN_TOOL)})
+    return sorted({f.rsplit("/", 1)[0] for f in files if f.endswith("/lean-audit.json") and not f.startswith((LEAN_TOOL, f"tests/{LEAN_TOOL}"))})
 
 
 #: the files of a package no audit reads, by name, each with what does: out of the package's key and of the scratch tree,
@@ -249,25 +250,31 @@ def provers(pkg: str) -> list[str]:
 FLAGS = ["--build", "--closure"]
 
 
-#: the files of `tools/verity/lean/` no audit reads, each with what does: out of every key, and of the scratch tree, where a
-#: read of one fails the audit
+#: the files of `tools/verity/lean/` no audit reads, each with what does: out of every key, and but for `CARRIED` of the
+#: scratch tree, where a read of one fails the audit
 NOT_READ = {
+    "reserve.json": "the figures a run reserves and plans its jobs by (`reserve.py`'s), never what it checks",
     "axiom_probe.py": "the axiom probe of `verity lean try`, which `lean_changed.py` and the CLI load",
+    "claim_ids.py": "`verity.claims`' table of each claim id's premises, written from the locks by a command of its own",
     "lean-deps.json": "the dependency bundles' pins, which preflight reads",
     "lean_changed.py": "the Lean fast path, which runs beside the audit",
     "merge.py": "git's merge driver for lean-audit.json",
     "modules.py": "the codemod onto Lean's module system, which the ratchet and the merge driver load",
+    "posture.py": "each deployed guarantee's premises against the trust list, a command of its own on the locks",
     "run_daily.py": "the build cache's daily publish",
     "siblings.py": "the sibling check of `verity lean try --siblings`, which `lean_changed.py` and the CLI load",
     "tool.py": "the store's declarations of the scheduled runs",
+    "trust-list.json": "Daniel's trust list, which `posture.py` and the repository suite's `test_trust_list.py` read",
     "trusted_size.py": "the size of a package's trusted text, a command of its own on a records run's facts document",
     "Upstream.lean": "`upstream.py --lean`, the exact pass; the audit runs the no-build one",
     "unread.py": "the ratchet on wholly unread modules, which `run` runs after the audits on the facts they wrote",
     "unread-caps.json": "the ratchet's caps, which `unread.py` reads",
     "unread_gate.py": "drive's landing gate on the seeds the ratchet reads, which runs `main`'s copy of this tool",
     "warm.py": "the audit of a ready mark's merge, which starts `lean_audit.py` for the packages a change reaches",
-    "pyproject.toml": "the tools/verity/lean suite's settings",
 }
+#: the files of `NOT_READ` every scratch tree carries all the same (`scratch_tree`): check.py plans its run by them, and
+#: no verdict reads them
+CARRIED = ("reserve.json",)
 
 #: the packages whose audits write `Unread.lean`'s facts (`check.py`'s `UNREAD_FACTS`): a pass of one is reused only with
 #: the facts it wrote, kept beside it, and the ratchet on wholly unread modules joins theirs (`unread_ratchet`)
@@ -430,7 +437,7 @@ def tool_files(files: list[str]) -> list[str]:
     """The auditor's files: `tools/verity/lean/` less its tests, its docs and `NOT_READ`, and the helpers it imports."""
     tool = [f for f in files if f.startswith(LEAN_TOOL) and not f.startswith(LEAN_TOOL + "tests/") and not f.endswith(".md")
             and f[len(LEAN_TOOL):] not in NOT_READ]
-    return sorted({*tool, "tools/verity/check/common.py", CONTRACT})
+    return sorted({*tool, "tools/check/common.py", CONTRACT})
 
 
 def read_packages(pkg: str) -> list[str]:
@@ -1146,6 +1153,10 @@ class LakeArtifacts:
                     log(f"lean-audit: {pkg}: a module its build didn't compile differs from its recompile (`sampled`), so "
                         "none of the modules compiled on top of it go into the artifact cache")
                     continue
+                if all(rep.get(k) == v for k, v in SAMPLE_PENDING.items()):
+                    log(f"lean-audit: {pkg}: check.py ended before the sampled recompile of what its build restored did, "
+                        "so none of the modules compiled on top of those go into the artifact cache")
+                    continue
                 ws = MK.workspace(pkg)
                 if isinstance(ws, str):
                     continue
@@ -1521,7 +1532,8 @@ def _move(src: Path, dst: Path) -> None:
 
 
 def scratch_tree(dest: Path, files: list[str]) -> None:
-    for f in files:
+    """``files`` copied from this checkout into ``dest``, and with them `CARRIED`."""
+    for f in dict.fromkeys([*files, *(LEAN_TOOL + c for c in CARRIED)]):
         s, d = ROOT / f, dest / f
         d.parent.mkdir(parents=True, exist_ok=True)
         if s.is_symlink():
@@ -1594,14 +1606,18 @@ RETRIES = (90, 240, 480)
 #: what check.py writes in a package's work directory (`audit-<tag>/` under its `--out`) once it knows whether the package's
 #: builds run in the sandbox, before the first of them (check.py's `BUILDING`)
 BUILDING = "building.json"
+#: what it says until the package's sampled recompile has ended (check.py's `SAMPLE_PENDING`), which `put` refuses
+SAMPLE_PENDING = {"sample": "pending"}
 
 
 def built(out: Path) -> dict[Path, dict]:
     """{package: what check.py said of its build} for each package the check.py with its reports under ``out`` built, or
     began to build: its report in `audit.json`, which says `sandbox` of a package it built, else what it wrote as the build
-    began (`BUILDING`: the package, and whether its builds run in the sandbox), which is all a check.py that was killed
-    leaves, and which is the later of the two when an earlier check.py left its report there. `LakeArtifacts.put` takes
-    either. Both are check.py's own words: ``out`` is outside every directory a build in the sandbox can write."""
+    began (`BUILDING`: the package, whether its builds run in the sandbox, and `SAMPLE_PENDING` until its sampled
+    recompile has ended, then that recompile's failure where it differs), which is all a check.py that was killed leaves,
+    and which is the later of the two when an earlier check.py left its report there. `LakeArtifacts.put` takes either,
+    and refuses both for a sampled failure, and `BUILDING` while its sample is pending. Both are check.py's own words:
+    ``out`` is outside every directory a build in the sandbox can write."""
     found: dict[Path, tuple[int, dict]] = {}
 
     def said(f: Path) -> tuple[int, dict]:
@@ -1690,6 +1706,7 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
         (out / "audit.json").unlink(missing_ok=True)
         r = subprocess.run([sys.executable, str(work / "tools" / "verity" / "lean" / "check.py"), *FLAGS, *(str(work / p) for p in audited),
                             "--replay-cache", str((work if fresh else cache.parent) / "lean-replay"),
+                            "--program-cache", str((work if fresh else cache.parent) / "lean-programs"),
                             *([] if fresh or cold else ["--artifacts", str(artifacts.store)]),
                             *(["--regenerate"] if regenerate else []), *(["--bookkeeping", "warn"] if bookkeeping else []),
                             *(["--facts-cache", str(documents)] if documents else []),
@@ -2142,9 +2159,13 @@ def main(argv: list[str]) -> int:
     if argv[:1] == ["--prune"]:
         root = Path(argv[argv.index("--cache") + 1]).parent if "--cache" in argv else COMMON.cache_dir()
         got = {"lean-deps": WarmDeps(root / "lean-deps").evict(), "lean-builds": WarmBuilds(root / "lean-builds").evict(),
-               "lean-replay": prune_replays(root / "lean-replay"), "lean-records": prune_records(root / "lean-records"),
-               "lean-artifacts": LakeArtifacts(root / "lean-artifacts").prune(),
-               "lean-audit/unread": prune_facts(root / "lean-audit")}
+               "lean-replay": prune_replays(root / "lean-replay"), "lean-records": prune_records(root / "lean-records")}
+        # a build's `module_keys.stage` reads the index, the records of what `put` couldn't index and the artifacts under
+        # this lock, shared, and `put` and `take` prune under it already
+        artifacts = LakeArtifacts(root / "lean-artifacts")
+        with artifacts._lock():
+            got["lean-artifacts"] = artifacts.prune()
+        got["lean-audit/unread"] = prune_facts(root / "lean-audit")
         print("lean-audit --prune: removed " + ", ".join(f"{v} from {k}" for k, v in got.items()) + f" (under {root})")
         return 0
     if argv[:1] == ["--explain"] and len(argv) in (2, 4):

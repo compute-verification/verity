@@ -101,10 +101,10 @@ public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
 * `Wide.FitS`: the rows the hidden-output headlines cover, each unsegmented (`Any.PadRow`) or a `sha512/row-seg/v1` row
   of any mix (`Any.RowsFitS`), and a row's `b ‖ c` under its own bytes (`Any.rowMsg`, `Any.row_bc_tgtS`);
 * `Wide.V2`: the V2 statements (`outputs_committed_v2'`, `outputs_binding_v2_of`);
-* `Wide.Shared`: a shared-row population's `b ‖ c` at a sampled proof block (`bc_drawnW`), and the Wide statements
+* `Wide.Shared`: a shared-row population's `b ‖ c` at a sampled proof block (`bc_sampledW`), and the Wide statements
   (`outputs_committed_wide'`, `outputs_binding_wide_of`);
 * `Wide.SharedP`: that `b ‖ c` at public inputs, the public file read under the public input words (`inRows`,
-  `loadPublic_inRows`, `bc_drawnWP`);
+  `loadPublic_inRows`, `bc_sampledWP`);
 * `Wide.Upv`: a unit per template instance from acceptance (`check_upv_pos`, `setupHidden_upv_pos`), since `HmRow.check`
   refuses `units_per_vu = 0`;
 * `Wide.Block`: a template instance per block from acceptance (`check_g_pos`, `setupH_g_pos`), since `HmRow.check`

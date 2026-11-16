@@ -1,6 +1,6 @@
 """The logical layer's objects: a Program, its values, its inputs, and the commitments the values sit under.
 
-The circuit is a `verity.circuits` `Program`, the format the rest of Verity reads: the sampled proofs partition it into
+The circuit is a `verity.circuits` `Program`, the format the rest of Verity reads: SPOT partitions it into
 proof blocks, PoUW's compiler rewrites its matmuls into tile units, the census counts it and memory accounting derives its
 requirement from it. It is Boolean, its semantics And, Xor and Not on bits, built constructively from registered
 Definitions (`verity/circuits/PROTOCOL.md`):
@@ -46,7 +46,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.protocols.accounting.registration.verifier import registration
+from verity.protocols.registration.verifier import registration
 from verity.circuits import boolean as BL
 from verity.circuits import types as T
 from verity.circuits.census import PRECISION, PRODUCTS, census, family
@@ -114,7 +114,8 @@ def census_of(program: Program, boolean: bool = False) -> dict:
     """The Program's census/v1 (one step), computed once; with `boolean` its Boolean work too, or `census.NoBooleanWork`."""
     memo = _census.setdefault(program, {})
     if boolean not in memo:
-        from verity.definitions.boolean import boolean_version
+        from verity.circuits.ops.boolean.versions import boolean_version
+        import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
         memo[boolean] = census(program, digest=program_digest(program), boolean=boolean and boolean_version)
     return memo[boolean]
 

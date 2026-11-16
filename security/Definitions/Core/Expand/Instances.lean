@@ -7,7 +7,7 @@ public import Mathlib.Data.Fin.VecNotation
 # The bit-level expansion: an AND of two two-bit gates (trusted)
 
 The instance the honest and nontrivial lemmas of `Verity.Guarantees.ExpandSize` and `Verity.Guarantees.ExpandAndSize`
-are stated at (`Security/Definitions/Core/Guarantees/Expand/Witnesses.lean`).
+are stated at (`security/Definitions/Core/Guarantees/Expand/Witnesses.lean`).
 
 `AndPair`: gates 0 and 1 are two-bit input gates, gate 0 registered, and gate 2 is their bitwise AND, the one unit of
 `P`. Expanded, each of gate 2's two bits reads the four input bits and is the AND of one bit of gate 0 and one of gate 1,

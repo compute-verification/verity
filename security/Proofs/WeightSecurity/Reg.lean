@@ -15,11 +15,11 @@ the run's coins.
 
 * `oneRegCount`: that count at a window's statement and prover, `0` out of scope.
 * `oneRegRec`, `oneRegRun`: the record, and the deployment's run over `T` windows recorded by it.
-* `PeriodReg`: the run leaves `M` incorrect proof blocks undetected with probability at most `Σ_t ε_t + x^M`, each
+* `MonitoringPeriodReg`: the run leaves `M` incorrect proof blocks undetected with probability at most `Σ_t ε_t + x^M`, each
   `ε_t` bounding window `t`'s `ε_reg` at every strategy the run plays it with. It is `period_undetected` at
   `oneRegRec`: `hacc` is `Compiled.KSReg`'s first conjunct and `hstage` is the sample's miss of the committed incorrect
   set, at most `P_a(Freg)` by the contract's sample (`Compiled.Sessions.draws`).
-* `CompilerPeriodReg`: `PeriodReg` at every run of window verifiers that meet `CompilerKSReg`'s premises, at sampling
+* `CompilerMonitoringPeriodReg`: `MonitoringPeriodReg` at every run of window verifiers that meet `CompilerKSReg`'s premises, at sampling
   designs that miss every set `B` of proof blocks with probability at most `x^{|B|}` at every statement in scope.
 
 Statements only: definitions, no proofs.
@@ -78,7 +78,7 @@ noncomputable def oneRegRun (H : Msg → Msg) (Lv : ℕ → Compiled Coin A) (T 
 errors (`Compiled.εreg` at the statement and prover each sends) are at most `ε_t`, the run leaves `M` incorrect proof
 blocks undetected with probability at most `Σ_t ε_t + x^M`: some window is accepted with its sample holding a proof
 block of its committed incorrect set, or the windows before the first such sample hold at least `M` such blocks. -/
-def PeriodReg (H : Msg → Msg) (Lv : ℕ → Compiled Coin A) (x : ℝ) : Prop :=
+def MonitoringPeriodReg (H : Msg → Msg) (Lv : ℕ → Compiled Coin A) (x : ℝ) : Prop :=
   ∀ (T : ℕ) (ε : ℕ → ℝ) (s : Strategy (monitoringPeriodG (fun t => oneGame (Lv t) ((O → V) × Tick × Adv)) 0 T)),
     (∀ t τ, MonitoringPeriodPlays (fun t => oneGame (Lv t) ((O → V) × Tick × Adv)) 0 T s t τ →
       (Lv t).εreg H τ.2.1.1 τ.2.1.2 ≤ ε t) →
@@ -87,13 +87,13 @@ def PeriodReg (H : Msg → Msg) (Lv : ℕ → Compiled Coin A) (x : ℝ) : Prop 
 
 /-- **The period bound from the windows' verifiers**: when every window's verifier meets `CompilerKSReg`'s premises and
 every statement in its scope has a sampling design that misses each set `B` of its proof blocks with probability at
-most `x^{|B|}`, `PeriodReg` holds (`period_undetected` at `oneRegRec`, from `CompilerKSReg` and that miss bound). -/
-def CompilerPeriodReg : Prop :=
+most `x^{|B|}`, `MonitoringPeriodReg` holds (`period_undetected` at `oneRegRec`, from `CompilerKSReg` and that miss bound). -/
+def CompilerMonitoringPeriodReg : Prop :=
   ∀ (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (O V Tick Adv : Type)
     (H : Msg → Msg) (Lv : ℕ → Compiled Coin A) (x : ℝ), A.KS H →
     (∀ t, (Lv t).commit.Binds H ∧ (Lv t).Sessions H) → 0 ≤ x → x ≤ 1 →
     (∀ t y s P, (Lv t).parse y = some s → (Lv t).partition s = some P → InScope P s →
       ∀ B ⊆ Finset.range P.blocks.length, s.design.Pa P B ≤ x ^ B.card) →
-    PeriodReg (O := O) (V := V) (Tick := Tick) (Adv := Adv) H Lv x
+    MonitoringPeriodReg (O := O) (V := V) (Tick := Tick) (Adv := Adv) H Lv x
 
 end WeightSecurity.SecurityProofs

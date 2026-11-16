@@ -163,7 +163,7 @@ def _owned(pkg: str, pkgs: set[str]) -> list[str]:
 def tasks(plan: dict, lean_suites: str = "tree") -> list[dict]:
     """The plan's parts as gating tasks; a `lean-suites` part keyed on the whole tree (``lean_suites="tree"``, graph/v2's
     key but the Markdown it leaves out) or on its suite's inputs (``"suite"``)."""
-    sys.path.insert(0, str(ROOT / "tools/verity/check"))
+    sys.path.insert(0, str(ROOT / "tools/check"))
     import suites as S
     found = {s.name: s for s in S.discover()}
     members = S.members()

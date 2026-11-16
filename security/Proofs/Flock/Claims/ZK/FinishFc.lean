@@ -52,7 +52,7 @@ the source's `masked lay.fc` (`repCut_fw_inner`).
 
 @[expose] public section
 
-namespace Flock.Firewall.Finish
+namespace Flock.ZkServer.Finish
 
 open Flock Transcript
 open FlockComplete (PS)
@@ -390,4 +390,4 @@ theorem repCut_fw_inner (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (hm
   try dsimp only
   exact FlockComplete.LigLock.bind_go_err (innerCut_first coin _ _ _ src _ t₄ (Nat.le_refl _))
 
-end Flock.Firewall.Finish
+end Flock.ZkServer.Finish

@@ -210,7 +210,7 @@ theorem acc_unrolled : HmOut.unrolled (x.acc ht hc hvP).st.c = c := x.unrolled_e
 
 end TableH
 
-variable (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
+variable (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀)) {Reg : Type}
 
 /-- **The sites of the one-table hidden plan**, at the session's statement circuit: each sampled proof block's acceptance,
 template instance and block are its sample's table's. -/

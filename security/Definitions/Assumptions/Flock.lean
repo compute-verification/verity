@@ -83,7 +83,7 @@ the challenger's coins the unit sample reads and the proof system's epoch salt (
 and its randomness unpredictable.
 
 The verifier has no randomness of its own: the unit sample reads the challenger's coins from its log, and the challenger
-flips them from `IO.getRandomBytes` on its own host (`sampled-proofs-verifier`'s `coins`). To Lean's logic an `IO`
+flips them from `IO.getRandomBytes` on its own host (`spot-verifier`'s `coins`). To Lean's logic an `IO`
 action is a function of the world, and `IO.getRandomBytes` an opaque constant, so a `Prop` saying its bytes are random
 would be refutable, and every theorem taking it vacuous. At run time, Lean v4.34.0's runtime implements it as
 `lean_io_get_random_bytes` (`src/runtime/io.cpp`), which reads `/dev/urandom` on Unix and calls `BCryptGenRandom` on
@@ -94,9 +94,9 @@ about those bytes has the probability it has for independent uniform bytes.
 What A3 assumes of the operating system is that the challenger's calls to `IO.getRandomBytes` for the coins a unit
 sample reads, and for the epoch salt, are such a source, every call's bytes independent of every earlier call's, for
 every `L`. That the challenger releases those coins only after the registration they sample is recorded rests on
-`trusted-host`, not on A3. The step from `IO` to the model rests on `drawWith` being generic in its monad, together with
+`trusted-device`, not on A3. The step from `IO` to the model rests on `drawWith` being generic in its monad, together with
 A3: the theorems read `drawWith` on a model byte source, the unit sample runs it on the challenger's coins read in order
-(`Spot.Draw.drawUnits`), and `drawOS` runs it on `IO.getRandomBytes` (`drawOS_def`).
+(`Spot.Draw.sampleUnits`), and `sampleOS` runs it on `IO.getRandomBytes` (`sampleOS_def`).
 
 The CSPRNG is idealized as exactly uniform here, for every event. That is refutable at the deployed source: Linux's CRNG
 (5.18 and later, `drivers/char/random.c`) answers a read past 32 bytes with a ChaCha20 stream under one 256-bit key, so
@@ -125,11 +125,11 @@ stream under one 256-bit key, so the event that the bytes are among the source's
 most `2^(256 - 8n)` at `n` uniform bytes. The theorems take it for the test they need.
 
 What it covers is every byte a zero-knowledge session reads from the operating system. Each rep of the ZK server's frame
-reads its samples in one call at its start (`flock-firewall frame`, `Frame.cmd`: `Frame.drawsWith` at `IO.getRandomBytes`):
+reads its samples in one call at its start (`flock-zk-server frame`, `Frame.cmd`: `Frame.samplesWith` at `IO.getRandomBytes`):
 the pads `h`, the dot-product mask `μ`, the inner rows' padding, `τ`'s salt and the pads tree's salts. The tap
-(`flock-firewall tap`) serves the prover's every other read: the mask slot's words, level 0's hiding, the other trees'
+(`flock-zk-server tap`) serves the prover's every other read: the mask slot's words, level 0's hiding, the other trees'
 salts and the coin tree's nonce. Flock's prover reads every hm96 leaf salt, 192 bytes a leaf, from the operating system
-(the tap, or `getrandom(2)` unserved), as the recursive audit's firewall and a registrant (`os.urandom`) do for their
+(the tap, or `getrandom(2)` unserved), as the recursive audit's ZK server and a registrant (`os.urandom`) do for their
 commitments' salts. So the masks and the Reed–Solomon padding are inside A3's
 scope, as the salts are, and no premise on a stream generator is left on them. `Discharge.ZkView.OsSalts` reads 192
 bytes as one salt and takes the hiding theorems to them; `Claims.ZKServer.OsTape` reads the server's tape.

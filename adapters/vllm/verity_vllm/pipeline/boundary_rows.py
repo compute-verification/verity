@@ -13,7 +13,7 @@ program, partition, port, schema, N leaves, run); a u32 is two u16 words, low fi
 | value | row |
 |---|---|
 | `b.ingress` | `INGRESS` (the prompt's length, the sampling inputs, the seed as a u64), then P ids, zero past the prompt |
-| `b.egress` | the ids served n, the finish (`FINISH`), then O ids, zero past n |
+| `b.egress` | the ids served n, the finish (`boundary_span.FINISH`), then O ids, zero past n |
 
 The step shapes are no value: they choose the Programs, and the window's advice commits them. Each leaf's salt is fresh
 from the OS (`commit`).
@@ -24,7 +24,7 @@ twice, and the ids served n is no number the serve states:
 
 | value | row |
 |---|---|
-| `b.request` | `b.ingress`'s fields before its ids (`FIELDS`), the prompt's length and ``max_tokens`` the first two |
+| `b.request` | `b.ingress`'s fields before its ids (`boundary_span.FIELDS`), the prompt's length and ``max_tokens`` the first two |
 | `b.prompt` | P prompt ids, zero past lp |
 | `b.egress` | O ids, zero past n: no n and no finish |
 | `b.stop` | one u16, n + finish * 8192 (1 a stop id, 2 ``max_tokens``, 3 the model's length): a stop class's alone |
@@ -37,7 +37,8 @@ a class is laid out under is the verifier's own copy, as its check template is (
 names another rule is refused.
 
 **History tables** (`Layout.layers`, off by default): each span's latent rows at each of those layers, one
-`boundary_tables` table a (slot, layer) of `boundary_tables.WORDS` words and ``capacity`` leaves under its own
+`boundary_tables` table a (slot, layer) of `Layout.row_words` words (the cache's layout's: `boundary_tables.WORDS` for bf16
+rows, which the record leaves unnamed, 328 for fp8_ds_mla's, which it names) and ``capacity`` leaves under its own
 `history.domain` (the class's program and the table's name, from the run, the class and the slot), listed beside the class's
 values in slot then layer order. Rank 0 builds them once the window assigns each span its slot (`boundary_tables.Builder`),
 and the class's commitment waits for their roots, so they are fixed before any coin, as the values are. A serve under a
@@ -56,16 +57,28 @@ record, after `PORTS` or, under a stop rule, after `PARTS`.
 
 * **Verdicts** (`Layout.verdict_rows`): each bit a one, what the block returns where its check passes, so the serve
   writes them without a replay.
-* **Ids** (`id_rows`): O rows a span, row j the id of output j as the check returns it, two u16 words, the low one
+* **Ids** (`boundary_span.id_rows`): O rows a span, row j the id of output j as the check returns it, two u16 words, the low one
   first. The ids are the ones `b.egress` holds; nothing ties the two values to each other while the replay block is a
   stand-in that reads neither (below).
+
+**The select's inputs** (`Layout.logits`), one more value of a class of `ids` whose check is the greedy select
+inlined: the logits each served id was selected from, as the sampler took them, so the select's inputs are fixed before
+any coin, as its return is. Its rows are the ones round 2's links at the select's units read (`Layout.logit_rows`): a
+span's tokens in order, each token's units in the select's order, row k of a token the slice of its logits unit k reads
+(bf16 bits, u16 words), past the ids served the last token's rows again, as `boundary_span.id_rows` repeats its id.
+Rank 0 holds the logits, so it commits them as the window closes and keeps their rows and salts (`boundary_logits`), and
+the class waits for the root, as it does for the tables'. Named as the return is (`return_port`: ``logits``, or
+``<replay block's id>/logits``), it is listed after the return, under the row values' window domain.
 
 **The replay block** (`Layout.replay`) is a stand-in until the class's request Definition lands: `per_prompt * P +
 per_output * O` instances of one check template (`population`), so a window committed under it is audited with that one
 template; or, ``inline``, those instances with each one's body in place (`inlined`), audited with the templates that body
 calls, for a check template too large for one proof block whose pieces are. The boundary's values, layout and serving
 path stay as they are when the replay block becomes the class's own; its program, and so its domains, name whichever
-replay block it is configured with.
+replay block it is configured with. The class's own Definition has its boundary values as its ends (`class_signature`):
+its parameters are a span's `b.request` and `b.prompt` rows and it returns the span's `b.egress` row, so round 2's own
+derivation links a template's port that reads a parameter to the value of its name, and the template output it returns
+to the name round 2 gives a return (`ends`).
 
 **Files** (`write`), under ``w<window>/p<P>-o<O>[-nostop]/``: ``commit.json`` (public: the layout, each value's root,
 domain and leaves, the index's hiding leaf), and prover-only ``index.json`` (each span's engine id, prompt, sampling
@@ -78,7 +91,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import struct
 import time
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
@@ -89,19 +101,29 @@ from typing import Any
 import numpy as np
 
 from verity.protocols.proofs.spot.verifier import second_stage as SS
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
 from verity.circuits.codec import definitions, descriptor_id
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.circuits.population import population
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Concat, coll_concat
-from verity.circuits.types import Array
+from verity.circuits.types import Array, Value
 from verity.commitments import history as HT
 from verity.commitments.identity import identity_digest_sha512
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
-from verity.commitments.windows import links as LK, rows as CS
+from verity.commitments.periods import links as LK, rows as CS
 from verity_vllm.pipeline import boundary_tables as BT
+from verity_vllm.pipeline.boundary_span import (
+    HEAD_U32,
+    MIN_CAP,
+    Span,
+    cap,
+    class_size,
+    egress_row,
+    id_rows,
+    ingress_row,
+)
 from verity_vllm.records.boundary_commit import FILE as COMMIT, SCHEMA as FORMAT, BoundaryCommit
 from verity_vllm.records.boundary_tables import TableRoots
 
@@ -111,28 +133,24 @@ PORTS = (INGRESS, EGRESS)
 REQUEST, PROMPT, STOP = "b.request", "b.prompt", "b.stop"
 #: a class's values under a stop rule, one row a span each: `b.ingress`'s row in two and `b.egress`'s ids
 PARTS = (REQUEST, PROMPT, EGRESS)
-#: every row value's name but the return's (`Layout.returned`): any other name of a class's is a history table's
+#: a class's Definition's parameters, each a span's row of the value of its name; it returns `b.egress`'s
+#: (`class_signature`)
+PARAMS = (REQUEST, PROMPT)
+#: a row's u32, a 32-bit leaf: two of its u16 words, the low one first
+U32 = Value(32)
+#: every row value's name but the return's (`Layout.returned`) and the select's inputs' (`Layout.logits_port`): any other
+#: name of a class's is a history table's
 ROWS = (INGRESS, EGRESS, REQUEST, PROMPT, STOP)
 #: the replay block's output port: its return's name where it is a value (`return_port`)
 RETURN = "o0"
+#: the select's parameter its units read the served logits at: their name where they are a value (`Layout.logits_port`)
+LOGITS = "logits"
 #: why no class holds both a stop rule and history tables
 TABLES_UNDER_A_RULE = ("a serve under a stop rule commits no history tables: a table's name holds its class's (P, O) and "
                        "slot, which a stop class and its sibling without a stop block share at the rule's T. The fix: the "
                        "table's key names which of the two its class is (`boundary_tables.KEY`)")
 #: why no class says both `verdicts` and `ids`: its replay block has one return, and the class commits it once
 ONE_RETURN = "a class commits its replay block's return as verdicts or as ids, not as both"
-MIN_CAP = 2
-#: `b.ingress`'s fields before its ids, each a u32 (``u64``: two, low first) of the request's own sampling inputs
-FIELDS = (("lp", "u32"), ("max_tokens", "u32"), ("min_tokens", "u32"), ("ignore_eos", "u32"), ("temperature", "f32"),
-          ("top_p", "f32"), ("top_k", "i32"), ("min_p", "f32"), ("presence_penalty", "f32"), ("frequency_penalty", "f32"),
-          ("repetition_penalty", "f32"), ("seeded", "u32"), ("seed", "u64"))
-#: the sampling inputs `FIELDS` reads off a request's SamplingParams
-SAMPLING = tuple(k for k, _ in FIELDS if k not in ("lp", "seeded"))
-HEAD_U32 = sum(2 if t == "u64" else 1 for _, t in FIELDS)
-#: each field's first u32 among `HEAD_U32`
-FIELD_AT = {k: sum(2 if t == "u64" else 1 for _, t in FIELDS[:i]) for i, (k, _) in enumerate(FIELDS)}
-#: `b.egress`'s finish codes; 0 is a request still running when the serve stopped
-FINISH = ("stop", "length", "abort", "error")
 INDEX, SALTS = "index.json", "salts.bin"
 
 
@@ -143,118 +161,58 @@ def check_template(t: str) -> SpecializedDefinition:
     return ST.template(t).fn
 
 
-def cap(n: int) -> int:
-    """The least power of two at least `MIN_CAP` and ``n``."""
-    return max(MIN_CAP, 1 << max(0, int(n) - 1).bit_length())
-
-
-def class_size(v: Any) -> bool:
-    """Whether ``v`` is a class's size, of prompt ids or of outputs (`Span.shape`)."""
-    return type(v) is int and v >= MIN_CAP and v & (v - 1) == 0
-
-
-@dataclass(frozen=True)
-class Span:
-    """One request as the engine core served it: its engine id, prompt ids, sampling inputs (`SAMPLING`), the ids it was
-    served, how it finished (a `FINISH` name, None while running) and, where the serve knows it, its release: the
-    network certifier's run and the request's index N in that run's release order."""
-
-    engine_id: str
-    prompt: tuple[int, ...]
-    sampling: Mapping[str, Any]
-    served: tuple[int, ...] = ()
-    finish: str | None = None
-    release: tuple[str, int] | None = None
-
-    @property
-    def shape(self) -> tuple[int, int]:
-        """Its class (P, O)."""
-        return cap(len(self.prompt)), cap(len(self.served))
-
-    def to_json(self) -> dict[str, Any]:
-        return {"engine_id": self.engine_id, "prompt": list(self.prompt), "sampling": dict(self.sampling),
-                "served": list(self.served), "finish": self.finish,
-                **({} if self.release is None else {"release": list(self.release)})}
-
-    @classmethod
-    def from_json(cls, d: Mapping[str, Any]) -> Span:
-        release = d.get("release")
-        return cls(str(d["engine_id"]), tuple(d["prompt"]), dict(d["sampling"]), tuple(d["served"]), d["finish"],
-                   None if release is None else (str(release[0]), int(release[1])))
-
-
-def sampling_of(params: Any) -> dict[str, Any]:
-    """A request's `SAMPLING` inputs off its SamplingParams (None where it has none)."""
-    out = {}
-    for k in SAMPLING:
-        v = getattr(params, k, None)
-        out[k] = v if v is None or isinstance(v, (bool, int, float)) else float(v)
-    return out
-
-
-def _u32(name: str, kind: str, v: Any) -> list[int]:
-    if kind == "f32":
-        return [struct.unpack("<I", struct.pack("<f", float(v or 0.0)))[0]]
-    x, bits = int(v or 0), 64 if kind == "u64" else 32
-    lo = -(1 << (bits - 1)) if kind in ("i32", "u64") else 0
-    if not lo <= x < 1 << bits:
-        raise ValueError(f"{name} = {x} doesn't fit b.ingress's {kind}")
-    x &= (1 << bits) - 1
-    return [x & 0xFFFFFFFF, x >> 32] if kind == "u64" else [x]
-
-
-def _words(u32s: Sequence[int]) -> np.ndarray:
-    a = np.asarray(u32s, dtype=np.int64)
-    if a.size and (a.min() < 0 or a.max() >= 1 << 32):
-        raise ValueError("an id is a u32")
-    return np.stack([a & 0xFFFF, a >> 16], axis=-1).astype(np.uint16).reshape(-1)
-
-
-def ingress_row(span: Span, prompt_cap: int) -> np.ndarray:
-    """Span's `b.ingress` row at prompt cap P, as u16 words."""
-    if len(span.prompt) > prompt_cap:
-        raise ValueError(f"{span.engine_id}: {len(span.prompt)} prompt ids past the class's {prompt_cap}")
-    s = {**{k: None for k in SAMPLING}, **span.sampling}
-    vals = {**s, "lp": len(span.prompt), "seeded": s["seed"] is not None}
-    head = [w for k, t in FIELDS for w in _u32(k, t, vals[k])]
-    return _words(head + list(span.prompt) + [0] * (prompt_cap - len(span.prompt)))
-
-
-def egress_row(span: Span, output_cap: int, head: bool = True) -> np.ndarray:
-    """Span's `b.egress` row at output cap O, as u16 words: the ids served n, the finish and the O ids; without ``head``
-    (a serve that registers a stop rule), the O ids alone."""
-    if len(span.served) > output_cap:
-        raise ValueError(f"{span.engine_id}: {len(span.served)} ids served past the class's {output_cap}")
-    ids = [*span.served, *[0] * (output_cap - len(span.served))]
-    if not head:
-        return _words(ids)
-    if span.finish is not None and span.finish not in FINISH:
-        raise ValueError(f"{span.engine_id}: finish {span.finish!r} is none of {FINISH}")
-    finish = 0 if span.finish is None else 1 + FINISH.index(span.finish)
-    return _words([len(span.served), finish, *ids])
-
-
-def id_rows(span: Span, outputs: int) -> np.ndarray:
-    """Span's rows of its replay block's return in a class of O outputs, (O, 2) u16: row j the id of output j, and past
-    the ids served the last one again, as the block's instances past them are copies of its last
-    (`interior_rows.Span.padded`). A span served no id has no instance to copy, and its rows are zero: no replay
-    reproduces it."""
-    if len(span.served) > outputs:
-        raise ValueError(f"{span.engine_id}: {len(span.served)} ids served past the class's {outputs}")
-    last = span.served[-1] if span.served else 0
-    return _words([*span.served] + [last] * (outputs - len(span.served))).reshape(outputs, 2)
+def linked(block: str, value: str, ports: Iterable[str]) -> str:
+    """The name round 2 gives the value a link of replay block ``block`` reads, ``value`` a parameter's name or its
+    return's `RETURN`, in a record whose other ports are ``ports`` (`second_stage.replay_links`): ``value``, or
+    ``<block>/<value>`` where the record names a port with a ``/``."""
+    return f"{block}/{value}" if any("/" in p for p in ports) else value
 
 
 def return_port(block: str, ports: Iterable[str]) -> str:
     """The name of replay block ``block``'s return in a record whose other ports are ``ports``, as round 2 names the
-    value a return link reads (`second_stage.replay_links`): `RETURN`, or ``<block>/o0`` where the record names a port
-    with a ``/``."""
-    return f"{block}/{RETURN}" if any("/" in p for p in ports) else RETURN
+    value a return link reads (`linked`): `RETURN`, or ``<block>/o0`` where the record names a port with a ``/``."""
+    return linked(block, RETURN, ports)
+
+
+def row_type(value: str, ids: int = 0) -> Array:
+    """A span's row of `b.request`, `b.prompt` or, under a stop rule, `b.egress`, as a Definition reads or returns it,
+    each u32 a `U32` (`port_rows`' words): `b.request`'s `boundary_span.HEAD_U32`, or an ids row's ``ids``, P prompt ids
+    or O ids zero past n."""
+    if value not in PARTS:
+        raise ValueError(f"a Definition reads or returns a row of {', '.join(PARTS)}, not {value!r}")
+    return Array(HEAD_U32 if value == REQUEST else ids, U32)
+
+
+def class_signature(prompt: int, outputs: int) -> tuple[tuple[tuple[str, Array], ...], Array]:
+    """The signature of a class's Definition at (P, O) = (``prompt``, ``outputs``): its parameters `PARAMS`, a span's
+    `b.request` and `b.prompt` rows, and its return, the span's `b.egress` row (`row_type`). Round 2 then links a
+    template's port that reads one of them to the class's value of that name, and the template output it returns to
+    the name `ends` gives `b.egress`."""
+    if not (class_size(prompt) and class_size(outputs)):
+        raise ValueError(f"a class's Definition is at a class's (P, O), each a class's size (`class_size`), not "
+                         f"({prompt!r}, {outputs!r})")
+    return tuple((v, row_type(v, prompt)) for v in PARAMS), row_type(EGRESS, outputs)
+
+
+def ends(block: str, ports: Iterable[str] = ()) -> dict[str, str]:
+    """Each boundary value a class's Definition ``block`` (`class_signature`) reads or returns, and the name round 2
+    gives the value its link reads in a record whose other ports are ``ports`` (`linked`): `b.request` and `b.prompt`
+    their own, and `b.egress` the return's (`return_port`)."""
+    ports = tuple(ports)
+    return {**{v: linked(block, v, ports) for v in PARAMS}, EGRESS: return_port(block, ports)}
 
 
 def _parts(r: Any) -> list[Any]:
     """A body reference's parts, its concatenations spliced in."""
     return [x for q in r.parts for x in _parts(q)] if isinstance(r, Concat) else [r]
+
+
+def window_domain(program: str, partition: str, port: str, leaves: int, run: str) -> CommitmentDomain:
+    """A row value's window domain: the program and partition digests of the record it is a port of, its name, `SCHEMA`,
+    its leaves and the window's run."""
+    binding = identity_digest_sha512(CS.DOMAIN_TAG, {"program": program, "partition": partition, "port": port,
+                                                     "schema": SCHEMA, "leaves": int(leaves), "run": run})
+    return CommitmentDomain(binding, CS.OWNER, RangeIndexedDomain(0, int(leaves)), hash="sha512")
 
 
 def run_root(serve: str, window: int) -> str:
@@ -288,12 +246,13 @@ class Layout:
     (``per_prompt`` a prompt row, ``per_output`` an output), the class (``prompt``, ``outputs``), the spans N and the run.
     ``inline``: the replay block holds them `inlined`, and the check's proof blocks are the templates the check template's
     body calls (`templates`); else they are its instances (`population`). ``layers``: each span's history tables' layers,
-    of ``capacity`` leaves (the module docstring). ``stop``: the serve's registered stop rule (a `boundary_stop.Stop`),
+    of ``capacity`` leaves and ``row_words`` words a row (the module docstring). ``stop``: the serve's registered stop rule (a `boundary_stop.Stop`),
     under which the class's values are `PARTS` and it has no history tables; ``held``, under a rule: the class is a stop
     class, its outputs the rule's T, with a stop block a span in a population of its own (`stop_program`) whose output
     it commits as `b.stop`. ``verdicts`` or ``ids`` (a class says at most one): the replay block returns the check's
     verdicts, every bit a one where it passes, or the ids the span was served, one check instance an output, and the
-    class commits that return as one more value of its boundary record (`return_rows`).
+    class commits that return as one more value of its boundary record (`return_rows`). ``logits``, in a class of
+    ``ids``: it commits the logits each id was selected from as one more value too (`logit_rows`), rank 0's.
     What the prover commits under and the challenger's own copies (`ports`, `stop_ports`)."""
 
     check: SpecializedDefinition
@@ -310,6 +269,8 @@ class Layout:
     held: bool = True
     verdicts: bool = False
     ids: bool = False
+    logits: bool = False
+    row_words: int = BT.WORDS
 
     def __post_init__(self) -> None:
         for k in ("prompt", "outputs"):
@@ -323,8 +284,12 @@ class Layout:
             raise ValueError(f"a class's table layers are distinct natural numbers in order, not {ls!r}")
         if not HT.cap_ok(self.capacity):
             raise ValueError(f"a table's capacity is a power of two of at least 2, not {self.capacity!r}")
+        if self.row_words not in BT.LAYOUT_WORDS.values() or type(self.row_words) is not int:
+            raise ValueError(f"a table's words are a layout's, {tuple(BT.LAYOUT_WORDS.values())}, not {self.row_words!r}")
         if self.verdicts and self.ids:
             raise ValueError(ONE_RETURN)
+        if self.logits and not self.ids:
+            raise ValueError("a class commits the logits its ids were selected from only beside those ids (ids)")
         if self.n_rho < 2:
             raise ValueError(f"a replay block holds two proof blocks or more (TwoStage), not {self.n_rho}: "
                              f"{self.per_prompt} a prompt row and {self.per_output} an output at ({self.prompt}, {self.outputs})")
@@ -439,6 +404,46 @@ class Layout:
         return self.outputs, 32
 
     @cached_property
+    def logit_rows(self) -> tuple[int, int] | None:
+        """The select's inputs as rows, where the class commits them (`logits`): ``(rows a block, words a row)``, a row
+        what one of round 2's links at a unit's ``logits`` reads (`second_stage.link_runs`): with K units a token, unit
+        k of token j its row j·K + k, the logits' lanes `greedy_stages.plan` gives unit k, which tile the row in order.
+        ValueError for a class whose replay block isn't `GreedySelect_v1` inlined, one instance an output, read so.
+        None for a class that doesn't."""
+        if not self.logits:
+            return None
+        from verity_vllm.definitions.registry import greedy_stages as GS
+
+        fn, t = self.check, P.template_id(self.check)
+        V, N = (int(fn.bindings[k]) for k in ("V", "N")) if getattr(fn, "defn", None) is GS.GreedySelect else (0, 0)
+        if not (self.inline and V and self.per_prompt == 0 and self.per_output == 1):
+            raise ValueError(f"a class commits the logits its ids were selected from where its check is GreedySelect_v1 "
+                             f"inlined, one instance an output: not {t}{'' if self.inline else ' as instances'} at "
+                             f"{self.per_prompt} a prompt id and {self.per_output} an output")
+        units, params = GS.plan(V, V // N), {P.template_id(x): dict(x.signature()[0]) for x in self.templates}
+        runs = SS.link_runs(definitions(self.program), descriptor_id(self.replay)) or ()
+        read = [(x, per, rs) for x, per, rs in runs if x.port in params.get(x.template, {})]
+        got = {x.template: (per, rs) for x, per, rs in read}
+        K, O = len(units), self.outputs
+        want = [P.template_id(u.defn) for u in units]
+        ok = (len(got) == len(read) and sorted(got) == sorted(want) and {x.value for x, _p, _r in read} == {LOGITS}
+              and all(u.lanes == (k * N, (k + 1) * N) and got[w][0] == K * O
+                      and [SS.row_at(got[w][1], j) for j in range(O)] == [j * K + k for j in range(O)]
+                      for k, (u, w) in enumerate(zip(units, want, strict=True))))
+        if not ok:
+            raise ValueError(f"{t}: round 2's links at its units' parameters are not each unit k's {LOGITS} at row j·{K} + k "
+                             f"of {K * O} a block, its lanes [k·{N}, (k + 1)·{N}): "
+                             f"{[(x.template, x.port, x.value, per) for x, per, _rs in read][:4]}")
+        return K * O, N
+
+    @cached_property
+    def logits_port(self) -> str | None:
+        """The select's inputs' name where the class commits them (`return_port` of `LOGITS`)."""
+        if self.logit_rows is None:
+            return None
+        return linked(descriptor_id(self.replay), LOGITS, (*(PORTS if self.stop is None else PARTS), *self.tables))
+
+    @cached_property
     def returned(self) -> str | None:
         """The return's name where the class commits it (`return_port`, among its row values and the tables)."""
         if self.return_rows is None:
@@ -464,9 +469,12 @@ class Layout:
         return tuple(BT.name(self.run, self.prompt, self.outputs, r, x) for r in range(self.spans) for x in self.layers)
 
     def leaves(self, port: str) -> int:
-        """A value's leaves: a row value's rows, one a span, or the return's rows a block a span; a table's capacity."""
+        """A value's leaves: a row value's rows, one a span, or the return's or the select's inputs' rows a block a span; a
+        table's capacity."""
         if port in ROWS:
             return self.spans
+        if port == self.logits_port:
+            return self.spans * self.logit_rows[0]
         return self.spans * self.return_rows[0] if port == self.returned else self.capacity
 
     def words(self, port: str) -> int:
@@ -474,26 +482,31 @@ class Layout:
         where no rule is registered."""
         rows = {INGRESS: 2 * (HEAD_U32 + self.prompt), EGRESS: 2 * (self.outputs + (2 if self.stop is None else 0)),
                 REQUEST: 2 * HEAD_U32, PROMPT: 2 * self.prompt, STOP: 1}
-        return -(-self.return_rows[1] // 16) if port == self.returned else rows.get(port, BT.WORDS)
+        if port == self.logits_port:
+            return self.logit_rows[1]
+        return -(-self.return_rows[1] // 16) if port == self.returned else rows.get(port, self.row_words)
 
     def domain(self, port: str) -> CommitmentDomain:
         """``port``'s domain: a history table's own, or a row value's window domain, over the program of the record it is
         a port of: the class's, or for `b.stop` the stop population's."""
-        if port not in ROWS and port != self.returned:
-            return HT.domain(self.partition["program"], port, BT.WORDS, self.capacity)
-        part, n = self.stop_partition if port == STOP else self.partition, self.leaves(port)
-        binding = identity_digest_sha512(CS.DOMAIN_TAG, {"program": part["program"], "partition": P.digest(part),
-                                                         "port": port, "schema": SCHEMA, "leaves": n, "run": self.run})
-        return CommitmentDomain(binding, CS.OWNER, RangeIndexedDomain(0, n), hash="sha512")
+        if port not in ROWS and port not in (self.returned, self.logits_port):
+            return HT.domain(self.partition["program"], port, self.row_words, self.capacity)
+        part = self.stop_partition if port == STOP else self.partition
+        return window_domain(part["program"], P.digest(part), port, self.leaves(port), self.run)
 
     def _ports(self, names: Sequence[str]) -> dict[str, dict[str, Any]]:
         return {p: {"leaves": self.leaves(p), "domain": self.domain(p).domain_id.hex()} for p in names}
 
+    @property
+    def rank0(self) -> tuple[str, ...]:
+        """The values rank 0 commits, in the record's order: the select's inputs where the class commits them, then each
+        table."""
+        return (*((self.logits_port,) if self.logits else ()), *self.tables)
+
     def ports(self) -> dict[str, dict[str, Any]]:
         """Each of the boundary record's values' leaves and domain id, as `Stream.register` takes them: its row values',
-        then each table's."""
-        return {**self._ports(self.values),
-                **{t: {"leaves": self.capacity, "domain": self.domain(t).domain_id.hex()} for t in self.tables}}
+        then the select's inputs' where it commits them, then each table's."""
+        return {**self._ports(self.values), **self._ports(self.rank0)}
 
     def stop_ports(self) -> dict[str, dict[str, Any]]:
         """The stop record's port's leaves and domain id, as `registration.check` takes them."""
@@ -501,14 +514,17 @@ class Layout:
 
     def schemas(self) -> dict[str, str]:
         """Each of the boundary record's values' row schema, in `ports`' order."""
-        return {**dict.fromkeys(self.values, SCHEMA), **dict.fromkeys(self.tables, HT.SCHEMA)}
+        return {**dict.fromkeys(self.values, SCHEMA), **({self.logits_port: SCHEMA} if self.logits else {}),
+                **dict.fromkeys(self.tables, HT.SCHEMA)}
 
     def provenance(self) -> dict[str, Any]:
-        tables = {"tables": {"layers": list(self.layers), "capacity": self.capacity}} if self.layers else {}
+        wide = {} if self.row_words == BT.WORDS else {"words": self.row_words}
+        tables = {"tables": {"layers": list(self.layers), "capacity": self.capacity, **wide}} if self.layers else {}
         return {"prompt": self.prompt, "outputs": self.outputs, "check": P.template_id(self.check),
                 "per_prompt": self.per_prompt, "per_output": self.per_output, "inline": self.inline, **tables,
                 **({} if self.stop is None else {"stop": self.stop.to_json(), "stopped": self.held}),
-                **({"verdicts": True} if self.verdicts else {}), **({"ids": True} if self.ids else {})}
+                **({"verdicts": True} if self.verdicts else {}), **({"ids": True} if self.ids else {}),
+                **({"logits": True} if self.logits else {})}
 
 
 def port_rows(spans: Sequence[Span], layout: Layout) -> dict[str, np.ndarray]:
@@ -516,9 +532,9 @@ def port_rows(spans: Sequence[Span], layout: Layout) -> dict[str, np.ndarray]:
     row as its fields and its prompt ids, and the ids served alone; in a stop class, whose spans are at the rule's T
     whatever they were served, also the stop block's output on those rows, the rule's word. Where the class commits its
     replay block's return, its rows too: of verdicts (`Layout.verdicts`), every bit a one, low bit first in its words,
-    as the block returns it where its check passes; of ids (`Layout.ids`), each span's (`id_rows`). ValueError for a
-    span of a stop class the rule doesn't end as it was served (`boundary_stop.Stop.word`): the block's output on its
-    rows is not its end."""
+    as the block returns it where its check passes; of ids (`Layout.ids`), each span's (`boundary_span.id_rows`).
+    ValueError for a span of a stop class the rule doesn't end as it was served (`boundary_stop.Stop.word`): the block's
+    output on its rows is not its end."""
     L = layout
     if len(spans) != L.spans or any((s.shape[0], L.outputs if L.stopped else s.shape[1]) != (L.prompt, L.outputs)
                                     for s in spans):
@@ -574,9 +590,9 @@ class Committed:
             values={p: {"root": self.roots[p].hex(), "words": L.words(p), **ports[p]} for p in ports},
             index=self.index_leaf, index_rule=CS.INDEX_RULE, seconds=round(self.seconds, 3)).dump()
 
-    def record(self, law: Mapping[str, Any], previous: str | None = None,
+    def record(self, design: Mapping[str, Any], previous: str | None = None,
                window: Mapping[str, Any] | None = None) -> dict[str, Any]:
-        return record(self.public(), self.layout.check, law, previous, window, stop=self.layout.stop)
+        return record(self.public(), self.layout.check, design, previous, window, stop=self.layout.stop)
 
     def port(self, value: str) -> LK.Port:
         """Value ``value`` as a later statement reads its rows (`links.Port`): its rows, every row's ``b || c`` and
@@ -608,43 +624,52 @@ def layout_of(pub: Mapping[str, Any], check: SpecializedDefinition, stop: Any = 
     if (c.stop is None) != (c.stopped is None):
         raise ValueError(f"a {FORMAT} commitment says whether it is a stop class (stopped) exactly under a stop rule (stop)")
     t = c.tables or {"layers": [], "capacity": HT.CAPACITY}
-    if set(t) != {"layers", "capacity"} or not isinstance(t["layers"], list):
-        raise ValueError(f"a {FORMAT} commitment's tables are its layers and capacity, not {sorted(t)}")
+    if not {"layers", "capacity"} <= set(t) <= {"layers", "capacity", "words"} or not isinstance(t["layers"], list) \
+            or t.get("words") == BT.WORDS:
+        raise ValueError(f"a {FORMAT} commitment's tables are its layers and capacity, and words where they aren't "
+                         f"{BT.WORDS}, not {sorted(t)}")
     L = Layout(check, c.per_prompt, c.per_output, c.prompt, c.outputs, c.spans, c.run, c.inline, tuple(t["layers"]),
-               t["capacity"], stop=stop, held=c.stopped is not False, verdicts=bool(c.verdicts), ids=bool(c.ids))
+               t["capacity"], stop=stop, held=c.stopped is not False, verdicts=bool(c.verdicts), ids=bool(c.ids),
+               logits=bool(c.logits), row_words=t.get("words", BT.WORDS))
     listed = (*L.ports(), *L.stop_ports())
     if tuple(c.values) != listed:
         raise ValueError(f"the commitment's values {list(c.values)[:4]} are not its layout's {list(listed)[:4]}")
     return L
 
 
-def record(pub: Mapping[str, Any], check: SpecializedDefinition, law: Mapping[str, Any], previous: str | None = None,
+def record(pub: Mapping[str, Any], check: SpecializedDefinition, design: Mapping[str, Any], previous: str | None = None,
            window: Mapping[str, Any] | None = None, stop: Any = None) -> dict[str, Any]:
     """The class's boundary registration (one-stage's record) from its ``commit.json``, laid out under ``check`` and the
-    stop rule ``stop`` (`layout_of`): `Layout.program` under `Layout.grain` at ``law`` (the first stage's,
-    `service.selection_law`), each of its values' root (`Layout.values`), and its window: served, the run, the window's
+    stop rule ``stop`` (`layout_of`): `Layout.program` under `Layout.grain` at sampling design ``design`` (the first stage's,
+    `service.selection_sampling_design`), each of its values' root (`Layout.values`), and its window: served, the run, the window's
     index as its row, the class, the check and the index's leaf, with ``window``'s items (the advice's binding)."""
     L, c = layout_of(pub, check, stop), BoundaryCommit.of(pub, COMMIT)
     roots = [{"port": p, "root": c.values[p]["root"], **e} for p, e in L.ports().items()]
     w = {"kind": "served", "run": L.run, "row": c.window, **L.provenance(), "index": c.index, "boundary": FORMAT,
          **(window or {})}
-    return R.record(L.program, L.grain, law, CS.SCHEME, roots, w, previous=previous)
+    return R.record(L.program, L.grain, design, CS.SCHEME, roots, w, previous=previous)
 
 
 def commit(spans: Sequence[Span], layout: Layout, window: int, *, salts: Mapping[str, bytes] | None = None,
-           index_salt: bytes | None = None, tables: Mapping[str, bytes] | None = None,
+           index_salt: bytes | None = None, tables: Mapping[str, bytes] | None = None, logits: bytes | None = None,
            clock: Callable[[], float] = time.perf_counter) -> Committed:
     """Commit one class's spans in ``window``: each value's rows under its domain, every leaf's salt fresh from the OS
-    unless ``salts`` gives them (`reopen`), beside each history table's root (``tables``, by name: rank 0's)."""
+    unless ``salts`` gives them (`reopen`), beside each history table's root (``tables``, by name: rank 0's) and the
+    select's inputs' (``logits``: rank 0's, `boundary_logits.root`)."""
     t0 = clock()
     if set(tables or {}) != set(layout.tables):
         raise ValueError(f"a class with {len(layout.tables)} history tables is committed with their roots, not "
                          f"{len(tables or {})}")
+    if (logits is None) == layout.logits:
+        raise ValueError("a class is committed with the root of the logits its ids were selected from exactly where it "
+                         "commits them (logits)")
     rows = port_rows(spans, layout)
     domains = {p: layout.domain(p) for p in rows}
     ys = {p: os.urandom(CS.SALT_BYTES * layout.leaves(p)) for p in rows} if salts is None else dict(salts)
     roots, _bc = CS.commit_ports(domains, rows, {}, ys, schemas=dict.fromkeys(rows, SCHEMA))
     roots |= {t: bytes(tables[t]) for t in layout.tables}
+    if logits is not None:
+        roots[layout.logits_port] = bytes(logits)
     return Committed(window, layout, tuple(spans), roots, ys, os.urandom(CS.SALT_BYTES) if index_salt is None else index_salt,
                      clock() - t0)
 
@@ -659,7 +684,7 @@ def table_roots(answer: Mapping[str, Any], layout: Layout) -> dict[str, bytes]:
     if [e.get("value") for e in got] != list(layout.tables):
         raise ValueError(f"rank 0 answered tables {[e.get('value') for e in got][:2]}, not the class's {list(layout.tables)[:2]}")
     for e in got:
-        want = {"value": e["value"], "leaves": layout.capacity, "words": BT.WORDS, "domain": ports[e["value"]]["domain"]}
+        want = {"value": e["value"], "leaves": layout.capacity, "words": layout.row_words, "domain": ports[e["value"]]["domain"]}
         if {k: e.get(k) for k in want} != want or len(bytes.fromhex(e["root"])) != HT.DIGEST_BYTES:
             raise ValueError(f"rank 0's table {e['value']} isn't at the class's leaves, words and domain")
     return {e["value"]: bytes.fromhex(e["root"]) for e in got}
@@ -700,7 +725,9 @@ def reopen(directory: Path, check: SpecializedDefinition, kept: BT.Kept | None =
         at = (pub.window, layout.run, layout.prompt, layout.outputs)
         tables = {layout.tables[r * len(layout.layers) + i]: kept.table(*at, r, x).root
                   for r in range(layout.spans) for i, x in enumerate(layout.layers)}
-    c = commit(spans, layout, pub.window, salts=salts, index_salt=(d / CS.INDEX_SALT).read_bytes(), tables=tables)
+    held = pub.values.get(layout.logits_port) if layout.logits else None
+    c = commit(spans, layout, pub.window, salts=salts, index_salt=(d / CS.INDEX_SALT).read_bytes(), tables=tables,
+               logits=None if held is None else bytes.fromhex(held["root"]))
     got = BoundaryCommit.of(c.public(), str(d))
     for k in ("values", "index", "program", "partition"):
         if getattr(got, k) != getattr(pub, k):
@@ -708,7 +735,7 @@ def reopen(directory: Path, check: SpecializedDefinition, kept: BT.Kept | None =
     return c
 
 
-__all__ = ["COMMIT", "EGRESS", "FIELD_AT", "FIELDS", "FINISH", "FORMAT", "INDEX", "INGRESS", "MIN_CAP", "PARTS", "PORTS",
-           "PROMPT", "REQUEST", "RETURN", "SALTS", "SCHEMA", "STOP", "Committed", "Layout", "Span", "cap", "check_template",
-           "class_size", "commit", "egress_row", "id_rows", "ingress_row", "inlined", "layout_of", "port_rows", "record",
-           "reopen", "return_port", "run_root", "sampling_of", "write"]
+__all__ = ["COMMIT", "EGRESS", "FORMAT", "INDEX", "INGRESS", "LOGITS", "MIN_CAP", "PARAMS", "PARTS", "PORTS", "PROMPT",
+           "REQUEST", "RETURN", "SALTS", "SCHEMA", "STOP", "U32", "Committed", "Layout", "Span", "cap", "check_template",
+           "class_signature", "class_size", "commit", "ends", "inlined", "layout_of", "linked", "port_rows", "record",
+           "reopen", "return_port", "row_type", "run_root", "window_domain", "write"]

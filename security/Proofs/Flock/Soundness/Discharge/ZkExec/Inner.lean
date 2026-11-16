@@ -4,7 +4,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkExec.Statements
 import Mathlib.Combinatorics.Matroid.Init
 
 /-!
-# flock-verify `--zk`'s inner proof accepts (live/PROTOCOL.md §5)
+# verity-verify-proof `--zk`'s inner proof accepts (live/PROTOCOL.md §5)
 
 `verifyInner_ok : ZkInnerOk`: `Zk.verifyInner` accepts only with the pinned sizes, `β ≠ 0`, `τ` opening its
 commitment, the batched constraint, and every queried column consistent with `Y` and climbing to the pads' root under

@@ -4,7 +4,7 @@
 Read: every ``.lean`` file under ``security/`` (the security analysis) and ``verity/`` (the code, each package's Lean
 beside it), found by a walk that leaves out ``.lake`` (``BUILT``: Lake's build trees and the packages it fetches, which
 git never tracks), so in a clean checkout the tracked ones.  The walk starts no program, so the suite's read guard traces
-all this lint reads.  The Lean check's own fixtures (``tools/verity/lean/tests/fixtures``) lie outside both trees, as do
+all this lint reads.  The Lean check's own fixtures (``tests/tools/verity/lean/fixtures``) lie outside both trees, as do
 the Lean tools' files and the benchmarks'; under the two trees nothing is left out, a package's test modules included.
 A tree with no ``.lean`` file under it fails (``test_every_tree_holds_lean``): a walk of a directory that was moved away
 finds nothing there, so the rules would hold none of its Lean while the two tests of new findings passed.
@@ -325,7 +325,7 @@ def _tree(root: Path) -> None:
                       ("verity/protocols/c/C.lean",
                        "/-! # C -/\n-- the table is large\nset_option maxHeartbeats 9 in\ndef c := 1\n"),
                       ("verity/protocols/c/.lake/packages/m/M.lean", "set_option maxHeartbeats 0\n"),
-                      ("tools/verity/lean/tests/fixtures/D.lean", "set_option maxHeartbeats 0\n"),
+                      ("tests/tools/verity/lean/fixtures/D.lean", "set_option maxHeartbeats 0\n"),
                       ("verity/protocols/c/README.md", "set_option maxHeartbeats 0\n")):
         (root / path).parent.mkdir(parents=True, exist_ok=True)
         (root / path).write_text(src, encoding="utf-8")
@@ -403,6 +403,9 @@ def test_only_the_soft_rules_are_bookkeeping() -> None:
 
 
 def test_the_list_is_well_formed_and_an_entry_moves_with_its_file() -> None:
+    # The check that reads the tree's list is a bookkeeping test, whose failed assertion only warns: a list that
+    # doesn't parse would switch the scan off with nothing red, so the tree's list is parsed here, where it fails.
+    allowed()
     assert parse({"entries": [{"file": "A.lean", "rule": "long-file", "count": 1}]}) == Counter({("A.lean", "long-file"): 1})
     for bad in ({"file": "A.lean", "rule": "long-file"}, {"file": "A.lean", "rule": "long-file", "count": 0},
                 {"file": "A.lean", "rule": "long-file", "count": True}, {"file": "A.lean", "rule": "naming", "count": 1},

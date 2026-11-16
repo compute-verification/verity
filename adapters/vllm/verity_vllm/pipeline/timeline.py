@@ -1,7 +1,7 @@
 """Automatic stage telemetry for the sweep runner.
 
 One append-only JSONL file per row attempt (`<row>/timeline.jsonl`, path in `VERITY_TIMELINE`): every process the runner starts
-(row_pod.sh itself, commit_delta, m1_capture, run_config's stages) appends `start` / `end` events with a wall-clock timestamp
+(row_pod.sh itself, commit_delta, match_capture, run_config's stages) appends `start` / `end` events with a wall-clock timestamp
 (`time.time()` / `date +%s.%N`), its pid and a process label, so elapsed time per stage is MEASURED, never estimated.  Torch-free.
 
     {"t": 1789875600.123, "utc": "...", "proc": "commit_delta", "pid": 123, "stage": "engine.build", "ev": "end", "s": 41.2,

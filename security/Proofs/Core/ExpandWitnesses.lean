@@ -6,8 +6,8 @@ public import Proofs.Core.AndSize
 /-!
 # The bit-level expansion's size bounds: honest and nontrivial lemmas
 
-The proofs of `Security/Definitions/Core/Guarantees/Expand/Witnesses.lean`, at `Verity.Expand.AndPair`
-(`Security/Definitions/Core/Expand/Instances.lean`). The honest lemmas are `ExpandSize` and `ExpandAndSize` there. The
+The proofs of `security/Definitions/Core/Guarantees/Expand/Witnesses.lean`, at `Verity.Expand.AndPair`
+(`security/Definitions/Core/Expand/Instances.lean`). The honest lemmas are `ExpandSize` and `ExpandAndSize` there. The
 nontrivial ones show that both bounds hold with equality there:
 
 * `RegisteredCircuit.width_unregistered_le_expand`: when every gate of a unit has a bit, the bits of the unit's unregistered

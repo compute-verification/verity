@@ -24,7 +24,7 @@ paths = []
 # whose bytes a digest pins, the archive, `move_check.py` and its test, and `tests/tree.toml`, the layout of record.
 exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
            "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "uv.lock", "tools/move/**", "archive/**",
-           "tools/verity/check/tests/test_move_check.py", "tools/verity/check/move_check.py",
+           "tools/check/tests/test_move_check.py", "tools/check/move_check.py",
            "tools/research/src/research/store/moves.json", "tests/tree.toml"]
 include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json"]
 

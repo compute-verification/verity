@@ -177,7 +177,7 @@ section Decode
 open FlockVBridge.Decode
 
 variable {mPts nU J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nU} (zo : ZkOuter mPts nU J Reg' c hU hscope Lv)
+  {Lv : SamplingDesign nU} (zo : ZkOuter mPts nU J Reg' c hU hscope Lv)
 
 /-- **Copy `j` of the verifier's `rec-sparse` unit in V*'s layer** (`laid_sparseR` at `sat_copy` of `fill`): the
 message columns some computed row reads registered bits of `w`, `v`'s of `vv` and `tau`'s of the slots' types give
@@ -228,7 +228,7 @@ open FlockVBridge.Sparse (SCoins nw nc verifierRow tauBase vBaseS sparseBase che
 section Layer
 
 variable {mPts nU J : ℕ} {Reg' : Type} {cc : Flock.Circuit} {hU : FlockSoundness.Built cc.unit}
-  {hscope : FlockSoundness.Discharge.Layout.scopeOk cc = true} {Lv : FlockSoundness.Audit.Law nU}
+  {hscope : FlockSoundness.Discharge.Layout.scopeOk cc = true} {Lv : FlockSoundness.Audit.SamplingDesign nU}
   (zo : FlockSoundness.Discharge.Recursion.ZkOuter mPts nU J Reg' cc hU hscope Lv)
 
 /-- **(B)'s tie at V*'s layer**: `SparseTie`'s message words `w` and coins `c`, with the unit copy `j` of unit `un` of

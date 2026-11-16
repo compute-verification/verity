@@ -1,4 +1,11 @@
-/-
+module
+
+public import Flock.ProvedScope
+public import Flock.Test.RegProgram
+meta import Flock.ProvedScope
+meta import Flock.Test.RegProgram
+
+/-!
 `Registered.checkCover`: with the verifier's own program and registered reads, every parameter of the circuit's template
 that reads a `RegisteredInput<w>_v1` root node of the program is read by a port of the reads (by its name, or its `param`);
 an uncovered one is refused by name, and so is a registered-reading program under a partition that is not a template
@@ -6,12 +13,6 @@ query or a circuit whose META names no template. `ProvedScope.programHeld`: a se
 program is refused. The programs are `Flock.Test.RegProgram`'s: in `reg`, `TWiden16_v1`'s `a` reads the
 `RegisteredInput16_v1` node and `TStep_v1`'s `k` the `RegisteredInput32_v1` node; `TPair_v1` reads neither.
 -/
-module
-
-public import Flock.ProvedScope
-public import Flock.Test.RegProgram
-meta import Flock.ProvedScope
-meta import Flock.Test.RegProgram
 
 @[expose] public section
 

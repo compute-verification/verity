@@ -61,14 +61,16 @@ namespace FlockComplete.Replay
 
 open Flock Transcript FlockComplete
 
-theorem zkSchedule_q {m : ℕ} {v : Schedule × ℕ} (h : Zk.schedule m = .ok v) :
+variable {wideLeaf : Bool}
+
+theorem zkSchedule_q {m : ℕ} {v : Schedule × ℕ} (h : Zk.schedule wideLeaf m = .ok v) :
     ∀ i < v.1.levels.size, (v.1.levels.getD i default).q ≠ 0 := by
   by_cases hm : m < 40
-  · have key : ∀ m : Fin 40, (match Zk.schedule m.val with
+  · have key : ∀ (w : Bool) (m : Fin 40), (match Zk.schedule w m.val with
         | .ok v => decide (∀ i < v.1.levels.size, (v.1.levels.getD i default).q ≠ 0)
         | .error _ => true) = true := by
       decide +kernel
-    have := key ⟨m, hm⟩
+    have := key wideLeaf ⟨m, hm⟩
     simp only [h] at this
     simpa using this
   · exfalso
@@ -134,7 +136,7 @@ theorem rep_rounds (hV : Level0.Verifier) (h64 : Claims.Out64 H) (st : Flock.Stm
     rw [hlL, hpk]
     have : piopSends (Setup.ofCircuit st) e = 3 + (st.m - 6) + 3 + (st.c.kLog - 6) + (2 + e.size + 1) := rfl
     omega
-  obtain ⟨hLgV, htIk⟩ := hV resp (Claims.hOf H) (Setup.ofCircuit st).m v
+  obtain ⟨hLgV, htIk⟩ := hV (Setup.ofCircuit st).wideLeaf resp (Claims.hOf H) (Setup.ofCircuit st).m v
     (Rs.T tr (claimsR resp (Setup.ofCircuit st) tr l.size e) (rsCoinsR resp (Setup.ofCircuit st) l.size e)) cm
     (packed tr (Setup.ofCircuit st).m)
     (basisVals (Rs.sws (claimsR resp (Setup.ofCircuit st) tr l.size e) (rsCoinsR resp (Setup.ofCircuit st) l.size e))

@@ -34,7 +34,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.KS.PlainDrawJRun
+import Proofs.Flock.Claims.KS.PlainSampleJRun
 import Proofs.Flock.Claims.Recursion.DecodeTies
 import Proofs.Flock.Claims.Recursion.RecordCanon
 import Proofs.Flock.Claims.Recursion.VerdictAssembly
@@ -127,7 +127,7 @@ namespace Flock.RecAlgebra
 open Flock
 
 /-- **The zerocheck's `v_C`** is `round1c`'s messages at the Lagrange weights of its `z`. -/
-theorem zerocheck_vc {α : Type} [Val α] {m : Nat} {M : Messages α} {k k' : Nat} {src : CoinSource} {r0 : α}
+theorem zerocheck_vc {α : Type} [Val α] {m : Nat} {M : Messages α} {k k' : Nat} {src : RoundCoins} {r0 : α}
     {zc : ZcPts α} (h : zerocheck m M k src = .ok ((r0, zc), k')) :
     zc.vc = dotV (lagrange nodesL den6Inv zc.z) M.c := by
   unfold zerocheck at h

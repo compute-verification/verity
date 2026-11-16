@@ -24,8 +24,8 @@ unswitched prover's on both branches, and it splits only at the `Finish`: where 
 prover's cut at the `Finish`; where it goes on, the honest prover's Goldreich–Kahan simulator, through the go prover
 `RefSession.goP`.
 
-At the deployed held relay (`Flock.Firewall.Session.relay` at `hold = true`, as `Relay.out`, each session held as
-`core-firewall session` holds it), which sends the setup's control frames at their places and the model's frames at
+At the deployed held relay (`Flock.ZkServer.Session.relay` at `hold = true`, as `Relay.out`, each session held as
+`core-zk-server session` holds it), which sends the setup's control frames at their places and the model's frames at
 theirs, the same holds per outcome (`FlockSoundness.ZK.PerOutcome`) at the pair of the verdict and how many frames left
 (`Relay.relayLen`, at most the setup's public bound `Relay.relayB`), at the same error (`Relay.relay_zkOut_env`):
 `ZKOutRelay`, which costs `relayB spec sts + 1` outcomes per verdict. Its simulator encodes the model's simulated
@@ -128,7 +128,7 @@ namespace Loop
 noncomputable def anyStops (T : CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit ((CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand))
     (real : Msg → Flock.Wit → (CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand →
-      ℕ → _root_.Flock.V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)) : RefSession :=
+      ℕ → _root_.Flock.V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray)) : RefSession :=
   (CoinLayer.session loopNr T).withStops
     (LeanRelease.rfOf (CoinLayer.session loopNr T) (LeanRelease.ofLoop T L₀ real) progOf freshOf readCoins)
     (LeanRelease.ofLoop T L₀ real).stop
@@ -139,7 +139,7 @@ values. -/
 noncomputable def anySim (T : CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit ((CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand))
     (real : Msg → Flock.Wit → (CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand →
-      ℕ → _root_.Flock.V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)) (t : ℕ) : SimOut Bool :=
+      ℕ → _root_.Flock.V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray)) (t : ℕ) : SimOut Bool :=
   verdictSim
     (((anyStops T L₀ real).refP.withSim fun x _ c => (anyStops T L₀ real).coinModel x c).simulatorE t (t * 3 ^ t))
     ((anyStops T L₀ real).offP.simulatorE t (t * 3 ^ t)) (fun x => refK x + 2) (LeanRelease.ofLoop T L₀ real).stop
@@ -150,7 +150,7 @@ success; where it stops, `8·n_L·δ₁ + 8t·n_L·δ₁ + 2·3^{-t}` plus `4t·
 noncomputable def anyErr (T : CoinLayer.TableData) (vs : (CoinLayer.session loopNr T).SwVals)
     (L₀ : LeanRelease Flock.Wit ((CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand))
     (real : Msg → Flock.Wit → (CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand →
-      ℕ → _root_.Flock.V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)) (t : ℕ) :
+      ℕ → _root_.Flock.V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray)) (t : ℕ) :
     (x : Msg) → Flock.Wit → (Θ : Type) → VStar Θ → Θ → Bool → ℝ :=
   fun x w _Θ Vs θ o =>
     if o then
@@ -171,7 +171,7 @@ relay. -/
 def ZkAnyAt (T : CoinLayer.TableData) (vs : (CoinLayer.session loopNr T).SwVals)
     (L₀ : LeanRelease Flock.Wit ((CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand))
     (real : Msg → Flock.Wit → (CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand →
-      ℕ → _root_.Flock.V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+      ℕ → _root_.Flock.V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (wk : (LeanRelease.ofLoop T L₀ real).toSrv.Worker) (Rl : Rel Flock.Wit) (t : ℕ) : Prop :=
   ZKOut (fun _ => (CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand)
       (fun _ => (LeanRelease.ofLoop T L₀ real).toSrv.Chk) CoinOpen.shaH (fun x => refK x + 2)
@@ -206,7 +206,7 @@ def _root_.Flock.Guarantees.SessionLoopZKAny : Prop :=
         ((CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand))
       (real : Msg → Flock.Wit →
         (CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand →
-        ℕ → _root_.Flock.V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+        ℕ → _root_.Flock.V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
       (wk : (LeanRelease.ofLoop T L₀ real).toSrv.Worker),
     LeanRelease.TrustsStop (CoinLayer.session Loop.loopNr T) vs (LeanRelease.ofLoop T L₀ real) CoinOpen.shaH wk Rl →
     Loop.ZkAnyAt T vs L₀ real wk Rl t

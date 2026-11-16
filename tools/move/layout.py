@@ -3,6 +3,7 @@
 
     python3 tools/move/layout.py              move and rewrite, then `uv lock` (the uv pod_setup.sh pins); prints what it changed
     python3 tools/move/layout.py --dry-run    print what it would change, and change nothing
+    python3 tools/move/layout.py --only FILE  rewrite only the files FILE lists (and what moves): a carry of a merge
     python3 tools/move/layout.py --modules    print the module renames that [paths] and [roots] imply ([modules] must equal it)
     python3 tools/move/layout.py --resolve M  the name module M has after the move (for readers of recorded data)
 
@@ -42,11 +43,20 @@ What it rewrites, in every tracked text file the map doesn't exclude:
   relative one no longer resolves), `from M import n` in strings, and every dotted name (`-m`, `import_module`,
   `module:attr`, docs). A module whose own row keeps its name (a [paths] row with old == new) stays where it is when its
   package moves;
+- Lean modules: a `.lean` file the map moves is the module its path below its Lake package names (`lean_module`), and
+  each `import` line of it names the new module; in a `lean-audit.json`, each whole name of it (a `reads` key, a layer,
+  an import), never a declaration below it, which keeps its namespace (`lean_module_sub`): the edits `move_check.py`
+  certifies;
 - pyprojects: the distributions folded into `verity` ([distributions]), the workspace members, the suites' inputs.
-A `lean-audit.json`'s `guarantees` and `reads` never change, and neither do the digests a path-keyed pin file records. A
-Lake package's path to another package that named one before the move names one after it, or the move stops (exit 1). An
-old path that names something outside the tree ([rewrite] keep: the frozen evidence artifact's layout) is never rewritten,
-and neither is a dotted name that only looks like a module ([rewrite] keep_dotted: a torch op's qualified name).
+A `lean-audit.json`'s `guarantees` and `reads` never change but for a `reads` key that follows its module, and neither
+do the digests a path-keyed pin file records (the move stops on one that would), but for a Lake manifest's: a pin of
+the check's `pins.py` that held the digest of a manifest the move rewrites gets its new digest
+(`repin_manifests`, which `rename.py` runs too), since a move changes a manifest only in where its path packages sit,
+which no pinned output reads. A Lake package's path to another package that named one before the move names one after
+it, or the move stops (exit 1). An old path that names something outside the tree ([rewrite] keep: the frozen evidence
+artifact's layout) is never rewritten, and neither is a dotted name that only looks like a module ([rewrite]
+keep_dotted: a torch op's qualified name). A file's relative paths stay as written where the map says so ([rewrite]
+keep_relative, by old path: a test's, which name a toy's files).
 A string literal in Rust or Lean is protocol text (a domain tag, a statement's field, a JSON key) where only a path changes:
 no dotted name and no lone quoted word in one is rewritten. In Python too a lone quoted word is a name (`"census"`: a key),
 unless the map lists the directory under [rewrite] words (`"Security"`: no key and no run's directory has that name): then
@@ -79,6 +89,7 @@ import bisect
 import fnmatch
 import functools
 import hashlib
+import importlib.util
 import io
 import json
 import os
@@ -90,6 +101,7 @@ import sys
 import tokenize
 import tomllib
 from collections import Counter, defaultdict
+from collections.abc import Callable
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -116,6 +128,12 @@ RELATIVE_TYPES = {".py", ".toml", ".json", ".sh", ".md", ".rs", ".cu", ".cuh", "
 #: the Lake files that name other packages' directories, each from its own: a lakefile by a requirement's `path`, a
 #: manifest by a path package's `dir` (`lake_dirs` reads them, `lake_spans` finds them in the text)
 LAKE_FILES = ("lakefile.toml", "lake-manifest.json")
+MANIFEST = "lake-manifest.json"
+#: a Lean import line, as `move_check.py`'s `LEAN_IMPORT` reads one
+LEAN_IMPORT = re.compile(r"^(\s*(?:(?:public|private|meta)\s+)*import\s+(?:all\s+)?)([\w.]+)(\s*(?:--.*)?)$", re.M)
+#: the pins of Lean sources: {path: digest} under a JSON key, or a `sha256sum` listing (`pins`), in the check's directory:
+#: `tools/check/`, or `tools/verity/check/` in a tree from before the move that put it there (`pins_py`)
+PINS_PYS = ("tools/check/pins.py", "tools/verity/check/pins.py")
 _LAKE_PATH = re.compile(r'[ \t]*path[ \t]*=[ \t]*"(?P<p>[^"\\\n]+)"')
 _LAKE_PACKAGE = re.compile(r"\{[^{}]*\}")
 _LAKE_DIR = re.compile(r'"dir"\s*:\s*"(?P<p>[^"\\\n]+)"')
@@ -136,7 +154,7 @@ SH_OWN = {"0", "BASH_SOURCE", "BASH_SOURCE[0]"}
 #: what stands before a shell variable's default (`${DEFS:-verity/x.json}`): the `-` there is no part of a longer word
 SH_DEFAULT = re.compile(r"\$\{\w+:?-\Z")
 #: what stands for the root before a path from it: what closes a placeholder or a command (`{ROOT}/`, `<tree>/`,
-#: `$(pwd)/`), a shell variable, the home's checkout, a pod's. `tools/verity/check/move_check.py` reads a path as this does.
+#: `$(pwd)/`), a shell variable, the home's checkout, a pod's. The check's `move_check.py` reads a path as this does.
 ROOT_PREFIX = r"[})>]/|\$\{?\w+\}?/|~/(?:verity/)?|/workspace/"
 
 
@@ -205,6 +223,48 @@ def lake_spans(name: str, text: str) -> list[tuple[int, int]]:
     return spans
 
 
+def pins_py(has: Callable[[str], bool]) -> str:
+    """Which of `PINS_PYS` a tree holds, by ``has`` (whether it holds a path)."""
+    return next((p for p in PINS_PYS if has(p)), PINS_PYS[0])
+
+
+def pins(pins_py: Path) -> list[tuple[str, str | None, str]]:
+    """The pins the check's `pins.py` (at `pins_py`) lists, as (pin, the JSON key it records {path: digest} under or
+    None for a `sha256sum` listing, the directory its paths are below); none when there is no such file."""
+    if not pins_py.is_file():
+        return []
+    spec = importlib.util.spec_from_file_location("move_pins", pins_py)
+    mod = sys.modules[spec.name] = importlib.util.module_from_spec(spec)       # its dataclass looks its module up
+    exec(compile(pins_py.read_text(), str(pins_py), "exec"), mod.__dict__)  # noqa: S102  (an import, with no bytecode left in the tree)
+    return [(p.path, p.key, p.under) for p in mod.PINS]
+
+
+def repin_manifests(before: str, text: str, key: str | None, under: str, changed: dict[str, tuple[bytes, str]],
+                    written: Callable[[str], str | None]) -> str:
+    """A pin's `text` after a move, with each Lake manifest's digest it held before the move (`before`: under JSON key `key`,
+    or a `sha256sum` line when `key` is None, its path relative to `under`) replaced by the manifest's new digest when the
+    move rewrites it: a move changes a manifest only in where its path packages sit, which no pinned output reads. A
+    digest of any other file stays, for the pin's command. `changed` holds each file the move rewrites by its path before
+    the move, as (its bytes before, its text after); `written` gives a recorded path as the pin writes it after the move,
+    or None to leave its digest."""
+    if key is None:
+        recorded = dict(ln.split("  ", 1)[::-1] for ln in before.splitlines() if ln.strip())
+    else:
+        recorded = json.loads(before).get(key, {})
+    for rel, digest in recorded.items():
+        target = posixpath.normpath(posixpath.join(under, rel))
+        if posixpath.basename(target) != MANIFEST or target not in changed:
+            continue
+        if hashlib.sha256(changed[target][0]).hexdigest() != digest or (w := written(rel)) is None:
+            continue
+        after = hashlib.sha256(changed[target][1].encode()).hexdigest()
+        if key is None:
+            text = re.sub(rf"^{digest}(  {re.escape(w)})$", lambda m, h=after: h + m[1], text, flags=re.M)
+        else:
+            text = re.sub(rf'("{re.escape(w)}"\s*:\s*"){digest}"', lambda m, h=after: f'{m[1]}{h}"', text)
+    return text
+
+
 def sh_ref(ref: str) -> str:
     """`$0`, `${BASH_SOURCE[0]}` or `$SELF` as the name it reads."""
     return ref[1:].strip("{}")
@@ -265,6 +325,8 @@ class Layout:
         rw = data.get("rewrite", {})
         self.exclude, self.include = rw.get("exclude", []), rw.get("include", [])
         self.keep = rw.get("keep", [])
+        #: files, by their old path, whose relative paths stay as written ([rewrite] keep_relative): a test's are a toy's
+        self.keep_relative = rw.get("keep_relative", [])
         self.keep_in = rw.get("keep_in", {})
         self.keep_dotted = tuple(rw.get("keep_dotted", []))
         #: moved directories whose name alone, between quotes or backticks, is ours wherever it is written ([rewrite] words)
@@ -355,10 +417,11 @@ class Layout:
         """Whether `word`, a moved directory's name alone between quotes, is the directory in file `where`."""
         return word in self.words or any(word in ws and fnmatch.fnmatchcase(where, g) for g, ws in self.words_in.items())
 
+    def keeps_relative(self, old: str) -> bool:
+        return _hit(self.keep_relative, old)
+
     def excluded(self, *paths: str) -> bool:
-        def hit(pats, p):
-            return any(fnmatch.fnmatchcase(p, pat) or (pat.startswith("**/") and fnmatch.fnmatchcase(p, pat[3:]))
-                       for pat in pats)
+        hit = _hit
         if MOVES in paths:              # each move's old paths, kept as they were: rewritten, a rerun would record it again
             return True
         if any(hit(self.include, p) for p in paths if p):
@@ -378,6 +441,26 @@ def module_name(path: str, roots: dict[str, str]) -> str | None:
             return ".".join(parts) if all(IDENT.match(x) for x in parts) else None
     parts = p.split("/")
     return ".".join(parts) if all(IDENT.match(x) for x in parts) else None
+
+
+def lean_module(path: str, files) -> str | None:
+    """The Lean module of the `.lean` file `path` among `files`: its path below its Lake package (the nearest directory
+    with a lakefile), `/` as `.`, without `.lean`, as `move_check.py` names one; None outside any package."""
+    d = posixpath.dirname(path)
+    while d:
+        if f"{d}/lakefile.toml" in files or f"{d}/lakefile.lean" in files:
+            return path[len(d) + 1:-len(".lean")].replace("/", ".")
+        d = posixpath.dirname(d)
+    return None
+
+
+def lean_module_sub(text: str, mods: dict[str, str]) -> str:
+    """Each whole moved Lean module name in `text` (`move_check.py`'s `module_sub`): `A.B`, never a declaration `A.B.c`
+    below it, which keeps its namespace."""
+    if not mods:
+        return text
+    pat = re.compile(r"(?<![\w.])(" + "|".join(map(re.escape, sorted(mods, key=len, reverse=True))) + r")(?![\w.])")
+    return pat.sub(lambda m: mods[m[1]], text)
 
 
 def module_there(old: str, new: str, root: str, tracked) -> bool:
@@ -553,6 +636,7 @@ class Run:
         self.leftover: list[str] = []               # the `__init__.py` files left in the packages the move empties
         self.splits: dict[str, str] = {}            # "old file: old directory" -> a rewrite of a split directory's reference
         self.unread: dict[str, int] = {}            # old path -> bytes, for the text files left unread for their size alone
+        self.only: set[str] | None = None           # `--only`: the old paths the rewrite reads, beside what the run moves
 
     def note(self, kind: str, what: str):
         self.notes[kind].append(what)
@@ -718,6 +802,8 @@ class Run:
                     mods.add(m)
                     mods.update(".".join(m.split(".")[:i]) for i in range(1, len(m.split("."))))
         self.new_modules = mods
+        self.lean_mods = {a: b for n, o in self.old_of.items() if n != o and o.endswith(".lean")
+                          and (a := lean_module(o, self.tracked_old)) and (b := lean_module(n, self.new_files)) and a != b}
 
     def old_module_of(self, new_path: str) -> str | None:
         old = self.old_of.get(new_path, new_path)
@@ -728,18 +814,26 @@ class Run:
 
     # ------------------------------------------------------------------------------------------------ rewriting
 
+    def in_scope(self) -> set[str]:
+        """The new paths the rewrite reads: every file of the moved tree, or under `--only`, the files it names (at their
+        paths before the move) and the files this run moves or creates."""
+        if self.only is None:
+            return self.new_files
+        return {p for p in self.new_files if p in self.only or self.old_of.get(p, p) in self.only or p in self.moved}
+
     def rewrite_all(self):
+        scope = self.in_scope()
         lean_before = {}
-        for p in sorted(self.new_files | set(self.texts)):
+        for p in sorted(scope | set(self.texts)):
             if p.endswith("lean-audit.json"):
-                lean_before[p] = self._lean_records(self._read(p))
+                lean_before[p] = self._lean_records(self._read(p), self.lean_mods)
         pins_before = {p: re.findall(r"\b[0-9a-f]{64}\b", self._read(p) or "")
-                       for p in self.new_files if self.L.excluded(self.old_of.get(p, p)) is False
+                       for p in scope if self.L.excluded(self.old_of.get(p, p)) is False
                        and any(fnmatch.fnmatchcase(p, pat) for pat in self.L.include)}
         lake_before = {p: self._lake_packages(self.old_of.get(p, p), self._read(p) or "", self.tracked_old)
-                       for p in self.new_files if posixpath.basename(p) in LAKE_FILES}
+                       for p in scope if posixpath.basename(p) in LAKE_FILES}
         created = set(self.L.data.get("create", {}))
-        for p in sorted(self.new_files - created, key=lambda p: (p == "pyproject.toml", p)):   # the root's members read the rest
+        for p in sorted(scope - created, key=lambda p: (p == "pyproject.toml", p)):   # the root's members read the rest
             if p == "pyproject.toml":
                 self._dependents()
             old = self.old_of.get(p, p)
@@ -775,6 +869,33 @@ class Run:
         for p, before in pins_before.items():
             if re.findall(r"\b[0-9a-f]{64}\b", self.texts.get(p) or self._read(p) or "") != before:
                 raise SystemExit(f"{p}: the rewrite would change a pinned digest")
+        self.repin()
+
+    def repin(self):
+        """Each pin of the check's `pins.py` with the new digest of each Lake manifest it held that the move rewrites
+        (`repin_manifests`), under the manifest's path as the rewrite leaves the pin: where that no longer names the manifest
+        (a pin the map excludes, of a manifest that moved), the digest stays, for the pin's command."""
+        def source(p: str) -> Path:
+            return self.root / (self.old_of.get(p, p) if self.dry else p)
+        changed = {self.old_of.get(p, p): (source(p).read_bytes(), t) for p, t in self.texts.items()
+                   if posixpath.basename(p) == MANIFEST and p in self.new_files}
+        if not changed:
+            return
+        listed = pins_py(lambda p: self.new_of.get(p, p) in self.new_files)
+        for was, key, under in pins(source(self.new_of.get(listed, listed))):
+            if (pin := self.new_of.get(was, was)) not in self.new_files:
+                continue
+            there, kept = (self.L.directory(under)[0] or under) if under else "", self.L.excluded(was, pin)
+
+            def written(rel: str, under=under, there=there, kept=kept) -> str | None:
+                dest = self.new_of.get(t := posixpath.normpath(posixpath.join(under, rel)), t)
+                w = rel if kept else posixpath.relpath(dest, there) if there else dest
+                return w if posixpath.normpath(posixpath.join(there, w)) == dest else None
+            before = source(pin).read_text()
+            text = self.texts.get(pin, before)
+            if (new := repin_manifests(before, text, key, under, changed, written)) != text:
+                self.texts[pin] = new
+                self._count(pin, "pins repinned to a rewritten Lake manifest")
 
     def rekey_lean_deps(self, pin: str = "tools/lean/lean-deps.json"):
         """Each pinned dependency bundle is keyed by its package's manifest and toolchain (`lean_audit.deps_key`), and a moved
@@ -811,9 +932,13 @@ class Run:
             self.texts[pin] = new
 
     @staticmethod
-    def _lean_records(text):
+    def _lean_records(text, mods: dict[str, str] | None = None):
+        """A lock's guarantees and reads, each `reads` key (a module's name) as `mods` moves it."""
         d = json.loads(text) if text else {}
-        return json.dumps([d.get("guarantees"), d.get("reads")], sort_keys=True)
+        reads = d.get("reads")
+        if mods and isinstance(reads, dict):
+            reads = {mods.get(k, k): v for k, v in reads.items()}
+        return json.dumps([d.get("guarantees"), reads], sort_keys=True)
 
     def _read(self, p: str) -> str | None:
         """The text of `p` as it will be written, or None for a file that isn't text (a NUL in its first 8 KiB, or not UTF-8)
@@ -855,11 +980,15 @@ class Run:
             out = self._imports(path, old, out)
         if is_shell(path, out):
             out = self._sh_anchors(path, old, out)
-        if not path.endswith(".lean"):
+        if path.endswith(".lean"):
+            out = LEAN_IMPORT.sub(lambda m: m[1] + self.lean_mods.get(m[2], m[2]) + m[3], out)
+        else:
             out = self._from_strings(path, out)
             out = self._dotted(path, out)
+        if path.endswith("lean-audit.json"):
+            out = lean_module_sub(out, self.lean_mods)
         if posixpath.basename(path) == "pyproject.toml":
-            out = self._pyproject(path, out)
+            out = self._pyproject(path, out, text)
         return out
 
     def _count(self, path: str, kind: str, n: int = 1):
@@ -1035,6 +1164,8 @@ class Run:
 
         def relative(m: re.Match) -> str:
             var, token = (m.group("v"), m.group("p")) if m.group("p") is not None else (m.group("v2"), m.group("p2"))
+            if self.L.keeps_relative(old):
+                return m.group(0)
             new = self._map_relative(token, path, old, from_member=bool(var))
             if new is None or new == token:
                 return m.group(0)
@@ -1062,7 +1193,7 @@ class Run:
             return out + ("/" if token.endswith("/") else "")
 
         text = self._short_re.sub(short, text)
-        if path != old and posixpath.splitext(path)[1] in RELATIVE_TYPES:
+        if path != old and posixpath.splitext(path)[1] in RELATIVE_TYPES and not self.L.keeps_relative(old):
             def plain(m: re.Match) -> str:
                 token = m.group("p")
                 stripped = token.rstrip("/.,")
@@ -1223,8 +1354,8 @@ class Run:
         if path == old and new_target == target and not self._through_moved(posixpath.dirname(old), t):
             return None                                 # neither end moved: the token stays as written
         rel = posixpath.relpath(new_target, base_new or ".")
-        if t.startswith("./") and not rel.startswith("."):
-            rel = "./" + rel
+        if t.startswith(("./", "../")) and not rel.startswith("."):
+            rel = "./" + rel                            # still read as relative (`move_check.py`'s `RELATIVE`, `MD_RELATIVE`)
         if plain and rel.startswith(".."):
             self.note("relative paths that now leave their directory", f"{path}: {t} -> {rel}")
         return rel + ("/." if dot else "") + ("/" if slash else "")
@@ -1269,7 +1400,7 @@ class Run:
 
     # Python anchors and joins -----------------------------------------------------------------------------------------
 
-    _ANCHOR = re.compile(r"(?P<head>Path\((?:__file__|(?P<mod>[A-Za-z_][\w.]*)\.__file__)\))(?P<r>\.resolve\(\)|\.absolute\(\))?"
+    _ANCHOR = re.compile(r"(?P<head>(?:pathlib\.)?Path\((?:__file__|(?P<mod>[A-Za-z_][\w.]*)\.__file__)\))(?P<r>\.resolve\(\)|\.absolute\(\))?"
                          r"(?:\.parents\[(?P<n>\d+)\]|(?P<p>(?:\.parent)+))(?P<chain>(?:\s*/\s*(?P<q>[\"'])[\w.\-]+(?P=q))*)")
 
     def _module_file(self, name: str) -> str | None:
@@ -1300,11 +1431,14 @@ class Run:
 
     def _anchors(self, path: str, old: str, text: str) -> str:
         """`Path(__file__).parents[N] / "a" / "b"` in a file that moved, or `Path(m.__file__)...` for a module m that moved:
-        the path it names, from the anchor file's new place."""
-        aliases = None
+        the path it names, from the anchor file's new place. One inside a string literal (a toy's source, a docstring's
+        example) is no anchor of this file's and stays as written."""
+        aliases, strings = None, py_string_spans(text)
 
         def fix(m: re.Match) -> str:
             nonlocal aliases
+            if _inside(strings, m.start()):
+                return m.group(0)
             if m.group("mod"):
                 if aliases is None:
                     aliases = self._aliases(old, text)
@@ -1675,7 +1809,7 @@ class Run:
 
     # pyprojects -------------------------------------------------------------------------------------------------------
 
-    def _pyproject(self, path: str, text: str) -> str:
+    def _pyproject(self, path: str, text: str, original: str | None = None) -> str:
         merged = self.L.merged
         try:
             data = tomllib.loads(text)
@@ -1696,6 +1830,10 @@ class Run:
             out = _add_inputs(out, add)
         for old, new in conf.get("testpaths_replace", {}).items():
             out = _replace_list_item(out, "testpaths", old, new)
+        if prefix := conf.get("strip_suite_relative"):
+            out = _strip_suite_relative(out, prefix)
+        if was := conf.get("pythonpath_from"):
+            out = _pythonpath_from(out, was, posixpath.dirname(path), original or text)
         for n in merged:
             dep = re.compile(r'"' + re.escape(n) + r'(\[[^\]]*\])?"')
             if dep.search(out):
@@ -1784,6 +1922,8 @@ class Run:
         keep = []
         for it in items:
             pp = f"{it}/pyproject.toml"
+            if self.new_of.get(pp, pp) != pp:
+                it = posixpath.dirname(pp := self.new_of[pp])   # the member follows its pyproject, also moved by a file's row
             body = self.texts.get(pp) or self._read(pp)
             if body is None:
                 continue
@@ -1891,6 +2031,20 @@ def rust_literals(text: str) -> list[tuple[int, int]]:
     return spans
 
 
+def py_string_spans(text: str) -> list[tuple[int, int]]:
+    """The offsets of each string literal of Python source ``text``, in order (none when it doesn't parse); an f-string's
+    replacement fields are code."""
+    if parsed(text) is None:
+        return []
+    lines = io.StringIO(text).readlines()
+    starts = [0]
+    for line in lines:
+        starts.append(starts[-1] + len(line))
+    kinds = {tokenize.STRING, getattr(tokenize, "FSTRING_MIDDLE", tokenize.STRING)}
+    return [(starts[t.start[0] - 1] + t.start[1], starts[t.end[0] - 1] + t.end[1])
+            for t in tokenize.generate_tokens(io.StringIO(text).readline) if t.type in kinds]
+
+
 def _inside(spans: list[tuple[int, int]], at: int) -> bool:
     k = bisect.bisect_right(spans, (at, float("inf"))) - 1
     return k >= 0 and spans[k][0] <= at < spans[k][1]
@@ -1992,10 +2146,53 @@ def _add_inputs(text: str, add: list[str], first: bool = False) -> str:
         return text
     ins = ", ".join(json.dumps(a) for a in missing)
     items = m.group("items")
+    tail = items.rstrip().rsplit("\n", 1)[-1]
+    first = first or "#" in tail or items.rstrip().endswith(",")   # appended there, the item would land in a comment or after ",,"
     new_items = (ins + (", " + items.lstrip() if items.strip() else "")) if first else \
         (items.rstrip() + (", " if items.strip() else "") + ins)
     new_body = body[: m.start("items")] + new_items + body[m.end("items"):]
     return text.replace(body, new_body, 1)
+
+
+#: the lists of a suite's `[tool.verity.tests]` whose paths are written from the suite's directory: {table: keys}
+SUITE_RELATIVE = {"tool.verity.tests": ("untraced",), "tool.verity.tests.reads": ("tests",)}
+
+
+def _hit(pats: list[str], p: str) -> bool:
+    """Whether path `p` matches one of the globs `pats` (`**/x` matches `x` too)."""
+    return any(fnmatch.fnmatchcase(p, pat) or (pat.startswith("**/") and fnmatch.fnmatchcase(p, pat[3:])) for pat in pats)
+
+
+def _strip_suite_relative(text: str, prefix: str) -> str:
+    """Each path of the suite-relative lists (`SUITE_RELATIVE`) that starts with `prefix`, without it: what a suite lists once
+    its test path `prefix` is its directory (`[pyproject] strip_suite_relative`, beside `testpaths_replace`)."""
+    out, table, key = [], None, None
+    for line in text.splitlines(keepends=True):
+        code = line.split("#", 1)[0]
+        if key is None and (m := re.match(r"^\s*\[\[?\s*([^\[\]]+?)\s*\]\]?\s*$", code)):
+            table = m.group(1)
+        elif key is None and (m := re.match(r"^\s*(\w+)\s*=\s*\[", code)) and m.group(1) in SUITE_RELATIVE.get(table, ()):
+            key = m.group(1)
+            code = code[m.end():]
+        if key is not None:
+            line = re.sub(r'(["\'])' + re.escape(prefix), r"\1", line)
+            if "]" in code:
+                key = None
+        out.append(line)
+    return "".join(out)
+
+
+PYTHONPATH = re.compile(r"^(?P<head>pythonpath\s*=\s*\[)(?P<items>[^\]]*)\]", re.M)
+
+
+def _pythonpath_from(text: str, was: str, now: str, original: str) -> str:
+    """pytest's `pythonpath` as the pyproject's `original` text gives it, each entry written from directory `was`, written
+    from `now`, the pyproject's new directory, so it names the same directory (`[pyproject] pythonpath_from`); whatever the
+    rewrite of relative paths made of it is replaced."""
+    if not (m := PYTHONPATH.search(original)):
+        return text
+    moved = [posixpath.relpath(posixpath.normpath(posixpath.join(was, i)), now) for i in json.loads("[" + m.group("items") + "]")]
+    return PYTHONPATH.sub(lambda n: n.group("head") + ", ".join(json.dumps(i) for i in moved) + "]", text, count=1)
 
 
 def _replace_list_item(text: str, key: str, old: str, new: list[str]) -> str:
@@ -2134,6 +2331,11 @@ def with_rows(data: dict, rows_file: Path, root: Path) -> dict:
     return {**merged, "modules": modules}
 
 
+def only_paths(path: Path) -> set[str]:
+    """The paths `--only FILE` names: one a line, blank lines left out."""
+    return {ln.strip() for ln in path.read_text().splitlines() if ln.strip()}
+
+
 def unpinned_uv(root: Path) -> str | None:
     """Why `uv lock` here wouldn't be the pinned uv's (`tools/check/pod_setup.sh`), or None.  Another uv writes another lock
     header, so the move would differ from a rerun of the script with the pinned one, which `restack.py` refuses."""
@@ -2161,6 +2363,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--report-splits", action="store_true",
                     help="note references to a split directory that [split] doesn't acknowledge, instead of failing (restack.py "
                          "on a branch: its own references are its owner's to check)")
+    ap.add_argument("--only", type=Path, metavar="FILE",
+                    help="rewrite only the files FILE names, one path a line, and those the run moves: a rerun over what a "
+                         "merge brought (every file still moves, and the rest of the tree is neither read nor rewritten)")
     a = ap.parse_args(argv)
     layout = load(a.map)
     if a.resolve:
@@ -2186,6 +2391,8 @@ def main(argv: list[str] | None = None) -> int:
     if (rows := rows_path(a.map)).is_file():
         layout = Layout(with_rows(layout.data, rows, root))
     run = Run(root, layout, a.dry_run)
+    if a.only:
+        run.only = only_paths(a.only)
     try:
         moves = run.plan()
     except NoRow as e:

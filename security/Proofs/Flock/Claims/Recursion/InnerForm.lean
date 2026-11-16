@@ -58,7 +58,7 @@ statement up as one table at the `m`, `k_log` and region count, and with the poi
 * `ins_plainLeaves`, `check_plain`: Flock's plain verifier reads it so (`Raw.ins`), at one table and without public
   inputs (`ProvedScope.check`, which `innerOk` runs).
 * `files_stmt`: both are one `Stmt.setupHidden` table (`HiddenExec.setupTables_okH`), the files' at no sample.
-* `drawn_full`: a full sample keeps `n`, so `m`, and the regions, whose count is the circuit's ports
+* `sampled_full`: a full sample keeps `n`, so `m`, and the regions, whose count is the circuit's ports
   (`regions_size`).
 -/
 
@@ -86,7 +86,7 @@ theorem checkForm_ok {fm : RecCoins.InnerForm} {st : Stmt} {u : Unit}
     (h : RecSetup.checkForm (some fm) st = .ok u) :
     fm.statement = Tags.circuitPlainLeaves.name ∧ fm.tables = [] ∧
       ∃ b d D, fm.draw = some b ∧ FlockDeploy.jsonOf "draw" b = .ok d ∧
-        Draw.UnitDraw.ofJson (Flock.norm d) = .ok D ∧ D.proved = Array.range st.n := by
+        Draw.UnitSample.ofJson (Flock.norm d) = .ok D ∧ D.proved = Array.range st.n := by
   unfold RecSetup.checkForm at h
   dsimp only at h
   simp only [throw_bind'] at h
@@ -95,7 +95,7 @@ theorem checkForm_ok {fm : RecCoins.InnerForm} {st : Stmt} {u : Unit}
     exact ⟨by simpa using ‹¬(fm.statement != Tags.circuitPlainLeaves.name) = true›,
       by simpa using ‹¬(!fm.tables.isEmpty) = true›,
       _, _, _, ‹fm.draw = some _›, jsonOf_of ‹String.fromUTF8? _ = some _› ‹Except.mapError _ _ = .ok _› "draw",
-      ‹Draw.UnitDraw.ofJson _ = .ok _›, by simpa using ‹¬(_ != Array.range st.n) = true›⟩
+      ‹Draw.UnitSample.ofJson _ = .ok _›, by simpa using ‹¬(_ != Array.range st.n) = true›⟩
 
 /-- **The setup's shape check, whole**: where `RecSetup.checkShape` passes on the inner statement's files, they set it
 up, the inner shape's `m`, `k_log`, regions and claims are the ones they set it up at, its shared-row tables are within
@@ -213,18 +213,18 @@ theorem regions_size {c : Circuit} {pub : Public} {rs : Array Region} (h : HmOut
 
 /-- **A full sample keeps `m` and the regions**: a hidden-output statement set up at a sample that proves every one of the
 unsampled statement's units, in order, has its `n`, hence its `m`, its `k_log` and its region count. -/
-theorem drawn_full {T : Tags} {cf pf : ByteArray} {co co' : Coins} {tb : List (String × ByteArray)}
-    {pa pa' : Option Lean.Json} {pr pr' : Option ByteArray} {d : Lean.Json} {D : Draw.UnitDraw} {st st' : Stmt}
+theorem sampled_full {T : Tags} {cf pf : ByteArray} {co co' : Coins} {tb : List (String × ByteArray)}
+    {pa pa' : Option Lean.Json} {pr pr' : Option ByteArray} {d : Lean.Json} {D : Draw.UnitSample} {st st' : Stmt}
     (h' : Stmt.setupHidden T cf pf co tb none pa pr = .ok st')
     (h : Stmt.setupHidden T cf pf co' tb (some d) pa' pr' = .ok st)
-    (hD : Draw.UnitDraw.ofJson d = .ok D) (hp : D.proved = Array.range st'.n) :
+    (hD : Draw.UnitSample.ofJson d = .ok D) (hp : D.proved = Array.range st'.n) :
     st.m = st'.m ∧ st.c.kLog = st'.c.kLog ∧ st.regions.size = st'.regions.size := by
   have s := FlockSoundness.Discharge.Hidden.setupHidden_spec' h
   have s' := FlockSoundness.Discharge.Hidden.setupHidden_spec' h'
   have hc : st.c = st'.c := Except.ok.inj (s.parse.symm.trans s'.parse)
   obtain ⟨pop, -, -, hd⟩ := s.pub
   have hdr : HmRow.drawn { st.c with outPorts := #[] } pop d = .ok st.pub := hd d rfl
-  obtain ⟨D', hD', -, hn, -⟩ := FlockSoundness.Discharge.Layout.drawn_spec hdr
+  obtain ⟨D', hD', -, hn, -⟩ := FlockSoundness.Discharge.Layout.sampled_spec hdr
   rw [hD] at hD'
   cases hD'
   have hN : st.n = st'.n := by rw [s.n, hn, hp, Array.size_range]
@@ -260,7 +260,7 @@ region count, and with the points, that the files set it up at (`RecCoins.Files.
 inner statement to a `Tags.circuitPlainLeaves` statement with no lookup table, at a
 sample of every one of the files' units in order (`checkForm_ok`); the plain verifier's statement check gives one table and no
 public inputs (`check_plain`); so both are one hidden-output table (`files_stmt`), and the full sample keeps the files'
-numbers (`drawn_full`). -/
+numbers (`sampled_full`). -/
 theorem innerSetup_files {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecScope.accepts (readOf r) = true) :
     ∃ f spec' st' s spec st, filesOf r = some (.files f) ∧ f.stmt "the inner session" = .ok (spec', st') ∧
       FlockDeploy.setupOf false r.w.inner = some (s, spec, #[st]) ∧
@@ -314,7 +314,7 @@ theorem innerSetup_files {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecSco
   rw [z2, z3, z4, z5, z7, hs3, hdraw, hpart, hpi] at hsetup
   have hh : RecCoins.innerTags.hiddenOutputs = true := rfl
   rcases FlockSoundness.Discharge.HiddenExec.setupTables_okH hh hsetup with ⟨-, st, hst, rfl, rfl⟩ | ⟨hc, -⟩
-  · obtain ⟨e1, e2, e3⟩ := drawn_full hst' hst hD hpr
+  · obtain ⟨e1, e2, e3⟩ := sampled_full hst' hst hD hpr
     exact ⟨_, spec', st', s, _, st, hfs, hstm, hset, e1, e2, e3, by rw [hspec']; rfl, z2, hpi⟩
   · omega
 

@@ -25,7 +25,7 @@ namespace Claims.ZKServer
 
 open Claims Claims.ZKMal
 open _root_.Flock (V F128)
-open _root_.Flock.Firewall.Frame (Cfg Masker roundFree check labelFrame LABEL_PCS claimPoints)
+open _root_.Flock.ZkServer.Frame (Cfg Masker roundFree check labelFrame LABEL_PCS claimPoints)
 open FlockSoundness.Refine (Frame encs)
 
 namespace Loop

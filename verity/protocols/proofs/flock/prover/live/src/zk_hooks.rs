@@ -180,7 +180,7 @@ impl LeafSalts {
         s
     }
 
-    /// The level-0 tree's salts sampled elsewhere (the Lean session loop's, `Flock.Firewall.Level0`), before anything reads them:
+    /// The level-0 tree's salts sampled elsewhere (the Lean session loop's, `Flock.ZkServer.Level0`), before anything reads them:
     /// every later [`Self::level0`] answers these bytes.
     pub fn set_level0(&self, s: impl Into<std::sync::Arc<Vec<u8>>>) -> Result<(), String> {
         let mut k = self.kept.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -197,8 +197,8 @@ impl LeafSalts {
         fill_salts(self.key.as_deref(), id, b)
     }
 
-    /// The salts of the next trees from here, sampled elsewhere (the Lean finish's for a firewalled rep's levels ≥ 1,
-    /// `Flock.Firewall.Finish.hiSaltsOf`), in id order, each `leaves` × 192 bytes: the first sample of each such tree at that
+    /// The salts of the next trees from here, sampled elsewhere (the Lean finish's for a zk_served rep's levels ≥ 1,
+    /// `Flock.ZkServer.Finish.hiSaltsOf`), in id order, each `leaves` × 192 bytes: the first sample of each such tree at that
     /// size takes them in place of its own read.
     pub fn preset(&self, trees: Vec<Vec<u8>>) -> Result<(), String> {
         let mut k = self.kept.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -233,7 +233,7 @@ impl LeafSalts {
     }
 
     fn draw(&self, id: u64, leaves: usize) -> Vec<u8> {
-        draw_salts(self.key.as_deref(), id, leaves)
+        sample_salts(self.key.as_deref(), id, leaves)
     }
 
     /// A handle that reads this table's trees ahead of their first sample, from another thread ([`SaltsAhead::draw`]).
@@ -242,7 +242,7 @@ impl LeafSalts {
     }
 }
 
-fn draw_salts(key: Option<&[u8; 32]>, id: u64, leaves: usize) -> Vec<u8> {
+fn sample_salts(key: Option<&[u8; 32]>, id: u64, leaves: usize) -> Vec<u8> {
     let mut b = vec![0u8; leaves * SALT_BYTES];
     fill_salts(key, id, &mut b);
     b
@@ -311,7 +311,7 @@ impl Drop for SaltsAhead {
 }
 
 /// Where a proving build's samples read the OS's bytes when not from `getrandom` itself: under the outer ZK server, the Lean
-/// server's `flock-firewall tap` (`firewall::lean_tap`, PROTOCOL.md §10.4), set once before the process's first sample.
+/// server's `flock-zk-server tap` (`zk_server::lean_tap`, PROTOCOL.md §10.4), set once before the process's first sample.
 static OS_SOURCE: std::sync::OnceLock<std::sync::Mutex<Box<dyn FnMut(&mut [u8]) + Send>>> = std::sync::OnceLock::new();
 
 /// Makes `source` the OS bytes of every later sample of this process; `Err` when a source is already set.
@@ -533,7 +533,7 @@ mod tests {
     /// generator read before, in every table, at lane lengths that end inside a ChaCha20 block, at a piece's end, and inside
     /// a later piece.
     #[test]
-    fn lanes_drawn_in_parallel_are_the_sequential_draw() {
+    fn lanes_sampled_in_parallel_are_the_sequential_sample() {
         let seed = ProverSeed::injected([11; 32]);
         let c = LANE_CHUNK;
         for (table, purpose, lanes, n) in [(0, 7, 3000, 37usize), (0, 6, 4, 4096), (2, 7, 257, 1), (5, 6, 64, 130), (0, 6, 4, 3 * c + 5),
@@ -679,7 +679,7 @@ mod tests {
     /// Table 0 of a session of several tables reads a one-table session's words and salts; every other table reads none of
     /// them, and none of another table's.
     #[test]
-    fn a_table_draws_its_own_words_and_salts() {
+    fn a_table_samples_its_own_words_and_salts() {
         let seed = ProverSeed::injected([7; 32]);
         let addrs = [(STREAM_MASK, 0u64, 64usize), (4, 0, 64), (4, 1 << 32, 64), (5, 1 << 24, 64), (6, 3 << 32, 64), (7, 67 << 32, 64)];
         let draw = |mut r: ProverRng| -> Vec<Vec<F128>> { addrs.iter().map(|&(s, i, n)| r.f128s(s, i, n)).collect() };
@@ -710,7 +710,7 @@ mod tests {
     /// A proving build's words are the OS's: two samples at one address, two tables of one seed at one address, and the lanes of
     /// a sample spanning several `getrandom` pieces share no word.
     #[test]
-    fn os_draws_are_read_afresh_at_every_address() {
+    fn os_samples_are_read_afresh_at_every_address() {
         let seed = ProverSeed::from_os();
         let (mut r, mut t1) = (ProverRng::from_seed(seed), ProverRng::for_table(seed, 1));
         let n = 2 * OS_PIECE / 16 + 3;

@@ -7,10 +7,10 @@ digests; then the exact W8A8 GEMM on one layer's loaded matrices.
 
 `LAYOUT`, `M`, `ENC`, the coin and the commitment are `layer.py`'s: the store's layout, the weights manifest with
 each stream tensor's SHA-256 (`manifest --digests`, the digests memory-accounting held W to), and memory-accounting's
-encoded store, read only, under the salt `setup.draw_salt` of the coin and commitment its `setup.json` is held to.
+encoded store, read only, under the salt `setup.sample_salt` of the coin and commitment its `setup.json` is held to.
 
 - **stage**, each tensor of `--layers` in block order (a layer's QKV, O, up and down; the head is the last layer):
-  - its rows from the store's segment files onto the GPU (`Segments`: each file read once, in order, `readers` ahead in
+  - its rows from the store's segment files onto the GPU (`stage.Segments`: each file read once, in order, `readers` ahead in
     threads, and held to its `seg/<s>.json`'s SHA-512);
   - `stage.decode_matrix` into a buffer poisoned with 0xA5 (a warm-up, where a refusal is recorded), then `reps`
     decodes, each into the buffer poisoned again and timed alone by CUDA events;
@@ -44,7 +44,7 @@ import os
 import sys
 import time
 from collections import deque
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -54,7 +54,8 @@ import torch
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "s8_linear"))
+sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "verity/protocols/resource_accounting/memory/poub/prover/p2_stage/stage.py").parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "kernels" / "s8_linear"))
 import gemm as G  # noqa: E402
 import layout as L  # noqa: E402
 import stage as S  # noqa: E402
@@ -76,59 +77,6 @@ class Out:
             f.write(json.dumps(row) + "\n")
 
 
-def sync() -> None:
-    if DEVICE.type == "cuda":
-        torch.cuda.synchronize()
-
-
-class Segments:
-    """An encoded store's segment files `needed`, in that order, each read once and held to its `seg/<s>.json`'s SHA-512,
-    `ahead` of the one in use in a thread pool; `rows` asks for blocks in increasing order."""
-
-    def __init__(self, root: Path, bps: int, needed: list[int], pool: ThreadPoolExecutor, ahead: int) -> None:
-        self.root, self.bps, self.pool, self.ahead = root, bps, pool, ahead
-        self.queue = deque(needed)
-        self.pending: dict[int, Future] = {}
-        self.held: dict[int, np.ndarray] = {}
-        self.read = 0
-
-    def _load(self, s: int) -> np.ndarray:
-        meta = L.segment_path(self.root, s, "json")
-        if not meta.exists():
-            raise SystemExit(f"segment {s} of {self.root} is not done: no {meta.name}")
-        data = np.fromfile(L.segment_path(self.root, s, "c"), dtype=np.uint8)
-        if hashlib.sha512(data).hexdigest() != json.loads(meta.read_text())["sha512"]:
-            raise SystemExit(f"segment {s}'s rows are not the SHA-512 its {meta.name} records")
-        return data
-
-    def segment(self, s: int) -> np.ndarray:
-        while self.queue and len(self.pending) < self.ahead + 1:
-            k = self.queue.popleft()
-            self.pending[k] = self.pool.submit(self._load, k)
-        if s not in self.held:
-            if s not in self.pending:
-                raise ValueError(f"segment {s} isn't next: the rows are asked for in block order")
-            self.held[s] = self.pending.pop(s).result()
-            self.read += 1
-        return self.held[s]
-
-    def rows(self, blocks: range) -> torch.Tensor:
-        """The rows of `blocks` ([n, 2056] uint8) on the device; the segments before the one before the last they touch
-        let go (the next tensor's rows in whole units can start a few blocks before these end)."""
-        out = torch.empty(len(blocks), L.ROW, dtype=torch.uint8, device=DEVICE)
-        last = (blocks.stop - 1) // self.bps
-        for s in range(blocks.start // self.bps, last + 1):
-            data = self.segment(s)
-            lo, hi = max(blocks.start, s * self.bps), min(blocks.stop, (s + 1) * self.bps)
-            part = data[(lo - s * self.bps) * L.ROW:(hi - s * self.bps) * L.ROW]
-            if len(part) != (hi - lo) * L.ROW:
-                raise ValueError(f"segment {s} ends before block {hi}")
-            out[lo - blocks.start:hi - blocks.start] = torch.from_numpy(part.reshape(hi - lo, L.ROW)).to(DEVICE)
-        for s in [s for s in self.held if s < last - 1]:
-            del self.held[s]
-        return out
-
-
 def segments_of(tensors: list[L.Tensor], bps: int, ranges: list[range] | None = None) -> list[int]:
     out: list[int] = []
     for r in ranges if ranges is not None else [t.block_range for t in tensors]:
@@ -147,7 +95,7 @@ class Audit:
 
     def __init__(self, args: argparse.Namespace, lay: L.StoreLayout) -> None:
         import sketch as K
-        from verity.protocols.accounting.poub.verifier import receipts as R
+        from verity.protocols.resource_accounting.memory.poub.verifier import receipts as R
 
         self.K, self.R = K, R
         self.store_units = lay.params.blocks_per_segment * lay.params.segments // K.PER
@@ -192,7 +140,7 @@ class Audit:
             gap(at, self.units)
         return out
 
-    def read_gap(self, segs: Segments, r: range, reps: int) -> None:
+    def read_gap(self, segs: S.Segments, r: range, reps: int) -> None:
         rows = segs.rows(r)
         self.gap_s += min(S.timed(partial(self.P.read, rows, r.start, r.start, r.stop), reps, DEVICE))
         self.gap_units += len(r) // self.K.PER
@@ -232,14 +180,14 @@ def digests(src: L.Weights, t: L.Tensor, host: np.ndarray) -> dict[str, bool]:
     return out
 
 
-def decode(args: argparse.Namespace, lay: L.StoreLayout, segs: Segments, t: L.Tensor, audit: Audit | None = None
+def decode(args: argparse.Namespace, lay: L.StoreLayout, segs: S.Segments, t: L.Tensor, audit: Audit | None = None
            ) -> tuple[torch.Tensor | None, S.EncodedRows, dict]:
     """`t`'s rows onto the device and decoded into a fresh buffer: the buffer (None if refused), the store and timings.
     With `audit`, the rows are of whole units and the decode sketches them."""
     t0 = time.perf_counter()
     r = audit.rows_range(t) if audit else t.block_range
     rows = segs.rows(r)
-    sync()
+    S.sync()
     rows_s = time.perf_counter() - t0
     store = S.EncodedRows(lay, rows, r.start, args.lib, chunk=args.chunk)
     store.sketch = audit.P if audit else None
@@ -269,7 +217,7 @@ def stage_pass(args: argparse.Namespace, lay: L.StoreLayout, src: L.Weights, ten
     with_s, sketch_s = 0.0, 0.0
     t_start = time.perf_counter()
     with ThreadPoolExecutor(args.readers) as readers, ThreadPoolExecutor(args.hashers) as hashers:
-        segs = Segments(args.encoded, bps, segments_of(tensors, bps, [r for r, _ in items]), readers, args.readers)
+        segs = S.Segments(args.encoded, bps, segments_of(tensors, bps, [r for r, _ in items]), readers, args.readers)
 
         def drain(keep: int) -> None:
             nonlocal ok
@@ -369,7 +317,7 @@ def gemm_pass(args: argparse.Namespace, lay: L.StoreLayout, src: L.Weights, read
     ok = True
     bps = lay.params.blocks_per_segment
     with ThreadPoolExecutor(args.readers) as readers:
-        segs = Segments(args.encoded, bps, segments_of(tensors, bps), readers, args.readers)
+        segs = S.Segments(args.encoded, bps, segments_of(tensors, bps), readers, args.readers)
         for t in tensors:
             w, store, rec = decode(args, lay, segs, t)
             del store
@@ -425,10 +373,10 @@ def layer_set(spec: str, last: int) -> set[int]:
 def main(argv: list[str] | None = None) -> int:
     global DEVICE
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--layout", type=Path, required=True, help="the store's layout JSON (p2_v1/store.py layout)")
+    ap.add_argument("--layout", type=Path, required=True, help="the store's layout JSON (p2_store/store.py layout)")
     ap.add_argument("--weights", type=Path, required=True, help="the weights stream's manifest, with digests")
     ap.add_argument("--w", type=Path, help="the weights stream's bytes at their stream offsets (else the generator's)")
-    ap.add_argument("--generator", default="benchmarks.torch_gpu.p2_stage.served_weights", help="the seeded generator, without --w")
+    ap.add_argument("--generator", default="verity.protocols.resource_accounting.memory.pous.prover.served_weights", help="the seeded generator, without --w")
     ap.add_argument("--shape", default="h200", help="its shape")
     ap.add_argument("--weights-seed", default="text:verity/cmp92/h200/weights/v1", help="its seed")
     ap.add_argument("--encoded", type=Path, required=True, help="the encoded store's directory, read only")
@@ -454,7 +402,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--keep", type=Path, help="with --receipts: σ, y, the salts and the pass for bw_ref.py")
     ap.add_argument("--device", default="cuda")
     args = ap.parse_args(argv)
-    DEVICE = torch.device(args.device)
+    DEVICE = S.DEVICE = torch.device(args.device)
     manifest = json.loads(args.weights.read_text())
     try:
         lay, setup = L.open_store(args.layout, manifest, args.encoded, args.source, args.commitment, None)

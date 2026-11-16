@@ -1037,7 +1037,7 @@ resource = { sm_90 = ["dram"], sm_120 = ["dram", "l2", "smem"] }
 rate = { sm_90 = ["hbm"], sm_120 = ["hbm", "l2.read", "l1.read"] }
 cost = "a word of the store it's served from a word"
 argument = "words between registers and device memory, L2 or L1 (shared memory's port), each at its store's rate; on sm_90 L2's 512 words is the lane loads' issue bound (4 warp instructions × 32 lanes × 4 words) and L1 shares shared memory's 128 B a clock"
-source = "θ hbm, l2.read, l1.read (census LDG*); Sm120.lean, H200.lean"
+source = "θ hbm, l2.read, l1.read (census LDG*); hardware/cards/rtx-pro-6000-server.toml, h200-sxm-141gb.toml"
 
 [[row]]
 ops = ["LDGSTS"]

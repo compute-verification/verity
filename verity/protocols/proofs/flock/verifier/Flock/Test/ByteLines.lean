@@ -1,11 +1,3 @@
-/-
-`HmRow.parseWith` runs its twin on an ASCII file (`parseWith_eq_bytes`), which reads the file's lines and rows through
-`ByteLines.View`. These guards hold the view's compiled code to what it stands for: its lines to `String.splitOn "\n"`'s
-without a last empty one, a line's numbers to `Net.lineNums` (a token past 19 digits, a token that is not a number, a line
-of whitespace), and a `NET` block to `Net.parse` of its lines, whole, truncated, with a `LEAVES` or `CUT` line after it,
-or with a row that is not numbers. A file that is empty, ends without a `'\n'` or holds empty lines has a view; one that
-is not ASCII has none.
--/
 module
 
 public import Flock.ByteLines
@@ -14,6 +6,15 @@ public import Flock.With.Setup
 meta import Flock.ByteLines
 meta import Flock.Test.Tmpl
 meta import Flock.With.Setup
+
+/-!
+`HmRow.parseWith` runs its twin on an ASCII file (`parseWith_eq_bytes`), which reads the file's lines and rows through
+`ByteLines.View`. These guards hold the view's compiled code to what it stands for: its lines to `String.splitOn "\n"`'s
+without a last empty one, a line's numbers to `Net.lineNums` (a token past 19 digits, a token that is not a number, a line
+of whitespace), and a `NET` block to `Net.parse` of its lines, whole, truncated, with a `LEAVES` or `CUT` line after it,
+or with a row that is not numbers. A file that is empty, ends without a `'\n'` or holds empty lines has a view; one that
+is not ASCII has none.
+-/
 
 @[expose] public section
 

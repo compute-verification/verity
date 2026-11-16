@@ -18,14 +18,14 @@ coins are flipped independently, window after window, the monitoring-period step
 it, given that each window is fixed before its own capacity coins (`FixedBefore`): window `u`'s joint run, its audit
 and the other audits' coins are functions of the earlier windows' capacity coins, so `PeriodHeld` applies to window `u`,
 at its strategy under the device model and the instantiation (`DeviceModel`, `Instantiates`), whatever the earlier
-windows' coins. `FixedBefore` is a named assumption (`pous-ring-device`, `trusted-host`), which the memory challenger
+windows' coins. `FixedBefore` is a named assumption (`pous-ring-device`, `trusted-device`), which the memory challenger
 enforces by releasing each window's capacity coins only after that window's commitment is in.
 
 * `pooledShort`: at least `M` of the `U` windows are accepted, unbroken and short with a probability `P` with
   `P · z^M ≤ (1 + (z − 1) p)^U` for every `z ≥ 1`; `pooledShort_choose`: `P ≤ C(U, M) p^M`; `pooledShort_log`
   (`Pous.Period.PooledShortLog`): `P ≤ δ'` once `M ≥ ((z − 1) U p + ln(1/δ')) / ln z`.
 * `pooledSureShort`: every window accepted with no break while at least `M` of them are short on every capacity coin
-  (`Accounting.Run.CapacityShort`, which reads only the window's other coins), with probability at most `p^M`.
+  (`ResourceAccounting.Run.CapacityShort`, which reads only the window's other coins), with probability at most `p^M`.
 * `pooledShort_log_honest`: `PooledShortLog`'s premises at `10,080` honest periods (`periodHeldHonest`'s device
   premises and certificate, each window reading no capacity coin), and its count condition at `z = 2`, `δ' = 2^-64`,
   `M = 210`: `10,080 · (1% + 2^-128) ≤ 146 · ln 2`. `pooledShort_log_nontrivial`: at `10,080` empty periods the
@@ -59,10 +59,10 @@ theorem pr_le_of_prCoin_le {X : Type} [Fintype X] (E : X → Prop) {b : ℝ} (hb
     (h : prCoin E ≤ ENNReal.ofReal b) : Pouw.pr E ≤ b :=
   (Claims.Sampling.Pr_eq_toReal_prCoin E).trans_le (ENNReal.toReal_le_of_le_ofReal hb h)
 
-variable {U : ℕ} {ι α ΩW ΩQ : Type} [Fintype ι] [Fintype α] {d : Fin U → Accounting.Device ι}
+variable {U : ℕ} {ι α ΩW ΩQ : Type} [Fintype ι] [Fintype α] {d : Fin U → ResourceAccounting.Device ι}
 
 variable {r : (u : Fin U) → (Fin U → (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) →
-      Accounting.Run (d u) α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams)}
+      ResourceAccounting.Run (d u) α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams)}
     {P : Fin U → (Fin U → (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) → Audits ΩW ΩQ}
     {o : Fin U → (Fin U → (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) → ΩW × ΩQ}
 
@@ -136,7 +136,7 @@ theorem pooledShort_log : PooledShortLog := by
 
 open Classical in
 /-- **PoUS pooled over `U` windows, sure shortness**: every window accepted with no break while at least `M` of them
-are short on every capacity coin (`Accounting.Run.CapacityShort`, fixed before the window's capacity coins) has
+are short on every capacity coin (`ResourceAccounting.Run.CapacityShort`, fixed before the window's capacity coins) has
 probability at most `(δ + ε_max)^M`. -/
 theorem pooledSureShort (D Q L : ℕ)
     (hP2 : Pous.P2.Assumptions.P2RingAuditSecure D Q L) (hfix : FixedBefore r P o) (round : ℕ) (S : ℝ)
@@ -158,7 +158,7 @@ theorem pooledSureShort (D Q L : ℕ)
   · intro u x x' hx
     simp only [hfix.2.1 u x x' fun i hi => hx i hi.le, hfix.2.2 u x x' fun i hi => hx i hi.le, hx u le_rfl]
   · intro u x x' hx
-    simp only [Accounting.Run.CapacityShort, hfix.1 u x x' hx, hfix.2.2 u x x' hx]
+    simp only [ResourceAccounting.Run.CapacityShort, hfix.1 u x x' hx, hfix.2.2 u x x' hx]
 
 /-! ## The honest and nontrivial lemmas of `pooledShort_log` -/
 

@@ -31,12 +31,12 @@ frames' updates do to that bit:
 namespace Claims.ZKServer.Relay
 
 open _root_.Flock (SessionSpec Stmt F128)
-open _root_.Flock.Firewall.Frames (Sessions Rep)
+open _root_.Flock.ZkServer.Frames (Sessions Rep)
 
 /-- **The session stopped exactly where one of its reps' frames did.** -/
 theorem stopped_iff {R : Sessions} {sid : Nat} :
     R.stopped sid = true ↔ ∃ p ∈ R.reps, p.sid = sid ∧ p.st.m.stopped = true := by
-  unfold _root_.Flock.Firewall.Frames.Sessions.stopped
+  unfold _root_.Flock.ZkServer.Frames.Sessions.stopped
   rw [Array.any_eq_true']
   simp only [Bool.and_eq_true, beq_iff_eq]
 
@@ -62,7 +62,7 @@ theorem stopped_of_frameAt {R : Sessions} {sid i r : Nat} {p : Rep} (hf : frameA
 /-- **A put of another session's frame** leaves the session's stop as it was. -/
 theorem stopped_put_other {R : Sessions} {sid : Nat} {p : Rep} (hp : p.sid ≠ sid) :
     (R.put p).stopped sid = R.stopped sid := by
-  unfold _root_.Flock.Firewall.Frames.Sessions.put _root_.Flock.Firewall.Frames.Sessions.stopped
+  unfold _root_.Flock.ZkServer.Frames.Sessions.put _root_.Flock.ZkServer.Frames.Sessions.stopped
   rw [Array.any_map]
   congr 1
   funext q
@@ -82,7 +82,7 @@ theorem stopped_put_self {R : Sessions} {p : Rep} (hfr : (frameAt R p.sid p.tabl
   have hk := Array.find?_some hq
   apply stopped_iff.mpr
   refine ⟨p, ?_, rfl, hp⟩
-  unfold _root_.Flock.Firewall.Frames.Sessions.put
+  unfold _root_.Flock.ZkServer.Frames.Sessions.put
   simp only [Array.mem_map]
   refine ⟨q, hm, ?_⟩
   have hk' : (q.sid == p.sid && q.table == p.table && q.rep == p.rep) = true := hk
@@ -94,7 +94,7 @@ theorem stopped_put_live {R : Sessions} {p : Rep} (hs : R.stopped p.sid = false)
   cases h : (R.put p).stopped p.sid
   · rfl
   · obtain ⟨q, hq, hqs, hqst⟩ := stopped_iff.mp h
-    unfold _root_.Flock.Firewall.Frames.Sessions.put at hq
+    unfold _root_.Flock.ZkServer.Frames.Sessions.put at hq
     simp only [Array.mem_map] at hq
     obtain ⟨q', hq', e⟩ := hq
     split at e
@@ -149,20 +149,20 @@ theorem stopped_sessKeptStep {sid : Nat} {R R' : Sessions} (h : SessKeptStep sid
     unfold startAt
     split
     · rfl
-    · unfold _root_.Flock.Firewall.Frames.Sessions.stopped
+    · unfold _root_.Flock.ZkServer.Frames.Sessions.stopped
       simp [hq]
   | put p hp => exact stopped_put_other hp
   | keep =>
     unfold keepOf
     split <;> rfl
   | file root r' b hf =>
-    unfold _root_.Flock.Firewall.Frames.Sessions.file at hf
+    unfold _root_.Flock.ZkServer.Frames.Sessions.file at hf
     split at hf
     · cases hf
     · cases hf
       rfl
   | inner root r' j b hf =>
-    unfold _root_.Flock.Firewall.Frames.Sessions.innerRound at hf
+    unfold _root_.Flock.ZkServer.Frames.Sessions.innerRound at hf
     simp only at hf
     split at hf
     · cases hf
@@ -187,16 +187,16 @@ theorem stopped_sessKept {sid : Nat} {R R' : Sessions} (h : SessKept sid R R') :
 at a round at `roundPlace`'s scheduled place `rr` on the frame `q`, where a stopped session takes no device round and a
 live one's frame is not stopped, the frame the round puts back (`p₁`) is the frame's check's, and after its put the
 session is stopped where it was or where the check failed the round. -/
-theorem roundStep_stopped {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {sid i r : Nat}
+theorem roundStep_stopped {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r : Nat}
     {dom content : ByteArray} {n : Nat} {q p₁ : Rep} {rr : ByteArray} {f : Bool} {nd : Option String}
     {o : ByteArray} (hfr : (frameAt R sid i r).isSome)
-    (hrp : _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom content n = .ok (q, .sched rr, f, nd))
+    (hrp : _root_.Flock.ZkServer.Frames.roundPlace R L0 sid i r dom content n = .ok (q, .sched rr, f, nd))
     (hnd : R.stopped sid = true → nd.isSome = true) (hq : R.stopped sid = false → q.st.m.stopped = false)
-    (ho : (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dom content n).out = .ok o)
-    (hput : (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dom content n).put = some p₁) :
-    ∃ out why, _root_.Flock.Firewall.Frame.check q.cfg q.st.m (if nd.isSome then ByteArray.empty else content) rr n =
+    (ho : (_root_.Flock.ZkServer.Frames.roundStep R L0 sid i r dom content n).out = .ok o)
+    (hput : (_root_.Flock.ZkServer.Frames.roundStep R L0 sid i r dom content n).put = some p₁) :
+    ∃ out why, _root_.Flock.ZkServer.Frame.check q.cfg q.st.m (if nd.isSome then ByteArray.empty else content) rr n =
         .ok (out, p₁.st.m, why) ∧ (R.put p₁).stopped sid = (R.stopped sid || why.isSome) := by
-  rcases hres : _root_.Flock.Firewall.Frame.step q.cfg q.st
+  rcases hres : _root_.Flock.ZkServer.Frame.step q.cfg q.st
     (.round n (if nd.isSome then ByteArray.empty else content) (.sched rr)) with ⟨a, st'⟩
   obtain ⟨v, hv⟩ := roundStep_put hrp hres
   rw [hv, Option.some.injEq] at hput
@@ -213,7 +213,7 @@ theorem roundStep_stopped {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slot
   rw [hres] at hre
   dsimp only at hre
   subst hre
-  obtain ⟨why, hc⟩ := _root_.Flock.Firewall.Frame.check_of_step hres
+  obtain ⟨why, hc⟩ := _root_.Flock.ZkServer.Frame.check_of_step hres
   rw [← hst₁] at hc
   refine ⟨out, why, hc, ?_⟩
   have hfr' : (frameAt R p₁.sid p₁.table p₁.rep).isSome := by

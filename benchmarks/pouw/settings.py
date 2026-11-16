@@ -21,8 +21,10 @@ from verity_config.settings import DEBUG, VALUE, WHERE, Registry, Setting as S, 
 
 #: the files that run outside the tree, relative to this one; `tools/move/layout.py` follows a `./` path to a file it
 #: moves, and a bare one only in a file it moves too
-STANDALONE = ("pearl_c_sm120/run.py", "pearl_c_sm90/run.py", "pearl_c_sm90/grouped.py", "pearl_c4/dev.py",
-              "../../verity/protocols/accounting/pouw/prover/sass_gate.py", "harness/ieee_pin.py")
+STANDALONE = ("../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120/run.py",
+              "../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/run.py",
+              "../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/grouped.py", "../../verity/protocols/experimental/pearl_c4/prover/kernels/dev.py",
+              "../../verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py", "harness/ieee_pin.py")
 
 
 def places(raw: str) -> frozenset[str]:
@@ -87,7 +89,7 @@ REGISTRY = Registry(
     S("PEARLC_SCHEDULE", str, "deferred", VALUE, "when the arm's hashes run: deferred (the served schedule) or serial"),
     S("PEARLC_BENCH_EPOCH", int, 20261014, VALUE, "the arm's PoUW epoch"),
     S("PEARLC_CHALLENGER_GATE", str, None, WHERE, "infra's gate as an ssh command: with PEARLC_CHALLENGER_PEER, the salt coin "
-                                                  "is a live session's on the auditor host"),
+                                                  "is a live session's on the auditor device"),
     S("PEARLC_CHALLENGER_PEER", str, None, WHERE, "this node's name in the challenger host's peers"),
     S("PEARLC_CHALLENGER_LANE", str, "vllm", WHERE, "the lane the gate key is registered for"),
     S("PEARLC_GPU_UTIL", float, 0.55, VALUE, "vLLM's gpu_memory_utilization under the arm"),
@@ -138,8 +140,10 @@ REGISTRY = Registry(
     S("POUW_CHALLENGER_PEER", str, None, WHERE, "the node the window's client runs on, as the gate names it (its draw session)"),
     S("POUW_CHALLENGER_SSH_KEY", str, None, WHERE, "the lane's own gate key, for the window's draw session"),
     # ---------------------------------------------------------------- which of the served path's tests run (tests/)
-    S("VERITY_POUW_H1_PIN", present, False, WHERE, "set, test_h1_pin.py builds the H1 unit's circuit at K = 64 and holds it "
-                                                   "to its pin (about 3.5 minutes, 9.5 GB): which tests run"),
+    # ---------------------------------------------------------------- H1's harness (h1_prove/h1form.py)
+    S("H1_TILE", str, "v1", WHERE, "the H1 tile under the unit, v1 or v3 (h1unit.tile)"),
+    S("H1_TMPL", str, None, WHERE, "the H1 statement's form: unset, empty or flat the flat statement, structural or a "
+                                   "layout mode the templated one (h1unit.layout)"),
     S("PARTIALS_LIB", str, None, WHERE, "an h1u.cu build with kh_lanes, which the partials' GPU tests load (test_partials.py, "
                                         "test_lane_refs.py); unset, they skip"),
     S("VERITY_POUW_H1U_SO", str, None, WHERE, "an h1u.cu -hbc build (benchmarks/hash/dither/sbench.sh's h1u_kc.so), which "

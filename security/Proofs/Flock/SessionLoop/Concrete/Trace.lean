@@ -8,7 +8,7 @@ import Flock.HmNets
 import Flock.Canon
 import Flock.JsonParse
 import Flock.Net
-import Flock.Firewall
+import Flock.ZkServer
 import Flock.Norm
 import Flock.Public
 import Flock.Statement
@@ -104,20 +104,20 @@ theorem netRow_holds {r : Fin (2 ^ S.kLog)} {b : ℕ} {ra rb : Array ℕ}
     (hA : ∀ j : Fin (2 ^ S.kLog), S.A₀ r j = (((ra.toList.map (b + ·)).count j.val : ℕ) : ZMod 2))
     (hB : ∀ j : Fin (2 ^ S.kLog), S.B₀ r j = (((rb.toList.map (b + ·)).count j.val : ℕ) : ZMod 2))
     (hla : ∀ y ∈ ra.toList.map (b + ·), y < 2 ^ S.kLog) (hlb : ∀ y ∈ rb.toList.map (b + ·), y < 2 ^ S.kLog)
-    (h : (xorRow (fun j => blockBit S z o (b + j)) ra && xorRow (fun j => blockBit S z o (b + j)) rb) =
-      blockBit S z o r.val) :
+    (h : (xorRow (fun j => chunkBit S z o (b + j)) ra && xorRow (fun j => chunkBit S z o (b + j)) rb) =
+      chunkBit S z o r.val) :
     (S.A₀.mulVec (S.block z o)) r * (S.B₀.mulVec (S.block z o)) r = S.block z o r := by
   have hmv : ∀ (rr : Array ℕ) (M : Matrix (Fin (2 ^ S.kLog)) (Fin (2 ^ S.kLog)) (ZMod 2)),
       (∀ y ∈ rr.toList.map (b + ·), y < 2 ^ S.kLog) →
       (∀ j : Fin (2 ^ S.kLog), M r j = (((rr.toList.map (b + ·)).count j.val : ℕ) : ZMod 2)) →
-      FlockSoundness.bit (M.mulVec (S.block z o) r) = xorRow (fun j => blockBit S z o (b + j)) rr := by
+      FlockSoundness.bit (M.mulVec (S.block z o) r) = xorRow (fun j => chunkBit S z o (b + j)) rr := by
     intro rr M hlt hM
     simp only [Matrix.mulVec, dotProduct, hM]
     rw [sum_count_nat _ hlt]
     exact bit_sum_row _ _ _
   apply bit_inj'
   rw [bit_mul, hmv ra S.A₀ hla hA, hmv rb S.B₀ hlb hB, h]
-  exact blockBit_of_lt _ z o r.isLt
+  exact chunkBit_of_lt _ z o r.isLt
 
 end rows
 
@@ -306,10 +306,10 @@ theorem block_zC {S : Model.Statement} (hk : S.kLog = 22) (o : Fin (2 ^ S.nbl)) 
   show (if zIn ((o.val * 2 ^ S.kLog + i.val) % 2 ^ 22) then 1 else 0) = _
   rw [mod_block _ _ _ hk hi]
 
-theorem blockBit_zC {S : Model.Statement} (hk : S.kLog = 22) (o : Fin (2 ^ S.nbl)) {y : ℕ} (hy : y < 2 ^ 22) :
-    blockBit S (zC S.m) o y = zIn y := by
+theorem chunkBit_zC {S : Model.Statement} (hk : S.kLog = 22) (o : Fin (2 ^ S.nbl)) {y : ℕ} (hy : y < 2 ^ 22) :
+    chunkBit S (zC S.m) o y = zIn y := by
   have hy' : y < 2 ^ S.kLog := lt_of_lt_of_eq hy (by rw [hk])
-  rw [blockBit_of_lt _ _ o hy', block_zC hk]
+  rw [chunkBit_of_lt _ _ o hy', block_zC hk]
   show FlockSoundness.bit (if zIn y then 1 else 0) = zIn y
   cases zIn y <;> rfl
 
@@ -422,8 +422,8 @@ theorem holds_unitComp {st : Stmt} (L : FlockSoundness.Layout st)
     (hs : s₀ < st.c.unitRange.count) (hlo : st.c.unit.inWords * WORD ≤ c) (hhi : c < st.c.unit.constPos)
     {z : Model.Witness (L.model regs).m} (o : Fin (2 ^ (L.model regs).nbl)) {r : Fin (2 ^ (L.model regs).kLog)}
     (hr : r.val = st.c.unitRange.slot s₀ + c)
-    (hz : ∀ y ∈ (st.c.unit.a.row c).toList, blockBit (L.model regs) z o (st.c.unitRange.slot s₀ + y) = false)
-    (hr0 : blockBit (L.model regs) z o r.val = false) :
+    (hz : ∀ y ∈ (st.c.unit.a.row c).toList, chunkBit (L.model regs) z o (st.c.unitRange.slot s₀ + y) = false)
+    (hr0 : chunkBit (L.model regs) z o r.val = false) :
     ((L.model regs).A₀.mulVec ((L.model regs).block z o)) r * ((L.model regs).B₀.mulVec ((L.model regs).block z o)) r =
       (L.model regs).block z o r := by
   have hlt := L.unit_row_lt hU hlo hhi (L.unitLog_le hs)
@@ -434,7 +434,7 @@ theorem holds_unitComp {st : Stmt} (L : FlockSoundness.Layout st)
   refine netRow_holds (b := st.c.unitRange.slot s₀) (ra := st.c.unit.a.row c) (rb := st.c.unit.b.row c)
     (fun j => L.placedA_comp hU hs hlo hhi r j hr) (fun j => L.placedB_comp hU hs hlo hhi r j hr)
     (hcl _ hlt.1) (hcl _ hlt.2) ?_
-  rw [xorRow_false (v := fun j => blockBit (L.model regs) z o (st.c.unitRange.slot s₀ + j)) hz, Bool.false_and, hr0]
+  rw [xorRow_false (v := fun j => chunkBit (L.model regs) z o (st.c.unitRange.slot s₀ + j)) hz, Bool.false_and, hr0]
 
 /-- **A unit row whose rows are empty and that Δ skips is zero.** -/
 theorem zeroRow_unitEmpty {st : Stmt} (L : FlockSoundness.Layout st)
@@ -477,10 +477,10 @@ theorem holds_unitComp_cW {st : Stmt} (L : FlockSoundness.Layout st)
     rw [hU] at hy
     have hy' : y < 16 := UN_a_lt (r.val - 524416) (Nat.sub_lt_left_of_lt_add hr.1 hr.2) y
       (by rwa [show 128 + (r.val - 524416) = r.val - 524288 by omega])
-    rw [hsl, blockBit_zC (S := L.model regs) hk o (lt_of_lt_of_le (show 524288 + y < 524304 by omega) (by norm_num))]
+    rw [hsl, chunkBit_zC (S := L.model regs) hk o (lt_of_lt_of_le (show 524288 + y < 524304 by omega) (by norm_num))]
     exact zIn_unit (by omega) (by omega)
   · clear hc hlo hhi
-    rw [blockBit_zC (S := L.model regs) hk o (lt_of_lt_of_le (show r.val < 524544 by omega) (by norm_num))]
+    rw [chunkBit_zC (S := L.model regs) hk o (lt_of_lt_of_le (show r.val < 524544 by omega) (by norm_num))]
     exact zIn_unit (by omega) (by omega)
 
 theorem count_E (x j : ℕ) : E.count (x, j) =
@@ -1090,9 +1090,9 @@ theorem holds_netRow {tags : Tags} (F : Discharge.Aliased.UnitFacts tags st) {n 
     (hl : Net.ofRows name l.useful l.constPos l.inGroups l.outGroups l.ra l.rb = .ok (st.c.nets.getD n default).2)
     (hc : ∀ j, (constPairs st.c st.pin).count (r.val, j) = 0) {z : Model.Witness (L.model regs).m}
     (o : Fin (2 ^ (L.model regs).nbl))
-    (h : (xorRow (fun j => blockBit (L.model regs) z o ((st.c.rangeOf n).slot s + j)) (l.ra.getD off #[]) &&
-      xorRow (fun j => blockBit (L.model regs) z o ((st.c.rangeOf n).slot s + j)) (l.rb.getD off #[])) =
-        blockBit (L.model regs) z o r.val) :
+    (h : (xorRow (fun j => chunkBit (L.model regs) z o ((st.c.rangeOf n).slot s + j)) (l.ra.getD off #[]) &&
+      xorRow (fun j => chunkBit (L.model regs) z o ((st.c.rangeOf n).slot s + j)) (l.rb.getD off #[])) =
+        chunkBit (L.model regs) z o r.val) :
     ((L.model regs).A₀.mulVec ((L.model regs).block z o)) r * ((L.model regs).B₀.mulVec ((L.model regs).block z o)) r =
       (L.model regs).block z o r := by
   have R := RowRanges.ofL L F.parse F.check
@@ -1133,15 +1133,15 @@ theorem holds_shaNet {tags : Tags} (F : Discharge.Aliased.UnitFacts tags st) (hn
       by rw [hR.2.1]; exact lt_of_lt_of_le (show r.val - 262144 < 262144 by omega) (by norm_num),
       by rw [hR.2.2]; omega⟩
   have hv : ∀ cs : Array ℕ, (∀ y ∈ cs.toList, y < 2 ^ (st.c.nets.getD st.c.shaNet default).2.unitLog) →
-      xorRow (fun j => blockBit (L.model regs) (zC (L.model regs).m) o ((st.c.rangeOf st.c.shaNet).slot 0 + j)) cs =
+      xorRow (fun j => chunkBit (L.model regs) (zC (L.model regs).m) o ((st.c.rangeOf st.c.shaNet).slot 0 + j)) cs =
         xorRow vS cs := by
     intro cs hcs
     refine xorRow_congr fun j hj => ?_
     have hj : j < 2 ^ (st.c.nets.getD st.c.shaNet default).2.unitLog := hcs j hj
     rw [hwid] at hj
     have hj' : j < 262144 := lt_of_lt_of_eq hj (by norm_num)
-    show blockBit (L.model regs) (zC (L.model regs).m) o ((st.c.rangeOf st.c.shaNet).slot 0 + j) = vS j
-    rw [hR.2.2, blockBit_zC (S := L.model regs) hk o (lt_of_lt_of_le (show 262144 + j < 524288 by omega) (by norm_num))]
+    show chunkBit (L.model regs) (zC (L.model regs).m) o ((st.c.rangeOf st.c.shaNet).slot 0 + j) = vS j
+    rw [hR.2.2, chunkBit_zC (S := L.model regs) hk o (lt_of_lt_of_le (show 262144 + j < 524288 by omega) (by norm_num))]
     unfold zIn
     rw [ite_eq_right (show ¬ 262144 + j < 262144 by omega), ite_eq_left (show 262144 + j < 524288 by omega),
       Nat.add_sub_cancel_left]
@@ -1152,7 +1152,7 @@ theorem holds_shaNet {tags : Tags} (F : Discharge.Aliased.UnitFacts tags st) (hn
       simp only [List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false] at hm
       omega
   · rw [hv _ (ofRows_cols_lt ha _), hv _ (ofRows_cols_lt hb _),
-      blockBit_zC (S := L.model regs) hk o (lt_of_lt_of_le (show r.val < 518144 by omega) (by norm_num))]
+      chunkBit_zC (S := L.model regs) hk o (lt_of_lt_of_le (show r.val < 518144 by omega) (by norm_num))]
     have hz : zIn r.val = vS (r.val - 262144) := by
       unfold zIn
       rw [ite_eq_right (show ¬ r.val < 262144 by omega), ite_eq_left (show r.val < 524288 by omega)]
@@ -1182,16 +1182,16 @@ theorem holds_hmNet {tags : Tags} (F : Discharge.Aliased.UnitFacts tags st) (hn 
       by rw [hR.2.1]; exact lt_of_lt_of_le (show r.val < 262144 by omega) (by norm_num),
       by rw [hR.2.2]; omega⟩
   have hv : ∀ cs : Array ℕ, (∀ y ∈ cs.toList, y < 2 ^ (st.c.nets.getD st.c.hmNet default).2.unitLog) →
-      xorRow (fun j => blockBit (L.model regs) (zC (L.model regs).m) o ((st.c.rangeOf st.c.hmNet).slot 0 + j)) cs =
+      xorRow (fun j => chunkBit (L.model regs) (zC (L.model regs).m) o ((st.c.rangeOf st.c.hmNet).slot 0 + j)) cs =
         xorRow vH cs := by
     intro cs hcs
     refine xorRow_congr fun j hj => ?_
     have hj : j < 2 ^ (st.c.nets.getD st.c.hmNet default).2.unitLog := hcs j hj
     rw [hwid] at hj
     have hj' : j < 262144 := lt_of_lt_of_eq hj (by norm_num)
-    show blockBit (L.model regs) (zC (L.model regs).m) o ((st.c.rangeOf st.c.hmNet).slot 0 + j) = vH j
+    show chunkBit (L.model regs) (zC (L.model regs).m) o ((st.c.rangeOf st.c.hmNet).slot 0 + j) = vH j
     rw [hR.2.2, Nat.zero_add,
-      blockBit_zC (S := L.model regs) hk o (lt_of_lt_of_le (show j < 262144 by omega) (by norm_num))]
+      chunkBit_zC (S := L.model regs) hk o (lt_of_lt_of_le (show j < 262144 by omega) (by norm_num))]
     unfold zIn
     rw [ite_eq_left hj']
   refine holds_netRow L regs F (Or.inr rfl) hat (by rw [hiw]; show 32 * 128 ≤ _; omega) (hmNet_ofRows R.rowNets)
@@ -1201,7 +1201,7 @@ theorem holds_hmNet {tags : Tags} (F : Discharge.Aliased.UnitFacts tags st) (hn 
       simp only [List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false] at hm
       omega
   · rw [hv _ (ofRows_cols_lt ha _), hv _ (ofRows_cols_lt hb _),
-      blockBit_zC (S := L.model regs) hk o (lt_of_lt_of_le (show r.val < 262144 by omega) (by norm_num))]
+      chunkBit_zC (S := L.model regs) hk o (lt_of_lt_of_le (show r.val < 262144 by omega) (by norm_num))]
     have hz : zIn r.val = vH r.val := by
       unfold zIn
       rw [ite_eq_left (show r.val < 262144 by omega)]

@@ -57,7 +57,7 @@ family here, `plainCountedRD` and `zkCountedRD`, so this file reads the codes an
   (`listWithin_plainDecodeRD`), with `DecoderComplexity` `14·(flockPolyR + X)` at the schedules' sizes summed
   (`plainSizeRD`, `plainDecodeRD_complexity`), its lists at most that long (`plainDecodeRD_length_le`).
 * `zkDecodeRD`, the masked family (`GS.RadiusFamily`): `ListWithin` at `deployZk rel`'s `len`, `enc` and `θ`, read
-  the same way (`listWithin_zkDecodeRD`), with `DecoderComplexity` `11·(zkPolyR + X)` at `zkSizeRD`
+  the same way (`listWithin_zkDecodeRD`), with `DecoderComplexity` `15·(zkPolyR + X)` at `zkSizeRD`
   (`zkDecodeRD_complexity`), its lists at most that long (`zkDecodeRD_length_le`).
 
 Each family's size is affine in the number of opened columns, at most its size on no columns times one more than

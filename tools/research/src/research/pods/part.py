@@ -14,11 +14,12 @@ The tolerance (12 %) is `tables.device_variant`'s: driver-reported totals differ
 from __future__ import annotations
 
 import json
+import sys
 import tomllib
 from pathlib import Path
 from typing import Any, Callable
 
-from .. import remote
+from .. import remote, settings
 from ..env import sku_family
 
 TOLERANCE = 0.12
@@ -54,7 +55,8 @@ def parse_probe(text: str) -> dict[str, Any]:
     sku = rows[0][0] if rows and rows[0][0] else None
     try:
         vram = int(float(rows[0][1])) if rows and len(rows[0]) > 1 else None
-    except ValueError:
+    except ValueError as e:
+        print(f"part: the probe's VRAM {rows[0][1][:40]!r} is not a number, read as unknown ({e})", file=sys.stderr)
         vram = None
     cpu = (model.split(":", 1)[1].strip() if ":" in model else model) or None
     load = loadavg.split()[0] if loadavg.split() else None
@@ -226,10 +228,9 @@ def main(argv: list[str]) -> int:
             ap.add_argument("--hours", type=float, required=True, help="the lease ends no sooner than now + H (it is never shortened)")
             ap.add_argument("--by", default=None, help="who extends it, recorded in the lease line (default $RESEARCH_LANE, else user@host)")
         ns = ap.parse_args(argv[1:])
-        import os
         import socket
 
-        by = (getattr(ns, "by", None) or os.environ.get("RESEARCH_LANE") or f"{os.environ.get('USER', '?')}@{socket.gethostname()}").replace(" ", "_")
+        by = (getattr(ns, "by", None) or settings.get("RESEARCH_LANE") or f"{settings.get('USER', '?')}@{socket.gethostname()}").replace(" ", "_")
         cmd = lease.remote_argv("extend", str(int(ns.hours * 3600)), by) if argv[0] == "extend" else lease.remote_argv("show")
         try:
             r = remote.ssh_run(ssh_base(ns.target), cmd, timeout=90)

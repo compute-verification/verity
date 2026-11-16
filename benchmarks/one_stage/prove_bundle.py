@@ -1,27 +1,27 @@
 """A drawn-unit replay bundle (`verity/drawn-unit-bundle/v2`, `benchmarks/one_stage/interfaces`) proved: each sampled member's units in
-one Flock `prove --zk` session (SPOT[Flock]'s proof server; behind the Lean ZK server under ``--firewall``, the core
+one Flock `prove --zk` session (SPOT[Flock]'s proof server; behind the Lean ZK server under ``--zk-server``, the core
 protocols' path), served the bundle's own sample, and decided by Lean's `verify --zk`,
 the verifier; then the honest session with one bit of its proof flipped, which Lean must refuse, and optionally a
 tampered window's member, whose proof must not be accepted.
 
-    python benchmarks/one_stage/prove_bundle.py --bundle B.json --window DIR --bin flock-circuit --lean flock-verify \\
-        [--firewall flock-firewall] --out DIR [--members N] [--tampered DIR] [--live] [--flips N]
+    python benchmarks/one_stage/prove_bundle.py --bundle B.json --window DIR --bin flock-circuit --lean verity-verify-proof \\
+        [--zk-server flock-zk-server] --out DIR [--members N] [--tampered DIR] [--live] [--flips N]
 
 * **The bundle** is what `replay_bundle.build` wrote of the window's sampled proof blocks. `prove_bundle.sh` proves the
   registered fixture `BUNDLE_WINDOW` (`tests/fixtures/bundle-window`: a W8A8 MLP's window, its tampered twin and the H200 interfaces' bundle of four sampled proof blocks under its
   registered `subset:4`, a fixture's sample) unless it's given others.
 * **The bundle held to the window** before anything is proved. The window is the prover's (what ``Window.write`` wrote, its
   private files included), since Flock's statement is a whole member. Checks: the bundle's own check
-  (`replay_bundle.check` against the window's registration: every string, path and domain, and each unit's Definition
-  replayed, and the sample's law the registered one); the bundle's run, registration digest and partition are the
+  (`replay_bundle.check` against the window's docket: every string, path and domain, and each unit's Definition
+  replayed, and the sample's sampling design the registered one); the bundle's run, docket digest and partition are the
   window's; each sampled member's public body is the one the bundle names (SHA-512); and a live sample (``--live`` requires
-  one) is held to the window (`held_draw`): its receipt names the window's registration, and its record is a sample of
-  the bundle's units under the registered law over the registered population (`draw.check_draw`).
+  one) is held to the window (`held_sample`): its receipt names the window's docket, and its record is a sample of
+  the bundle's units under the registered sampling design over the registered population (`draw.check_draw`).
 * **Staging** as a5 stages a sampled member. The circuit is composed from the template's Definition, bound to the window's
   partition and program (`records_audit.verifier_window`'s composer). The public file is made under that circuit and
-  held to the registration's roots and domains, and the prover's file is made under the same header.
+  held to the docket's roots and domains, and the prover's file is made under the same header.
 * **The session** serves the bundle's member sample (`serve --zk --draw-file`). The prover runs `prove --zk` itself
-  (`a0.DIRECT`), or under ``--firewall`` behind the ZK server's send check (``FC_FIREWALL=1``, Lean's `flock-firewall`), and
+  (`a0.DIRECT`), or under ``--zk-server`` behind the ZK server's send check (``FC_ZK_SERVER=1``, Lean's `flock-zk-server`), and
   Lean `verify --zk --archive --partition --program` decides it.
   The sessions run one at a time, and Lean verifies each (one core) while the next one proves.
   A unit is accepted when its session's M0 and Lean verdicts accept, the served sample is the bundle's, and the proved
@@ -31,7 +31,7 @@ tampered window's member, whose proof must not be accepted.
   mutant names. ``--flips N`` verifies only the first N edits (M3's one flipped bit at m30 costs a Lean verify each).
 * **Tampered** (``--tampered DIR``): the same member of a window whose outputs are not its Definition's, proved with
   the prover's self-check skipped, without the ZK server (Lean `verify --zk` must refuse the proof that reaches it) and,
-  under ``--firewall``, behind it as well (its Lean recheck must stop it).
+  under ``--zk-server``, behind it as well (its Lean recheck must stop it).
 
 The weights' rows are bound here by the window's port roots. A window whose member headers name their registered reads
 (``rows.write``'s ``registered``) would be verified with ``--registered`` as well. The fixture's headers don't name
@@ -58,9 +58,9 @@ import a0  # noqa: E402
 import a5 as A5  # noqa: E402
 import records_audit as RA  # noqa: E402
 import zk_mutants as ZM  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registration as R  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
-from verity.commitments.windows import flock_inputs as FI, rows as CS  # noqa: E402
+from verity.commitments.periods import flock_inputs as FI, rows as CS  # noqa: E402
 from verity_e2e_demo import replay_bundle as RB  # noqa: E402
 
 FORMAT = "verity/prove-bundle/v0"
@@ -76,7 +76,7 @@ def hold(doc: dict, payload: bytes, wdir: Path) -> tuple[dict[str, bool], dict]:
     """The bundle held to the window (module docstring): ``({check: ok}, the bundle check's findings)``."""
     rec = json.loads((wdir / "registration.json").read_text())
     win = json.loads((wdir / "window.json").read_text())
-    bad = RB.check(doc, payload, registration=rec)
+    bad = RB.check(doc, payload, docket=rec)
     ok = {"bundle_check": not bad, "run": doc["window"]["run"] == win["run"],
           "registration": doc["window"]["registration"] == win["registration_digest"],
           "partition": doc["window"]["partition"] == win["partition_digest"]}
@@ -86,7 +86,7 @@ def hold(doc: dict, payload: bytes, wdir: Path) -> tuple[dict[str, bool], dict]:
     return ok, bad
 
 
-def held_draw(doc: dict, wdir: Path) -> dict[str, bool]:
+def held_sample(doc: dict, wdir: Path) -> dict[str, bool]:
     """A live sample held to the window (module docstring); ``{}`` for a fixture's. Its sampling design against the registered one is
     also the bundle check's (`replay_bundle.check`)."""
     d = doc["draw"]
@@ -101,12 +101,12 @@ def held_draw(doc: dict, wdir: Path) -> dict[str, bool]:
 
 
 class Staged:
-    """The window's verifier side, read once: its Spec, registration, ports, and each template's circuit composed once."""
+    """The window's verifier side, read once: its Spec, docket, ports, and each template's circuit composed once."""
 
     def __init__(self, wdir: Path, out: Path) -> None:
         self.wdir, self.out = wdir, out
         self.rec = json.loads((wdir / "registration.json").read_text())
-        self.mine, _doc, self.sets = RA.verifier_window(wdir, D.parse_design(_law(self.rec["law"])), None)
+        self.mine, _doc, self.sets = RA.verifier_window(wdir, D.parse_design(_design(self.rec["law"])), None)
         self.files = (json.loads((wdir / "window.json").read_text()), self.rec)
         self.want = CS.expected_ports(self.mine)
         self.roots = {r["port"]: r for r in self.rec["roots"]}
@@ -116,7 +116,7 @@ class Staged:
         self.composed: dict[str, tuple[Path, dict, object]] = {}
 
     def member(self, k: int) -> dict:
-        """Member ``k`` staged as a5 stages a sampled one: its circuit, public file and header held to the registration, and
+        """Member ``k`` staged as a5 stages a sampled one: its circuit, public file and header held to the docket, and
         its prover's file under that header."""
         m = self.mine.members[k]
         pd, prog = self.mine.partition_digest, self.mine.partition["program"]
@@ -147,20 +147,20 @@ class Staged:
         return {**mm, "checks": ok, "k_log": circ.meta.get("k_log")}
 
 
-def _law(law: dict) -> str:
-    return f"{law['law']}:{law['k']}"
+def _design(sampling_design: dict) -> str:
+    return f"{sampling_design['law']}:{sampling_design['k']}"
 
 
-def session(a, mm: dict, draw: dict, sdir: Path, firewall: bool = True, forged: bool = False,
+def session(a, mm: dict, draw: dict, sdir: Path, zk_server: bool = True, forged: bool = False,
             lean_pool: ThreadPoolExecutor | None = None) -> dict:
     """One `--zk` session of member ``mm`` served ``draw``, and Lean's verdict on it: with ``lean_pool``, a future of
     it, so that the next session proves while Lean verifies this one."""
     sdir.mkdir(parents=True, exist_ok=True)
     (sdir / "draw.json").write_text(json.dumps(draw, sort_keys=True))
-    env = a0.prover_env(a.firewall if firewall else None, mm["st"])
+    env = a0.prover_env(a.zk_server if zk_server else None, mm["st"])
     if forged:
         env["FC_ZK_SELF_CHECK"] = "skip"
-    record, live = a0.session(a.bin, mm["st"], mm["m"].n, f"subset:{draw['k']}", free_port(), sdir, draw_file=sdir / "draw.json",
+    record, live = a0.session(a.bin, mm["st"], mm["m"].n, f"subset:{draw['k']}", free_port(), sdir, sample_file=sdir / "draw.json",
                               zk=True, env=env, prove_timeout=a.session_timeout)
     served = (record or {}).get("unit_draw") or {}
 
@@ -208,7 +208,7 @@ def main(argv=None) -> int:
     ap.add_argument("--window", required=True, help="the prover's window: what Window.write wrote, private files included")
     ap.add_argument("--bin", required=True)
     ap.add_argument("--lean", required=True)
-    ap.add_argument("--firewall", help=A5.FIREWALL_HELP)
+    ap.add_argument("--zk-server", help=A5.ZK_SERVER_HELP)
     ap.add_argument("--out", required=True)
     ap.add_argument("--members", type=int, default=None, help="prove only the bundle's first N drawn members")
     ap.add_argument("--tampered", help="a tampered window of the same shape: its first drawn member must not be accepted")
@@ -220,14 +220,14 @@ def main(argv=None) -> int:
     out.mkdir(parents=True, exist_ok=True)
     doc, payload = RB.read(a.bundle)
     held, bad = hold(doc, payload, wdir)
-    held.update(held_draw(doc, wdir))
+    held.update(held_sample(doc, wdir))
     if a.live:
         held["draw:live"] = doc["draw"].get("source") == "live"
     summary: dict = {"format": FORMAT, "bundle": {"payload_sha512": doc["payload"]["sha512"], "draw": doc["draw"],
                                                   "units": len(doc["units"]),
                                                   "registered_law": json.loads((wdir / "registration.json").read_text())["law"]},
                      "window": {"run": doc["window"]["run"], "registration": doc["window"]["registration"]},
-                     "held": held, "bundle_findings": bad, "arm": "fw" if a.firewall else "dev"}
+                     "held": held, "bundle_findings": bad, "arm": "fw" if a.zk_server else "dev"}
     if not all(held.values()):
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
         print("PROVEBUNDLE " + json.dumps({"ok": False, "held": held, "bundle_findings": bad}, sort_keys=True))
@@ -267,11 +267,11 @@ def main(argv=None) -> int:
         bm = members[0]
         tv = Staged(tw, out / "tampered")
         mm = tv.member(bm["k"])
-        arms = [("firewalled", True)] if a.firewall else []
+        arms = [("firewalled", True)] if a.zk_server else []
         for arm, fw in [*arms, ("unfirewalled", False)]:
-            s = session(a, mm, bm["draw"], out / "tampered" / f"session-{arm}", firewall=fw, forged=True)
+            s = session(a, mm, bm["draw"], out / "tampered" / f"session-{arm}", zk_server=fw, forged=True)
             # behind the ZK server no proof may leave the prover; without it Lean's own verdict must refuse the proof
-            refused = (str(s["prover"]["stopped"]).startswith("FIREWALL-REFUSED") and s["lean"]["accepted"] is not True
+            refused = (str(s["prover"]["stopped"]).startswith("ZK-SERVER-REFUSED") and s["lean"]["accepted"] is not True
                        and s["m0"]["accepted"] is not True) if fw else a0.lean_refused(s["lean"])
             negatives[f"tampered/{arm}"] = {"refused": refused, "lean": s["lean"], "m0": s["m0"], "prover": s["prover"],
                                             "checks_before_draw": mm["checks"]}

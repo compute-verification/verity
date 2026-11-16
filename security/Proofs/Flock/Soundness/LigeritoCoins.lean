@@ -18,7 +18,7 @@ The pieces of the Ligerito phase that do not depend on its weight bookkeeping:
 
 * a `K` coin (`drawK`, two `F` limbs) is uniform on `K` (`prCoin_ofLimbs`, from
   `Arith.Correct.ofLimbs_bijective`), so a step on it costs `prCoin bad` over `K`
-  (`value_drawK_le`);
+  (`value_sampleK_le`);
 * a Ligerito round's quadratic `from(msg, s)` sums to `s` by construction (`Flock.Ligerito`), so a false
   claim survives a `K` coin with probability at most `2/|K|` (`prCoin_fromMsg_le`);
 * the consistency coins `α` batch per-query mismatches through `eq(α)`: a nonzero mismatch survives
@@ -48,7 +48,7 @@ theorem prCoin_ofLimbs (A : Arith F K) (hA : A.Correct) (P : K → Prop) :
   rfl
 
 /-- A step on a `K` coin: leaving the good set costs `prCoin bad` over `K`. -/
-theorem value_drawK_le (A : Arith F K) (hA : A.Correct) {α : Type} (p : α → Prop)
+theorem value_sampleK_le (A : Arith F K) (hA : A.Correct) {α : Type} (p : α → Prop)
     (k : K → Game α) (bad : K → Prop) (ε ε' : ℝ≥0∞) (hbad : prCoin bad ≤ ε)
     (hgood : ∀ c, ¬ bad c → value p (k c) ≤ ε') :
     value p ((drawK A).bind k) ≤ ε + ε' := by

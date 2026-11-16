@@ -149,7 +149,7 @@ theorem recordListZk_distinct (spec : SessionSpec) (h : ByteArray → ByteArray)
 /-- **The masked record is printable** when the statement's sample is. -/
 theorem good_recordObjZk {spec : SessionSpec} {t : String} (ht : spec.tables = #[t]) (h : ByteArray → ByteArray)
     (hz : String) (ct : CoinTree.Spec) (rb : ByteArray) (points : Array (Array F128)) (streams : Array (Array Round))
-    (proofs : Array ByteArray) (hd : Good (spec.unitDraw.getD Json.null)) :
+    (proofs : Array ByteArray) (hd : Good (spec.unitSample.getD Json.null)) :
     Good (recordObjZk spec h hz ct #[rb] points streams proofs) := by
   have ht' : (specZ spec hz).tables = #[t] := ht
   refine good_mkObj (recordListZk_distinct spec h hz ct _ points streams proofs) ?_

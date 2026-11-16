@@ -9,7 +9,7 @@ import Proofs.Flock.Soundness.Refine.Seam
 import Proofs.Flock.Soundness.Refine.Setup
 
 /-!
-# flock-verify refines each table of a session, under `hm96-sha512/v1` (`Flock.Record`, `Flock.Piop`, `Flock.Opening`, `Flock.Ligerito`, `Flock.Merkle`, `Stmt.setupTables`)
+# verity-verify-proof refines each table of a session, under `hm96-sha512/v1` (`Flock.Record`, `Flock.Piop`, `Flock.Opening`, `Flock.Ligerito`, `Flock.Merkle`, `Stmt.setupTables`)
 
 `verify_refines_hm96` peels a one-table `Flock.verify`. A session of `J` tables runs the same checks on each:
 
@@ -223,7 +223,7 @@ theorem table_tableAfterL (spec : SessionSpec) (st : Setup) (S : Model.Statement
   · simp only [hv₀, hv₁, Bool.true_and, decide_eq_true_eq]
     exact ⟨hok₀, hok₁⟩
 
-/-- **flock-verify refines each table of the session it accepts, under `hm96-sha512/v1`** (`Flock.Record`, `Flock.Piop` to
+/-- **verity-verify-proof refines each table of the session it accepts, under `hm96-sha512/v1`** (`Flock.Record`, `Flock.Piop` to
 `Flock.Merkle`, `Stmt.setupTables`). When `Accepts I t`, the record decodes against the session's spec, and each table
 `j` is `setupH`'s statement. For a table
 whose leaves are `hm96-sha512/v1`, its schedule is `fast100`'s and, at the statement `stmtOf sts[j]` read off its

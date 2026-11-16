@@ -51,7 +51,7 @@ GPU-seconds) and `compare.json` and `compare.md` to `$OUT`; the per-row fingerpr
 Python with vLLM at the pin), `WORK` and `LEASE_MIN` are settable.
 
 `tests/` checks the row fingerprint and `compare.py` on a synthetic window, the per-op table included, on CPU
-(`uv run tools/verity/check/suites.py benchmarks/replay_determinism`).
+(`uv run tools/check/suites.py benchmarks/replay_determinism`).
 
 A dense baseline is the same run with `MODEL_DIR` set to a local Llama-architecture checkpoint, a hub snapshot such as
 `$HF_HOME/hub/models--ORG--NAME/snapshots/REV` (its prompts take the checkpoint's chat template, or for a base model its

@@ -1,6 +1,6 @@
 module
 
-public import Flock.Firewall.Finish
+public import Flock.ZkServer.Finish
 public import Mathlib.Algebra.Group.Nat.Defs
 public import Mathlib.Tactic.ToDual
 public import Proofs.Flock.Claims.Complete.Prover.Piop
@@ -83,19 +83,19 @@ theorem packed_bit (tr : Trace) (m : ℕ) {y v : ℕ} (hy : y < 2 ^ (m - 7)) (hv
 
 /-- **The ZK server's switched vector at the packed table is the prover's**, at a claim with `m − 6` coordinates. -/
 theorem switchVec_packed {m : ℕ} (hm : 7 ≤ m) (tr : Trace) (c : Claim) (hx : c.x.size = m - 6) :
-    Flock.Firewall.Finish.switchVec (packed tr m) c = FlockComplete.switchVec tr c := by
+    Flock.ZkServer.Finish.switchVec (packed tr m) c = FlockComplete.switchVec tr c := by
   have hsz : (eqTable (c.x.extract 1 c.x.size)).size = 2 ^ (m - 7) := by
     rw [FlockLevel3.eqTable_size, Array.size_extract]
     congr 1
     omega
-  unfold Flock.Firewall.Finish.switchVec FlockComplete.switchVec
+  unfold Flock.ZkServer.Finish.switchVec FlockComplete.switchVec
   dsimp only
   apply Array.ext
   · simp
   · intro v h1 _
     have hv : v < 128 := by simpa using h1
     simp only [Array.getElem_map, Array.getElem_range]
-    unfold Flock.Firewall.Finish.sumF FlockComplete.sumF
+    unfold Flock.ZkServer.Finish.sumF FlockComplete.sumF
     refine Flock.RecAlgebra.foldl_mem_congr _ fun y hy a => ?_
     rw [List.mem_range, hsz] at hy
     dsimp only

@@ -42,10 +42,10 @@ def frame_lowering(subcircuit, T: int):
 
 def supports(subcircuit, scheme):
     if int(subcircuit.params["D"]) % 16:
-        return f"C-Flock lowers AttentionHead_v3 with D a multiple of 16, not D = {subcircuit.params['D']}"
+        return f"Flock lowers AttentionHead_v3 with D a multiple of 16, not D = {subcircuit.params['D']}"
     if scheme in FRAME_SCHEMES:
         return None
-    return (f"C-Flock proves {subcircuit.id} under {', '.join(FRAME_SCHEMES)} (verity/flock-ir-frame/v3: tensor-core steps as units, "
+    return (f"Flock proves {subcircuit.id} under {', '.join(FRAME_SCHEMES)} (verity/flock-ir-frame/v3: tensor-core steps as units, "
             f"the softmax native); binding its rows under {scheme} is not wired yet")
 
 
@@ -93,7 +93,7 @@ def class_manifest(subcircuit, lo: int, hi: int) -> bytes:
         nets[str(T)] = low.sha256
         rows.add(unit_rows_sha256(low.text))
     if len(rows) != 1:
-        raise ValueError(f"{subcircuit.id}: the netlists of T in [{lo}, {hi}] do not share their unit rows")
+        raise ValueError(f"{subcircuit.id}: the circuit descriptions of T in [{lo}, {hi}] do not share their unit rows")
     D = int(subcircuit.params["D"])
     m = {"format": CLASS_FORMAT, "template": subcircuit.id, "T": [lo, hi], "key_port": "k", "words_per_key": D, "unit_rows": rows.pop(),
          "nets": nets}

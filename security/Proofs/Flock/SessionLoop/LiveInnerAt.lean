@@ -90,7 +90,7 @@ theorem repSlot_innerOff {x : Msg} {s0 : _} {spec : _root_.Flock.SessionSpec}
     repSlot x (2 * j.val + r.val) (innerOff e) = repSlot x (2 * j.val + r.val) (innerOff 0) + e := by
   have hjs : j.val < (stsOf x).size := lt_of_jOf j
   have hr2 := r.isLt
-  have hz₁ : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.m =
+  have hz₁ : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((zkTab x j).sch, (zkTab x j).tPad) := by
     rw [show (2 * j.val + r.val) / 2 = j.val by omega, getElem!_pos (stsOf x) j.val hjs]
     exact (zkTab x j).hz
@@ -109,7 +109,7 @@ theorem runCut_innerBody_live {x : Msg} (hx : Live x) (c : Fin (refK x) → Floc
     (hi : i < 4) (hN : ¬ Refused x c (repSlot x (2 * j.val + r.val) (innerOff i))) :
     (runCut x c (repSlot x (2 * j.val + r.val) (innerOff i)) spec src).2[repSlot x (2 * j.val + r.val) (innerOff i)]! =
       FlockComplete.CutFree.innerCutBody (((src j.val).rep r.val).masked (innerLayE x j).fc) ((src j.val).rep r.val)
-        _root_.Flock.Firewall.Session.INNER_CONS i := by
+        _root_.Flock.ZkServer.Session.INNER_CONS i := by
   obtain ⟨-, -, -, hall⟩ := FlockComplete.ZkTables.tables_of_setup hx.1 hsx
   obtain ⟨schs, hs, -⟩ := schedsPZk_live hx
   have hms : ∀ k < (FlockDeploy.tabsOf (stsOf x)).size,
@@ -160,8 +160,8 @@ namespace Claims.ZKServer
 open Claims Claims.ZKMal
 open _root_.Flock (V F128 Stmt SessionSpec)
 open _root_.Flock.Transcript (header)
-open _root_.Flock.Firewall.Frame (Cfg Masker INNER_ROUNDS labelFrame wordBytes words)
-open _root_.Flock.Firewall.Finish (Tab)
+open _root_.Flock.ZkServer.Frame (Cfg Masker INNER_ROUNDS labelFrame wordBytes words)
+open _root_.Flock.ZkServer.Finish (Tab)
 open FlockSoundness.Refine (Frame encs)
 
 /-! ### The cut session's inner bodies and the ZK server's own rounds -/
@@ -278,7 +278,7 @@ theorem swMsgAt_innerAt (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVal
         ((Masked.swSrcE x ((CoinLayer.session Loop.loopNr Masked.dataE).pad cs) w
           (vs x w ν ((CoinLayer.session Loop.loopNr Masked.dataE).pad cs)
             ((CoinLayer.session Loop.loopNr Masked.dataE).seenOf x t)) t j.val).rep r.val)
-        _root_.Flock.Firewall.Session.INNER_CONS e := by
+        _root_.Flock.ZkServer.Session.INNER_CONS e := by
   have hb := Masked.runCut_innerBody_live hx ((CoinLayer.session Loop.loopNr Masked.dataE).pad cs)
     (Masked.swSrcE x ((CoinLayer.session Loop.loopNr Masked.dataE).pad cs) w
       (vs x w ν ((CoinLayer.session Loop.loopNr Masked.dataE).pad cs)
@@ -318,7 +318,7 @@ theorem ofLoop_start_at (T : CoinLayer.TableData)
     {s0 : _} {spec : SessionSpec} {sts : Array Stmt} {q k j : ℕ}
     (hx : FlockDeploy.setupOf true x = some (s0, spec, sts)) (hq : h1.length = q + 1)
     (hki : CoinLayer.locate (roundsOf spec sts) 0 q = (k, j + 1)) :
-    ∃ lay mask, _root_.Flock.Firewall.Drive.start sts[k / 2]! = .ok (lay, mask) := by
+    ∃ lay mask, _root_.Flock.ZkServer.Drive.start sts[k / 2]! = .ok (lay, mask) := by
   have hq1 : cs.length = q + 1 := by rw [← hcs, List.length_map, hq]
   have hj : (CoinLayer.locate (roundsOf spec sts) 0 q).2 = j + 1 := by rw [hki]
   obtain ⟨m0, r0⟩ := e0
@@ -355,7 +355,7 @@ is the switched session's message. The release is the frame's own round (`releas
 round `e` (`innerAt_slot`), and the switched session's message there `innerCutBody` at the rep's switched source
 (`swMsgAt_innerAt`, the coins below it showing no refusal: `innerAt_unrefused`). Round 0: the worker's `final_c'` plus
 the pad at `final_c` is `vs`'s value there (`hF`), the source's masked `final_c` less that pad
-(`swSrcE_masked_vsWord`). Round 1: the configuration's pads are the tape's (`cfg_tapeOfDraws`, `RepSrc.pads`), at the
+(`swSrcE_masked_vsWord`). Round 1: the configuration's pads are the tape's (`cfg_tapeOfSamples`, `RepSrc.pads`), at the
 rep's layout (`lay_ofLoopLink`), and `ε` the opened coin at the rep's inner round 0 (`coinAt_inner`), so the round is
 the pair's openings (`swSrcE_inner`, `innerTripleE`). Round 2: the worker's `τ` commitment is `vs`'s (`hT`), the
 switched source's. Round 3: `Y` at the tape's pads and `β`, the opened coin at the rep's `β` round, the switched
@@ -389,7 +389,7 @@ theorem liveInner_withInner_at (vs : (CoinLayer.session Loop.loopNr Masked.dataE
     (hv : wk x w (ν, t) ((m₀, ρ₀) :: ops) 0 = some (v, false))
     (hI : Loop.InnerAt (real x w (ν, t)) x (ops.map fun p => CoinLayer.rd p.2))
     (hF : ∀ (w' : ByteArray) (j : Fin (Masked.jOf x)) (r : Fin 2), w'.size = 16 →
-      v = (_root_.Flock.Firewall.Frame.labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8 ++
+      v = (_root_.Flock.ZkServer.Frame.labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8 ++
         _root_.Flock.Transcript.header 3 1 1 ++ w' ++ _root_.Flock.Transcript.header 4 1 1).data.toList →
       (ofLoopLink (withInner Masked.dataE L₁ real fin) src real).rep x (ops.length + 1) = 2 * j.val + r.val →
       ops.length = Masked.repSlot x (2 * j.val + r.val) (Masked.innerOff 0) →
@@ -439,7 +439,7 @@ theorem liveInner_withInner_at (vs : (CoinLayer.session Loop.loopNr Masked.dataE
   obtain rfl := Option.some.inj (hin.symm.trans hin')
   obtain ⟨W, T, hW, hT', hsch⟩ : ∃ W T : ByteArray, W.size = 16 ∧ T.size = 64 ∧
       ∀ (c : Cfg) (s : Masker) (n k : ℕ),
-        _root_.Flock.Firewall.Frame.innerSched c s (fin x w (ν, t) ((m₀, ρ₀) :: ops)) n k = ownRound c s W T n k :=
+        _root_.Flock.ZkServer.Frame.innerSched c s (fin x w (ν, t) ((m₀, ρ₀) :: ops)) n k = ownRound c s W T n k :=
     ⟨wordBytes (words ((fin x w (ν, t) ((m₀, ρ₀) :: ops)).getD 0 .empty)
         ((labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8).size + 16) 1),
       wordBytes (words ((fin x w (ν, t) ((m₀, ρ₀) :: ops)).getD 2 .empty) 16 4),
@@ -449,7 +449,7 @@ theorem liveInner_withInner_at (vs : (CoinLayer.session Loop.loopNr Masked.dataE
   rw [hsch] at hrel hvr
   have hcfg : (ofLoopLink (withInner Masked.dataE L₁ real fin) src real).cfg x (ν, t) ((m₀, ρ₀) :: ops) =
       (withFrames Masked.dataE L₁ real).cfg x (ν, t) ((m₀, ρ₀) :: ops) := by
-    unfold cfg drawsAt
+    unfold cfg samplesAt
     rfl
   have hrep : (ofLoopLink (withInner Masked.dataE L₁ real fin) src real).rep x (ops.length + 1) =
       2 * jf.val + rf.val := by
@@ -460,11 +460,11 @@ theorem liveInner_withInner_at (vs : (CoinLayer.session Loop.loopNr Masked.dataE
     (withFiles (withLink (withInner Masked.dataE L₁ real fin) src) src) real x (ν, t) (m₀, ρ₀) ops ha rfl hxs hq1 hloc
   rw [show k / 2 = jf.val by omega] at hst
   have hlay := lay_ofLoopLink (L₀ := withInner Masked.dataE L₁ real fin) src real jf rf hst
-  have hd := draws_ofLoopLink (L₀ := withInner Masked.dataE L₁ real fin) src real
+  have hd := samples_ofLoopLink (L₀ := withInner Masked.dataE L₁ real fin) src real
   have hz := hS.size (ofLoopLink (withInner Masked.dataE L₁ real fin) src real) hd ν t jf rf hlay
   have hpads := hS.pads (ofLoopLink (withInner Masked.dataE L₁ real fin) src real) hd ν t jf rf hlay
     (Masked.UE.tapeZk t)
-  obtain ⟨hH, hRH, hRM⟩ := cfg_tapeOfDraws (ofLoopLink (withInner Masked.dataE L₁ real fin) src real) x (ν, t)
+  obtain ⟨hH, hRH, hRM⟩ := cfg_tapeOfSamples (ofLoopLink (withInner Masked.dataE L₁ real fin) src real) x (ν, t)
     ((m₀, ρ₀) :: ops) (Masked.UE.tapeZk t) Loop.frepOf jf.val rf.val hrep hz
   rw [hlay, ← hpads, hcfg] at hH hRH hRM
   have hLay : ((withFrames Masked.dataE L₁ real).cfg x (ν, t) ((m₀, ρ₀) :: ops)).lay = Masked.layE x jf := by
@@ -512,7 +512,7 @@ theorem liveInner_withInner_at (vs : (CoinLayer.session Loop.loopNr Masked.dataE
       FlockSoundness.Refine.getD_of_lt hfcL, FlockSoundness.Discharge.Composed.ZerocheckMasked.add_add_self]
     rfl
   · -- round 1: the pair's openings
-    have hn1 : loopNr x (q + 1) = _root_.Flock.Firewall.Session.INNER_CONS := by
+    have hn1 : loopNr x (q + 1) = _root_.Flock.ZkServer.Session.INNER_CONS := by
       rw [hslot]
       exact hnr 1 (by decide)
     have hL1 := Masked.repSlot_innerOff hxs jf rf 1

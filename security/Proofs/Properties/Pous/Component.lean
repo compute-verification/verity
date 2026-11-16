@@ -3,7 +3,7 @@ module
 public import Properties.Pous.Component
 public import Proofs.Properties.Pous.RunAt
 public import Proofs.Properties.Pous.MemoryChallenger
-public import Proofs.Properties.NetworkCertifier.Device.Lms
+public import Proofs.Properties.Hash.Lms
 public import Mathlib.Tactic.SplitIfs
 public import Proofs.Core.CanonUtf8
 import all Init.Data.Array.QSort.Basic
@@ -66,7 +66,7 @@ local instance instLawfulBEqByteArray_component : LawfulBEq ByteArray where
 
 deriving instance ReflBEq, LawfulBEq for StreamedWipe.Params
 deriving instance ReflBEq, LawfulBEq for StreamedWipe.Commitment
-deriving instance ReflBEq, LawfulBEq for SessionCommitment
+deriving instance ReflBEq, LawfulBEq for ChallengePhaseCommitment
 
 /-! ## PoUS's acceptance -/
 
@@ -362,28 +362,77 @@ private def wtail (s : StreamedWipe.Signed) (c : StreamedWipe.Commitment) (r0 : 
     if b == 0 && r.sendNs < s.fillEndNs then reasons := reasons.push "the first batch was sent before the fill completed"
   return (MemoryChallenger.StreamedWipe.Findings.mk reasons, MemoryChallenger.acceptIf reasons.isEmpty)
 
-private theorem wverdict_eq (schemes : Schemes) (trusted : List ByteArray) (s : StreamedWipe.Signed)
-    (c : StreamedWipe.Commitment) :
+/-! Each case of the scheme and the signature is a declaration of its own: `rfl` unfolds the whole verdict in each of
+its sixteen branches, and the fifty-six together exceed one declaration's heartbeats. -/
+
+private theorem wverdict_none (schemes : Schemes) (trusted : List ByteArray) (s : StreamedWipe.Signed)
+    (c : StreamedWipe.Commitment) (hl : schemes.lookup s.scheme = none) :
     StreamedWipe.verdict schemes trusted s c = wtail s c (wpre schemes trusted s c) := by
   unfold StreamedWipe.verdict wtail wpre
-  cases schemes.lookup s.scheme with
+  cases h : schemes.lookup s.scheme with
+  | some _ => simp [hl] at h
   | none =>
     by_cases h1 : (!(s.commitment == c)) = true <;> by_cases h2 : (!c.params.covered) = true <;>
     by_cases h3 : (s.ended != StreamedWipe.COMPLETE || s.batches.size != c.params.batches) = true <;>
       simp only [h1, h2, h3, ite_true, ite_false, Bool.false_eq_true] <;> rfl
+
+private theorem wverdict_error (schemes : Schemes) (trusted : List ByteArray) (s : StreamedWipe.Signed)
+    (c : StreamedWipe.Commitment) {p : Lms.Params} (hl : schemes.lookup s.scheme = some p) {e : String}
+    (hm : (s.message >>= fun m => lmsVerify p s.publicKey s.commitment.session m s.signature) = .error e) :
+    StreamedWipe.verdict schemes trusted s c = wtail s c (wpre schemes trusted s c) := by
+  unfold StreamedWipe.verdict wtail wpre
+  cases h : schemes.lookup s.scheme with
+  | none => simp [hl] at h
+  | some p' =>
+    obtain rfl : p = p' := Option.some.inj (hl.symm.trans h)
+    by_cases h0 : (!trusted.contains s.publicKey) = true <;>
+      by_cases h1 : (!(s.commitment == c)) = true <;> by_cases h2 : (!c.params.covered) = true <;>
+      by_cases h3 : (s.ended != StreamedWipe.COMPLETE || s.batches.size != c.params.batches) = true <;>
+      simp only [hm, h0, h1, h2, h3, ite_true, ite_false, Bool.false_eq_true, Bool.not_false] <;>
+      rfl
+
+private theorem wverdict_false (schemes : Schemes) (trusted : List ByteArray) (s : StreamedWipe.Signed)
+    (c : StreamedWipe.Commitment) {p : Lms.Params} (hl : schemes.lookup s.scheme = some p)
+    (hm : (s.message >>= fun m => lmsVerify p s.publicKey s.commitment.session m s.signature) = .ok false) :
+    StreamedWipe.verdict schemes trusted s c = wtail s c (wpre schemes trusted s c) := by
+  unfold StreamedWipe.verdict wtail wpre
+  cases h : schemes.lookup s.scheme with
+  | none => simp [hl] at h
+  | some p' =>
+    obtain rfl : p = p' := Option.some.inj (hl.symm.trans h)
+    by_cases h0 : (!trusted.contains s.publicKey) = true <;>
+      by_cases h1 : (!(s.commitment == c)) = true <;> by_cases h2 : (!c.params.covered) = true <;>
+      by_cases h3 : (s.ended != StreamedWipe.COMPLETE || s.batches.size != c.params.batches) = true <;>
+      simp only [hm, h0, h1, h2, h3, ite_true, ite_false, Bool.false_eq_true, Bool.not_false, Bool.not_true] <;>
+      rfl
+
+private theorem wverdict_true (schemes : Schemes) (trusted : List ByteArray) (s : StreamedWipe.Signed)
+    (c : StreamedWipe.Commitment) {p : Lms.Params} (hl : schemes.lookup s.scheme = some p)
+    (hm : (s.message >>= fun m => lmsVerify p s.publicKey s.commitment.session m s.signature) = .ok true) :
+    StreamedWipe.verdict schemes trusted s c = wtail s c (wpre schemes trusted s c) := by
+  unfold StreamedWipe.verdict wtail wpre
+  cases h : schemes.lookup s.scheme with
+  | none => simp [hl] at h
+  | some p' =>
+    obtain rfl : p = p' := Option.some.inj (hl.symm.trans h)
+    by_cases h0 : (!trusted.contains s.publicKey) = true <;>
+      by_cases h1 : (!(s.commitment == c)) = true <;> by_cases h2 : (!c.params.covered) = true <;>
+      by_cases h3 : (s.ended != StreamedWipe.COMPLETE || s.batches.size != c.params.batches) = true <;>
+      simp only [hm, h0, h1, h2, h3, ite_true, ite_false, Bool.false_eq_true, Bool.not_false, Bool.not_true] <;>
+      rfl
+
+private theorem wverdict_eq (schemes : Schemes) (trusted : List ByteArray) (s : StreamedWipe.Signed)
+    (c : StreamedWipe.Commitment) :
+    StreamedWipe.verdict schemes trusted s c = wtail s c (wpre schemes trusted s c) := by
+  cases hl : schemes.lookup s.scheme with
+  | none => exact wverdict_none schemes trusted s c hl
   | some p =>
     cases hm : (s.message >>= fun m => lmsVerify p s.publicKey s.commitment.session m s.signature) with
-    | error e =>
-      by_cases h0 : (!trusted.contains s.publicKey) = true <;>
-      by_cases h1 : (!(s.commitment == c)) = true <;> by_cases h2 : (!c.params.covered) = true <;>
-      by_cases h3 : (s.ended != StreamedWipe.COMPLETE || s.batches.size != c.params.batches) = true <;>
-        simp only [hm, h0, h1, h2, h3, ite_true, ite_false, Bool.false_eq_true, Bool.not_false] <;> rfl
+    | error e => exact wverdict_error schemes trusted s c hl hm
     | ok b =>
-      by_cases h0 : (!trusted.contains s.publicKey) = true <;> cases b <;>
-      by_cases h1 : (!(s.commitment == c)) = true <;> by_cases h2 : (!c.params.covered) = true <;>
-      by_cases h3 : (s.ended != StreamedWipe.COMPLETE || s.batches.size != c.params.batches) = true <;>
-        simp only [hm, h0, h1, h2, h3, ite_true, ite_false, Bool.false_eq_true, Bool.not_false, Bool.not_true] <;>
-        rfl
+      cases b
+      · exact wverdict_false schemes trusted s c hl hm
+      · exact wverdict_true schemes trusted s c hl hm
 
 /-- Batch `b` passes every check of the loop. -/
 private def WGood (s : StreamedWipe.Signed) (c : StreamedWipe.Commitment) (b : Nat) : Prop :=
@@ -666,7 +715,7 @@ private def honestCommitment : StreamedWipe.Commitment := ⟨.empty, .empty, ⟨
 private def honestBatch : StreamedWipe.Batch := ⟨0, 0, 1, 0, 0, 0, .empty⟩
 
 /-- The session, ended complete with an empty start mark under S1's scheme, the key `pk` and the signature `sig`. -/
-private def honestSession (pk sig : ByteArray) : StreamedWipe.Signed :=
+private def honestWipe (pk sig : ByteArray) : StreamedWipe.Signed :=
   ⟨honestCommitment, StreamedWipe.COMPLETE, .empty, 0, 0, #[honestBatch], LMS, pk, sig⟩
 
 private theorem honest_message :
@@ -680,7 +729,7 @@ LMS parameters, the session signed at leaf 0 with `Lms.signAt` on its message pa
 against its commitment. The signature verifies by LMS's correctness
 (`Properties.CertifierDevice.Proofs.Lms.lmsCorrect`). -/
 private theorem honest_checked {I seed : ByteArray} {k : Lms.PrivateKey} (hk : Lms.key Lms.deployed I seed = .ok k) :
-    ∃ sig : ByteArray, WipeChecked SCHEMES [k.publicKey] (honestSession k.publicKey sig) honestCommitment := by
+    ∃ sig : ByteArray, WipeChecked SCHEMES [k.publicKey] (honestWipe k.publicKey sig) honestCommitment := by
   obtain ⟨-, hIk, -, hIs, -, -, -⟩ := Properties.CertifierDevice.Proofs.Lms.key_spec hk
   subst hIk
   have hroot : (k.tree[1]!).size = Lms.deployed.N :=
@@ -702,20 +751,20 @@ private theorem honest_checked {I seed : ByteArray} {k : Lms.PrivateKey} (hk : L
     simp only [hpub, ne_eq, not_true_eq_false, ↓reduceIte, hdec, hI, hM, hver, bind, Except.bind] <;> rfl
   refine ⟨sig.encode, ⟨Lms.deployed, rfl, List.mem_singleton.2 rfl, m, hm, hlms⟩, rfl, rfl, rfl, rfl, ?_⟩
   intro b hb
-  obtain rfl : b = 0 := by simp [honestSession] at hb; omega
-  simp [honestSession, honestBatch, honestCommitment, StreamedWipe.Batch.elapsedNs]
+  obtain rfl : b = 0 := by simp [honestWipe] at hb; omega
+  simp [honestWipe, honestBatch, honestCommitment, StreamedWipe.Batch.elapsedNs]
 
 /-- The wipe's compiled check of a verifier that trusts the key `pk` accepts the honest session it finds
 `WipeChecked`, on the session's server and session, with an egress of 0 MiB in the evidence
 (`wipeAccepts_complete`, whose range holds at 0). -/
 private theorem honest_accepted {pk sig : ByteArray}
-    (hw : WipeChecked SCHEMES [pk] (honestSession pk sig) honestCommitment) :
+    (hw : WipeChecked SCHEMES [pk] (honestWipe pk sig) honestCommitment) :
     WipeProtocol.protocol.check ⟨honestCommitment.server, honestCommitment.session, #[pk]⟩ honestCommitment
-        ⟨some (honestSession pk sig), some 0⟩ =
+        ⟨some (honestWipe pk sig), some 0⟩ =
       .accept (WipeProtocol.certify honestCommitment.params StreamedWipe.EGRESS_MAX_UNITS)
         (honestCommitment.params, 0) := by
   rcases wipeAccepts_complete ⟨honestCommitment.server, honestCommitment.session, #[pk]⟩ honestCommitment
-      ⟨some (honestSession pk sig), some 0⟩ (honestSession pk sig) rfl rfl rfl hw with h | h | h
+      ⟨some (honestWipe pk sig), some 0⟩ (honestWipe pk sig) rfl rfl rfl hw with h | h | h
   · exact h
   · exact absurd h (Int.lt_irrefl 0)
   · exact absurd h (show ¬ StreamedWipe.EGRESS_MAX_UNITS < (0 : Int) by decide)
@@ -731,7 +780,7 @@ theorem wipeAccepts_meets : ∀ (I seed : ByteArray) (k : Lms.PrivateKey), Lms.k
       WipeProtocol.protocol.check ⟨c.server, c.session, #[k.publicKey]⟩ c e = .accept out prof := by
   intro I seed k hk
   obtain ⟨sig, hw⟩ := honest_checked hk
-  exact ⟨honestCommitment, ⟨some (honestSession k.publicKey sig), some 0⟩, _, _, honest_accepted hw⟩
+  exact ⟨honestCommitment, ⟨some (honestWipe k.publicKey sig), some 0⟩, _, _, honest_accepted hw⟩
 
 /-- **An honest wipe is `WipeChecked` and accepted** (the honest witness of `WipeAccepts` and of
 `wipeAccepts_complete`): there is a key `Lms.key` derives at S1's deployed LMS parameters and a session it signed
@@ -798,17 +847,17 @@ private def toyCoins : CoinTree :=
   match CoinTree.make toySid 2 #[0] toyCoinKey #[toyCoinSalt] with
   | .ok t => t
   | .error _ => ⟨toySid, 2, #[0], toyCoinKey, #[toyCoinSalt], #[], .empty⟩
-private def toySessionCommitment : SessionCommitment :=
+private def toyPhaseCommitment : ChallengePhaseCommitment :=
   ⟨toySid, toyCoins.root, toyCoinKey, 2, 1, 1000, 8, toyPublic.root⟩
 private def toyRound : MemoryChallenger.Round := ⟨0, 0, 0, 0, blockDigest toyBlocks[0]!⟩
 private def toyOpenings : Array CoinOpening := #[toyCoins.opening 0]
-private def toySigned (pk sig : ByteArray) : SignedSession :=
-  ⟨toySessionCommitment, COMPLETE, #[toyRound], LMS, pk, sig⟩
-private def toySession (pk sig : ByteArray) : Run.ChallengePhaseRecord :=
-  ⟨toySigned pk sig, toySessionCommitment, toyOpenings⟩
+private def toySigned (pk sig : ByteArray) : SignedChallengePhase :=
+  ⟨toyPhaseCommitment, COMPLETE, #[toyRound], LMS, pk, sig⟩
+private def toyRecord (pk sig : ByteArray) : Run.ChallengePhaseRecord :=
+  ⟨toySigned pk sig, toyPhaseCommitment, toyOpenings⟩
 
 /-- `verdict`'s reasons before the rounds. -/
-private def rpre (schemes : Schemes) (trusted : List ByteArray) (s : SignedSession) (c : SessionCommitment) :
+private def rpre (schemes : Schemes) (trusted : List ByteArray) (s : SignedChallengePhase) (c : ChallengePhaseCommitment) :
     Array String := Id.run do
   let mut reasons : Array String := #[]
   match schemes.lookup s.scheme with
@@ -827,7 +876,7 @@ private def rpre (schemes : Schemes) (trusted : List ByteArray) (s : SignedSessi
   return reasons
 
 /-- `verdict` from the rounds `rounds` on, after the reasons `r0`. -/
-private def rtail (expected : Nat → Option ByteArray) (rounds : Array MemoryChallenger.Round) (c : SessionCommitment)
+private def rtail (expected : Nat → Option ByteArray) (rounds : Array MemoryChallenger.Round) (c : ChallengePhaseCommitment)
     (openings : Array CoinOpening) (r0 : Array String) : Verdict := Id.run do
   let mut reasons := r0
   let byJ := fun (j : Nat) => openings.findRev? (·.j == j)
@@ -846,7 +895,7 @@ private def rtail (expected : Nat → Option ByteArray) (rounds : Array MemoryCh
   return (MemoryChallenger.Findings.mk reasons late wrong, MemoryChallenger.acceptIf reasons.isEmpty)
 
 private theorem rverdict_eq (schemes : Schemes) (trusted : List ByteArray) (expected : Nat → Option ByteArray)
-    (s : SignedSession) (c : SessionCommitment) (openings : Array CoinOpening) :
+    (s : SignedChallengePhase) (c : ChallengePhaseCommitment) (openings : Array CoinOpening) :
     MemoryChallenger.verdict schemes trusted expected s c openings =
       rtail expected s.rounds c openings (rpre schemes trusted s c) := by
   unfold MemoryChallenger.verdict rtail rpre
@@ -867,7 +916,7 @@ private theorem rverdict_eq (schemes : Schemes) (trusted : List ByteArray) (expe
       by_cases h2 : (s.ended != COMPLETE || s.rounds.size != c.k) = true <;>
         simp only [hm, h0, h1, h2, ite_true, ite_false, Bool.false_eq_true, Bool.not_false, Bool.not_true] <;> rfl
 
-private theorem rpre_nil (schemes : Schemes) (trusted : List ByteArray) (s : SignedSession) (c : SessionCommitment)
+private theorem rpre_nil (schemes : Schemes) (trusted : List ByteArray) (s : SignedChallengePhase) (c : ChallengePhaseCommitment)
     (hk : ∃ p, schemes.lookup s.scheme = some p ∧ s.publicKey ∈ trusted ∧
       ∃ m, s.message = .ok m ∧ lmsVerify p s.publicKey s.commitment.session m s.signature = .ok true)
     (hcm : (s.commitment == c) = true) (hend : s.ended = COMPLETE) (hsize : s.rounds.size = c.k) :
@@ -881,15 +930,15 @@ private theorem rpre_nil (schemes : Schemes) (trusted : List ByteArray) (s : Sig
   exact ite_eq_left ht
 
 private theorem rtail_toy :
-    (rtail (Run.expected toyParams toyDigests) #[toyRound] toySessionCommitment toyOpenings #[]).accepted = true := by
+    (rtail (Run.expected toyParams toyDigests) #[toyRound] toyPhaseCommitment toyOpenings #[]).accepted = true := by
   decide +kernel
 
 private theorem verdict_toy (pk sig m : ByteArray)
-    (hm : MemoryChallenger.message toySessionCommitment COMPLETE #[toyRound] = .ok m)
-    (hlms : lmsVerify Lms.deployed pk toySessionCommitment.session m sig = .ok true) :
-    (MemoryChallenger.verdict SCHEMES [pk] (Run.expected toyParams toyDigests) (toySigned pk sig) toySessionCommitment
+    (hm : MemoryChallenger.message toyPhaseCommitment COMPLETE #[toyRound] = .ok m)
+    (hlms : lmsVerify Lms.deployed pk toyPhaseCommitment.session m sig = .ok true) :
+    (MemoryChallenger.verdict SCHEMES [pk] (Run.expected toyParams toyDigests) (toySigned pk sig) toyPhaseCommitment
       toyOpenings).accepted = true := by
-  rw [rverdict_eq, rpre_nil SCHEMES [pk] (toySigned pk sig) toySessionCommitment
+  rw [rverdict_eq, rpre_nil SCHEMES [pk] (toySigned pk sig) toyPhaseCommitment
     ⟨Lms.deployed, rfl, List.mem_singleton.2 rfl, m, hm, hlms⟩ (beq_self_eq_true _) rfl rfl]
   exact rtail_toy
 
@@ -919,14 +968,20 @@ private theorem table_toy :
 set_option maxRecDepth 100000 in
 private theorem checkAt_toy (pk sig : ByteArray)
     (hv : (MemoryChallenger.verdict SCHEMES [pk] (Run.expected toyParams toyDigests) (toySigned pk sig)
-      toySessionCommitment toyOpenings).accepted = true) :
-    Run.checkAt SCHEMES toyPoint [pk] toyPublic toyDigests (toySession pk sig) toySid = .ok () :=
-  checkAt_of SCHEMES toyPoint [pk] toyPublic toyDigests (toySession pk sig) toySid rfl salt_toy digests_toy
+      toyPhaseCommitment toyOpenings).accepted = true) :
+    Run.checkAt SCHEMES toyPoint [pk] toyPublic toyDigests (toyRecord pk sig) toySid = .ok () :=
+  checkAt_of SCHEMES toyPoint [pk] toyPublic toyDigests (toyRecord pk sig) toySid rfl salt_toy digests_toy
     table_toy rfl rfl rfl rfl (beq_self_eq_true _) (beq_self_eq_true _) hv
 
-private theorem message_toy : ∃ m, MemoryChallenger.message toySessionCommitment COMPLETE #[toyRound] = .ok m := by
-  unfold MemoryChallenger.message MemoryChallenger.recordsRoot
+private theorem message_toy : ∃ m, MemoryChallenger.message toyPhaseCommitment COMPLETE #[toyRound] = .ok m := by
+  obtain ⟨v, hv⟩ : ∃ v, toyRound.value = .ok v := by
+    have hd : toyRound.digest.size = 64 := Properties.Certifier.Bytes.hash_size _
+    unfold MemoryChallenger.Round.value
+    rw [ite_cond_eq_false _ _ (by simp [hd])]
+    exact ⟨_, rfl⟩
+  unfold MemoryChallenger.message MemoryChallenger.recordsDigest MemoryChallenger.recordsStream
   rw [Array.mapM_eq_mapM_toList]
+  simp only [List.toList_toArray, List.mapM_cons, List.mapM_nil, hv, bind, Except.bind, pure, Except.pure]
   exact ⟨_, rfl⟩
 
 /-- **An honest run is accepted** (the instance of `RunAccepts`' honest lemma): for every key `Lms.key` derives at
@@ -945,7 +1000,7 @@ theorem runAccepts_meets : ∀ (I seed : ByteArray) (k : Lms.PrivateKey), Lms.ke
     simp only [Lms.PrivateKey.publicKey, ByteArray.size_append, hIs, hroot]
   have hI : k.publicKey.extract 0 16 = k.I := ByteArray.extract_append_eq_left hIs.symm
   obtain ⟨m, hm⟩ := message_toy
-  obtain ⟨M, hM⟩ : ∃ M, memoryChallengerMessage k.I toySessionCommitment.session m = .ok M := by
+  obtain ⟨M, hM⟩ : ∃ M, memoryChallengerMessage k.I toyPhaseCommitment.session m = .ok M := by
     unfold memoryChallengerMessage
     simp [hIs]
     exact ⟨_, rfl⟩
@@ -953,17 +1008,17 @@ theorem runAccepts_meets : ∀ (I seed : ByteArray) (k : Lms.PrivateKey), Lms.ke
     Properties.CertifierDevice.Proofs.Lms.lmsSigns 64 1 20 false Lms.deployed k.I seed k 0 M rfl hk (by decide)
   obtain ⟨hver, hdec⟩ :=
     Properties.CertifierDevice.Proofs.Lms.lmsCorrect 64 1 20 false Lms.deployed k.I seed k 0 M sig rfl hk hsig
-  have hlms : lmsVerify Lms.deployed k.publicKey toySessionCommitment.session m sig.encode = .ok true := by
+  have hlms : lmsVerify Lms.deployed k.publicKey toyPhaseCommitment.session m sig.encode = .ok true := by
     unfold lmsVerify
     simp only [hpub, ne_eq, not_true_eq_false, ↓reduceIte, hdec, hI, hM, hver, bind, Except.bind]
   have ha : RunProtocol.accepts SCHEMES toyPoint [k.publicKey] toyCommitment toyStore toyPublic toyDigests
-      (toySession k.publicKey sig.encode) toySid = .ok () := by
+      (toyRecord k.publicKey sig.encode) toySid = .ok () := by
     unfold RunProtocol.accepts
     rw [tie_toy, checkAt_toy k.publicKey sig.encode (verdict_toy k.publicKey sig.encode m hm hlms)]
     rfl
-  exact ⟨toyPoint, toySid, toyPublic, ⟨toyDigests, toySession k.publicKey sig.encode, ⟨toyCommitment, toyStore⟩⟩,
+  exact ⟨toyPoint, toySid, toyPublic, ⟨toyDigests, toyRecord k.publicKey sig.encode, ⟨toyCommitment, toyStore⟩⟩,
     runAccepts_complete ⟨toyPoint, toySid, #[k.publicKey]⟩ toyPublic
-      ⟨toyDigests, toySession k.publicKey sig.encode, ⟨toyCommitment, toyStore⟩⟩
+      ⟨toyDigests, toyRecord k.publicKey sig.encode, ⟨toyCommitment, toyStore⟩⟩
       ((RunProtocol.accepts_iff _ _ _ _ _ _ _ _ _).mp ha)⟩
 
 /-- **Two honest runs of one setup are accepted** (the instance of `RunBinds`' honest lemma): `runAccepts_meets`' run,

@@ -5,7 +5,7 @@ for the dot products GLM-5.3 serves. The report is the throughput frontier over 
 against the H200's native peak, the dominant prover phase, peak memory, proof bytes and the Lean verifier's seconds.
 
 ~~~text
-verity bench proof_throughput workloads                       the VU families and their B caps
+verity bench proof_throughput workloads                       the proof-block families and their B caps
 verity bench proof_throughput plan  [--workload W] [--store]  each point's identity (and its passing prover run)
 verity bench proof_throughput run   [--workload W] [--lo B] [--hi B] [--store] [--dry-run]   one recorded prover run per point
 verity bench proof_throughput verify --prove-run RUN [--node N]   the Lean verifier point on that run's bundle (vy-nebius-cpu-3)
@@ -26,16 +26,16 @@ stratified sampling design the Lean verifier's soundness covers:
    by `gpu-lease` (the kernel-engineering skill's sharing rule), with live coins from a loopback `flock-circuit serve`
    on the challenger's keyed coin tree (`FC_COINS=tree`, `serve --tree-from`: `70-class-sweep.sh` gives the server its own
    challenger and accepts the point only if the challenger's audit holds every session's record to its release log, which the
-   bundle carries). The server samples each session's B units at its Register by the verifier's sampling design (`serve --draw-law`,
+   bundle carries). The server samples each session's B proof blocks at its Register by the verifier's sampling design (`serve --sample-design`,
    `law.json`: core's `one_stage.draw.derive` of `stratified:B` over the population's program and its
-   `Q_template_instance` partition), and the session proves those units only. ZK is off. The statement gives every
+   `Q_template_instance` partition), and the session proves those proof blocks only. ZK is off. The statement gives every
    coordinate its own rows (`FLOCK_OWN_ROWS=1`), x included: the verifiers refuse a plain statement whose public file shares
    rows (`ProvedScope.sharedRowsOk` covers that only with the verifier's own registered reads), so x is committed once per coordinate
    rather than once per Call, and that cost is in the numbers. It puts the circuit,
    the public file and every session in the evidence store as one bundle (`out/bundle.json`) and writes the contract
    result with the live verdicts only.
 2. **Verifier run** (`verify.sh`, a `research run --on vy-nebius-cpu-3` or `-cpu-2` job, tool `proof_throughput_verifier`):
-   builds the compiled Lean verifier (`flock-verify`, `verity/protocols/proofs/flock/verifier/`), runs `flock-verify verify --coins tree
+   builds the compiled Lean verifier (`verity-verify-proof`, `verity/protocols/proofs/flock/verifier/`), runs `verity-verify-proof verify --coins tree
    --program P --stratified B --partition F` on every session of the bundle one at a time under `/usr/bin/time`, with its
    own copies of the population's program and of the `verity/partition/v1` object the circuit binds (derived from the
    workload, checked against the circuit's META, not taken from the bundle). The verifier derives the stratified sampling design for B
@@ -103,7 +103,7 @@ busy.
 | `bf16-k6144` | `GemmCoordinate_v2{K=6144,DOT=HopperBF16WgmmaDot16_v1}` | lm_head, indexer `wk_weights_proj`, MoE router | 1024 |
 | `fp8-coord-k6144`, `-k2048`, `-k256` | `ScaledMmFp8BlockCoordinate_v2{K,G=128}` | the FP8 GEMMs with scale groups | declared |
 
-The bf16 sites are those of `verity/definitions/registry/bf16_gemm_check.py`. The cap is the largest
+The bf16 sites are those of `adapters/vllm/verity_vllm/definitions/registry/bf16_gemm_check.py`. The cap is the largest
 power of two of coordinates one statement holds at the hill-climb's 2^35 witness bits (each coordinate one 2^25-bit block
 at K = 6144). The FP8 coordinates are declared with their profile; the point job stages class-statement workloads only, and
 staging them through `benchmarks/served_units/stage.py` is the next workload's work.
@@ -126,12 +126,12 @@ Workers would prove the inner statement natively with ZK off and the outer proof
 (compiled Lean, CPU) would sample the masks and salts, check the outer relations and release; the auditor runs the Lean
 verifier. That split doesn't exist. The ZK point measures today's stand-in,
 labelled so in its result (`proof-throughput/zk-standin/v1`): `job.sh ZK=1` proves the same sampled sessions with
-`flock-circuit prove --zk --gpu` (Flock ZK's masked protocol) under the ZK server (`FC_FIREWALL=1`, PROTOCOL §10): `flock-circuit`'s
-checks on its host threads and the Lean (`verity/protocols/proofs/flock/verifier/Flock/Firewall`, the `flock-firewall` processes the
+`flock-circuit prove --zk --gpu` (Flock ZK's masked protocol) under the ZK server (`FC_ZK_SERVER=1`, PROTOCOL §10): `flock-circuit`'s
+checks on its host threads and the Lean (`verity/protocols/proofs/flock/verifier/Flock/ZkServer`, the `flock-zk-server` processes the
 prover starts on the same node: the session loop, the frames and the finish, which commits level 0 and computes the
 opening and the proof file), and `zk-point` writes the result: the prover process's CPU seconds per session, the
 ZK server's recheck and opening times, the session's bytes out and its released proof. The ZK server's CPU per session is
-that CPU with `FC_FIREWALL=1` less the same point's with `FC_FIREWALL=0`; `/usr/bin/time` counts a `flock-firewall`
+that CPU with `FC_ZK_SERVER=1` less the same point's with `FC_ZK_SERVER=0`; `/usr/bin/time` counts a `flock-zk-server`
 process's CPU only once the prover has waited for it. The ZK server rechecks a witness the host assembled (`FC_HOST_WITNESS=1`,
 §10.2), so `ZK=1` sets it in both arms. `zk` prints each field and its source.
 

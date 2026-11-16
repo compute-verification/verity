@@ -8,7 +8,9 @@ parses a command line: it builds the parser from the dataclass fields, takes the
 (`option(env=...)`), and reports a `config.UsageError`, the command's or an option type's, as a usage error with its message
 (exit 2).  A process it starts refuses a `VERITY_*`
 variable nothing in the tree reads (`settings.validate_environ`), naming it, also exit 2.  `python -m verity_vllm.pipeline.cli`
-is the same program, for interpreters without the `verity-vllm` launcher.
+is the same program, for interpreters without the `verity-vllm` launcher.  A command prints what it says to its reader (a
+record, a card, a plan) with `write` (`verity_vllm.log`'s, which every layer may load), on stdout; its diagnostics go to
+its logger, on stderr.
 """
 
 from __future__ import annotations
@@ -23,6 +25,9 @@ from typing import Any
 
 from verity_vllm import settings
 from verity_vllm.config import UsageError
+from verity_vllm.log import write
+
+__all__ = ["main", "parse", "write"]
 
 PROG = "verity-vllm"
 
@@ -33,7 +38,6 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "block-counts": ("verity_vllm.program.predict.block_counts", "a day's (c, k)-inference blocks from its served windows' circuit records, judged against its declared n: the judgment public, the counts private"),
     "boundary-plan": ("verity_vllm.pipeline.boundary_plan", "a row's call-boundary check over its Commit's Programs, and the Commit's call-boundary plan, keyed"),
     "build": ("verity_vllm.pipeline.build", "derive one request wrapper's Program (Build step)"),
-    "census": ("verity_vllm.properties.census", "kernel census of a bare run"),
     "commit": ("verity_vllm.pipeline.commit", "Commit stage: pairs protocol, commitment root and overhead"),
     "commit-arb": ("verity_vllm.pipeline.commit_arb", "the served Commit under seeded varied traffic, each request's record held to its streamed ids"),
     "commit-plan": ("verity_vllm.pipeline.commit_plan", "a Commit's plan, derived before the GPU: its producer facts, keyed"),
@@ -43,7 +47,9 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "compiled-merge": ("verity_vllm.pipeline.compiled_merge", "merge control/treatment outputs of a compiled row"),
     "coverage-workloads": ("verity_vllm.pipeline.coverage_workloads", "coverage campaign workloads"),
     "epoch": ("verity_vllm.pipeline.epoch", "the re-baseline epoch's row job (job, resolve, row-state, word-check, digests, ...)"),
+    "fa2-tap-apply": ("verity_vllm.acquire.fa2_tap_src.apply_fa2_tap", "patch a pinned vllm-flash-attn tree into the FA2 tapped tree"),
     "fa2-tap-build": ("verity_vllm.acquire.fa2_tap_src.build_ext", "build one FA2 forward variant extension"),
+    "fa3-tap-apply": ("verity_vllm.acquire.fa3_tap_src.apply_fa3_tap", "patch a pinned vllm-flash-attn tree into the FA3 tapped tree"),
     "fa3-tap-build": ("verity_vllm.acquire.fa3_tap_src.build_fa3_ext", "build the FA3 forward extension"),
     "fold-compare": ("verity_vllm.check.fold_compare", "folded observation log vs evidence"),
     "fp8-checkpoint": ("verity_vllm.engine.fp8_checkpoint", "make or re-make a block-FP8 checkpoint from a BF16 pin"),
@@ -53,18 +59,14 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "global-match": ("verity_vllm.check.match.global_match", "global Match of a batched execution"),
     "global-program": ("verity_vllm.pipeline.global_program", "workload Program from the derived request Programs"),
     "glue": ("verity_vllm.glue", "per model, the code its `__models__` markers tie to it and the hours from staged checkpoint to record"),
-    "golden": ("verity_vllm.properties.golden", "golden corpus check"),
-    "holdout": ("verity_vllm.properties.holdout", "holdout workload generator and assembler"),
-    "ids-front": ("verity_vllm.pipeline.ids_front", "the network certifier's id form in front of vLLM's own OpenAI server"),
+    "ids-front": ("verity_vllm.pipeline.ids_front", "the network attester's id form in front of vLLM's own OpenAI server"),
     "launch-context": ("verity_vllm.pipeline.launch_context", "launch context of a workload's request shapes"),
-    "m1-capture": ("verity_vllm.pipeline.m1_capture", "capture the observation log under the observer"),
+    "m1-capture": ("verity_vllm.pipeline.match_capture", "capture the observation log under the observer"),
     "manifest": ("verity_vllm.pipeline.manifest", "the required-value manifest (build, build-global, compare)"),
     "manifest-verify": ("verity_vllm.pipeline.manifest_verify", "is manifest.json the manifest of record"),
     "match": ("verity_vllm.pipeline.match", "Match stage driver of one configuration"),
     "meta-inventory": ("verity_vllm.engine.meta_inventory", "a checkpoint's modules on the meta device, from its config.json alone"),
-    "mla-capture": ("verity_vllm.program.mla_capture", "MLA kernel captures (produce), against their numpy models (check) and Booleans (check-bits)"),
     "neutrality": ("verity_vllm.pipeline.neutrality", "rebuild the rows of record's Programs; fail if a Program digest moved"),
-    "noninterference": ("verity_vllm.properties.noninterference", "observer non-interference check"),
     "norm-tap-build": ("verity_vllm.acquire.norm_tap_src.build_ext", "build or check the norm-scale tap's CUDA op"),
     "predict": ("verity_vllm.program.predict.cli", "ahead-of-time Program prediction from φ, compared with the traced Builds; a switched row's Build"),
     "program-graph": ("verity_vllm.pipeline.program_graph", "a served row's Program as a graph (modules, Calls, dataflow, hashes)"),
@@ -73,9 +75,9 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "serve-openai": ("verity_vllm.pipeline.serve_openai", "an OpenAI-compatible HTTP server on the in-process engine, every step committed"),
     "program-compare": ("verity_vllm.check.match.program_compare", "structural comparison of two Programs"),
     "program-dag": ("verity_vllm.check.match.program_dag", "a derived Program and a fold: live-cone DAG multisets equal"),
-    "properties-admission": ("verity_vllm.properties.admission", "quarantine admission differential tests"),
-    "records": ("verity_vllm.pipeline.circuit_db", "the circuit database: a row's record and its Programs, by row id (publish, pull, capture, show, programs, fetch, "
-                            "switch), and a checkpoint's staging (staged)"),
+    "records": ("verity_vllm.pipeline.circuit_db",
+                ("the circuit database: a row's record and its Programs, by row id (publish, pull, capture, show, programs, fetch, "
+                 "switch), and a checkpoint's staging (staged)")),
     "release-json": ("verity_vllm.pipeline.release_json", "RELEASE.json writer, reader and release line"),
     "router-tap-build": ("verity_vllm.acquire.router_tap_src.build_ext", "build or check the router-softmax tap's CUDA op"),
     "research-outputs": ("verity_vllm.pipeline.research_outputs", "typed outputs of a sweep stage"),
@@ -87,7 +89,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "source-identity": ("verity_vllm.pipeline.source_identity", "source identity and precheck"),
     "stoch-recompute": ("verity_vllm.check.replay.stoch_recompute", "value check of a stochastic row"),
     "target-family": ("verity_vllm.target_family", "target-family preflight"),
-    "timeline": ("verity_vllm.pipeline.timeline", "stage telemetry (mark, report, collect)"),
+    "timeline": ("verity_vllm.pipeline.timeline", "stage telemetry (report)"),
     "topp-pin-check": ("verity_vllm.pipeline.topp_pin_check", "the top-p split pin on the GPU: the kernel pinned and not, requests together and alone"),
     "topp-split-probe": ("verity_vllm.pipeline.topp_split_probe", "top-p split fixture"),
     "tp-capture": ("verity_vllm.pipeline.tp.capture", "tensor-parallel M1 capture"),
@@ -232,7 +234,7 @@ def process_settings(environ: MutableMapping[str, str]) -> None:
 
 def main(argv: list[str] | None = None) -> Any:
     process = argv is None
-    argv = sys.argv[1:] if process else list(argv)
+    argv = sys.argv[1:] if argv is None else list(argv)
     if not argv or argv[0] in ("-h", "--help"):
         print(usage(), file=sys.stdout if argv else sys.stderr)
         return 0 if argv else 2

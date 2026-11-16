@@ -160,7 +160,7 @@ theorem regLevels_of_readAt {e : ExecHolo} {l : List Step} {u : C3Run e} {cap₀
   exact ⟨hT, hver, opensOK_of msId sch hlv cap p 2 pend os.1 hcaps hreqs ho⟩
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
+  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
 /-- **(n5's read fact) R's Ligerito run is on the inner transcript**: at every accepted outcome, the inner
 transcript's steps (V*'s layers' messages zipped with the rounds' coins) hold, past what the run reads before R's

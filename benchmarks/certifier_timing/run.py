@@ -1,4 +1,4 @@
-"""certifier_timing: the bits an interval a server moves through when the network certifier releases its bytes.
+"""certifier_timing: the bits an interval a server moves through when the network attester releases its bytes.
 
     verity bench certifier_timing run     [--paced-ms 50] [--intervals 3000] [--attacks write,burst]
                                           [--observers plain,spin] [--repeat 1] [--tree DIR [--tree-commit SHA]]
@@ -13,7 +13,7 @@
     verity bench certifier_timing table   RESULT.json...
     verity bench certifier_timing target  [--interval-ms 100]
 
-`run` first runs the guard, then each attack against the network certifier (`parties.py`: a server that picks a bit an
+`run` first runs the guard, then each attack against the network attester (`parties.py`: a server that picks a bit an
 interval and times its writes by it, the certifier, and an observer on the client side, three processes on this host's
 loopback and monotonic clock), `--repeat` times each with each observer, and prints one JSON line, which it also writes
 to `--out`/result.json (`$OUT` under `research run`): `value`, the most bits an interval any attack showed
@@ -43,7 +43,7 @@ leaves observer.json; `score DIR --observer FILE` joins them, and `score DIR... 
 observer.json at SEEN/<DIR's name>/. Nothing joins the two clocks: which interval a chunk is comes from its bytes and
 the certifier's record of the connection, and `channel`'s `step` reads through the clocks' drift. `serve --certifier
 relay --attack delay`, with and without `--ignore`, is the guard across the two hosts, and `serve --ignore` an
-attack's control through the network certifier: `score` reads its guard from the first two and keeps the control out
+attack's control through the network attester: `score` reads its guard from the first two and keeps the control out
 of its number.
 
 `--launch` puts the release in the kernel's hands, or the NIC's. For the case it sets a `taprio` schedule on DEV, the
@@ -374,7 +374,7 @@ def score(case: Path, observed: Path | None = None) -> dict:
 
 
 def role(case: dict) -> str:
-    """What a case is to the number: an `attack` on the network certifier or its `control` (the server ignores its
+    """What a case is to the number: an `attack` on the network attester or its `control` (the server ignores its
     bits), or of the guard, through the relay, the `planted` channel or its `ignored` twin."""
     if case["certifier"] == "relay":
         return "ignored" if case["ignore"] else "planted"
@@ -497,10 +497,10 @@ def _table(docs: list[dict]) -> str:
 
 def _hello(certifier: str, tree: Path) -> tuple[str, int]:
     """What an observer sends a certifier of `tree` and the bytes of one interval: the relay takes the request as it
-    is, the network certifier in its cells."""
+    is, the network attester in its cells."""
     if certifier == "relay":
         return parties.HELLO.hex(), SCHEDULE["slots"] * (SCHEDULE["cell_bytes"] - HEADER_BYTES)
-    code = ("import sys; from verity.protocols.accounting.certifier.verifier.warden import cells; "
+    code = ("import sys; from verity.protocols.resource_accounting.network.verifier.network_attester import cells; "
             "print(cells(bytes.fromhex(sys.argv[1]), int(sys.argv[2])).hex())")
     done = subprocess.run([sys.executable, "-c", code, parties.HELLO.hex(), str(SCHEDULE["cell_bytes"])],
                           env=os.environ | {"PYTHONPATH": str(tree)}, capture_output=True, text=True, check=True)

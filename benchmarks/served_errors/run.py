@@ -60,9 +60,9 @@ G0 = Fraction(1, 400)
 # The deployed PoUW window (`verity/protocols/proofs/spot/verifier/profile.py` WINDOW_DELTA) and the served run's sampling δ.
 WINDOW_DELTA = Fraction(1, 2**40)
 SERVED_DELTA = Fraction(1, 100)
-# A K_d that `security/Definitions/Accounting/Guarantees/Compose.lean`'s docstring takes as its example; not served.
+# A K_d that `security/Definitions/Compose/Guarantees/Compose.lean`'s docstring takes as its example; not served.
 COMPOSE_KD = 96000
-# The Sm120 headlines' window (`security/Definitions/Accounting/Guarantees/Headline.lean`): checks·(√δ_fork + n_π·δ_ZK) ≤ 2^-41.
+# The Sm120 headlines' window (`security/Definitions/Pouw/Guarantees/Headline.lean`): checks·(√δ_fork + n_π·δ_ZK) ≤ 2^-41.
 SM120_CHECKS, SM120_BUDGET = 48000, -41.0
 
 # Dither's design point (`verity/protocols/experimental/dither/PROTOCOL.md`; q at `Guarantees/Dither.lean`).
@@ -181,7 +181,7 @@ def rows() -> list[dict[str, Any]]:
             "PouwSound's bridge, not stated; κ = 0 assumed", "assumed")
 
     nmax = SM120_BUDGET - lg(SM120_CHECKS) - s64
-    row("sm120 n_π·δ_ZK", "Accounting.Guarantees.TS.Sm120SheetHeadline and siblings (ProofSoundAt)",
+    row("sm120 n_π·δ_ZK", "ResourceAccounting.Guarantees.TS.Sm120SheetHeadline and siblings (ProofSoundAt)",
         "n_π · one session's KS, against 2^-41/checks", f"n_π = 1, {TABLES_MAX} tables; budget 2^{SM120_BUDGET - lg(SM120_CHECKS):.2f}",
         s64, f"holds for n_π up to 2^{nmax:.1f}; Flock's bound omits the rows link ProofSoundAt reads")
 

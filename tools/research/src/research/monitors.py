@@ -60,13 +60,17 @@ import re
 import shlex
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Callable
+
+from . import settings
 
 SCHEMA = "research/monitors-{}/v1"
 STAMP = "%Y-%m-%dT%H:%M:%SZ"
@@ -299,9 +303,10 @@ def booked(text: str) -> list[list]:
         f = body.split()
         try:
             s = datetime.fromisoformat(f[0])
-            s = (s if s.tzinfo else s.replace(tzinfo=timezone.utc)).timestamp()
+            s = (s if s.tzinfo else s.replace(tzinfo=UTC)).timestamp()
             out.append([s, s + 60 * float(f[1] if len(f) > 1 else 30), who.strip()[:80]])
-        except (IndexError, ValueError):
+        except (IndexError, ValueError) as e:
+            print(f"monitors: a window line skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
     return out
 
@@ -437,7 +442,8 @@ def held_back(waiters: list[dict], usable: Callable[[dict], int], now: float) ->
     for w in waiters:
         try:
             waited = now - epoch(w["since"])
-        except (KeyError, ValueError):
+        except (KeyError, ValueError) as e:
+            print(f"monitors: a waiter without a time skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         if waited >= MIN_WAIT_S and int(w.get("n") or 1) <= usable(w):
             return w, waited
@@ -528,7 +534,8 @@ def fast_preemptions(lines: list[str], now: float) -> list[dict]:
         v = fields(m[7])
         try:
             t, since = epoch(m[1]), epoch(v["since"])
-        except (KeyError, ValueError):
+        except (KeyError, ValueError) as e:
+            print(f"monitors: a preempted line without a time skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         if now - t > PREEMPT_WINDOW_S or not 0 <= t - since <= PREEMPT_WITHIN_S or (v.get("pid"), m[3]) in seen:
             continue
@@ -590,7 +597,7 @@ def units(node: str) -> Callable[[Ctx], list[Finding]]:
             span = f"`{sessions[0]}`" + (f" to `{sessions[-1]}`" if len(sessions) > 1 else "")
             out.append(Finding("system:session-*.scope", f"*{name}: {len(sessions)} login session scope"
                                f"{'s have' if len(sessions) > 1 else ' has'} failed* ({span}): those logins (ssh, and the runs sent "
-                               "over it) got no scope of their own, so no per-run memory cap. `journalctl -u UNIT` names the cause; once it's fixed, "
+                               "over it) got no scope of their own, so no per-run memory limit. `journalctl -u UNIT` names the cause; once it's fixed, "
                                "`systemctl reset-failed 'session-*.scope'`.",
                                cleared=f"*Cleared:* no failed login session scope on {name.lower()}."))
         return out
@@ -711,13 +718,18 @@ def redirected_base(url: str, key: str) -> str:
     """The base that `url` redirects `key` to, or `url` itself when it doesn't redirect. The site's edge denies a burst of
     anonymous HEADs from one address (`X-Vercel-Mitigated: deny`), so the burst goes to where the site redirects."""
     import urllib.error
+    import urllib.parse
     import urllib.request
+
+    if (scheme := urllib.parse.urlsplit(url).scheme) not in ("http", "https"):
+        raise ValueError(f"the public export's URL is not an http or https URL (scheme {scheme!r})")
 
     class Stay(urllib.request.HTTPRedirectHandler):
         def redirect_request(self, *a, **k):
             return None
 
-    req = urllib.request.Request(f"{url}/{key}", method="HEAD", headers={"User-Agent": "research-store-fetch"})
+    req = urllib.request.Request(f"{url}/{key}", method="HEAD",  # noqa: S310 (http or https, checked above)
+                                 headers={"User-Agent": "research-store-fetch"})
     try:
         urllib.request.build_opener(Stay).open(req, timeout=30).close()
     except urllib.error.HTTPError as e:
@@ -871,7 +883,8 @@ def submitter(ctx: Ctx, rid: str) -> str | None:
     """Who sent run `rid`: its request's `submitted_by`, else the `--by` its command passes (check's slot.py)."""
     try:
         req = json.loads(_read(ctx.path(REQUESTS) / rid / "request.json") or "{}")
-    except ValueError:
+    except ValueError as e:
+        print(f"monitors: run {rid}'s request.json is not JSON, so its sender is not known ({e})", file=sys.stderr, flush=True)
         return None
     if req.get("submitted_by"):
         return str(req["submitted_by"])
@@ -944,7 +957,7 @@ def answering(ctx: Ctx) -> list[Finding]:
 WORKSPACE = "/workspace"
 DISK_FULL_PCT = 85.0        # resource_probe's HARD /workspace line: no new check starts past it
 INODES_FULL_PCT = 80.0      # resource_probe's inode_pct
-#: twice tools/verity/check/slot.py's DISK_MIN_INODES, under which no check slot starts: a page of its own, since a node can
+#: twice tools/check/slot.py's DISK_MIN_INODES, under which no check slot starts: a page of its own, since a node can
 #: stand past INODES_FULL_PCT for days and that finding pages only once
 INODES_FREE_PAGE = 800_000
 FORECAST_S = 6 * 3600       # page while the line reaches FULL within this
@@ -1040,7 +1053,7 @@ def unit_states(ctx: Ctx, scope: str, names: list[str]) -> dict[str, dict[str, s
     """`systemctl show`'s load, unit-file and active state of each of `names` in `scope` (`systemd`, or research's user manager)."""
     argv = ["systemctl", *(["--user"] if scope == "user-systemd" else []), "show", "--no-pager",
             "-p", "LoadState", "-p", "UnitFileState", "-p", "ActiveState", "-p", "SubState", *names]
-    env = {**os.environ, "XDG_RUNTIME_DIR": os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"}
+    env = {**os.environ, "XDG_RUNTIME_DIR": settings.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"}
     r = ctx.run(argv, capture_output=True, text=True, timeout=ctx.bound(30), env=env)
     if r.returncode:
         raise RuntimeError(f"`{' '.join(argv[:3])}` exited {r.returncode}: {(r.stderr or '').strip()[-200:]}")
@@ -1087,7 +1100,8 @@ def lost_checks(ctx: Ctx) -> list[Finding]:
     for d in sorted(ctx.path(RUNS).glob(f"r{day}-*")):
         try:
             req = json.loads(_read(ctx.path(REQUESTS) / d.name / "request.json") or "{}")
-        except ValueError:
+        except ValueError as e:
+            print(f"monitors: run {d.name}'s request.json is not JSON, skipped ({e})", file=sys.stderr, flush=True)
             continue
         if not is_full_check(req) or (d / "refused.json").exists():
             continue
@@ -1108,7 +1122,7 @@ def lost_checks(ctx: Ctx) -> list[Finding]:
 
 # ---- failed checks (relay-side: GitHub and the Slack registry name each PR's lane) ---------------------------------------------
 
-MERGE_THREAD = "1790957906.278529"      # #agent-coordination's merge thread, where the lander and the lanes follow the trains
+MERGE_THREAD = "1790957906.278529"      # #agent-coordination's merge thread, where the lander and the lanes follow the candidates
 LANDER = "ci"
 REPO_SLUG = "compute-verification/verity"
 # Node 2 too without N2_GUARD: its check slots run whole checks at any time, so one niced read of their run files a minute is
@@ -1118,47 +1132,59 @@ SLOT_WRAPPER = "check/slot.py"
 CHECK_LINE = "/workspace/research/locks/check-line"     # slot.py's LINE beside its SLOTS: a waiter's ticket, locked while it waits
 NOT_STARTED = 75        # slot.py's exit when CMD never ran: a waiter past --wait-max, or a twin whose twin took a slot first
 FAILED_RECENT_S = 6 * 3600
+#: the largest steps.jsonl or suite report of a running check the reader brings the relay to judge its failures by (`_judged`)
+JUDGED_BYTES = 2 << 20
 #: how long a run that ended before any step failed may lack its failure.json: `research run` classifies the end a few seconds
 #: after status.json says so, and a post read in between would say "unclassified: no reason recorded" of a hand cancel
 CLASSIFY_S = 120
 TRAIN_RE = re.compile(r"^Merge #(\d+) \(([0-9a-f]+)\)")
 TRAIN_MAIN_RE = re.compile(r"^Merge main \([0-9a-f]+\)")
-#: drive's reason when it cancels a landed train's check (drive.py, `postland`): its deferred steps run in the after-landing run, so
-#: the step it killed did not fail
+#: drive's reason when it cancels a landed candidate's check (drive.py, in the platform repository): its deferred steps run in the
+#: after-landing run, so the step it killed did not fail
 DRIVE_LANDED_CANCEL = "deferred steps run in the post-landing run"
 BC_ID_RE = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
 LANE_RE = re.compile(r"-([0-9a-f]{4})$")
 # a log's first failing line: the first line matching the first of these that any line matches, else its last line
 FAILING = (r"\b(?:FAILED|ERROR) \S+::\S+", r"(?i)\berror(?:\[\w+\])?:", r"\bFAIL(?:ED)?\b|\bfailed\b|Error\b|Traceback")
-#: the most of a failed ratchet gate's lines (`reds.RATCHET_FAILED_RE`) a row carries: a train's merges, and a few more
+#: the most of a failed ratchet gate's lines (`reds.RATCHET_FAILED_RE`) a row carries: a candidate's merges, and a few more
 RATCHET_LINES = 40
 #: the check's jobs and their owners
-CI_TOML = "tools/verity/check/ci.toml"
+CI_TOML = "tools/check/ci.toml"
 
 # A machine's failed checks: `python3 -` runs this there, with __ARGS__ its paths and limits. It prints {"rows": one a run,
-# "waiting": each live ticket in slot.py's line (one another process holds locked: slot.py's `waiting`)}.
+# "waiting": each live ticket in slot.py's line (one another process holds locked: slot.py's `waiting`), "unread": each file it
+# couldn't read, and why}. No handler of it swallows what it caught (the silent-excepts lint's rule, which its test holds it to).
 FAILED_READER = r'''
 import fcntl, json, os, re, subprocess, time
 A = json.loads(__ARGS__)
 PICK = [re.compile(p) for p in A["pick"]]
 RATCHET = re.compile(A["ratchet"]["re"], re.M)
 SUITE = re.compile(r"^(passed|failed|reused|skipped)\s+(\S+)\s")
+UNREAD = []
+
+
+def unread(p, e, out=None):
+    """``out``, in place of what ``p`` would have given, which raised ``e``: recorded in UNREAD (the relay logs it) unless the
+    file is merely absent, as a run's failure.json is until it ends."""
+    if not isinstance(e, FileNotFoundError):
+        UNREAD.append(f"{p}: {type(e).__name__}: {str(e)[:120]}")
+    return out
 
 
 def load(p):
     try:
         with open(p, errors="replace") as f:
             return json.load(f)
-    except (OSError, ValueError):
-        return {}
+    except (OSError, ValueError) as e:
+        return unread(p, e, {})
 
 
 def first_failing(p):
     try:
         with open(p, errors="replace") as f:
             lines = f.read(A["log_bytes"]).splitlines()
-    except OSError:
-        return None
+    except OSError as e:
+        return unread(p, e)
     for rx in PICK:
         for ln in lines:
             if rx.search(ln):
@@ -1170,8 +1196,8 @@ def ratchet_failed(p):
     try:
         with open(p, errors="replace") as f:
             return [m[0] for m in RATCHET.finditer(f.read(A["log_bytes"]))][:A["ratchet"]["max"]]
-    except OSError:
-        return []
+    except OSError as e:
+        return unread(p, e, [])
 
 
 def failed_suite(p):
@@ -1180,8 +1206,8 @@ def failed_suite(p):
     try:
         with open(p, errors="replace") as f:
             lines = f.read(A["log_bytes"]).splitlines()
-    except OSError:
-        return None
+    except OSError as e:
+        return unread(p, e)
     for i, ln in enumerate(lines):
         if m := SUITE.match(ln):
             if m[1] != "failed":
@@ -1197,24 +1223,47 @@ def failed_suite(p):
 
 
 def steps(p):
+    """The records of steps.jsonl ``p``, but a last line its writer hasn't finished (no newline yet), which is no error."""
     out = []
     try:
         with open(p, errors="replace") as f:
             for ln in f:
                 try:
                     out.append(json.loads(ln))
-                except ValueError:
-                    pass
-    except OSError:
-        pass
+                except ValueError as e:
+                    if ln.endswith("\n"):
+                        unread(p, e)
+    except OSError as e:
+        unread(p, e)
     return out
+
+
+def judged(d, ran):
+    """(what the relay judges a running check's failures by (`_judged`): its steps.jsonl and suite reports whole, and each failed
+    step's log's FAIL lines (all an allowance of circuit-check reads); each file it left out, with why: over its bound
+    (`over N B`) or unreadable (the error's class)).  An absent file is no failure reported, as the queue reads it."""
+    out, left = {}, []
+    for name, bound in [*((n, A["judged_bytes"]) for n in A["judged"]),
+                        *((os.path.basename(s["log"]), A["log_bytes"]) for s in ran if s.get("status") == "failed" and s.get("log"))]:
+        p = os.path.join(d, name)
+        try:
+            if os.path.getsize(p) > bound:
+                left.append(f"{name} (over {bound} B)")
+                continue
+            with open(p, errors="replace") as f:
+                text = f.read()
+            out[name] = text if name in A["judged"] else "".join(ln for ln in text.splitlines(True) if ln.startswith("FAIL "))
+        except OSError as e:
+            if not isinstance(e, FileNotFoundError):
+                left.append(f"{name} ({type(e).__name__})")
+    return out, left
 
 
 now, rows = time.time(), []
 try:
     names = sorted(n for n in os.listdir(A["runs"]) if any(n.startswith("r" + d + "-") for d in A["days"]))
-except OSError:
-    names = []
+except OSError as e:
+    names = unread(A["runs"], e, [])
 for n in names:
     d = os.path.join(A["runs"], n)
     ts = [os.stat(p).st_mtime for p in (os.path.join(d, f) for f in ("status.json", "steps.jsonl", "stdout.log")) if os.path.exists(p)]
@@ -1244,6 +1293,8 @@ for n in names:
     if bad is not None:
         row.update(step=bad.get("step"), step_ended=bad.get("ended_utc"), rc=bad.get("rc"), suite=bad.get("suite", False),
                    line=bad.get("line") or (first_failing(os.path.join(d, bad["log"])) if bad.get("log") else None))
+        if state == "running" and not row["suite"]:
+            row["files"], row["left_out"] = judged(d, ran)
     # the ratchet gate's lines, though another step failed first: each change it fails is a lane to ring
     gate = next((s for s in ran if s.get("step") == A["ratchet"]["step"] and s.get("status") == "failed"), None)
     if gate is not None:
@@ -1253,39 +1304,41 @@ for n in names:
             r = subprocess.run(["git", "-C", cwd, "log", "--first-parent", "--format=%s", "-n", "40", sha],
                                capture_output=True, text=True, timeout=10)
             row["subjects"] = r.stdout.splitlines() if r.returncode == 0 else []
-        except (OSError, subprocess.TimeoutExpired):
-            pass
+        except (OSError, subprocess.TimeoutExpired) as e:
+            unread(cwd, e)
     rows.append(row)
 waiting = []
 try:
     tickets = sorted(t for t in os.listdir(A["line"]) if not t.startswith("."))
-except OSError:
-    tickets = []
+except OSError as e:
+    tickets = unread(A["line"], e, [])
 for t in tickets:
     try:
         fd = os.open(os.path.join(A["line"], t), os.O_RDONLY)
-    except OSError:
+    except OSError as e:
+        unread(os.path.join(A["line"], t), e)
         continue
+    # a ticket another process holds locked is a live waiter; one nobody holds, its waiter died
     try:
         fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
-        continue
     except BlockingIOError:
-        pass
+        who = load(os.path.join(A["line"], t))
+        waiting.append({"run": who.get("run"), "by": who.get("by")})
     finally:
         os.close(fd)
-    who = load(os.path.join(A["line"], t))
-    waiting.append({"run": who.get("run"), "by": who.get("by")})
-print(json.dumps({"rows": rows, "waiting": waiting}))
+print(json.dumps({"rows": rows, "waiting": waiting, "unread": UNREAD}))
 '''
 
 
 def failed_reader(now: float, *, runs: str = RUNS, requests: str = REQUESTS, line: str = CHECK_LINE) -> str:
+    from .landing import PROGRESS, SUITE_REPORTS
     from .reds import RATCHET_FAILED_RE, RATCHET_STEP
 
     days = sorted({time.strftime("%Y%m%d", time.gmtime(now - s)) for s in (0, FAILED_RECENT_S)})
     args = {"runs": runs, "requests": requests, "line": line, "days": days, "recent_s": FAILED_RECENT_S, "wrapper": SLOT_WRAPPER,
             "pick": list(FAILING), "log_bytes": 8 << 20, "not_started": NOT_STARTED, "classify_s": CLASSIFY_S,
-            "ratchet": {"step": RATCHET_STEP, "re": RATCHET_FAILED_RE.pattern, "max": RATCHET_LINES}}
+            "ratchet": {"step": RATCHET_STEP, "re": RATCHET_FAILED_RE.pattern, "max": RATCHET_LINES},
+            "judged": list(dict.fromkeys((PROGRESS[0], *SUITE_REPORTS))), "judged_bytes": JUDGED_BYTES}
     return FAILED_READER.replace("__ARGS__", repr(json.dumps(args)))
 
 
@@ -1307,8 +1360,8 @@ def lane_of(reg: dict, branch: str) -> str | None:
 
 
 def train_prs(subjects: list[str]) -> list[int]:
-    """The PRs of a train: its first-parent subjects from the head, while each is the lander's `Merge #N (sha)` (or a `Merge
-    main (sha)` that brings the train up to main)."""
+    """The PRs of a candidate: its first-parent subjects from the head, while each is the lander's `Merge #N (sha)` (or a `Merge
+    main (sha)` that brings the candidate up to main)."""
     out = []
     for s in subjects:
         if m := TRAIN_RE.match(s):
@@ -1324,7 +1377,7 @@ def _pr(ctx: Ctx, n: int) -> dict:
 
 
 def _open_prs(ctx: Ctx, row: dict) -> list[tuple[int, str]]:
-    """(number, branch) of each open PR the run checks: a train's, else the PR whose head it is."""
+    """(number, branch) of each open PR the run checks: a candidate's, else the PR whose head it is."""
     gh = ["gh", "-R", REPO_SLUG, "pr"]
     if nums := list(dict.fromkeys(train_prs(row.get("subjects") or []))):
         out = []
@@ -1339,18 +1392,59 @@ def _open_prs(ctx: Ctx, row: dict) -> list[tuple[int, str]]:
     return [(p["number"], p.get("headRefName") or "") for p in got]
 
 
-def _jobs(ctx: Ctx, sha: str | None) -> list:
-    """ci.toml's job tables at the run's commit ``sha`` on GitHub, or at `main` when GitHub can't give that commit's."""
-    import tomllib
-
-    def at(ref: str) -> list:
-        return tomllib.loads(ctx.sh(["gh", "api", "-H", "Accept: application/vnd.github.raw",
-                                     f"repos/{REPO_SLUG}/contents/{CI_TOML}?ref={ref}"], timeout=30)).get("job") or []
+def _raw(ctx: Ctx, path: str, sha: str | None) -> str:
+    """The file ``path`` at the run's commit ``sha`` on GitHub, or at `main` when GitHub can't give that commit's."""
+    def at(ref: str) -> str:
+        return ctx.sh(["gh", "api", "-H", "Accept: application/vnd.github.raw", f"repos/{REPO_SLUG}/contents/{path}?ref={ref}"],
+                      timeout=30)
 
     try:
         return at(sha or "main")
     except RuntimeError:
         return at("main")
+
+
+def _jobs(ctx: Ctx, sha: str | None) -> list:
+    """ci.toml's job tables at the run's commit ``sha`` on GitHub, or at `main` when GitHub can't give that commit's."""
+    import tomllib
+
+    return tomllib.loads(_raw(ctx, CI_TOML, sha)).get("job") or []
+
+
+def step_job(step: str) -> str:
+    """The ci.toml job of a check step's name (check.py's `steps.jsonl`): the job itself, or `JOB:PART` for a part of a split job."""
+    return step.partition(":")[0]
+
+
+def _policy(ctx: Ctx, sha: str | None):
+    """policy.toml (`research.policy.Policy`: its `off_gate` and allowances) at the run's commit ``sha`` on GitHub, or at `main`
+    when GitHub can't give that commit's; RuntimeError or `policy.PolicyError` when it can't be read."""
+    from . import policy
+
+    return policy.parse(_raw(ctx, policy.PATH, sha), f"{policy.PATH} at {(sha or 'main')[:12]}")
+
+
+def _judged(pol, now: float, row: dict) -> tuple[set[str], set[str]]:
+    """(the steps running check ``row`` failed, those of them that failed only where ``pol``'s allowances live at ``now`` cover),
+    by the verified queue's own judge of a run's steps (`landing.allowed_steps`) over the files the reader brought (``files``)."""
+    from .landing import allowed_steps, failed_names
+
+    with tempfile.TemporaryDirectory(prefix="failed-checks-") as t:
+        d = Path(t)
+        for name, text in (row.get("files") or {}).items():
+            (d / Path(name).name).write_text(text)
+        return failed_names([d]), allowed_steps(pol, now, [d])
+
+
+def candidate(subjects: list[str]) -> int | None:
+    """The PR of the `Queue: #N` merge (`digest.QUEUE_SUBJECT`) at the tip of a commit's first-parent ``subjects``, beneath the
+    records commit the queue puts on a candidate whose locks it regenerated (`vqueue_records.LOCK_SUBJECT`): a commit the
+    verified queue built as a candidate; None for any other."""
+    from .digest import QUEUE_SUBJECT
+    from .vqueue_records import LOCK_SUBJECT
+
+    top = subjects[1:2] if subjects[:1] and subjects[0].startswith(LOCK_SUBJECT) else subjects[:1]
+    return int(m[1]) if top and (m := QUEUE_SUBJECT.match(top[0])) else None
 
 
 def _hm(utc: str | None) -> str:
@@ -1359,7 +1453,7 @@ def _hm(utc: str | None) -> str:
 
 def failed_check(ctx: Ctx, reg: dict, machine: str, row: dict) -> Finding | None:
     """The post for one failed check run, or None for one nobody needs telling about: cancelled by hand before any step failed
-    (whoever cancelled it knows), or neither a train nor sent by the lander (a lane's own check: it reads its own result).  It
+    (whoever cancelled it knows), or neither a candidate nor sent by the lander (a lane's own check: it reads its own result).  It
     rings, first who acts (`reds.red_owners`), the lane of each open PR the run checks and, of a failed ratchet gate, of each
     merge its log says the gate fails (`reds.ratchet_prs`, open or not), then the owner ci.toml at the run's commit gives the
     failed step's job and the ratchet gate's (`reds.job_owner`), then the lander."""
@@ -1418,28 +1512,55 @@ def on_main(ctx: Ctx, sha: str | None) -> bool:
     return got.strip() in ("ahead", "identical")
 
 
-def cancel_failed(ctx: Ctx, machine: str, row: dict, waiting: list[dict]) -> str | None:
-    """Cancel a check whose step failed while a ticket waits for a check slot on its machine (running on to find more
-    failures is worth it only while nothing waits for its slot): what the post says, or None when it isn't cancelled. A suites.py
-    run's failed suite only rings: the lander runs those to land a PR on, and decides whether a suite that failed is its change's
-    (a suite can fail for its machine's sake while the run's other steps are worth keeping)."""
+def cancel_failed(ctx: Ctx, machine: str, row: dict, waiting: list[dict]) -> tuple[str, bool] | None:
+    """Cancel a check whose step on the merge gate failed while a ticket waits for a check slot on its machine (running on to
+    find more failures is worth it only while nothing waits for its slot): (what the post says, whether that is final), or None
+    when it isn't cancelled and nothing needs saying.  A check of a commit the verified queue built as a candidate (`candidate`)
+    is never cancelled: its loop judges its parts, under the allowances at the candidate's base, as their steps end
+    (`vqueue_slim`) and stops them itself, and a red its base shares still lands it, so a cancel only throws away its evidence.
+    Of any other check, a step whose job policy.toml's `off_gate` lists at the run's commit (`_policy`) holds no candidate, and
+    one that failed only where an allowance live there covers (`_judged`, as the queue judges a step) is taken as passed, so
+    neither cancels anything (the second is said, and judged again on each pass, so a later red still cancels); a failure the
+    reader couldn't bring a file of (``left_out``) isn't known to be allowed, so no step is taken as allowed then, and the post
+    names those files; when the policy can't be read, nothing is cancelled and the post says so.  A suites.py run's failed suite only rings: the lander runs those
+    to land a PR on, and decides whether a suite that failed is its change's (a suite can fail for its machine's sake while the
+    run's other steps are worth keeping)."""
     if not (ctx.act and waiting and row.get("step") and not row.get("suite") and row.get("state") == "running"):
         return None
     if on_main(ctx, row.get("sha")):
         return None
+    if (pr := candidate(row.get("subjects") or [])) is not None:
+        return (f"Not cancelled, though a ticket waits for its slot: it checks a candidate of the verified queue (#{pr} at its "
+                "tip), whose loop judges its failures, allowances included, and stops its runs itself."), True
+    try:
+        pol = _policy(ctx, row.get("sha"))
+    except Exception as e:  # noqa: BLE001  (an unread policy cancels nothing)
+        why = f"{type(e).__name__}: {str(e)[:120]}".replace("`", "'")
+        return f"Not cancelled, though a ticket waits for its slot: policy.toml is unread ({why}).", True
+    failed, allowed = _judged(pol, ctx.now, row)
+    if left := row.get("left_out") or []:
+        allowed = set()
+    gating = [s for s in dict.fromkeys([row["step"], *sorted(failed)]) if step_job(s) not in pol.off_gate]
+    if not (red := [s for s in gating if s not in allowed]):
+        return (f"Not cancelled, though a ticket waits for its slot: {', '.join(f'`{s}`' for s in gating)} failed only where "
+                "policy.toml's live allowances at its commit cover, which the verified queue takes as passed.", False) \
+            if gating else None
     who = ", ".join(w.get("run") or "a check" for w in waiting[:3]) + (f" and {len(waiting) - 3} more" if len(waiting) > 3 else "")
     ctx.sh([*ctx.research, "cancel", row["run"], "--on", machine, "--by", "infra", "--reason",
-            f"failed-checks: step {row['step']} failed while {len(waiting)} waited for a check slot on {machine} ({who})"],
+            f"failed-checks: step {red[0]} failed while {len(waiting)} waited for a check slot on {machine} ({who})"],
            timeout=120)
-    return f"Cancelled at {iso(ctx.now)[11:16]}Z, since {who} waited for a check slot on {machine}."
+    lacked = f" Its allowances were not judged: the reader left out {', '.join(f'`{x}`' for x in left)}." if left else ""
+    return f"Cancelled at {iso(ctx.now)[11:16]}Z, since {who} waited for a check slot on {machine}.{lacked}", True
 
 
 def failed_checks(ctx: Ctx) -> list[Finding]:
     """Each check run through slot.py on a Nebius machine with a failed step (while it still runs, under --keep-going), or that
     ended non-zero or was killed, in the last FAILED_RECENT_S: one post in the merge thread, leading with the lane of each open
     PR it checks (the handle its branch suffix names in the registry), of each merge a failed ratchet gate fails, the owner of
-    the failed job and the lander (`failed_check`). One still running whose step failed is
-    cancelled once a ticket waits for a check slot on its machine, and the post says so (or a second one, when it comes later)."""
+    the failed job and the lander (`failed_check`). One still running whose step on the merge gate failed (not policy.toml's
+    `off_gate`, nor only where its allowances cover) is cancelled once a ticket waits for a check slot on its machine, unless it
+    checks a candidate of the verified queue (`cancel_failed`), and the post says so, or why not (or a second one, when it comes
+    later)."""
     reg, memo, errors, out = _registry(), ctx.memo.setdefault("runs", {}), [], []
     for machine, host in CHECK_MACHINES:
         script = failed_reader(ctx.now)
@@ -1449,6 +1570,8 @@ def failed_checks(ctx: Ctx) -> list[Finding]:
         except Exception as e:  # noqa: BLE001  (the other machines still post)
             errors.append(f"{machine}: {type(e).__name__}: {e}"[:300])
             continue
+        for u in got.get("unread") or ():
+            print(f"monitors: failed-checks on {machine} could not read {u}", file=sys.stderr, flush=True)
         for row in rows:
             key, new = f"{machine}:{row['run']}", f"{machine}:{row['run']}" not in memo
             if new:
@@ -1459,15 +1582,17 @@ def failed_checks(ctx: Ctx) -> list[Finding]:
             if "cancelled" not in got:
                 try:
                     if said := cancel_failed(ctx, machine, row, waiting):
-                        got["cancelled"] = said
-                        if new:
-                            got["text"] += " " + said
+                        if (slot := "cancelled" if said[1] else "spared") not in got:
+                            got[slot] = said[0]
+                            if new:
+                                got["text"] += " " + said[0]
                 except Exception as e:  # noqa: BLE001  (tried again next pass, while it still runs)
                     got["cancel_error"] = f"{type(e).__name__}: {e}"[:300]
             out.append(Finding(key, got["text"], owners=tuple(got["owners"]), thread=MERGE_THREAD))
-            if got.get("cancelled") and not got["text"].endswith(got["cancelled"]):
-                out.append(Finding(f"{key}:cancelled", f"*Check `{row['run']}` on {machine}*: {got['cancelled']}",
-                                   owners=tuple(got["owners"]), thread=MERGE_THREAD))
+            for slot in ("spared", "cancelled"):
+                if got.get(slot) and got[slot] not in got["text"]:
+                    out.append(Finding(f"{key}:{slot}", f"*Check `{row['run']}` on {machine}*: {got[slot]}",
+                                       owners=tuple(got["owners"]), thread=MERGE_THREAD))
     for k in [k for k, v in memo.items() if ctx.now - v["t"] > 2 * FAILED_RECENT_S]:
         del memo[k]
     if errors and len(errors) == len(CHECK_MACHINES):
@@ -1509,11 +1634,11 @@ MONITORS: list[Monitor] = [
     Monitor("units-n2", "infra", "warn", "node", units("n2"), UNITS_ACTION, every_s=300, clear_s=UNITS_CLEAR_S, n2="units"),
     Monitor("memory-pressure", "infra", "page", "machine", memory_pressure,
             "Find what is growing (`systemd-cgtop -m` on the machine; the alert names the biggest runs) and tell its sender; a "
-            "run past its scope's cap is OOM-killed whole, so pressure that holds means the caps or the slice's headroom are too "
+            "run past its scope's limit is OOM-killed whole, so pressure that holds means the limits or the slice's headroom are too "
             "loose for what runs there.", for_s=300, clear_s=300),
     Monitor("oom-kills", "infra", "warn", "machine", oom_kills,
-            "Tell the run's sender why it died (the alert names both) and what its scope's cap is; if a check, size its "
-            "parallelism from memory (check.py's memory_gb) rather than raising the cap.", events=True),
+            "Tell the run's sender why it died (the alert names both) and what its scope's limit is; if a check, size its "
+            "parallelism from memory (check.py's memory_gb) rather than raising the limit.", events=True),
     Monitor("answering", "infra", "page", "machine", answering,
             "`nebius compute instance get` for its state; preserve what it can (its runs' custody), then restart it "
             "(`nebius compute instance stop` and `start`), and tell the owners of the runs it had.", for_s=180, clear_s=120),
@@ -1527,7 +1652,7 @@ MONITORS: list[Monitor] = [
             "unit); `systemctl enable --now UNIT` once its cause is fixed. A unit off there by design goes in EXPECTED_OFF in research/monitors.py with "
             "the reason, or out of that machine's `nodes` in deploy.toml.", every_s=300, for_s=300, clear_s=300),
     Monitor("lost-checks", "infra", "warn", "machine", lost_checks,
-            "Read each lost check's failure.json; fix the cause on the machine (memory caps, disk, the runner) and tell its "
+            "Read each lost check's failure.json; fix the cause on the machine (memory limits, disk, the runner) and tell its "
             "sender to resend it.", every_s=3600, events=True),
     Monitor("drift", "infra", "warn", "relay", deploy_drift,
             "`research deploy drift --on N` for the detail; install main's version (`research deploy install N --by WHO "
@@ -1570,7 +1695,8 @@ MONITORS: list[Monitor] = [
             "line's head is a waiter no run passes (slot.py's line rule: one that would start if the runs that passed it "
             "ended, a priority one, or one whose ticket names no ask), and it holds those behind; where they don't, set "
             "`peaks=` on them. Lean: the machine's Lean slots. "
-            "Peers: put every CPU machine in the /etc/vy/peers of each machine it names, with the key accepted.",
+            "Peers: `research deploy roll /etc/vy/peers --by WHO` (a dry run; `--apply` does it) writes each machine's "
+            "/etc/vy/peers from the register of machines and has it take the key from every machine its list names.",
             every_s=120, clear_s=300),
 ]
 BY_ID = {m.id: m for m in MONITORS}
@@ -1654,8 +1780,11 @@ def message(ev: dict, tag: Callable[[str], str] = lambda h: "@" + h) -> str:
 
 
 def webhook_post(url: str, text: str) -> None:
-    req = urllib.request.Request(url, data=json.dumps({"text": text}).encode(), headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=10) as r:
+    if (scheme := urllib.parse.urlsplit(url).scheme) not in ("http", "https"):
+        raise ValueError(f"${WEBHOOK_ENV} is not an http or https URL (scheme {scheme!r})")
+    req = urllib.request.Request(url, data=json.dumps({"text": text}).encode(),  # noqa: S310 (http or https, checked above)
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=10) as r:  # noqa: S310 (http or https, checked above)
         r.read()
 
 
@@ -1887,7 +2016,8 @@ class Source:
 def _event(line: str) -> dict:
     try:
         ev = json.loads(line)
-    except ValueError:
+    except ValueError as e:
+        print(f"monitors: an event line is not JSON, read as empty ({e})", file=sys.stderr, flush=True)
         return {}
     return ev if isinstance(ev, dict) else {}
 
@@ -2000,7 +2130,7 @@ def slack_post(dry: bool) -> Callable[[dict, dict | None], dict]:
     from . import slack
 
     reg = slack.load_registry(slack.registry_path())
-    api = slack.Slack(os.environ.get("SLACK_BOT_TOKEN"), dry_run=dry)
+    api = slack.Slack(settings.get("SLACK_BOT_TOKEN"), dry_run=dry)
     alerts, front, routes = slack.channel_id_for(reg, "agent-alerts"), slack.channel_id_for(reg, slack.FRONT_DOOR), slack.Routes()
 
     def tag(h: str) -> str:
@@ -2050,7 +2180,7 @@ def slack_post(dry: bool) -> Callable[[dict, dict | None], dict]:
 # ---- the command line -----------------------------------------------------------------------------------------------------------
 
 def _ctx_for(ns: argparse.Namespace, now: float, act: bool = False) -> Callable[[dict], Ctx]:
-    return lambda memo: Ctx(now=now, memo=memo, act=act, n2_host=os.environ.get("VY_N2", "vy-n2"), node=getattr(ns, "node", "n2"),
+    return lambda memo: Ctx(now=now, memo=memo, act=act, n2_host=settings.get("VY_N2", "vy-n2"), node=getattr(ns, "node", "n2"),
                             node_state=getattr(ns, "node_state", STATE), machine=getattr(ns, "machine", None) or os.uname()[1],
                             peers=tuple(getattr(ns, "peer", None) or ()))
 
@@ -2105,7 +2235,7 @@ def run_once(ns: argparse.Namespace, where: str, state_path: Path, alerts: Path,
     try:
         state = load(state_path)
         evs = step(state, select(where, ns.only), _ctx_for(ns, now, act=True), now, AlertDir(alerts), by=ns.by,
-                   webhook=os.environ.get(WEBHOOK_ENV) or None, checkpoint=lambda: save(state_path, state),
+                   webhook=settings.get(WEBHOOK_ENV) or None, checkpoint=lambda: save(state_path, state),
                    pass_s=PASS_S if where in ("node", "machine") else None)
         save(state_path, state)
         return state, evs

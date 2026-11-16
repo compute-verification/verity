@@ -121,7 +121,7 @@ def bits {M : ℕ} (ω : Fin M → Bool) (p : ℕ) : ℤ := if h : p < M then ((
 /-- The all-constant adversary for values `x` that do not depend on the noise. -/
 def constAdv (x : ℕ → ℕ → ℤ) : Adversary := ⟨fun u p => .const (x u p)⟩
 
-/-! ## Pinned statements -/
+/-! ## Guarantees -/
 
 /-- **R_word-NCP's bound**: `Pr[16·Σ_{u ∈ K'} n_u > cost/(1 − g₀)] ≤ Σ_u 2^−(g₀·n_u − F_u)`. -/
 def WordBound : Prop :=

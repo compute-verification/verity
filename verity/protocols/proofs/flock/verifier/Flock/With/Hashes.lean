@@ -1,4 +1,8 @@
-/-
+module
+
+public import Flock.Merkle
+
+/-!
 The verifier's hashes as an oracle. `Hashes M` is SHA-512, SHA-256 and BLAKE3 as actions of a verdict monad `M`, and the
 `…With` copies of the verifier (`Flock.With.Verify`, `Flock.With.Zk`) hash only through it: run in `V` with
 `Hashes.ofSha512 Sha512.hash` they are `Flock.verify` and `Flock.Zk.verify` (`Flock.With.Eq`), and run in a monad that
@@ -9,9 +13,6 @@ once from the key label with SHA-512 itself.
 Here: the oracle, and `Flock.Merkle`'s Merkle checks over it. A registered scheme's node and leaf go through the oracle
 (`MerkleScheme.opsWith`, by the registry's ids alone); a scheme the registry doesn't name keeps its own closures.
 -/
-module
-
-public import Flock.Merkle
 
 @[expose] public section
 

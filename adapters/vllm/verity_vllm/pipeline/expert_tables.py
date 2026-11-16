@@ -44,7 +44,7 @@ from verity_vllm.pipeline.serving_templates import shard_block
 from verity_vllm.records import expert_tables as XT
 from verity_vllm.records.expert_tables import SCHEMA, ExpertTables
 
-__all__ = ["NONCES", "SCHEMA", "TABLES_NONCE", "ExpertTables", "bnk_param", "bnk_words", "committer", "entries", "key_of", "mint_key",
+__all__ = ["NONCES", "SCHEMA", "TABLES_NONCE", "ExpertTables", "bnk_fields", "bnk_param", "bnk_words", "committer", "entries", "key_of", "mint_key",
            "nonces", "of_request", "program", "register", "served_fields", "shard_param", "shard_words", "table_param", "table_words",
            "tables_of"]
 
@@ -164,7 +164,7 @@ def entries(digest: str, words: np.ndarray, shape: Sequence[int], tables: Sequen
     each table committed at the rank's program ``digest`` and its ``nonce`` under ``key``; an embedding shard's over ``vocab``,
     the whole vocabulary's rows and the rank's first token."""
     from verity.protocols.proofs.spot.verifier.one_stage import registered as G
-    from verity_vllm.protocols.pouw.h1 import registered as H1R
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import registered_commit
 
     def rows(b: int, what: str, n: int) -> np.ndarray:
         if what == "vocab":
@@ -174,7 +174,7 @@ def entries(digest: str, words: np.ndarray, shape: Sequence[int], tables: Sequen
         E, N, K = (int(x) for x in shape)
         return table_words(words, what, E, N, K, 1, n, b)
 
-    return {param: H1R.commit(digest, param, rows(b, what, n), key, nonce[param],
+    return {param: registered_commit(digest, param, rows(b, what, n), key, nonce[param],
                               schema=G.SCHEMA_V2 if what == "bnk" else G.SCHEMA_SEG).entry() for b, param, what, n in tables}
 
 
@@ -286,6 +286,11 @@ def register(program_dir: str | None, checkpoint_dir: str, key: bytes, blocks: M
                            nonces=nonce).dump()
 
 
+def bnk_fields(program_dir: Path, rank: int) -> tuple[str, ...]:
+    """The rank's ``W_UK_T`` and ``W_UV`` fields, as ``weights/<label>@<K>``, for ``tp-register-tables --bnk``."""
+    raise NotImplementedError("vllm/compiler-wires-period-pieces: no /bnk value is registered on the served path yet")
+
+
 @dataclass(frozen=True, kw_only=True)
 class Options:
     """verity-vllm tp-register-tables --program-dir D --checkpoint-dir C --key K --block w13=1 --block w2=32 --out F [--stacks S,..]:
@@ -318,7 +323,7 @@ def main(o: Options) -> int:
     blocks = {}
     for b in o.block:
         proj, _, n = b.partition("=")
-        if not proj or not n.isdigit():
+        if not proj or not n.isdecimal():
             raise UsageError(f"--block {b!r}: PROJ=n")
         blocks[proj] = int(n)
     if not blocks and not o.shard and not o.bnk:

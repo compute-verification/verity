@@ -1,5 +1,5 @@
 """The step schedule, as the verifier's `Spot.Schedule` defines it, which the difftest's ``second_schedule`` holds this
-to: the replay blocks of a two-stage window as runs of positions of its requests, which the boundary registration's
+to: the replay blocks of a two-stage window as runs of positions of its requests, which the boundary docket's
 record commits before the first coin (``window.schedule``), each run ``{"request", "first_span", "spans",
 "first_position", "length"}``. Round 2 refuses a record whose schedule is no schedule of its replay blocks
 (``second-schedule``, `second_stage`); what one is, and each block's positions (`at`), are the Lean's (its module

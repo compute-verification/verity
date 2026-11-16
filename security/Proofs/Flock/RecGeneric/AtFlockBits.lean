@@ -305,8 +305,8 @@ theorem lin2_four_le {W Col T : Type} [DecidableEq Col] (H : Msg → Msg) (D : D
   have htc : (1 : ℝ) ≤ t * (cBe D x + setupLen D x + 2 * n) := by nlinarith
   have htn : (setupLen D x : ℝ) + 2 * n ≤ t * (setupLen D x + 2 * n) := le_mul_of_one_le_left hn0 ht1'
   have hd : ∀ ω, Ex (fun d : (Fin (D.V.k x) → Coin) × (Claims.Recursion.EO D I DO decO).C x =>
-      (Claims.Recursion.drawCost H D I DO decO P x ω d : ℝ)) ≤ t * cBe D x / 2 :=
-    Claims.Recursion.Ex_drawCost_le H D I DO decO hS x P t hrun
+      (Claims.Recursion.sampleCost H D I DO decO P x ω d : ℝ)) ≤ t * cBe D x / 2 :=
+    Claims.Recursion.Ex_sampleCost_le H D I DO decO hS x P t hrun
   have hp256 : (0 : ℝ) < 2 ^ (256 : ℝ) := by positivity
   have h256 : (2 : ℝ) ^ (256 : ℝ) = 2 * 2 ^ (255 : ℝ) := by
     rw [show (256 : ℝ) = 1 + 255 by norm_num, Real.rpow_add (by norm_num), Real.rpow_one]
@@ -463,7 +463,7 @@ variable [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {Col T : Type} [Decidab
   [DecidableEq Col']
 
 /-- **A rerun of `E_O`'s model costs at most `t·c_B/2 + L` calls on average**, at every tape: its compiled run's and
-`E_O`'s calls are a sample's, which average at most `t·c_B/2` (`Claims.Recursion.Ex_drawCost_le`), and its inner
+`E_O`'s calls are a sample's, which average at most `t·c_B/2` (`Claims.Recursion.Ex_sampleCost_le`), and its inner
 view's run's, searched and own calls are at most `L` at every rerun. -/
 theorem verModel_Ex_cost_le {H : Msg → Msg} {D : RecAt Coin} {Bd : Bound Coin Col T}
     {DO : Claims.Flock.Deploy Coin Col' T'} (hS : SessionAccepts (D.record Bd.IVStar)) (x : Msg) {Ω : Type}
@@ -477,11 +477,11 @@ theorem verModel_Ex_cost_le {H : Msg → Msg} {D : RecAt Coin} {Bd : Bound Coin 
       (((compDep D Bd DO).verModel IV H P x).cost ω u : ℝ)) ≤ t * cBe (D.record Bd.IVStar) x / 2 + L := by
   have hpt : ∀ u : (Fin ((compDep D Bd DO).V.k x) → Coin) × (compDep D Bd DO).EO.C x,
       (((compDep D Bd DO).verModel IV H P x).cost ω u : ℝ) ≤
-        (drawCost H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy Bd.deploy.decode) DO DO.decode P x ω u : ℝ) +
+        (sampleCost H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy Bd.deploy.decode) DO DO.decode P x ω u : ℝ) +
           L := by
     intro u
     have e : ((compDep D Bd DO).verModel IV H P x).cost ω u =
-        drawCost H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy Bd.deploy.decode) DO DO.decode P x ω u +
+        sampleCost H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy Bd.deploy.decode) DO DO.decode P x ω u +
           ((compDep D Bd DO).viewCalls IV H P x ω u).length + ((compDep D Bd DO).rerunCalls H P x ω u).length +
           ((compDep D Bd DO).ownAt H P x ω u).length := rfl
     have h := (Nat.cast_le (α := ℝ)).2 (hL ω u)
@@ -489,16 +489,16 @@ theorem verModel_Ex_cost_le {H : Msg → Msg} {D : RecAt Coin} {Bd : Bound Coin 
     push_cast at h ⊢
     linarith
   have hd : Ex (fun u : (Fin ((compDep D Bd DO).V.k x) → Coin) × (compDep D Bd DO).EO.C x =>
-      (drawCost H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy Bd.deploy.decode) DO DO.decode P x ω u : ℝ)) ≤
+      (sampleCost H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy Bd.deploy.decode) DO DO.decode P x ω u : ℝ)) ≤
         t * cBe (D.record Bd.IVStar) x / 2 :=
-    Ex_drawCost_le H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy Bd.deploy.decode) DO DO.decode hS x P t hrun ω
+    Ex_sampleCost_le H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy Bd.deploy.decode) DO DO.decode hS x P t hrun ω
   calc Ex (fun u : (Fin ((compDep D Bd DO).V.k x) → Coin) × (compDep D Bd DO).EO.C x =>
         (((compDep D Bd DO).verModel IV H P x).cost ω u : ℝ))
       ≤ Ex (fun u : (Fin ((compDep D Bd DO).V.k x) → Coin) × (compDep D Bd DO).EO.C x =>
-          (drawCost H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy Bd.deploy.decode) DO DO.decode P x ω u : ℝ) +
+          (sampleCost H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy Bd.deploy.decode) DO DO.decode P x ω u : ℝ) +
             (L : ℝ)) := Ex_mono hpt
     _ = Ex (fun u : (Fin ((compDep D Bd DO).V.k x) → Coin) × (compDep D Bd DO).EO.C x =>
-          (drawCost H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy Bd.deploy.decode) DO DO.decode P x ω u : ℝ)) +
+          (sampleCost H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy Bd.deploy.decode) DO DO.decode P x ω u : ℝ)) +
             (L : ℝ) := by rw [Ex_add, Ex_const]
     _ ≤ t * cBe (D.record Bd.IVStar) x / 2 + L := by linarith
 

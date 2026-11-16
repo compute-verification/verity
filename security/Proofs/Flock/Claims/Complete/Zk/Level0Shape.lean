@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.Claims.Complete.Shaped.Walk
 public import Proofs.Flock.Claims.Complete.ZkTables.Level0
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -52,9 +54,8 @@ length `Zk.decode` checks of its proof (`ZkTables.Level0.LgShaped`) and `t_pad` 
 
 * **Level 0's masked commitment by its shape** (`CommitOkW`, `commitRowsP_shapeW`, `openP_okW`): `CommitOk` and
   `openP_ok` at a row width `w`; `commitPZk`'s rows are `2^lanes + EXTRA_LANES` wide (`commitPZk_shape`).
-* **The `--zk` schedule** is one the walk follows (`zkSchedule_lig`): fast100's dimensions and levels above 0
-  (`zk_schedule_fast100`, `fast100_lig`), every level's seam (`zk_schedule_seams`), level 0's cap within its depth
-  (`zkSchedule_cap0`).
+* **The `--zk` schedule** is one the walk follows (`zkSchedule_lig`): every level's seam (`zk_schedule_seams`), and
+  its dimensions and each level's cap within its depth by the kernel's evaluation at either statement version.
 * **The lane phase** is walked on the run (`lforIn_invS`), keeping its lengths (`meas`) and, at its last coin, the
   padding's `t_pad` coefficients. **The rest** is plain's code from the split table on, walked on `Total.H` as
   `ligeritoP_shape` walks it and read off the run by determinism (`H_run`).
@@ -65,6 +66,8 @@ length `Zk.decode` checks of its proof (`ZkTables.Level0.LgShaped`) and `t_pad` 
 namespace FlockComplete.L0
 
 open Flock Transcript FlockComplete Replay Replay.Lg JsonRT FlockSoundness.Discharge
+
+variable {wideLeaf : Bool}
 
 /-! ## Level 0's masked commitment, by its shape -/
 
@@ -169,18 +172,18 @@ theorem openP_okW {sh : Shape} {ms : MerkleScheme} {lv : Level} {w : ℕ} {cm : 
 
 /-- **The walk follows the `--zk` schedule**: fast100's dimensions and levels above 0, every level's seam, and level
 0's cap within its depth. -/
-theorem zkSchedule_lig {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {v : Schedule × ℕ} (h : Zk.schedule m = .ok v) :
+theorem zkSchedule_lig {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {v : Schedule × ℕ} (h : Zk.schedule wideLeaf m = .ok v) :
     LigSched v.1 := by
-  obtain ⟨-, -, hm, hk0, -, ⟨hnm, -, -, -, hl4, -, -⟩, hseam, -, -⟩ :=
-    FlockSoundness.Discharge.ZkExec.zk_schedule_seams m v.1 v.2 h
-  obtain ⟨s₀, hf, ek, ee, es, el⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_fast100 h
-  obtain ⟨⟨-, h2', hdim, hcap, -, -⟩, hm₀⟩ := fast100_lig m s₀ hf
-  have hn₀ := (FlockSoundness.Refine.fast100_dims m s₀ hf).1.1
-  refine ⟨hk0, by omega, by omega, fun i hi => ?_, hseam, hl4⟩
-  rcases Nat.eq_zero_or_pos i with rfl | hi0
-  · exact (zkSchedule_cap0 h1 h2 h).1
-  · rw [el i hi0]
-    exact hcap i (by omega)
+  obtain ⟨-, -, -, hk0, -, ⟨-, hL, -, -, hl4, -, -⟩, hseam, -, -⟩ :=
+    FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ m v.1 v.2 h
+  have key : ∀ (w : Bool) (k : Fin 11), (match Zk.schedule w (k.val + 25) with
+      | .ok v => decide (v.1.n = v.1.k0 + v.1.ext + 3 * (v.1.levels.size - 1) ∧
+          ∀ i < v.1.levels.size, (v.1.levels.getD i default).cap ≤ (v.1.levels.getD i default).d)
+      | .error _ => false) = true := by
+    decide +kernel
+  have hkey := key wideLeaf ⟨m - 25, by omega⟩
+  simp only [show m - 25 + 25 = m by omega, h, decide_eq_true_eq] at hkey
+  exact ⟨hk0, by omega, hkey.1, hkey.2, hseam, hl4⟩
 
 /-! ## The walk -/
 

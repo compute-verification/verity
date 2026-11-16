@@ -1,6 +1,6 @@
 """serve-openai's admissions: what a request brings to the engine (`Admission`, and `Delta`, what goes back), and the order
 and the step they are added in (``--admit``). ``arrival`` adds each request to the engine as soon as the frontend has parsed
-it, in the API server's body-read order; ``release-order`` adds them in the network certifier's release order, so the advice
+it, in the API server's body-read order; ``release-order`` adds them in the network attester's release order, so the advice
 needn't carry the permutation between the two; ``tick`` also fixes the step each is added at, by the certified tick, so it
 needn't carry when each arrived either.
 
@@ -8,17 +8,17 @@ needn't carry when each arrived either.
 once the frontend holds every earlier-released request, each forwarded, refused or dropped, and holds it until then. There
 is no hold to a bucket boundary (the boundary saves no step bits).
 
-**What the network certifier sends.** Each request it releases carries ``x-verity-release: N``, N its 0-based index in the release
+**What the network attester sends.** Each request it releases carries ``x-verity-release: N``, N its 0-based index in the release
 order of its run (the certifier's ``Proxy.requests_released`` before the release counts it): dense, each N once, every
 released request numbered, a request a fault drops before its release unnumbered. With ``x-verity-release-run: ID`` (the
 certifier run's id, hex) the numbering is per run: a new ID starts a new order at 0, and what the old run still held is
-forwarded at once. The network certifier copies both onto the POST it sends the endpoint (`benchmarks/network_traces/
-active_replay.LiveServer`, and `warden_serve.py serve --watermark` beside it). The network certifier also sends
+forwarded at once. The network attester copies both onto the POST it sends the endpoint (`benchmarks/network_traces/
+network_attester_serve.py serve --watermark`). The network attester also sends
 ``x-verity-release-bucket: A``, the release's bucket counted from 0 at the run's origin, and the watermark: one
 ``POST /verity/watermark`` a run, naming it, whose chunked body has the line ``t n`` (`watermark_line`) once bucket t has
 closed, the releases of buckets up to t being exactly those numbered below n, followed on that line by each release of
 bucket t that its server connection lost on the way; its end ends the run. A frontend takes one such stream a run, and
-none that carries ``x-verity-release``, which the network certifier puts on every request it releases and never on its
+none that carries ``x-verity-release``, which the network attester puts on every request it releases and never on its
 own stream (`open_watermark`): any other POST to that route is answered 400, and feeds the gate nothing.
 
 What a request without the header gets: it is forwarded at once (``unordered``), as the served plan's probes are. A
@@ -44,7 +44,7 @@ Batch invariance keeps each row's values independent of its place.
 gate adds exactly the requests whose release bucket a has closed by then, (a + 1)·τ_b ≤ T_k, in release order. After a step
 that scheduled a token, T advances by τ_sat if vLLM's waiting queue is nonempty and by τ_free if it is empty; when nothing is
 running or waiting, T jumps to the close of the next release's bucket, so T_0 is the first release's. τ_b is the network
-certifier's bucket and τ_sat, τ_free the engine class's (`Tick`), registered with the class: a configuration, not a
+attester's bucket and τ_sat, τ_free the engine class's (`Tick`), registered with the class: a configuration, not a
 run-time choice. A release's bucket is the watermark's (the header is only checked against it), and the gate starts step k
 once it holds the watermark's line for the last bucket closed by T_k and every request numbered below that line's n but
 the ones a line names lost. The rest of each step is vLLM's own scheduler, unpatched: the gate holds a numbered request
@@ -62,9 +62,10 @@ scheduler policy other than FCFS (the waiting queue must be the admission order)
 Two frontends feed the gate: serve-openai's (`TickAdmit`, its watermark route in the server), and vLLM's own OpenAI server
 through `verity_vllm.pipeline.tick_plugin` (its ``--middleware``, which writes the releases and the watermark to a feed
 file, and a vLLM general plugin whose gate in the engine core process reads it). A request the gate drops is its
-frontend's to end: serve-openai's answers it with an error and aborts it, and refuses one that comes after its line
-(`TickAdmit`); under vLLM's own server nothing here does, and the request ends when vLLM aborts it on its connection's
-close, a lost release's connection being one that is closing, failed or ended.
+frontend's to end, and each refuses one that comes after its line with one sentence (`LOST`). serve-openai's answers the
+one in the engine with that error and aborts it (`TickAdmit`). vLLM's own server's is given the request's disconnect, on
+which vLLM aborts it as it does on its connection's close, and is then answered by the middleware: 400 where the server
+had begun no response, a stream ended with nothing more of it where its head had gone (`tick_plugin.TickFeed`).
 """
 from __future__ import annotations
 
@@ -83,6 +84,8 @@ from verity_vllm.engine.hooks import Hooks
 ADMIT = ("arrival", "release-order", "tick")
 RELEASE_HEADER, RUN_HEADER, BUCKET_HEADER = "x-verity-release", "x-verity-release-run", "x-verity-release-bucket"
 WATERMARK_PATH = "/verity/watermark"
+#: what either frontend answers a request whose release a watermark line named lost
+LOST = RELEASE_HEADER + ": {n} of run {run!r} was lost on the way to the server, as the watermark says"
 #: seconds between the gate's looks at its feed while the engine waits on it
 POLL_S = 0.002
 _ENGINE_ID = re.compile(r"^(?:cmpl|chatcmpl)-(.+)-\d+-[0-9a-f]{8}$")
@@ -113,7 +116,7 @@ class Admission:
     deliver: Callable[[Delta], None]
     brought: dict[str, Any]                  # the sampling fields it sent, as it sent them
     user: str | None = None
-    release: tuple[str, int] | None = None   # (the network certifier's run, the request's place in its release order)
+    release: tuple[str, int] | None = None   # (the network attester's run, the request's place in its release order)
     times: dict[str, float] = field(default_factory=dict)   # wall-clock stamps (telemetry): head, received, submitted, admitted
     ingress: dict[str, Any] = field(default_factory=dict, init=False)   # its ingress record, once the engine loop seeds and adds it
 
@@ -153,7 +156,7 @@ class ReleaseOrder:
         raw = headers.get(RELEASE_HEADER)
         if raw is None:
             return None
-        if not raw.strip().isdigit():
+        if not raw.strip().isdecimal():
             raise ValueError(f"{RELEASE_HEADER}: a non-negative integer, not {raw!r}")
         run, n = headers.get(RUN_HEADER, ""), int(raw)
         if run != self.run:
@@ -270,15 +273,17 @@ def keep_scheduler_rows(runner: Any, scheduler: Any) -> Hooks:
 
 
 def watermark_line(line: bytes, last: tuple[int, ...] | None = None) -> tuple[int, int, tuple[int, ...]]:
-    """(t, n, lost) of one watermark line, ``t n``, any lost releases and its newline, as the network certifier's own
-    reader reads it (`verity.protocols.accounting.certifier.verifier.release.read_watermark`): bucket t has closed, the releases of
+    """(t, n, lost) of one watermark line, ``t n``, any lost releases and its newline, as the network attester's own
+    reader reads it (`verity.protocols.resource_accounting.network.verifier.release.read_watermark`): bucket t has closed, the releases of
     buckets up to t are exactly those numbered below n, and each of ``lost`` is a release of bucket t that its server
     connection lost on the way, which won't come. `ValueError` unless it follows ``last``, the line before it (its
     (t, n)): t one past last's (0 first), n at least last's, and the lost rising from last's n to below n, so no line
     names a release an earlier line counted and each lost one is named once."""
     # Imported where a line is read, not with the module, which `tick_plugin` loads in each of vLLM's processes and
     # which imports only the stdlib and this package.
-    from verity.protocols.accounting.certifier.verifier.release import read_watermark
+    from verity.protocols.resource_accounting.network.verifier.release import (
+        read_watermark,
+    )
     return read_watermark(line, last)
 
 
@@ -288,17 +293,17 @@ def release_of(headers: Mapping[str, str]) -> tuple[str, int, int | None] | None
     raw = headers.get(RELEASE_HEADER)
     if raw is None:
         return None
-    if not raw.strip().isdigit():
+    if not raw.strip().isdecimal():
         raise ValueError(f"{RELEASE_HEADER}: a non-negative integer, not {raw!r}")
     bucket = headers.get(BUCKET_HEADER)
-    if bucket is not None and not bucket.strip().isdigit():
+    if bucket is not None and not bucket.strip().isdecimal():
         raise ValueError(f"{BUCKET_HEADER}: a non-negative integer, not {bucket!r}")
     return headers.get(RUN_HEADER, "").strip(), int(raw), None if bucket is None else int(bucket)
 
 
 @dataclass(frozen=True)
 class Tick:
-    """The certified tick's constants, in microseconds: the network certifier's bucket τ_b, and the engine class's step
+    """The certified tick's constants, in microseconds: the network attester's bucket τ_b, and the engine class's step
     times τ_sat (a step after which vLLM's waiting queue is nonempty) and τ_free (one after which it is empty)."""
 
     bucket_us: int
@@ -690,9 +695,9 @@ class Watermark:
 def open_watermark(headers: Mapping[str, str], runs: set[str], emit: Callable[[dict[str, Any]], Any]) -> Watermark:
     """The watermark stream a ``POST /verity/watermark`` of these lower-cased headers opens for the run they name, into
     ``emit``; ``runs`` holds the runs whose stream this frontend has had, and gets this one. `ValueError` (the frontend's
-    400), with nothing emitted, for the two POSTs that aren't the network certifier's stream. One that carries
-    ``x-verity-release`` is a client's request: the network certifier puts that header on every request it releases
-    and never on its own stream. And a run's second: the network certifier sends one a run, so a second, whether
+    400), with nothing emitted, for the two POSTs that aren't the network attester's stream. One that carries
+    ``x-verity-release`` is a client's request: the network attester puts that header on every request it releases
+    and never on its own stream. And a run's second: the network attester sends one a run, so a second, whether
     the first is still open or has ended, would be read beside it or after it, and its lost releases acted on."""
     if RELEASE_HEADER in headers:
         raise ValueError(f"{WATERMARK_PATH}: a POST that carries {RELEASE_HEADER} is a client's request, not the network "
@@ -717,8 +722,6 @@ class TickAdmit:
     names lost, which the open gate adds at once like any other: no admission order rests on which, since an open gate
     orders nothing. All of it runs on the HTTP server's event loop."""
 
-    LOST = RELEASE_HEADER + ": {n} of run {run!r} was lost on the way to the server, as the watermark says"
-
     def __init__(self, forward: Callable[[Any], None], abort: Callable[[str], None],
                  take: Callable[[dict[str, Any]], None]) -> None:
         self.forward, self.abort, self.take = forward, abort, take
@@ -735,7 +738,7 @@ class TickAdmit:
             return None
         run, n, bucket = rel
         if n in self.lost.get(run, ()):
-            raise ValueError(self.LOST.format(n=n, run=run))
+            raise ValueError(LOST.format(n=n, run=run))
         seen = self.seen.setdefault(run, set())
         if n in seen:
             raise ValueError(f"{RELEASE_HEADER}: {n} came twice in run {run!r}")
@@ -786,7 +789,7 @@ class TickAdmit:
         for n in lost:
             adm = self.submitted.get((run, n))
             if adm is not None:
-                adm.deliver(Delta([], "", error=self.LOST.format(n=n, run=run)))
+                adm.deliver(Delta([], "", error=LOST.format(n=n, run=run)))
                 self.abort(adm.engine_id)
 
     def summary(self) -> dict[str, Any]:

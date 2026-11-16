@@ -22,8 +22,10 @@ public import Definitions.Core.Expand
 public import Definitions.Core.Expand.Instances
 public import Definitions.Core.NaiveStrassen
 public import Definitions.Core.Site
+public import Definitions.Core.SiteSubtree
 public import Definitions.Core.ValueSalts
 public import Definitions.Core.MemCheck
+public import Definitions.Core.InProofs
 
 /-!
 # Core: the model every area states its guarantees in
@@ -39,16 +41,19 @@ the ones here.
 * Partitions: `Partition` (committed wires, a proof block's correctness), `Annotation`, `PrivatePartition`,
   `Formalism` (`(c, k)`-partitions and local description length).
 * What the developer commits: `RegisteredCircuit` (the registered circuit and `θ`), `Advice` (the advice root), `Site`
-  (the registered hardware and its registration).
+  (the registered hardware and its registration), `SiteSubtree` (a subtree of the Site, its places and its links as
+  the hardware model's). What an accepted registration gives the theorems is registration's, an accounting protocol
+  (`Definitions.Registration`).
 * Coins and soundness: `Game` (`Sound`, live-coin interactions), `Draw` (sampling designs), `Challenger`, `Decisive`.
 * Memory checking: `MemCheck` (a multiset's fingerprint and a key's print over a finite field).
+* A check moved inside proofs: `InProofs` (an accepted run leaves fewer than `K₀` proof blocks failing a check).
 * Word semantics: `Scalar`, `Prims`, `Fp32`, `TC` (the tensor cores); `NaiveStrassen` (two tilings in the tensor-core
   model).
 
 The guarantees are in `Guarantees` (read `Verity.Guarantees.SampleAfterRecorded` and `Verity.Guarantees.SoundBatch`
 first) and the named assumptions in `Assumptions`. This module, `Assumptions` and `Guarantees` are the spec: they import
 only one another and Mathlib, so their diff is everything a statement reviewer reads. The proofs and their lemmas are in
-`Security/Proofs/Core/`.
+`security/Proofs/Core/`.
 -/
 
 @[expose] public section

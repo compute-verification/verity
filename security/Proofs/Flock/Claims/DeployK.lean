@@ -210,7 +210,7 @@ theorem zkVerifyWithM_tables (hs : Hashes Flock.V) {spec : SessionSpec} {tabs : 
     ∃ (sess : RunRecord) (schs : Array (Schedule × ℕ)), Record.decodeWith hs spec record = .ok sess ∧
       tabs.size = spec.tables.size ∧ schs.size = tabs.size ∧
       ∀ (i : ℕ) (hi : i < tabs.size), ∃ (hs' : i < schs.size) (c₀ c₁ : ByteArray),
-        Zk.schedule tabs[i].m = .ok schs[i] ∧
+        Zk.schedule tabs[i].wideLeaf tabs[i].m = .ok schs[i] ∧
         Zk.verifyRepWith hs spec tabs[i] schs[i].1 schs[i].2 sess i 0 proofs[2 * i]! = .ok c₀ ∧
         Zk.verifyRepWith hs spec tabs[i] schs[i].1 schs[i].2 sess i 1 proofs[2 * i + 1]! = .ok c₁ := by
   unfold Zk.verifyWithM at h
@@ -910,7 +910,7 @@ theorem rep_zk (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt} {re
     (hl : liveOf spec record = .ok lv) :
     lv.streams.size = 2 * sts.size ∧ ∀ (k : ℕ) (hk : k < lv.streams.size),
       ∃ (sess : RunRecord) (sch : Schedule) (tPad : ℕ) (stream : StreamRec) (c : ByteArray),
-        sess.points = lv.points ∧ sess.points.size = spec.points ∧ Zk.schedule sts[k / 2]!.m = .ok (sch, tPad) ∧
+        sess.points = lv.points ∧ sess.points.size = spec.points ∧ Zk.schedule sts[k / 2]!.wideLeaf sts[k / 2]!.m = .ok (sch, tPad) ∧
         Zk.verifyRepWith hs spec (Setup.ofCircuit sts[k / 2]!) sch tPad sess (k / 2) (k % 2) proofs[k]! = .ok c ∧
         sess.streams.find? (fun x => x.name == s!"{spec.tables[k / 2]!}/rep{k % 2}") = some stream ∧
         List.Forall₂ (fun a b => a.n = b.n ∧ a.coins = b.coins) lv.streams[k].toList stream.rounds.toList := by

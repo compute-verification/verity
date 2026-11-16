@@ -1,9 +1,9 @@
-"""The Commit's coins from the auditor host's challenger: one challenge phase a Commit, which samples its openings
+"""The Commit's coins from the auditor device's challenger: one challenge phase a Commit, which samples its openings
 and its served C2 replay challenge after each run's root of record.
 
 * **Serving** (the Commit's ``--challenger-gate CMD`` and ``--challenger-peer NAME``; `of_options`): before its engine,
   the Commit reserves a challenge phase on the auditor's challenger gate (`ChallengerGate`: ``reserve --peer NAME --scheme SCHEME --families
-  families(runs)``, `verity/protocols/compose/device/live_challenger/auditor.py` on the auditor host, under the caller's own gate key). Once its
+  families(runs)``, `verity/protocols/compose/verifier/live_challenger/auditor.py` on the auditor device, under the caller's own gate key). Once its
   first instrumented run's root of record is fixed (rows-sha512's 64-byte root, `commit.step_rows`; a TP Commit's run
   root v2, `tp.run_root`), it opens that challenge phase on it (``open --session S --root R``): the gate signs the open entry
   binding the challenge phase to the root before the challenger serves a coin, and refuses a second challenge phase for the root, ever.
@@ -37,12 +37,23 @@ from collections.abc import Callable, Mapping, Sequence
 from types import SimpleNamespace
 from typing import Any
 
-from verity.protocols.proofs.spot.device import challenger as Ch
-from verity.protocols.proofs.spot.device import remote
-from verity.protocols.proofs.spot.device.challenger import CoinError, LiveOpening, live_reason
+from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
+from verity.protocols.proofs.spot.verifier.challenger import remote
+from verity.protocols.proofs.spot.verifier.challenger.challenger import (
+    CoinError,
+    LiveOpening,
+    live_reason,
+)
 
-from verity_vllm.protocols.pouw.h1 import challenger as PHC
-from verity_vllm.protocols.pouw.h1 import window as PHW
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+    challenger_carried,
+    connect_window,
+    lms_verify,
+    pins_head,
+    REPLY_FIELDS,
+    SESSION_FIELDS,
+    session_of,
+)
 
 SCHEME_TAG = "verity/vllm/commit-coins/v1"
 POSITIONS, IDENTITIES, REPLAY = "opening-positions", "opening-identities", "replay"
@@ -101,7 +112,7 @@ class ChallengerGate:
 
 
 class ChallengePhase:
-    """The Commit's challenge phase on the auditor host's challenger: reserved for `runs` runs (`reserve`), opened on the first
+    """The Commit's challenge phase on the auditor device's challenger: reserved for `runs` runs (`reserve`), opened on the first
     run's root of record (`draw` of run 0), a coin of each family a run, closed after the last (`close`)."""
 
     def __init__(self, gate: ChallengerGate, reserved: Mapping[str, Any], runs: int, address: Callable[[int], str] | None = None) -> None:
@@ -114,7 +125,7 @@ class ChallengePhase:
     @classmethod
     def reserve(cls, gate: ChallengerGate, peer: str, runs: int, **kw: Any) -> ChallengePhase:
         if runs < 1:
-            raise SystemExit("--challenger-gate draws the coins of the Commit's instrumented runs: not without one")
+            raise SystemExit("--challenger-gate flips the coins of the Commit's instrumented runs: not without one")
         return cls(gate, gate.call("reserve", "--peer", peer, "--scheme", SCHEME_TAG, "--families", json.dumps(families(runs))),
                    runs, **kw)
 
@@ -123,10 +134,10 @@ class ChallengePhase:
         if answer.get("commitment") is None:
             answer["commitment"] = self.gate.call("status", self.reserved["session"]).get("commitment")
         try:
-            self.given = PHC.session_of({k: v for k, v in answer.items() if k in (*PHC.SESSION_FIELDS, *PHC.REPLY_FIELDS)}) or {}
+            self.given = session_of({k: v for k, v in answer.items() if k in (*SESSION_FIELDS, *REPLY_FIELDS)}) or {}
         except ValueError as e:
             raise CoinError(f"the challenger gate's open answer: {e}") from e
-        self.client = PHW.connect(self._address(int(answer["port"])), self.given)
+        self.client = connect_window(self._address(int(answer["port"])), self.given)
         c = self.client.commitment
         if c.scheme != SCHEME_TAG or [list(f) for f in c.families] != families(self.runs):
             self.close()
@@ -141,12 +152,12 @@ class ChallengePhase:
             raise CoinError(f"the challenger's coins follow a {ROOT_BYTES}-byte root of record (rows-sha512, the TP run root "
                             f"v2), not this run's {len(root)}-byte root (vllm-v1)")
         if self.index >= self.runs:
-            raise CoinError(f"the Commit's session holds coins for {self.runs} runs, and each is drawn")
+            raise CoinError(f"the Commit's session holds coins for {self.runs} runs, and each is flipped")
         if self.client is None:
             self._open(root)
         i, self.index = self.index, self.index + 1
         openings = {f: self.client.open(f, i, root) for f in FAMILIES}
-        return {"source": CHALLENGER, "index": i, "root": root.hex(), "session": PHC.carried(self.given),
+        return {"source": CHALLENGER, "index": i, "root": root.hex(), "session": challenger_carried(self.given),
                 "commitment": self.client.commitment.to_json(), "keys": {f: o.coin.hex() for f, o in openings.items()},
                 "openings": {f: o.to_json() for f, o in openings.items()}}
 
@@ -168,7 +179,7 @@ def of_options(args: Any, runs: int, gate_run: Run | None = None) -> ChallengePh
     gate, peer = getattr(args, "challenger_gate", None), getattr(args, "challenger_peer", None)
     if bool(gate) != bool(peer):
         raise SystemExit("--challenger-gate and --challenger-peer go together: the gate's command and this machine's name in "
-                         "the auditor host's peers, where its challenger reaches the Commit")
+                         "the auditor device's peers, where its challenger reaches the Commit")
     if not gate or not peer:
         return None
     if getattr(args, "replay_challenge", None):
@@ -193,7 +204,7 @@ def _key(rc: Any, family: str) -> bytes:
     extra = getattr(rc, "extra", None)
     rec = extra.get("coins") if extra else None  # a run that holds no coins record drew none
     if not rec or rec.get("root") != bytes(rc.run_root).hex():
-        raise ValueError(f"run root {bytes(rc.run_root).hex()[:16]}: no coins drawn after it (commit_coins.draw)")
+        raise ValueError(f"run root {bytes(rc.run_root).hex()[:16]}: no coins flipped after it (commit_coins.draw)")
     return bytes.fromhex(rec["keys"][family])
 
 
@@ -234,9 +245,9 @@ def tp_keys(rec: Mapping[str, Any]) -> tuple[bytes, bytes]:
 
 
 def reason(runs: Sequence[Mapping[str, Any]], roots: Sequence[bytes], heads: Sequence[Any], directory: Any,
-           key: Ch.ChallengerKey, verify: Ch.Verify = PHC.lms_verify, *, pins: Sequence[Any] | None,
+           key: Ch.ChallengerKey, verify: Ch.Verify = lms_verify, *, pins: Sequence[Any] | None,
            main: Sequence[str] | None) -> str | None:
-    """Why the Commit's coins (`runs`, each instrumented run's ``coins`` record, in order) aren't the auditor host's
+    """Why the Commit's coins (`runs`, each instrumented run's ``coins`` record, in order) aren't the auditor device's
     challenger's, sampled after `roots` (each run's root of record as the verifier holds it); None when they are. The
     challenge phase is read from `directory` (its ``out/`` from the gate's ``fetch``) and the ledger from `heads` (every head
     published, each a ``windows.jsonl``), under `key`, the challenger key the deployment pins, the host's pins log
@@ -245,7 +256,7 @@ def reason(runs: Sequence[Mapping[str, Any]], roots: Sequence[bytes], heads: Seq
     if not runs or len(runs) != len(roots):
         return f"the Commit's coins name {len(runs)} runs' draws, not one for each of its {len(roots)} runs of record"
     if any(r.get("source") != CHALLENGER for r in runs):
-        return ("the Commit's coins were drawn in its own process, not by the auditor host's challenger: a measurement, "
+        return ("the Commit's coins were flipped in its own process, not by the auditor device's challenger: a measurement, "
                 "which credits nothing")
     roots = [bytes(r) for r in roots]
     if any(len(r) != ROOT_BYTES for r in roots):
@@ -253,7 +264,7 @@ def reason(runs: Sequence[Mapping[str, Any]], roots: Sequence[bytes], heads: Seq
     window = {"root": roots[0].hex()}
     try:
         lines = Ch.ledger_head([remote.ledger_lines(p) for p in heads], key, verify)
-        audited = Ch.pinned_session(lines, window, key, PHC.pins_head(pins), None if main is None else list(main),
+        audited = Ch.pinned_session(lines, window, key, pins_head(pins), None if main is None else list(main),
                                     verify)
         trusted, received = remote.trusted_session(directory, heads, window, key, verify)
     except CoinError as e:
@@ -271,7 +282,7 @@ def reason(runs: Sequence[Mapping[str, Any]], roots: Sequence[bytes], heads: Seq
     for f in FAMILIES:
         if tuple(received.get(f, ())) != tuple(roots):
             return (f"the challenger's log shows its {f} coins released after roots other than the runs' roots of record, "
-                    "in order: a coin drawn before its run's root, or after another")
+                    "in order: a coin flipped before its run's root, or after another")
     for i, (run, root) in enumerate(zip(runs, roots)):
         openings, keys = run.get("openings"), run.get("keys")  # a record with neither block holds no family's opening or key
         for f in FAMILIES:

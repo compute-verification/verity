@@ -264,7 +264,7 @@ def ligeritoPadZK (A : Arith F K) {np e : ℕ} (P : Pads0 np e) (sch : Schedule)
       let msg ← recv (K × K)
       let (initial, s) ← foldRoundsZK A P sch.k0 0 s (fromMsgL (unmask A P 0 msg) s)
       let ev ← recv (Fin e → K)
-      let ρ ← drawKs A e
+      let ρ ← sampleKs A e
       let T' ← recv K
       let ybar ← recv (Fin t → K)
       let row := s + ∑ i, ρ i • (cK (ev i) + padK A (P.ev i 0) (P.ev i 1)) - cK T'

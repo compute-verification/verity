@@ -1,14 +1,14 @@
 """The build family: the check's steps that build the Flock verifier and run what it built, and Flock's Rust, as
-`tools/verity/check/check.py` runs them (its `lean_steps` and `groups`), each step one task.
+`tools/check/check.py` runs them (its `lean_steps` and `groups`), each step one task.
 
 - `lean-build:verity/protocols/proofs/flock/verifier`: `lake build` of the Lean verifier, which reads its package and the packages of
   the tree it requires by path; its outputs are the executables its lakefile's
   `defaultTargets` name, each at its path in a built tree (`.lake/build/bin/<exe>`, where the suites that run them look), and
   the rest of the build, each of those packages' `.lake/build` in one archive (`TREE`, its var `builds` the packages).
-- `lean-unit-cut:verity/protocols/proofs/flock/prover/agreement/unit_cut_agree.py`: the script on the flock-verify it reads, the Lean partition
+- `lean-unit-cut:verity/protocols/proofs/flock/prover/agreement/unit_cut_agree.py`: the script on the Lean verifier it reads, the Lean partition
   check's conformance with `verity.circuits.partition`; its inputs are the script's import closure (`test_file.Imports`: it
   reads no data), its output the script's result.json.
-- `lean-agreement:verity/protocols/proofs/flock/prover/agreement`: `check.py --lean-agreement` on the flock-verify it reads, against upstream's Rust
+- `lean-agreement:verity/protocols/proofs/flock/prover/agreement`: `check.py --lean-agreement` on the Lean verifier it reads, against upstream's Rust
   verifier on the upstream build and inputs `upstream.json` pins; its inputs are its directory less its Markdown, which no
   script there reads, and what check.py reads; its output is ci.py's per-set verdicts.
 - `lean-suites:SUITE`: `suites.py` on one of the suites check runs after lean-build (`suites.AFTER_LEAN`, read from its source:
@@ -43,51 +43,56 @@ LEAN = "verity/protocols/proofs/flock/verifier"
 VERIFIER = "verity/protocols/proofs/flock/prover/agreement"
 FLOCK = "verity/protocols/proofs/flock/prover"
 UNIT_CUT = f"{VERIFIER}/unit_cut_agree.py"
-SUITES = "tools/verity/check/suites.py"
+SUITES = "tools/check/suites.py"
 #: the lean-suites suites listed in parts, {suite: parts}: `suites.py --files K/M` on a timing record that has none of their
 #: files (`lean_suites.run`), so each part is every M-th of the suite's test files in path order, a function of the commit alone,
 #: and the parts of one tree hold each file once whichever machines run them.  Each is as many as keep its parts near ten minutes
 #: at its files' recorded seconds, or near its longest file.  A suite that declares `[tool.verity.tests] parts` is in those
 #: parts by test id, as check runs it, and isn't listed here
-PARTS = {"verity-flock": 6, "pous-check": 3, "verity-pouw-check-difftest": 2,
-         "verity/protocols/accounting/certifier/verifier": 2}
+PARTS = {"pous-check": 3}
 #: a lean-suites task's disk: the suites build Lake packages of their own beside the verifier's
 SUITES_DISK_GB = 60
 #: where lean-build's output holding the rest of its build (`lean_build.TREE`: each `.lake/build` but the executables) is in a work
 #: directory
 TREE_PATH = "lean-build/lake-build.tar.gz"
 #: what `check.py --lean-agreement` reads of the tree outside the verifier's directory: check.py, the modules it loads as it
-#: starts and the job declaration and policy they read, with the Slack registry the declaration checks its handles against
-#: (`tests/test_build.py` holds this list to what an audit hook sees it open)
-CHECK_READS = (*(f"tools/verity/check/{m}" for m in ("check.py", "ci.toml", "common.py", "declaration.py", "live.py",
+#: starts (suites.py's suite layout rule among them) and the job declaration and policy they read, with the Slack registry the
+#: declaration checks its handles against (`tests/test_build.py` holds this list to what an audit hook sees it open)
+CHECK_READS = (*(f"tools/check/{m}" for m in ("check.py", "ci.toml", "common.py", "declaration.py", "live.py",
                                                      "policy.toml", "records.py", "settings.py", "shards.py", "slot.py",
                                                      "spans.py", "suites.py", "verdicts.py")),
+               "tools/research/src/research/suite_layout.py",
                ".agents/skills/using-slack/registry.json")
 
 
-def required(root: Path, files: list[str]) -> list[str]:
-    """The packages of the tree the Lean verifier requires by path from outside its directory, by its manifest (which lists
-    those its requirements require too) or its lakefile, each from the root and ending in "/" (`check.required_in_tree`)."""
+def required_dirs(root: Path, files: list[str]) -> set[Path]:
+    """The directories of the packages the Lean verifier requires by path, by its manifest (which lists those its
+    requirements require too) or its lakefile (`check.required_packages`)."""
     entries: list[dict] = []
     if f"{LEAN}/lake-manifest.json" in files:
         entries += json.loads((root / LEAN / "lake-manifest.json").read_text()).get("packages", [])
     if f"{LEAN}/lakefile.toml" in files:
         entries += tomllib.loads((root / LEAN / "lakefile.toml").read_text()).get("require", [])
-    top, own = root.resolve(), (root / LEAN).resolve()
-    dirs = {(own / p).resolve() for e in entries if (p := e.get("dir") or e.get("path")) is not None}
+    own = (root / LEAN).resolve()
+    return {(own / p).resolve() for e in entries if (p := e.get("dir") or e.get("path")) is not None}
+
+
+def required(root: Path, files: list[str]) -> list[str]:
+    """The packages of the tree the Lean verifier requires by path from outside its directory, each from the root and
+    ending in "/" (`check.required_in_tree`)."""
+    top, own, dirs = root.resolve(), (root / LEAN).resolve(), required_dirs(root, files)
     return sorted(d.relative_to(top).as_posix() + "/" for d in dirs if d.is_relative_to(top) and not d.is_relative_to(own))
 
 
 def package(root: Path, files: list[str]) -> list[str]:
     """The files `lake build` of the Lean verifier can read: its package's and those of the packages of the tree it requires
     by path (`required`), less each one's lock (`lean-audit.json`, which only the Lean check reads), their Markdown and any
-    Lake package nested in the verifier's while its lakefile requires nothing (`check.agreement_closure`'s cut)."""
+    Lake package nested in the verifier's directory that the verifier doesn't require (`check.agreement_closure`'s cut)."""
     pre = LEAN + "/"
     lakefiles = [f for f in files if f.startswith(pre) and f.rsplit("/", 1)[-1] in ("lakefile.toml", "lakefile.lean")]
     top = [f for f in lakefiles if f.count("/") == pre.count("/")]
-    nested = tuple(f.rsplit("/", 1)[0] + "/" for f in lakefiles if f not in top)
-    if any("require" in (root / f).read_text() for f in top):
-        nested = ()
+    need = required_dirs(root, files)
+    nested = tuple(d for f in lakefiles if f not in top if (root / (d := f.rsplit("/", 1)[0] + "/")).resolve() not in need)
     packages = (pre, *required(root, files))
     locks = {p + "lean-audit.json" for p in packages}
     return [f for f in files if f.startswith(packages) and f not in locks and not f.startswith(nested) and not f.endswith(".md")]
@@ -198,19 +203,19 @@ def tasks(root: Path, files: list[str]) -> list[dict]:
                 "vars": {"builds": " ".join([LEAN, *(d.rstrip("/") for d in required(root, files))])},
                 "inputs": package(root, files), "outputs": [*({"name": e, "path": f"{bin_}/{e}"} for e in exes),
                                                             {"name": TREE, "path": TREE_PATH}]})
-    if "flock-verify" in exes and UNIT_CUT in files:
+    if "verity-verify-proof" in exes and UNIT_CUT in files:
         out.append({"id": f"lean-unit-cut:{UNIT_CUT}", "kind": "lean-unit-cut", "env": "py",
                     "about": "the Lean partition check's codes against verity.circuits.partition's on random cuts",
-                    "vars": {"verify": f"{bin_}/flock-verify"}, "inputs": unit_cut_inputs(root, files),
-                    "reads": [{"task": build, "output": "flock-verify"}],
+                    "vars": {"verify": f"{bin_}/verity-verify-proof"}, "inputs": unit_cut_inputs(root, files),
+                    "reads": [{"task": build, "output": "verity-verify-proof"}],
                     "outputs": [{"name": "result", "path": "lean-unit-cut/result.json"}],
                     "resources": {"cores": 1, "mem_gb": 4, "disk_gb": 1}, "timeout_s": 900})
-    if "flock-verify" in exes and f"{VERIFIER}/upstream.json" in files:
+    if "verity-verify-proof" in exes and f"{VERIFIER}/upstream.json" in files:
         out.append({"id": f"lean-agreement:{VERIFIER}", "kind": "lean-agreement", "env": "py",
                     "about": "agree with upstream's Rust verifier on the pinned upstream build and inputs (ci.py)",
-                    "vars": {"verify": f"{bin_}/flock-verify"},
+                    "vars": {"verify": f"{bin_}/verity-verify-proof"},
                     "inputs": sorted({*(f for f in files if f.startswith(VERIFIER + "/") and not f.endswith(".md")),
                                       *(f for f in CHECK_READS if f in files)}),
-                    "reads": [{"task": build, "output": "flock-verify"}],
+                    "reads": [{"task": build, "output": "verity-verify-proof"}],
                     "outputs": [{"name": "sets", "path": "flock-agreement/ci/sets.json"}]})
     return out + suite_tasks(root, files, build, bin_, exes)

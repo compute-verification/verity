@@ -5,7 +5,7 @@ module
 
 Every coin a protocol uses comes from a **challenger**: an auditor-controlled device that flips coins only after the
 commitments they sample are recorded, and logs every coin it releases. A challenger may run on the same device as
-another auditor device: onsite, the network certifier's machine runs one; for remote, it is an auditor host. The
+another auditor device: onsite, the network attester's machine runs one; for remote, it is an auditor device. The
 verifier reads coins only from a challenger's log, and uses no randomness of its own.
 
 * `Challenger.Entry R C`: one entry of a challenger's log, a commitment `r : R` it recorded or a coin `c : C` it
@@ -24,7 +24,7 @@ challenger is impractical; there, randomness is derived from a challenger's coin
 
 * PoUW's per-matmul noise seeds, each hashed from the verification phase's salt (one challenger coin per phase), the
   call's position, and the committed roots of its operands;
-* the remote bandwidth audit's pass seeds within a phase, each hashed from the phase's challenger coin and the previous
+* PoUB's pass seeds within a phase, each hashed from the phase's challenger coin and the previous
   pass's root.
 
 Neither is a coin of this log: a statement about one reads it through the coin it is derived from.

@@ -9,6 +9,7 @@ import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.PearlC.Tile4Circuit
 public import Proofs.Pouw.PearlC.TileGap
+public import Proofs.Pouw.PearlC.Records
 
 /-!
 # `pc4`'s tile check computes the words (proofs)

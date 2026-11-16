@@ -8,7 +8,7 @@ import Mathlib.Data.Sym.Sym2.Init
 /-!
 # Fisch 2018/702, Claims 13–14, proved
 
-The definitions and statements are copies of the trusted ones (`Security/Definitions/Pous/Model/Pebbling.lean`,
+The definitions and statements are copies of the trusted ones (`security/Definitions/Pous/Model/Pebbling.lean`,
 `Pous.Guarantees.FischClaim13` and `FischClaim14`).
 
 * **Claim 13** from Claim 12 (`PousB2.b2_stacking`). Let `E` be the set of endpoints. If `|E| < εn/2`, pebble

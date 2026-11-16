@@ -375,8 +375,8 @@ def line (xs : List String) : String := " ".intercalate xs
 
 def sideStr (l : List Nat) : List String := toString l.length :: l.map toString
 
-/-- A layout's rows as `derive.netlist` writes them: the header, then rows `0 .. size - 1`. -/
-def netlist (d : D) (name : String) : String :=
+/-- A layout's rows as `derive.circuit_description` writes them: the header, then rows `0 .. size - 1`. -/
+def circuitDescription (d : D) (name : String) : String :=
   let side := fun (gs : Array (Nat × Nat × Array Nat)) =>
     toString gs.size :: gs.toList.flatMap fun (w, ws, bits) => ([w, ws, bits.size] ++ bits.toList).map toString
   let head := line (["flock-ir-unit/v2", name, toString d.size, toString d.const] ++ side d.inGroups ++ side d.outGroups)
@@ -420,7 +420,7 @@ def logicalText (done : Array D) (u : D) : String :=
     | none => let (a, b) := u.rows.getD c ([], []); line ([toString c] ++ sideStr a ++ sideStr b)
   "\n".intercalate (order.map rowStr ++ [line ["one", "1", "one", "1", "one"]]) ++ "\n"
 
-/-! ## Archives (`flock-verify layout`'s format) -/
+/-! ## Archives (`verity-verify-proof layout`'s format) -/
 
 /-- An archive's types, tables, layouts and unit: each type and layout checked as `BlockLayout.checkFile` checks it. -/
 def load (j : Json) : V ((String → Option CircuitType) × Array BlockLayout × (String → Option TableInfo) ×

@@ -10,7 +10,7 @@ form where it doesn't. Every output fits its size class: 16 bits a bf16 word, 32
     RmsNormOutSums_v1{C, S, G, N, EPS}  (x: Array<C, BF16>, w: Array<C, BF16>, s: Array<S, F32>) -> Array<C, BF16>
 
 (BF16 is ``Array<16, Value<1>>``, F32 ``Array<32, Value<1>>``.) `RmsNormRow`'s function is `RMSNormRef_v1{N, EPS, bf16}`'s
-(`verity.definitions.registry.ref_prims`, HF's ``LlamaRMSNorm``) on the GPU's operations, so a kernel matches it bit for bit
+(`verity_vllm.definitions.registry.ref_prims`, HF's ``LlamaRMSNorm``) on the GPU's operations, so a kernel matches it bit for bit
 with ``mul.rn.f32``, ``add.rn.f32``, ``div.rn.f32``, ``sqrt.rn.f32`` and ``cvt.rn.bf16.f32``:
 
 - ``acc = (((+0 + RN(x_0²)) + RN(x_1²)) + ...) + RN(x_{N-1}²)``, each x_i widened to f32 exactly, the sum in ascending order;
@@ -37,7 +37,7 @@ reads x, w and all S chunk sums. Its s is one parameter, so a statement may lay 
 `RmsSumSqPart{K}` of words iK to iK + K - 1.
 
 The square root is `ops.boolean.sqrt`'s `f32_sqrt_rn`, ``PouwF32SqrtRn_v1``'s builder, which PoUW's `PouwF32SqrtRn_v2` traces too
-(`verity.protocols.accounting.pouw.prover.circuit.boolean`).
+(`verity.protocols.resource_accounting.compute.pouw.prover.circuit.boolean`).
 """
 from __future__ import annotations
 

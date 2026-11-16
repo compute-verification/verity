@@ -14,7 +14,7 @@ import Proofs.Pous.StreamedWipe.Witnesses
 `StreamedWipeMeetsDisk` is `streamed_wipe_meets_server` on the one session over the server's tiers and its disks:
 `n + f` labels on `M_s = M + 8·D` bits, whose `R` is the other tiers' `M − 512·n` and the disks' `8·D − 512·f`. Its
 honest and nontrivial lemmas are at the session on the deployed H200's card (`StreamedWipe.h200`) and its disks as
-measured (`StreamedWipe.h200Disks`), in the pattern of `Security/Proofs/Pous/StreamedWipe/Witnesses.lean`.
+measured (`StreamedWipe.h200Disks`), in the pattern of `security/Proofs/Pous/StreamedWipe/Witnesses.lean`.
 -/
 
 @[expose] public section

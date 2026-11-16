@@ -90,7 +90,7 @@ from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.commitments.rowleaf import row_leaf, sha512_row_v2_digest
 from verity.commitments.scheme import DIGEST_BYTES
 
-from verity.protocols.accounting.pouw.prover.circuit import segment as SG
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import segment as SG
 
 #: a served call's values tree, and a filler's (no O)
 TAG = domains.POUW_DITHER_CALL
@@ -449,7 +449,7 @@ def leaf_row(sh: Shape, seeds: Mapping[str, bytes], A: Sequence[Sequence[int]], 
 # -- the leaves and the trees ----------------------------------------------------------------------------------------------------
 
 def prf_salt(ks: bytes, pos: int) -> bytes:
-    """commit_gpu's salt PRF (`benchmarks/pouw/commit_gpu/reference.py`): leaf `pos`'s hm96 salt under the prover's private
+    """commit_gpu's salt PRF (`verity/commitments/cuda/commit_gpu/reference.py`): leaf `pos`'s hm96 salt under the prover's private
     key `ks`, three SHA-512 blocks."""
     return b"".join(hashlib.sha512(ks + pos.to_bytes(8, "big") + r.to_bytes(8, "big")).digest() for r in range(3))
 

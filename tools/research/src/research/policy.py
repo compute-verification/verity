@@ -1,5 +1,5 @@
 """The landing's policy over what the runners (`suites.py`, `circuit-check`, check.py's steps) report (`PATH`,
-`tools/verity/check/policy.toml`): which ci.toml jobs are off the merge gate (`off_gate`) and which failures aren't taken as red
+`tools/check/policy.toml`): which ci.toml jobs are off the merge gate (`off_gate`) and which failures aren't taken as red
 until a deadline (`allow`):
 
     schema = "policy/v0"
@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-PATH = "tools/verity/check/policy.toml"
+PATH = "tools/check/policy.toml"
 SCHEMA = "policy/v0"
 #: what an allowance's ``id`` names: a suite, one of its tests, or one circuit-check failure by its key
 ID_RE = re.compile(r"suite [^\s:]+(::\S.*)?|circuit-check \S+/\S+ [^\s{]+")

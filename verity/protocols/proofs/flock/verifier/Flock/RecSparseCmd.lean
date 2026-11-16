@@ -9,7 +9,7 @@ public import Flock.HmRow
     flock-rec-sparse net NAME                the unit named `rec-sparse/n<NU>-e<ELL>-s<S_LOG>-t<T_LOG>` as text
     flock-rec-sparse check CIRCUIT NAME ...  `RecSparse.check` on the file's unit and on it renamed to each NAME
 
-`net` prints `RecSparse.unitLaid` as `flock-ir-unit/v2` text (`ir_lower.netlist`'s form). `check` parses the file as
+`net` prints `RecSparse.unitLaid` as `flock-ir-unit/v2` text (`ir_lower.circuit_description`'s form). `check` parses the file as
 `verity/flock-circuit` and prints one `{"unit", "ok"}` line for each name, with `"error"` when refused.
 -/
 
@@ -33,7 +33,7 @@ def cmd (args : List String) : IO UInt32 := do
       if !sh.valid then
         IO.eprintln s!"{name}: not a valid rec-sparse shape"
         return 2
-      IO.print (RecSparse.netlist name (RecSparse.unitLaid sh))
+      IO.print (RecSparse.circuitDescription name (RecSparse.unitLaid sh))
       return 0
     | none =>
       IO.eprintln s!"{name} is not rec-sparse/n<NU>-e<ELL>-s<S_LOG>-t<T_LOG>"

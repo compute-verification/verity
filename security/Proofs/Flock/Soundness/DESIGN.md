@@ -115,7 +115,7 @@ with `log2(√2·S_m)` = 10.7 at m = 22, 16.3 at m = 33 and 17.3 at m = 35 (§1.
    Per cap, the second costs `√(N_ℓ·Q_ℓ·Pr[conflict_ℓ])`, where `conflict_ℓ` is two runs sharing the prefix up to the
    cap opening one position differently: the rewinding lemma for any run distribution (`Rewinding.expect_bad_le`) at
    the cap, and Jensen over the prefixes above it (`Lock.leafE_off_le`).
-4. **Binding.** A conflict, like a self-clash, is a SHA-512 collision (`Merkle.opening_binding`), so
+4. **Binding.** A conflict, like a self-clash, gives a SHA-512 collision that `Merkle.openCollPair` computes (`Merkle.openCollPair_spec`), so
    `Pr[conflict_ℓ] ≤ Adv_ℓ`.
 5. **Rounds.** The kept bytes fix every message before its coins: the `Game` model itself (`send` before `coin`).
 
@@ -164,7 +164,7 @@ adopted form is "fill and decode"; it is proved (`Knowledge.lean`).
   output them.
 - **Binding to registered data.** Given the registrant's opening `(W, R)`, the extracted rows equal `W` wherever the
   statement links the root, or tree binding and then Halevi–Micali binding give a SHA-512 collision.
-- **Sampled audits need the binding error `δ_link` as well** (the lifetime-soundness desk study, §2 and §3).
+- **Sampled audits need the binding error `ε_bind` as well** (the lifetime-soundness desk study, §2 and §3).
   - Its collision finder runs the extractor, so the extractor's run count enters the collision-resistance bound.
   - The analysis is below.
 - **Risks:** `ValueBinding` until the `hm96` layout; bridging CompPoly, ArkLib and `Model` for the efficient decoder.
@@ -221,7 +221,7 @@ strict time.
   - **The value layer** is the plurality of what extractions recover behind each commit string (lifetime doc §2), a
     function of the state at registration. Behind one string, disagreeing with the plurality is at most as likely as
     two independent recoveries disagreeing: $r-p_{\max}\le r-\sum_v p_v^2/r$.
-  - **The link finder** for one commit string samples a unit set that reads it and runs an extraction. Two sampled proof blocks
+  - **The link finder** for one commit string samples a proof block set that reads it and runs an extraction. Two sampled proof blocks
     that open the string differently are already a collision. If one value was read, it runs extractions on such
     samples until one reads the string, $1/r$ of them in expectation, and collides if the value differs. That is
     $2(1+k)\,t$ evaluations in expectation (Wald). Weighting each string by the probability that a sample reads it gives
@@ -238,7 +238,7 @@ strict time.
     wires to commit strings (`ValueBinding`, from the `hm96` layout):
     $\delta_{\rm link}\le Q_s\big(2(1+k)t'/2^{256}+1/(eM)+k/(eR_w)\big)/(1-\rho)$. Waits give up after $R_w$ runs
     and the finder after $M$ further trials; $\rho$ bounds each table's $N_0/(ek)$.
-  - **$Q_s\le N_s$** is the expected number of commit strings the sampled proof blocks read, since the finder samples only unit
+  - **$Q_s\le N_s$** is the expected number of commit strings the sampled proof blocks read, since the finder samples only proof block
     sets that read its target. The record counts $Q_s$; with $N_s$ it would be $t\cdot2^{-205.1}$ for
     audit B.
 - **Strict time, proved** (`CROnly/`). The link finders stopped at a budget $q$ fixed in advance meet
@@ -249,7 +249,7 @@ strict time.
   whose session model receives `final_c'` before the inner proof. Improving substantially on the strict-time loss would
   improve the analysis of Schnorr's protocol (CDGSY24).
 - **The random-oracle column** (comparison, lifetime doc §7). The extractor reads the commit strings, the `hm96`
-  openings and the tables off the prover's queries, so `δ_tree`, `δ_link` and the knowledge term collapse into one
+  openings and the tables off the prover's queries, so `δ_tree`, `ε_bind` and the knowledge term collapse into one
   global $t^2/2^{511}$. `ASSUMPTIONS.md` keeps the random oracle as a cross-check only.
 - **Either way,** the table theorems (`table_sound_compiled`, `table_knowledge_sound_joint`) and `δ_tree` stand as
   proved under strict-time collision resistance. A2 enters only the value layer, and `CROnly` replaces it there by
@@ -529,13 +529,13 @@ If real concurrency is ever needed:
 - **Strategies, not `value`.** `value` can exceed every strategy's `prob` when a branch has no strategy. So the audit
   theorems take per-strategy hypotheses and give per-strategy conclusions (`Game/Prob.lean`), as `table_sound_exec`
   does.
-- **Knowledge soundness and the binding error.** Halevi–Micali leaves open to essentially any value, so a unit is incorrect
+- **Knowledge soundness and the binding error.** Halevi–Micali leaves open to essentially any value, so a proof block is incorrect
   relative to a committed trace defined by extraction. A sampled incorrect proof block is charged to one of two named events:
   extraction fails, or it disagrees with the trace (`cover`, from `correct_congr`). The oracle layer is the special
   case where the registration is the trace (`Partition.oracle`).
 - **Traces are total** (`Fin C.N → Bool`), and the committed set is derived. `Circuit.run` is the one evaluator,
   and every composition lemma is a strong induction over gate indices.
-- **Two-stage.** Second-stage coins are flipped for every coarse unit, and only the sampled proof blocks' coordinates are used.
+- **Two-stage.** Second-stage coins are flipped for every replay block, and only the sampled proof blocks' coordinates are used.
   Tightness and the dilution counterexample hold for any first-stage sampling design. Minimax uses the supporting line
   of `s ↦ C(n − s, K)` in `ℕ`, where real convexity fails.
 - **The Flock instantiation, oracle layer** (`Audit/Flock.lean`). `table_sound` splits into its `value` form
@@ -556,7 +556,7 @@ If real concurrency is ever needed:
     `loweringSoundB_of_place` discharges the lowering from each unit's `UnitPlace`. `unitPlace_of_setupH` gives
     the `UnitPlace` from the executable's accept step (`Stmt.setupH`), given the unit's instance in `C`.
   - The link event is the weakest one (every satisfying candidate disagrees). For the expected-time extractor's
-    analysis (`analysisBE`), `flock_batched_linkSoundE` discharges `δ_link` under A2 and `ValueBinding` (§3).
-  - Composed (`FlockLinked.lean`): `flock_batched_count_linked` and `flock_batched_drawn_linked` carry no `δ_link`
+    analysis (`analysisBE`), `flock_batched_linkSoundE` discharges `ε_bind` under A2 and `ValueBinding` (§3).
+  - Composed (`FlockLinked.lean`): `flock_batched_count_linked` and `flock_batched_sampled_linked` carry no `ε_bind`
     hypothesis. They rest on A2, `ValueBinding` and the lowering; the `_placed` forms take `UnitPlace`
     (row placement) for the lowering.

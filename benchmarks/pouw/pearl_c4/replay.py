@@ -1,5 +1,5 @@
 """Pearl-C4's reference replay of a device run's own transcript under the work sampling design (`clear_work.audit`), with
-Pearl-C4's domain and inert work (`schemes.pearl_c4`).  It opens rows and words and recomputes them in the clear, so its
+Pearl-C4's domain and inert work (`verity.protocols.experimental.pearl_c4.prover.pearl_c4`).  It opens rows and words and recomputes them in the clear, so its
 ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK proof, PouwCheck), never the protocol's
 verdict.
 
@@ -24,7 +24,7 @@ many fall outside D-SB's byte range (`device_scales`).
 samples, and on every opened tile (`clear_work.check_drawn`) A's and B's openings against the device's roots, the leaf's
 against the commitment, the tile's C̃ and U through the scalar reference to the device's leaf, zero filler rows, credited
 rows passing the per-row rules and R1 and excluded rows failing one of them, and the replayed inert work
-(`pearl_c4.tile_debit`: F1′'s base split under the exact noise distribution given the sampled E lines and the realised
+(`pearl_c4.tile_inert_work`: F1′'s base split under the exact noise distribution given the sampled E lines and the realised
 scale bytes, F2's int8 route on flat scales, identity atoms, dead × dead pairs, salt-dead or inert A forming, sub-grid
 blocks, D-24's pair-sparse row windows) under the inert-work bound, ρ = 1/400 of the credited cells' creditOf.  Its report
 carries every tile's inert work and the accept line (`accept_line`).
@@ -53,14 +53,14 @@ from pathlib import Path
 from verity_config.settings import of
 
 from verity.commitments import Commitment, MerkleTree, Opening
-from verity.protocols.accounting.pouw.prover.schemes import get
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c4 as F
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as W
-from verity.protocols.accounting.pouw.verifier import audit as au
-from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape, tagged
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import get
+from verity.protocols.experimental.pearl_c4.prover import pearl_c4 as F
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_work as W
+from verity.protocols.resource_accounting.compute.pouw.verifier import audit as au
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Context, Matmul, Shape, tagged
 
-# the work sampling design and the clear audit are a reference tool's (verity/protocols/accounting/pouw/prover/clear), imported by name
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "clear"))
+# the work sampling design and the clear audit are a reference tool's (verity/protocols/resource_accounting/compute/pouw/prover/clear), imported by name
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "clear"))
 import clear_audit as CA
 import clear_work as CW
 
@@ -242,9 +242,9 @@ class _Openings:
 
 def _check_with_inert_work(f: Callable, pick) -> tuple[CA.Verdict, dict | None]:
     scheme = f.args[0]
-    scheme.last_debit = None
+    scheme.last_inert_work = None
     v = f(pick)
-    return v, None if scheme.last_debit is None else scheme.last_debit.to_json()
+    return v, None if scheme.last_inert_work is None else scheme.last_inert_work.to_json()
 
 
 def verify(t: dict, workers: int = 1, scheme: F.PearlC4 | None = None) -> dict:
@@ -289,7 +289,7 @@ def verify(t: dict, workers: int = 1, scheme: F.PearlC4 | None = None) -> dict:
         if v.tile >= 0:
             ref = refs[v.tile]
             rows, cols = records[0].credited(ref.tile)
-            bound = F.CAP * cell * len(rows) * len(cols)
+            bound = F.INERT_SHARE * cell * len(rows) * len(cols)
             row |= {"rows": [ref.tile.rows[0], ref.tile.rows[-1]], "cols": [ref.tile.cols[0], ref.tile.cols[-1]],
                     "credited": [len(rows), len(cols)], "cap": str(bound)}
             if d is not None:

@@ -1370,8 +1370,8 @@ theorem PrBAbort_le_reg {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {
     have htrue : ∀ p ∈ D.calls x ((eoOut H D I DO decO P x ω (extend ρ a.1, a.2)).getD []) ++
         D.calls x ((eoOut H D I DO decO P x ω (extend (forkCoins j ρ ρ') a'.1, a'.2)).getD []), H p.1 = p.2 :=
       fun p hp => (List.mem_append.1 hp).elim (calls_true_of hT hN0 ω _ p) (calls_true_of hT hN0 ω _ p)
-    rcases innerF_vLog_sub_coll (decC := decC) hL hpc ω (extendDraw (ρ, a)) with h1 | hc1
-    · rcases innerF_vLog_sub_coll (decC := decC) hL hpc ω (extendDraw (forkCoins j ρ ρ', a')) with h2 | hc2
+    rcases innerF_vLog_sub_coll (decC := decC) hL hpc ω (extendSample (ρ, a)) with h1 | hc1
+    · rcases innerF_vLog_sub_coll (decC := decC) hL hpc ω (extendSample (forkCoins j ρ ρ', a')) with h2 | hc2
       · refine coll_or_reg_split htrue (fun p hp => ?_) h
         rcases List.mem_append.1 hp with hp | hp
         · rcases h1 p hp with h | h

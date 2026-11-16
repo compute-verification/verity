@@ -11,7 +11,7 @@ The counting oracle (`Hashes.counted h`) runs a `With` function and counts its S
 bound on it (`FlockComplete.Cost`): from any count, a run adds at most `n` calls. Each function the setup calls a
 bounded number of times is bounded here, for every `h`: the digests (`partitionDigestWith`, `publicDigestWith`), the
 decoders (`Program.decodeWith`, `Desc.parseWith`, `HmRow.parseWith`), the loads and samples of a public file, the
-partition's checks and laws, and the links check. Each proof walks the definition with `countC`'s rules: the walk
+partition's checks and sampling designs, and the links check. Each proof walks the definition with `countC`'s rules: the walk
 assigns each bound, and `omega` closes what it leaves. The walk is spelled out in each proof rather than kept as a
 macro, which only a `compile_time` module may hold.
 -/
@@ -519,8 +519,8 @@ theorem checkPartition_cost (c : Circuit) (obj : Option Json) :
     | none => simp only; exact countC.mono (countC.pure _) (Nat.zero_le _)
     | some o => simp only; exact countC.throw _ _
 
-theorem templateStrata_cost (law : String) (obj : Json) (program : ByteArray) :
-    countC.P (HmRow.templateStrataWith (Hashes.counted h) law obj program) 1 := by
+theorem templateStrata_cost (samplingDesign : String) (obj : Json) (program : ByteArray) :
+    countC.P (HmRow.templateStrataWith (Hashes.counted h) samplingDesign obj program) 1 := by
   apply countC.mono
   · unfold HmRow.templateStrataWith
     repeat (first
@@ -584,10 +584,10 @@ theorem templateStrata_cost (law : String) (obj : Json) (program : ByteArray) :
     all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *); all_goals omega
   · omega
 
-theorem stratifiedLaw_cost (obj : Json) (program : ByteArray) (k : Nat) :
-    countC.P (HmRow.stratifiedLawWith (Hashes.counted h) obj program k) 1 := by
+theorem stratifiedSamplingDesign_cost (obj : Json) (program : ByteArray) (k : Nat) :
+    countC.P (HmRow.stratifiedSamplingDesignWith (Hashes.counted h) obj program k) 1 := by
   apply countC.mono
-  · unfold HmRow.stratifiedLawWith
+  · unfold HmRow.stratifiedSamplingDesignWith
     repeat (first
       | extract_lets
       | (with_reducible apply throwBind)
@@ -649,10 +649,10 @@ theorem stratifiedLaw_cost (obj : Json) (program : ByteArray) (k : Nat) :
     all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *); all_goals omega
   · omega
 
-theorem workLaw_cost (obj : Json) (program : ByteArray) (k : Nat) (table : Array (String × Nat × Nat)) :
-    countC.P (HmRow.workLawWith (Hashes.counted h) obj program k table) 1 := by
+theorem workSamplingDesign_cost (obj : Json) (program : ByteArray) (k : Nat) (table : Array (String × Nat × Nat)) :
+    countC.P (HmRow.workSamplingDesignWith (Hashes.counted h) obj program k table) 1 := by
   apply countC.mono
-  · unfold HmRow.workLawWith
+  · unfold HmRow.workSamplingDesignWith
     repeat (first
       | extract_lets
       | (with_reducible apply throwBind)
@@ -1184,9 +1184,9 @@ theorem inLoadPublic_cost (tags : Tags) (c : Circuit) (pi : HmIn.Ports) (file : 
 -- a cost combinator per bind and loop of the unfolded sample header write (`repeat (first ...)`), `omega` at each leaf
 set_option maxHeartbeats 4000000 in
 theorem drawn_cost (c : Circuit) (pub : Public) (draw : Json) :
-    countC.P (HmRow.drawnWith (Hashes.counted h) c pub draw) 1 := by
+    countC.P (HmRow.sampledWith (Hashes.counted h) c pub draw) 1 := by
   obtain ⟨header, n, digests, outputs, sha, population, tables⟩ := pub
-  unfold HmRow.drawnWith
+  unfold HmRow.sampledWith
   cases tables
   all_goals
     dsimp only
@@ -1727,13 +1727,13 @@ theorem outParseCommit_flat (tags : Tags) (bytes : ByteArray) (tables : List (St
 -- leaf
 set_option maxHeartbeats 8000000 in
 /-- **`Stmt.setupHiddenWith`'s calls**, at a sampled statement of an untyped, flat circuit: ten for its parse, partition,
-load, sample, law, links or query and digests, and `checkPublic`'s, at the ports and rows its parse, load and sample return. -/
+load, sample, sampling design, links or query and digests, and `checkPublic`'s, at the ports and rows its parse, load and sample return. -/
 theorem setupHidden_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tables : List (String × ByteArray))
     (d : Json) (partition : Option Json) (program publicInputs : Option ByteArray) (PC : Circuit → Prop) (NP K : Nat)
     (ht : tags.typed = false) (hi : tags.isTmpl = false) (hPC : ∀ c, PC c → c.ports.size ≤ NP)
     (H1 : okC (HmOut.parseWith (Hashes.counted h) tags cf tables) PC)
     (H2 : ∀ c pi, PC c → okC (HmIn.loadPublicWith (Hashes.counted h) tags c pi pf) (PT K))
-    (H3 : ∀ c pi pop, PT K pop → okC (HmIn.drawnWith (Hashes.counted h) c pi pop d) (fun pub => PT K pub ∧ PN K pub)) :
+    (H3 : ∀ c pi pop, PT K pop → okC (HmIn.sampledWith (Hashes.counted h) c pi pop d) (fun pub => PT K pub ∧ PN K pub)) :
     countC.P (Stmt.setupHiddenWith (Hashes.counted h) tags cf pf coins tables (some d) partition program publicInputs)
       (10 + NP * perRow K) := by
   have hParse : ∀ {β : Type} {f : Circuit → CountV β} {m N : Nat}, (∀ c, PC c → countC.P (f c) m) → 2 + m ≤ N →
@@ -1742,9 +1742,9 @@ theorem setupHidden_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tabl
   have hLoad : ∀ c pi {β : Type} {f : Public → CountV β} {m N : Nat}, PC c → (∀ pop, PT K pop → countC.P (f pop) m) →
       1 + m ≤ N → countC.P (HmIn.loadPublicWith (Hashes.counted h) tags c pi pf >>= f) N :=
     fun c pi _ _ _ _ hc hf hN => bindQ (inLoadPublic_cost h tags c pi pf) (H2 c pi hc) hf hN
-  have hDrawn : ∀ c pi pop {β : Type} {f : Public → CountV β} {m N : Nat}, PT K pop →
+  have hSampled : ∀ c pi pop {β : Type} {f : Public → CountV β} {m N : Nat}, PT K pop →
       (∀ pub, PT K pub ∧ PN K pub → countC.P (f pub) m) → 1 + m ≤ N →
-      countC.P (HmIn.drawnWith (Hashes.counted h) c pi pop d >>= f) N :=
+      countC.P (HmIn.sampledWith (Hashes.counted h) c pi pop d >>= f) N :=
     fun c pi pop _ _ _ _ hp hf hN => bindQ (drawn_cost h _ pop d) (H3 c pi pop hp) hf hN
   -- at an open bound the walk assigns it (`2 + m`, `1 + m`); a sibling arm's `throw0` would otherwise fix it at `0`
   have hParseE : ∀ {β : Type} {f : Circuit → CountV β} {m : Nat}, (∀ c, PC c → countC.P (f c) m) →
@@ -1753,10 +1753,10 @@ theorem setupHidden_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tabl
   have hLoadE : ∀ c pi {β : Type} {f : Public → CountV β} {m : Nat}, PC c → (∀ pop, PT K pop → countC.P (f pop) m) →
       countC.P (HmIn.loadPublicWith (Hashes.counted h) tags c pi pf >>= f) (1 + m) :=
     fun c pi _ _ _ hc hf => hLoad c pi hc hf (Nat.le_refl _)
-  have hDrawnE : ∀ c pi pop {β : Type} {f : Public → CountV β} {m : Nat}, PT K pop →
+  have hSampledE : ∀ c pi pop {β : Type} {f : Public → CountV β} {m : Nat}, PT K pop →
       (∀ pub, PT K pub ∧ PN K pub → countC.P (f pub) m) →
-      countC.P (HmIn.drawnWith (Hashes.counted h) c pi pop d >>= f) (1 + m) :=
-    fun c pi pop _ _ _ hp hf => hDrawn c pi pop hp hf (Nat.le_refl _)
+      countC.P (HmIn.sampledWith (Hashes.counted h) c pi pop d >>= f) (1 + m) :=
+    fun c pi pop _ _ _ hp hf => hSampled c pi pop hp hf (Nat.le_refl _)
   have hCP : ∀ c pub, PC c → PT K pub ∧ PN K pub →
       countC.P (HmOut.checkPublicWith (Hashes.counted h) c pub) (NP * perRow K) :=
     fun c pub hc hp => countC.mono (checkPublic_cost h c pub K hp.1 hp.2) (Nat.mul_le_mul_right _ (hPC c hc))
@@ -1765,7 +1765,7 @@ theorem setupHidden_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tabl
   -- `if let some d := draw` binds its own `d`; only once that match reduces is the sampling design's `Except.map` at the theorem's
   -- `d`, where `generalize` finds it. A `split` the walk leaves unreduced shares one bound between its arms.
   try simp -zeta only
-  generalize Except.map (fun x => x.law) (Draw.UnitDraw.ofJson d) = s
+  generalize Except.map (fun x => x.samplingDesign) (Draw.UnitSample.ofJson d) = s
   cases hb : tags.bindings <;> cases partition <;> cases program <;>
     rcases s with e | (k | ⟨num, den⟩ | ⟨k, strata⟩ | ⟨k, strata⟩)
   all_goals
@@ -1776,10 +1776,10 @@ theorem setupHidden_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tabl
         | extract_lets
         | (with_reducible apply hParseE)
         | (with_reducible apply hLoadE)
-        | (with_reducible apply hDrawnE)
+        | (with_reducible apply hSampledE)
         | (with_reducible apply hParse)
         | (with_reducible apply hLoad)
-        | (with_reducible apply hDrawn)
+        | (with_reducible apply hSampled)
         | (with_reducible apply map_bind_cost)
         | (with_reducible apply throwBind)
         | (with_reducible apply Cost.bind)
@@ -1787,7 +1787,7 @@ theorem setupHidden_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tabl
         | (with_reducible apply hCP)
         | (with_reducible apply map_cost)
         | (with_reducible apply checkPartition_cost h)
-        | (with_reducible apply stratifiedLaw_cost h)
+        | (with_reducible apply stratifiedSamplingDesign_cost h)
         | (with_reducible apply deriveTemplate_cost h)
         | (with_reducible apply linksCheck_cost h)
         | (with_reducible apply qwordFinding_cost h)
@@ -1820,10 +1820,10 @@ theorem setupHidden_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tabl
           | extract_lets
           | (with_reducible apply hParseE)
           | (with_reducible apply hLoadE)
-          | (with_reducible apply hDrawnE)
+          | (with_reducible apply hSampledE)
           | (with_reducible apply hParse)
           | (with_reducible apply hLoad)
-          | (with_reducible apply hDrawn)
+          | (with_reducible apply hSampled)
           | (with_reducible apply map_bind_cost)
           | (with_reducible apply throwBind)
           | (with_reducible apply Cost.bind)
@@ -1831,7 +1831,7 @@ theorem setupHidden_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tabl
           | (with_reducible apply hCP)
           | (with_reducible apply map_cost)
           | (with_reducible apply checkPartition_cost h)
-          | (with_reducible apply stratifiedLaw_cost h)
+          | (with_reducible apply stratifiedSamplingDesign_cost h)
           | (with_reducible apply deriveTemplate_cost h)
           | (with_reducible apply linksCheck_cost h)
           | (with_reducible apply qwordFinding_cost h)
@@ -1863,8 +1863,8 @@ theorem setupHidden_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tabl
     · (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero]); first | omega
 
 
-theorem workLaw_cost' (obj : Json) (program : ByteArray) (k : Nat) (table : Array (String × Nat × Nat)) :
-    countC.P (HmRow.workLawWith (Hashes.counted h) obj program k table) 1 := workLaw_cost h obj program k table
+theorem workSamplingDesign_cost' (obj : Json) (program : ByteArray) (k : Nat) (table : Array (String × Nat × Nat)) :
+    countC.P (HmRow.workSamplingDesignWith (Hashes.counted h) obj program k table) 1 := workSamplingDesign_cost h obj program k table
 
 -- a cost combinator per bind and loop of `Stmt.setupTablesWith`'s unfolded body (`repeat (first ...)`), `omega` at each
 -- leaf
@@ -1882,10 +1882,10 @@ theorem setupTables_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (coun
       stratified closure publicInputs) (2 + B) := by
   unfold Stmt.setupTablesWith
   simp -zeta only [hc, hh, ↓reduceIte, decide_true, Bool.not_true, Bool.and_false, Bool.false_eq_true]
-  generalize Draw.UnitDraw.ofJson d = r
-  rcases r with e | ⟨law, population, units, cl⟩
+  generalize Draw.UnitSample.ofJson d = r
+  rcases r with e | ⟨samplingDesign, population, units, cl⟩
   rotate_left
-  · cases law
+  · cases samplingDesign
     all_goals
       dsimp -zeta only
       apply countC.mono
@@ -1895,8 +1895,8 @@ theorem setupTables_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (coun
           | (with_reducible apply Cost.bind)
           | (with_reducible apply bindAny)
           | (with_reducible apply hS)
-          | (with_reducible apply stratifiedLaw_cost h)
-          | (with_reducible apply workLaw_cost' h)
+          | (with_reducible apply stratifiedSamplingDesign_cost h)
+          | (with_reducible apply workSamplingDesign_cost' h)
           | (with_reducible apply sha_cost h)
           | (with_reducible intro _)
           | (with_reducible apply Cost.pure)
@@ -1928,8 +1928,8 @@ theorem setupTables_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (coun
             | (with_reducible apply Cost.bind)
             | (with_reducible apply bindAny)
             | (with_reducible apply hS)
-            | (with_reducible apply stratifiedLaw_cost h)
-            | (with_reducible apply workLaw_cost' h)
+            | (with_reducible apply stratifiedSamplingDesign_cost h)
+            | (with_reducible apply workSamplingDesign_cost' h)
             | (with_reducible apply sha_cost h)
             | (with_reducible intro _)
             | (with_reducible apply Cost.pure)
@@ -1964,8 +1964,8 @@ theorem setupTables_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (coun
         | (with_reducible apply Cost.bind)
         | (with_reducible apply bindAny)
         | (with_reducible apply hS)
-        | (with_reducible apply stratifiedLaw_cost h)
-        | (with_reducible apply workLaw_cost' h)
+        | (with_reducible apply stratifiedSamplingDesign_cost h)
+        | (with_reducible apply workSamplingDesign_cost' h)
         | (with_reducible apply sha_cost h)
         | (with_reducible intro _)
         | (with_reducible apply Cost.pure)
@@ -1997,8 +1997,8 @@ theorem setupTables_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (coun
           | (with_reducible apply Cost.bind)
           | (with_reducible apply bindAny)
           | (with_reducible apply hS)
-          | (with_reducible apply stratifiedLaw_cost h)
-          | (with_reducible apply workLaw_cost' h)
+          | (with_reducible apply stratifiedSamplingDesign_cost h)
+          | (with_reducible apply workSamplingDesign_cost' h)
           | (with_reducible apply sha_cost h)
           | (with_reducible intro _)
           | (with_reducible apply Cost.pure)

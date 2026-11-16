@@ -2,14 +2,14 @@ module
 
 public import Properties.Remote
 public import Proofs.Properties.Composition
-public import Proofs.Properties.Nci.DescVerdict
-public import Proofs.Properties.Nci.Baseline
-public import Proofs.Properties.Nci.BaselineSteps
-public import Proofs.Properties.Nci
-public import Proofs.Properties.Nci.Agrees
-public import Proofs.Nci.FitWitness
+public import Proofs.Properties.InferenceOnly.DescVerdict
+public import Proofs.Properties.InferenceOnly.Theta
+public import Proofs.Properties.InferenceOnly.ThetaSteps
+public import Proofs.Properties.InferenceOnly
+public import Proofs.Properties.InferenceOnly.Agrees
+public import Proofs.Slowdown.FitWitness
 public import Proofs.Properties.Spot
-public import Proofs.Nci.CompliesCK
+public import Proofs.InferenceOnly.CompliesCK
 public import Proofs.Core.Expand
 public import Std.Data.TreeMap.Raw.Lemmas
 import all Lean.Data.Json.Basic
@@ -20,19 +20,23 @@ import all Lean.Data.Json.Basic
 Remote's check is `Core.Composition.holdTies` of its tie over `Core.Composition.checkSame` over its components on the
 caller's blobs (`remote_check`), so an acceptance is `checkSame`'s with the tie held (`Properties.Composition.acceptTied`),
 and `checkSame`'s is `Core.Composition.check`'s (`checkSame_accept`), which `Properties.Composition.acceptMeans` reduces
-to each component accepting its own case, with sampled proofs' record the policy's (`strays_two`) and every
+to each component accepting its own case, with SPOT's record the policy's (`strays_two`) and every
 Commit record the period's windows name the policy's record too (`executionPhases_tied`). The policy's
-acceptance is `NciCheck.Baseline.evaluate`'s with the record naming the circuit (`policy_accept`), which is
-`NciCheck.Desc.evaluate`'s and θ's provenance (`BaselineSteps.evaluate_ok`), whose verdict `DescReports`,
-`DescWitnesses` and `BaselineProvenance` read; `Nci.SecurityProofs.constInputs_isCK` and `constInputs_expand_isCK`
+acceptance is `InferenceOnlyCheck.Theta.evaluate`'s with the record naming the circuit (`policy_accept`), which is
+`InferenceOnlyCheck.Desc.evaluate`'s and θ's provenance (`ThetaSteps.evaluate_ok`), whose verdict `DescReports`,
+`DescWitnesses` and `ThetaProvenance` read; `InferenceOnly.SecurityProofs.constInputs_isCK` and `constInputs_expand_isCK`
 give the `(c, k)`-partitions, of the declaration with its constants registered, which needs no assumption that it is
 Boolean or of positive fan-in; where it is, they are partitions of the declaration itself (`policyMet_old_clauses`).
 The parse, declaration and division an acceptance
 exhibits come from `DescAgrees` (the verdict is the gate-by-gate check's on an expansion) and `Decodes` (that check's
-verdicts are about a parse, a layout, a baseline and a division). Sampled proofs' acceptance is one-stage v1's check
-at the coins it read (`OneStage.checkAt`) at its params' form: in the one-stage form v2's, on the verdicts its own run of
-the verifier computed (`stage_zk_registered`), in the recursive form v1's live check on the inner statement's params
-after V*'s compiled check (`recursive_live`), so its record keeps R2 in either (`stage_registered_at`).
+verdicts are about a parse, a layout, a baseline and a division). SPOT's acceptance is one-stage v1's check
+at the coins it read (`OneStage.checkAt`), one-stage v2's on the verdicts its own run of the verifier computed
+(`stage_zk_registered`), so its record keeps R2 (`stage_registered_at`): SPOT's params decode to no other form that
+accepts (the recursive form is refused by name, the two-stage form refuses while its switch is off). It
+reads SPOT's acceptance through the caller's check (`VStar.Recursive.Caller.gate`), whose emptiness gives the caller's
+facts (`Properties.Spot.CallerHeld`): `CallerCheckSound`, which `stage_held` takes, is the forward half of
+`CallerCheckMeans` (`callerCheckSound_of_means`), which `callerCheckMeans` proves from the check's steps, so
+`acceptInferenceOnly` rests on no premise of the caller's (`callerCheckSound`).
 
 The policy's existence clause is neither empty nor trivial: `policyMet_honest` exhibits a declaration and a division into
 nonempty inference blocks that meet the policy, and `policyMet_nontrivial` one the policy refuses at every `α`. Both
@@ -50,8 +54,8 @@ namespace Properties.Remote.SecurityProofs
 open Core Core.Composition Verity
 open Lean (Json)
 open Flock.Program (Prog)
-open NciCheck.Properties (Parses Expands LaysOut Names Divides Meets ProvenanceHeld Reported Witnessed)
-open NciCheck.Protocol (instanceOf trustedOf)
+open InferenceOnlyCheck.Properties (Parses Expands LaysOut Names Divides Meets ProvenanceHeld Reported Witnessed)
+open InferenceOnlyCheck.Protocol (instanceOf trustedOf)
 
 private theorem getObjVal?_mkObj {l : List (String × Json)} (hd : l.Pairwise (fun a b => ¬ compare a.1 b.1 = .eq))
     {k : String} {v : Json} (hm : (k, v) ∈ l) : (Json.mkObj l).getObjVal? k = .ok v := by
@@ -59,20 +63,20 @@ private theorem getObjVal?_mkObj {l : List (String × Json)} (hd : l.Pairwise (f
   rw [Std.TreeMap.Raw.getElem?_ofList_of_mem (Std.ReflCmp.compare_self) hd hm]
   rfl
 
-theorem instance_program (p : NciCheck.Protocol.Params) (e : NciCheck.Protocol.Evidence) :
+theorem instance_program (p : InferenceOnlyCheck.Protocol.Params) (e : InferenceOnlyCheck.Protocol.Evidence) :
     (instanceOf p e).getObjVal? "program" = .ok (.str p.program) :=
   getObjVal?_mkObj (by simp) (by simp)
 
-theorem instance_gamma (p : NciCheck.Protocol.Params) (e : NciCheck.Protocol.Evidence) :
+theorem instance_gamma (p : InferenceOnlyCheck.Protocol.Params) (e : InferenceOnlyCheck.Protocol.Evidence) :
     (instanceOf p e).getObjVal? "gamma" = .ok p.gamma :=
   getObjVal?_mkObj (by simp) (by simp)
 
-theorem instance_alpha (p : NciCheck.Protocol.Params) (e : NciCheck.Protocol.Evidence) :
+theorem instance_alpha (p : InferenceOnlyCheck.Protocol.Params) (e : InferenceOnlyCheck.Protocol.Evidence) :
     (instanceOf p e).getObjVal? "alpha" = .ok p.alpha :=
   getObjVal?_mkObj (by simp) (by simp)
 
 /-- Two parses of one instance agree on its program, `Γ` and `α`. -/
-theorem parses_same {j : Json} {i i' : NciCheck.Instance} (h : Parses j i) (h' : Parses j i') :
+theorem parses_same {j : Json} {i i' : InferenceOnlyCheck.Instance} (h : Parses j i) (h' : Parses j i') :
     i.program = i'.program ∧ i.gamma = i'.gamma ∧ i.num = i'.num ∧ i.den = i'.den := by
   obtain ⟨hp, -, -, ⟨v, hv, hg⟩, ⟨a, b, hab, ha, hb⟩, -⟩ := h
   obtain ⟨hp', -, -, ⟨v', hv', hg'⟩, ⟨a', b', hab', ha', hb'⟩, -⟩ := h'
@@ -87,8 +91,8 @@ theorem parses_same {j : Json} {i i' : NciCheck.Instance} (h : Parses j i) (h' :
     Option.some.inj (ha.symm.trans ha'), Option.some.inj (hb.symm.trans hb')⟩
 
 /-- Every parse of an expansion of the policy's instance carries the policy's parameters. -/
-theorem verifier_own {p : NciCheck.Protocol.Params} {e : NciCheck.Protocol.Evidence} {j' : Json}
-    {i : NciCheck.Instance} (hx : Expands (instanceOf p e) j') (hi : Parses j' i) : VerifierOwn p i := by
+theorem verifier_own {p : InferenceOnlyCheck.Protocol.Params} {e : InferenceOnlyCheck.Protocol.Evidence} {j' : Json}
+    {i : InferenceOnlyCheck.Instance} (hx : Expands (instanceOf p e) j') (hi : Parses j' i) : VerifierOwn p i := by
   obtain ⟨i0, -, h0, -, theta', owner', h0', -, -⟩ := hx
   obtain ⟨hpr, hg, hn, hd⟩ := parses_same h0' hi
   obtain ⟨hp0, -, -, ⟨v, hv, hgv⟩, ⟨a, b, hab, ha, hb⟩, -⟩ := h0
@@ -107,9 +111,9 @@ theorem verifier_own {p : NciCheck.Protocol.Params} {e : NciCheck.Protocol.Evide
   · rw [ha, hn']
   · rw [hb, hd']
 
-/-- An expansion of the policy's instance, and what it parses to, carry the declared circuit's text. -/
-theorem expands_program {p : NciCheck.Protocol.Params} {e : NciCheck.Protocol.Evidence} {j' : Json}
-    {i : NciCheck.Instance} (hx : Expands (instanceOf p e) j') (hi : Parses j' i) : i.program = p.program := by
+/-- An expansion of the policy's instance, and what it parses to, carry the registered circuit's text. -/
+theorem expands_program {p : InferenceOnlyCheck.Protocol.Params} {e : InferenceOnlyCheck.Protocol.Evidence} {j' : Json}
+    {i : InferenceOnlyCheck.Instance} (hx : Expands (instanceOf p e) j') (hi : Parses j' i) : i.program = p.program := by
   obtain ⟨i0, -, h0, -, theta', owner', h0', -, -⟩ := hx
   have a : (instanceOf p e).getObjVal? "program" = .ok (.str i0.program) := h0.1
   rw [instance_program] at a
@@ -152,29 +156,29 @@ theorem strays_none {ss : List String} {cs : List Protocol} {ev : List Case} {s 
 /-- Remote's check on the caller's blobs is its tie held over `checkSame` over its components on them. -/
 theorem remote_check (blobs : Array ByteArray) (ps : List Named) (c : ByteArray) (ev : List Case) :
     (Core.Remote.protocol.on blobs).check ps c ev =
-      holdTies [Core.Remote.windows] ev (checkSame "verity/remote/v0"
+      holdTies [Core.Remote.executionPhases] ev (checkSame "verity/remote/v0"
         ["verity/inference-only/v0", "verity/sampled-proofs/v1"]
-        [NciCheck.Protocol.protocol, PouwCheck.Period.protocol,
+        [InferenceOnlyCheck.Protocol.protocol, PouwCheck.Period.protocol,
           VStar.Recursive.Sampled.protocol.onBlobs (Blobs.ofArray blobs)] ps c ev) := rfl
 
-theorem id_policy : NciCheck.Protocol.protocol.id = "verity/inference-only/v0" := rfl
+theorem id_policy : InferenceOnlyCheck.Protocol.protocol.id = "verity/inference-only/v0" := rfl
 theorem id_monitoringPeriod : PouwCheck.Period.protocol.id = "verity/pouw/period/v1" := rfl
 theorem id_sampled (bs : Blobs) : (VStar.Recursive.Sampled.protocol.onBlobs bs).id = "verity/sampled-proofs/v1" := rfl
 
-/-- Sampled proofs' commitment and digest are the one-stage registration record's, on any blobs. -/
+/-- SPOT's commitment and digest are the one-stage registration record's, on any blobs. -/
 theorem digestOf_sampled (bs : Blobs) (b : ByteArray) :
     Properties.Composition.digestOf (VStar.Recursive.Sampled.protocol.onBlobs bs) b =
       Properties.Composition.digestOf Spot.OneStage.protocol b := rfl
 
-/-- What the policy's check accepts: a record naming the declared circuit, and a verdict of compliance of the check of
+/-- What the policy's check accepts: a record naming the registered circuit, and a verdict of compliance of the check of
 record. -/
-theorem policy_accept {p : NciCheck.Protocol.Params} {c : NciCheck.Protocol.Commitment}
-    {e : NciCheck.Protocol.Evidence} {pub : Unit} {prof : Json}
-    (h : NciCheck.Protocol.check p c e = .accept pub prof) :
-    NciCheck.Protocol.names p c = true ∧ ∃ out, NciCheck.Baseline.evaluate (instanceOf p e) (trustedOf p c) = .ok out ∧
+theorem policy_accept {p : InferenceOnlyCheck.Protocol.Params} {c : InferenceOnlyCheck.Protocol.Commitment}
+    {e : InferenceOnlyCheck.Protocol.Evidence} {pub : Unit} {prof : Json}
+    (h : InferenceOnlyCheck.Protocol.check p c e = .accept pub prof) :
+    InferenceOnlyCheck.Protocol.names p c = true ∧ ∃ out, InferenceOnlyCheck.Theta.evaluate (instanceOf p e) (trustedOf p c) = .ok out ∧
       out.getObjVal? "complies" = .ok (.bool true) := by
-  unfold NciCheck.Protocol.check at h
-  by_cases hn : NciCheck.Protocol.names p c = true
+  unfold InferenceOnlyCheck.Protocol.check at h
+  by_cases hn : InferenceOnlyCheck.Protocol.names p c = true
   · simp only [hn, Bool.not_true, Bool.false_eq_true, ite_false] at h
     refine ⟨hn, ?_⟩
     split at h
@@ -188,20 +192,20 @@ theorem policy_accept {p : NciCheck.Protocol.Params} {c : NciCheck.Protocol.Comm
     simp [hn] at h
 
 /-- The record names the circuit the program decodes to. -/
-theorem names_program {p : NciCheck.Protocol.Params} {c : NciCheck.Protocol.Commitment} {P : Prog}
-    (hn : NciCheck.Protocol.names p c = true) (hP : Flock.Program.decode p.program.toUTF8 = .ok P) :
-    NciCheck.Baseline.strAt c.record "program" = some (Flock.hexOf P.sha512) := by
-  unfold NciCheck.Protocol.names at hn
+theorem names_program {p : InferenceOnlyCheck.Protocol.Params} {c : InferenceOnlyCheck.Protocol.Commitment} {P : Prog}
+    (hn : InferenceOnlyCheck.Protocol.names p c = true) (hP : Flock.Program.decode p.program.toUTF8 = .ok P) :
+    InferenceOnlyCheck.Theta.strAt c.record "program" = some (Flock.hexOf P.sha512) := by
+  unfold InferenceOnlyCheck.Protocol.names at hn
   rw [hP] at hn
   simpa using hn
 
 /-- `PolicyMet` from its first clause, every inference block meeting both bounds: the rest follows
-(`Nci.CompliesRate`, and the partitions of the declaration with its constants registered by `constInputs_isCK` and
+(`InferenceOnly.CompliesRate`, and the partitions of the declaration with its constants registered by `constInputs_isCK` and
 `constInputs_expand_isCK`, on the division with its constants taken out). -/
 theorem policyMet_of_meets {d : RegisteredCircuit} {n : ℕ} {U : Partition d.D n} {Γ : ℕ} {α : ℝ}
     (h : ∀ u, Meets d U Γ α u) : PolicyMet d U Γ α :=
-  ⟨h, ⟨n, U, h⟩, fun h1 => ⟨n, U.constInputs, Nci.SecurityProofs.constInputs_isCK h h1⟩,
-    fun _ hW => ⟨n, U.constInputs.expand, Nci.SecurityProofs.constInputs_expand_isCK h hW⟩⟩
+  ⟨h, ⟨n, U, h⟩, fun h1 => ⟨n, U.constInputs, InferenceOnly.SecurityProofs.constInputs_isCK h h1⟩,
+    fun _ hW => ⟨n, U.constInputs.expand, InferenceOnly.SecurityProofs.constInputs_expand_isCK h hW⟩⟩
 
 /-- **`PolicyMet` keeps its earlier partition clauses**: where their antecedents hold, `d` Boolean, or of positive
 fan-in in bits with every computed gate 1 to `W` bits wide, `d` has no constant, so its partitions with its constants
@@ -224,52 +228,52 @@ theorem policyMet_old_clauses {d : RegisteredCircuit} {n : ℕ} {U : Partition d
     exact hP.reads u
 
 /-- **Honest witness of the policy's existence clause**: a declaration and a division into nonempty inference blocks
-that meet the policy, `Nci.SecurityProofs.FitWitness`'s five-gate circuit in its two one-gate windows, at `Γ = 1` and
+that meet the policy, `Slowdown.SecurityProofs.FitWitness`'s five-gate circuit in its two one-gate windows, at `Γ = 1` and
 `α = 3`. -/
 theorem policyMet_honest : ∃ (d : RegisteredCircuit) (n : ℕ) (U : Partition d.D n) (Γ : ℕ) (α : ℝ),
     0 < n ∧ (∀ u, (U.gates u).Nonempty) ∧ PolicyMet d U Γ α := by
-  have hs : ∀ u, Nci.SecurityProofs.FitWitness.decl.D.size (Nci.SecurityProofs.FitWitness.windows.gates u) = 1 := by
+  have hs : ∀ u, Slowdown.SecurityProofs.FitWitness.decl.D.size (Slowdown.SecurityProofs.FitWitness.serverBlocks.gates u) = 1 := by
     decide +kernel
-  refine ⟨Nci.SecurityProofs.FitWitness.decl, 2, Nci.SecurityProofs.FitWitness.windows, 1, 3, by norm_num,
+  refine ⟨Slowdown.SecurityProofs.FitWitness.decl, 2, Slowdown.SecurityProofs.FitWitness.serverBlocks, 1, 3, by norm_num,
     by decide +kernel, policyMet_of_meets fun u => ⟨(hs u).le, ?_⟩⟩
   rw [hs u, Nat.cast_one, mul_one]
-  exact Nci.SecurityProofs.FitWitness.reads_le u
+  exact Slowdown.SecurityProofs.FitWitness.reads_le u
 
 /-- **Nontrivial witness of the policy's existence clause**: the policy refuses a declaration and a division into
 nonempty inference blocks, the same windows at `Γ = 0`, at every `α`: each block is a gate of width 1. -/
 theorem policyMet_nontrivial : ∃ (d : RegisteredCircuit) (n : ℕ) (U : Partition d.D n),
     (∀ u, (U.gates u).Nonempty) ∧ ∀ α : ℝ, ¬ PolicyMet d U 0 α := by
-  refine ⟨Nci.SecurityProofs.FitWitness.decl, 2, Nci.SecurityProofs.FitWitness.windows, by decide +kernel,
+  refine ⟨Slowdown.SecurityProofs.FitWitness.decl, 2, Slowdown.SecurityProofs.FitWitness.serverBlocks, by decide +kernel,
     fun α h => ?_⟩
-  have hs : Nci.SecurityProofs.FitWitness.decl.D.size (Nci.SecurityProofs.FitWitness.windows.gates 0) = 1 := by
+  have hs : Slowdown.SecurityProofs.FitWitness.decl.D.size (Slowdown.SecurityProofs.FitWitness.serverBlocks.gates 0) = 1 := by
     decide +kernel
   have h0 := (h.1 0).1
   omega
 
 /-- What a verdict of compliance on the policy's instance gives, on each of its expansions. -/
-theorem policy_met {p : NciCheck.Protocol.Params} {e : NciCheck.Protocol.Evidence} {out : Json}
-    (hd : NciCheck.Desc.evaluate (instanceOf p e) = .ok out) (hc : out.getObjVal? "complies" = .ok (.bool true))
+theorem policy_met {p : InferenceOnlyCheck.Protocol.Params} {e : InferenceOnlyCheck.Protocol.Evidence} {out : Json}
+    (hd : InferenceOnlyCheck.Desc.evaluate (instanceOf p e) = .ok out) (hc : out.getObjVal? "complies" = .ok (.bool true))
     {P : Prog} (hP : Flock.Program.decode p.program.toUTF8 = .ok P) :
-    ∀ (j' : Json) (i : NciCheck.Instance) (d : RegisteredCircuit),
+    ∀ (j' : Json) (i : InferenceOnlyCheck.Instance) (d : RegisteredCircuit),
       Expands (instanceOf p e) j' → Parses j' i → LaysOut P d.D → Names i.theta d.θ → Divides i.owner d.𝓘 →
         VerifierOwn p i ∧ PolicyMet d d.𝓘 i.gamma ((i.num : ℝ) / i.den) := by
   intro j' i d hx hi hL hN hD
   have hP' : Flock.Program.decode i.program.toUTF8 = .ok P := expands_program hx hi ▸ hP
-  have hR := (NciCheck.Properties.SecurityProofs.DescReports _ _ hd).2 j' hx i P d hi hP' hL hN hD
+  have hR := (InferenceOnlyCheck.Properties.SecurityProofs.DescReports _ _ hd).2 j' hx i P d hi hP' hL hN hD
   exact ⟨verifier_own hx hi, policyMet_of_meets (hR.2.2.1.1 hc)⟩
 
 /-- What the policy's acceptance establishes about its decoded case. -/
-theorem policyHeld {p : NciCheck.Protocol.Params} {c : NciCheck.Protocol.Commitment}
-    {e : NciCheck.Protocol.Evidence} {pub : Unit} {prof : Json}
-    (h : NciCheck.Protocol.check p c e = .accept pub prof) : PolicyHeld p c e := by
+theorem policyHeld {p : InferenceOnlyCheck.Protocol.Params} {c : InferenceOnlyCheck.Protocol.Commitment}
+    {e : InferenceOnlyCheck.Protocol.Evidence} {pub : Unit} {prof : Json}
+    (h : InferenceOnlyCheck.Protocol.check p c e = .accept pub prof) : PolicyHeld p c e := by
   obtain ⟨hn, out, hb, hc⟩ := policy_accept h
-  obtain ⟨hd, -⟩ := NciCheck.Properties.SecurityProofs.BaselineSteps.evaluate_ok _ _ _ hb
-  obtain ⟨⟨j', hx⟩, hev⟩ := NciCheck.Properties.SecurityProofs.DescAgrees _ _ hd
+  obtain ⟨hd, -⟩ := InferenceOnlyCheck.Properties.SecurityProofs.ThetaSteps.evaluate_ok _ _ _ hb
+  obtain ⟨⟨j', hx⟩, hev⟩ := InferenceOnlyCheck.Properties.SecurityProofs.DescAgrees _ _ hd
   obtain ⟨i, P, hpi, hP', D, hL, ⟨θ, hθ, hθin⟩, n, U, hD⟩ :=
-    NciCheck.Properties.SecurityProofs.Decodes _ _ (hev j' hx)
+    InferenceOnlyCheck.Properties.SecurityProofs.Decodes _ _ (hev j' hx)
   have hP : Flock.Program.decode p.program.toUTF8 = .ok P := expands_program hx hpi ▸ hP'
   let d : RegisteredCircuit := .ofPartition D θ hθin n U
-  exact ⟨P, hP, names_program hn hP, NciCheck.Properties.SecurityProofs.BaselineProvenance _ _ _ hb,
+  exact ⟨P, hP, names_program hn hP, InferenceOnlyCheck.Properties.SecurityProofs.ThetaProvenance _ _ _ hb,
     ⟨j', i, d, hx, hpi, hL, hθ, hD, policy_met hd hc hP j' i d hx hpi hL hθ hD⟩, policy_met hd hc hP⟩
 
 /-- What one-stage v1's check at any coins gives on acceptance: its record keeps R2 against the audit's own
@@ -281,27 +285,20 @@ theorem stage_registered_at {p : Spot.OneStage.Params} {c : Spot.OneStage.Commit
   unfold Spot.OneStage.checkAt at h
   split at h
   · cases h
-  · obtain ⟨law, d, n, hreg, -⟩ := Properties.Spot.acceptMeans _ _ _ _ _ h
+  · obtain ⟨samplingDesign, d, n, hreg, -⟩ := Properties.Spot.acceptMeans _ _ _ _ _ h
     exact hreg.2.1
 
-/-- What one-stage v1's live check gives on acceptance: its record keeps R2 against the audit's own verifier. -/
-theorem stage_registered {p : Spot.OneStage.Params} {c : Spot.OneStage.Commitment}
-    {e : Spot.OneStage.Evidence} {pub : Spot.OneStage.Public} {prof : Integrity}
-    (h : Spot.OneStage.checkLive p c e = .accept pub prof) :
-    Properties.Spot.R2 c.record p.verifier := by
-  unfold Spot.OneStage.checkLive Core.atCoins at h
-  split at h
-  · exact stage_registered_at h
-  · cases h
-
 /-- One-stage v2's check at the coins it read accepts only where v1's check accepts at them, on the verdicts its own
-run of the verifier computed. -/
+run of the verifier computed, in either form: the one statement's run, or the per-member run. -/
 theorem stage_zk_at {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment} {ξ : ByteArray}
     {e : Spot.OneStageZk.Evidence} {bs : Blobs} {pub : Spot.OneStage.Public} {prof : Integrity}
     (h : Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     ∃ r : Spot.OneStageZk.Run,
       Spot.OneStage.checkAt p.base c (some ξ) { e.base with verdicts := r.out } = .accept pub prof := by
-  replace h := (Spot.OneStageZk.checkBlobsAt_accept h).1
+  rcases Spot.OneStageZk.checkBlobsAt_accept h with ⟨-, -, h⟩ | ⟨ms, sts, -, -, h⟩
+  swap
+  · obtain ⟨r, -, -, hc⟩ := Spot.OneStageZk.checkMembersAt_accept h
+    exact ⟨r, hc⟩
   unfold Spot.OneStageZk.checkOneAt at h
   dsimp only at h
   split at h
@@ -328,19 +325,6 @@ theorem stage_zk_registered {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Comm
   · obtain ⟨_, hr⟩ := stage_zk_at h
     exact stage_registered_at hr
   · cases h
-
-/-- The recursive audit accepts only where one-stage v1 accepts on the inner statement's params, with the verdicts
-V*'s compiled check computes. -/
-theorem recursive_live {q : VStar.Recursive.Params} {c : Spot.OneStage.Commitment}
-    {e : VStar.Recursive.Evidence} {bs : Blobs} {pub : Spot.OneStage.Public} {prof : Integrity}
-    (h : VStar.Recursive.checkBlobs q c e bs = .accept pub prof) :
-    ∃ e₀, Spot.OneStage.checkLive q.base c e₀ = .accept pub prof := by
-  unfold VStar.Recursive.checkBlobs at h
-  split at h
-  · cases h
-  · split at h
-    · cases h
-    · exact ⟨_, h⟩
 
 /-- `digestOf` of a commitment that decodes is the digest of what it decodes to. -/
 theorem digestOf_ok {P : Protocol} {b : ByteArray} {c : P.Commitment} (h : P.commitment b = .ok c) :
@@ -413,14 +397,14 @@ theorem strays_two_none {P₁ P₂ P₃ : Protocol} {k₁ k₂ k₃ : Case} {c�
 named by their ids. -/
 theorem remote_check_ids (blobs : Array ByteArray) (ps : List Named) (c : ByteArray) (ev : List Case) :
     (Core.Remote.protocol.on blobs).check ps c ev =
-      holdTies [Core.Remote.windows] ev (checkSame "verity/remote/v0"
-        [NciCheck.Protocol.protocol.id, (VStar.Recursive.Sampled.protocol.onBlobs (Blobs.ofArray blobs)).id]
-        [NciCheck.Protocol.protocol, PouwCheck.Period.protocol,
+      holdTies [Core.Remote.executionPhases] ev (checkSame "verity/remote/v0"
+        [InferenceOnlyCheck.Protocol.protocol.id, (VStar.Recursive.Sampled.protocol.onBlobs (Blobs.ofArray blobs)).id]
+        [InferenceOnlyCheck.Protocol.protocol, PouwCheck.Period.protocol,
           VStar.Recursive.Sampled.protocol.onBlobs (Blobs.ofArray blobs)] ps c ev) := by
   rw [remote_check, id_policy, id_sampled]
 
 theorem ne_policy_stage (bs : Blobs) :
-    (NciCheck.Protocol.protocol.id == (VStar.Recursive.Sampled.protocol.onBlobs bs).id) = false := by
+    (InferenceOnlyCheck.Protocol.protocol.id == (VStar.Recursive.Sampled.protocol.onBlobs bs).id) = false := by
   rw [id_policy, id_sampled]; decide
 
 theorem ne_monitoringPeriod_stage (bs : Blobs) :
@@ -429,17 +413,17 @@ theorem ne_monitoringPeriod_stage (bs : Blobs) :
 
 /-- What remote's tie gives once the policy's commitment decodes: every Commit record the period's windows name, when
 they decode, has the policy's record's digest. -/
-theorem executionPhases_tied {kI kW kS : Case} {cI : NciCheck.Protocol.Commitment}
-    (hI : kI.id = NciCheck.Protocol.protocol.id) (hW : kW.id = PouwCheck.Period.protocol.id)
-    (hcI : NciCheck.Protocol.protocol.commitment kI.commitment = .ok cI)
-    (ht : Properties.Composition.Tied Core.Remote.windows [kI, kW, kS]) :
-    ∀ ds, Core.Remote.executionPhaseRecords kW = some ds → ∀ d ∈ ds, d = NciCheck.Protocol.protocol.digest cI := by
+theorem executionPhases_tied {kI kW kS : Case} {cI : InferenceOnlyCheck.Protocol.Commitment}
+    (hI : kI.id = InferenceOnlyCheck.Protocol.protocol.id) (hW : kW.id = PouwCheck.Period.protocol.id)
+    (hcI : InferenceOnlyCheck.Protocol.protocol.commitment kI.commitment = .ok cI)
+    (ht : Properties.Composition.Tied Core.Remote.executionPhases [kI, kW, kS]) :
+    ∀ ds, Core.Remote.executionPhaseRecords kW = some ds → ∀ d ∈ ds, d = InferenceOnlyCheck.Protocol.protocol.digest cI := by
   intro ds hds d hd
   rw [id_policy] at hI
   rw [id_monitoringPeriod] at hW
-  have nI : Properties.Composition.named [kI, kW, kS] (NciCheck.Protocol.protocolId, Core.Remote.policyRecord) =
-      some [NciCheck.Protocol.protocol.digest cI] := by
-    have hid : (kI.id == NciCheck.Protocol.protocolId) = true := by rw [hI]; decide
+  have nI : Properties.Composition.named [kI, kW, kS] (InferenceOnlyCheck.Protocol.protocolId, Core.Remote.policyRecord) =
+      some [InferenceOnlyCheck.Protocol.protocol.digest cI] := by
+    have hid : (kI.id == InferenceOnlyCheck.Protocol.protocolId) = true := by rw [hI]; decide
     simp [Properties.Composition.named, List.find?, hid, Core.Remote.policyRecord, hcI, Except.toOption]
     exact ⟨cI, rfl, rfl⟩
   have nW : Properties.Composition.named [kI, kW, kS] (PouwCheck.Period.protocolId, Core.Remote.executionPhaseRecords) =
@@ -447,12 +431,12 @@ theorem executionPhases_tied {kI kW kS : Case} {cI : NciCheck.Protocol.Commitmen
     have hI' : (kI.id == PouwCheck.Period.protocolId) = false := by rw [hI]; decide
     have hW' : (kW.id == PouwCheck.Period.protocolId) = true := by rw [hW]; decide
     simp [Properties.Composition.named, List.find?, hI', hW', hds]
-  have mI : (NciCheck.Protocol.protocolId, Core.Remote.policyRecord) ∈ Core.Remote.windows.names := by
-    simp [Core.Remote.windows]
-  have mW : (PouwCheck.Period.protocolId, Core.Remote.executionPhaseRecords) ∈ Core.Remote.windows.names := by
-    simp [Core.Remote.windows]
+  have mI : (InferenceOnlyCheck.Protocol.protocolId, Core.Remote.policyRecord) ∈ Core.Remote.executionPhases.names := by
+    simp [Core.Remote.executionPhases]
+  have mW : (PouwCheck.Period.protocolId, Core.Remote.executionPhaseRecords) ∈ Core.Remote.executionPhases.names := by
+    simp [Core.Remote.executionPhases]
   rcases ht with ⟨n, hn, e⟩ | ⟨r, hr⟩
-  · simp only [Core.Remote.windows, List.mem_cons, List.not_mem_nil, or_false] at hn
+  · simp only [Core.Remote.executionPhases, List.mem_cons, List.not_mem_nil, or_false] at hn
     rcases hn with rfl | rfl
     · rw [nI] at e; cases e
     · rw [nW] at e; cases e
@@ -464,8 +448,103 @@ theorem executionPhases_tied {kI kW kS : Case} {cI : NciCheck.Protocol.Commitmen
     cases hy
     rw [hyr d hd, ← hxr _ (List.mem_singleton_self _)]
 
-/-- What sampled proofs' accepted case gives, on any blobs: `StageHeld`, at the form its params name. -/
-theorem stage_held {k : Case} {n : Named} {bs : Blobs} (hp : k.params = n.params)
+/-! ## The caller's check's steps -/
+
+/-- The declared day's code (`VStar.Recursive.Caller.declaredCode`) is none exactly when `DeclaredDay` holds. -/
+theorem declaredCode_none_iff (rec : Json) (v : Spot.Docket.Verifier) :
+    (VStar.Recursive.Caller.declaredCode (Spot.getD rec "program") v.declared).isSome = false ↔
+      Properties.Spot.DeclaredDay rec v := by
+  unfold Properties.Spot.DeclaredDay VStar.Recursive.Caller.declaredCode
+  rcases v.declared with _ | ⟨day, ds⟩
+  · simp
+  · rcases h : Spot.Docket.declaredOf day ds with _ | ⟨p, _ | ⟨q, l⟩⟩
+    · simp [h]
+    · by_cases hp : Spot.jeq (Spot.getD rec "program") (.str p) = true <;> simp [h, hp]
+    · simp [h]
+
+/-- The pool chain (`VStar.Recursive.Caller.poolChained`) holds exactly when `PoolChained` does. -/
+theorem poolChained_iff (rec : Json) (v : Spot.Docket.Verifier) :
+    VStar.Recursive.Caller.poolChained rec v = true ↔ Properties.Spot.PoolChained rec v := by
+  unfold VStar.Recursive.Caller.poolChained Properties.Spot.PoolChained
+  rcases hp : v.pool with _ | p
+  · simp
+  · rcases he : Spot.Docket.entryOf rec p.pin with _ | e <;>
+      rcases ho : Spot.Docket.poolOpen rec v p with _ | ⟨d, r⟩ <;> simp [he, ho]
+    all_goals exact ⟨fun h => ⟨d, r, ⟨rfl, rfl⟩, h⟩, fun ⟨_, _, ⟨h1, h2⟩, h⟩ => by subst h1 h2; exact h⟩
+
+/-- The pool's codes (`VStar.Recursive.Caller.poolMarks`) add none exactly when the window names the pool's reset, week
+and spent mark and no reset falls where the week's is spent before it. -/
+theorem poolMarks_nil (w : Json) (pool : Option Spot.Docket.Pool) (log : Array Json) (c : Array String) :
+    VStar.Recursive.Caller.poolMarks w pool log c = #[] ↔ c = #[] ∧
+      Spot.jeq (Spot.getD w "pool_reset") (match pool with | some p => .bool p.reset | none => .null) = true ∧
+      Spot.jeq (Spot.getD w "pool_week") (match pool with | some p => Lean.toJson p.week | none => .null) = true ∧
+      Spot.jeq (Spot.getD w "pool_spent")
+        (match pool with | some p => .bool (p.reset || p.spentBefore log) | none => .null) = true ∧
+      (match pool with | some p => !(p.reset && p.spentBefore log) | none => true) = true := by
+  rw [VStar.Recursive.Caller.poolMarks, Properties.Spot.kept_nil, Properties.Spot.kept_nil, Properties.Spot.kept_nil,
+    Properties.Spot.kept_nil]
+  exact ⟨fun ⟨⟨⟨⟨a, r⟩, wk⟩, s⟩, o⟩ => ⟨a, r, wk, s, o⟩, fun ⟨a, r, wk, s, o⟩ => ⟨⟨⟨⟨a, r⟩, wk⟩, s⟩, o⟩⟩
+
+/-- The registered compiler's codes (`VStar.Recursive.Caller.compilerMarks`) add none exactly when the window names the
+log's compiler and advice within its length. -/
+theorem compilerMarks_nil (w : Json) (b : Option (Option (String × Nat))) (c : Array String) :
+    VStar.Recursive.Caller.compilerMarks w b c = #[] ↔ c = #[] ∧ Spot.Docket.compilerOk w b = true ∧
+      Spot.Docket.adviceOk w b = true := by
+  rw [VStar.Recursive.Caller.compilerMarks, Properties.Spot.kept_nil, Properties.Spot.kept_nil, and_assoc]
+
+/-- The declared day's codes (`VStar.Recursive.Caller.declaredMarks`) add none exactly when `DeclaredDay` holds. -/
+theorem declaredMarks_nil (rec : Json) (v : Spot.Docket.Verifier) (c : Array String) :
+    VStar.Recursive.Caller.declaredMarks (Spot.getD rec "program") v.declared c = #[] ↔
+      c = #[] ∧ Properties.Spot.DeclaredDay rec v := by
+  rw [← declaredCode_none_iff]
+  unfold VStar.Recursive.Caller.declaredMarks
+  cases VStar.Recursive.Caller.declaredCode (Spot.getD rec "program") v.declared with
+  | none => simp
+  | some code => simp [Properties.Spot.addCode_ne_nil]
+
+/-- The binding's codes (`VStar.Recursive.Caller.bindingMarks`) add none exactly when the window names the stream and
+the prover of the binding, if any. -/
+theorem bindingMarks_nil (w : Json) (b : Option (String × String)) (c : Array String) :
+    VStar.Recursive.Caller.bindingMarks w b c = #[] ↔ c = #[] ∧
+      (∀ sp, b = some sp → Spot.jeq (Spot.getD w "stream") (.str sp.1) = true ∧
+        Spot.jeq (Spot.getD w "prover") (.str sp.2) = true) := by
+  rcases b with _ | ⟨stream, prover⟩
+  · simp [VStar.Recursive.Caller.bindingMarks]
+  · rw [VStar.Recursive.Caller.bindingMarks, Properties.Spot.kept_nil, Properties.Spot.kept_nil]
+    constructor
+    · rintro ⟨⟨a, hs⟩, hp⟩
+      exact ⟨a, fun sp hsp => by cases hsp; exact ⟨hs, hp⟩⟩
+    · rintro ⟨a, h⟩
+      exact ⟨⟨a, (h _ rfl).1⟩, (h _ rfl).2⟩
+
+/-- The two codes the caller's check adds for a verifier that expects values registered (`R7-pool-chain`,
+`R7-output-refused`) are none exactly when, for such a verifier, `PoolChained` and `OutputPortsAccepted` hold. -/
+theorem v2Marks_iff (rec : Json) (v : Spot.Docket.Verifier) :
+    ((!v.v2 || VStar.Recursive.Caller.poolChained rec v) = true ∧ (!v.v2 || Spot.Docket.portsAccepted v) = true) ↔
+      (Properties.Spot.ExpectsV2 v → Properties.Spot.PoolChained rec v ∧ Properties.Spot.OutputPortsAccepted v) := by
+  rw [← poolChained_iff, ← Properties.Spot.portsAccepted_iff]
+  unfold Properties.Spot.ExpectsV2 Spot.Docket.Verifier.v2
+  cases v.registered.isEmpty && v.certified.isEmpty <;> simp
+
+/-- **`CallerCheckMeans`**: the caller's check finds nothing exactly where the record keeps the caller's facts. -/
+theorem callerCheckMeans : CallerCheckMeans := by
+  intro rec v
+  simp only [VStar.Recursive.Caller.check]
+  rw [Properties.Spot.kept_nil, Properties.Spot.kept_nil, and_assoc, v2Marks_iff, compilerMarks_nil, poolMarks_nil,
+    Properties.Spot.kept_nil, bindingMarks_nil, declaredMarks_nil]
+  unfold Properties.Spot.CallerHeld Properties.Spot.RunCompiler
+  exact ⟨fun ⟨⟨⟨⟨⟨⟨_, dd⟩, bd⟩, ss⟩, r, wk, sp, o⟩, ck, ad⟩, v2⟩ => ⟨dd, bd, ss, r, wk, sp, o, ⟨ck, ad⟩, v2⟩,
+    fun ⟨dd, bd, ss, r, wk, sp, o, ⟨ck, ad⟩, v2⟩ => ⟨⟨⟨⟨⟨⟨rfl, dd⟩, bd⟩, ss⟩, r, wk, sp, o⟩, ck, ad⟩, v2⟩⟩
+
+/-- **`CallerCheckSound`**, `CallerCheckMeans`' forward half. -/
+theorem callerCheckSound_of_means (hm : CallerCheckMeans) : CallerCheckSound := fun rec v => (hm rec v).1
+
+/-- `CallerCheckSound`, from `callerCheckMeans`. -/
+theorem callerCheckSound : CallerCheckSound := callerCheckSound_of_means callerCheckMeans
+
+/-- What SPOT's accepted case gives, on any blobs: `StageHeld`, in the one-stage form, where the caller's
+check finds nothing only where the record keeps the caller's facts (`CallerCheckSound`). -/
+theorem stage_held (hm : CallerCheckSound) {k : Case} {n : Named} {bs : Blobs} (hp : k.params = n.params)
     (h : Properties.Composition.DecodedAccepted (VStar.Recursive.Sampled.protocol.onBlobs bs) n.params.toUTF8
       k.commitment k.evidence) : StageHeld k := by
   obtain ⟨p, c, e, hp', hc, -, pub, prof, hchk⟩ := h
@@ -475,27 +554,30 @@ theorem stage_held {k : Case} {n : Named} {bs : Blobs} (hp : k.params = n.params
   have hchk' : VStar.Recursive.Sampled.checkBlobs p c e bs = .accept pub prof := hchk
   clear hp' hchk
   rcases p with p | q <;> rcases e with e | e
-  · exact Or.inl ⟨p, c, hp'', hc',
-      stage_zk_registered (show Spot.OneStageZk.checkBlobs p c e bs = .accept pub prof from hchk')⟩
+  · obtain ⟨hcall, hz⟩ := VStar.Recursive.Caller.gate_accept
+      (show VStar.Recursive.Caller.gate c.record p.base.verifier (Spot.OneStageZk.checkBlobs p c e bs) =
+        .accept pub prof from hchk')
+    exact ⟨p, c, hp'', hc', stage_zk_registered hz, hm _ _ hcall⟩
   · simp [VStar.Recursive.Sampled.checkBlobs] at hchk'
   · simp [VStar.Recursive.Sampled.checkBlobs] at hchk'
-  · obtain ⟨e₀, he₀⟩ := recursive_live
-      (show VStar.Recursive.checkBlobs q c e bs = .accept pub prof from hchk')
-    exact Or.inr ⟨q, c, hp'', hc', stage_registered he₀⟩
+  · exact absurd hchk' (VStar.Recursive.SampledTwo.checkBlobs_refuses VStar.Recursive.SampledTwo.form_off q c e bs
+      pub prof)
 
-/-- What remote's acceptance gives: the three cases in order, one digest for the policy's and sampled proofs'
-records, which every Commit record the period's windows name has, and the policy's case decoding to what the policy's
-check accepts. -/
+/-- What remote's acceptance gives: the three cases in order, one digest for the policy's and SPOT's
+records, which every Commit record the period's windows name has, the policy's case decoding to what the policy's
+check accepts, and SPOT's case decoding to what its check accepts on the blobs. -/
 theorem remote_accept {blobs : Array ByteArray} {ps : List Named} {c : ByteArray} {ev : List Case} {pub prof : Keyed}
     (h : (Core.Remote.protocol.on blobs).check ps c ev = .accept pub prof) :
-    ∃ (kI kW kS : Case) (pI : NciCheck.Protocol.Params) (cI : NciCheck.Protocol.Commitment)
-      (eI : NciCheck.Protocol.Evidence), ev = [kI, kW, kS] ∧
-      Properties.Composition.digestOf NciCheck.Protocol.protocol kI.commitment = some (NciCheck.Protocol.protocol.digest cI) ∧
-      (∀ ds, Core.Remote.executionPhaseRecords kW = some ds → ∀ d ∈ ds, d = NciCheck.Protocol.protocol.digest cI) ∧
-      Properties.Composition.digestOf Spot.OneStage.protocol kS.commitment = some (NciCheck.Protocol.protocol.digest cI) ∧
-      (canonicalJson kI.params.toUTF8 >>= NciCheck.Protocol.paramsOf) = .ok pI ∧
-      NciCheck.Protocol.commitmentOf kI.commitment = .ok cI ∧ NciCheck.Protocol.evidenceOf kI.evidence = .ok eI ∧
-      (∃ pub' prof', NciCheck.Protocol.check pI cI eI = .accept pub' prof') ∧ StageHeld kS := by
+    ∃ (kI kW kS : Case) (pI : InferenceOnlyCheck.Protocol.Params) (cI : InferenceOnlyCheck.Protocol.Commitment)
+      (eI : InferenceOnlyCheck.Protocol.Evidence), ev = [kI, kW, kS] ∧
+      Properties.Composition.digestOf InferenceOnlyCheck.Protocol.protocol kI.commitment = some (InferenceOnlyCheck.Protocol.protocol.digest cI) ∧
+      (∀ ds, Core.Remote.executionPhaseRecords kW = some ds → ∀ d ∈ ds, d = InferenceOnlyCheck.Protocol.protocol.digest cI) ∧
+      Properties.Composition.digestOf Spot.OneStage.protocol kS.commitment = some (InferenceOnlyCheck.Protocol.protocol.digest cI) ∧
+      (canonicalJson kI.params.toUTF8 >>= InferenceOnlyCheck.Protocol.paramsOf) = .ok pI ∧
+      InferenceOnlyCheck.Protocol.commitmentOf kI.commitment = .ok cI ∧ InferenceOnlyCheck.Protocol.evidenceOf kI.evidence = .ok eI ∧
+      (∃ pub' prof', InferenceOnlyCheck.Protocol.check pI cI eI = .accept pub' prof') ∧
+      ∃ nS : Named, kS.params = nS.params ∧ Properties.Composition.DecodedAccepted
+        (VStar.Recursive.Sampled.protocol.onBlobs (Blobs.ofArray blobs)) nS.params.toUTF8 kS.commitment kS.evidence := by
   rw [remote_check_ids] at h
   obtain ⟨hsame, hties⟩ := Properties.Composition.acceptTied _ _ _ _ _ h
   obtain ⟨hcheck, hstrays⟩ := checkSame_accept hsame
@@ -503,20 +585,21 @@ theorem remote_accept {blobs : Array ByteArray} {ps : List Named} {c : ByteArray
     accepted_three hcheck
   have hS₀ := hS
   obtain ⟨pS, cS, eS, -, hcS, -, -⟩ := hS₀
-  have hdS := strays_two (P₁ := NciCheck.Protocol.protocol) (P₂ := PouwCheck.Period.protocol)
+  have hdS := strays_two (P₁ := InferenceOnlyCheck.Protocol.protocol) (P₂ := PouwCheck.Period.protocol)
     (P₃ := VStar.Recursive.Sampled.protocol.onBlobs (Blobs.ofArray blobs)) (ne_policy_stage _) (ne_monitoringPeriod_stage _)
     hcI hcS hstrays
-  have hp : (canonicalJson kI.params.toUTF8 >>= NciCheck.Protocol.paramsOf) = .ok pI := by rw [hpI]; exact hpI'
+  have hp : (canonicalJson kI.params.toUTF8 >>= InferenceOnlyCheck.Protocol.paramsOf) = .ok pI := by rw [hpI]; exact hpI'
   refine ⟨kI, kW, kS, pI, cI, eI, rfl, digestOf_ok hcI,
     executionPhases_tied hidI hidW hcI (hties _ (List.mem_singleton_self _)),
     (digestOf_sampled _ _).symm.trans ((digestOf_ok hcS).trans (congrArg some hdS)), hp, hcI, heI, hchkI,
-    stage_held hpS hS⟩
+    nS, hpS, hS⟩
 
+/-- `AcceptInferenceOnly`, on the proved caller's check (`callerCheckSound`). -/
 theorem acceptInferenceOnly : AcceptInferenceOnly := by
   intro blobs ps c ev pub prof h
-  obtain ⟨kI, kW, kS, pI, cI, eI, hev, hdI, hdW, hdS, hp, hc, he, ⟨pub', prof', hchk⟩, hstage⟩ := remote_accept h
-  exact ⟨kI, kW, kS, NciCheck.Protocol.protocol.digest cI, hev, hdI, hdW, hdS, ⟨pI, cI, eI, hp, hc, he, policyHeld hchk⟩,
-    hstage⟩
+  obtain ⟨kI, kW, kS, pI, cI, eI, hev, hdI, hdW, hdS, hp, hc, he, ⟨pub', prof', hchk⟩, nS, hpS, hS⟩ := remote_accept h
+  exact ⟨kI, kW, kS, InferenceOnlyCheck.Protocol.protocol.digest cI, hev, hdI, hdW, hdS, ⟨pI, cI, eI, hp, hc, he, policyHeld hchk⟩,
+    stage_held callerCheckSound hpS hS⟩
 
 /-- **`AcceptInferenceOnly`'s nontrivial lemma**: its conclusion fails at no cases at all, `ev = []`, which a check that
 accepts every input accepts: they are not the three subprotocols' cases. -/
@@ -528,12 +611,12 @@ theorem acceptComplies : AcceptComplies := by
   intro blobs ps c ev pub prof h
   obtain ⟨kI, kW, kS, pI, cI, eI, hev, -, -, -, hp, hc, he, ⟨pub', prof', hchk⟩, -⟩ := remote_accept h
   obtain ⟨hn, out, hb, hcomp⟩ := policy_accept hchk
-  obtain ⟨hd, -⟩ := NciCheck.Properties.SecurityProofs.BaselineSteps.evaluate_ok _ _ _ hb
+  obtain ⟨hd, -⟩ := InferenceOnlyCheck.Properties.SecurityProofs.ThetaSteps.evaluate_ok _ _ _ hb
   obtain ⟨P, hP, hname, -, ⟨j', i, d, hx, hpi, hL, hθ, -, hown, hmet⟩, -⟩ := policyHeld hchk
   refine ⟨kI, kW, kS, pI, cI, eI, P, hev, hp, hc, he, hP, hname, ⟨j', i, d, hx, hpi, hL, hθ, hown, hmet.2.1⟩, ?_⟩
   intro j' i d hx hi hL hN
   have hP' : Flock.Program.decode i.program.toUTF8 = .ok P := expands_program hx hi ▸ hP
-  exact ⟨verifier_own hx hi, ((NciCheck.Properties.SecurityProofs.DescWitnesses _ _ hd).2 j' hx i P d hi hP' hL hN hcomp).1⟩
+  exact ⟨verifier_own hx hi, ((InferenceOnlyCheck.Properties.SecurityProofs.DescWitnesses _ _ hd).2 j' hx i P d hi hP' hL hN hcomp).1⟩
 
 /-- **`AcceptComplies`'s nontrivial lemma**, as `AcceptInferenceOnly`'s: its conclusion fails at `ev = []`, which a check
 that accepts every input accepts. -/

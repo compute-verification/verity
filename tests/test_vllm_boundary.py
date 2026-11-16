@@ -45,14 +45,14 @@ ALLOWED = {
     "benchmarks/kv_filler/serve.py": "memory-accounting: a stock vllm.LLM serving under the KV filler's top-up",
     "benchmarks/pous/p2_v1/scale.py": "memory-accounting: P2's store held beside a stock vllm.LLM serving",
     **dict.fromkeys(("benchmarks/remote_session/engine.py", "benchmarks/remote_session/serve.py"),
-                    "memory-accounting: an in-process LLMEngine under the remote bandwidth audit's binder"),
+                    "memory-accounting: an in-process LLMEngine under PoUB's binder"),
     "benchmarks/network_traces/record.py": "network-accounting: per-token timing of served requests (SamplingParams)",
     # the stock kernels a benchmark times or gates against
-    **dict.fromkeys(("benchmarks/hash/exactlin/kbench.py", "benchmarks/hash/exactlin/kgate.py",
-                     "benchmarks/hash/exactlin/ksweep.py"),
+    **dict.fromkeys(("benchmarks/kernels/exactlin/kbench.py", "benchmarks/kernels/exactlin/kgate.py",
+                     "benchmarks/kernels/exactlin/ksweep.py"),
                     "kernels: vLLM's int8 GEMMs (_custom_ops.cutlass_scaled_mm, triton_scaled_mm) as the exact linear's "
                     "kernel-level baseline and gate"),
-    **dict.fromkeys(("benchmarks/torch_gpu/s8_linear/bench.py", "benchmarks/torch_gpu/s8_linear/run.py"),
+    **dict.fromkeys(("benchmarks/kernels/s8_linear/bench.py", "benchmarks/kernels/s8_linear/run.py"),
                     "kernels: vLLM's int8 cutlass_scaled_mm as the plain GEMM the exact W8A8 linear is timed against"),
     **dict.fromkeys(("benchmarks/pouw/harness/torch_baselines.py", "benchmarks/pouw/pearl_c_sm90/glm53_timing.py",
                      "benchmarks/pouw/pearl_c_sm90/grouped_check.py"),
@@ -63,14 +63,14 @@ ALLOWED = {
                      "benchmarks/hash/dither/dither_one.py", "benchmarks/hash/dither/dither_so.py",
                      "benchmarks/hash/dither/sbench.py"),
                     "kernels: Dither's served arms, a stock vllm.LLM per arm with its int8 linears swapped in process"),
-    **dict.fromkeys(("benchmarks/hash/exactlin/percall.py", "benchmarks/hash/exactlin/share.py"),
+    **dict.fromkeys(("benchmarks/kernels/exactlin/percall.py", "benchmarks/kernels/exactlin/share.py"),
                     "kernels: sbench's served arms over stock vLLM int8 (TritonInt8ScaledMMLinearKernel)"),
-    **dict.fromkeys(("benchmarks/moe_align/served.py", "benchmarks/moe_align/stress.py"),
+    **dict.fromkeys(("benchmarks/kernels/moe_align/served.py", "benchmarks/kernels/moe_align/stress.py"),
                     "kernels: verity_vllm.engine.moe_align's canonical moe_align_block_size held to vLLM's op and to its "
                     "Marlin MoE path, served at TP8"),
     **dict.fromkeys(("benchmarks/vllm_encoded/kernels.py",
                      "benchmarks/vllm_encoded/serve.py", "benchmarks/vllm_encoded/stack.py",
-                     "benchmarks/vllm_encoded/tests/properties/encoded_kv_append_capture_gpu.py"),
+                     "tests/benchmarks/vllm_encoded/properties/encoded_kv_append_capture_gpu.py"),
                     "memory-accounting: the encoded-weights stack inside vLLM, its linears, attention and KV append in "
                     "place of vLLM's"),
     # vLLM general plugins and the engine-core internals they patch
@@ -96,7 +96,7 @@ ALLOWED = {
     "benchmarks/spot_proved/discover.py": "proofs: a rehearsal of the capture on a GLM-5.3 vllm.LLM with dummy weights",
     "benchmarks/route_capture/route_capture_plugin.py": "proofs: a general plugin recording each served step's launch-shape "
                                                         "class and kernels",
-    "benchmarks/route_capture/tests/test_plugin.py": "proofs: the route capture's plugin on stand-ins for vLLM's model "
+    "tests/benchmarks/route_capture/test_plugin.py": "proofs: the route capture's plugin on stand-ins for vLLM's model "
                                                      "runners, imported under vLLM's module names",
 }
 
@@ -105,7 +105,7 @@ def _importers(texts: dict[str, str]) -> dict[str, list[str]]:
     """Each file of ``texts`` (repository path -> source) outside the integration that imports vLLM, with where."""
     out = {}
     for rel, text in texts.items():
-        if rel.startswith(INTEGRATION) or "vllm" not in text:
+        if rel.removeprefix("tests/").startswith(INTEGRATION) or "vllm" not in text:
             continue
         hits = sorted({(line, name) for name, line, imported in _imports(ROOT / rel, ROOT, (), ast.walk(ast.parse(text, filename=rel)))
                        if imported and name.split(".")[0] == "vllm"})

@@ -50,7 +50,7 @@ import Std.Tactic.BVDecide.Normalize.BitVec
   the mask slot's weights at its claim points are rank-deficient), counted `4·m` times (`εZk`).
 * **`δc H x = 1` exactly where `ready H x` fails**, which is on the statements that:
   * set up no plain session (`setupOf false x = none`), which the verifier refuses at every run;
-  * set up a session that samples no unit: `checks` ends in `drawLaw zk tags false none`, which refuses;
+  * set up a session that samples no unit: `checks` ends in `sampleDesign zk tags false none`, which refuses;
   * are `2^64` bytes or more: the last message (`Final.encode`) writes the statement's length in a 64-bit word;
   * have a table whose regions do not fit (`RegionsFit`: some region's bytes at some block are not its free bits): the
     extra claims refuse (`Stmt.regionValue`), the honest prover's as the verifier's, and the relation, on the circuit's
@@ -173,7 +173,7 @@ def outerSlotsZk (x : Claims.Msg) : List (ℕ × ℕ) :=
 def rhoSlotsZk (x : Claims.Msg) : List ℕ :=
   match setupOf true x with
   | some (_, spec, sts) => (List.range (2 * sts.size)).flatMap fun q =>
-      match Zk.schedule sts[q / 2]!.m with
+      match Zk.schedule sts[q / 2]!.wideLeaf sts[q / 2]!.m with
       | .ok (sch, _) => [repStartZk spec sts q + piopRoundsZk spec sts[q / 2]! + (sch.k0 + 2)]
       | .error _ => []
   | none => []
@@ -182,7 +182,7 @@ def rhoSlotsZk (x : Claims.Msg) : List ℕ :=
 def betaSlotsZk (x : Claims.Msg) : List ℕ :=
   match setupOf true x with
   | some (_, spec, sts) => (List.range (2 * sts.size)).flatMap fun q =>
-      match Zk.schedule sts[q / 2]!.m with
+      match Zk.schedule sts[q / 2]!.wideLeaf sts[q / 2]!.m with
       | .ok (sch, _) =>
         [repStartZk spec sts q + piopRoundsZk spec sts[q / 2]! + (sch.k0 + 7 + 11 * (sch.levels.size - 1)) + 2]
       | .error _ => []
@@ -192,7 +192,7 @@ def betaSlotsZk (x : Claims.Msg) : List ℕ :=
 def rankSlotsZk (x : Claims.Msg) : List (Flock.Stmt × ℕ × ℕ) :=
   match setupOf true x with
   | some (_, spec, sts) => (List.range sts.size).flatMap fun i =>
-      match Zk.schedule sts[i]!.m with
+      match Zk.schedule sts[i]!.wideLeaf sts[i]!.m with
       | .ok _ => [(sts[i]!, repStartZk spec sts (2 * i), repStartZk spec sts (2 * i + 1))]
       | .error _ => []
   | none => []

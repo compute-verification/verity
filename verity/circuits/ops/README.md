@@ -1,7 +1,7 @@
 # verity.circuits.ops
 
 The primitive circuits' Definitions: the exact, hardware-faithful semantics of the operations ML kernels are built from,
-registered as Definitions that `verity.definitions` composes into the served kernels. Each module registers one family
+registered as Definitions that `verity_vllm.definitions` composes into the served kernels. Each module registers one family
 and its docstring lists what it registers. The terms and the front doors are [`verity.circuits`](../README.md)'s.
 
 | Module | What it registers |
@@ -23,7 +23,9 @@ and its docstring lists what it registers. The terms and the front doors are [`v
 `ops.boolean` holds their Boolean versions: each module the next version of an `ops` module's word Definitions, the same
 function on bits. They are built with `verity.circuits.boolean`'s `forms`, `gather` and `trace` and
 `verity.circuits.silicon`'s `fp`, `fp4` and `tc_step`, and `ops.boolean.trace_cache` lets a prover's or a developer's
-build reuse traced circuits across processes (a verifier never does).
+build reuse traced circuits across processes (a verifier never does). `ops.boolean.versions` is the Boolean-versions
+lookup: `boolean_version` finds the one a word Definition has, among `ops.boolean`'s, what is already imported, and every
+catalog registered with it (`catalog_loader`), which it imports none of by name.
 
 Beside the modules are each Definition module's binding file and pins (`<module>.circuit-check.py`,
 `<module>.circuit-check.json`), the store ids a module's conformance texts cite (`<module>_evidence.json`), and
@@ -31,7 +33,7 @@ Beside the modules are each Definition module's binding file and pins (`<module>
 
 ## Tests
 
-`tests/` is this package's suite (`uv run tools/verity/check/suites.py verity/circuits/ops`), which tests
+`tests/` is this package's suite (`uv run tools/check/suites.py verity/circuits/ops`), which tests
 `verity.circuits.silicon` too. [`tests/fixtures/`](tests/fixtures/README.md) holds the hardware captures the semantics
 are replayed against.
 
@@ -39,11 +41,11 @@ are replayed against.
 
 - **Provides:** the primitive circuits' Definitions, one family a module, their Boolean versions (`ops.boolean`), and each
   module's sidecar and pins, which `circuit-check` reads.
-- **Loaded by:** the served workloads' Definitions (`verity.definitions`); `verity.commitments.windows`, whose
-  `interface` imports every module; PoUW's prover (`verity.protocols.accounting.pouw.prover`); Flock's prover (`verity_flock`), pod
+- **Loaded by:** the served workloads' Definitions (`verity_vllm.definitions`); `verity.commitments.periods`, whose
+  `interface` imports every module; PoUW's prover (`verity.protocols.resource_accounting.compute.pouw.prover`); Flock's prover (`verity_flock`), pod
   scripts and agreement with upstream's verifier (`verity/protocols/proofs/flock`); the script that writes the difftest
   vectors of the inference-only policy's check
-  (`verity/protocols/policy/inference_only/verifier/nci/lean/scripts/difftest_vectors.py`); `circuit-check`, which imports each
+  (`verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts/difftest_vectors.py`); `circuit-check`, which imports each
   module that has a sidecar; the vLLM integration (`verity_vllm`); and benchmarks. Tests across the tree import it too,
   verifiers' tests among them. No verifier loads it.
 - **Loads:** `verity.circuits` (its types, its Boolean forms, its census and its library), `verity.circuits.silicon`,

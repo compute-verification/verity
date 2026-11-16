@@ -17,8 +17,8 @@ record the tree's data files name. Stdlib only; it reads the tree at one commit 
   record's.
 - `status`: `assumes` with an assumption, `proved` with none and its premises read, `unknown` with none and its premises
   not read.
-- `results`: each `art:` id a table's runs of record name (`RENDERERS`, read as literals, never imported) and each demo's
-  `[evidence]` (`demos/*/demo.toml`); run ids are counted, not exported.
+- `results`: each `art:` id a table's runs of record name (`RENDERERS`, read as literals, never imported); run ids are
+  counted, not exported.
 
 The document is written as `canonical` bytes. Prints one JSON line: the counts, the bytes written and their SHA-256.
 """
@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import argparse
 import ast
-import fnmatch
 import gzip
 import hashlib
 import json
@@ -34,14 +33,12 @@ import os
 import re
 import subprocess
 import sys
-import tomllib
 from pathlib import Path
 
 SCHEMA = "verity/status/v0"
 LOCK = "lean-audit.json"
 ART = re.compile(r"art:[0-9a-f]{64}")
 RUN = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")
-DEMOS = "demos/*/demo.toml"
 #: a table renderer's path -> {the call naming a row's runs of record: how its `what` reads, from the call's first argument}
 RENDERERS = {"benchmarks/harness/verity_bench/served_table.py": {"Protocol": "{}", "Breakdown": "{}, where its time goes by span"}}
 
@@ -177,10 +174,6 @@ def lean_status(locks: dict[str, dict], facts: Path | None) -> tuple[list[dict],
     return sorted(packages, key=lambda p: p["path"]), sorted(guarantees, key=key), sorted(assumptions, key=key)
 
 
-def names(v) -> list[str]:
-    return [v] if isinstance(v, str) else [x for x in v if isinstance(x, str)] if isinstance(v, list) else []
-
-
 def renderer_records(text: str, calls: dict[str, str]) -> list[tuple[str, str, str | None]]:
     """(id, what, table) for each run of record a renderer's source names in one of ``calls`` (first argument the row's
     name), the table its `# ` heading, read from literals alone."""
@@ -199,23 +192,12 @@ def renderer_records(text: str, calls: dict[str, str]) -> list[tuple[str, str, s
     return out
 
 
-def demo_records(text: str, name: str) -> list[tuple[str, str, str | None]]:
-    """(id, what, None) for each run of record a demo's `[evidence]` names: its `runs` and each premise's run."""
-    ev = tomllib.loads(text).get("evidence") or {}
-    out = [(r, f"the {name} demo's run of record", None) for r in names(ev.get("runs"))]
-    for premise, v in sorted((ev.get("premises") or {}).items()):
-        out += [(r, f"{premise}, measured for the {name} demo", None) for r in names(v)]
-    return out
-
-
 def results(root: Path, rev: str, files: list[str]) -> tuple[list[dict], int]:
     """(each result of record by `art:` id, the run ids named beside them)."""
     found = []
     for path, calls in sorted(RENDERERS.items()):
         if path in files:
             found += renderer_records(show(root, rev, path), calls)
-    for path in sorted(p for p in files if fnmatch.fnmatch(p, DEMOS)):
-        found += demo_records(show(root, rev, path), path.split("/")[1])
     arts = {(i, what, table) for i, what, table in found if ART.fullmatch(i)}
     out = [{"art": i, "kind": None, "what": what, "table": table} for i, what, table in sorted(arts, key=lambda t: (t[0], t[1], t[2] or ""))]
     return out, len({i for i, _, _ in found if RUN.fullmatch(i)})

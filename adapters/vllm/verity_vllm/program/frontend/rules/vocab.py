@@ -1,103 +1,66 @@
-"""Kind vocabularies: the registered definitions a derivation mode binds semantic roles to (GUIDANCE §43.2).
-
-A rule never names a kind directly; it asks `ctx.kind(role, **statics)`. The vocabulary of the (mode, profile)
-answers with a bound registered definition or `None` (-> `Unsupported(numerics_unregistered)`). Provenance records
-the vocabulary's name and version, so "which kernels does this program claim" is pinned per derivation.
+"""The vLLM adapter's kind vocabularies: its eager profiles (`b1-eager`, `-v2`, `-v3`, `dense2-eager-v1`), added to
+`verity_torch.frontend.rules.vocab.PROFILES`, which `vocabulary_for` reads; `Vocabulary`, reference mode's vocabulary and
+`vocabulary_for` are `verity_torch.frontend.rules.vocab`'s.
 """
 
 from __future__ import annotations
 
-import hashlib
 from collections.abc import Callable
-from dataclasses import dataclass, field
 
 from verity.circuits.defs import bind as ir_bind
-from verity.definitions.registry import act as _act
-from verity.definitions.registry import b1
-from verity.definitions.registry import b1_tp2 as TP2
-from verity.definitions.registry import boolean_rope as _rope
-from verity.definitions.registry import cublas_bf16 as _cublas_bf16
-from verity.definitions.registry import cuda_rmsnorm as _cuda_rmsnorm
-from verity.definitions.registry import deepgemm as _deepgemm
-from verity.definitions.registry import dsa as _dsa
-from verity.definitions.registry import dsa_norm as _dsa_norm
-from verity.definitions.registry import dsa_topk_mask as _dsa_topk_mask
-from verity.definitions.registry import dsv4_compressor as _dsv4_compressor
-from verity.definitions.registry import dsv4_indexer as _dsv4_indexer
-from verity.definitions.registry import dsv4_moe as _dsv4_moe
-from verity.definitions.registry import dsv4_qnorm_insert as _dsv4_qnorm
-from verity.definitions.registry import fa2_check_inf as _f2
-from verity.definitions.registry import fa2_softcap as _f2s
-from verity.definitions.registry import fa3_check_inf as _f3
-from verity.definitions.registry import flashmla as _flashmla
-from verity.definitions.registry import flashmla_prefill as _flashmla_prefill
-from verity.definitions.registry import fp8 as _fp8
-from verity.definitions.registry import fp8_moe as _fm
-from verity.definitions.registry import fp8_moe_experts as _x
-from verity.definitions.registry import fp8_vocab as _fp8_vocab
-from verity.definitions.registry import gemm_bias as _gemm_bias
-from verity.definitions.registry import layer_norm as _LN
-from verity.definitions.registry import ll_bf16 as _ll_bf16
-from verity.definitions.registry import marlin_moe as _marlin
-from verity.definitions.registry import mhc as _mhc
-from verity.definitions.registry import moe as _moe
-from verity.definitions.registry import pad_prims as PP
-from verity.definitions.registry import pouw_rows as _pouw_rows
-from verity.definitions.registry import prims as P
-from verity.definitions.registry import ref_prims as RP
-from verity.definitions.registry import sparse_mla as _sparse_mla
-from verity.definitions.registry import sparse_mla_split as _sparse_mla_split
-from verity.definitions.registry import (
+from verity_vllm.definitions.registry import act as _act
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry import b1_tp2 as TP2
+from verity_vllm.definitions.registry import boolean_rope as _rope
+from verity_vllm.definitions.registry import cublas_bf16 as _cublas_bf16
+from verity_vllm.definitions.registry import cuda_rmsnorm as _cuda_rmsnorm
+from verity_vllm.definitions.registry import deepgemm as _deepgemm
+from verity_vllm.definitions.registry import dsa as _dsa
+from verity_vllm.definitions.registry import dsa_ds_mla as _dsa_ds_mla
+from verity_vllm.definitions.registry import dsa_norm as _dsa_norm
+from verity_vllm.definitions.registry import dsa_topk_mask as _dsa_topk_mask
+from verity_vllm.definitions.registry import dsv4_compressor as _dsv4_compressor
+from verity_vllm.definitions.registry import dsv4_indexer as _dsv4_indexer
+from verity_vllm.definitions.registry import dsv4_moe as _dsv4_moe
+from verity_vllm.definitions.registry import dsv4_qnorm_insert as _dsv4_qnorm
+from verity_vllm.definitions.registry import fa2_check_inf as _f2
+from verity_vllm.definitions.registry import fa2_softcap as _f2s
+from verity_vllm.definitions.registry import fa3_check_inf as _f3
+from verity_vllm.definitions.registry import flashmla as _flashmla
+from verity_vllm.definitions.registry import flashmla_dsv32 as _flashmla_dsv32
+from verity_vllm.definitions.registry import flashmla_prefill as _flashmla_prefill
+from verity_vllm.definitions.registry import fp8 as _fp8
+from verity_vllm.definitions.registry import fp8_ds_mla_upconvert as _fp8_ds_mla_upconvert
+from verity_vllm.definitions.registry import fp8_moe as _fm
+from verity_vllm.definitions.registry import fp8_moe_experts as _x
+from verity_vllm.definitions.registry import fp8_vocab as _fp8_vocab
+from verity_vllm.definitions.registry import gemm_bias as _gemm_bias
+from verity_vllm.definitions.registry import layer_norm as _LN
+from verity_vllm.definitions.registry import ll_bf16 as _ll_bf16
+from verity_vllm.definitions.registry import marlin_moe as _marlin
+from verity_vllm.definitions.registry import mhc as _mhc
+from verity_vllm.definitions.registry import moe as _moe
+from verity_vllm.definitions.registry import pad_prims as PP
+from verity_vllm.definitions.registry import pouw_rows as _pouw_rows
+from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.registry import ref_prims as RP  # noqa: F401  -- imported to register the reference kinds
+from verity_vllm.definitions.registry import sparse_mla as _sparse_mla
+from verity_vllm.definitions.registry import sparse_mla_split as _sparse_mla_split
+from verity_vllm.definitions.registry import (
     topp_words as _topp_words,  # the keep word as word gates at a constant S
 )
-from verity.definitions.registry import tp_allreduce as _tp_allreduce
-from verity.definitions.registry import value_inputs as _vi
-from verity.definitions.registry.dsv4_decode_indices import gather_i32
+from verity_vllm.definitions.registry import tp_allreduce as _tp_allreduce
+from verity_vllm.definitions.registry import value_inputs as _vi
+from verity_vllm.definitions.registry.dsv4_decode_indices import gather_i32
 
-from verity_vllm.program import dsa_table as _dsa_table
+from verity_torch import dsa_table as _dsa_table
 from verity_vllm.program.frontend import targets as _targets
-from verity_vllm.program.frontend.rules import ref_kinds as R
-
-
-@dataclass
-class Vocabulary:
-    name: str
-    mode: str
-    profile: str | None
-    kinds: dict[str, Callable[..., object]] = field(default_factory=dict)
-    notes: dict[str, str] = field(default_factory=dict)
-
-    @property
-    def version(self) -> str:
-        rows = []
-        for role in sorted(self.kinds):
-            rows.append(f"{role}:{self.notes.get(role, '')}")
-        return hashlib.sha256("\n".join([self.name, self.notes.get("_pin", "")] + rows).encode()).hexdigest()[:16]
-
-    def kind(self, role: str, **statics):
-        binder = self.kinds.get(role)
-        if binder is None:
-            return None
-        try:
-            return binder(**statics)
-        except TypeError:
-            return None
-
-    def has(self, role: str) -> bool:
-        return role in self.kinds
-
-    def to_json(self) -> dict:
-        d = {"name": self.name, "version": self.version, "mode": self.mode, "profile": self.profile,
-             "roles": {r: self.notes.get(r, "") for r in sorted(self.kinds)}}
-        pin = self.notes.get("_pin")
-        if pin is not None:
-            d["pin"] = pin
-        return d
+from verity_torch.frontend.rules.vocab import PROFILES, REFERENCE_CPU_F32, Vocabulary, vocabulary_for
 
 
 def _int8():
     """`registry.int8_exact`, loaded on a profile's first int8 kind (it builds the s8 family's circuits)."""
-    from verity.definitions.registry import int8_exact
+    from verity_vllm.definitions.registry import int8_exact
     return int8_exact
 
 
@@ -179,54 +142,11 @@ PROFILE_B1_EAGER = Vocabulary(
                               "BLOCK-thread reduction (its sum of squares as batches) and epilogue (registry.cuda_rmsnorm)",
     })
 
-# -- reference: NUMERIC's reference kinds (`verity/definitions/registry/ref_prims.py`, vocabulary `verity-ref-vocab/1`) ----------
+# -- reference: NUMERIC's reference kinds (`adapters/vllm/verity_vllm/definitions/registry/ref_prims.py`, vocabulary `verity-ref-vocab/1`) ----------
 # The reference kinds define the arithmetic (sequential f32 chains, one DT rounding at stated points); agreement with torch
 # CPU is measured over a tested domain (docs/data/ref-prims/), never assumed. The vocabulary version pins NUMERIC's
 # `REF_VOCAB_VERSION` and `ref_vocab_digest()` (a hash over every reference kind's evaluator/body source).
 
-
-def _ref_doc(d) -> str:
-    return (d.doc or "").split("\n")[0].strip()
-
-
-REFERENCE_CPU_F32 = Vocabulary(
-    "reference-ref-prims", "reference", None,
-    kinds={
-        "linear": lambda K, N, DT, BIAS: ir_bind(RP.LinearRef, K=K, N=N, DT=DT, BIAS=bool(BIAS)),
-        "add": lambda N, DT: ir_bind(RP.AddRef, N=N, DT=DT),
-        "mul": lambda N, DT: ir_bind(RP.MulRef, N=N, DT=DT),
-        "relu": lambda N, DT: ir_bind(RP.ReluRef, N=N, DT=DT),
-        "silu": lambda N, DT: ir_bind(RP.SiluRef, N=N, DT=DT),
-        "gelu": lambda N, DT, APPROX: ir_bind(RP.GeluRef, N=N, DT=DT, APPROX=APPROX),
-        "layer_norm": lambda N, EPS, DT: ir_bind(RP.LayerNormRef, N=N, EPS=EPS, DT=DT),
-        "rmsnorm": lambda N, EPS, DT: ir_bind(RP.RMSNormRef, N=N, EPS=EPS, DT=DT),
-        "layer_norm_value": lambda N, DT: ir_bind(_vi.LayerNormRefV2, N=N, DT=DT),
-        "rmsnorm_value": lambda N, DT: ir_bind(_vi.RMSNormRefV2, N=N, DT=DT),
-        "softmax": lambda N, DT: ir_bind(RP.SoftmaxRef, N=N, DT=DT),
-        "embedding": lambda V, H, DT: ir_bind(RP.EmbeddingRef, V=V, H=H, DT=DT),
-        "argmax": lambda V, DT: ir_bind(RP.ArgmaxRef, V=V, DT=DT),
-        "i64_to_i32": lambda: RP.I64ToI32,
-        "eager_attention": lambda T, NH, KVH, D, DT, SCALE_OP: ir_bind(RP.EagerAttentionRef, T=T, NH=NH, KVH=KVH, D=D, DT=DT, SCALE_OP=SCALE_OP),
-        "rope_heads": lambda NHEADS, D, DT: ir_bind(RP.RoPEHeadsRef, NHEADS=NHEADS, D=D, DT=DT),
-        "bf16_to_f32": lambda N: ir_bind(R.DeriveRefBf16ToF32, N=N),
-        "f32_to_bf16": lambda N: ir_bind(R.DeriveRefF32ToBf16Rn, N=N),
-    },
-    notes={
-        "linear": "LinearRef_v1{K,N,DT,BIAS}: " + _ref_doc(RP.LinearRef),
-        "add": "AddRef_v1{N,DT}: " + _ref_doc(RP.AddRef), "mul": "MulRef_v1{N,DT}: " + _ref_doc(RP.MulRef),
-        "relu": "ReluRef_v1{N,DT}: " + _ref_doc(RP.ReluRef), "silu": "SiluRef_v1{N,DT}: " + _ref_doc(RP.SiluRef),
-        "gelu": "GeluRef_v1{N,DT,APPROX}: " + _ref_doc(RP.GeluRef), "layer_norm": "LayerNormRef_v1{N,EPS,DT}: " + _ref_doc(RP.LayerNormRef),
-        "rmsnorm": "RMSNormRef_v1{N,EPS,DT}: " + _ref_doc(RP.RMSNormRef),
-        "layer_norm_value": "LayerNormRef_v2{N,DT}(x, g, b, eps): LayerNormRef_v1's body with eps an input",
-        "rmsnorm_value": "RMSNormRef_v2{N,DT}(x, w, eps): RMSNormRef_v1's body with eps an input", "softmax": "SoftmaxRef_v1{N,DT}: " + _ref_doc(RP.SoftmaxRef),
-        "embedding": "EmbeddingRef_v1{V,H,DT}: " + _ref_doc(RP.EmbeddingRef), "argmax": "ArgmaxRef_v1{V,DT}: " + _ref_doc(RP.ArgmaxRef),
-        "i64_to_i32": "I64ToI32_v1: " + _ref_doc(RP.I64ToI32),
-        "eager_attention": "EagerAttentionRef_v1{T,NH,KVH,D,DT,SCALE_OP}: " + _ref_doc(RP.EagerAttentionRef),
-        "rope_heads": "RoPEHeadsRef_v1{NHEADS,D,DT}: " + _ref_doc(RP.RoPEHeadsRef),
-        "bf16_to_f32": "batched Bf16ToF32_v1 (exact widening; derive-lane composite over the registered primitive)",
-        "f32_to_bf16": "batched F32ToBf16Rn_v1 (RNE narrowing; derive-lane composite over the registered primitive)",
-        "_pin": f"{RP.REF_VOCAB_VERSION} digest {RP.ref_vocab_digest()}",
-    })
 
 # -- profile "b1-eager-v2": the same Ampere eager profile over the v2 skeleton (`Serve_v2`/`Serve_v3`: `Gemm_v2{K,N,DOT}`,
 # `Attention_v2{..,BN,DOT,INV}`, the `NORM` bundle) + the `pad-serve@1` kinds of the padded circuit (`serve3.py`) ------------
@@ -270,10 +190,10 @@ PROFILE_B1_EAGER_V2 = Vocabulary(
 # UNFUSED under the eager batch-invariant profile when a model's norm is `forward_native` (`ir.ops.rms_norm` / `fused_add_rms_norm` as
 # an ATen chain on an f32 copy), its activation is GeGLU, its attention has a logit soft cap, or its logits are soft-capped. Every kind
 # is op-shaped (an ATen CUDA kernel on a bf16 / f32 row, a Triton reduction, a softcapped FA2 head) — nothing here names a model; the
-# Definitions live in `verity.definitions.registry.dense` (promoted from `quarantine.dense` with the same name, version and body, so the
-# specialization ids the accepted `GEMMA2_2B` record resolved to are unchanged). `rules/vllm_bindings.py` asks for them. ----------------
+# Definitions live in `verity_vllm.definitions.registry.dense` (promoted from `quarantine.dense` with the same name, version and body, so the
+# specialization ids the accepted `GEMMA2_2B` record resolved to are unchanged). `rules/vllm_bindings/` asks for them. ------------------
 def _dense_kinds() -> tuple[dict, dict]:
-    from verity.definitions.registry import dense as DN
+    from verity_vllm.definitions.registry import dense as DN
     kinds = {
         "scale_tensor": lambda N: ir_bind(b1.Bf16MulScalarTensor, N=N),
         "gelu_tanh_mul": lambda I: ir_bind(DN.GeluTanhMul, I=I),
@@ -335,7 +255,7 @@ _DNK, _DNN = _dense_kinds()
 def _moe_ffn_fixed(E: int, TOPK: int, VPT: int, H: int, I: int):
     """[route A (3)] `MoeFfnFixedL_v1{E,TOPK,VPT,H,I}` (registry.moe_pad), imported on first use: the padded registry (pad's lifted
     registry + the hand-lift hook) is not loaded by a dense derivation that never asks for the kind."""
-    from verity.definitions.registry import moe_pad as _mp
+    from verity_vllm.definitions.registry import moe_pad as _mp
     return ir_bind(_mp.MoeFfnFixedL, E=E, TOPK=TOPK, VPT=VPT, H=H, I=I)
 
 
@@ -360,24 +280,24 @@ def _attention_softcap_dot(T, NH, KVH, D, BN, DOT, INV, FA2_MASKED_FROM, CAP):
 def _attention_split_dot(T, NH, KVH, D, BN, DOT, INV, MASKED_FROM, PER):
     if MASKED_FROM is None:
         raise TypeError("FA3's split prefill is registered only under FA3's per-iteration Check_inf")
-    from verity.definitions.registry import fa3_split as _f3s
+    from verity_vllm.definitions.registry import fa3_split as _f3s
     return ir_bind(_f3s.AttentionSplit, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=MASKED_FROM, PER=PER)
 
 
 def _attention_head_lse(T, D, BN, DOT, INV, MASKED_FROM, PER):
-    from verity.definitions.registry import fa3_split as _f3s
+    from verity_vllm.definitions.registry import fa3_split as _f3s
     if PER is None:
         return ir_bind(_f3s.AttentionHeadLse, T=T, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=MASKED_FROM)
     return ir_bind(_f3s.AttentionHeadSplitLse, T=T, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=MASKED_FROM, PER=PER)
 
 
 def _merge_attn_states(NH, D):
-    from verity.definitions.registry import merge_attn_states as _mas
+    from verity_vllm.definitions.registry import merge_attn_states as _mas
     return ir_bind(_mas.MergeAttnStates, NH=NH, D=D)
 
 # -- profile "b1-eager-v3": the admitted `vllm_d9105ea80_sm89_eager` profile as the accepted records bind it —
 # the v1 kinds with the attention chain `Attention_v3{T,NH,KVH,D,BN}` (`b1.AttentionV3`, `BN = fa2_kblock_n(D)`: FA2's kBlockN at
-# this head dim). Used by the export-of-the-real-vLLM-class frontend (`rules/vllm_bindings.py`). ---------------------------
+# this head dim). Used by the export-of-the-real-vLLM-class frontend (`rules/vllm_bindings/`). -----------------------------
 _PAD_KINDS = {k: PROFILE_B1_EAGER_V2.kinds[k] for k in ("const", "i32_eq", "bit_not", "bit_and", "select_i32", "select_bf16")}
 _PAD_NOTES = {k: PROFILE_B1_EAGER_V2.notes[k] for k in _PAD_KINDS}
 
@@ -461,7 +381,7 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "token_select_stochastic_split": lambda V, S: ir_bind(_topp_words.GumbelTopPTokenSelectV2, V=V, S=S),
            # the block-scaled FP8 linear of a pre-quantised checkpoint on Hopper (registry.fp8, pinned bit-exact on the H100 against
            # _C.per_token_group_fp8_quant and the blockwise _C.cutlass_scaled_mm): the dynamic per-128-group activation quant (both outputs
-           # computed) and the scaled GEMM over e4m3 weights with f32 128x128 block scales as Inputs. `rules/vllm_bindings.py` asks for them.
+           # computed) and the scaled GEMM over e4m3 weights with f32 128x128 block scales as Inputs. `rules/vllm_bindings/fp8.py` asks for them.
            # SCALE is `TargetProfile.effective_fp8_scale_construction()`; FP8_DOT, given on a target whose blockwise step is not Hopper's
            # (`frontend.targets.fp8_block_dot`), binds the version 3 forms over it (the role and its note stay as they were).
            "fp8_group_quant": lambda K, G: ir_bind(_fp8.Fp8GroupQuant, K=K, G=G),
@@ -499,6 +419,12 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # latent cache row [kv_c | k_pe] as one Definition
            "dsa_topk_mask_counted": lambda N, TOPK: ir_bind(_dsa_topk_mask.DsaTopKMaskCounted, N=N, TOPK=TOPK),
            "dsa_latent_row": lambda KVL, R, EPS: ir_bind(_dsa_norm.DsaLatentRow, KVL=KVL, R=R, EPS=EPS),
+           # an fp8_ds_mla KV cache (FLASHMLA_SPARSE, `phi.STATED_KV_LAYOUT`): a token's latent row with its 656-byte cache row, the
+           # sparse rows' FlashMLA fp8 decode, and a dense-MHA prefill's context row upconverted to bf16. `predict.dsa` asks for them.
+           "dsa_latent_row_ds_mla": lambda KVL, R, TILE, EPS: ir_bind(_dsa_ds_mla.DsaLatentRowDsMla, KVL=KVL, R=R, TILE=TILE, EPS=EPS),
+           "flashmla_v32_decode": lambda NH, SPLITS, DN, DR, QT, BN, DOT, SCALE:
+               ir_bind(_flashmla_dsv32.FlashMlaV32Decode, NH=NH, SPLITS=SPLITS, DN=DN, DR=DR, QT=QT, BN=BN, DOT=DOT, SCALE=SCALE),
+           "fp8_ds_mla_upconvert_row": lambda DN, DR: ir_bind(_fp8_ds_mla_upconvert.Fp8DsMlaUpconvertRow, DN=DN, DR=DR),
            # the table-read form's long rows (`Registered.dsa_table_reads`, `program.dsa_table`): a row's top-TOPK positions, and
            # the TOPK history rows read at them
            "dsa_topk_index": lambda N, TOPK: ir_bind(_dsa_table.DsaTopKIndex, N=N, TOPK=TOPK),
@@ -663,6 +589,12 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
                                     "argument, so the rows of a block of the batched form share one N",
            "dsa_latent_row": "DsaLatentRow_v1{KVL,R,EPS}: a token's latent cache row, DsaRMSNorm_v1{KVL,EPS} of kv_c then "
                              "RoPEHeadGptJ_v2{R} of k_pe (_fused_norm_rope_kernel), one Definition per row",
+           "dsa_latent_row_ds_mla": "DsaLatentRowDsMla_v1{KVL,R,TILE,EPS}: _fused_norm_rope_kernel's row under fp8_ds_mla -- the latent "
+                                    "row [kv_c | k_pe] and the cache row's KVL e4m3 and KVL/TILE f32 scales (DsMlaFp8Tile_v1{TILE})",
+           "flashmla_v32_decode": "FlashMlaV32Decode_v1{NH,SPLITS,DN,DR,QT,BN,DOT,SCALE}: FlashMLA's sparse fp8 decode of one token's NH "
+                                  "heads over its INDEX_TOPK fp8_ds_mla rows in index order, index -1 a pad, at the planner's splits",
+           "fp8_ds_mla_upconvert_row": "Fp8DsMlaUpconvertRow_v1{DN,DR}: cp_gather_and_upconvert_fp8_kv_cache of one fp8_ds_mla row to "
+                                       "its DN + DR bf16 words",
            "dsa_topk_index": "DsaTopKIndex_v1{N,TOPK}: a counted mask's TOPK members' positions in ascending index order, the slots "
                              "the concentrator gives their rows",
            "dsa_history_reads": "DsaHistoryReads_v1{V,TOPK,H}: the TOPK history rows at those positions, one read each of the "
@@ -740,17 +672,8 @@ PROFILE_DENSE2_EAGER_V1 = Vocabulary("dense2-eager-v1", "profile", "dense2-eager
                                      kinds=dict(PROFILE_B1_EAGER_V3.kinds), notes=dict(PROFILE_B1_EAGER_V3.notes))
 
 
-PROFILES = {"b1-eager": PROFILE_B1_EAGER, "b1-eager-v2": PROFILE_B1_EAGER_V2, "b1-eager-v3": PROFILE_B1_EAGER_V3,
-            "dense2-eager-v1": PROFILE_DENSE2_EAGER_V1, None: PROFILE_B1_EAGER}
-
-
-def vocabulary_for(mode: str, profile: str | None) -> Vocabulary:
-    if mode == "reference":
-        return REFERENCE_CPU_F32
-    v = PROFILES.get(profile)
-    if v is None:
-        raise ValueError(f"unknown profile {profile!r}; known: {sorted(k for k in PROFILES if k)}")
-    return v
+PROFILES.update({"b1-eager": PROFILE_B1_EAGER, "b1-eager-v2": PROFILE_B1_EAGER_V2, "b1-eager-v3": PROFILE_B1_EAGER_V3,
+            "dense2-eager-v1": PROFILE_DENSE2_EAGER_V1, None: PROFILE_B1_EAGER})
 
 
 __all__ = ["Vocabulary", "PROFILE_B1_EAGER", "PROFILE_B1_EAGER_V3", "REFERENCE_CPU_F32", "vocabulary_for", "PROFILES"]

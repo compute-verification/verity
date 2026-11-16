@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # proof_throughput's prover point: sessions that each prove B coordinates of one workload's population, the B its loopback
-# `flock-circuit serve` samples at the session's Register by the stratified sampling design (`serve --draw-law`, the sampling design verify.sh's Lean
+# `flock-circuit serve` samples at the session's Register by the stratified sampling design (`serve --sample-design`, the sampling design verify.sh's Lean
 # verifier derives for itself), proved by Flock's native prover (ZK off) on one leased GPU with live coins, WARM warm and RUNS
 # timed sessions. The coins are the challenger's keyed coin tree's (FC_COINS=tree: 70-class-sweep.sh gives the loopback verifier
 # its own challenger, pod/challenger.sh, and holds every session's record to the challenger's release log). The population (n_max instances) is staged once, whatever B (FLOCK_STAGE_CACHE). Build, staging and the
@@ -17,12 +17,17 @@
 #      LEASE_MAX_MIN=30  BUNDLE=1 (0: keep the sessions out of the store)  STAGE_ONLY=1 (build, stage and check; no GPU)
 #      any FC_*=VALUE reaches the prover (FC_PIPELINE_DEPTH=4 and FC_HOST_PREPIN=1 by default, as the hill-climb)
 #      ZK=1: configuration 2's stand-in (zk.py): M1's masked sessions (--zk) on the host's witness, under the ZK server's send
-#      check unless FC_FIREWALL=0; the result is zk-point's, no contract result and no bundle
+#      check unless FC_ZK_SERVER=0; the result is zk-point's, no contract result and no bundle
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uo pipefail
+for o in FLOCK_DRAW_LAW:FLOCK_SAMPLE_DESIGN; do n=${o#*:} o=${o%%:*}; [ -z "${!o+x}" ] || [ -n "${!n+x}" ] \
+  || { echo "proof-throughput: $o is set and $n is not: it is read as $n now; set $n instead" >&2; exit 2; }; done
 : "${WORKLOAD:?WORKLOAD= is required}" "${B:?B= is required}"
+# a job written when the ZK server's controls were FC_FIREWALL* sets keys nothing reads: refused, naming the key read now
+for k in ${!FC_FIREWALL*}; do n=FC_ZK_SERVER${k#FC_FIREWALL}; [ -n "${!n+x}" ] \
+  || { echo "proof-throughput: $k is set and $n is not: the ZK server's controls are read under $n; set $n instead" >&2; exit 2; }; done
 # the ZK server rechecks a witness the host assembled (PROTOCOL §10.2), so both arms take it: their difference is the ZK server's
-[ "${ZK:-0}" = 1 ] && export FLOCK_ZK=1 FC_FIREWALL=${FC_FIREWALL:-1} FC_HOST_WITNESS=1 BUNDLE=0
+[ "${ZK:-0}" = 1 ] && export FLOCK_ZK=1 FC_ZK_SERVER=${FC_ZK_SERVER:-1} FC_HOST_WITNESS=1 BUNDLE=0
 REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:-/tmp/pt-$$}/out}; mkdir -p "$O"
 export FLOCK_WORK=${FLOCK_WORK:-/workspace/jobs/proof-throughput}; mkdir -p "$FLOCK_WORK" || { echo "cannot make $FLOCK_WORK" >&2; exit 1; }
 PYTHONPATH=$REPO/tools/research/src python3 -m research keep "$FLOCK_WORK" --owner @proofs --expires 14d --priority low \
@@ -59,7 +64,7 @@ fi
 [ -x "$BIN" ] && [ -x "$PYBIN" ] || { log "missing the prover ($BIN) or the venv ($PYBIN)"; exit 1; }
 sha256sum "$BIN" | cut -d' ' -f1 > "$O/binary.sha256"
 ph build end
-export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/proof_throughput
+export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/proof_throughput
 PT() { "$PYBIN" -m verity_proof_throughput "$@"; }
 # the population (the class sweep's PT_VU, PT_N) and the verifier's stratified sampling design for B (law.json)
 read -r PT_VU PT_N < <(PT population --workload "$WORKLOAD" --B "$B" --out "$O") && [ -n "${PT_N:-}" ] || { log "no such workload or B"; exit 1; }
@@ -80,14 +85,14 @@ ph stage end
 PT staged --results "$O/staged.jsonl" > "$O/staged.txt" || { tail -20 "$O/stage.txt"; log "staging failed"; exit 1; }
 log "staged: $(cat "$O/staged.txt")"
 [ "${STAGE_ONLY:-0}" = 1 ] && { log "STAGE_ONLY: done"; exit 0; }
-# a firewalled prover's Lean Hello sets each session up at the verifier's own statement (live PROTOCOL.md §10.4), which takes
+# the Lean Hello of a prover behind the ZK server sets each session up at the verifier's own statement (live PROTOCOL.md §10.4), which takes
 # a stratified sample only with the verifier's own partition, program and K = B, as verify.sh derives them
-if [ "${ZK:-0}" = 1 ] && [ "$FC_FIREWALL" = 1 ]; then
+if [ "${ZK:-0}" = 1 ] && [ "$FC_ZK_SERVER" = 1 ]; then
   C0=$(PT staged --results "$O/staged.jsonl" --cache-dir) && PT partition --workload "$WORKLOAD" --circuit "$C0/circuit.txt" \
     --out "$S/partition.json" --program-out "$S/program.json" > "$O/partition.txt" 2>&1 \
-    || { tail -5 "$O/partition.txt"; log "no partition object for the firewall's Hello"; exit 1; }
-  export FC_FIREWALL_STATEMENT=verity/flock-circuit
-  export FC_FIREWALL_HELLO_ARGS="--partition $S/partition.json --program $S/program.json --stratified $B"
+    || { tail -5 "$O/partition.txt"; log "no partition object for the ZK server's Hello"; exit 1; }
+  export FC_ZK_SERVER_STATEMENT=verity/flock-circuit
+  export FC_ZK_SERVER_HELLO_ARGS="--partition $S/partition.json --program $S/program.json --stratified $B"
 fi
 
 # the sessions, on one leased GPU: node 1 lends Kueue's GPUs through its own gpu-lease copy (infra/cluster submit.py)
@@ -109,7 +114,7 @@ flock "$FLOCK_WORK/sessions.lock" "${LEASE[@]}" 1 --wait --max-min "${LEASE_MAX_
   "$@"; rc=$?
   kill $SM_ 2>/dev/null; wait $SM_ 2>/dev/null
   printf "lease\tend\t%s\n" "$(date +%s.%N)" >> "$O/phases.tsv"
-  exit $rc' _ "$O" env OUT="$S/prove" RESEARCH_RUN_DIR="$S/prove" bash $SWEEP "${ARGS[@]}" GPU=1 FLOCK_DRAW_LAW="$O/law.json" > "$O/prove.txt" 2>&1
+  exit $rc' _ "$O" env OUT="$S/prove" RESEARCH_RUN_DIR="$S/prove" bash $SWEEP "${ARGS[@]}" GPU=1 FLOCK_SAMPLE_DESIGN="$O/law.json" > "$O/prove.txt" 2>&1
 rc=$?
 log "sessions: exit $rc"
 D=$(ls -d "$S"/prove/classes/*/ 2>/dev/null | head -1)

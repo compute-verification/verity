@@ -5,13 +5,14 @@ no pool fits.
 Node 2's share is 48 cores that queued runs claim whole (research.cores) in one first-come line, so two large runs (a 16-job
 quick tier and a 32-core Lean check) can hold all 48 for hours while dozens of small runs wait behind them, with cpu-1's idle
 cores unused. So before queueing, `read` asks each machine at once, over the ssh `research run
---on` uses, as `python3 -` with research.cores and the source tree's tools/verity/check/slot.py inlined (both stdlib only):
+--on` uses, as `python3 -` with research.cores and the source tree's tools/check/slot.py (a trusted launcher tree's,
+research.launcher, where there is one) inlined (both stdlib only):
 node 2 for its share's live claims and waiters, and each CPU node (`spill`) for its pool's `slot.py --status --json` and the
 memory slot.py finds free there (`free_gb`, read once a pool). A pool is read by the machine's own slot.py where it has one
 (slot_only.NODE_SLOT), the copy its runs wait by, and by the inlined one where it has none. `choose` then takes, in order:
 
   - the pool with the most places for the job, the first by number among equals. A place is a slot that fits the job (not
-    trains-only, at least its CPUs), idle and unblocked, with the machine's free memory covering what the job would reserve
+    `only=trains`, at least its CPUs), idle and unblocked, with the machine's free memory covering what the job would reserve
     there (`_need`: the larger of the slot's mem=, or its book=, and the job's ask, which no cgroup enforces) once the
     waiters ahead have taken their own slots and memory, each by the ask its ticket names, as slot.py admits them (`_pool`).
     Idle slots are places only as far as the free memory goes, since every run that starts reserves its own. The most
@@ -36,9 +37,10 @@ read comes last there, never first. The placement's reason names the Lean pool t
 A GPU job, a run naming its own node, or one asking more CPUs than a pool slot has stays on node 2's queue. A machine that can't
 be read is skipped; with node 2 unread and no pool fitting, the job is refused (`Unplaceable`) with where to run it. A pool
 run waits up to slot_only.POOL_WAIT_S (4 h) in its line and then exits 75 without running; its --timeout counts from taking
-the slot, and a wait inside it for a Lean audit slot (lean_slot.py) moves it later by as long. While it waits there on
-memory, the asker its launch left, if it left one, asks again where it would start now (`elsewhere`) and moves it there as
-its late twin, as long as the launching VM is up (research.asker).
+the slot, and a wait inside it for a Lean audit slot (lean_slot.py) moves it later by as long. While it waits there, whatever
+on, the asker its launch left, if it left one, asks again where it would start now (`elsewhere`) and, once a place has stood
+there, moves it there as its late twin, as long as the launching VM is up (research.asker). So does a run sent by name to a
+machine's SPILL_POOL, unless its launch says `--stay`.
 
 The launch is told when the job should start where `choose` sent it (`expect`, from the documents `read` already has): now, in
 about so many minutes behind the line it joins, or that nothing read gives an estimate. A job expected to wait past
@@ -66,6 +68,7 @@ import math
 import re
 import shlex
 import subprocess
+import sys
 import tomllib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -77,7 +80,7 @@ SPILL_POOL = "research"
 #: a CPU node's name in the launcher's registry of machines; `spill` takes them by number
 CPU_NODE = re.compile(r"vy-nebius-cpu-([0-9]+)")
 DESCRIPTION = Path("infra/cluster/descriptions/nebius.toml")
-SLOT_PY = Path("tools/verity/check/slot.py")
+SLOT_PY = Path("tools/check/slot.py")
 READ_TIMEOUT_S = 30
 #: ssh's ConnectTimeout for node 2's probe: a stopped node 2 costs a launch this long, not remote.ssh_argv's default
 NODE_CONNECT_S = 5
@@ -92,8 +95,8 @@ NO_SSH = "its ssh doesn't answer"
 HOLD_FILE = "/etc/vy/auto-hold"
 #: a machine whose DISK_PATH has fewer free inodes or GB than these takes no `--on auto` job: a machine out of inodes with half
 #: its bytes free fails every job placed there, shipping its source or mid-build, with ENOSPC. One run of
-#: a large suite (tools/research's) holds some 250k pytest temp files at once, so a floor below a few of those still fails jobs
-DISK_PATH, MIN_FREE_INODES, MIN_FREE_GB = "/workspace", 1_000_000, 50
+#: a large suite (tools/research's) holds some 250k pytest temp files at once: the floor is two of those
+DISK_PATH, MIN_FREE_INODES, MIN_FREE_GB = "/workspace", 500_000, 50
 #: what a launch needs of a machine whatever the job, which the probe tries (its `no_start`): the null device, which the
 #: runner's start opens to read and write and git opens before it does anything, and git, which ships a tree as a checkout
 NULL_DEVICE, GIT = "/dev/null", "git"
@@ -119,7 +122,7 @@ LEAN_SLOTS = "/workspace/research/locks/lean-slots"
 #: the machines a machine reaches, one a line with its ssh options (slot.py's PEERS): a twin claims its pair on its home
 #: through it, so a late twin goes only where the first's machine is named (`elsewhere`)
 PEERS_FILE = "/etc/vy/peers"
-LEAN_SLOT_PY = Path("tools/verity/check/lean_slot.py")
+LEAN_SLOT_PY = Path("tools/check/lean_slot.py")
 #: the files of a source tree `read` reads: all a caller that has a commit and no checkout of it need hand it (research.asker)
 READS = (DESCRIPTION, SLOT_PY, LEAN_SLOT_PY)
 
@@ -336,7 +339,9 @@ def share_cpus(source: Path) -> str | None:
     """The CPUs of AUTO_PROJECT's share on AUTO_NODE in the source tree's cluster description, None when it says none."""
     try:
         desc = tomllib.loads((Path(source) / DESCRIPTION).read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"research run: {Path(source) / DESCRIPTION} unread, so {AUTO_PROJECT} has no share on {AUTO_NODE} "
+              f"({type(e).__name__}: {e})", file=sys.stderr)
         return None
     return next((s["cpus"] for s in desc.get("shares", []) if s.get("project") == AUTO_PROJECT and s.get("node") == AUTO_NODE
                  and isinstance(s.get("cpus"), str)), None)
@@ -417,8 +422,12 @@ def read(source: Path, cpus: int, *, reach: Callable[[str], list[str]] | None = 
     2's share is `{"hold": {until, why}}` while HOLD_FILE holds it (`now`: `payload`). A machine that can start no run (the
     probe's `no_start`) says why in place of each: node 2's share is `{"no_start": why}`, a pool's document an error in
     NO_START's words. With `node_only`, node 2 alone is asked; with `lean`, each machine's Lean slots too, under "lean"
-    (lean_slot.py's status document); with `peers`, the machines each one reaches, under "peers" (`elsewhere` reads them)."""
-    reach, run = reach or _reach, run or _ssh
+    (lean_slot.py's status document); with `peers`, the machines each one reaches, under "peers" (`elsewhere` reads them).
+    The probe's slot.py and lean_slot.py and the description are a trusted launcher tree's where there is one
+    (research.launcher), never ``source``'s."""
+    from . import launcher
+
+    reach, run, source = reach or _reach, run or _ssh, launcher.code(source)
     share = share_cpus(source)
     asks: dict[str, list[str]] = {AUTO_NODE: []}
     for machine, pool in () if node_only else spill():
@@ -561,7 +570,7 @@ def _ahead(fit: int, free: int, waiting: int) -> float:
 
 def _lean(doc: Any, pool: str | None) -> tuple[float | None, str]:
     """The line a run joins for a slot of Lean ``pool`` on the machine whose `read` document is ``doc``, and how to say it:
-    0 with no ``pool`` to take, where the machine caps no Lean, or while a slot is free for every waiter and this run; else the
+    0 with no ``pool`` to take, where the machine limits no Lean, or while a slot is free for every waiter and this run; else the
     waiters ahead and this run, per slot of the pool; infinite when its Lean slots weren't read; None, with why, when they give
     the pool none, so the run would never get one there."""
     if not pool:

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One streamed wipe of one GPU's memory, as one Attempt. wipe_period's leg on this node: the prover keeps the
+# One streamed wipe of one GPU's memory, as one Attempt. wipe_run's subprotocol on this node: the prover keeps the
 # fill in device memory (wipe_store.Cuda, the CUDA driver through ctypes: no toolkit, no build), the memory challenger
 # streams it natively (wipe_stream.c, built and gated on the challenger's host) and times its spot reads (--reads), and
 # the Lean (wipe-protocol, verity/wipe/v0) and the Python judge the signed session and must agree. cwd = a clone (the
@@ -17,24 +17,25 @@
 #   --reads K            the timed spot reads, which the certificate is computed at (default 2152; 2906 is the H200's
 #                        StreamedWipeMeetsH200, r = 33, at the whole device filled; a fill that leaves memory out
 #                        counts it in R and needs more): a challenger here is started with it; one on its own host
-#                        chooses its own (its --challenger-command's wipe_party --reads K), and the leg refuses a
+#                        chooses its own (its --challenger-command's wipe_party --reads K), and the subprotocol refuses a
 #                        session at another count
 #   --challenger HOST --challenger-address H:P --challenger-command 'ARGV'
 #                        the memory challenger on a host of its own (all three; infra's wiring of wipe_party's side
-#                        there, e.g. 'python -m verity.protocols.accounting.pous.verifier.wipe_party --device D --listen 0.0.0.0:P
+#                        there, e.g. 'python -m verity.protocols.resource_accounting.memory.pous.attester.wipe_challenger --device D --listen 0.0.0.0:P
 #                        --reads 5231 --streamer build'); without them it runs on this node, a rehearsal
 #   --trusted-sha512 HEX the SHA-512 of the memory challenger's public key, in 128 lowercase hex digits: the one key
 #                        the verifier trusts, a session signed under another rejected. --challenger takes it; a
-#                        challenger here signs under a key this run makes, trusted without it. trusted-host holds only
-#                        under the key wipe_party.AUDITOR_KEYS pins for the challenger's host; under any other the
-#                        record reads "rehearsal: key not the auditor's pinned key, no bound"
+#                        challenger here signs under a key this run makes, trusted without it. trusted-device holds only
+#                        under a committed configuration (VERITY_CONFIGURATION, its hash) for a key its pins give the
+#                        wipe (VERITY_PINS, its [[pin]] entries as JSON), which period.json's deployment carries; under
+#                        any other the record reads a rehearsal with no bound
 #   --simulated          the memory challenger here, named the stand-in for one on its own host (placement
 #                        `simulated`, a label; its key in this run's scratch, so a rehearsal all the same)
 #   --foreign-gb G|fM    the cheat: the prover keeps G GB (10^9 bytes) of prior content in place of the fill's first
 #                        labels, or fM, one label past the foreign_bits published at the reads; a cheat's run
 #                        expects reject
 #   --expect accept|reject  the verdict that exits 0 (default accept; reject with --foreign-gb)
-#   --egress-bits N      the network certifier's egress count over the session, in bits, which the verifier's check
+#   --egress-bits N      the network attester's egress count over the session, in bits, which the verifier's check
 #                        takes as evidence in whole MiB, wherever the challenger runs (default: none, the bound
 #                        vacuous); no challenger is given it and the session signs none
 #   --link NAME=TO@VIA   a link leaving this node besides the control link and the challenger's, which the record names
@@ -61,7 +62,6 @@
 #   --gpu NAME           refuse a GPU whose name lacks NAME (default H200; any: take any)
 #   --node NAME          the developer's node, the wiped server's id (default: hostname)
 #   --limit-ns N         the deadline a read (default 20 ms)
-#   --no-lean            judge in Python alone; judge out/wipe.case.json with wipe-protocol later on a CPU node
 #   --wipe-protocol EXE  the Lean judge built elsewhere (served_wipe.sh builds it outside this tree's .lake, which
 #                        served_verdicts.sh's own Lean builds write meanwhile), in place of building it here
 #
@@ -82,7 +82,7 @@ mkdir -p "$O"
 if [ "${1:-}" = leased ]; then
   [ -n "${GPU_LEASE_UUID:-}" ] && export CUDA_VISIBLE_DEVICES=$GPU_LEASE_UUID
 else
-  DRY=0 SEGMENTS= RESERVE=1 CH= CH_ADDR= CH_CMD= THREADS= STORE=cuda GPU=H200 NODE=$(hostname) LIMIT=20000000 LEAN=1
+  DRY=0 SEGMENTS= RESERVE=1 CH= CH_ADDR= CH_CMD= THREADS= STORE=cuda GPU=H200 NODE=$(hostname) LIMIT=20000000
   SIMULATED=0 FOREIGN=0 EXPECT= EGRESS= LINKS= READS= DISKS=() DISK_GB= DISK_RESERVE=10 DISK_SPARE=0 LEASE_MIN=60
   DRAM=0 DRAM_GB= DRAM_RESERVE=16 WIPE_PROTOCOL= TRUSTED=
   ARGS=("$@")
@@ -114,7 +114,6 @@ else
       --gpu) GPU=$2; shift ;;
       --node) NODE=$2; shift ;;
       --limit-ns) LIMIT=$2; shift ;;
-      --no-lean) LEAN=0 ;;
       --wipe-protocol) WIPE_PROTOCOL=$2; shift ;;
       *) echo "demo.sh: unknown option $1 (see the header)"; exit 2 ;;
     esac
@@ -181,13 +180,12 @@ EOF
     ip -br link 2>/dev/null; for i in /sys/class/net/*; do echo "$(basename "$i") $(cat "$i/speed" 2>/dev/null || echo -) Mb/s"; done
   } > "$O/env.txt" 2>&1
   uv sync -q --all-packages --extra torch-cpu
-  [ -n "$CH" ] || cc -O3 -pthread verity/protocols/accounting/pous/verifier/wipe_stream.c -o "$S/wipe_stream-check"
-  TOOLS={}
-  if [ "$LEAN" = 1 ] && [ -n "$WIPE_PROTOCOL" ]; then
+  [ -n "$CH" ] || cc -O3 -pthread verity/protocols/resource_accounting/memory/pous/attester/wipe_stream.c -o "$S/wipe_stream-check"
+  if [ -n "$WIPE_PROTOCOL" ]; then
     [ -x "$WIPE_PROTOCOL" ] || { echo "REFUSED: --wipe-protocol $WIPE_PROTOCOL is not an executable"; exit 3; }
     TOOLS="{\"wipe-protocol\": \"$WIPE_PROTOCOL\"}"
-  elif [ "$LEAN" = 1 ]; then
-    L=verity/protocols/accounting/pous/device/lean
+  else
+    L=verity/protocols/resource_accounting/memory/pous/attester/lean
     export PATH="$HOME/.elan/bin:$PATH"
     command -v lake >/dev/null 2>&1 || bash tools/verity/lean/setup.sh "$L" > "$O/lake-setup.log" 2>&1
     (cd "$L" && lake build wipe-protocol) > "$O/lake-build.log" 2>&1 \
@@ -198,7 +196,7 @@ EOF
   uv run --no-sync python - "$S/periods/p0/period.json" "$TOOLS" "$STORE" "${SEGMENTS:-null}" "$RESERVE" "${THREADS:-null}" \
     "$LIMIT" "$CH" "$CH_ADDR" "$CH_CMD" "$SIMULATED" "$FOREIGN" "${EGRESS:-null}" "${READS:-null}" "${CTRL_DEV:-}" \
     "${CTRL_SRC:-}" "$CTRL_MBPS" "$LINKS" "$DISK_JSON" "$DRAM_JSON" "$TRUSTED" <<'EOF'
-import json, shlex, sys
+import json, os, shlex, sys
 from fractions import Fraction
 (path, tools, store, segments, reserve, threads, limit, ch, addr, cmd, simulated, foreign, egress, reads, dev, src, mbps,
  specs, disk, dram, trusted) = sys.argv[1:]
@@ -216,7 +214,9 @@ doc = {"tools": json.loads(tools),
                 "foreign_bytes": foreign if foreign == "fM" else int(Fraction(foreign) * 10 ** 9),
                 "placement": "simulated" if simulated == "1" else None, "egress_bits": json.loads(egress),
                 "reads": json.loads(reads), "links": links, "disk": json.loads(disk), "dram": json.loads(dram),
-                "trusted_sha512": trusted or None}}
+                "trusted_sha512": trusted or None},
+       "deployment": {"configuration": os.environ.get("VERITY_CONFIGURATION") or None,
+                      "pins": json.loads(os.environ.get("VERITY_PINS") or "[]")}}
 if ch:
     doc |= {"challenger_host": ch, "challenger": {"wipe": {"command": shlex.split(cmd), "address": addr}}}
 open(path, "w").write(json.dumps(doc, indent=1, sort_keys=True))
@@ -242,7 +242,7 @@ if [ "$DEMO_STORE" = cuda ]; then
   case "$DEMO_GPU:$NAME" in any:*|*:*"$DEMO_GPU"*) ;; *) echo "REFUSED: the GPU is '$NAME', not an $DEMO_GPU"; exit 3 ;; esac
 fi
 rc=0
-uv run --no-sync python -m verity.protocols.accounting.pous.verifier.wipe_period --period "$DEMO_PERIOD" --out "$O" --node "$DEMO_NODE" \
+uv run --no-sync python benchmarks/pous/streamed_wipe/wipe_on_node.py --period "$DEMO_PERIOD" --out "$O" --node "$DEMO_NODE" \
   --expect "$DEMO_EXPECT" > "$O/summary.json" || rc=$?
 cat "$O/summary.json"
 exit $rc

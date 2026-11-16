@@ -1,4 +1,9 @@
-/-
+module
+
+public import Flock.Hash
+public import Flock.Bytes
+
+/-!
 Halevi–Micali hiding leaves (`verity.commitments.hm96`), generic over the hash. For an inner digest `x` of the value
 and a salt `y`:
 
@@ -8,10 +13,6 @@ and a salt `y`:
 where `pad` zero-pads to the hash's block. Bit `t` of a byte string is bit `t mod 8` of byte `⌊t/8⌋`. The verifier computes
 the leaf natively from the commit string `b ‖ c`; the key is the statement's, never an opening's.
 -/
-module
-
-public import Flock.Hash
-public import Flock.Bytes
 
 @[expose] public section
 set_option backward.privateInPublic true

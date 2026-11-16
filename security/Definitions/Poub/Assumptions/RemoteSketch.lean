@@ -1,0 +1,58 @@
+module
+
+public import Definitions.Poub.Remote.Held
+public import Definitions.Poub.Remote.Sketch
+public import Definitions.Assumptions.ResourceAccounting
+
+/-!
+# What deriving the receipts' sketch bound assumes (trusted)
+
+`ResourceAccounting.Guarantees.Remote.SketchBoundRun` derives `ResourceAccounting.Remote.Held.Assumptions.SketchBound` on a
+trace over a session's outcomes (`ResourceAccounting.Remote.Sketch.Outcome`) from the session (`ResourceAccounting.Remote.Sketch.Run`)
+and these premises, each a named `Prop` taken as a hypothesis:
+
+* `ResourceAccounting.Assumptions.SketchHashRandom A ε` (declared in `Definitions.Assumptions.ResourceAccounting`, which this module
+  re-exports): the random-oracle premise (`random-oracle`). At every prover coin and
+  store, the keys SHA-512 gives at the session's candidate seeds are within `ε` of uniform: no event of the keys is
+  more than `ε` likelier than at uniform keys.
+* `KeyBudget A qtot`: across pass `j`'s candidate seeds the receipt-hash queries total at most `qtot j`, the hashes the
+  prover computes in the pass, on the node or off it (`SketchHashBudget`'s budget, per pass of a remote session).
+* `Receipted A T`: a receipt the trace counts correct (`Trace.correct`) is one the kept candidate's device got right
+  at the key SHA-512 gives at its seed (`Run.correctAt`): the trace's verdict on a receipt is the model's.
+* `Present A T`: a block the kept candidate's device obtained whole in pass `j`, held on chip or read in from node
+  memory, a link or a rebuild, was in node memory or on a chip at some tick of the pass (`Trace.present`). The trace
+  counts whole blocks, the device sectors: the premise reads a block present when all its sectors were obtained in the
+  pass, not necessarily at one tick.
+
+The signs' rank tail is `ResourceAccounting.Assumptions.SketchRank`, evaluated outside Lean.
+-/
+
+@[expose] public section
+
+namespace ResourceAccounting.Remote.Sketch.Assumptions
+
+open ResourceAccounting.RateSketch ResourceAccounting.Remote.Held ResourceAccounting.Remote.Sketch
+
+variable {β Hs : Type} {P N m h S L q ks : ℕ} {G : Fin P → ℕ}
+
+/-- **The per-pass hash budget**: at every prover coin, earlier keys, candidate keys and store, pass `j`'s candidates'
+receipt-hash queries total at most `qtot j`. Grinding a seed reads no block, so the prover may compute its hashes off
+the node as well as on it: `Σ_j qtot j` is at most the SHA-512 compressions the prover can make over the session,
+`Q`, its budget on any hardware it reaches (`timing.sketch_failure`'s `queries`, `2^80` in `audit.QUERIES_LOG2`). -/
+def KeyBudget (A : Run β Hs P N m h S L q ks G) (qtot : Fin P → ℕ) : Prop :=
+  ∀ b j η (κ : Fin (G j) → Key N m h ks) (D : Data N m 0 Sector),
+    ∑ c, (((A.device b j η c).prog (κ c).1 D).queries (κ c).2 D).length ≤ qtot j
+
+/-- **Receipted**: on every accepting outcome, each block whose receipt the trace counts correct in credited pass `j`
+is one the kept candidate's device tagged right at the key SHA-512 gives at its seed. -/
+def Receipted (A : Run β Hs P N m h S L q ks G) (T : Trace (Outcome β Hs N m)) : Prop :=
+  ∀ ω, T.accepts ω → ∀ j : Fin P, ∀ b ∈ T.correct ω (j : ℕ),
+    ∃ t ∈ A.correctAt ω j (A.kept ω j), (t : ℕ) = b
+
+/-- **Present**: on every accepting outcome, a block the kept candidate's device of pass `j` obtained whole was in node
+memory or on a chip at some tick of the pass. -/
+def Present (A : Run β Hs P N m h S L q ks G) (T : Trace (Outcome β Hs N m)) : Prop :=
+  ∀ ω, T.accepts ω → ∀ j : Fin P, ∀ t : Fin N, A.Whole ω j (A.kept ω j) t →
+    ∀ b : Fin T.blocks, (b : ℕ) = t → ∃ τ, T.tick ω (j : ℕ) ≤ τ ∧ τ < T.tick ω ((j : ℕ) + 1) ∧ b ∈ T.present ω τ
+
+end ResourceAccounting.Remote.Sketch.Assumptions

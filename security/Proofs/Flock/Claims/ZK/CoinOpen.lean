@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.ZK.CoinLayer
-import Flock.Firewall.Contract
+import Flock.ZkServer.Contract
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -36,9 +36,9 @@ import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
-# The Lean coin check is the deployed coin layer's (`Flock.Firewall.Coins`)
+# The Lean coin check is the deployed coin layer's (`Flock.ZkServer.Coins`)
 
-`flock-firewall coins` (`Flock.Firewall.Coins.cmd`) is the check every coin a masked prover behind the ZK server hands on has passed:
+`flock-zk-server coins` (`Flock.ZkServer.Coins.cmd`) is the check every coin a masked prover behind the ZK server hands on has passed:
 `coin_tree::Checked` asks it at `Hello`, at `Hello`'s answer and at each opening, and its verdict is the transport's. Its
 verdict over a session is `Release.start` at the answer, then `Release.openAll` over the openings in order. At SHA-512
 (`shaH`, the hash `Coins.hk` takes under the nonce prefix) that verdict is the model's: the keyed coin-tree walk of
@@ -62,7 +62,7 @@ verdict over a session is `Release.start` at the answer, then `Release.openAll` 
 namespace Claims.ZKMal.CoinOpen
 
 open Claims FlockSoundness.Merkle FlockSoundness.ZK CoinLayer
-open _root_.Flock.Firewall
+open _root_.Flock.ZkServer
 
 /-! ## SHA-512 as the oracle -/
 
@@ -72,7 +72,7 @@ def shaH (m : Msg) : Msg := (_root_.Flock.Sha512.hash ⟨m.toArray⟩).data.toLi
 theorem shaH_length (m : Msg) : (shaH m).length = 64 := by
   unfold shaH
   rw [Array.length_toList, ByteArray.size_data]
-  exact _root_.Flock.Firewall.Contract.sha512_size _
+  exact _root_.Flock.ZkServer.Contract.sha512_size _
 
 theorem hk_length (ν m : List UInt8) : (Coins.hk ν m).length = 64 := shaH_length _
 

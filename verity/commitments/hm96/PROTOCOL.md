@@ -14,9 +14,9 @@ key as an `hm96-sha512/v1` leaf (frame-v3's `PROTOCOL.md`, §6, "Keyed leaves").
   `verity.commitments.hm96.batch` (numpy) computes the masks and tree leaves of many rows at once, byte-identical to it.
 - **Vectors.** `vectors.json` (`hm96-sha256/v1`) and `vectors_sha512.json` (`hm96-sha512/v1`), written by
   `python -m verity.commitments.hm96.vectors`. `--check` exits nonzero if either is stale.
-- **Conformance.** `verity/commitments/tests/test_hm96.py` checks the reference against the vectors and a bit-level matrix
-  product; `test_hm96_batch.py` checks `batch` against the reference; `verity/commitments/windows/tests/test_hiding.py` checks
-  `verity.commitments.windows.hiding`'s batch path against both.
+- **Conformance.** `tests/verity/commitments/test_hm96.py` checks the reference against the vectors and a bit-level matrix
+  product; `test_hm96_batch.py` checks `batch` against the reference; `tests/verity/commitments/periods/test_hiding.py` checks
+  `verity.commitments.periods.hiding`'s batch path against both.
 - **Source.** Halevi and Micali, "Practical and Provably-Secure Commitment Schemes from Collision-Free Hashing", CRYPTO 1996 (HM96):
   their first scheme, with the affine universal family below, applied to a digest of the value (their O(k) variant). The hiding bound
   uses the generalized leftover hash lemma of Dodis, Ostrovsky, Reyzin and Smith, "Fuzzy Extractors", SIAM J. Computing 38(1), 2008
@@ -85,7 +85,8 @@ hm96-sha256/v1: SHA-256, i = 0 … 4 (160 bytes)        hm96-sha512/v1: SHA-512,
 - **What the hiding claim assumes about the key.** The pinned-key bound of section 3 holds for all but a `2^-64` fraction of keys.
   Using a derived key assumes it isn't in that fraction: a counter-mode hash output over a public label is a typical sample of the
   family.
-  - This is the assumption `hash-derived-key` in `verity.claims`, a standard nothing-up-my-sleeve assumption.
+  - This is the assumption `hash-derived-key` (a claim id of `verity.commitments.claim_ids`), a standard nothing-up-my-sleeve
+    assumption.
   - It is used in the `common-reference-string` model.
   - It is not a collision-resistance assumption, and binding doesn't use it.
 - **One key per instance, for every leaf, run and deployment.** N in section 3 counts every leaf ever committed under that key.
@@ -224,7 +225,7 @@ Hiding rests on no hash property. It is statistical given uniform salts, and its
 - the pinned key, which every configuration uses: `N · 2^-192`, except for a `2^-64` fraction of keys. That condition is the
   common-reference-string step of section 3, justified by the derivation of section 2a.
 
-`verity.claims` names these:
+Three claim ids of `verity.commitments.claim_ids` name these:
 - the guarantee `statistical-hiding`;
 - the model `common-reference-string`;
 - the setup assumption `hash-derived-key`.

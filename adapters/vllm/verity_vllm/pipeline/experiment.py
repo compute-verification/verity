@@ -22,7 +22,7 @@ their byte size, a sha256 for the small ones, and a presence flag.  Two discipli
 
 The future config-driven Program predictor reads `specification` (+ `representation.program`) as one training example; `execution`
 is what validates it.  `checks.classification` (PASS / ADAPTER / MECHANISM / SCALE) is the *campaign's* judgement and is filled from the
-coverage table, not by the run.
+inventory, not by the run.
 """
 from __future__ import annotations
 

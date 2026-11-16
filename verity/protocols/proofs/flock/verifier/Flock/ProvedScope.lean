@@ -1,13 +1,14 @@
-/-
+module
+
+public import Flock.HmRow
+public import Flock.JsonParse
+
+/-!
 The statement forms the soundness proof covers. `verify` refuses every other: soundness is one theorem
 over every session the verifier accepts, so a form no theorem covers is refused, never accepted. Widening the proof to
 another form is a change to one rule here, with the proof that the headlines cover it. With hidden outputs that is the
 general instance form (`scopeOkI`, once `wiresAcyclic` passed); with public outputs, the unit's form (`scopeOk`).
 -/
-module
-
-public import Flock.HmRow
-public import Flock.JsonParse
 
 @[expose] public section
 
@@ -547,28 +548,28 @@ theorem programP_ok {parsed : V Circuit} {program : Option ByteArray} (h : progr
     | none => rfl
     | some w => simp [hw] at h
 
-/-- What a sample's law is, when no soundness claim samples by it at the session's form: the one rule
-for which law each form samples by. Without `--plain-tables`: the stratified sampling design at every form `check` passes, each claim at
+/-- What a sample's sampling design is, when no soundness claim samples by it at the session's form: the one rule
+for which sampling design each form samples by. Without `--plain-tables`: the stratified sampling design at every form `check` passes, each claim at
 one table (`SoundExec`, `SoundExecH`, `SoundZ`, `SoundZH`); the subset sampling design under `--zk` (`SoundZJ`, `SoundZHJ`, `SoundZHJR`)
 and, without it, exactly where a plain claim samples by it: at hidden outputs, at the one table `check` admits there
 (`SoundExecH` at its subset sample design). Under `--plain-tables` (`plainTables`, `SoundExecJ`), the subset sampling design alone. So a
 bernoulli sample, a work sample (with or without a closure), a subset sample without `--zk` or `--plain-tables` at public outputs,
 and a stratified sample under `--plain-tables` are outside them. -/
-def lawWhy (zk : Bool) (tags : Tags) (plainTables : Bool) (d : Draw.UnitDraw) : Option String :=
-  match d.law with
+def samplingDesignWhy (zk : Bool) (tags : Tags) (plainTables : Bool) (d : Draw.UnitSample) : Option String :=
+  match d.samplingDesign with
   | .stratified .. => if plainTables then some "a stratified draw under --plain-tables" else none
   | .subset _ => if zk || tags.hiddenOutputs || plainTables then none else some "a subset draw without --zk"
   | .bernoulli .. => some "a bernoulli draw"
   | .work .. => some (if d.closure.isEmpty then "a work draw" else "a work draw with a closure")
 
-/-- **The session's sample is by a sampling design a soundness claim samples by at its form** (`lawWhy`): `draw` is
+/-- **The session's sample is by a sampling design a soundness claim samples by at its form** (`samplingDesignWhy`): `draw` is
 the record's (`recordDraw`), none for a session without one. Every claim is about a sampled session, so a session without
 a sample is refused (D12); so is a sample that does not parse. -/
-def drawLaw (zk : Bool) (tags : Tags) (plainTables : Bool) : Option Lean.Json → Except String Unit
+def sampleDesign (zk : Bool) (tags : Tags) (plainTables : Bool) : Option Lean.Json → Except String Unit
   | none => .error "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
-  | some j => match Draw.UnitDraw.ofJson j with
+  | some j => match Draw.UnitSample.ofJson j with
     | .error e => .error s!"refused: a draw that does not parse ({e})"
-    | .ok d => match lawWhy zk tags plainTables d with
+    | .ok d => match samplingDesignWhy zk tags plainTables d with
       | some why => .error s!"refused: {why}: no soundness claim draws by this law"
       | none => .ok ()
 
@@ -706,15 +707,27 @@ theorem programFields_held {parsed : V Circuit} {handed : Option (Option String)
           · exact ⟨c, m, rfl, by rw [he], hm, by simpa [programFields, notHeldWhy, hm, he] using h⟩
           · simp [programFields, notHeldWhy, hm, he] at h
 
-/-- **The statement versions `verify` takes**: the current statement, a recursive session's inner one, and the templated
-statement (`Tags.tmplName`; building `Tags.circuitTmpl` would hash its identity's key), which `check` passes only in the
-form `scopeOkT` covers and `--zk`'s form check (`KsScope.checkOf`) only on its template, and whose statement circuit, the
-flat circuit it unrolls to, is the one `SampledKSLiveV5` is stated at. Every other version `Tags.all` names is
+/-- **The statement versions `verify` takes**: the current statement, a recursive session's inner one, the wide-leaf
+statement (`Tags.wideLeafName`, under `--zk` only: `wideLeafWhy`), and the templated statement and its wide-leaf version
+(`Tags.tmplName`, `Tags.tmplWideLeafName`; building `Tags.circuitTmpl` would hash its identity's key), which `check`
+passes only in the form `scopeOkT` covers and `--zk`'s form check (`KsScope.checkOf`) only on its template, and whose
+statement circuit, the flat circuit it unrolls to, is the one `SampledKSLiveV5` is stated at. Every other version
+`Tags.all` names is
 superseded: a `+seed-injection` one is a selftest build's, whose coins the prover injected, and the older ones' coins
 derive through SHA-256 or, under `--zk`, their pads are ChaCha20 streams of the prover's seed. They stay in `Tags.all` so
 the agreement corpus and the recorded fixtures replay: `verify` runs every check on them, then refuses the session
 (`servedForm`). -/
-def served : List String := [Tags.circuit.name, Tags.circuitPlainLeaves.name, Tags.tmplName]
+def served : List String :=
+  [Tags.circuit.name, Tags.circuitPlainLeaves.name, Tags.wideLeafName, Tags.tmplName, Tags.tmplWideLeafName]
+
+/-- **Where a wide-leaf statement (`Tags.wideLeaf`) is taken**: under `--zk`, outside a recursive session (`recursive`:
+any `--rec-…` flag). The wide-leaf schedule is the `--zk` verifier's (`Zk.schedule`); the plain verifier and a recursive
+session's checks read `fast100`, so a wide-leaf statement there would be checked at the other version's schedule. -/
+def wideLeafWhy (tags : Tags) (zk recursive : Bool) : Option String :=
+  if !tags.wideLeaf then none
+  else if !zk then some s!"refused: {tags.name}, a wide-leaf statement, without --zk: the plain verifier reads fast100, the other statement version's schedule"
+  else if recursive then some s!"refused: {tags.name}, a wide-leaf statement, in a recursive session: its checks read fast100, the other statement version's schedule"
+  else none
 
 def versionWhy (tags : Tags) : Option String :=
   if served.contains tags.name then none

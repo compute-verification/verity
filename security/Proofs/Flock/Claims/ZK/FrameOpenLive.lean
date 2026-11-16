@@ -59,7 +59,7 @@ pads of an `L0Round`, so the frame releases the live opening's body as the rep's
 namespace FlockComplete.LigLock
 
 open Flock
-open _root_.Flock.Firewall.Frame (Cfg Draws MaskSlot Masker)
+open _root_.Flock.ZkServer.Frame (Cfg Draws MaskSlot Masker)
 open FlockSoundness.Refine (Frame encs)
 open Claims.ZKServer (L0Round LeanRelease absPos zeros_get!)
 
@@ -76,7 +76,7 @@ variable {coin : ℕ → ℕ → F128} {p0 : ℕ} {P : List UInt8} {T : F128} {c
 
 /-- **The out-of-domain round** with `β_0`'s squeeze is body `1`. -/
 theorem l0Sent_ood (hk : 0 < lay.k0) (z : Array F128) (hz : z[lay.lgOod 0]! = 0) :
-    L0Sent (Cfg.ofDraws lay d mk) (absPos lay (lay.lgOod 0)) 1 1 1
+    L0Sent (Cfg.ofSamples lay d mk) (absPos lay (lay.lgOod 0)) 1 1 1
       (l0BodyAt coin p0 P T cap sch t b lay z rep extra nonce 1)
       (l0BodyAt coin p0 P T cap sch t b lay d.h rep extra nonce 1) :=
   ⟨_, _, Claims.ZKServer.l0Round_ood lay d mk hk _ z hz _ (by
@@ -85,7 +85,7 @@ theorem l0Sent_ood (hk : 0 < lay.k0) (z : Array F128) (hz : z[lay.lgOod 0]! = 0)
 /-- **Lane round `j`'s masked message** with its challenge's squeeze is body `j + 2`, for `j < k_0`. -/
 theorem l0Sent_lane (hk : 0 < lay.k0) {j : ℕ} (hj : j < sch.k0) (hjl : j < lay.k0) (z : Array F128)
     (hz : ∀ q < 4, z[lay.lgMsg j q]! = 0) :
-    L0Sent (Cfg.ofDraws lay d mk) (absPos lay (lay.lgMsg j 0)) 4 2 2
+    L0Sent (Cfg.ofSamples lay d mk) (absPos lay (lay.lgMsg j 0)) 4 2 2
       (l0BodyAt coin p0 P T cap sch t b lay z rep extra nonce (j + 2))
       (l0BodyAt coin p0 P T cap sch t b lay d.h rep extra nonce (j + 2)) :=
   ⟨_, _, Claims.ZKServer.l0Round_msg lay d mk hk hjl (roundPoly (tabS coin p0 t j) (wS coin p0 b sch.n j)) z hz,
@@ -93,7 +93,7 @@ theorem l0Sent_lane (hk : 0 < lay.k0) {j : ℕ} (hj : j < sch.k0) (hjl : j < lay
 
 /-- **The pair's sums** with `ρ_0`'s squeeze are body `k_0 + 2`. -/
 theorem l0Sent_pair (hk : 0 < lay.k0) (z : Array F128) (hz : ∀ i < 2, ∀ c < 2, z[lay.lgE i c]! = 0) :
-    L0Sent (Cfg.ofDraws lay d mk) (absPos lay (lay.lgE 0 0)) 4 2 2
+    L0Sent (Cfg.ofSamples lay d mk) (absPos lay (lay.lgE 0 0)) 4 2 2
       (l0BodyAt coin p0 P T cap sch t b lay z rep extra nonce (sch.k0 + 2))
       (l0BodyAt coin p0 P T cap sch t b lay d.h rep extra nonce (sch.k0 + 2)) :=
   ⟨_, _, Claims.ZKServer.l0Round_e lay d mk hk _ _ z hz, l0BodyAt_e, l0BodyAt_e⟩
@@ -103,7 +103,7 @@ at the samples' pads, its squeeze one coin of kind `1` or two of kind `2`. -/
 theorem l0Sent_zero (hk : 0 < lay.k0) (hkk : sch.k0 ≤ lay.k0) (len : ℕ) {i : ℕ} (hi1 : 1 ≤ i)
     (hi : i ≤ sch.k0 + 2) :
     ∃ p n k nc, (k = 2 ∨ (k = 1 ∧ nc = 1)) ∧ nc ≠ 0 ∧
-      L0Sent (Cfg.ofDraws lay d mk) p n k nc
+      L0Sent (Cfg.ofSamples lay d mk) p n k nc
         (l0BodyAt coin p0 P T cap sch t b lay (Array.replicate len 0) rep extra nonce i)
         (l0BodyAt coin p0 P T cap sch t b lay d.h rep extra nonce i) := by
   rcases Nat.lt_or_ge i 2 with h2 | h2
@@ -192,7 +192,7 @@ theorem ligeritoPZk_cutL0_live (coin : ℕ → ℕ → F128) (hs : Hashes PS) (m
           nonce).run tr).go l) ∧
       (∀ i, (i = 0 ∨ i = sch.k0 + 3) → B z i = B d.h i) ∧
       (∀ i, 1 ≤ i → i ≤ sch.k0 + 2 → ∃ p n k nc, (k = 2 ∨ (k = 1 ∧ nc = 1)) ∧ nc ≠ 0 ∧
-        L0Sent (Cfg.ofDraws lay d mk) p n k nc (B z i) (B d.h i)) := by
+        L0Sent (Cfg.ofSamples lay d mk) p n k nc (B z i) (B d.h i)) := by
   intro B z
   exact ⟨ligeritoPZk_cutL0 coin hs ms sch T cm0 t b lay _ rep tPad extra lanePad salt nonce tr l hj hk hn,
     ligeritoPZk_cutL0 coin hs ms sch T cm0 t b lay _ rep tPad extra lanePad salt nonce tr l hj hk hn,

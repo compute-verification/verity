@@ -23,7 +23,7 @@ definition); its `Bad` is the session's; `bad_le` is `TileReadSound`; and `good_
 def TileReadSession.tileGame [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P : Protocol Q R S)
     (TR : TileRules Q R S) (D : Layout → Prop) (F : TileReadSession Q R S) (δzk : ℕ → ℝ) (h0 : ∀ q, 0 ≤ δzk q)
     (hT3 : TileReadSound P D F δzk) (hbind : TileReadBinds P TR D F) (U : Workload) (hU : U.InDomain P D)
-    (τ : Transcript) (o : F.Opening) (H : Q → R) (s : S) (g : ℕ) :
+    (τ : Trace) (o : F.Opening) (H : Q → R) (s : S) (g : ℕ) :
     TileGame P TR F.audit F.cls δzk U τ o H s g where
   Out := F.Out U
   G := F.game H s U (F.root U τ o) g

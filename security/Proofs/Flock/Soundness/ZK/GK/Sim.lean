@@ -20,9 +20,9 @@ If `V*` does not complete it (it aborts, or its coin openings fail), that view i
   differently from the first run (`bad`) is a break of the coin commitment, `Out.bind`; running out of rewinds is
   `Out.fail`.
 
-`gk` counts the runs of `V*` it plays alongside its outcome. This file proves the loops' laws that the hybrid argument
+`gk` counts the runs of `V*` it plays alongside its outcome. This file proves the loops' sampling designs that the hybrid argument
 (`GK/Theorem.lean`) reads: `estimate_runs` (`q·E[N] ≤ t` at completion rate `q`), `estimate_cap` (`M·Pr[cap] ≤ E[N]`),
-`estimate_abort` (`E[(1 − p)^{4N}] ≤ 3^{-t}` once `(1 − p)^4·(1 + 2q) ≤ 1`), `rewinds_close` (one run's law changed by
+`estimate_abort` (`E[(1 − p)^{4N}] ≤ 3^{-t}` once `(1 − p)^4·(1 + 2q) ≤ 1`), `rewinds_close` (one run's distribution changed by
 `δ` changes `n` rewinds' by at most `n·δ`), `rewinds_couple` (two loops that agree until `bad` differ by at most the
 probability of `bind`) and `ev_rewinds_real` (rewinding with real runs reaches a completed view with probability
 `1 − (1 − p)^n`).
@@ -151,7 +151,7 @@ theorem ev_gk (Cr : Type) [Fintype Cr] [Nonempty Cr] (dummy : C → V) (rw : V �
 
 end Unfold
 
-/-! ## The estimation's laws -/
+/-! ## The estimation's sampling designs -/
 
 section Estimate
 
@@ -246,7 +246,7 @@ theorem estimate_abort {a : ℝ} (ha : 0 ≤ a) (hq : a * (1 + 2 * rate C comp) 
 
 end Estimate
 
-/-! ## The rewinds' laws -/
+/-! ## The rewinds' sampling designs -/
 
 section Rewinds
 
@@ -264,7 +264,7 @@ theorem rewinds_all (C : Type) [Fintype C] [Nonempty C] (v₀ : V) (rw : C → V
       · exact Rand.All.map (P := fun o : Out V × ℕ => o.2 ≤ n) (Q := fun o : Out V × ℕ => o.2 ≤ n + 1)
           (fun o => (o.1, o.2 + 1)) (fun o ho => Nat.succ_le_succ ho) _ (rewinds_all C v₀ rw comp bad n)
 
-/-- **One run's law changed by `δ` changes `n` rewinds' by at most `n·δ`**, for every test with values in `[0, 1]`. -/
+/-- **One run's distribution changed by `δ` changes `n` rewinds' by at most `n·δ`**, for every test with values in `[0, 1]`. -/
 theorem rewinds_close {C₁ C₂ : Type} [Fintype C₁] [Nonempty C₁] [Fintype C₂] [Nonempty C₂] (v₀ : V) (rw₁ : C₁ → V)
     (rw₂ : C₂ → V) (comp bad : V → Bool) {δ : ℝ}
     (h : ∀ U : V → Prop, |avgR (fun σ => ind U (rw₁ σ)) - avgR (fun σ => ind U (rw₂ σ))| ≤ δ) :

@@ -120,7 +120,7 @@ noncomputable def linkOut (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
 
 /-- **One sample's SHA-512 calls**: the compiled verifier's run, the prover's and the verifier's, and `E_O`'s, as `Be`
 counts each of its two. -/
-noncomputable def drawCost (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
+noncomputable def sampleCost (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) : ℕ :=
   (run H P D.V x ω d.1).pLog.length + (run H P D.V x ω d.1).vLog.length + ((EO D I DO decO).eval H P x ω d.1 d.2).2.1
@@ -133,7 +133,7 @@ noncomputable def Fdev (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (D
   ne := ⟨(⟨0, hk⟩, Classical.arbitrary _)⟩
   out := linkOut H D I DO decO P x
   cost s := linkCost (linkG H D I DO decO P x s.1 s.2.1 s.2.2.1)
-    (fun v => drawCost H D I DO decO P x s.2.1 (fork s.1 s.2.2.1 v.1, v.2)) M s.2.2.2
+    (fun v => sampleCost H D I DO decO P x s.2.1 (fork s.1 s.2.2.1 v.1, v.2)) M s.2.2.2
 
 /-- `Pr[Fdev^{P*}(x) outputs a collision]` at `M`, `0` for an inner protocol that takes no rounds at `x_I`. -/
 noncomputable def PrFdev (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
@@ -249,7 +249,7 @@ ones, its setup's at the inner statement and its own on the inner messages at th
 record, so `B_I`, `FCI`, `F0I` and `Fdev` search all three at each sample's own coins (`Deploy.callsAt`), each charged
 the setup's `|S(x_I)|` calls once (`Finder.charge`, `setupLen`). A V\* part's check is accepted where its recorded calls
 and the compiled verifier's own evaluations at its V\* statement (check 5's row commitments) don't collide, so `B_I` and
-`Fdev`, which read what V*'s parts accept, search those too (`drawCalls`: `BinnerV`, `FdevV`), each charged `v` more
+`Fdev`, which read what V*'s parts accept, search those too (`sampleCalls`: `BinnerV`, `FdevV`), each charged `v` more
 calls per sample. `BitsLin2` is its bits.
 -/
 
@@ -382,7 +382,7 @@ def Deploy.callsAt (H : Msg → Msg) (D : Deploy Coin) (x : Msg) (r : Fin (D.V.k
   D.calls x ws ++ (D.innerSetup (xI D x) ++ D.innerCalls H x (coinSeq r) ws).map fun u => (u, H u)
 
 /-- The outer witnesses `E_O` gives at a sample, none where it gives up. -/
-noncomputable def drawWits (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col' T')
+noncomputable def sampleWits (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col' T')
     (decO : List (ℕ × Col') → List T') {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) : List Flock.Wit :=
   ((EO D I DO decO).eval H P x ω d.1 d.2).1.getD []
@@ -390,10 +390,10 @@ noncomputable def drawWits (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W
 /-- **A sample's SHA-512 evaluations**: those the outer witnesses `E_O` gives at the sample record and the inner verifier's
 own at the sample's coins (`Deploy.callsAt`), then the compiled verifier's own at the run's V\* statements (`setupCalls`
 at `runStmts`: its setup's there, check 5's row commitments among them), which no witness records. -/
-noncomputable def drawCalls (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col' T')
+noncomputable def sampleCalls (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col' T')
     (decO : List (ℕ × Col') → List T') {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) : List (Msg × Msg) :=
-  D.callsAt H x d.1 (drawWits H D I DO decO P x ω d) ++ setupCalls H D (runStmts H D I P x ω d.1)
+  D.callsAt H x d.1 (sampleWits H D I DO decO P x ω d) ++ setupCalls H D (runStmts H D I P x ω d.1)
 
 /-- `B_I`'s coins at `x`: the inner round, a tape, the shared coins, the fork's continuation and `E_O`'s coins at both
 runs. -/
@@ -403,15 +403,15 @@ abbrev BinCoins (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col
     (EO D I DO decO).C x
 
 /-- **`B_I` over the samples' evaluations**: `Binner`'s fork, extractions and cost, and the first collision among the
-two samples' evaluations (`drawCalls`): the calls their outer witnesses record and the compiled verifier's own at their
+two samples' evaluations (`sampleCalls`): the calls their outer witnesses record and the compiled verifier's own at their
 V\* statements. -/
 noncomputable def BinnerV (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col' T')
     (decO : List (ℕ × Col') → List T') {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg)
     (hk : 0 < I.V.k (xI D x)) : Finder :=
   { Binner H D I DO decO P x hk with
     out := fun s : BinCoins D I DO decO Ω x =>
-      findColl (drawCalls H D I DO decO P x s.2.1 (s.2.2.1, s.2.2.2.2.1) ++
-        drawCalls H D I DO decO P x s.2.1 (fork s.1 s.2.2.1 s.2.2.2.1, s.2.2.2.2.2)) }
+      findColl (sampleCalls H D I DO decO P x s.2.1 (s.2.2.1, s.2.2.2.2.1) ++
+        sampleCalls H D I DO decO P x s.2.1 (fork s.1 s.2.2.1 s.2.2.2.1, s.2.2.2.2.2)) }
 
 /-- `Pr[B_I^{P*}(x) outputs a collision]` over the samples' evaluations, `0` for an inner protocol that takes no rounds
 at `x_I`. -/
@@ -421,14 +421,14 @@ noncomputable def PrBinnerV (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin 
 
 open Classical in
 /-- **The link's output over the samples' evaluations**: `linkOut`, with each of its two samples' evaluations
-(`drawCalls`) in place of the calls their witnesses record, and nothing where `E_O` gives no witnesses at the first
+(`sampleCalls`) in place of the calls their witnesses record, and nothing where `E_O` gives no witnesses at the first
 sample. -/
 noncomputable def linkOutV (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col' T')
     (decO : List (ℕ × Col') → List T') {Ω : Type} (P : Prover Ω) (x : Msg) {M : ℕ}
     (s : LinCoins D I DO decO Ω x M) : Option (Msg × Msg) :=
   if linkG H D I DO decO P x s.1 s.2.1 s.2.2.1 s.2.2.2.1 then
-    findColl (drawCalls H D I DO decO P x s.2.1 (fork s.1 s.2.2.1 s.2.2.2.1.1, s.2.2.2.1.2) ++
-      drawCalls H D I DO decO P x s.2.1
+    findColl (sampleCalls H D I DO decO P x s.2.1 (fork s.1 s.2.2.1 s.2.2.2.1.1, s.2.2.2.1.2) ++
+      sampleCalls H D I DO decO P x s.2.1
         (fork s.1 s.2.2.1 ((firstPick (linkG H D I DO decO P x s.1 s.2.1 s.2.2.1) M s.2.2.2.2).getD s.2.2.2.1).1,
           ((firstPick (linkG H D I DO decO P x s.1 s.2.1 s.2.2.1) M s.2.2.2.2).getD s.2.2.2.1).2))
   else none
@@ -478,7 +478,7 @@ open Classical in
 sample (the compiled run and `E_O`); if its inner view accepts and its inner coins query `q`, the loop over `M` samples
 forked at `q`'s inner round from it, stopping at the first whose inner view accepts and whose inner coins query `q`, and
 the first collision among the calls the two samples' outer witnesses record (the first sample again where none does). Its
-cost is the samples' (`drawCost`). -/
+cost is the samples' (`sampleCost`). -/
 noncomputable def FCI (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col' T')
     (decO : List (ℕ × Col') → List T') (Cp : Caps Coin) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) (x : Msg) (M : ℕ) (hW : 0 < Cp.width (xI D x)) : Finder where
@@ -486,19 +486,19 @@ noncomputable def FCI (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO
   ne := ⟨(⟨0, hW⟩, Classical.arbitrary _)⟩
   out s :=
     if opensAtI H D I DO decO Cp P x s.1 s.2.1 s.2.2.1 then
-      findColl (D.callsAt H x s.2.2.1.1 (drawWits H D I DO decO P x s.2.1 s.2.2.1) ++
+      findColl (D.callsAt H x s.2.2.1.1 (sampleWits H D I DO decO P x s.2.1 s.2.2.1) ++
         D.callsAt H x (capForkI D I DO decO Cp x s.1 s.2.2.1
           ((firstPick (fun v => opensAtI H D I DO decO Cp P x s.1 s.2.1 (capForkI D I DO decO Cp x s.1 s.2.2.1 v))
             M s.2.2.2).getD s.2.2.1)).1
-          (drawWits H D I DO decO P x s.2.1 (capForkI D I DO decO Cp x s.1 s.2.2.1
+          (sampleWits H D I DO decO P x s.2.1 (capForkI D I DO decO Cp x s.1 s.2.2.1
             ((firstPick (fun v => opensAtI H D I DO decO Cp P x s.1 s.2.1 (capForkI D I DO decO Cp x s.1 s.2.2.1 v))
               M s.2.2.2).getD s.2.2.1))))
     else none
   cost s :=
-    drawCost H D I DO decO P x s.2.1 s.2.2.1 +
+    sampleCost H D I DO decO P x s.2.1 s.2.2.1 +
       if opensAtI H D I DO decO Cp P x s.1 s.2.1 s.2.2.1 then
         loopCost (fun v => opensAtI H D I DO decO Cp P x s.1 s.2.1 (capForkI D I DO decO Cp x s.1 s.2.2.1 v))
-          (fun v => drawCost H D I DO decO P x s.2.1 (capForkI D I DO decO Cp x s.1 s.2.2.1 v)) M s.2.2.2
+          (fun v => sampleCost H D I DO decO P x s.2.1 (capForkI D I DO decO Cp x s.1 s.2.2.1 v)) M s.2.2.2
       else 0
 
 /-- `Pr[FCI^{P*}(x) outputs a collision]` at `M`, `0` where the inner statement has no cap position. -/
@@ -523,15 +523,15 @@ noncomputable def F0I (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO
   ne := ⟨Classical.arbitrary _⟩
   out s :=
     if accAtI H D I DO decO P x s.1 s.2.1 then
-      findColl (D.callsAt H x s.2.1.1 (drawWits H D I DO decO P x s.1 s.2.1) ++
+      findColl (D.callsAt H x s.2.1.1 (sampleWits H D I DO decO P x s.1 s.2.1) ++
         (List.finRange (I.k (xI D x))).flatMap fun i =>
           ((firstPick (accAtI H D I DO decO P x s.1) R (s.2.2 i)).map fun d =>
-            D.callsAt H x d.1 (drawWits H D I DO decO P x s.1 d)).getD [])
+            D.callsAt H x d.1 (sampleWits H D I DO decO P x s.1 d)).getD [])
     else none
   cost s :=
-    drawCost H D I DO decO P x s.1 s.2.1 +
+    sampleCost H D I DO decO P x s.1 s.2.1 +
       if accAtI H D I DO decO P x s.1 s.2.1 then
-        ∑ i, loopCost (accAtI H D I DO decO P x s.1) (drawCost H D I DO decO P x s.1) R (s.2.2 i)
+        ∑ i, loopCost (accAtI H D I DO decO P x s.1) (sampleCost H D I DO decO P x s.1) R (s.2.2 i)
       else 0
 
 /-- `Pr[F0I^{P*}(x) outputs a collision]` at waits of `R` samples. -/
@@ -574,7 +574,7 @@ the spec, on every prover and at every `M`, `R`: `Pr[run = acc ∧ ¬R(x, E*(x))
 (4k_I + 1)·Pr[B_I] + 4·W_I·(Pr[FCI] + 1/(M+1)) + 4·(Pr[F0I] + (k_I + 1)/(R+1)) + β₂·(Pr[Fdev] + 1/(M+1))`, the inner
 caps read by `Cp` at the inner statement, and `B_I`, `FCI`, `F0I` and `Fdev` searching the inner verifier's own calls,
 its setup's and those on each sample's inner messages at the sample's coins, with the recorded ones (`Deploy.callsAt`),
-and `B_I` and `Fdev` the compiled verifier's own at each sample's V\* statements too (`BinnerV`, `FdevV`, `drawCalls`).
+and `B_I` and `Fdev` the compiled verifier's own at each sample's V\* statements too (`BinnerV`, `FdevV`, `sampleCalls`).
 It is `KSBoundLin` with `KSFlockLin`'s terms in place of `√(γ_BI·Pr[B_I])`. -/
 def KSLin2 [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
     (DO : Flock.Deploy Coin Col' T') (Cp : Caps Coin) : Prop :=

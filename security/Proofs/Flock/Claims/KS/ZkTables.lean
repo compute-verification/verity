@@ -70,7 +70,7 @@ local notation "𝔽" => FlockLevel3.GF128
 /-- **Table `j`'s word's length**: its level-0 codeword length `2^d`; `0` past the statement's tables. -/
 def wordLenJ (zk : Bool) (x : Claims.Msg) (j : ℕ) : ℕ :=
   match (tables zk x)[j]? with
-  | some (_, st) => 2 ^ (if zk then Claims.Flock.zkLevel0 st.m else Claims.Flock.plainLevel0 st.m).d
+  | some (_, st) => 2 ^ (if zk then Claims.Flock.zkLevel0 st.wideLeaf st.m else Claims.Flock.plainLevel0 st.m).d
   | none => 0
 
 namespace Gen
@@ -80,7 +80,7 @@ variable [S : ZkSetup]
 /-- **Table `j`'s word's length**: its level-0 codeword length `2^d`; `0` past the statement's tables. -/
 def wordLenJ (zk : Bool) (x : Claims.Msg) (j : ℕ) : ℕ :=
   match (tables zk x)[j]? with
-  | some (_, st) => 2 ^ (if zk then Claims.Flock.zkLevel0 st.m else Claims.Flock.plainLevel0 st.m).d
+  | some (_, st) => 2 ^ (if zk then Claims.Flock.zkLevel0 st.wideLeaf st.m else Claims.Flock.plainLevel0 st.m).d
   | none => 0
 
 end Gen
@@ -89,7 +89,7 @@ end Gen
 lanes). -/
 def wideJ (zk : Bool) (x : Claims.Msg) (j : ℕ) (u : List 𝔽) : Prop :=
   match (tables zk x)[j]? with
-  | some (_, st) => u.length = 2 ^ (if zk then Claims.Flock.zkLevel0 st.m else Claims.Flock.plainLevel0 st.m).lanes
+  | some (_, st) => u.length = 2 ^ (if zk then Claims.Flock.zkLevel0 st.wideLeaf st.m else Claims.Flock.plainLevel0 st.m).lanes
   | none => False
 
 namespace Gen
@@ -100,7 +100,7 @@ variable [S : ZkSetup]
 lanes). -/
 def wideJ (zk : Bool) (x : Claims.Msg) (j : ℕ) (u : List 𝔽) : Prop :=
   match (tables zk x)[j]? with
-  | some (_, st) => u.length = 2 ^ (if zk then Claims.Flock.zkLevel0 st.m else Claims.Flock.plainLevel0 st.m).lanes
+  | some (_, st) => u.length = 2 ^ (if zk then Claims.Flock.zkLevel0 st.wideLeaf st.m else Claims.Flock.plainLevel0 st.m).lanes
   | none => False
 
 end Gen
@@ -124,7 +124,7 @@ variable [S : ZkSetup]
 theorem sum_wordLenJ_le (zk : Bool) (x : Claims.Msg) (n : ℕ) :
     ((∑ j : Fin n, wordLenJ zk x j : ℕ) : ℝ) ≤ N₀ zk x := by
   set g : SessionSpec × Stmt → ℕ :=
-    fun p => 2 ^ (if zk then Claims.Flock.zkLevel0 p.2.m else Claims.Flock.plainLevel0 p.2.m).d with hg
+    fun p => 2 ^ (if zk then Claims.Flock.zkLevel0 p.2.wideLeaf p.2.m else Claims.Flock.plainLevel0 p.2.m).d with hg
   have hw : ∀ j, wordLenJ zk x j = ((tables zk x)[j]?.map g).getD 0 := by
     intro j
     unfold wordLenJ
@@ -195,12 +195,12 @@ theorem acc_colsJ {zk : Bool} {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : C
     {ω : Ω} {r : Fin ((V zk).k x) → Coin} (h : (Claims.run H P (V zk) x ω r).out = .acc) {j q : ℕ} {u : List 𝔽}
     (hu : Claims.Flock.lookCol (cols zk (Claims.run H P (V zk) x ω r).seen j) q = some u) :
     ∃ spec st, (tables zk x)[j]? = some (spec, st) ∧
-      u.length = 2 ^ (if zk then Claims.Flock.zkLevel0 st.m else Claims.Flock.plainLevel0 st.m).lanes := by
+      u.length = 2 ^ (if zk then Claims.Flock.zkLevel0 st.wideLeaf st.m else Claims.Flock.plainLevel0 st.m).lanes := by
   obtain ⟨s, spec, sts, f, hs, hf, hx⟩ := acc_last h
   unfold cols at hu
   split at hu
   · rename_i rr hrr
-    obtain ⟨f', s', spec', sts', st, hf', hs', hst, hm⟩ := runOf_m hrr
+    obtain ⟨f', s', spec', sts', st, hf', hs', hst, hm, hw⟩ := runOf_m hrr
     rw [hf] at hf'
     cases hf'
     rw [hx, hs] at hs'
@@ -211,7 +211,7 @@ theorem acc_colsJ {zk : Bool} {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : C
     · simp only [Bool.false_eq_true, ↓reduceIte] at hp ⊢
       rw [plainRunCols_width hp, hm]
     · simp only [↓reduceIte] at hp ⊢
-      rw [zkRunCols_width hp, hm]
+      rw [zkRunCols_width hp, hm, hw rfl]
   · simp [Claims.Flock.lookCol] at hu
 
 end Gen
@@ -222,7 +222,7 @@ theorem acc_colsJ {zk : Bool} {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : C
     {ω : Ω} {r : Fin ((V zk).k x) → Coin} (h : (Claims.run H P (V zk) x ω r).out = .acc) {j q : ℕ} {u : List 𝔽}
     (hu : Claims.Flock.lookCol (cols zk (Claims.run H P (V zk) x ω r).seen j) q = some u) :
     ∃ spec st, (tables zk x)[j]? = some (spec, st) ∧
-      u.length = 2 ^ (if zk then Claims.Flock.zkLevel0 st.m else Claims.Flock.plainLevel0 st.m).lanes :=
+      u.length = 2 ^ (if zk then Claims.Flock.zkLevel0 st.wideLeaf st.m else Claims.Flock.plainLevel0 st.m).lanes :=
   Gen.acc_colsJ (S := S₀) (zk := zk) (H := H) (Ω := Ω) (P := P) (x := x) (ω := ω) (r := r) (h := h) (j := j) (q := q)
     (u := u) (hu := hu)
 
@@ -261,6 +261,7 @@ theorem runOf_eqJ {zk : Bool} {seen : Claims.Seen} {f : Final} {x : Claims.Msg} 
     ∃ st extras, sts[j]? = some st ∧ (Setup.ofCircuit st).extra lv.points = .ok extras ∧
       rr = { m := (Setup.ofCircuit st).m, kLog := (Setup.ofCircuit st).kLog, claims := 2 + extras.size,
              hashLen := (Setup.ofCircuit st).merkle.digestLen, saltLen := saltLenOf zk (Setup.ofCircuit st),
+             wideLeaf := zk && (Setup.ofCircuit st).wideLeaf,
              reps := [(lv.streams.getD (2 * j) #[], f.proofs.getD (2 * j) ByteArray.empty),
                       (lv.streams.getD (2 * j + 1) #[], f.proofs.getD (2 * j + 1) ByteArray.empty)] } := by
   unfold runOf at hr
@@ -288,6 +289,7 @@ theorem runOf_eqJ {zk : Bool} {seen : Claims.Seen} {f : Final} {x : Claims.Msg} 
     ∃ st extras, sts[j]? = some st ∧ (Setup.ofCircuit st).extra lv.points = .ok extras ∧
       rr = { m := (Setup.ofCircuit st).m, kLog := (Setup.ofCircuit st).kLog, claims := 2 + extras.size,
              hashLen := (Setup.ofCircuit st).merkle.digestLen, saltLen := saltLenOf zk (Setup.ofCircuit st),
+             wideLeaf := zk && (Setup.ofCircuit st).wideLeaf,
              reps := [(lv.streams.getD (2 * j) #[], f.proofs.getD (2 * j) ByteArray.empty),
                       (lv.streams.getD (2 * j + 1) #[], f.proofs.getD (2 * j + 1) ByteArray.empty)] } :=
   Gen.runOf_eqJ (S := S₀) (zk := zk) (seen := seen) (f := f) (x := x) (s := s) (spec := spec) (sts := sts) (lv := lv)
@@ -306,7 +308,7 @@ theorem zk_openingJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω
     (hu : Claims.Flock.lookCol (cols true (Claims.run sha512 P (V true) x ω r).seen j) q = some u) :
     ∃ (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (st : Stmt) (sch : Flock.Schedule) (tPad : ℕ)
       (link : List ByteArray × List ByteArray) (row : Array F128),
-      setupOf true x = some (s, spec, sts) ∧ sts[j]? = some st ∧ Zk.schedule st.m = .ok (sch, tPad) ∧
+      setupOf true x = some (s, spec, sts) ∧ sts[j]? = some st ∧ Zk.schedule st.wideLeaf st.m = .ok (sch, tPad) ∧
       linkOf ((P.next x [] ω).eval sha512).1 = some link ∧
       Opening MerkleScheme.hm96Sha512 (sch.levels.getD 0 default)
         (2 ^ (sch.levels.getD 0 default).lanes + Zk.EXTRA_LANES) link.1.toArray[j]!
@@ -359,7 +361,7 @@ theorem zk_openingJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω
   subst hys
   have hcoins := forall₂_coins (fun _ _ hab => hab.2.1) hfa
   have hcolsEq : Claims.Flock.zkRepColsOf
-      (Claims.Flock.zkProofShape (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog (2 + extras.size)
+      (Claims.Flock.zkProofShape (Setup.ofCircuit st).wideLeaf (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog (2 + extras.size)
         (Setup.ofCircuit st).merkle.digestLen (saltLenOf true (Setup.ofCircuit st)))
       (lv.streams.getD (2 * j + k) #[]) (f.proofs.getD (2 * j + k) ByteArray.empty) =
       (Claims.Flock.zkRepCols (sch.levels.getD 0 default)
@@ -418,7 +420,7 @@ theorem zk_openingJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω
     (hu : Claims.Flock.lookCol (cols true (Claims.run sha512 P (V true) x ω r).seen j) q = some u) :
     ∃ (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (st : Stmt) (sch : Flock.Schedule) (tPad : ℕ)
       (link : List ByteArray × List ByteArray) (row : Array F128),
-      setupOf true x = some (s, spec, sts) ∧ sts[j]? = some st ∧ Zk.schedule st.m = .ok (sch, tPad) ∧
+      setupOf true x = some (s, spec, sts) ∧ sts[j]? = some st ∧ Zk.schedule st.wideLeaf st.m = .ok (sch, tPad) ∧
       linkOf ((P.next x [] ω).eval sha512).1 = some link ∧
       Opening MerkleScheme.hm96Sha512 (sch.levels.getD 0 default)
         (2 ^ (sch.levels.getD 0 default).lanes + Zk.EXTRA_LANES) link.1.toArray[j]!

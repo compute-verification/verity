@@ -322,12 +322,12 @@ fn serve(st: Arc<Stmt>) {
 }
 
 /// GPU tables (Flock-CUDA proves non-union `prove_ligerito`, one table per session): `--table NAME --nbl N`, with
-/// `--netlist P` for a census unit (feature `verity-unit`), else the BLAKE3 statement.
+/// `--circuit-description P` for a census unit (feature `verity-unit`), else the BLAKE3 statement.
 fn serve_gpu() {
     let name = arg("--table", "blake3");
     let nbl: usize = arg("--nbl", "17").parse().unwrap();
-    let netlist = arg("--netlist", "");
-    let r1cs = Arc::new(gpu_r1cs(&netlist, nbl));
+    let circuit_description = arg("--circuit-description", "");
+    let r1cs = Arc::new(gpu_r1cs(&circuit_description, nbl));
     let no_link = arg("--no-link", "0") == "1";
     serve_loop(move || {
         let spec = TableSpec { name: name.clone(), binding: Binding::R1cs { statement_digest: r1cs.statement_digest() } };
@@ -338,18 +338,18 @@ fn serve_gpu() {
 }
 
 #[cfg(feature = "verity-unit")]
-fn gpu_r1cs(netlist: &str, nbl: usize) -> BlockR1cs {
-    if netlist.is_empty() {
+fn gpu_r1cs(circuit_description: &str, nbl: usize) -> BlockR1cs {
+    if circuit_description.is_empty() {
         return build_block_r1cs(nbl);
     }
-    let net = flock_prover::r1cs_hashes::verity_unit::Netlist::load(netlist);
-    assert_eq!(net.self_check(), 0, "netlist self-check");
+    let net = flock_prover::r1cs_hashes::verity_unit::CircuitDescription::load(circuit_description);
+    assert_eq!(net.self_check(), 0, "circuit description self-check");
     net.block_r1cs(nbl)
 }
 
 #[cfg(not(feature = "verity-unit"))]
-fn gpu_r1cs(netlist: &str, nbl: usize) -> BlockR1cs {
-    assert!(netlist.is_empty(), "--netlist needs the verity-unit feature");
+fn gpu_r1cs(circuit_description: &str, nbl: usize) -> BlockR1cs {
+    assert!(circuit_description.is_empty(), "--circuit-description needs the verity-unit feature");
     build_block_r1cs(nbl)
 }
 
@@ -555,7 +555,7 @@ fn main() {
 #[cfg(feature = "verity-unit")]
 mod f2 {
     use super::*;
-    use flock_prover::{prover::prove_ligerito, r1cs_hashes::verity_unit::{CombinedSetup, Netlist}};
+    use flock_prover::{prover::prove_ligerito, r1cs_hashes::verity_unit::{CombinedSetup, CircuitDescription}};
 
     pub const UNION: &str = "unit+blake3";
 
@@ -565,9 +565,9 @@ mod f2 {
     }
 
     impl UnionStmt {
-        pub fn new(netlist: &str, n: usize, units: usize) -> Self {
-            let net = Netlist::load(netlist);
-            assert_eq!(net.self_check(), 0, "netlist self-check");
+        pub fn new(circuit_description: &str, n: usize, units: usize) -> Self {
+            let net = CircuitDescription::load(circuit_description);
+            assert_eq!(net.self_check(), 0, "circuit description self-check");
             Self { setup: CombinedSetup::new(net, n.max(units)), counts: [n, units] }
         }
         pub fn spec(&self) -> TableSpec {
@@ -619,7 +619,7 @@ mod f2 {
     }
 
     pub fn serve_union() {
-        let st = Arc::new(UnionStmt::new(&arg("--netlist", ""), arg("--n", "4096").parse().unwrap(), arg("--units", "4096").parse().unwrap()));
+        let st = Arc::new(UnionStmt::new(&arg("--circuit-description", ""), arg("--n", "4096").parse().unwrap(), arg("--units", "4096").parse().unwrap()));
         serve_loop(move || union_server(&st));
     }
 
@@ -658,7 +658,7 @@ mod f2 {
     }
 
     pub fn selftest() {
-        let (net, other) = (arg("--netlist", ""), arg("--netlist-other", ""));
+        let (net, other) = (arg("--circuit-description", ""), arg("--circuit-description-other", ""));
         let (n, units, nbl): (usize, usize, usize) =
             (arg("--n", "512").parse().unwrap(), arg("--units", "512").parse().unwrap(), arg("--nbl", "10").parse().unwrap());
         let mut all = true;
@@ -680,13 +680,13 @@ mod f2 {
         report(&mut all, "union_blake3_only_statement", "F2 registry digest pin", run(union_server(&st), UNION, &b3p, None), false);
 
         // GPU unit table (non-union prove_ligerito, Flock-CUDA's pinned parameters).
-        let gpu_server = |netlist: &str| {
-            let r1cs = Arc::new(gpu_r1cs(netlist, nbl));
+        let gpu_server = |circuit_description: &str| {
+            let r1cs = Arc::new(gpu_r1cs(circuit_description, nbl));
             let spec = TableSpec { name: "unit".into(), binding: Binding::R1cs { statement_digest: r1cs.statement_digest() } };
             Server::new(SessionConfig::flock_128_r2(vec![spec]), Box::new(GpuVerifier(r1cs)))
         };
-        let gpu_prove = |netlist: &str, lig: LigeritoProfile| {
-            let net = Netlist::load(netlist);
+        let gpu_prove = |circuit_description: &str, lig: LigeritoProfile| {
+            let net = CircuitDescription::load(circuit_description);
             let r1cs = net.block_r1cs(nbl);
             let (z, _, _, _) = net.witness_row_major(nbl);
             move |_rep: usize, ch: &mut LiveChallenger| {

@@ -120,7 +120,7 @@ theorem schedOf_lanes {s : Flock.Schedule} (hd : Refine.DimSeam s) :
 four lanes after level 0. -/
 theorem zkTabs_facts {sts : Array Stmt} {mPts : ℕ} (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL mPts) (j : ℕ) :
     (zkTabs h0 L hz hk hlay j).e = 2 ∧ (zkTabs h0 L hz hk hlay j).S.m = sts[zkTbl sts j]!.m ∧
@@ -131,13 +131,13 @@ theorem zkTabs_facts {sts : Array Stmt} {mPts : ℕ} (h0 : 0 < sts.size)
   unfold zkTabs zkSchT zkTbl
   split_ifs with h
   · rw [getElem!_pos sts j h]
-    obtain ⟨-, -, -, -, -, hdim, -⟩ := ZkExec.zk_schedule_seams _ _ _ (hz j h)
+    obtain ⟨-, -, -, -, -, hdim, -⟩ := ZkExec.zk_schedule_seams _ _ _ _ (hz j h)
     refine ⟨rfl, rfl, rfl, ?_, rfl, schedOf_lanes hdim⟩
     rw [dite_eq_left h]
     show (Refine.regionsOf sts[j]).length = sts[j].regions.size
     simp [Refine.regionsOf]
   · rw [getElem!_pos sts 0 h0]
-    obtain ⟨-, -, -, -, -, hdim, -⟩ := ZkExec.zk_schedule_seams _ _ _ (hz 0 h0)
+    obtain ⟨-, -, -, -, -, hdim, -⟩ := ZkExec.zk_schedule_seams _ _ _ _ (hz 0 h0)
     refine ⟨rfl, rfl, rfl, ?_, rfl, schedOf_lanes hdim⟩
     rw [dite_eq_right h]
     show (Refine.regionsOf sts[0]).length = sts[0].regions.size
@@ -151,7 +151,7 @@ def zkFront (spec : SessionSpec) (sts : Array Stmt) (j : ℕ) : ℕ :=
 `r = 1`, then `zkCapDist`, at two link points per region. -/
 theorem zkRdAt_cap {spec : SessionSpec} {sts : Array Stmt} (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
     (hp : spec.points = 2) (j : ℕ) (r : Fin 2) (ℓ : Fin (zkTabs h0 L hz hk hlay j).sch.levels.length) :
@@ -171,7 +171,7 @@ def ZkFrontAlign (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf true x = some (ins, spec, sts))
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
     (d : Lean.Json) (hd : ins.read.draw = some d) (Ω : Type) (P : Claims.Prover Ω) (ω : Ω) (j : ℕ)
@@ -193,7 +193,7 @@ def ZkFrontAlign (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf true x = some (ins, spec, sts))
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
     (d : Lean.Json) (hd : ins.read.draw = some d) (Ω : Type) (P : Claims.Prover Ω) (ω : Ω) (j : ℕ)

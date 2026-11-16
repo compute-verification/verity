@@ -96,9 +96,9 @@ ALLOW = (
     Rule("/usr/local/bin/vy-lean-sandbox", "*", "journal n1 5 (`vy-lean-sandbox probe`); lean_sandbox.py:17 is meant for `sudo -n` "
          "and never runs a build as root, research or a privileged group"),
     Rule("/usr/bin/systemctl", "start vy-steward-watch.service", "journal n1 3 (infra's duty pass; the watch is read-only)"),
-    Rule("/usr/bin/true", "", "journal n2 21 + n1 11 `sudo -n true` (infra/cluster/src/cluster/status.py:54)"),
+    Rule("/usr/bin/true", "", "journal n2 21 + n1 11 `sudo -n true` (infra/cluster/src/cluster/status.py, its bundles read)"),
     Rule("/usr/local/sbin/vy-sudo", "du-bundles", "journal n1 23,140 each `find /workspace/jobs/cov /workspace/jobs/probe-jit -xdev "
-         "-name replay_bundle_p* -prune -print0` and `xargs -0r du -sb` (infra/cluster/src/cluster/status.py:54, sky/release.py's: a "
+         "-name replay_bundle_p* -prune -print0` and `xargs -0r du -sb` (infra/cluster/src/cluster/status.py, its bundles read, sky/release.py's: a "
          "root unit after the switch); vy-sudo runs that find with -exec du, since `xargs du` as root takes du's options from stdin"),
 )
 #: research -> root on a CPU node: what a run and the store need there, and nothing of the cluster's
@@ -112,7 +112,7 @@ CPU_ALLOW = (
     Rule("/usr/local/sbin/vy-seal-runs", "evict *", "research data evict --runs on a sealed run (vy-store-evict-research.service, as research)"),
     Rule("/usr/bin/systemctl", "start --no-block vy-lean-cache-daily.service", "the Lean cache's publish after a landing that touches "
          "Lean (merge.py lean_publish starts it on the node that builds the cache); the unit takes nothing of the caller's"),
-    Rule("/usr/bin/true", "", "`sudo -n true` (infra/cluster/src/cluster/status.py:54)"),
+    Rule("/usr/bin/true", "", "`sudo -n true` (infra/cluster/src/cluster/status.py, its bundles read)"),
 )
 #: who besides root research may run as, for anything: itself (journal n1 1,471 tmux, 512 env), and the job user ubuntu (journal n1
 #: 311 `env HOME=* PYTHONPATH=* ...`, 27 mv: n1_custody.sh:245, n2_build.sh:98,202, n2_commit.sh:50,197,215) once ubuntu has no root
@@ -207,7 +207,8 @@ def expiry(text: str) -> float | None:
         return None
     try:
         return float(calendar.timegm(time.strptime(m.group(1), TS)))
-    except ValueError:
+    except ValueError as e:
+        print(f"vy-lockout: the expiry {m.group(1)} is not a time, so it reads as none ({e})", file=sys.stderr, flush=True)
         return None
 
 
@@ -330,8 +331,10 @@ def tmux_command(unit_text: str, unit: str) -> str:
     name = unit.rsplit(".", 1)[0]
     inst = name.partition("@")[2]
     lines = [ln.strip() for ln in unit_text.splitlines()]
-    get = lambda k: [ln.split("=", 1)[1] for ln in lines if ln.startswith(k + "=")]
-    res = lambda s: s.replace("%N", name).replace("%i", inst).replace("$$", "$").replace("%%", "%")
+    def get(k):
+        return [ln.split("=", 1)[1] for ln in lines if ln.startswith(k + "=")]
+    def res(s):
+        return s.replace("%N", name).replace("%i", inst).replace("$$", "$").replace("%%", "%")
     envs = [res(e.lstrip("-")) for e in get("EnvironmentFile")]
     start = res(get("ExecStart")[0].lstrip("-@+!"))
     wd = res((get("WorkingDirectory") or ["/"])[0])
@@ -347,27 +350,24 @@ def untrusted(paths: tuple[str, ...] | list[str], lstat: Callable = os.lstat, wa
     or writable by group or others (a sticky root-owned directory above is fine). Symlinks are judged as links and by target."""
     bad: list[str] = []
 
-    def check(p: str, above: bool = False) -> None:
+    def check(p: str, above: bool = False) -> os.stat_result | None:
         try:
             st = lstat(p)
         except FileNotFoundError:
             bad.append(f"{p}: missing")
-            return
+            return None
         if st.st_uid != 0:
             bad.append(f"{p}: owner uid {st.st_uid}")
         elif st.st_mode & 0o022 and not stat.S_ISLNK(st.st_mode) and not (above and st.st_mode & stat.S_ISVTX):
             bad.append(f"{p}: mode {stat.S_IMODE(st.st_mode):o}")
+        return st
 
     for p in paths:
         parts = Path(p).parts
         for i in range(1, len(parts)):
             check(str(Path(*parts[:i])), above=True)
-        check(p)
-        try:
-            is_dir = stat.S_ISDIR(lstat(p).st_mode)
-        except OSError:
-            continue
-        if is_dir:
+        st = check(p)
+        if st is not None and stat.S_ISDIR(st.st_mode):
             for base, dirs, files in walk(p):
                 for n in sorted(dirs + files):
                     check(os.path.join(base, n))
@@ -424,7 +424,8 @@ ACCEPTED = re.compile(r"^(\d+(?:\.\d+)?) .*Accepted publickey for vy-admin ")
 
 def preflight(node: str, run: Runner = _run, root: Path = Path("/"), session: Callable[[], int | None] = login_uid) -> list[Check]:
     """What the sudoers step needs, each as a Check."""
-    at = lambda p: root / str(p).lstrip("/")
+    def at(p):
+        return root / str(p).lstrip("/")
     out: list[Check] = []
     keys = at("/home/vy-admin/.ssh/authorized_keys")
     admin_sudo = at(SUDOERS_D / ADMIN)
@@ -450,12 +451,13 @@ def preflight(node: str, run: Runner = _run, root: Path = Path("/"), session: Ca
                      "account that keeps it"))
     try:
         g = groups_of("ubuntu", str(at("/etc/group")))
-    except OSError:
+    except OSError as e:
+        print(f"vy-lockout: {at('/etc/group')} unread, so ubuntu's groups read as none ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         g = set()
     out.append(Check("ubuntu-unprivileged", not g & {"lxd", "docker", "disk"}, f"ubuntu's groups: {', '.join(sorted(g)) or 'none'}",
                      "vy-lockout harden --apply (lxd is root for its members, and research may act as ubuntu)"))
-    cap = run(["getcap", PY_SPY])
-    out.append(Check("py-spy", "cap_sys_ptrace" not in cap.stdout, cap.stdout.strip() or f"{PY_SPY}: no capability",
+    getcap = run(["getcap", PY_SPY])
+    out.append(Check("py-spy", "cap_sys_ptrace" not in getcap.stdout, getcap.stdout.strip() or f"{PY_SPY}: no capability",
                      "vy-lockout harden --apply (cap_sys_ptrace lets anyone read any process's memory)"))
     admin = [str(p) for p in sorted(at(RESEARCH_KUBE).glob("*")) if p.is_file() and kubeconfig_admin(p.read_text(errors="replace"))] \
         if at(RESEARCH_KUBE).is_dir() else []
@@ -476,7 +478,7 @@ def preflight(node: str, run: Runner = _run, root: Path = Path("/"), session: Ca
     out.append(Check("allowlist", staged.is_file() and staged.read_text() == render(profile(node)),
                      f"{LIB / ALLOWLIST} is {node}'s (sudoers/{profile(node).file})" if staged.is_file() and
                      staged.read_text() == render(profile(node)) else f"{LIB / ALLOWLIST} is missing or not sudoers/{profile(node).file}",
-                     f"research deploy install {node}: the files of one commit"))
+                     f"research deploy install {node}{'' if profile(node) is CLUSTER else ' --only lockout'}: the files of one commit"))
     for loop in SWITCH.get(node, ()):
         if loop.tmux:
             ls = run(["runuser", "-u", "research", "--", "tmux", "has-session", "-t", f"={loop.tmux}"])
@@ -488,7 +490,8 @@ def preflight(node: str, run: Runner = _run, root: Path = Path("/"), session: Ca
                              f"vy-lockout root-units {node} --apply"))
     for tool in ("/usr/local/sbin/vy-sudo", "/usr/local/sbin/vy-seal-runs", "/usr/local/sbin/vy-lockout"):
         bad = untrusted([str(at(tool))]) if root == Path("/") else []
-        out.append(Check(f"tool:{tool}", at(tool).is_file() and not bad, "; ".join(bad) or "root's", "research deploy install"))
+        out.append(Check(f"tool:{tool}", at(tool).is_file() and not bad, "; ".join(bad) or "root's",
+                         f"research deploy install {node}{'' if profile(node) is CLUSTER else ' --only lockout'}"))
     return out
 
 
@@ -612,6 +615,7 @@ def step_roots(ctx: Ctx, back: bool, backup: Path = BACKUP) -> None:
         try:
             st = os.lstat(p)
         except FileNotFoundError:
+            print(f"vy-lockout: {p} does not exist, so it is not taken over", file=sys.stderr, flush=True)
             continue
         saved[p] = {"uid": st.st_uid, "gid": st.st_gid, "mode": f"{stat.S_IMODE(st.st_mode):o}"}
         ctx.do(["chown", "root:root", p])
@@ -716,7 +720,8 @@ def fallback(ctx: Ctx, action: str, now: float, hours: float = FALLBACK_HOURS, s
     if action == "expire":
         try:
             exp = expiry(path.read_text())
-        except OSError:
+        except OSError as e:
+            print(f"vy-lockout: {path} unread, so its expiry reads as none ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             exp = None
         if exp is not None and exp > now:
             return f"fallback holds until {time.strftime(TS, time.gmtime(exp))}"
@@ -727,12 +732,21 @@ def fallback(ctx: Ctx, action: str, now: float, hours: float = FALLBACK_HOURS, s
 def plan_text(node: str) -> str:
     loops, cluster = SWITCH.get(node, ()), profile(node) is CLUSTER
     rows = [
-        ("deploy", f"from an agent VM: `research deploy install {node} --by WHO --apply` (stages /usr/local/lib/vy-lockout"
-                   + (", the tools and node 1's /etc/vy/env/root.env" if cluster else " and the tools") + "; installs nothing into "
+        ("deploy", (f"from an agent VM: `research deploy install {node} --by WHO --apply` (stages /usr/local/lib/vy-lockout"
+                    ", the tools and node 1's /etc/vy/env/root.env" if cluster else
+                    f"from an agent VM: `research deploy install {node} --only lockout --by WHO`, which prints what it would write "
+                    "and the allowlist research keeps, and refuses while the node holds a check slot; then the same with `--apply` "
+                    "(stages /usr/local/lib/vy-lockout and the tools") + "; installs nothing into "
                    "sudoers.d or a unit's .d, and starts nothing). From this deploy on, `research run --job-user USER` here asks "
                    f"vy-sudo for its unit, and vy-sudo starts one only as an account listed in group {JOB_GROUP}: before it, on the "
                    f"node, `sudo groupadd -f --system {JOB_GROUP}`, and `sudo usermod -aG {JOB_GROUP} USER` for each account made for "
-                   "jobs and nothing else (after the lock-out only vy-admin can)", "research deploy attic"),
+                   "jobs and nothing else (after the lock-out only vy-admin can)",
+         "research deploy attic" if cluster else
+         "the staged files start nothing; to remove them, as root: `rm -rf /usr/local/lib/vy-lockout /usr/local/sbin/vy-admin-setup "
+         f"/usr/local/sbin/vy-lockout /usr/local/sbin/vy-sudo /usr/local/sbin/vy-seal-runs {SSHD_ADMIN} "
+         "/etc/systemd/system/vy-seal-runs.service /etc/systemd/system/vy-seal-runs.timer "
+         "/etc/systemd/system/vy-sudo-fallback-expire.service /etc/systemd/system/vy-sudo-fallback-expire.timer && systemctl "
+         "daemon-reload` (drift then reads step lockout as not installed)"),
         ("vy-admin", "copy the public keys to the node, then `sudo vy-admin-setup KEYS`; "
                      + ("" if cluster else f"`sudo sshd -t && sudo systemctl reload ssh` ({SSHD_ADMIN}, which deploy staged: the node's "
                                            "sshd lets only research log in until then); ")

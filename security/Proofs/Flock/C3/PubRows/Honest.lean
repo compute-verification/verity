@@ -46,7 +46,7 @@ open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL Floc
 open FlockVBridge.Family (skOf cmtOf mem_skOf_inl inr_not_mem_skOf vb_cs_inl)
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
+  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
 /-- **The verifier's check of a session's public rows**: `RecVStar.checkPubRows` passes on each statement the session's
 record sets up, against the reads `own`, the inner transcript `cs` the verifier holds and its RecSparse shape, and

@@ -23,8 +23,8 @@ they abort:
   last coin no prover can refuse after it, so `keep` doesn't fold into a prover (`flockKS_not_KSAbort`). Where the
   decision doesn't read it and the escapes are on accepted runs, `keep` folds into a prover that refuses at the last
   round (`FlockKSAcc`).
-* **One wait over samples** (`oneWaitD`): `joint_acc_le` at `drawGame`, one coin node flipping a run's coins with its
-  abort coins, at any run law, as `oneWait_of_tableBound` is at `runGame`; at the runs as they abort, with `ColsOk` and
+* **One wait over samples** (`oneWaitD`): `joint_acc_le` at `sampleGame`, one coin node flipping a run's coins with its
+  abort coins, at any run sampling design, as `oneWait_of_tableBound` is at `runGame`; at the runs as they abort, with `ColsOk` and
   `ConflictTied` at the prover's runs, it gives `OneWaitAbort` (`oneWaitAbort_of_tableBound`), the conflict an escape
   at round `0` of weight `k` (`EscapesD.addFork`).
 * **KS** (`KSAbort_of_oneWaitAbort`): `PrBadAbort_trunc` and `EscapesD.le`, as `KS_of_oneWait`, at Flock's own `κ` and
@@ -40,44 +40,44 @@ open Claims Claims.Flock FlockSoundness FlockSoundness.Game FlockSoundness.Extra
 
 /-! ## Samples as a game -/
 
-section DrawGame
+section SampleGame
 
 variable {Dr : Type} [Fintype Dr] [Nonempty Dr]
 
-/-- **Samples' law as a game**: one coin node, a sample. -/
-def drawGame (Dr : Type) [Fintype Dr] [Nonempty Dr] : Game Dr := .coin Dr .ret
+/-- **Samples' sampling design as a game**: one coin node, a sample. -/
+def sampleGame (Dr : Type) [Fintype Dr] [Nonempty Dr] : Game Dr := .coin Dr .ret
 
 /-- The game's one strategy. -/
-def drawS (Dr : Type) [Fintype Dr] [Nonempty Dr] : Strategy (drawGame Dr) := fun _ => PUnit.unit
+def drawS (Dr : Type) [Fintype Dr] [Nonempty Dr] : Strategy (sampleGame Dr) := fun _ => PUnit.unit
 
-theorem expect_drawGame (f : Dr → ℝ) : expect f (drawGame Dr) (drawS Dr) = Ex f := rfl
+theorem expect_sampleGame (f : Dr → ℝ) : expect f (sampleGame Dr) (drawS Dr) = Ex f := rfl
 
-/-- **`k` independent samples** are `expectN` of `drawGame`, first sample first. -/
-theorem expectN_drawGame : ∀ (k : ℕ) (F : List Dr → ℝ),
-    expectN (drawGame Dr) (drawS Dr) k F = Ex fun σ : Fin k → Dr => F ((List.finRange k).map σ)
+/-- **`k` independent samples** are `expectN` of `sampleGame`, first sample first. -/
+theorem expectN_sampleGame : ∀ (k : ℕ) (F : List Dr → ℝ),
+    expectN (sampleGame Dr) (drawS Dr) k F = Ex fun σ : Fin k → Dr => F ((List.finRange k).map σ)
   | 0, F => by
     simp only [expectN, List.finRange_zero, List.map_nil]
     exact (Ex_const _).symm
   | k + 1, F => by
-    rw [expectN, expect_drawGame, Claims.Bridge.Ex_cons]
+    rw [expectN, expect_sampleGame, Claims.Bridge.Ex_cons]
     refine congrArg Ex (funext fun c => ?_)
-    rw [expectN_drawGame k]
+    rw [expectN_sampleGame k]
     refine congrArg Ex (funext fun r => ?_)
     simp [List.finRange_succ, List.map_cons, List.map_map, Function.comp_def]
 
 /-- The run at a sample accepts. -/
 def AccD (tr : Dr → Transcript) (d : Dr) : Prop := (tr d).out = .acc
 
-theorem accPrD_eq (tr : Dr → Transcript) : accPrD tr = expect (ind (AccD tr)) (drawGame Dr) (drawS Dr) := by
-  rw [expect_drawGame]
+theorem accPrD_eq (tr : Dr → Transcript) : accPrD tr = expect (ind (AccD tr)) (sampleGame Dr) (drawS Dr) := by
+  rw [expect_sampleGame]
   exact Claims.Bridge.Pr_eq_Ex _
 
-/-- **`k` accepted samples that fail `G`**, on the samples' law. -/
+/-- **`k` accepted samples that fail `G`**, on the samples' sampling design. -/
 theorem accFailD_eq (tr : Dr → Transcript) (k : ℕ) (G : List Seen → Prop) :
-    accFailD tr k G = expectN (drawGame Dr) (drawS Dr) k fun bs =>
+    accFailD tr k G = expectN (sampleGame Dr) (drawS Dr) k fun bs =>
       (bs.map (ind (AccD tr))).prod * ind (fun bs => ¬ G (bs.map fun d => (tr d).seen)) bs := by
   classical
-  rw [expectN_drawGame]
+  rw [expectN_sampleGame]
   unfold accFailD
   rw [Claims.Bridge.Pr_eq_Ex]
   refine congrArg Ex (funext fun σ => ?_)
@@ -94,12 +94,12 @@ theorem accFailD_eq (tr : Dr → Transcript) (k : ℕ) (G : List Seen → Prop) 
 /-- **One wait's left side over samples is the product form's**: `ε · Q/ε^k = ε · expectAcc(¬G)`. -/
 theorem oneWaitD_lhs_eq (tr : Dr → Transcript) (k : ℕ) (G : List Seen → Prop) :
     accPrD tr * (accFailD tr k G / accPrD tr ^ k) =
-      expect (ind (AccD tr)) (drawGame Dr) (drawS Dr) *
-        expectAcc (drawGame Dr) (drawS Dr) (AccD tr) k (ind fun bs => ¬ G (bs.map fun d => (tr d).seen)) := by
+      expect (ind (AccD tr)) (sampleGame Dr) (drawS Dr) *
+        expectAcc (sampleGame Dr) (drawS Dr) (AccD tr) k (ind fun bs => ¬ G (bs.map fun d => (tr d).seen)) := by
   rw [accFailD_eq, accPrD_eq]
   rfl
 
-end DrawGame
+end SampleGame
 
 /-! ## One wait over samples -/
 
@@ -126,7 +126,7 @@ theorem firstTable_opD (D : Flock.Deploy Coin Col T) (N : Msg → ℕ) (x : Msg)
       unfold opD
       simp only [show (tr b).out = .acc from hacc b hb, ↓reduceIte]]
 
-/-- **One wait's bound over samples, from the table's bound**: at a run law `tr` over finite samples, where the statement
+/-- **One wait's bound over samples, from the table's bound**: at a run sampling design `tr` over finite samples, where the statement
 has one table, `Ok` admits `0` and every column an accepted run opens, and every table of `Ok` columns that does not
 extract leaves accepted runs at least `ε − ε_c` off it, `ε · Q/ε^k ≤ ε_c + N·ε/(e·k) + √(k · Pr[conflict])`. -/
 theorem oneWaitD (D : Flock.Deploy Coin Col T) (N : Msg → ℕ) (x : Msg) (tr : Dr → Transcript) {s : Flock.Stmt}
@@ -143,9 +143,9 @@ theorem oneWaitD (D : Flock.Deploy Coin Col T) (N : Msg → ℕ) (x : Msg) (tr :
   classical
   set Xt : List Dr → Prop := fun bs =>
     (∀ b ∈ bs, AccD tr b) → Extracts D x (bs.map fun d => (tr d).seen) with hXt
-  have hXb : ∀ bs, ¬ Xt bs → expect (ind (AccD tr)) (drawGame Dr) (drawS Dr) ≤
+  have hXb : ∀ bs, ¬ Xt bs → expect (ind (AccD tr)) (sampleGame Dr) (drawS Dr) ≤
       εc + expect (ind fun d => AccD tr d ∧
-        ∃ p, Off (opD D N x tr) (firstTable (opD D N x tr) (fun _ => 0) bs) d p) (drawGame Dr) (drawS Dr) := by
+        ∃ p, Off (opD D N x tr) (firstTable (opD D N x tr) (fun _ => 0) bs) d p) (sampleGame Dr) (drawS Dr) := by
     intro bs hnX
     simp only [hXt, Classical.not_imp] at hnX
     obtain ⟨hall, hnot⟩ := hnX
@@ -165,7 +165,7 @@ theorem oneWaitD (D : Flock.Deploy Coin Col T) (N : Msg → ℕ) (x : Msg) (tr :
         rw [List.flatMap_map] at hl
         obtain ⟨b, hb', hu⟩ := lookCol_flatMap_some (fun d => D.cols (tr d).seen 0) p.val u bs hl
         exact hok b p.val u (hall b hb') p.isLt hu
-    rw [← accPrD_eq, expect_drawGame, ← Claims.Bridge.Pr_eq_Ex]
+    rw [← accPrD_eq, expect_sampleGame, ← Claims.Bridge.Pr_eq_Ex]
     refine (hb _ hOk hgood).trans (le_of_eq ?_)
     congr 1
     refine Pr_congr fun d => ?_
@@ -179,10 +179,10 @@ theorem oneWaitD (D : Flock.Deploy Coin Col T) (N : Msg → ℕ) (x : Msg) (tr :
       rw [ite_eq_left ha] at h1 h2
       obtain ⟨u, hu⟩ := Option.isSome_iff_exists.1 h1
       exact ⟨ha, p, u, hu, fun h => h2 (by rw [hu, h])⟩
-  have hj := joint_acc_le (opD D N x tr) (fun _ => 0) (drawGame Dr) (drawS Dr) (AccD tr) Xt εc hεc hXb k hk
+  have hj := joint_acc_le (opD D N x tr) (fun _ => 0) (sampleGame Dr) (drawS Dr) (AccD tr) Xt εc hεc hXb k hk
   have hlhs : accPrD tr * (accFailD tr k (Extracts D x) / accPrD tr ^ k) =
-      expect (ind (AccD tr)) (drawGame Dr) (drawS Dr) *
-        expectAcc (drawGame Dr) (drawS Dr) (AccD tr) k (ind fun bs => ¬ Xt bs) := by
+      expect (ind (AccD tr)) (sampleGame Dr) (drawS Dr) *
+        expectAcc (sampleGame Dr) (drawS Dr) (AccD tr) k (ind fun bs => ¬ Xt bs) := by
     rw [oneWaitD_lhs_eq]
     congr 1
     unfold expectAcc
@@ -199,9 +199,9 @@ theorem oneWaitD (D : Flock.Deploy Coin Col T) (N : Msg → ℕ) (x : Msg) (tr :
       split_ifs with h1 h2 h2 <;> first | rfl | (exfalso; tauto)
     · rw [ite_eq_right hall, zero_mul, zero_mul]
   have hE₂ : expect₂ (fun a a' => ind (fun y : Dr × Dr => ∃ p, ConflictAt (opD D N x tr) y p) (a, a'))
-      (drawGame Dr) (drawS Dr) = Pr fun s : Dr × Dr => ∃ p, ConflictAt (opD D N x tr) s p := by
+      (sampleGame Dr) (drawS Dr) = Pr fun s : Dr × Dr => ∃ p, ConflictAt (opD D N x tr) s p := by
     unfold expect₂
-    simp only [expect_drawGame]
+    simp only [expect_sampleGame]
     rw [Claims.Bridge.Pr_eq_Ex, Claims.Bridge.Ex_prod]
   rw [hE₂, ← accPrD_eq, Fintype.card_fin] at hj
   rw [hlhs, ← accPrD_eq]
@@ -218,7 +218,7 @@ variable {Ω Coin A : Type} {H : Msg → Msg} {n : ℕ} {tr : Ω → (Fin n → 
 /-- **Escapes over samples with one more fork event**: `e`'s, and `ev` at round `j₀` with weight `c`. -/
 def EscapesD.addFork (e : EscapesD H n tr) (c : ℝ) (hc : 0 ≤ c) (j₀ : Fin n)
     (ev : Ω → (Fin n → Coin) × A → (Fin n → Coin) × A → Prop)
-    (tied : ∀ ω d d', ev ω d d' → TiedColl H ((tr ω d).vLog ++ (tr ω (forkDraw j₀ d d')).vLog)) :
+    (tied : ∀ ω d d', ev ω d d' → TiedColl H ((tr ω d).vLog ++ (tr ω (forkSample j₀ d d')).vLog)) :
     EscapesD H n tr where
   I := Option e.I
   c i := i.elim c e.c
@@ -275,7 +275,7 @@ end ForkD
 
 /-! ## The fixed-table bound at the abort distribution, and the tie -/
 
-section AbortLaw
+section AbortSamplingDesign
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
 
@@ -395,7 +395,7 @@ theorem tableBoundθ_of_kept (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N 
       ∃ (p : Fin (N x)) (u : Col), lookCol (D.cols (run H P D.V x ω r).seen 0) p.val = some u ∧ u ≠ C p]
     exact Pr_congr fun d => by simp
 
-end AbortLaw
+end AbortSamplingDesign
 
 /-! ## One wait at the abort distribution, and KS -/
 
@@ -422,10 +422,10 @@ theorem opD_tied (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg → �
     {Ω A : Type} (P : Prover Ω) (x : Msg) (keep : Ω → (Fin (D.V.k x) → Coin) → A → Bool) (j₀ : Fin (D.V.k x))
     (hj₀ : j₀.val = 0) (ω : Ω) (d d' : (Fin (D.V.k x) → Coin) × A)
     (h : ∃ p, ConflictAt (opD D N x (abortRun H P D.V x keep ω)) (d, d') p) :
-    TiedColl H ((abortRun H P D.V x keep ω d).vLog ++ (abortRun H P D.V x keep ω (forkDraw j₀ d d')).vLog) := by
+    TiedColl H ((abortRun H P D.V x keep ω d).vLog ++ (abortRun H P D.V x keep ω (forkSample j₀ d d')).vLog) := by
   classical
   obtain ⟨p, h1, h2, h3⟩ := h
-  have hfd : forkDraw j₀ d d' = d' := by
+  have hfd : forkSample j₀ d d' = d' := by
     show (forkCoins j₀ d.1 d'.1, d'.2) = d'
     rw [Claims.Bridge.forkCoins_zero j₀ hj₀]
   rw [hfd]

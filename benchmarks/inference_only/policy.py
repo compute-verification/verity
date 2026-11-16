@@ -1,16 +1,16 @@
 """An inference-only policy's number: the least slowdown of training run inside the policy's inference blocks.
 
 A policy is `(c, k, n)`: blocks of at most `c` Boolean gates, each reading at most `k` bits from outside itself and
-outside θ, at most `n` of them (the Lean's `CompliesAtMost c k n`; `UNITS`). Its number is the slowdown `min_cut.bound`
-gives it (`benchmarks/rho/rho/min_cut.py`, the arithmetic of the Lean statement its `HE` names) on
-one block's work: `N` the block's work in the policy's own MACs, `O = N o b` its output wires (`o` the output values a
+outside θ, at most `n` of them (the Lean's `CompliesAtMost c k n`; `UNITS`). Its number is the slowdown
+`min_cut.slowdown_of` gives it (`benchmarks/slowdown/slowdown/min_cut.py`, the arithmetic of the Lean statement its `HE` names) on
+one block's work, one forward product: `N` the block's work in the policy's own MACs, `O = N o b` its output wires (`o` the output values a
 MAC of the model's forward matmuls, `Shape.outputs / Shape.macs`, and `b` a bf16 value's wires) and the circuit's size
 `c`. That is `max(1, N / limit)`, `limit` the most of such work one block of the policy finishes
 (`Bound.macs_a_block`): the number is 1 where the count lets a block hold all of its own work as training.
 
 `stated` reads a policy's public numbers from a file (`served.toml`, whose keys README.md lists) and says what its `k`
 is made of; `built.py` builds a class's policy from this tree. `periods` sets a block's limit beside the blocks a fleet
-holds over a monitoring period, on the slowdown calculator's fleets and periods (`benchmarks/rho`).
+holds over a monitoring period, on the slowdown calculator's fleets and periods (`benchmarks/slowdown`).
 `tied` reads the served class under the value tie (`tied.toml`), which `tied.py` prices over those periods.
 """
 from __future__ import annotations
@@ -23,12 +23,12 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-RHO = ROOT / "benchmarks" / "rho"
-# first on the path: rho's `periods` imports rho's own `run`, not this benchmark's
-sys.path.insert(0, str(RHO))
+SLOWDOWN = ROOT / "benchmarks" / "slowdown"
+# first on the path: the slowdown calculator's `periods` imports the slowdown calculator's own `run`, not this benchmark's
+sys.path.insert(0, str(SLOWDOWN))
 
-from rho import hardware, min_cut  # noqa: E402
-from rho.params import Registry  # noqa: E402
+from slowdown import hardware, min_cut  # noqa: E402
+from slowdown.params import Registry  # noqa: E402
 
 #: the served policy's public numbers
 SERVED = HERE / "served.toml"
@@ -115,14 +115,12 @@ def pinned(model: str) -> tuple[str, Path]:
 
 
 def shape(model: str) -> Shape:
-    """``model``'s forward matmuls, from its config of record: the 2-D weights of a layer's record
-    (`b1.layer_weights_type`) and the LM head's, the embedding's where the two are tied."""
-    from verity_vllm.program.model import config_of
-
-    from verity.definitions.registry import b1
+    """``model``'s forward matmuls, from its config of record: the 2-D weights of a layer's record (`model.weights_type`'s
+    `layers`) and the LM head's, the embedding's where the two are tied."""
+    from verity_vllm.program.model import config_of, weights_type
 
     C, _ = config_of(pinned(model)[1])
-    weights = dict(b1.weights_type(C).fields)
+    weights = dict(weights_type(C).fields)
     head = weights.get("lm_head", weights["embed"])
     linears = tuple((name.removesuffix("_w"), t.n, t.elem.n) for name, t in weights["layers"].elem.fields
                     if name.endswith("_w"))
@@ -218,24 +216,29 @@ def tied(path: Path = TIED) -> Tied:
     return Tied(p, *(table[x] for x in keys))
 
 
-def bound(p: Policy, sh: Shape, blocks: float = 1.0) -> min_cut.Bound:
-    """`min_cut.bound` at ``p`` on one block's work: `N` the session's work over the ``blocks`` it is divided into, in
-    the policy's own MACs, `O = N o b`, and the circuit's size `c`."""
+def bound(p: Policy, sh: Shape, blocks: float = 1.0, k: float | None = None) -> min_cut.Bound:
+    """The calculator's bound (`min_cut.slowdown_of`) at ``p``, or at its `c` and `n` with ``k`` bits a block, on one
+    block's work: one forward product of `N` MACs, the session's work over the ``blocks`` it is divided into in the
+    policy's own MACs, with `O = N o b` output wires, a bf16 weight times an activation at (H)'s `β` at `k`, on a
+    circuit of the size `c`."""
+    k = p.k if k is None else k
     N = p.work[TOTAL] / blocks
-    return min_cut.bound(p.c, p.k, p.n, N=N, O=N * sh.outputs * min_cut.BF16 / sh.macs, size=p.c)
+    product = min_cut.Product(N, N * sh.outputs * min_cut.BF16 / sh.macs, (min_cut.BF16, min_cut.beta(k)),
+                              (True, False), forward=True)
+    return min_cut.slowdown_of(p.c, k, p.n, size=p.c, work=[product]).bound
 
 
 def fleet_periods(work: float) -> list[dict[str, Any]]:
-    """For each of the slowdown calculator's fleets and monitoring periods (rho's `periods.FLEETS` and `PERIODS`): the
+    """For each of the slowdown calculator's fleets and monitoring periods (the slowdown calculator's `periods.FLEETS` and `PERIODS`): the
     period's seconds and the policy's blocks the fleet holds at capacity, each of ``work`` MACs. A fleet's rate is its
     locations' data-sheet dense rate (`location.<name>.flops`, two FLOPs a MAC)."""
-    import periods as rho_periods
+    import periods as slowdown_periods
 
     reg, rows = Registry.load(), []
-    for fleet, label in rho_periods.FLEETS:
+    for fleet, label in slowdown_periods.FLEETS:
         f = hardware.fleet(reg, fleet)
         rate = f.count * reg[f"location.{f.location}.flops"] / 2
-        for name in rho_periods.PERIODS:
+        for name in slowdown_periods.PERIODS:
             seconds = hardware.monitoring_period(reg, name).seconds
             rows.append({"where": label, "fleet": fleet, "location": f.location, "locations": f.count, "period": name,
                          "seconds": seconds, "blocks": rate * seconds / work})

@@ -10,7 +10,7 @@ the other's argument. Fold semantics belong to the receipt-fold module. MMA sema
 
 **What a caller may import** is each module's `__all__` (`exact_kit.checks`, `exact_kit.f2`, `exact_kit.wrap`,
 `exact_kit.search`, `exact_kit.sat`); the package itself re-exports nothing. Its readers are `../theory/`'s scripts and
-`../edited_gemm/egemm_depthr_check.py`.
+`../theory/egemm_depthr_check.py`.
 
 **What it never does.** It imports nothing of Verity and nothing of `research`: the standard library, numpy and pysat
 alone. It reads the environment in one place, `exact_kit.settings` (`OUT` and the three variables `research run` sets),
@@ -39,7 +39,7 @@ which only `Checks.finish` asks, for where the verdict and the run's result go, 
   - Solving: `solve`, `models(over, limit)` and `value`.
 
 Every primitive is cross-checked in `tests/`, against brute force on small cases and against sympy's linear algebra over
-GF(2). Run them from the repository root, with `uv run tools/verity/check/suites.py exact_kit`. Inside this directory uv
+GF(2). Run them from the repository root, with `uv run tools/check/suites.py exact_kit`. Inside this directory uv
 stops at `benchmarks/pouw`'s project, takes the kit for a workspace of its own, and builds it a separate `.venv` and
 `uv.lock`.
 

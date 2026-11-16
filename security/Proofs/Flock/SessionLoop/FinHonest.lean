@@ -30,8 +30,8 @@ namespace Claims.ZKServer
 
 open Claims Claims.ZKMal
 open _root_.Flock (V F128 Stmt SessionSpec)
-open _root_.Flock.Firewall.Frame (Cfg Masker INNER_ROUNDS innerSched ownRound)
-open _root_.Flock.Firewall.Finish (Tab)
+open _root_.Flock.ZkServer.Frame (Cfg Masker INNER_ROUNDS innerSched ownRound)
+open _root_.Flock.ZkServer.Finish (Tab)
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000 -- `ofLoopLink`'s session types, as in `Statement`
@@ -107,7 +107,7 @@ theorem cfg_ofLoopLink_withInner (L₁ : LeanRelease Flock.Wit Tp)
     (fin : Msg → Flock.Wit → Tp → List (Msg × Msg) → Array ByteArray) (x : Msg) (ρ : Tp) (h : List (Msg × Msg)) :
     (LeanRelease.ofLoopLink (LeanRelease.withInner Masked.dataE L₁ real fin) src real).cfg x ρ h =
       (LeanRelease.ofLoopLink L₁ src real).cfg x ρ h := by
-  unfold LeanRelease.cfg LeanRelease.drawsAt
+  unfold LeanRelease.cfg LeanRelease.samplesAt
   rfl
 
 /-- `withInner` keeps the values `vsAt` reads at the release it wraps: they read its rep. -/
@@ -137,8 +137,8 @@ theorem innerOf_congr (real : ℕ → V (Tab × Array ByteArray)) (c : Cfg) (x :
       (hi : Array ByteArray) (sched : Array (ByteArray × ℕ)), FlockDeploy.setupOf true x = some (s0, spec, sts) →
       cs.length = q + 1 → CoinLayer.locate (roundsOf spec sts) 0 q = (k, i) → real k = .ok (t, hi) →
       schedSoFar t (k % 2) (spec.domain (spec.tables[k / 2]!) (k % 2)).toUTF8
-        (_root_.Flock.Firewall.Drive.extras sts[k / 2]!
-          (_root_.Flock.Firewall.Drive.linkPoints sts[k / 2]! (wordsAt x cs 0)))
+        (_root_.Flock.ZkServer.Drive.extras sts[k / 2]!
+          (_root_.Flock.ZkServer.Drive.linkPoints sts[k / 2]! (wordsAt x cs 0)))
         hi ((Array.range i).map fun j => wordsAt x cs (q - i + j + 1)) = .ok sched →
       sched.size ≤ i → i - sched.size < INNER_ROUNDS →
       ∀ (s : Masker) (n : ℕ), innerSched c s fin n (i - sched.size) = innerSched c s fin' n (i - sched.size)) :
@@ -155,8 +155,8 @@ theorem innerOf_congr (real : ℕ → V (Tab × Array ByteArray)) (c : Cfg) (x :
     rw [hsx, hq]
     simp only [hl, hr]
   rcases hs : schedSoFar t (k % 2) (spec.domain (spec.tables[k / 2]!) (k % 2)).toUTF8
-      (_root_.Flock.Firewall.Drive.extras sts[k / 2]!
-        (_root_.Flock.Firewall.Drive.linkPoints sts[k / 2]! (wordsAt x cs 0)))
+      (_root_.Flock.ZkServer.Drive.extras sts[k / 2]!
+        (_root_.Flock.ZkServer.Drive.linkPoints sts[k / 2]! (wordsAt x cs 0)))
       hi ((Array.range i).map fun j => wordsAt x cs (q - i + j + 1)) with e | sched
   · unfold innerOf
     rw [hsx, hq]

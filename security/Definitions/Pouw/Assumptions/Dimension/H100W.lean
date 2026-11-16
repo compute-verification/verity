@@ -119,7 +119,7 @@ The verdicts:
 * **`DistinctLiveAt`**: a property of the targets, which no measurement reads.
 * **`h100Legacy`**: a hypothetical part, as stated. It does not describe the H200, where no tensor form is under 32.
   Legacy m16n8k8 f16 costs 32.014 on the H200, and 32.00 loop-free on the H100 SXM.
-* **The pinned statements** read only the definitions above, at a table meeting `H32` or `Floor c`, or at
+* **The guarantees** read only the definitions above, at a table meeting `H32` or `Floor c`, or at
   `h100Nominal`. They are checked with them.
   - `DistinctWritesAttained`'s hardware caveat (`wgmma` at N ≥ 64 only) holds on the H200 as on the H100.
   - `C2FirstRunCopy` is an implication. Its hypothesis is stated precisely in its docstring.
@@ -169,7 +169,7 @@ the H800 PCIe's figure for legacy k8 `mma.sync` (31.2–31.8), rounded down. The
 32.00 loop-free, and the H200 32.014. -/
 def h100Legacy : Prices100 := { h100Nominal with tc := 31 }
 
-/-! ## Pinned statements -/
+/-! ## Guarantees -/
 
 /-- **The distinct-writes bound for `MH100w`**: under `H32`, for every grid, free
 values `F` containing the constants, and FP32 semantics, a well-formed `MH100w` program on free inputs whose

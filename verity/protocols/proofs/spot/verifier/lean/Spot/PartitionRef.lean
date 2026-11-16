@@ -1,4 +1,9 @@
-/-
+module
+
+public import Flock.Program
+public import Spot.Partition
+
+/-!
 `committedBits` as `Spot.Partition` first computed it: its own walk of one activation of the Definition, every
 gate unrolled, to each gate's last reader. `Partition.committedBits` reads the same off `Flock.Qcall.gates`' layout
 (`Gates.readTo`), and the `committed_bits` difftest piece holds the two equal on every Definition a `Q_call` partition
@@ -6,10 +11,6 @@ cuts. And `unitGates` as it first computed a template query's instances: unit by
 earlier root node (`TemplateQuery.unitGatesRef`), which the `unit_gates` piece holds `Partition.unitGates` to. The
 verifier never runs these.
 -/
-module
-
-public import Flock.Program
-public import Spot.Partition
 
 @[expose] public section
 

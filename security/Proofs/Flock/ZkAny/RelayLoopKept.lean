@@ -33,9 +33,9 @@ frame is kept; so `LoopJ` is kept there given `RoundFacts` and `RepJ` of the rou
 
 namespace Claims.ZKServer.Relay
 
-open _root_.Flock.Firewall.Session (State Placed byte? reqAt)
+open _root_.Flock.ZkServer.Session (State Placed byte? reqAt)
 open _root_.Flock (SessionSpec Stmt)
-open _root_.Flock.Firewall.Frames (Sessions Rep)
+open _root_.Flock.ZkServer.Frames (Sessions Rep)
 
 /-- **Rep stream `m` is table `i`'s rep `r` where `m = 2 * i + r`.** -/
 theorem rep_at {spec : SessionSpec} {m i r : Nat} {s : String} (hme : spec.repStreams[m]? = some (i, r, s)) :
@@ -132,7 +132,7 @@ theorem round_rep {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Session
     rw [LoopModel.hist, length_histOf_take, Nat.min_eq_left (Nat.le_of_lt hlt), hF.count hsent]
     omega
   rw [hJ.plan hsent] at hq
-  have hsz : opened st - 1 < (_root_.Flock.Firewall.Session.planOf spec sts).size := by
+  have hsz : opened st - 1 < (_root_.Flock.ZkServer.Session.planOf spec sts).size := by
     by_contra hc
     rw [Array.getElem?_eq_none (by omega)] at hq
     cases hq
@@ -144,7 +144,7 @@ theorem round_rep {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Session
   unfold nextAt
   rw [hlen]
   generalize (ZKMal.CoinLayer.locate (Loop.roundsOf spec sts) 0 (opened st - 1)).1 = k at hfst ⊢
-  unfold _root_.Flock.Firewall.Session.repName at hfst
+  unfold _root_.Flock.ZkServer.Session.repName at hfst
   rcases hek : spec.repStreams[k]? with _ | ⟨a, b, c⟩
   · simp only [hek, Option.map_none, Option.getD_none] at hfst
     exact absurd hfst (Loop.repStreams_name hmem)
@@ -221,8 +221,8 @@ theorem seenAt_round {spec : SessionSpec} {sts : Array Stmt} {h h' : List (Claim
 /-- **A rep stream before the next round's has `StreamAt` vacuously one round on**: past the `Commit`, at the history
 `h'` one message past `h`, the next round is neither the stream's nor the next stream's first. -/
 theorem streamAt_old {W Rr : Type} {M : LoopModel W Rr} {spec : SessionSpec} {sts : Array Stmt} {k : Nat}
-    {h h' : List (Claims.Msg × Claims.Msg)} {rel : _root_.Flock.Firewall.Frames.Release} {name : String}
-    {l0 : _root_.Flock.Firewall.Level0.Level0} {p : Rep} {R : _root_.Flock.Firewall.Frames.Sessions}
+    {h h' : List (Claims.Msg × Claims.Msg)} {rel : _root_.Flock.ZkServer.Frames.Release} {name : String}
+    {l0 : _root_.Flock.ZkServer.Level0.Level0} {p : Rep} {R : _root_.Flock.ZkServer.Frames.Sessions}
     (hk : k < (nextAt spec sts h).1) (hl : 2 ≤ h.length) (hl' : h'.length = h.length + 1) :
     StreamAt M spec sts k h' rel name l0 p R := by
   have hq : h'.length - 2 = h.length - 2 + 1 := by omega
@@ -359,7 +359,7 @@ theorem ofLoop_answered_snd (T : ZKMal.CoinLayer.TableData)
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand))
     (real : Msg → Claims.Flock.Wit →
       (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
-      Nat → _root_.Flock.V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+      Nat → _root_.Flock.V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (x : Msg)
     (ρ : (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)
     {h h' : List (Msg × Msg)} (hs : h.map Prod.snd = h'.map Prod.snd) :
@@ -408,7 +408,7 @@ theorem ofLoop_answeredR_snd (T : ZKMal.CoinLayer.TableData)
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand))
     (real : Msg → Claims.Flock.Wit →
       (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
-      Nat → _root_.Flock.V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+      Nat → _root_.Flock.V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (x : Msg)
     (ρ : (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)
     {h h' : List (Msg × Msg)} (hs : h.map Prod.snd = h'.map Prod.snd) :
@@ -431,7 +431,7 @@ theorem ofLoop_fed_snd (T : ZKMal.CoinLayer.TableData)
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand))
     (real : Msg → Claims.Flock.Wit →
       (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
-      Nat → _root_.Flock.V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+      Nat → _root_.Flock.V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (x : Msg)
     (ρ : (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)
     {h h' : List (Msg × Msg)} (hs : h.map Prod.snd = h'.map Prod.snd) :
@@ -453,9 +453,9 @@ theorem ofLoop_fed_snd (T : ZKMal.CoinLayer.TableData)
 /-- **`SameInv` reads the history only through the configuration and the coins' answer there** before the rank
 stop. -/
 theorem sameInv_hist {W Rr : Type} {L : LeanRelease W Rr} {x : Msg} {ρ : Rr} {h h' : List (Msg × Msg)}
-    {cs : List FlockDeploy.Coin} {q j : Nat} {t : _root_.Flock.Firewall.Finish.Tab} {dom : ByteArray}
-    {xs : Array (Array _root_.Flock.F128)} {hi : Array ByteArray} {pre : List _root_.Flock.Firewall.Frame.Req}
-    {ev : List (Nat × ByteArray × _root_.Flock.Firewall.Frame.Place × Array _root_.Flock.F128)} {p : Rep}
+    {cs : List FlockDeploy.Coin} {q j : Nat} {t : _root_.Flock.ZkServer.Finish.Tab} {dom : ByteArray}
+    {xs : Array (Array _root_.Flock.F128)} {hi : Array ByteArray} {pre : List _root_.Flock.ZkServer.Frame.Req}
+    {ev : List (Nat × ByteArray × _root_.Flock.ZkServer.Frame.Place × Array _root_.Flock.F128)} {p : Rep}
     (hc : L.cfg x ρ h' = L.cfg x ρ h) (ha : L.answeredR x ρ h' = L.answeredR x ρ h)
     (hI : SameInv L x ρ h cs q j t dom xs hi pre ev p) : SameInv L x ρ h' cs q j t dom xs hi pre ev p :=
   ⟨hI.run, hI.cfg.trans hc.symm, fun m hm => hI.st m (ha.symm.trans hm), hI.coins, hI.inv⟩
@@ -466,12 +466,12 @@ theorem sameInv_snd {T : ZKMal.CoinLayer.TableData}
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
     {real : Msg → Claims.Flock.Wit →
       (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
-      Nat → _root_.Flock.V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)} {x : Msg}
+      Nat → _root_.Flock.V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray)} {x : Msg}
     {ρ : (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand}
     {h h' : List (Msg × Msg)} (hs : h.map Prod.snd = h'.map Prod.snd) {cs : List FlockDeploy.Coin} {q j : Nat}
-    {t : _root_.Flock.Firewall.Finish.Tab} {dom : ByteArray} {xs : Array (Array _root_.Flock.F128)}
-    {hi : Array ByteArray} {pre : List _root_.Flock.Firewall.Frame.Req}
-    {ev : List (Nat × ByteArray × _root_.Flock.Firewall.Frame.Place × Array _root_.Flock.F128)} {p : Rep}
+    {t : _root_.Flock.ZkServer.Finish.Tab} {dom : ByteArray} {xs : Array (Array _root_.Flock.F128)}
+    {hi : Array ByteArray} {pre : List _root_.Flock.ZkServer.Frame.Req}
+    {ev : List (Nat × ByteArray × _root_.Flock.ZkServer.Frame.Place × Array _root_.Flock.F128)} {p : Rep}
     (hI : SameInv (LeanRelease.ofLoop T L₀ real) x ρ h cs q j t dom xs hi pre ev p) :
     SameInv (LeanRelease.ofLoop T L₀ real) x ρ h' cs q j t dom xs hi pre ev p :=
   sameInv_hist (cfg_length _ x ρ (h := h') (h' := h) (by simpa using (congrArg List.length hs).symm))
@@ -537,7 +537,7 @@ theorem loopKept_round {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Se
   have hreq := request_round_slot hF.reach hF.live hsl
   obtain ⟨⟨o, hro⟩, a, hae, hb, hsa, hco⟩ := stepK_round_go hF.reach hF.live hsl hgo
   have hRA := hA seen st pl e σ σ' i r dom v hsl hF hJ hlt hv hr hpc hsal hin hsk ⟨o, hro⟩
-  have hk : (Except.ok (.round stream n) : Except String _root_.Flock.Firewall.Session.Kind) ≠ .ok .hello := by
+  have hk : (Except.ok (.round stream n) : Except String _root_.Flock.ZkServer.Session.Kind) ≠ .ok .hello := by
     intro h
     cases h
   have hsent' := stepK_sent (hold := true) (st := st) (pl := pl) (b := some (tagOf (.round stream n))) (e := e) hk

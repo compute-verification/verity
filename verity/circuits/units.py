@@ -147,7 +147,7 @@ class UnitPosition:
 
 
 @dataclass
-class UnitClass:
+class ProofBlockClass:
     shape: str
     representative: ProofBlockCircuit
     definition: Any                # the flat Definition the representative lives in (to lift inputs through it)
@@ -243,7 +243,7 @@ class PartitionUnits:
                 yield UnitPosition(i, k, m, path, uc)
                 i += 1
 
-    def classes(self) -> dict[str, UnitClass]:
+    def classes(self) -> dict[str, ProofBlockClass]:
         """Every shape with a representative, the flat Definition it lives in, and how many units have it, without expanding
         separable cuts (a Definition's members share their callee's circuits)."""
         total: Counter = Counter()
@@ -257,7 +257,7 @@ class PartitionUnits:
             if key is not None:
                 by_def[key] = c
             total.update(c)
-        return {s: UnitClass(s, *self._reps[s], n) for s, n in total.items()}
+        return {s: ProofBlockClass(s, *self._reps[s], n) for s, n in total.items()}
 
 
-__all__ = ["shape_digest", "ProofBlockCircuit", "Activation", "UnitPosition", "UnitClass", "PartitionUnits"]
+__all__ = ["shape_digest", "ProofBlockCircuit", "Activation", "UnitPosition", "ProofBlockClass", "PartitionUnits"]

@@ -11,7 +11,7 @@ queues at 12:10Z), or after an MPS fault; it exits once nothing runs and the que
 PACK_MAX_WALL_S, when whatever still runs is stopped. At 12:28Z it drains: every Commit still running is stopped and reported
 `drained` (not a fault), the dispatcher requeues each unpacked, and the pod exits, so none runs into the 12:30Z quiet hour.
 Storage: it claims nothing while /workspace is PACK_DISK_PAUSE (80%) full or more,
-and no Commit of batch 8 or more that would take the replay bundles on the node past PACK_BUNDLE_CAP_GB (400): the bundles waiting,
+and no Commit of batch 8 or more that would take the replay bundles on the node past PACK_BUNDLE_LIMIT_GB (400): the bundles waiting,
 plus an estimate for each Commit running here and for the candidate: the pacer's own (sky/release.py's learned rate per model,
 which it mirrors to $VY_BUNDLE_SIZES, x1.25), else its model's in BUNDLE_EST_GB, else PACK_BUNDLE_EST_GB, 60, for
 B8 with 1,024 + 128 tokens, scaled by batch and tokens (phi3-mini's was 113 GB, the grid's B8 1k ones of smaller models 25-57 GB,
@@ -69,7 +69,7 @@ BUNDLE_GLOBS = os.environ.get("PACK_BUNDLE_GLOBS", "/workspace/jobs/cov/*/*/comm
                               "/workspace/jobs/probe-jit/*/*/sweep/*/commit/replay_bundle_p*,"
                               "/workspace/research/runs/*/*/sweep/*/commit/replay_bundle_p*,"
                               "/workspace/research/runs/*/*/*/commit/replay_bundle_p*").split(",")
-BUNDLE_LIMIT = float(os.environ.get("PACK_BUNDLE_CAP_GB", "400")) * 1e9
+BUNDLE_LIMIT = float(os.environ.get("PACK_BUNDLE_LIMIT_GB", "400")) * 1e9
 BUNDLE_BATCH = 8
 BUNDLE_EST = float(os.environ.get("PACK_BUNDLE_EST_GB", "60")) * 1e9
 # phi3-mini's measured 113 GB; the packable 3-4B models nobody has measured are taken to be as large
@@ -118,9 +118,12 @@ def batch(entry: dict) -> int:
 
 def learned() -> dict[str, float]:
     """The pacer's learned GB per (batch x tokens) per model, or {} while SIZES is missing or unreadable."""
+    if not SIZES.exists():
+        return {}
     try:
         return {k: float(v) for k, v in json.loads(SIZES.read_text()).items()}
-    except (OSError, ValueError, AttributeError):
+    except (OSError, ValueError, AttributeError) as e:
+        print(f"commit_pack: {SIZES} unread, so no size is learned yet ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return {}
 
 
@@ -151,7 +154,10 @@ def bundle_bytes(globs: list[str]) -> int:
                 for name in files:
                     try:
                         st = os.lstat(os.path.join(root, name))
-                    except OSError:
+                    except OSError as e:
+                        if os.path.lexists(os.path.join(root, name)):
+                            print(f"commit_pack: {os.path.join(root, name)} unread, so not counted ({type(e).__name__}: {e})",
+                                  file=sys.stderr, flush=True)
                         continue
                     if (st.st_dev, st.st_ino) not in seen:
                         seen.add((st.st_dev, st.st_ino))
@@ -174,15 +180,18 @@ def claim(spool: Path, pod: str, accept=lambda entry: True) -> tuple[str, dict] 
     for f in (spool / "queue").glob("*.json"):
         try:
             entries.append((f.stat().st_mtime, f))
-        except OSError:
-            continue
+        except OSError as e:
+            if f.exists():
+                print(f"commit_pack: {f.name} unread, so not claimed now ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
     for _, f in sorted(entries):
         if not _accepts(f, accept):
             continue
         dst = mine / f.name
         try:
             f.rename(dst)
-        except OSError:
+        except OSError as e:
+            if f.exists():
+                print(f"commit_pack: {f.name} not claimed ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         return f.stem, json.loads(dst.read_text())
     return None
@@ -241,7 +250,9 @@ class Mps:
         for p in Path("/proc").glob("[0-9]*/cmdline"):
             try:
                 argv = p.read_bytes().split(b"\0")
-            except OSError:
+            except OSError as e:
+                if p.parent.exists():
+                    print(f"commit_pack: {p} unread ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
                 continue
             if any(a.endswith(b"nvidia-cuda-mps-control") for a in argv[:2]):
                 return (self.pipe / "control").exists()
@@ -255,7 +266,8 @@ class Mps:
                     f.seek(self.offsets.get(p, 0))
                     new = f.read().decode("utf-8", "replace")
                     self.offsets[p] = f.tell()
-            except OSError:
+            except OSError as e:
+                print(f"commit_pack: MPS log {p} unread this pass ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
                 continue
             for line in new.splitlines():
                 if MPS_LOG_FAULT.search(line) and not MPS_LOG_CLIENT_EXIT.search(line):
@@ -300,37 +312,35 @@ def label_packed(c: Client) -> str:
     return f"unlabelled {run}: rc {r.returncode}: {last}" if r.returncode else f"labelled {run}: {last}"
 
 
-def stop_client(c: Client, grace_s: int) -> None:
+def signalled(pgid: int, sig: int) -> bool:
+    """Whether `sig` reached process group `pgid`: False once the group is gone."""
     try:
-        os.killpg(c.proc.pid, signal.SIGTERM)
+        os.killpg(pgid, sig)
+        return True
     except ProcessLookupError:
+        return False
+
+
+def stop_client(c: Client, grace_s: int) -> None:
+    if not signalled(c.proc.pid, signal.SIGTERM):
         return
     try:
         c.proc.wait(grace_s)
     except subprocess.TimeoutExpired:
-        try:
-            os.killpg(c.proc.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
+        signalled(c.proc.pid, signal.SIGKILL)
         c.proc.wait()
 
 
 def stop_all(clients: list[Client], grace_s: int) -> None:
     """stop_client for several at once: SIGTERM to every one, then SIGKILL to whatever outlives the shared grace."""
     for c in clients:
-        try:
-            os.killpg(c.proc.pid, signal.SIGTERM)
-        except ProcessLookupError:
-            pass
+        signalled(c.proc.pid, signal.SIGTERM)
     deadline = time.time() + grace_s
     for c in clients:
         try:
             c.proc.wait(max(0.0, deadline - time.time()))
         except subprocess.TimeoutExpired:
-            try:
-                os.killpg(c.proc.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
+            signalled(c.proc.pid, signal.SIGKILL)
             c.proc.wait()
 
 
@@ -448,8 +458,8 @@ def main() -> int:
             report(c, None, True, "stopped: the pilot is exiting")
         try:
             mps.stop()
-        except (OSError, subprocess.SubprocessError):
-            pass
+        except (OSError, subprocess.SubprocessError) as e:
+            print(f"commit_pack: the MPS daemon did not stop ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         for p in sorted(mps.logs.glob("*.log")):
             print(f"--- {p.name}\n{tail(p, 16 * 1024)}", flush=True)
         shutil.rmtree(scratch, ignore_errors=True)

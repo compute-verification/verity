@@ -1,18 +1,19 @@
-/-
+module
+
+public import Flock.ZkServer.Frame
+meta import Flock.ZkServer.Frame
+
+/-!
 `Frame.step`, the frame's answer to one request and its state after it, and `Frame.run`, its fold: a round squeezing two
 coins passes against itself and owes them; a second round, coins for no round, coins of another count and an earlier
 rep's coins after the first round are refused; and `run` ends at the first answer that ends the rep.
 -/
-module
-
-public import Flock.Firewall.Frame
-meta import Flock.Firewall.Frame
 
 @[expose] public section
 
 namespace Flock.Test.FrameStep
 
-open Flock.Firewall.Frame
+open Flock.ZkServer.Frame
 open Flock.Transcript (header)
 
 def c : Cfg := default

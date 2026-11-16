@@ -33,8 +33,8 @@ from verity.channel import (
     Refused,
     Schema,
     Str,
-    frames,
 )
+from verity.runtime.framing import decode, encode, frames
 
 DIRS = ("start", "in", "out", "arrived", "event", "record", "finish", "handshake-in", "handshake-out", "party")
 ENTRY = Schema("Entry", 1, "structure", {"n": Int(), "dir": Str(16, "|".join(DIRS)), "channel": Str(64),
@@ -54,12 +54,12 @@ class Entry:
     elided: bool = False
 
     def frame(self) -> bytes:
-        return REGISTRY.encode(Message("Entry", {"n": self.n, "dir": self.dir, "channel": self.channel, "kind": self.kind,
-                                                 "elided": self.elided}, self.data))
+        return encode(REGISTRY, Message("Entry", {"n": self.n, "dir": self.dir, "channel": self.channel, "kind": self.kind,
+                                                  "elided": self.elided}, self.data))
 
     @classmethod
     def of(cls, frame: bytes) -> Entry:
-        m = REGISTRY.decode(frame)
+        m = decode(REGISTRY, frame)
         return cls(m.fields["n"], m.fields["dir"], m.fields["channel"], m.fields["kind"], m.body, m.fields["elided"])
 
     def holds(self, data: bytes) -> bool:

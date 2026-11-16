@@ -29,6 +29,8 @@ namespace Claims.Flock.Numbers
 
 open FlockSoundness.Accounting
 
+variable {wideLeaf : Bool}
+
 /-! ## `N₀` -/
 
 /-- Level 0's codeword length at every `fast100` schedule is `2^10` to `2^23`. -/
@@ -43,8 +45,8 @@ theorem fast100_logLen₀ {m : ℕ} {sch : Schedule} (h : fast100 m = some sch) 
 
 /-- `--zk` keeps level 0's codeword length. -/
 theorem m1Schedule_logLen₀ {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) :
-    10 ≤ ((m1Schedule m).levels.headD default).logLen ∧ ((m1Schedule m).levels.headD default).logLen ≤ 23 := by
-  interval_cases m <;> decide
+    10 ≤ ((m1Schedule wideLeaf m).levels.headD default).logLen ∧ ((m1Schedule wideLeaf m).levels.headD default).logLen ≤ 23 := by
+  cases wideLeaf <;> interval_cases m <;> decide
 
 /-! ## The weight -/
 
@@ -97,13 +99,13 @@ theorem weightOf_le_fast100 {m : ℕ} {sch : Schedule} (h : fast100 m = some sch
 
 /-- **`C ≤ 2^33` with `--zk`**, at every `--zk` schedule and pads' domain up to `2^13`. -/
 theorem weightOf_le_m1 {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {N : ℕ} (hN : N ≤ 2 ^ 13) :
-    weightOf (m1Schedule m) N ≤ 2 ^ 33 := by
+    weightOf (m1Schedule wideLeaf m) N ≤ 2 ^ 33 := by
   refine weightOf_le_of (m1Schedule_logLen₀ h1 h2).2 ((weightNat_mono _ hN).trans ?_)
-  interval_cases m <;> decide
+  cases wideLeaf <;> interval_cases m <;> decide
 
 /-- `C ≤ 2^33` at a `--zk` statement's own pads' domain, in scope. -/
-theorem weightOf_le_m1_pads {m kLog k0 : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) (hk : kLog ≤ 27) (h0 : k0 ≤ 6) :
-    weightOf (m1Schedule m) (padDomain (_root_.Flock.Zk.PadLayout.new m kLog k0)) ≤ 2 ^ 33 :=
+theorem weightOf_le_m1_pads {m kLog k0 : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) (hk : kLog ≤ 27) (h0 : k0 ≤ 10) :
+    weightOf (m1Schedule wideLeaf m) (padDomain (_root_.Flock.Zk.PadLayout.new m kLog k0)) ≤ 2 ^ 33 :=
   weightOf_le_m1 h1 h2 (padDomain_le h2 hk h0)
 
 /-! ## `γ` -/

@@ -10,7 +10,7 @@
 # bare repository, never the source root's frozen copy) into $OUT/main.txt (`--main`): a pin off that line likewise
 # credits zero, and a fetch that fails refuses (exit 3) with no line. Writes $OUT/auditor_line.json and $OUT/credit.md,
 # each session's checks and the line, which the Lean verifier computes (`line_by` lean: auditor_line.py builds
-# remote-audit-verifier, so lake must be on the PATH, and refuses the line where line.py's differs). RUN may instead be
+# poub-verifier, so lake must be on the PATH, and refuses the line where line.py's differs). RUN may instead be
 # a host run's directory as the verifier host ships it (its gate's `fetch`, out/ beside request.json): the sessions'
 # challenger peer is the record's (verifier.json's, else request.json's --challenger-peer), and PEER overrides it.
 # LOCKDOWN, if set, is infra's record of the provider's lockdown of the gate node (auditor_line.py --lockdown).

@@ -6,15 +6,15 @@ public import Definitions.Pous.Game.Prob
 /-!
 # The streamed-label wipe (experimental)
 
-The game of `verity/core/protocols/pous/PROTOCOL.md` ("The streamed-label wipe"), whose reference is
-`verity/core/protocols/pous/streamed_wipe.py`. The memory challenger fills every memory tier of one server with `N`
-labels of `b` bits, `L : Fin N → Bits b`. Once the fill is complete it reveals `k` indices `c : Fin k → Fin N`, uniform
-and independent, one at a time, and accepts when every answer is its label (`Accepts`).
+The game of `verity/protocols/accounting/pous/verifier/PROTOCOL.md` ("The streamed-label wipe"), whose reference is
+`verity/protocols/accounting/pous/verifier/streamed_wipe.py`. The memory challenger fills every memory tier of one
+server with `N` labels of `b` bits, `L : Fin N → Bits b`. Once the fill is complete it reveals `k` indices `c : Fin k →
+Fin N`, uniform and independent, one at a time, and accepts when every answer is its label (`Accepts`).
 
 Before the wipe the server holds `q` bits of prior content `z`, uniform: a statement over a fixed `z` is false, since a
 prover can hard-code it. Its fill is any function of `z` and the labels. When the fill ends the server holds
 `σ : Bits M` inside the boundary, every tier counted, and the outside holds `ξ : Bits E`, every bit that left the
-boundary during the wipe as the network certifier counts it. No label reaches the outside except through that egress.
+boundary during the wipe as the network attester counts it. No label reaches the outside except through that egress.
 Round `j`'s answer reads `σ`, `ξ`, the indices revealed before it, in order, and its own index. The outside can answer
 too, from `ξ` and the indices it is sent, so whatever the two sides do during the challenges is a function of these.
 The prover *keeps* `z` when a function of `σ`, `ξ` and the challenges returns it (`Keeps`): then `z` survives the

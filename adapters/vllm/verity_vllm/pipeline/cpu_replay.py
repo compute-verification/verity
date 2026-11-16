@@ -4,7 +4,7 @@
 
 The replay is the prover's pre-flight check: it reads committed values, the requests and the weights in the clear on the
 prover's node, so neither it nor its keep is verifier-facing.  A verifier checks the sampled proof blocks' proofs
-(`verity.protocols.spot.verifier.one_stage`).
+(`verity.protocols.proofs.spot.verifier.one_stage`).
 
 The bundle is opened against its manifest and against the Commit's record beside it: the manifest sha256 the Commit's verdict names,
 the run root of the instrumented run's row (`runs.jsonl`), the dumped store's step roots folding to it, the binding map, the
@@ -76,9 +76,24 @@ from verity_vllm.records.schema_ids import REPLAY_SLIM_SCHEMA
 # partition, the admission's calibration and the timeline are imported inside the functions that read them: the route pin's and the
 # driver's imports put the catalog's Definitions into the Definition table, which this module's import is to leave as it found it.
 
-__all__ = ["OnRead", "Options", "Refused", "WORDS", "main", "manifest_of", "of_record", "open_weights", "opener",
-           "provider", "registered_roles", "replay_args", "tensor_root_of", "tree_refusal", "weights_attest",
-           "worker_peak"]
+__all__ = [
+    "WORDS",
+    "OnRead",
+    "Options",
+    "Refused",
+    "main",
+    "manifest_of",
+    "of_record",
+    "open_weights",
+    "opener",
+    "provider",
+    "registered_roles",
+    "replay_args",
+    "tensor_root_of",
+    "tree_refusal",
+    "weights_attest",
+    "worker_peak",
+]
 
 logger = init_logger(__name__)
 
@@ -224,7 +239,7 @@ def slim_tree(tree: dict[str, Any], opened: Iterable[str]) -> dict[str, Any]:
     at, keep_ = {e[0]: i for i, e in enumerate(tree["names"])}, set(opened)
     keys: dict[str, str] = {}
     for n in sorted(keep_ & at.keys(), key=at.__getitem__):
-        ks: Any = tensor_key_of(tree, at[n])  # typed Any: a tree that carries no key for the tensor raises AttributeError here, as on main
+        ks: Any = tensor_key_of(tree, at[n])  # typed Any: a tree that carries no key for the tensor raises AttributeError here
         keys[str(at[n])] = ks.hex()
     return {k: v for k, v in tree.items() if k not in ("key", "tensor_keys", "extra")} | {
         "tensor_keys": keys, "extra": {n: i for n, i in tree["extra"].items() if str(i) in keys}}
@@ -367,7 +382,7 @@ class OnRead(Mapping):
     holds it, and one that does not open is refused by name on its read (``LookupError``, which ``.get`` does not swallow)."""
 
     def __init__(self, bundle: Path, tree: dict[str, Any], root_of_record: str | None, ck: Any, *, tp: dict[str, int] | None = None,
-                 roles: dict[str, dict[str, Any]] | None = None):
+                 roles: dict[str, dict[str, Any]] | None = None) -> None:
         names = tree["names"]
         _folded, refused = tree_refusal(tree, root_of_record)
         if refused:
@@ -487,7 +502,7 @@ class WorkerPeakOption(Protocol):
 
 
 def worker_peak(o: WorkerPeakOption) -> int:
-    from verity_vllm.pipeline.telemetry.admission import CALIBRATION
+    from verity_vllm.engine.profiles.admission_calibration import CALIBRATION
 
     return int(o.worker_peak_gb * 2**30) if o.worker_peak_gb else int(CALIBRATION["commit.c2.replay_workers.small_vu"]["value"])
 
@@ -613,10 +628,10 @@ def kept_sample(s: C2.ReplaySources, slim: dict[str, Any]) -> None:
     want = slim["picks"]
     if got == want:
         return
-    draw = getattr(s.args, "replay_draw", None)
+    design = getattr(s.args, "replay_draw", None)
     seen = (f"reads what the keep does not hold ({why})" if why else
-            f"shares {len({tuple(p) for p in want} & {tuple(p) for p in got or ()})} of the keep's {len(want)} picks ({len(got or ())} drawn)")
-    raise Refused(f"this code's draw from the keep {seen}" + (f"; the record draws by {draw!r}" if draw else ""))
+            f"shares {len({tuple(p) for p in want} & {tuple(p) for p in got or ()})} of the keep's {len(want)} picks ({len(got or ())} sampled)")
+    raise Refused(f"this code's sample from the keep {seen}" + (f"; the record samples by {design!r}" if design else ""))
 
 
 def replay(o: Options) -> bool | None:

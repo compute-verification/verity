@@ -1,13 +1,13 @@
 """The what-if line beside a gate run's line of record: each accepted paced session replayed with every exchange between
 the verifier and the challenger a round trip r instead of the session's own, every other time the record holds kept,
 and its line (`auditor_line.shares`) on the auditor's clock and on the verifier's at each r. Replayed at the session's
-own round trip it is the record: every group's coin, root and draws on the verifier's clock and every coin's release
+own round trip it is the record: every group's coin, root and samples on the verifier's clock and every coin's release
 and root's receipt on the challenger's come back to the nanosecond, and so the line `auditor_line.analyse` reads
 (`identity`, checked; the script exits 1 when it fails).
 
 The loop replayed is `verifier.py`'s at k = 1, as a session's record shows it, and a record of another form is refused:
 at root g the verifier asks the challenger for openings coin g and chal_(g+2) in one round trip
-(`coins.SessionCoins.ahead`), sends window g's draws (its `draws_sent_ns` D_g), then chal_(g+2) (its `released_ns`
+(`coins.SessionCoins.ahead`), sends window g's samples (its `draws_sent_ns` D_g), then chal_(g+2) (its `released_ns`
 R_(g+2)); chal_0 and chal_1 each go alone, stamped before they are asked (`audit.AuditRun._release`), and the last two
 groups' openings coins go alone. Group g's root arrives at A_g. The prover's record (`prover.json`) has each pass from
 its coin's arrival to its root, ph_g, and from its root to its send, gp_g, and τ, half the verifier↔prover round trip
@@ -55,7 +55,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import auditor_line as al  # noqa: E402
-from verity.protocols.proofs.spot.device import remote  # noqa: E402
+from verity.protocols.proofs.spot.verifier.challenger import remote  # noqa: E402
 
 RTT_MS = (0.3, 1.15, 10.0, 25.0, 50.0)
 """The round trips a row is replayed at by default, ms: in-region and a few farther."""

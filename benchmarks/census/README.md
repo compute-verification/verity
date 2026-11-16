@@ -16,7 +16,7 @@ imports them as code, so the directory can move to its own repository unchanged.
 | `adversary.json` | the adversary resource model, the compute every result is stated against: the reference is `world-inference-2027`, all inference worldwide over a one-year monitoring period (requests, FLOP a request, about 9.4e30 FP8 FLOP in all), with the H100-equivalent base its source states | `schemas/adversary.schema.json` |
 
 Each file is a JSON array of entries. Each entry validates against its file's JSON Schema (draft 2020-12). The tests
-in `benchmarks/numerical/tests/bench/test_census_data.py` check that.
+in `tests/benchmarks/numerical/bench/test_census_data.py` check that.
 
 ## Ids
 
@@ -84,7 +84,7 @@ The captured input sets (vllm-vu-export) sample these counts. They cross-check t
 once registered; they don't replace the counts. An attention entry of a batch-1 workload also records `variable_counts`: the proof blocks at each key count T
 (runs of T with units per value). These come from its one request's positions and are checked against the stratum's population
 by phase. The headline weights attention cells by them, one T at a time. `source` names the row, its expected file and records artifact, and the commit it was read at. A proof block is a role
-that sampled proofs assigns in the source run; the census records the run's counts, not a unit definition.
+that SPOT assigns in the source run; the census records the run's counts, not a unit definition.
 
 ## Sourcing
 

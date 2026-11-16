@@ -198,15 +198,11 @@ theorem kTable_range_zk (rel : Readable.Parsed → Readable.Relation) (x : Claim
       rw [Claims.Flock.nTab_of_parse (D := deployZk rel) hp, tables_length hp (by rw [hs]; rfl)]
     refine .inl ⟨by rw [hn, hlen]; exact hj, ?_⟩
     obtain ⟨h25, h35⟩ := hm j hj
-    have hd := zkLen_ge ⟨sts[j].m - 25, by omega⟩
-    have hi : Claims.Flock.ZkIdx.m ⟨sts[j].m - 25, by omega⟩ = sts[j].m := by
-      simp only [Claims.Flock.ZkIdx.m]
-      omega
-    have hd10 : 10 ≤ (Claims.Flock.zkLevel0 sts[j].m).d := by
-      unfold Claims.Flock.zkLen at hd
-      rw [hi] at hd
+    have hd := zkLen_ge (Claims.Flock.ZkIdx.of sts[j].wideLeaf sts[j].m)
+    have hd10 : 10 ≤ (Claims.Flock.zkLevel0 sts[j].wideLeaf sts[j].m).d := by
+      rw [Claims.Flock.zkLen, (Claims.Flock.ZkIdx.of_at sts[j].wideLeaf h25 h35).level0] at hd
       exact hd
-    have hw : wordLenJ true x j = 2 ^ (Claims.Flock.zkLevel0 sts[j].m).d := by
+    have hw : wordLenJ true x j = 2 ^ (Claims.Flock.zkLevel0 sts[j].wideLeaf sts[j].m).d := by
       simp [wordLenJ, tables_getElem? hs (Array.getElem?_eq_getElem hj)]
     have hN : (2 : ℝ) ^ 10 ≤ (wordLenJ true x j : ℝ) := by
       rw [hw, Nat.cast_pow, Nat.cast_ofNat]

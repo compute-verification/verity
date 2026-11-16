@@ -6,7 +6,7 @@
 Per step: `StepContext` (header, StepStart, SampleEnd, StepLinks, Roots by allocation — the weight/buffer Roots of the
 preamble plus the step's prompt-row Roots —, the profile's C, the profile), `resolve_step`, and the op histogram with
 the resolution of every event.  Prints the per-step summary, the op histogram, the `ResolutionReport` JSON (primary
-resolutions, the integrator's counter) and the expanded counts (grouped members: one `Attention_v3{T}` per T, the k
+resolutions) and the expanded counts (grouped members: one `Attention_v3{T}` per T, the k
 rotation of RoPE, the v move of the KV update), then writes `<out>.json` and `<out>.md`
 (default `out/capture/reports/resolution_<log stem>.{json,md}`).  `--dump-trees` prints `TreeNode.render` for one step
 (`--step`, default 0), collapsing roots whose subtree *shape* (ops only) was already printed.  Exit status 1 with

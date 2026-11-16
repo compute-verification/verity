@@ -4,13 +4,13 @@
 #     bash benchmarks/one_stage/kept_composite.sh SRC [K]
 # SRC is the served run's out/ (`served_verdicts.sh`'s $OUT), or a .tgz of the part of it read here: serve/windows.jsonl
 # and serve/h1/, sampled-proofs/served/window/, and pieces/NAME/ for each kept piece. K is the window (default 0).
-# It builds remote, onsite, pouw-check, pouw-period and sampled-proofs-one-stage-zk, then writes each case private in
+# It builds remote, onsite, pouw-check, pouw-period and spot-one-stage-zk, then writes each case private in
 # scratch (0700, files 0600; a case's evidence is witness):
 #  - PoUW's: pouw_piece.py v1 (remote) and period (onsite, and remote once composite.py lists it among remote's
 #    components) from the serve dir, each MISSING with why where the run holds no case of it. With pieces/pouw/ kept,
 #    the period is built from it, H1_KEY_SHA512, main.txt (or MAIN_FILE) and the sampled calls' statements and live
 #    evidence (POUW_STATEMENTS, POUW_LIVE, files on this node), its REFERENCE line credit's own verdict;
-#  - sampled proofs v2's: v2_case.py on the kept window, with its own Lean answer;
+#  - SPOT v2's: v2_case.py on the kept window, with its own Lean answer;
 #  - every kept piece directory pieces/NAME/ holding a case (case.json, or NAME.case.json as the wipe writes it) beside its
 #    own answer.json (the wipe's), entered as kept, onsite only.
 # composite.py then composes and checks each product; $OUT/remote and $OUT/onsite get only its public output (verdict
@@ -41,13 +41,13 @@ build() {  # DIR TARGET
 }
 build verity/protocols/compose/verifier/remote remote || exit 3
 build verity/protocols/compose/verifier/onsite onsite || exit 3
-build verity/protocols/accounting/pouw/verifier/lean/check pouw-check || exit 3
-build verity/protocols/accounting/pouw/verifier/lean/check pouw-period || exit 3
-build verity/protocols/proofs/spot/verifier/lean sampled-proofs-one-stage-zk || exit 3
+build verity/protocols/resource_accounting/compute/pouw/verifier/lean/check pouw-check || exit 3
+build verity/protocols/resource_accounting/compute/pouw/verifier/lean/check pouw-period || exit 3
+build verity/protocols/proofs/spot/verifier/lean spot-one-stage-zk || exit 3
 B=.lake/build/bin
 REMOTE=$TREE/verity/protocols/compose/verifier/remote/$B/remote ONSITE=$TREE/verity/protocols/compose/verifier/onsite/$B/onsite
-POUW=$TREE/verity/protocols/accounting/pouw/verifier/lean/check/$B/pouw-check PERIOD=$TREE/verity/protocols/accounting/pouw/verifier/lean/check/$B/pouw-period
-V2=$TREE/verity/protocols/proofs/spot/verifier/lean/$B/sampled-proofs-one-stage-zk
+POUW=$TREE/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/$B/pouw-check PERIOD=$TREE/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/$B/pouw-period
+V2=$TREE/verity/protocols/proofs/spot/verifier/lean/$B/spot-one-stage-zk
 P=$W/cases
 log() { "$@" 2>&1 | tee -a "$OUT/kept_composite.txt"; return "${PIPESTATUS[0]}"; }
 log "$PY" benchmarks/one_stage/pouw_piece.py v1 --serve-run "$SRC/serve" --window "$K" --out "$P/remote/pouw" --exe "$POUW"

@@ -36,7 +36,7 @@ reads the level's tops `rec-top-L<l>` at row `i` in instance `i`, every node of 
 -/
 module
 
-public import Flock.Firewall
+public import Flock.ZkServer
 public import Flock.RecVStar
 public import Flock.Zk
 
@@ -95,7 +95,7 @@ def dirsRow (pos H : Nat) : Array Nat :=
 /-- A registered row's `b ‖ c` under `salt` (`registered.Registered.commit`, registered.py:139: `sha512/row/v1` of its
 u16 words, zero-padded to whole blocks, under hm96-sha512's default key). -/
 def commitRow (row : Array Nat) (salt : ByteArray) : ByteArray :=
-  Hm96.Default512.commitString (Firewall.rowDigest (padTo row (Registered.rowWords row.size 16))) salt
+  Hm96.Default512.commitString (ZkServer.rowDigest (padTo row (Registered.rowWords row.size 16))) salt
 
 /-- How Flock's plain verifier is told to set the inner statement up, as the verifier holds it
 (`--rec-inner-statement`, `--rec-inner-tables`, `--rec-inner-draw`): the statement id, its lookup tables, and its sample's
@@ -164,32 +164,32 @@ def recordDraw (record : String) : Option Json :=
 
 /-- The spec a recursive inner session's record decodes against, `spec` and `st` the inner statement's without a sample and
 `setupAt d` the statement at sample `d`: `spec` for a record without a sample (whose session `verify` refuses last in its
-verdict, `RecSetup.innerDrawn`), and for a record whose sample proves every one of
+verdict, `RecSetup.innerSampled`), and for a record whose sample proves every one of
 `st`'s units, in order, the sampled statement's spec (the challenger's live-coin part's full sample, `rec_live.full_draw`, which `verify`
 holds to its own sampling design with `--stratified`, `--program` and `--partition`). The sampled statement has `st`'s units, `m` and
 regions; its header carries the sample, so its Σ and Hello are its own. A sample that leaves a unit out is refused: V*
 recurses on an inner session that proves every unit. -/
-def drawnSpec (setupAt : Json → V Stmt) (spec : SessionSpec) (st : Stmt) (record : String) : V SessionSpec := do
+def sampledSpec (setupAt : Json → V Stmt) (spec : SessionSpec) (st : Stmt) (record : String) : V SessionSpec := do
   let some d := recordDraw record | return spec
-  let D ← Draw.UnitDraw.ofJson d
+  let D ← Draw.UnitSample.ofJson d
   if D.proved != Array.range st.n then
     throw s!"the session's draw proves {D.proved.size} units, not every one of the statement's {st.n} in order"
   return (← setupAt d).spec
 
-/-- `drawnSpec` at the inner files: the inner statement set up at the record's sample as `Files.stmt` sets it up without one. -/
-def Files.drawnSpec (f : Files) (spec : SessionSpec) (st : Stmt) : V SessionSpec :=
-  RecCoins.drawnSpec (fun d => Stmt.setupHidden innerTags f.circuit f.pub RecVStar.innerTree [] (some d) (some f.partition)
+/-- `sampledSpec` at the inner files: the inner statement set up at the record's sample as `Files.stmt` sets it up without one. -/
+def Files.sampledSpec (f : Files) (spec : SessionSpec) (st : Stmt) : V SessionSpec :=
+  RecCoins.sampledSpec (fun d => Stmt.setupHidden innerTags f.circuit f.pub RecVStar.innerTree [] (some d) (some f.partition)
     f.program) spec st f.record
 
 /-- The inner statement as the recursive audit's event reads it (`AcceptsStmt`): set up from its circuit and public files
 on the challenger's live-coin part's coins, with an `m` that `Zk.schedule` accepts, and its session's record decoded (at the record's full
-sample when it has one, `Files.drawnSpec`). -/
+sample when it has one, `Files.sampledSpec`). -/
 def Inner.load (unit : String) (f : Files) : V Inner := do
   let (spec, st) ← f.stmt unit
   if let some i := f.inner then
     if let .error e := RecVStar.checkInnerStmt i st then throw s!"rec-coins: {unit}: {e}"
-  if let .error e := Zk.schedule st.m then throw s!"rec-coins: {unit}: the inner statement's schedule: {e}"
-  let spec ← match f.drawnSpec spec st with
+  if let .error e := Zk.schedule st.wideLeaf st.m then throw s!"rec-coins: {unit}: the inner statement's schedule: {e}"
+  let spec ← match f.sampledSpec spec st with
     | .ok s => pure s
     | .error e => throw s!"rec-coins: {unit}: the inner session's draw: {e}"
   let sess ← match Record.decode spec f.record with
@@ -482,7 +482,7 @@ def opening (c3 : C3) (unit : String) : V RegisteredOpening := do
     let (lgr, lg) ← RecAlgebra.ligerito sh.sched M tIn rs.sws
     return (rsr ++ lgr ++ #[RecAlgebra.instValLin.add tIn rs.T], lg)
   let built : Except String RegisteredOpening := do
-    let (lins, lg) ← (run.run' 0).run (RecAlgebra.CoinSource.ofRounds rounds)
+    let (lins, lg) ← (run.run' 0).run (RecAlgebra.RoundCoins.ofRounds rounds)
     let kappa := sh.sched.levels.map fun lv => Array.replicate 2 (Array.replicate (2 ^ lv.lanes) (0 : F128))
     let (res, st) ← (RecOpening.buildAll sh lins.toList 0).run { kappa }
     if some (⟨RecOpening.nw sh, st.vNames.size, st.ops, res⟩ : RecAlgebra.GfS) != (RecOpening.structureOf sh).toOption then
@@ -745,13 +745,13 @@ def checkLink (st : Stmt) (own : Option (Array Registered.Port)) (files : Option
   if let some (l, N) := cap then
     if l == 0 then
       if lk.root.size != N then
-        throw s!"rec-coins: {unit}: holds {N} nodes of the cap, and the coin server's {lk.table} root_B has {lk.root.size}"
+        throw s!"rec-coins: {unit}: holds {N} nodes of the cap, and the challenger's live-coin part's {lk.table} root_B has {lk.root.size}"
     else
       match lk.tops[0]?.bind (·[l - 1]?), lk.tops[1]?.bind (·[l - 1]?) with
       | some (_, t0), some (_, t1) =>
         if t0.size + t1.size != N then
-          throw s!"rec-coins: {unit}: holds {N} nodes of level {l}'s tops, and the coin server's reps' level {l} tops have {t0.size + t1.size}"
-      | _, _ => throw s!"rec-coins: {unit}: the coin server's record has no level {l} top of both reps"
+          throw s!"rec-coins: {unit}: holds {N} nodes of level {l}'s tops, and the challenger's live-coin part's reps' level {l} tops have {t0.size + t1.size}"
+      | _, _ => throw s!"rec-coins: {unit}: the challenger's live-coin part's record has no level {l} top of both reps"
     return
   let some (LANES, H) := o | return
   let some own := own

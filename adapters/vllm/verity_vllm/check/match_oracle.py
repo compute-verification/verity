@@ -16,10 +16,9 @@ from collections import defaultdict
 from collections.abc import Mapping
 from typing import Any
 
+from verity_vllm.observe.events import DTYPE_BYTES
 from verity_vllm.records.fields import RecordError
 
-_ITEMSIZE = {"bfloat16": 2, "float16": 2, "float32": 4, "float64": 8, "int32": 4, "int64": 8, "int16": 2, "int8": 1, "uint8": 1, "bool": 1,
-             "float8_e4m3fn": 1, "float8_e5m2": 1}
 VIEW = "a fold instance's view"
 _ROPE_MEMBER = {"query": "rope.q", "key": "rope.k"}                # RoPE's members (the Build's hints) -> the Match fold's hint suffixes
 
@@ -71,15 +70,46 @@ def _stated_number(view: Mapping[str, Any], key: str) -> int | None:
         raise _refused(view, key, "a number") from e
 
 
-def _stated_numbers(view: Mapping[str, Any], key: str) -> list[int]:
-    """The numbers a fold view lists under `key`, none where it lists none.  Anything else there is refused by name."""
-    xs = _listed(view, key)
+def _number(view: Mapping[str, Any], key: str, left_out: int | None = None) -> int:
+    """The number a fold view states under `key`, as `int` reads it; `left_out`, where one is given, for a view that leaves the
+    key out.  Any other view that states no number there (null, anything that is none, or the key left out with no `left_out`)
+    is refused by name.  What is no view is refused by no name: a null, which the fold writes for an operand that has no device
+    view, raises the `TypeError` of indexing it (with `left_out`, the `AttributeError` of its `get`)."""
+    try:
+        x = view[key] if left_out is None else view.get(key, left_out)
+    except KeyError as e:
+        raise _refused(view, key, "a number") from e
+    try:
+        return int(x)
+    except (TypeError, ValueError, OverflowError) as e:
+        raise _refused(view, key, "a number") from e
+
+
+def _numbers(view: Mapping[str, Any], key: str) -> list[int]:
+    """The numbers a fold view lists under `key`, each as `int` reads it.  A view that leaves the key out, or states there what is
+    no list of numbers (a null among them), is refused by name."""
+    xs = view.get(key)
     if not isinstance(xs, (list, tuple)):
         raise _refused(view, key, "a list of numbers")
     try:
         return [int(x) for x in xs]
     except (TypeError, ValueError, OverflowError) as e:
         raise _refused(view, key, "a list of numbers") from e
+
+
+def _stated_numbers(view: Mapping[str, Any], key: str) -> list[int]:
+    """The numbers a fold view lists under `key`, none where it lists none.  Anything else there is refused by name."""
+    return _numbers(view, key) if _listed(view, key) else []
+
+
+def _itemsize(view: Mapping[str, Any]) -> int:
+    """The bytes of one element of the dtype a fold view states, by the recorder's table, which holds every dtype a `ViewDesc`
+    takes.  A view that leaves the dtype out, or states there what is no dtype of that table, is refused by name."""
+    dtype = view.get("dtype")
+    size = DTYPE_BYTES.get(dtype) if isinstance(dtype, str) else None
+    if size is None:
+        raise _refused(view, "dtype", "a dtype the recorder writes (observe.events.DTYPE_BYTES)")
+    return size
 
 
 def oracle_tie_facts(match_dir: str) -> dict[str, Any]:
@@ -239,11 +269,11 @@ class MatchOracle:
         return b
 
     def _view_bytes(self, event: int, view: dict) -> tuple[bytes | None, str | None]:
-        """The logical (contiguous) bytes of one storage view at the snapshot of `event`, or (None, why)."""
-        alloc, off, shape, strides, dtype = int(view["alloc"]), int(view["offset"]), list(view["shape"]), list(_listed(view, "strides")), str(view["dtype"])
-        isz = _ITEMSIZE.get(dtype)
-        if isz is None:
-            return None, f"dtype {dtype} unknown itemsize"
+        """The logical (contiguous) bytes of one storage view at the snapshot of `event`, or (None, why).  A view that leaves its
+        allocation, offset, shape or dtype out, or states there what is no number, no list of numbers or no dtype the recorder
+        writes, is refused by name; so are strides that are no list of numbers.  A view that states no strides is contiguous."""
+        alloc, off = _number(view, "alloc"), _number(view, "offset")
+        shape, strides, isz = _numbers(view, "shape"), _stated_numbers(view, "strides"), _itemsize(view)
         numel = _prod(shape) if shape else 1
         if not strides or _contiguous(shape, strides):
             lo, hi = off * isz, (off + numel) * isz
@@ -276,7 +306,7 @@ class MatchOracle:
         if not isinstance(view, Mapping):
             return None
         alloc, off = _stated_number(view, "alloc"), _stated_number(view, "offset")
-        isz = _ITEMSIZE.get(str(view.get("dtype")))
+        isz = DTYPE_BYTES.get(str(view.get("dtype")))
         if alloc is None or off is None or isz is None:
             return None
         shape, strides = _stated_numbers(view, "shape"), _stated_numbers(view, "strides")
@@ -339,7 +369,7 @@ class MatchOracle:
                     for plo, phi, p in outs.get(alloc, ()):
                         if plo <= blo and bhi <= phi and str(p.get("spec") or "").split("{", 1)[0] == spec:
                             ov0 = (p.get("output_views") or [{}])[0]
-                            found[(p.get("event"), p.get("request"), p.get("position"), p.get("row"), int(ov0.get("alloc", -1)), int(ov0.get("offset", -1)))] = p
+                            found[(p.get("event"), p.get("request"), p.get("position"), p.get("row"), _number(ov0, "alloc", -1), _number(ov0, "offset", -1))] = p
             if found:
                 return list(found.values()), None
         if n_consumer_insts == 0:
@@ -429,12 +459,12 @@ class MatchOracle:
                     out_fam: dict[tuple[int, int], set[str]] = defaultdict(set)      # (alloc, offset) of an output view -> producing families
                     for m in insts:
                         for ov in m["output_views"]:
-                            out_fam[(int(ov["alloc"]), int(ov["offset"]))].add(str(m.get("spec") or "").split("{", 1)[0])
+                            out_fam[(_number(ov, "alloc"), _number(ov, "offset"))].add(str(m.get("spec") or "").split("{", 1)[0])
                     for v in per_pos.values():
                         fed = []
                         for m in v:
                             opv = (m.get("operand_views") or [None])[0]
-                            fams = out_fam.get((int(opv["alloc"]), int(opv["offset"]))) if opv else None
+                            fams = out_fam.get((_number(opv, "alloc"), _number(opv, "offset"))) if opv else None
                             if fams and operand in fams:
                                 fed.append(m)
                         if len(fed) != 1:
@@ -461,7 +491,7 @@ class MatchOracle:
         def _order(m: dict) -> tuple[int, int]:
             pos = m.get("position")
             first = m["output_views"][0] if m.get("output_views") else (m["operand_views"][0] if m.get("operand_views") else {})
-            return (int(pos) if pos is not None else (int(m["row"]) if m.get("row") is not None else 0), int(first.get("offset") or 0))
+            return (int(pos) if pos is not None else (int(m["row"]) if m.get("row") is not None else 0), _number(first, "offset") if first.get("offset") else 0)
         insts = sorted(insts, key=_order)
         port = _port_view(member, producer)
         parts: list[bytes] = []
@@ -537,7 +567,7 @@ class MatchOracle:
 
 def _port_view(member: str, producer: dict[str, Any] | None) -> int | None:
     """The output view of a several-output Call that `member` is: its manifest row's `port`, else the port `query.required.member_name`
-    spells into it (`<port>`, or `<hint>.<port>` when the Build recorded a hint), when that port is a digit; else None."""
+    spells into it (`<port>`, or `<hint>.<port>` when the Build recorded a hint), when that port is a decimal number; else None."""
     port = (producer or {}).get("port")
     port = str(port) if port is not None else member.rsplit(".", 1)[-1]
-    return int(port) if port.isdigit() else None
+    return int(port) if port.isdecimal() else None

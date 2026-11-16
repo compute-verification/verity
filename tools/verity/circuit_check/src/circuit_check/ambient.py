@@ -1,5 +1,5 @@
 """``circuit-check --ambient TARGET..``: each target's flat lowering (`verity_flock.ir_lower.lower`, laid out as
-``flock-ir-unit/v2`` text by `ir_lower.netlist`) is a function of the Definition alone, its builders' operands and statics,
+``flock-ir-unit/v2`` text by `ir_lower.circuit_description`) is a function of the Definition alone, its builders' operands and statics,
 and of nothing else they could read. Two fresh interpreters lower every target:
 
   plain      PYTHONHASHSEED=0, the cwd as given, the targets in the order given, each lowered once;
@@ -44,11 +44,11 @@ PERTURBED: dict[str, Any] = {"hashseed": "4242", "heap": 100_000, "junk": 37, "r
 
 CLOCKS = ("time", "time_ns", "monotonic", "monotonic_ns", "perf_counter", "perf_counter_ns", "process_time",
           "process_time_ns", "thread_time", "thread_time_ns", "clock_gettime", "clock_gettime_ns")
-DRAWS = ("random", "randint", "randrange", "randbytes", "getrandbits", "choice", "choices", "shuffle", "sample", "uniform",
-         "triangular", "gauss", "normalvariate", "lognormvariate", "expovariate", "vonmisesvariate", "gammavariate",
-         "betavariate", "paretovariate", "weibullvariate", "binomialvariate")
-NUMPY_DRAWS = ("random", "rand", "randn", "randint", "random_sample", "random_integers", "choice", "shuffle", "permutation",
-               "bytes", "uniform", "normal", "standard_normal")
+RANDOM_CALLS = ("random", "randint", "randrange", "randbytes", "getrandbits", "choice", "choices", "shuffle", "sample",
+                "uniform", "triangular", "gauss", "normalvariate", "lognormvariate", "expovariate", "vonmisesvariate",
+                "gammavariate", "betavariate", "paretovariate", "weibullvariate", "binomialvariate")
+NUMPY_RANDOM_CALLS = ("random", "rand", "randn", "randint", "random_sample", "random_integers", "choice", "shuffle",
+                      "permutation", "bytes", "uniform", "normal", "standard_normal")
 
 _reads: list[str] | None = None
 _keep: list = []
@@ -85,13 +85,13 @@ def _install() -> None:
 
     for n in CLOCKS:
         _wrap(time, n, f"time.{n}")
-    for n in DRAWS:
+    for n in RANDOM_CALLS:
         _wrap(random, n, f"random.{n}")
     _wrap(random.Random, "seed", "an unseeded random.Random", lambda self, a=None, *_a, **_k: a is None)
     _wrap(os, "urandom", "os.urandom")
     _wrap(os, "getrandom", "os.getrandom")
     random._urandom = os.urandom  # type: ignore[attr-defined]  (SystemRandom's, so secrets')
-    for n in NUMPY_DRAWS:
+    for n in NUMPY_RANDOM_CALLS:
         _wrap(npr, n, f"numpy.random.{n}")
     _wrap(npr, "default_rng", "an unseeded numpy.random.default_rng", lambda seed=None, *_a, **_k: seed is None)
 
@@ -133,7 +133,7 @@ def text(target: Any, junk: int = 0) -> str:
         del C.inputs["ambient"]
     C, _ins, words = ST._lowered(target, C)
     lay = IL.layout(C, list(C.inputs), [f"o{j}" for j in range(len(words))])
-    return IL.netlist(lay, "unit")
+    return IL.circuit_description(lay, "unit")
 
 
 def _child(opts: dict) -> None:

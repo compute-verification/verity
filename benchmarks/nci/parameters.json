@@ -32,7 +32,7 @@
     "central": 4.0,
     "high": 8,
     "confidence": "medium",
-    "merge": "Central: NVFP4 weights (16x16 block scales, 4.03 bits) in the largest low-bit runs, Nemotron 3 Ultra (550B total, 55B active, 20T tokens) and Super (120B, 12.7B active, 25T tokens). The loss gap against BF16 is below 0.4% and falls with scale: about 1%, 0.6% and 0.4% at 3B, 8B and 55B active. The final 15% of layers plus attention, latent and embedding projections stay in high precision, which lifts the weight-averaged read to about 5.8. Low: ternary from scratch (BitNet b1.58 2B4T at 4T tokens, Spectra 3.9B, Spectra 1.1 3B at 1.2T), with a fitted loss gap of 5-7% at 15B-330B. 1-bit BitNet reaches 30B but trains on only about 10B tokens. High: FP8 practice (DeepSeek-V3 within 0.25%; FSDP2 float8 weight all-gather). Naive 4-bit weight reads without training-aware quantization cost 5-12%. These are rates of a different training computation, not compressions of a BF16 one: the bound applies to the low-bit run as its own reference circuit, and its master-weight update is extra work the bound does not count.",
+    "merge": "Central: NVFP4 weights (16x16 block scales, 4.03 bits) in the largest low-bit runs, Nemotron 3 Ultra (550B total, 55B active, 20T tokens) and Super (120B, 12.7B active, 25T tokens). The loss gap against BF16 is below 0.4% and falls with scale: about 1%, 0.6% and 0.4% at 3B, 8B and 55B active. The final 15% of layers plus attention, latent and embedding projections stay in high precision, which lifts the weight-averaged read to about 5.8. Low: ternary from scratch (BitNet b1.58 2B4T at 4T tokens, Spectra 3.9B, Spectra 1.1 3B at 1.2T), with a fitted loss gap of 5-7% at 15B-330B. 1-bit BitNet reaches 30B but trains on only about 10B tokens. High: FP8 practice (DeepSeek-V3 within 0.25%; FSDP2 float8 weight all-gather). Naive 4-bit weight reads without training-aware quantization cost 5-12%. These are rates of a different training computation, not compressions of a BF16 one: the bound applies to the low-bit run as its own reference training algorithm, and its master-weight update is extra work the bound does not count.",
     "evidence": [
      "nvidia-2026-nemotron3-ultra/1",
      "nvidia-2026-nemotron3-ultra/2",
@@ -573,7 +573,7 @@
   "id": "train.compute_multiplier",
   "symbol": "m",
   "unit": "x (FLOP-equivalent)",
-  "meaning": "Compute a BF16 run needs to reach the loss of a pretraining run at rates (b_w, b_a), divided by that run's compute (FLOPs = 6ND, MACs counted once whatever their precision). 1 for BF16; below 1 when compressed training needs more compute. Pretraining efficiency under the policy is max m / rho.",
+  "meaning": "Compute a BF16 run needs to reach the loss of a pretraining run at rates (b_w, b_a), divided by that run's compute (FLOPs = 6ND, MACs counted once whatever their precision). 1 for BF16; below 1 when compressed training needs more compute. Pretraining efficiency under the policy is max m / slowdown.",
   "estimates": [
    {
     "id": "train.compute_multiplier/w8a8",

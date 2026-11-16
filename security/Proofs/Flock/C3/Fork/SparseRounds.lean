@@ -19,7 +19,7 @@ import VCVio.Prelude.Core
 
 The two coin bounds `sparse_sound` (`C3/Fork/Sparse.lean`) chains, and the algebra they rest on:
 
-* `value_drawFin_le`: Schwartz–Zippel per `drawFin` coin. A nonzero vector's multilinear extension at `n` fresh coins,
+* `value_sampleFin_le`: Schwartz–Zippel per `sampleFin` coin. A nonzero vector's multilinear extension at `n` fresh coins,
   flipped one at a time, is zero with probability at most `n/|F|`: each coin folds the lowest bit, and a nonzero pair
   `(u(2b), u(2b+1))` folds to zero at one coin at most.
 * `value_degRounds_le`: `degRounds`' round step. A round's polynomial sums to the claim by construction
@@ -399,7 +399,7 @@ theorem value_pure_eq_zero {α : Type} {p : α → Prop} {a : α} (h : ¬ p a) :
   classical
   rw [pure_eq, value_ret, ite_eq_right h]
 
-theorem value_draw_bind_le (p : β → Prop) (C : Type) [Fintype C] [Nonempty C] (f : C → Game β) (bad : C → Prop)
+theorem value_sample_bind_le (p : β → Prop) (C : Type) [Fintype C] [Nonempty C] (f : C → Game β) (bad : C → Prop)
     (ε ε' : ℝ≥0∞) (hbad : prCoin bad ≤ ε) (hgood : ∀ c, ¬ bad c → value p (f c) ≤ ε') :
     value p (draw C >>= f) ≤ ε + ε' :=
   value_coin_le p C f bad ε ε' hbad hgood
@@ -415,12 +415,12 @@ theorem prCoin_eq_le (c₀ : F) {bad : F → Prop} (h : ∀ c, bad c → c = c�
     simp only [Finset.mem_filter] at ha hb
     exact ha.2.trans hb.2.symm
 
-/-- **Schwartz–Zippel per `drawFin` coin**: a nonzero vector's multilinear extension at `n` fresh coins is zero with
+/-- **Schwartz–Zippel per `sampleFin` coin**: a nonzero vector's multilinear extension at `n` fresh coins is zero with
 probability at most `n/|F|`. -/
-theorem value_drawFin_le (p : β → Prop) : ∀ (n : ℕ) (u : ℕ → F), (∃ b < 2 ^ n, u b ≠ 0) →
+theorem value_sampleFin_le (p : β → Prop) : ∀ (n : ℕ) (u : ℕ → F), (∃ b < 2 ^ n, u b ≠ 0) →
     ∀ (k : (Fin n → F) → Game β) (ε : ℝ≥0∞),
       (∀ ζ, ∑ b ∈ Finset.range (2 ^ n), eqAt ζ b * u b ≠ 0 → value p (k ζ) ≤ ε) →
-        value p (drawFin n >>= k) ≤ (n : ℝ≥0∞) / Fintype.card F + ε
+        value p (sampleFin n >>= k) ≤ (n : ℝ≥0∞) / Fintype.card F + ε
   | 0, u, hu, k, ε, hk => by
       obtain ⟨b, hb, hub⟩ := hu
       obtain rfl : b = 0 := by rw [pow_zero] at hb; omega
@@ -456,25 +456,25 @@ theorem value_drawFin_le (p : β → Prop) : ∀ (n : ℕ) (u : ℕ → F), (∃
           · exact hub₀ (by rw [show b₀ = 2 * (b₀ / 2) + 1 by omega]; exact ha'0)
         rw [eq_div_iff hne]
         linear_combination h1
-      have hgame : drawFin (n + 1) >>= k = (draw F >>= fun c => drawFin n >>= fun ζ => k (Fin.cons c ζ)) := by
-        rw [drawFin.eq_2]
+      have hgame : sampleFin (n + 1) >>= k = (draw F >>= fun c => sampleFin n >>= fun ζ => k (Fin.cons c ζ)) := by
+        rw [sampleFin.eq_2]
         simp only [bind_eq, bind_assoc, pure_eq, bind_ret]
       rw [hgame]
-      refine (value_draw_bind_le p F _ (fun c => ∀ b < 2 ^ n, (1 + c) * u (2 * b) + c * u (2 * b + 1) = 0)
+      refine (value_sample_bind_le p F _ (fun c => ∀ b < 2 ^ n, (1 + c) * u (2 * b) + c * u (2 * b + 1) = 0)
         (1 / Fintype.card F) ((n : ℝ≥0∞) / Fintype.card F + ε) (prCoin_eq_le _ hbad) fun c hc => ?_).trans
           (le_of_eq ?_)
       · push Not at hc
-        exact value_drawFin_le p n _ hc _ ε fun ζ hζ => hk _ (by rw [hsum]; exact hζ)
+        exact value_sampleFin_le p n _ hc _ ε fun ζ hζ => hk _ (by rw [hsum]; exact hζ)
       · rw [← add_assoc, ENNReal.div_add_div_same, Nat.cast_succ, add_comm (1 : ℝ≥0∞)]
 
-/-- `value_drawFin_le` with a disjunct `E` that, when it holds, bounds the rest by itself. -/
-theorem value_drawFin_le_or (p : β → Prop) (E : Prop) (n : ℕ) (u : ℕ → F) (hu : E ∨ ∃ b < 2 ^ n, u b ≠ 0)
+/-- `value_sampleFin_le` with a disjunct `E` that, when it holds, bounds the rest by itself. -/
+theorem value_sampleFin_le_or (p : β → Prop) (E : Prop) (n : ℕ) (u : ℕ → F) (hu : E ∨ ∃ b < 2 ^ n, u b ≠ 0)
     (k : (Fin n → F) → Game β) (ε : ℝ≥0∞)
     (hk : ∀ ζ, E ∨ ∑ b ∈ Finset.range (2 ^ n), eqAt ζ b * u b ≠ 0 → value p (k ζ) ≤ ε) :
-    value p (drawFin n >>= k) ≤ (n : ℝ≥0∞) / Fintype.card F + ε := by
+    value p (sampleFin n >>= k) ≤ (n : ℝ≥0∞) / Fintype.card F + ε := by
   by_cases hE : E
   · exact (value_bind_le_of_forall p _ k ε fun ζ => hk ζ (Or.inl hE)).trans le_add_self
-  · exact value_drawFin_le p n u (hu.resolve_left hE) k ε fun ζ h => hk ζ (Or.inr h)
+  · exact value_sampleFin_le p n u (hu.resolve_left hE) k ε fun ζ h => hk ζ (Or.inr h)
 
 /-- A round's polynomial `c₀ + c₁X + Σ_i c_{i+2}X^{i+2}` with `c₁ = claim + Σ_i c_{i+2}` (`degNext`). -/
 noncomputable def degPoly {k : ℕ} (claim : F) (c : F × (Fin k → F)) : F[X] :=
@@ -529,7 +529,7 @@ theorem value_degRounds_le [CharP F 2] (k : ℕ) : ∀ (n : ℕ) (G : (Fin n →
         rw [ENNReal.div_add_div_same]; congr 1; push_cast; ring
       rw [degRounds.eq_2, ← hle]
       refine value_bind_le_of_forall _ _ _ _ fun c => ?_
-      refine value_draw_bind_le _ F _ (fun r => (degPoly claim c).eval r = (∑ b ∈ Finset.range (2 ^ n), P b).eval r)
+      refine value_sample_bind_le _ F _ (fun r => (degPoly claim c).eval r = (∑ b ∈ Finset.range (2 ^ n), P b).eval r)
         _ _ ?_ fun r hr => ?_
       · refine Verity.Game.prCoin_eval_eq_eval_le _ _ (fun hPT => hc ?_) (k + 1) (degPoly_natDegree_le _ _) hTd
         rw [cube_succ, ← degPoly_sum claim c, hPT, hTe, hTe, Finset.sum_add_distrib]

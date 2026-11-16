@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from verity_vllm.config import UsageError, option
+from verity_vllm.log import write
 
 NAME = "verity_norm_tap"
 TAP_VERSION = 1
@@ -137,10 +138,10 @@ class Options:
 def main(a: Options) -> int:
     if a.check:
         r = check(a.check)
-        print(("NORM-TAP-OK " if r["ok"] else "NORM-TAP-FAIL ") + json.dumps(r), flush=True)
+        write(("NORM-TAP-OK " if r["ok"] else "NORM-TAP-FAIL ") + json.dumps(r))
         return 0 if r["ok"] else 1
     if not (a.vllm_src and a.build_dir):
         raise UsageError("give --vllm-src and --build-dir (build) or --check SO")
     info = build(a.vllm_src, a.build_dir)
-    print(f"BUILD-OK {info['so']} {info['so_sha256']} arch={info['arch']} ({info['compile_seconds']} s)", flush=True)
+    write(f"BUILD-OK {info['so']} {info['so_sha256']} arch={info['arch']} ({info['compile_seconds']} s)")
     return 0

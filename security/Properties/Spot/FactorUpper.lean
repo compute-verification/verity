@@ -15,7 +15,7 @@ precision it accepts:
   replay block `ρ` whose cells `cs` covers (`Covers`: as many proof blocks of each width or more, a `k` or less);
 * `FactorUpperPatternsSound`: when `lnFactorUpperPatterns cs reads N S P` returns `v`, the patterns' factor is at most
   `e^v` (`Claims.Sampling.rankinFactorPatterns`) for every such `ρ` whose proof blocks are read by at most `N` requests,
-  each serving `S` bits and reading at most `reads` (`ReadsCover`), no two reading one proof block;
+  each serving at most `S` bits and reading at most `reads` (`ReadsCover`), no two reading one proof block;
 * `FactorUpperCappedSound`: when `lnFactorUpperCapped cs S P` returns `v`, the capped factor, each set's bits capped at
   `S`, is at most `e^v` (`Claims.Sampling.rankinFactorCapped`) for every replay block `ρ` that `cs` covers.
 
@@ -55,7 +55,7 @@ def ReadsCover (s : AuditStatement) (Pt : Partition) (d : Design.Two) {R : Type}
 
 /-- **The bound is above the patterns' factor**: when `lnFactorUpperPatterns cs reads N S P` returns `v`, every replay
 block `ρ` that `cs` covers has its patterns' factor at most `e^v`, when at most `N` requests read its proof blocks, each
-serving `S` bits and reading at most `reads`, and no two read one proof block. -/
+serving at most `S` bits and reading at most `reads`, and no two read one proof block. -/
 def FactorUpperPatternsSound : Prop :=
   ∀ (cs : List Cell) (reads : List (List (ℕ × ℕ))) (N S : ℕ) (P : Params) (v : ℚ),
     lnFactorUpperPatterns cs reads N S P = some v →
@@ -63,7 +63,7 @@ def FactorUpperPatternsSound : Prop :=
       (req : Fin s.prog.outs.length → R) (ρ : ℕ), Covers s Pt d ρ cs →
       (Finset.univ.filter fun r => (blocksTo s.prog Pt req (blocksIn Pt d.part ρ) r).Nonempty).card ≤ N →
       (∀ r, (blocksTo s.prog Pt req (blocksIn Pt d.part ρ) r).Nonempty →
-        servedBits req r = S ∧ ReadsCover s Pt d req ρ reads r) →
+        servedBits req r ≤ S ∧ ReadsCover s Pt d req ρ reads r) →
       (∀ r r', r ≠ r' →
         Disjoint (blocksTo s.prog Pt req (blocksIn Pt d.part ρ) r) (blocksTo s.prog Pt req (blocksIn Pt d.part ρ) r')) →
       rankinFactorPatterns s Pt d req (P.q : ℝ) (P.θ : ℝ) ρ ≤ Real.exp (v : ℝ)

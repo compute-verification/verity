@@ -23,7 +23,7 @@ that population (`unitOf`), whose row at port `q` is leaf `rowAt` of the tree (`
 * `pubPort_opens`: at a population `HmOut.loadPublic` accepts, unit `u`'s `b ‖ c` at port `q` opens `pubPort` at the
   unit's row through `pubPath` (`SamplingDeploy.opensLeaf_tree`).
 * `setupHidden_unit`: at a statement `setupHidden` sets up from that population at a sample, instance `n` is unit
-  `unitOf draw n` of the population, with its `b ‖ c` at each port (`Hidden.drawn_digestW`).
+  `unitOf draw n` of the population, with its `b ‖ c` at each port (`Hidden.sampled_digestW`).
 -/
 
 @[expose] public section
@@ -32,12 +32,12 @@ namespace SpotFlock
 
 open Claims Claims.Sampling SamplingDeploy
 
-/-- **The population unit a session's instance `n` is**: its sample's `n`-th proved unit (`Draw.UnitDraw.proved`),
+/-- **The population unit a session's instance `n` is**: its sample's `n`-th proved unit (`Draw.UnitSample.proved`),
 `n` itself without a sample. -/
 def unitOf (draw : Option Lean.Json) (n : ℕ) : ℕ :=
   match draw with
   | some d =>
-    match _root_.Flock.Draw.UnitDraw.ofJson d with
+    match _root_.Flock.Draw.UnitSample.ofJson d with
     | .ok D => D.proved.getD n 0
     | .error _ => n
   | none => n
@@ -123,13 +123,13 @@ theorem setupHidden_unit {tags : _root_.Flock.Tags} {cf pf : ByteArray} {coins :
     exact ⟨hn, rfl⟩
   | some d =>
     have hdrawn : _root_.Flock.HmRow.drawn { st.c with outPorts := #[] } pop d = .ok st.pub := hsome d rfl
-    obtain ⟨D, hD, hpn, hnD, -⟩ := FlockSoundness.Discharge.Layout.drawn_spec hdrawn
+    obtain ⟨D, hD, hpn, hnD, -⟩ := FlockSoundness.Discharge.Layout.sampled_spec hdrawn
     have hlt := FlockSoundness.Discharge.Layout.proved_lt_population hD
     have hr : n < D.proved.size := hnD ▸ hn
     have hu : unitOf (some d) n = D.proved[n] := by
       simp only [unitOf, hD, Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hr, Option.getD_some]
     rw [hu]
     exact ⟨hpn ▸ hlt _ (Array.getElem_mem hr),
-      FlockSoundness.Discharge.Hidden.drawn_digestW hload hdrawn hD hlt hr hq⟩
+      FlockSoundness.Discharge.Hidden.sampled_digestW hload hdrawn hD hlt hr hq⟩
 
 end SpotFlock

@@ -12,13 +12,13 @@ public import Proofs.Flock.Claims.DeployCode
 `D.enc` and `D.θ` (`ListWithin`), its count at most `p` at the opened word's encoded length (`Flock.wordLen`), and its
 lists that long at most, which bounds `assemble`'s checks. The first holds at every deployment (`Claims.ERep_cost`,
 `Flock.Efficient_of_decoder`). Both records name the counted radius decoder (`GS.plainCountedRD`, `GS.zkCountedRD`),
-whose count and lists are at most `14·(flockPolyR + X)` (`11·(zkPolyR + X)` masked) at its family's size; that size
+whose count and lists are at most `14·(flockPolyR + X)` (`15·(zkPolyR + X)` masked) at its family's size; that size
 is at most its value on no columns times one more than their number (`GS.plainSizeRD_le`), and their number is at most
 the word's encoded length (`Flock.length_le_wordLen`). So, at every `H`:
 
 * `efficient_plain`: the plain record the claims read, `deployPlainTrim rel`, at `plainStepPoly`, `14·(flockPolyR + X)`
   composed with `plainSizeRD [] · (X + 1)`;
-* `efficient_zk`: the masked record `deployZkTrim rel` at `zkStepPoly`, `11·(zkPolyR + X)` composed with
+* `efficient_zk`: the masked record `deployZkTrim rel` at `zkStepPoly`, `15·(zkPolyR + X)` composed with
   `zkSizeRD [] · (X + 1)`. The masked columns and code are the `2^k0` witness lanes of each opened row (`zkRepColsOf`,
   `Flock.zkWidth i = 2^k0`), so `zkDecodeRD` decodes those lanes only.
 
@@ -109,10 +109,10 @@ theorem listWithin_zkTrim (rel : Readable.Parsed → Readable.Relation) :
 noncomputable def plainStepPoly : Polynomial ℕ :=
   (C 14 * (Claims.GS.flockPolyR + Polynomial.X)).comp (C (Claims.GS.plainSizeRD []) * (Polynomial.X + 1))
 
-/-- **The masked record's step polynomial**: `11·(zkPolyR + X)`, the masked family's bound at its size, composed with
+/-- **The masked record's step polynomial**: `15·(zkPolyR + X)`, the masked family's bound at its size, composed with
 `zkSizeRD [] · (X + 1)`. -/
 noncomputable def zkStepPoly : Polynomial ℕ :=
-  (C 11 * (Claims.GS.zkPolyR + Polynomial.X)).comp (C (Claims.GS.zkSizeRD []) * (Polynomial.X + 1))
+  (C 15 * (Claims.GS.zkPolyR + Polynomial.X)).comp (C (Claims.GS.zkSizeRD []) * (Polynomial.X + 1))
 
 /-- **Flock: efficiency at the deployed plain verifier**, at every `H`: `E^rep`'s reruns, and the record's decoder, the
 counted plain radius decoder, meets `ListWithin` at the record's `len`, `enc` and `θ`, with its count and its lists at

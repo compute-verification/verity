@@ -1,7 +1,7 @@
 #!/bin/sh
 # Print a read-only GitHub App installation token, the one every reader of GitHub on the pod takes (the sweep, the agent watch,
 # the cloud watch and the watchers' gh, bin/gh): gh_app_token.sh's exchange (a JWT signed RS256 with the App's private key,
-# exchanged at GitHub for a 1-hour token scoped to compute-verification/verity and compute-verification/infra), asked for with
+# exchanged at GitHub for a 1-hour token scoped by id, which survives a rename, to compute-verification/verity and the platform repository), asked for with
 # contents and pull requests read and nothing else, so nothing that holds it can write. Its only output on stdout is the token,
 # for `GH_TOKEN=$(gh_read_token.sh --cached)`. Exit 1, with GitHub's message on stderr, when the exchange fails.
 #   gh_read_token.sh --cached   the token minted within the last 45 min, else a new one: kept in $GH_READ_CACHE (default
@@ -24,7 +24,7 @@ body=$(printf '{"iat":%d,"exp":%d,"iss":"%s"}' $((now - 60)) $((now + 540)) "$ap
 sig=$(printf '%s.%s' "$head" "$body" | openssl dgst -sha256 -sign "$key" -binary | b64) || exit 1
 curl -sS --max-time 30 -X POST -H "Authorization: Bearer $head.$body.$sig" -H "Accept: application/vnd.github+json" \
   "https://api.github.com/app/installations/$inst/access_tokens" \
-  -d '{"repositories":["verity","infra"],"permissions":{"contents":"read","pull_requests":"read"}}' |
+  -d '{"repository_ids":[1380037273,1436193999],"permissions":{"contents":"read","pull_requests":"read"}}' |
   python3.12 -c '
 import json, sys
 d = json.load(sys.stdin)

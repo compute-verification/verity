@@ -277,8 +277,9 @@ def _eval_vu(task: tuple[int, bytes, bytes]) -> dict:
 def _eval_stale(task: tuple[int, bytes, bytes, int]) -> dict:
     i, xb, wb, prev = task
     x, w = _words(xb), _words(wb)
-    alt = G.variant_chain("c0-stale", x, w, {"previous_final": prev})
-    if alt is None:
+    try:
+        alt = G.variant_chain("c0-stale", x, w, {"previous_final": prev})
+    except InvalidArtifact:
         return {"i": i, "y": None, "acc_differs": None}
     accs = G.chain_accs(x, w)
     return {"i": i, "y": G.epilogue(alt[-1]), "acc_differs": alt != accs}
@@ -558,7 +559,7 @@ def build(out: Path | str = DEFAULT_ROOT, procs: int = 1, seeds_dir: Path | str 
             "hf": {"repo": G.HF_REPO, "revision": G.HF_REVISION, "file": G.HF_FILE, "url": G.HF_URL, "header": st.header_info(),
                    "fused_row_order": "vLLM TP=1: qkv_proj rows = q_proj (1536) | k_proj (256) | v_proj (256); gate_up_proj rows = gate_proj (8960) | up_proj (8960); "
                                       "lm_head = model.embed_tokens.weight (tie_word_embeddings, no lm_head.weight in the checkpoint)",
-                   "tensors": tensors, "rows_per_activation": G.ROWS_PER_X, "drawn_rows": {f"{fam}/layer-{layer}": rows for (fam, layer), rows in rows_of.items()}},
+                   "tensors": tensors, "rows_per_activation": G.ROWS_PER_X, "sampled_rows": {f"{fam}/layer-{layer}": rows for (fam, layer), rows in rows_of.items()}},
             "tiers": {
                 "vu-k1536": {"n": N_VU, "K": K, "steps": STEPS, "block": BLOCK, "corners_per_block": CORNERS_PER_BLOCK, "corner_slots": list(CORNER_SLOTS),
                              "composition": {"real": N_VU - n_corner, "real_seed": len(seeds), "real_other_rows": N_VU - n_corner - len(seeds), "corner": n_corner,

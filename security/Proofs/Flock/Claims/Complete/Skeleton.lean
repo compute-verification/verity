@@ -221,9 +221,9 @@ def FinalFits (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readabl
 
 /-! ### B's checks -/
 
-/-- **The record's sample is the statement's**, as the verifier compares them (`drawEq`). -/
-def DrawMatches (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
-  ∀ o : Run H rel, drawEq (FlockSoundness.Discharge.Exec.recordDraw o.record) o.s.read.draw = true
+/-- **The record's sample is the statement's**, as the verifier compares them (`sampleEq`). -/
+def SampleMatches (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
+  ∀ o : Run H rel, sampleEq (FlockSoundness.Discharge.Exec.recordDraw o.record) o.s.read.draw = true
 
 /-- **The record's live session reads** (`liveOf`: the record is JSON with its link, points and streams). -/
 def LiveReads (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop := ∀ o : Run H rel, liveOf o.spec o.record = .ok o.live
@@ -336,7 +336,7 @@ structure Goals (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Reada
   sends : SendCount H rel
   linkFirst : LinkFirst H rel
   finalFits : FinalFits H rel
-  draw : DrawMatches H rel
+  draw : SampleMatches H rel
   liveReads : LiveReads H rel
   rootB : CustodyRootB H rel
   publicsLink : CustodyPublics H rel
@@ -379,7 +379,7 @@ theorem Run.recordFits {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed �
     o.record.toUTF8.size < 2 ^ 64 :=
   o.ready_parts.2.2.2.2 o.w o.ω o.r o.record o.proofs o.bodies o.ran
 
-/-- **A sampled session**: `checks` never reaches `drawLaw zk tags false none`. -/
+/-- **A sampled session**: `checks` never reaches `sampleDesign zk tags false none`. -/
 theorem Case.drawn {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (c : Case H rel) : c.s.read.draw.isNone = false := by
   have := c.ready_parts.1
   cases h : c.s.read.draw

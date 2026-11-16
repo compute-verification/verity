@@ -1,7 +1,7 @@
 """A party's signed period roots and its liveness records: how an auditor device's signatures reach the verifier only
 through the prover's zero-knowledge proofs.
 
-An auditor party (a memory challenger, a network certifier) on a device holds a lower HSS key the device's identity
+An auditor party (a memory challenger, a network attester) on a device holds a lower HSS key the device's identity
 certified for it in the deployment (`verity.commitments.crypto.lms.Identity.issue`, `PartyKey`). Over one certification period it
 commits every execution phase's records, each a byte string, as the leaves of one frame-v3-sha512 tree (`root`):
 
@@ -15,7 +15,7 @@ commits every execution phase's records, each a byte string, as the leaves of on
 record, "block ``w`` of the period was certified" with no content (`lms.liveness_message`): the party's one public
 message per execution phase, which the verifier checks in the clear (`lms.verify_liveness`). `Period.close` signs
 the root once
-(`lms.period_root_message`, binding the deployment's hash, the party, the attachment id the challenger drew, the link,
+(`lms.period_root_message`, binding the deployment's hash, the party, the attachment id the challenger sampled, the link,
 the period's index and the record count) and returns the `SignedPeriod`, which goes to the prover only, as witness. The
 party's lower key and the identity's certificate of it are public: every liveness record shows them in the clear. The
 prover opens the records a proof reads (`SignedPeriod.read`); the verifier checks the certificate in the clear
@@ -29,7 +29,7 @@ of it, under no-state-rollback. `Period.block` signs the block's liveness record
 so every record a closed period holds is in a block whose liveness record is out.
 
 A party key signs period roots and liveness records only. What a party signs per challenge outside its periods (the
-network certifier's reveals) is no record of a period: it stays under the party's own key, and no statement about a
+network attester's reveals) is no record of a period: it stays under the party's own key, and no statement about a
 period reads it as the device's.
 
 Stdlib only, as a core unit with no ml edge is: the tree is written out here, and its test holds it to

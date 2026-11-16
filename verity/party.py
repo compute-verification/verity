@@ -19,7 +19,8 @@ Besides its peers' messages and its sources', the runtime tells a party that a c
 on it was refused (`Refused {name, detail}`, after which the party is finished refused by that name unless it finishes
 first). A party does no I/O and reads no ambient clock or randomness: its coins and clock readings are messages from its sources,
 so its transcript (`transcript.PartyLog`) replays it exactly, and the same code runs live, simulated or replayed. What
-the runtime gives it in `Identity` is its own device: its name, the configuration's hash, its key and its state directory.
+the runtime gives it in `Identity` is its own device: its name, the configuration's hash, its key, its state directory
+and the name of the clock its clock source reads.
 """
 
 from __future__ import annotations
@@ -30,17 +31,25 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from verity.channel import KINDS, Message
-from verity.runtime.handshake import Key
 
 type Params = Mapping[str, Any]
 """A protocol's public structural parameters, canonical JSON."""
 
 
+class Key(Protocol):
+    """A party's key: its public half, and `sign(message)`, which a stateful hash-based scheme refuses past its last leaf."""
+
+    public_key: bytes
+
+    def sign(self, message: bytes) -> bytes: ...
+
+
 @dataclass(frozen=True)
 class Identity:
     """Who a party is and what its machine gives it: its name in the manifest, its instance (`memory-challenger@s1`), the
-    deployment configuration's hash, its key, its state directory (persisted across restarts) and the local capabilities
-    the manifest says it needs (a signer, a store), by name."""
+    deployment configuration's hash, its key, its state directory (persisted across restarts), the local capabilities
+    the manifest says it needs (a signer, a store), by name, and `clock`: the clock its clock source reads, as a record
+    names it (`CLOCK_MONOTONIC ns`), None for virtual time, in a replay, and for a party with no clock."""
 
     party: str
     instance: str = ""
@@ -48,6 +57,7 @@ class Identity:
     key: Key | None = None
     state: Path | None = None
     capabilities: Mapping[str, Any] = field(default_factory=dict)
+    clock: str | None = None
 
 
 @dataclass(frozen=True)
@@ -106,4 +116,4 @@ class Party(Protocol):
     def on(self, msg: Received) -> list[Action]: ...
 
 
-__all__ = ["Action", "Finish", "Identity", "Params", "Party", "Received", "LogEntry", "Send", "Timer"]
+__all__ = ["Action", "Finish", "Identity", "Key", "Params", "Party", "Received", "LogEntry", "Send", "Timer"]

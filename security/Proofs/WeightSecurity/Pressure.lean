@@ -46,7 +46,7 @@ theorem strataPa_le_pow (ss : List (ℕ × ℕ)) (hk : ∀ p ∈ ss, p.2 ≤ p.1
 /-- **A window's sampling design misses `B` with probability at most `x^|B|`** when its strata `ss` cover its
 population, each samples at most its size and misses one more incorrect proof block with probability at most `x`. -/
 theorem pa_le_pow (w : JointAuditV5) {ss : List (ℕ × ℕ)}
-    (hss : (Properties.Spot.oneStageOf w.law).strata w.ns = some ss) (hk : ∀ p ∈ ss, p.2 ≤ p.1)
+    (hss : (Properties.Spot.oneStageOf w.samplingDesign).strata w.ns = some ss) (hk : ∀ p ∈ ss, p.2 ≤ p.1)
     (hcov : (ss.map Prod.fst).sum = w.ns.sum) {x : ℝ} (hf : ∀ p ∈ ss, fac p.1 p.2 0 ≤ x) (B : Finset (Fin w.nJ)) :
     w.pa B ≤ x ^ B.card := by
   have hB : B.map Fin.valEmbedding ⊆ range w.ns.sum := fun v hv => by
@@ -59,10 +59,10 @@ theorem pa_le_pow (w : JointAuditV5) {ss : List (ℕ × ℕ)}
     exact mem_range.1 (hB hv)
 
 /-- **A registered sampling design's strata** cover its population and each sample at most their size. -/
-theorem registered_strata {law : Flock.Draw.Law} {ns : List ℕ} {kd : ℕ} (h : Flock.Bridge.LawOn law ns kd) :
-    ∃ ss, (Properties.Spot.oneStageOf law).strata ns = some ss ∧ (∀ p ∈ ss, p.2 ≤ p.1) ∧
+theorem registered_strata {samplingDesign : Flock.Draw.SamplingDesign} {ns : List ℕ} {kd : ℕ} (h : Flock.Bridge.SamplingDesignOn samplingDesign ns kd) :
+    ∃ ss, (Properties.Spot.oneStageOf samplingDesign).strata ns = some ss ∧ (∀ p ∈ ss, p.2 ≤ p.1) ∧
       (ss.map Prod.fst).sum = ns.sum := by
-  cases law with
+  cases samplingDesign with
   | subset k =>
     obtain ⟨rfl, hk⟩ := h
     exact ⟨[(ns.sum, k)], rfl, fun p hp => by rw [List.mem_singleton.1 hp]; exact hk, by simp⟩
@@ -90,7 +90,7 @@ theorem registered_strata {law : Flock.Draw.Law} {ns : List ℕ} {kd : ℕ} (h :
 /-- **A registered window's sampling design misses `B` with probability at most `x^|B|`** when each of its strata misses
 one more incorrect proof block with probability at most `x`. -/
 theorem pa_le_pow_of_fac (w : JointAuditV5) {x : ℝ}
-    (hf : ∀ ss, (Properties.Spot.oneStageOf w.law).strata w.ns = some ss → ∀ p ∈ ss, fac p.1 p.2 0 ≤ x)
+    (hf : ∀ ss, (Properties.Spot.oneStageOf w.samplingDesign).strata w.ns = some ss → ∀ p ∈ ss, fac p.1 p.2 0 ≤ x)
     (B : Finset (Fin w.nJ)) : w.pa B ≤ x ^ B.card := by
   obtain ⟨ss, hss, hk, hcov⟩ := registered_strata w.hlaw
   exact pa_le_pow w hss hk hcov (hf ss hss) B
@@ -117,7 +117,7 @@ theorem fac_le_of_rate {num den n k : ℕ} (hd : 0 < den) (hq : num ≤ den) (h 
 /-- **A registered window's sampling design at a rate** misses `B` with probability at most `(1 − num/den)^|B|` when
 each of its strata samples at the rate `num/den` or more, however the prover sizes them. -/
 theorem pa_le_pow_of_rate (w : JointAuditV5) {num den : ℕ} (hd : 0 < den) (hq : num ≤ den)
-    (hr : ∀ ss, (Properties.Spot.oneStageOf w.law).strata w.ns = some ss → ∀ p ∈ ss, num * p.1 ≤ den * p.2)
+    (hr : ∀ ss, (Properties.Spot.oneStageOf w.samplingDesign).strata w.ns = some ss → ∀ p ∈ ss, num * p.1 ≤ den * p.2)
     (B : Finset (Fin w.nJ)) : w.pa B ≤ (1 - (num : ℝ) / den) ^ B.card :=
   pa_le_pow_of_fac w (fun ss hss p hp => fac_le_of_rate hd hq (hr ss hss p hp)) B
 
@@ -137,18 +137,20 @@ theorem TheftServedDeployedRate {Ω R Θ Q Adv O V Tick Θ' : Type} [Fintype Ω]
     (hhon : HonestUseHard C gen Stolen T A p)
     (hsim : Simulable A Ou (servedChannel R Q Adv O V Tick T (E * M + (L + 1) * Fintype.card O)))
     (hA3 : ∀ t < T, Assumptions.UniformRandomBytes (W t).Lb (W t).src)
-    (hr : ∀ t < T, ∀ ss, (Properties.Spot.oneStageOf (W t).law).strata (W t).ns = some ss →
+    (hr : ∀ t < T, ∀ ss, (Properties.Spot.oneStageOf (W t).samplingDesign).strata (W t).ns = some ss →
       ∀ p ∈ ss, num * p.1 ≤ den * p.2)
     (hT : ∀ θ r t (τ : Strategy (servedGame (W t) (Release O V Tick Adv))),
-      MonitoringPeriodPlays (fun t => servedGame (W t) (Release O V Tick Adv)) 0 T (s θ r) t τ → ∀ k ω j,
+      MonitoringPeriodPlays (fun t => servedGame (W t) (Release O V Tick Adv)) 0 T (s θ r) t τ → 
+      ∀ _ : Nonempty (W t).EndΩ, ∀ k ω j,
       Assumptions.TableCRZAt execArith hs512
-        (planZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀ (((W t).memberLaw (servedAudit (W t) τ) k).draw ω)
+        (planZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀ (((W t).memberSamplingDesign (servedAudit (W t) τ) k).draw ω)
           (reg ((W t).memberSim (servedAudit (W t) τ) k))) j
         (zcStrat execArith hs512 (planZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀)
           (cont ((W t).memberSim (servedAudit (W t) τ) k) ω))
         ((W t).ms.get k).qF ((W t).ms.get k).qS)
     (hL : ∀ θ r t (τ : Strategy (servedGame (W t) (Release O V Tick Adv))),
-      MonitoringPeriodPlays (fun t => servedGame (W t) (Release O V Tick Adv)) 0 T (s θ r) t τ → ∀ k,
+      MonitoringPeriodPlays (fun t => servedGame (W t) (Release O V Tick Adv)) 0 T (s θ r) t τ → 
+      ∀ _ : Nonempty (W t).EndΩ, ∀ k,
       Assumptions.LinkCRZCAt execArith hs512 ((W t).ms.get k).P
         (planZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀) (tabZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀)
         ((W t).ms.get k).vb (reg ((W t).memberSim (servedAudit (W t) τ) k))

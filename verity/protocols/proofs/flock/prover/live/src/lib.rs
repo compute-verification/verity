@@ -33,7 +33,7 @@ pub mod ir_sampling;
 pub mod ir_tail;
 pub mod lookup;
 pub mod circuit;
-pub mod firewall;
+pub mod zk_server;
 pub mod glue;
 pub mod huge_pages;
 pub mod proved_scope;
@@ -50,6 +50,8 @@ pub mod zk_hooks;
 pub mod zk_veil;
 #[cfg(feature = "sha512")]
 pub mod sha512_native;
+#[cfg(feature = "sha512")]
+pub mod wide_leaf;
 // needs flock-vtime-b684b12.patch, which the pods apply with the SHA-512 patches
 #[cfg(feature = "sha512")]
 pub mod session_verify;
@@ -270,7 +272,7 @@ pub fn sha256(b: &[u8]) -> [u8; 32] {
 /// `{"law": "bernoulli", "population": N, "p": "num/den", "units": [...]}` or `{"law": "stratified", "population": N, "k": K,
 /// "strata": [{"template", "units": [[lo, hi], ...], "k"}, ...], "units": [...]}`, units ascending. A stratified sampling design is the
 /// verifier's own expansion of `stratified:K` over its program and query (core's `one_stage.draw.derive`, Lean
-/// `HmRow.stratifiedLaw`): this module checks its form (Lean `Flock.Draw.strataProblem`) and samples by it, never derives it.
+/// `HmRow.stratifiedSamplingDesign`): this module checks its form (Lean `Flock.Draw.strataProblem`) and samples by it, never derives it.
 pub mod unit_draw {
     use serde_json::{Value, json};
 
@@ -366,22 +368,22 @@ pub mod unit_draw {
     }
 
     #[derive(Clone, Debug, PartialEq)]
-    pub enum Law {
+    pub enum SamplingDesign {
         Subset { k: u64 },
         Bernoulli { num: u64, den: u64 },
-        /// One stratum per template, a uniform `k_s`-subset of each, independently (Lean `Flock.Draw.Law.stratified`).
+        /// One stratum per template, a uniform `k_s`-subset of each, independently (Lean `Flock.Draw.SamplingDesign.stratified`).
         Stratified { k: u64, strata: Vec<Stratum> },
     }
 
-    impl Law {
+    impl SamplingDesign {
         /// `subset:K` or `bernoulli:NUM/DEN`.
-        pub fn parse(s: &str) -> Result<Law, String> {
+        pub fn parse(s: &str) -> Result<SamplingDesign, String> {
             let bad = || format!("a draw law is subset:K or bernoulli:NUM/DEN, not {s:?}");
             match s.split_once(':') {
-                Some(("subset", k)) => Ok(Law::Subset { k: k.parse().map_err(|_| bad())? }),
+                Some(("subset", k)) => Ok(SamplingDesign::Subset { k: k.parse().map_err(|_| bad())? }),
                 Some(("bernoulli", p)) => {
                     let (a, b) = p.split_once('/').ok_or_else(bad)?;
-                    Ok(Law::Bernoulli { num: a.parse().map_err(|_| bad())?, den: b.parse().map_err(|_| bad())? })
+                    Ok(SamplingDesign::Bernoulli { num: a.parse().map_err(|_| bad())?, den: b.parse().map_err(|_| bad())? })
                 }
                 _ => Err(bad()),
             }
@@ -389,17 +391,17 @@ pub mod unit_draw {
 
         /// A sampling design object: `{"law": "stratified", "k": K, "strata": [...]}` (the verifier's own expansion, `draw.derive`'s),
         /// `{"law": "subset", "k": K}` or `{"law": "bernoulli", "p": "num/den"}`.
-        pub fn of_json(v: &Value) -> Result<Law, String> {
+        pub fn of_json(v: &Value) -> Result<SamplingDesign, String> {
             let keys: Vec<&str> = v.as_object().ok_or("a draw law is an object")?.keys().map(|k| k.as_str()).collect();
             match (v["law"].as_str(), keys.as_slice()) {
                 (Some("stratified"), ["k", "law", "strata"]) => {
                     let k = v["k"].as_u64().ok_or("a stratified law's k")?;
                     let strata = v["strata"].as_array().ok_or("a stratified law's strata")?.iter().map(Stratum::of_json)
                         .collect::<Result<_, _>>()?;
-                    Ok(Law::Stratified { k, strata })
+                    Ok(SamplingDesign::Stratified { k, strata })
                 }
-                (Some("subset"), ["k", "law"]) => Ok(Law::Subset { k: v["k"].as_u64().ok_or("a subset law's k")? }),
-                (Some("bernoulli"), ["law", "p"]) => Law::parse(&format!("bernoulli:{}", v["p"].as_str().unwrap_or(""))),
+                (Some("subset"), ["k", "law"]) => Ok(SamplingDesign::Subset { k: v["k"].as_u64().ok_or("a subset law's k")? }),
+                (Some("bernoulli"), ["law", "p"]) => SamplingDesign::parse(&format!("bernoulli:{}", v["p"].as_str().unwrap_or(""))),
                 _ => Err(format!("a draw law object is {{law: stratified, k, strata}}, {{law: subset, k}} or {{law: bernoulli, p}}, not {v}")),
             }
         }
@@ -407,14 +409,14 @@ pub mod unit_draw {
         /// A sample of each stratum's first `k_s` units (or the first `k`): a stand-in whose tables are every sample's.
         pub fn first(&self, population: u64) -> Option<Value> {
             match self {
-                Law::Subset { k } => Some(json!({"law": "subset", "population": population, "k": k, "units": (0..*k).collect::<Vec<_>>()})),
-                Law::Stratified { k, strata } => {
+                SamplingDesign::Subset { k } => Some(json!({"law": "subset", "population": population, "k": k, "units": (0..*k).collect::<Vec<_>>()})),
+                SamplingDesign::Stratified { k, strata } => {
                     let mut units: Vec<u64> = strata.iter().flat_map(|s| (0..s.k.min(s.size())).map(|j| s.unit(j))).collect();
                     units.sort_unstable();
                     Some(json!({"law": "stratified", "population": population, "k": k,
                                 "strata": strata.iter().map(Stratum::to_json).collect::<Vec<_>>(), "units": units}))
                 }
-                Law::Bernoulli { .. } => None,
+                SamplingDesign::Bernoulli { .. } => None,
             }
         }
     }
@@ -458,22 +460,22 @@ pub mod unit_draw {
 
     /// The sample over `[0, population)`. A stratified sample is one `subset` per stratum, each on its own OS bytes, local index
     /// `j` mapped to the stratum's `j`-th unit, the union ascending (Lean `Flock.Draw.stratified`).
-    pub fn draw(law: &Law, population: u64) -> Result<Value, String> {
-        let v = match law {
-            Law::Subset { k } => {
+    pub fn draw(sampling_design: &SamplingDesign, population: u64) -> Result<Value, String> {
+        let v = match sampling_design {
+            SamplingDesign::Subset { k } => {
                 if *k > population {
                     return Err(format!("subset: k = {k} > population {population}"));
                 }
                 json!({"law": "subset", "population": population, "k": k, "units": subset(*k, population)})
             }
-            Law::Bernoulli { num, den } => {
+            SamplingDesign::Bernoulli { num, den } => {
                 if *den == 0 || num > den {
                     return Err(format!("bernoulli: p = {num}/{den} is not a probability"));
                 }
                 let units: Vec<u64> = (0..population).filter(|_| uniform(*den) < *num).collect();
                 json!({"law": "bernoulli", "population": population, "p": format!("{num}/{den}"), "units": units})
             }
-            Law::Stratified { k, strata } => {
+            SamplingDesign::Stratified { k, strata } => {
                 if let Some(why) = strata_problem(*k, strata, population) {
                     return Err(why);
                 }
@@ -542,16 +544,16 @@ pub mod unit_draw {
     mod tests {
         use super::*;
 
-        fn law() -> Law {
+        fn sampling_design() -> SamplingDesign {
             // two templates, one in two ranges: 10 + 6 units, k = 5 -> k_s = round(50/16) = 3 and round(30/16) = 2
-            Law::of_json(&json!({"law": "stratified", "k": 5, "strata": [
+            SamplingDesign::of_json(&json!({"law": "stratified", "k": 5, "strata": [
                 {"template": "A", "units": [[0, 4], [10, 16]], "k": 3}, {"template": "B", "units": [[4, 10]], "k": 2}]})).unwrap()
         }
 
         #[test]
-        fn a_stratified_draw_takes_each_strata_k_from_its_own_units() {
+        fn a_stratified_sample_takes_each_strata_k_from_its_own_units() {
             for _ in 0..200 {
-                let d = draw(&law(), 16).unwrap();
+                let d = draw(&sampling_design(), 16).unwrap();
                 let units = check(&d).unwrap();
                 assert_eq!(units.len(), 5);
                 assert_eq!(units.iter().filter(|&&u| (4..10).contains(&u)).count(), 2, "{d}");
@@ -559,10 +561,10 @@ pub mod unit_draw {
         }
 
         #[test]
-        fn every_unit_of_a_stratum_is_drawn() {
+        fn every_unit_of_a_stratum_is_sampled() {
             let mut seen = [false; 16];
             for _ in 0..400 {
-                for u in check(&draw(&law(), 16).unwrap()).unwrap() {
+                for u in check(&draw(&sampling_design(), 16).unwrap()).unwrap() {
                     seen[u] = true;
                 }
             }
@@ -575,8 +577,8 @@ pub mod unit_draw {
         }
 
         #[test]
-        fn a_malformed_law_or_draw_is_refused() {
-            let Law::Stratified { k, strata } = law() else { unreachable!() };
+        fn a_malformed_sampling_design_or_sample_is_refused() {
+            let SamplingDesign::Stratified { k, strata } = sampling_design() else { unreachable!() };
             assert!(strata_problem(k, &strata, 17).is_some(), "the strata don't tile 17 units");
             let mut wrong = strata.clone();
             wrong[1].k = 3;
@@ -584,8 +586,8 @@ pub mod unit_draw {
             let mut twice = strata.clone();
             twice[1].template = "A".into();
             assert!(strata_problem(k, &twice, 16).is_some(), "a template twice");
-            assert!(draw(&law(), 17).is_err());
-            let d = draw(&law(), 16).unwrap();
+            assert!(draw(&sampling_design(), 17).is_err());
+            let d = draw(&sampling_design(), 16).unwrap();
             let mut moved = d.clone();
             let u: Vec<u64> = (0..5).collect();
             moved["units"] = json!(u);
@@ -593,14 +595,14 @@ pub mod unit_draw {
             let mut extra = d.clone();
             extra["p"] = json!("1/2");
             assert!(check(&extra).is_err(), "a key no stratified draw has");
-            assert!(Law::of_json(&json!({"law": "stratified", "k": 5, "strata": [{"template": "A", "units": [[0, 4], [4, 16]], "k": 5}]})).is_err(),
+            assert!(SamplingDesign::of_json(&json!({"law": "stratified", "k": 5, "strata": [{"template": "A", "units": [[0, 4], [4, 16]], "k": 5}]})).is_err(),
                     "adjacent ranges");
-            assert_eq!(Law::of_json(&json!({"law": "subset", "k": 3})).unwrap(), Law::Subset { k: 3 });
+            assert_eq!(SamplingDesign::of_json(&json!({"law": "subset", "k": 3})).unwrap(), SamplingDesign::Subset { k: 3 });
         }
 
         #[test]
-        fn the_stand_in_draw_has_every_draws_count() {
-            let d = law().first(16).unwrap();
+        fn the_stand_in_sample_has_every_samples_count() {
+            let d = sampling_design().first(16).unwrap();
             assert_eq!(check(&d).unwrap(), vec![0, 1, 2, 4, 5]);
         }
     }
@@ -888,6 +890,17 @@ impl Resp {
                 w.push(6);
                 put_bytes(&mut w, s.as_bytes());
             }
+        }
+        w
+    }
+
+    /// This answer's frame where the verifier lists the statement's known trees (`known`, `verity-verify-proof known-trees`):
+    /// the sample that answers `Register` (`register`: the request was one), then the list. Any other answer's frame is
+    /// its own (`encode`). `decode` reads a sample and no further, so a prover handed the whole frame reads the sample.
+    pub fn frame_with_known(&self, register: bool, known: &[u8]) -> Vec<u8> {
+        let mut w = self.encode();
+        if register && matches!(self, Resp::Draw(_)) {
+            w.extend_from_slice(known);
         }
         w
     }
@@ -1265,18 +1278,18 @@ pub struct SessionConfig {
     /// The sample this statement proves (its public header's `unit_draw`, under Σ); the record keeps it (U1).
     pub unit_draw: Option<Value>,
     /// Sample units live: after registration (`Register`) the server samples them under this sampling design over the population.
-    pub draw_law: Option<(unit_draw::Law, u64)>,
+    pub sample_design: Option<(unit_draw::SamplingDesign, u64)>,
     /// M2 (`coin_tree::SCHEME`): at `Hello` the verifier commits to every coin of the session (one HM96 leaf per stream and
     /// round under one SHA-512 root) and opens each round's coins with its answer; the prover checks every opening first.
     pub coin_tree: Option<coin_tree::Spec>,
     /// Or serve this sample, the verifier's own (made outside the server, as `docs/audit-protocols.md` recommends), at `Register`.
-    pub draw_given: Option<Value>,
+    pub sample_given: Option<Value>,
 }
 
 impl SessionConfig {
     pub fn flock_128_r2(tables: Vec<TableSpec>) -> Self {
         Self { profile: "fast100".into(), reps: 2, flavor: "rs".into(), tables, require_link: true, link: None, prime_live: false, coin_seed: false,
-               retain_rounds: false, sha512_digests: false, unit_draw: None, draw_law: None, draw_given: None, coin_tree: None }
+               retain_rounds: false, sha512_digests: false, unit_draw: None, sample_design: None, sample_given: None, coin_tree: None }
     }
 
     /// The record's digest of `b`.
@@ -1414,8 +1427,8 @@ struct CommitRec {
 }
 
 /// The sampled proof blocks' statement: from the sample, the session configuration (carrying the sample) and the verifier.
-pub type DrawHook = Box<dyn FnMut(&Value) -> Result<(SessionConfig, Box<dyn StatementVerifier>), String> + Send>;
-/// `(stream, round, block)`: a malicious verifier's edit of a committed block ([`coin_tree::CoinTree::draw_with`]).
+pub type SampleHook = Box<dyn FnMut(&Value) -> Result<(SessionConfig, Box<dyn StatementVerifier>), String> + Send>;
+/// `(stream, round, block)`: a malicious verifier's edit of a committed block ([`coin_tree::CoinTree::sample_with`]).
 pub type CoinEdit = Box<dyn Fn(&str, usize, &mut [F128]) + Send>;
 
 pub struct Server {
@@ -1446,8 +1459,8 @@ pub struct Server {
     round_g: BTreeMap<(String, usize), u64>,
     /// with `retain_rounds`: (stream, round) -> the round's bytes as received
     round_msg: BTreeMap<(String, usize), Vec<u8>>,
-    /// Rebuilds the statement for the sampled proof blocks (`SessionConfig::draw_law`): its configuration (with `unit_draw`) and verifier.
-    on_draw: Option<DrawHook>,
+    /// Rebuilds the statement for the sampled proof blocks (`SessionConfig::sample_design`): its configuration (with `unit_draw`) and verifier.
+    on_draw: Option<SampleHook>,
     /// a test harness's step-0 seed and nonce (feature `seed-injection` only), used at `Hello` instead of the OS's
     seed_inject: Option<([u8; 32], [u8; 32])>,
     /// M2: the committed coin schedule (sampled at `Hello`, here or by the challenger), and a test harness's random tape for
@@ -1458,7 +1471,7 @@ pub struct Server {
     /// the prover's nonce from its `Hello` (the keyed coin tree's prefix; in the record)
     coin_nonce: Option<[u8; coin_tree::NONCE_BYTES]>,
     coin_tape: Option<[u8; 32]>,
-    /// a test harness's malicious verifier: its edit of the committed blocks (`coin_tree::CoinTree::draw_with`)
+    /// a test harness's malicious verifier: its edit of the committed blocks (`coin_tree::CoinTree::sample_with`)
     coin_edit: Option<CoinEdit>,
     t0: std::time::Instant,
     /// Seconds spent handling everything but `Finish` (the verifier's compute inside the prover's coin waits).
@@ -1482,8 +1495,8 @@ impl Server {
         Self::try_new(cfg, verifier).unwrap_or_else(|e| panic!("{e}"))
     }
 
-    /// A server that samples units at `Register` (its configuration's `draw_law`) and takes the sampled statement from `hook`.
-    pub fn with_draw(mut self, hook: DrawHook) -> Self {
+    /// A server that samples units at `Register` (its configuration's `sample_design`) and takes the sampled statement from `hook`.
+    pub fn with_sample(mut self, hook: SampleHook) -> Self {
         self.on_draw = Some(hook);
         self
     }
@@ -1569,7 +1582,7 @@ impl Server {
         (&self.prime, self.prime_before_commit)
     }
 
-    /// A server rebuilt from a record ([`Server::from_record`]) has no coin source: the points it samples while replaying
+    /// A server rebuilt from a record ([`Server::from_record`]) has no live coins: the points it samples while replaying
     /// `Commit` are zeros, replaced at once by the recorded ones, and it never answers a prover.
     fn urandom(&mut self, b: &mut [u8]) {
         match self.urandom.as_mut() {
@@ -1693,9 +1706,9 @@ impl Server {
                 if self.hello.is_some() || self.cfg.unit_draw.is_some() {
                     return self.refuse("U: the units are drawn once, after registration and before Hello".into());
                 }
-                let drawn = match (&self.cfg.draw_given, &self.cfg.draw_law) {
+                let drawn = match (&self.cfg.sample_given, &self.cfg.sample_design) {
                     (Some(d), _) => unit_draw::check(d).map(|_| d.clone()),
-                    (None, Some((law, population))) => unit_draw::draw(law, *population),
+                    (None, Some((sampling_design, population))) => unit_draw::draw(sampling_design, *population),
                     (None, None) => return Resp::Draw("null".into()),
                 };
                 let draw = match drawn {
@@ -1761,11 +1774,11 @@ impl Server {
                         Some(t) => {
                             use rand_chacha::{ChaCha20Rng, rand_core::{RngCore, SeedableRng}};
                             let mut r = ChaCha20Rng::from_seed(t);
-                            coin_tree::CoinTree::draw_with(spec, &nonce, &mut |b: &mut [u8]| r.fill_bytes(b), edit)
+                            coin_tree::CoinTree::sample_with(spec, &nonce, &mut |b: &mut [u8]| r.fill_bytes(b), edit)
                         }
                         None => {
                             let mut f = File::open("/dev/urandom").expect("/dev/urandom");
-                            coin_tree::CoinTree::draw_with(spec, &nonce, &mut |b: &mut [u8]| f.read_exact(b).expect("urandom"), edit)
+                            coin_tree::CoinTree::sample_with(spec, &nonce, &mut |b: &mut [u8]| f.read_exact(b).expect("urandom"), edit)
                         }
                     };
                     // the session key leaves the verifier here, with the root, and not before
@@ -2631,7 +2644,7 @@ mod replay_tests {
 }
 
 #[cfg(test)]
-mod coin_server_tests {
+mod live_coin_part_tests {
     use super::*;
 
     struct NoProofs;
@@ -2649,6 +2662,21 @@ mod coin_server_tests {
         let mut c = SessionConfig::flock_128_r2(vec![TableSpec { name: "t".into(), binding: Binding::R1cs { statement_digest: [0; 32] } }]);
         c.coin_tree = Some(coin_tree::Spec { streams: vec![coin_tree::SESSION.into(), rep_stream("t", 0), rep_stream("t", 1)], rounds_log: 2, block: 3 });
         c
+    }
+
+    /// The verifier's list of known trees follows the sample in the answer to `Register` and nowhere else, and a reader of
+    /// the sample reads the sample whatever follows it.
+    #[test]
+    fn the_known_trees_follow_the_draw_in_registers_answer_alone() {
+        let draw = Resp::Draw("null".into());
+        let refused = Resp::Refused("no".into());
+        let known = [0u8, 0, 0, 1, 7, 7];
+        let frame = draw.frame_with_known(true, &known);
+        assert_eq!(frame, [draw.encode(), known.to_vec()].concat());
+        assert!(matches!(Resp::decode(&frame), Ok(Resp::Draw(ref s)) if s == "null"));
+        assert_eq!(draw.frame_with_known(false, &known), draw.encode());
+        assert_eq!(draw.frame_with_known(true, &[]), draw.encode());
+        assert_eq!(refused.frame_with_known(true, &known), refused.encode());
     }
 
     /// A coin-tree server answers `Hello` with the root and its session key (20 words), once per session; without an OS
@@ -2689,7 +2717,7 @@ mod coin_server_tests {
     /// and records the same coins; the challenger opened its link points after its record's link roots and its round after
     /// the round's msg_sha512, as the audit of its release log holds the record to.
     #[test]
-    fn a_session_on_the_challengers_tree_is_the_session_its_tape_draws_here() {
+    fn a_session_on_the_challengers_tree_is_the_session_its_tape_samples_here() {
         let (address, served) = tree_from::fake::challenger([3; 32], tree_from::fake::How::Honest);
         let c = Arc::new(Mutex::new(tree_from::Challenger::connect(&address, None).unwrap()));
         let mut there = Server::try_new(linked(), Box::new(NoProofs)).unwrap().with_tree_from(c.clone());

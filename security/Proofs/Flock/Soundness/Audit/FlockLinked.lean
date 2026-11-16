@@ -3,12 +3,12 @@ module
 public import Proofs.Flock.Soundness.Audit.FlockLink
 
 /-!
-# The compiled-layer audit with `δ_link` discharged
+# The compiled-layer audit with `ε_bind` discharged
 
 The batched Flock audit with the expected-time extractor (`flock_batched_countE`), composed with the link theorem
 (`flock_batched_linkSoundE`) at the plurality value layer (`Xplur`). The count curve and the drawn-unit bound no longer
-carry `δ_link` as a hypothesis:
-$$\Pr[\text{accept} \wedge \text{at least } K \text{ wrong}] \le \mathrm{miss}_L(K) + \varepsilon_{ks}(\sigma) +
+carry `ε_bind` as a hypothesis:
+$$\Pr[\text{accept} \wedge \text{at least } K \text{ incorrect}] \le \mathrm{miss}_L(K) + \varepsilon_{ks}(\sigma) +
 \frac{Q_s}{1-\rho}\Big(\frac{2t'(1+k)}{2^{256}} + \frac{1}{eM} + \frac{k}{eR_w}\Big).$$
 
 What it rests on, all named:
@@ -39,7 +39,7 @@ variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) {mPts : ℕ}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
-  {L : Law n} {decode : DecoderB (C := C) (Reg := Reg) plan tab} {Dh : Type} {Hc : List UInt8 → Dh}
+  {L : SamplingDesign n} {decode : DecoderB (C := C) (Reg := Reg) plan tab} {Dh : Type} {Hc : List UInt8 → Dh}
   (vb : P.ValueBinding plan tab decode Hc)
 
 /-- **The binding error the link theorem gives**: `Q_s/(1 − ρ)·(2t'(1 + k)/2^256 + 1/(eM) + k/(eR_w))`. -/
@@ -55,15 +55,15 @@ theorem linkBoundCR_eq {k Rw M : ℕ} {ρ t' : ℝ} {R : Reg} {τ : Cont L Reg (
   simp only [hCR, ↓reduceIte]
   rfl
 
-/-- **The compiled-layer count curve, with `δ_link` discharged**: at the plurality value layer,
-`Pr[accept ∧ at least K wrong units] ≤ miss K + ε_ks(σ) + linkBoundE`, given A2 for the link finders, `ValueBinding`
+/-- **The compiled-layer count curve, with `ε_bind` discharged**: at the plurality value layer,
+`Pr[accept ∧ at least K incorrect proof blocks] ≤ miss K + ε_ks(σ) + linkBoundE`, given A2 for the link finders, `ValueBinding`
 and the lowering. -/
 theorem flock_batched_count_linked (hlow : P.LoweringSoundB plan tab decode)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t')
     (K : ℕ) (σ : Strategy (audit L Reg (batchedSession H E plan)))
     (hCR : P.LinkCR H E plan tab vb (reg σ) (cont σ) k Rw M t') :
-    prob (fun o => o.1 = true ∧ K ≤ (P.wrong (P.Xplur H E plan tab vb (reg σ) (cont σ) k Rw)).card)
+    prob (fun o => o.1 = true ∧ K ≤ (P.incorrect (P.Xplur H E plan tab vb (reg σ) (cont σ) k Rw)).card)
         (audit L Reg (batchedSession H E plan)) σ ≤
       L.miss K + ksAvgBE H E plan k (reg σ) (cont σ) + P.linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
   (P.flock_batched_countE H E plan tab decode (fun R τ => P.Xplur H E plan tab vb R τ k Rw) hk
@@ -71,17 +71,17 @@ theorem flock_batched_count_linked (hlow : P.LoweringSoundB plan tab decode)
     (P.flock_batched_linkSoundE H E plan tab vb hlow hk hRw hM hρ hr ht) K σ).trans_eq
     (by rw [P.linkBoundCR_eq H E plan tab vb hCR])
 
-/-- **Sampled proof blocks of the compiled-layer audit, with `δ_link` discharged**, are correct at the plurality value layer
+/-- **Sampled proof blocks of the compiled-layer audit, with `ε_bind` discharged**, are correct at the plurality value layer
 up to `ε_ks(σ) + linkBoundE`. -/
-theorem flock_batched_drawn_linked (hlow : P.LoweringSoundB plan tab decode)
+theorem flock_batched_sampled_linked (hlow : P.LoweringSoundB plan tab decode)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t')
     (σ : Strategy (audit L Reg (batchedSession H E plan)))
     (hCR : P.LinkCR H E plan tab vb (reg σ) (cont σ) k Rw M t') :
-    prob (fun o => o.1 = true ∧ ¬ Disjoint (P.wrong (P.Xplur H E plan tab vb (reg σ) (cont σ) k Rw)) o.2)
+    prob (fun o => o.1 = true ∧ ¬ Disjoint (P.incorrect (P.Xplur H E plan tab vb (reg σ) (cont σ) k Rw)) o.2)
         (audit L Reg (batchedSession H E plan)) σ ≤
       ksAvgBE H E plan k (reg σ) (cont σ) + P.linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
-  (P.flock_batched_drawnE H E plan tab decode (fun R τ => P.Xplur H E plan tab vb R τ k Rw) hk
+  (P.flock_batched_sampledE H E plan tab decode (fun R τ => P.Xplur H E plan tab vb R τ k Rw) hk
     (fun S R j => (hr S R j).trans_lt hρ) hlow
     (P.flock_batched_linkSoundE H E plan tab vb hlow hk hRw hM hρ hr ht) σ).trans_eq
     (by rw [P.linkBoundCR_eq H E plan tab vb hCR])
@@ -94,7 +94,7 @@ variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) {mPts : ℕ}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
-  {L : Law n}
+  {L : SamplingDesign n}
 
 /-- The decoder that reads each sampled proof block from its place in its table (`loweringSoundB_of_place`). -/
 noncomputable def placeDecoder (place : ∀ S R u, u ∈ S → UnitPlace P (tabOf plan tab S R u).S u) :

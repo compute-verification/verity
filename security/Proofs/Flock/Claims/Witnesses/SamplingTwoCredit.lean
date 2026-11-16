@@ -76,12 +76,12 @@ theorem correct_refIn_iff (C : Prog) {r u : List ℕ} {val : ℕ → Option Bool
 
 /-- **A cell's incorrect proof blocks at an interior serving opened are its faulty ones**: when `w` opens, at `ι`, every
 gate of replay block `ρ`'s interior that the check of a proof block inside `ρ` reads. -/
-theorem wrongIn_eq_inter_faulty {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : AuditStatement}
+theorem incorrectIn_eq_inter_faulty {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : AuditStatement}
     {Pt Pρ : Partition} {w : Wit} {ρ t : ℕ} {ι : ℕ → Bool}
     (hι : ∀ r : List ℕ, Pρ.blocks[ρ]? = some r → ∀ g ∈ r, s.prog.Boundary r g = false →
       (∃ (v : ℕ) (u : List ℕ), Pt.blocks[v]? = some u ∧ (∀ g' ∈ u, g' ∈ r) ∧ s.prog.Checked u g) →
         w.val H Cm s g = some (ι g)) :
-    wrongIn H Cm s Pt Pρ w ρ t ι = cell Pt Pρ ρ t ∩ faulty H Cm s Pt w := by
+    incorrectIn H Cm s Pt Pρ w ρ t ι = cell Pt Pρ ρ t ∩ faulty H Cm s Pt w := by
   have hiff : ∀ v ∈ cell Pt Pρ ρ t, ∀ u r, Pt.blocks[v]? = some u → Pρ.blocks[ρ]? = some r →
       (s.prog.Correct (s.prog.refIn r (w.val H Cm s) ι) u ↔ s.prog.Correct (w.val H Cm s) u) := by
     intro v hv u r hu hr
@@ -100,7 +100,7 @@ theorem wrongIn_eq_inter_faulty {H : Msg → Msg} {Cm : CommitmentScheme Bool} {
     exact correct_refIn_iff s.prog (fun g hg hb => key g ⟨v, u, hu, hur, Or.inl ⟨hg, hb⟩⟩)
       fun g hg x hx i hi hiu => key i ⟨v, u, hu, hur, Or.inr ⟨hiu, g, hg, x, hx, hi⟩⟩
   ext v
-  unfold wrongIn faulty
+  unfold incorrectIn faulty
   simp only [Finset.mem_filter, Finset.mem_inter, faulty_iff_boundaryFaulty, BoundaryFaulty]
   constructor
   · rintro ⟨hv, hn⟩
@@ -120,7 +120,7 @@ theorem footprint_eq_counts_faulty {H : Msg → Msg} {Cm : CommitmentScheme Bool
   unfold OpensChecked at hι
   funext ρ t
   unfold footprint counts
-  rw [wrongIn_eq_inter_faulty (hι ρ), Finset.inter_comm]
+  rw [incorrectIn_eq_inter_faulty (hι ρ), Finset.inter_comm]
 
 /-- **Compute credit over serve-time interiors**: a footprint in `M̄_δ` at an interior serving opened puts the incorrect
 set's counts, the incorrect proof blocks on the values serving committed, in `M̄_δ`. -/

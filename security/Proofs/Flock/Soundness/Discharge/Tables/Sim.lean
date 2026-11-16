@@ -10,7 +10,7 @@ import VCVio.Prelude.Core
 /-!
 # The simulation of a session of `J` tables (the transfer, R11c, at `--session-tables J`)
 
-flock-circuit's `--session-tables J` (`session_tables`, `config_with`) and flock-verify's `Stmt.setupTables` run one
+flock-circuit's `--session-tables J` (`session_tables`, `config_with`) and verity-verify-proof's `Stmt.setupTables` run one
 session of `J` tables: one `Commit` with every table's root, one link exchange whose two points every table reads (the
 tables share `m_pts`), the `2J` rep streams `(table j, rep r)` in any order the prover picks, each round's coins flipped
 after its bytes, and every proof file after the last coin of every stream (the barrier).

@@ -3,16 +3,16 @@ module
 public import Std.Data.HashSet
 
 /-!
-# A declared circuit's requirement, computed
+# A registered circuit's requirement, computed
 
-`Accounting.Requirement` (`Security/Definitions/Accounting/Requirement.lean`) on one instance: a declared circuit's
+`Accounting.Requirement` (`security/Definitions/ResourceAccounting/Requirement.lean`) on one instance: a registered circuit's
 wiring, one scheduled execution of it and a layout of its values (`Instance`), the audit's store (`Store`), and a
 placement of the execution on devices (`Placement`), whose regions, ingress and credits are PoUW's over the placed
-execution (`Proofs/Accounting/Lemmas/RequirementPouw.lean`). A step is always an engine step, never a device tick.
-This is code, so it requires nothing of `Security/`: `Properties.Accounting.Requirement` states that each function here
+execution (`Proofs/ResourceAccounting/Lemmas/RequirementPouw.lean`). A step is always an engine step, never a device tick.
+This is code, so it requires nothing of `security/`: `Properties.ResourceAccounting.Requirement` states that each function here
 is the definition it computes, on the wiring, execution, layout, store and placement an instance denotes, and
-`Proofs.Properties.Accounting.Requirement` proves it. `requirement-difftest` serves these functions to the difftest, which
-holds them to `verity.ml.circuits.requirement` (`tests/test_requirement_difftest.py`).
+`Proofs.Properties.ResourceAccounting.Requirement` proves it. `requirement-difftest` serves these functions to the difftest, which
+holds them to `verity.circuits.requirement` (`tests/test_requirement_difftest.py`).
 
 An instance's values are `0 … n - 1`, `n` the length of `width`, and the operands a gate uses are those at this
 execution's values (`Wiring.uses` at `Execution.value`). An array read past its end reads as empty, or 0. A set is a list,
@@ -33,7 +33,7 @@ def subsetOf (a b : List Nat) : Bool :=
   let hb := Std.HashSet.ofList b
   a.all hb.contains
 
-/-- A declared circuit's wiring, one scheduled execution of it and a layout of its values, value by value. -/
+/-- A registered circuit's wiring, one scheduled execution of it and a layout of its values, value by value. -/
 structure Instance where
   /-- each value's width in bits (`Wiring.width`); the values are `0 … n - 1`, `n` this array's length -/
   width : Array Nat

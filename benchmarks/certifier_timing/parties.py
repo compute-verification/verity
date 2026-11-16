@@ -7,7 +7,7 @@ clock; the observer is on that host too, over loopback, or on another, where it 
   seed and t (`coin`). It acts only through when and how it writes its own bytes: `Plan.writes` is every time it
   writes at, a function of the bit, the lead and the public schedule. The bytes it writes are the same whatever the
   bit, `unit` bytes an interval.
-- **The certifier** is the device under test: the network certifier (`network`, which imports it from whatever
+- **The certifier** is the device under test: the network attester (`network`, which imports it from whatever
   tree is first on the import path), on its loop (`paced_ms` 0) or with its pacer, or `relay`, a stand-in that paces
   nothing and passes each side's bytes on as they come, which is where a planted channel is put.
 - **The observer** is the client side. It reads the certifier's bytes a `chunk` at most a read and timestamps the
@@ -27,14 +27,14 @@ clock; the observer is on that host too, over loopback, or on another, where it 
 **The attacks** (`Plan.attack`), over interval t's release time R_t = t·τ + `aim` after the origin, `aim` the pacer's
 offset, or with a launch gate (`run.py --launch`) the gate's opening:
 - `delay`: interval t's bytes at t·τ, or half an interval later with bit 1. Only the relay passes it on: the network
-  certifier releases a late interval as `FAIL`, in its own interval, and the connection ends.
+  attester releases a late interval as `FAIL`, in its own interval, and the connection ends.
 - `write`: the next interval's bytes in one write, a lead of at most `lead_ms` before R_t with bit 1, and with bit 0
   at the quiet time, midway between R_t and the next interval's boundary. Both are in time for the next interval.
 - `burst`: with bit 1 the next interval's bytes in `burst` writes spread from `lead_ms` before R_t to an eighth of
   that after it; with bit 0 as `write`.
 With `ignore` the server flips its bits and writes as for bit 0 whatever they are: the control.
 
-The server takes the admission bucket s of a network certifier's connection from when its request arrives, the
+The server takes the admission bucket s of a network attester's connection from when its request arrives, the
 boundary after the one it was admitted at (`admit_lag`), and writes bucket s + D's bytes at once; a request that
 comes before the origin it takes as the first interval's. Interval t's bytes
 are all the byte t mod 256, so `run.py` checks which interval each of the observer's chunks is, and on one host its
@@ -65,7 +65,7 @@ LOOPBACK = "127.0.0.1"
 OBSERVERS = ("plain", "spin")
 #: how long before a time the server stops sleeping and spins on the clock
 SPIN_S = 0.003
-#: a cell's header, `verity.protocols.accounting.certifier.verifier.active.HEADER`'s size: the certifier checks it at its start
+#: a cell's header, `verity.protocols.resource_accounting.network.verifier.link_frame.HEADER`'s size: the certifier checks it at its start
 HEADER_BYTES = 9
 #: what the observer sends, a request of no meaning
 HELLO = b"go\n"
@@ -143,7 +143,7 @@ def schedule(plan: Plan, seed: bytes, first: int, intervals: int, unit: int):
 
 def first_interval(cfg: dict, arrived: int) -> int:
     """The first interval the server writes for, on a connection whose request reached it in interval `arrived`: a
-    network certifier's releases the request `admit_lag` boundaries after admission and the first of the server's
+    network attester's releases the request `admit_lag` boundaries after admission and the first of the server's
     bytes `delay` after it; the relay's two intervals on."""
     return arrived - cfg["admit_lag"] + cfg["delay"] if cfg["certifier"] == "network" else arrived + 2
 
@@ -464,15 +464,15 @@ async def relay(cfg: dict) -> dict:
 
 
 async def network(cfg: dict) -> dict:
-    """The network certifier of the tree on the import path, relaying any bytes, one lane for the observer and one
+    """The network attester of the tree on the import path, relaying any bytes, one lane for the observer and one
     spare; its records are dropped as they close. It runs for the intervals of one connection and, before them, the
     `wait_s` an observer on another host may take to come (`listen`), the one connection it then takes. With
     `gate_ms` [before, after] it reads no server from
     `before` ms ahead of each release to `after` ms past it: the server's bytes for the next interval wait in the
     kernel. Returns each tick's lateness, and from a paced one each bucket's release start and write end after its
     time."""
-    from verity.protocols.accounting.certifier.verifier.active import HEADER
-    from verity.protocols.accounting.certifier.verifier.warden import Warden as Certifier, WardenParams as Parameters, cells
+    from verity.protocols.resource_accounting.network.verifier.link_frame import HEADER
+    from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttester as Certifier, NetworkAttesterParams as Parameters, cells
 
     plan = plan_of(cfg)
     if HEADER.size != HEADER_BYTES:

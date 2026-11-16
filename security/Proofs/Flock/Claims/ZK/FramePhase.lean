@@ -61,7 +61,7 @@ namespace Claims.ZKServer
 
 open _root_.Flock (F128)
 open _root_.Flock.Transcript (header)
-open _root_.Flock.Firewall.Frame (Cfg Masker labelFrame roundFree LABEL_PCS LABEL_ZC RHO_COINS)
+open _root_.Flock.ZkServer.Frame (Cfg Masker labelFrame roundFree LABEL_PCS LABEL_ZC RHO_COINS)
 open FlockSoundness.Refine (Frame encs)
 
 /-! ## The opening's label -/

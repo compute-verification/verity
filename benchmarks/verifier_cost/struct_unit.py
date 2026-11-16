@@ -1,4 +1,4 @@
-"""The H1 tile unit (``benchmarks/pouw/h1_prove/h1unit.Shape``) through `verity_flock.struct_lower`, for ``struct_tmpl.sh``.
+"""The H1 tile unit (``verity/protocols/resource_accounting/compute/pouw/prover/lowering/h1unit.Shape``) through `verity_flock.struct_lower`, for ``struct_tmpl.sh``.
 
     python benchmarks/verifier_cost/struct_unit.py K [R C] [--support S] [--first-appearance]
         [--scattered-returns] [--out UNIT.tmpl] [--flat | --check]
@@ -33,9 +33,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--check", action="store_true")
     a = ap.parse_args(argv)
     sys.path[:0] = [str(H1), str(H1.parent / "hidden_zk")]
-    import h1unit as U
+    import h1form as F
 
-    shape = U.Shape(*a.shape)
+    shape = F.shape(*a.shape)
     t0 = time.time()
     if a.flat:
         out = SL.flat(shape.unit())

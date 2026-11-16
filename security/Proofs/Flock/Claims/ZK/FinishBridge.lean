@@ -39,7 +39,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The ZK server's rounds as the session's
 
-`flock-firewall finish` runs a rep in `StateT Nat V`, answering the rep's round `k`, counted from `0`, with the rep's
+`flock-zk-server finish` runs a rep in `StateT Nat V`, answering the rep's round `k`, counted from `0`, with the rep's
 coins `coins[k]` (`asksOf`). The session runs it in `FlockComplete.PS`, logging every send and answering the session's
 round `j`, counted over the whole session, with `coin j` (`FlockComplete.asksCut`). Here one is held to the other:
 
@@ -51,7 +51,7 @@ round `j`, counted over the whole session, with `coin j` (`FlockComplete.asksCut
   `base + k` sends, which returns the same with a log of `base + k'` sends, `k'` the port's final round.
 * **The sends** (`asksOf_rel`): the port's coins, read from the session's round `base` on (`coinsFrom`), are what
   `asksCut` answers, so the port's round `k` is the session's round `base + k` while the cut is past the rep's last.
-* **`repFw_cut`**: where `flock-firewall finish`'s rep returns a proof after `k'` rounds, `repFwC` at the session's sends
+* **`repFw_cut`**: where `flock-zk-server finish`'s rep returns a proof after `k'` rounds, `repFwC` at the session's sends
   from round `base` returns that proof, with `base + k'` sends logged.
 
 The coins are the port's own (`coinsFrom`); that they are the opened coins at the rep's rounds is the transport's, as
@@ -60,7 +60,7 @@ is each round's coin count, which the port reads back from the round's header.
 
 @[expose] public section
 
-namespace Flock.Firewall.Finish
+namespace Flock.ZkServer.Finish
 
 open Flock With Transcript
 
@@ -266,7 +266,7 @@ theorem asksOf_rel (coins : Array (Array F128)) (base n : ℕ) (hn : base + coin
           rw [Array.size_push, hl]
           rfl
 
-/-- **The ZK server's rep is the session's rounds from `base`**: where `flock-firewall finish`'s rep (`repFw` at
+/-- **The ZK server's rep is the session's rounds from `base`**: where `flock-zk-server finish`'s rep (`repFw` at
 `commitFw`, answered by its coins from round `0`, in `StateT Nat V`) returns a proof and transcript at round `k'`,
 `repFwC` answered by `asksCut` at those coins from the session's round `base`, from a log of `base` sends, returns the
 same with a log of `base + k'`, wherever the cut is past the rep's last round. -/
@@ -292,4 +292,4 @@ theorem repFw_cut (coins : Array (Array F128)) (base n : ℕ) (hn : base + coins
   exact repFwC_rel (bridge base) (asksOf_rel coins base n hn) (ofSha512_rel _ Sha512.hash) st sch tPad rep dom g
     cm0.toC extras pads.toC ic.toC vals extra lanePad salt tr 0 l (by rw [hl]; rfl) (p, t) k' h
 
-end Flock.Firewall.Finish
+end Flock.ZkServer.Finish

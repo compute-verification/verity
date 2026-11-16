@@ -1,4 +1,4 @@
-"""Per-token timing traces of real vLLM serving, for the network certifier's calibration (`network-certifier-calibrate`).
+"""Per-token timing traces of real vLLM serving, for sizing the network attester.
 
 One job (`run.sh`, queued on one leased GPU) starts vLLM's OpenAI-compatible server on that GPU from
 the node's local weights, replays recorded request mixes open-loop with a streaming client on the same host, and records
@@ -31,8 +31,7 @@ goes to stderr and the job exits, rather than holding its GPU to the lease's end
   GPU and of the job's CPUs, the GPU's utilisation, clocks and compute processes, and the longest stall of a 10 ms
   heartbeat thread and of the client's event loop (the monitor's own, in the offline modes);
 - `meta.json`: host, GPU, CPUs, versions, model, server arguments, the mix and t0;
-- `server.log`, and at the end `trace.json` (the calibration format, `verity.protocols.accounting.certifier.verifier.calibration`) and
-  `summary.json`.
+- `server.log`, and at the end `trace.json` (`trace_doc`) and `summary.json`.
 
 **Exit status.** 0 when the chunk ran to its deadline. A SIGTERM (an eviction: the lease reclaimed the GPU) stops it;
 the job still converts what it recorded, sets `ended.evicted` in `meta.json`, and exits 143, so that a queue requeues
@@ -50,7 +49,7 @@ the chunk rather than counting it done.
   a sample came over `--freeze-ms` late or none came after it, or when one of its requests failed;
 - the chunk is cut at dropped windows into contiguous segments, one configuration each.
 
-**`merge`** joins chunks' traces into one for the calibration tool.
+**`merge`** joins chunks' traces into one.
 
     python record.py run --out DIR --model unsloth/Llama-3.2-1B --mix b16=3,b4=1,b64=10 --minutes 55
     python record.py convert DIR [DIR ...]
@@ -104,7 +103,7 @@ def ms(seconds: float) -> float:
 
 
 def percentiles(xs: Sequence[float], ps: Iterable[float] = (50, 99, 99.9)) -> dict:
-    """Nearest-rank percentiles and the maximum, as the calibration tool takes them."""
+    """Nearest-rank percentiles and the maximum."""
     s = sorted(xs)
     if not s:
         return {}

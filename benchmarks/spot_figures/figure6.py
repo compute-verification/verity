@@ -1,5 +1,5 @@
 """Figure 6 of the SPOT post, the certified tick's trade-off: (a) a timeline of continuous admission against tick
-admission, with the network certifier stamping each arrival's release bucket as its own layer; (b) latency and
+admission, with the network attester stamping each arrival's release bucket as its own layer; (b) latency and
 throughput against the tick period, beside the no-tick point at each load; (c) the scheduler advice's term in the
 exfiltration bound, with and without the tick, over the headline and secondary scopes, against the model's FP4 weights.
 
@@ -104,7 +104,7 @@ def _sweep_caption(out: dict) -> str:
     sw = out["sweep"]
     loads = ", ".join(f"{g['load']} ({g['rate']:g} req/s)" for g in sw)
     taus = sorted({(r["sat_ms"], r["free_ms"]) for g in sw for r in g["tick"] if not r["old_rule"]})
-    text = (f"(b) {out['model']} served at each load ({loads}), one run a point: the no-tick point on the production "
+    text = (f"(b) {out['model']} served at each load ({loads}), one run a point: the no-tick point on the serving "
             "scheduler beside the tick at each period, τ_sat / τ_free "
             + ", ".join(f"{a:.0f} / {f:.0f} ms" for a, f in taus) + ". ")
     pairs = [(g, r) for g in sw if g["none"] for r in g["tick"]]
@@ -125,7 +125,7 @@ def _sweep_caption(out: dict) -> str:
         if r["old_rule"] and r["step_ms"] is not None and (f := ratio(g, r, "ttft_p50_s")) is not None:
             text += (f"{r['point']} took τ_sat from the no-tick step at its load, the old rule: {r['sat_ms']:.0f} ms "
                      f"against the tick arm's own {r['step_ms']:.0f} ms step, so its queue grew (TTFT p50 {_times(f)}); "
-                     "it is drawn hollow, off its load's line. ")
+                     "it is sampled hollow, off its load's line. ")
     return text
 
 

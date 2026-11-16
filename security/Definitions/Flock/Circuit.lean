@@ -64,7 +64,7 @@ def Correct (X : Fin C.N → Bool) (u : Fin n) : Prop :=
 
 open Classical in
 /-- The incorrect proof blocks of a transcript. -/
-noncomputable def wrong (X : Fin C.N → Bool) : Finset (Fin n) :=
+noncomputable def incorrect (X : Fin C.N → Bool) : Finset (Fin n) :=
   Finset.univ.filter fun u => ¬ P.Correct X u
 
 open Classical in

@@ -12,8 +12,8 @@
 #   3. one loopback --zk session per statement (each sampled call's units, honest the first sampled proof block's call; the other
 #      window's unit; honest's units on a tampered A row, with their ok rows committed afresh, and on in-z's window
 #      computing ok = 0; the in-proof negatives on honest's units, each also as
-#      <tag>-skip, proved with FC_ZK_SELF_CHECK=skip), every instance sampled, each prover under the ZK server (FC_FIREWALL=1:
-#      the Lean session loop, its level-0 sample and Lean finish) unless H1_FIREWALL=0
+#      <tag>-skip, proved with FC_ZK_SELF_CHECK=skip), every instance sampled, each prover under the ZK server (FC_ZK_SERVER=1:
+#      the Lean session loop, its level-0 sample and Lean finish) unless H1_ZK_SERVER=0
 #   4. the Lean checks of recorded.py's plan, each with the verifier's own window Program, partition and its call's registered
 #      reads, the ok port among them (--program, --partition, --registered: honest and each honest-c<c> ACCEPT with their
 #      units derived; flipped-zy, wrong-receipt, other-window
@@ -30,7 +30,7 @@
 #      checks' Lean findings under the window's open root, which every per-window registered value binds
 # env: H1_MEM_GB (the job's --mem-gb)  H1_K (4096; a smaller K truncates every row: a smoke)  H1_COLS (each call's first
 #      N weight rows; 0 all)  H1_DRAW (8)  H1_TOKENS (16)  H1_LAYER (0)  H1_HUB (/workspace/hf/hub)
-#      H1_FIREWALL (1)  H1_WIRE (0; 1: the selftest's zk_worker_wire, zk_worker_finish, zk_worker_level0, zk_worker_inner and
+#      H1_ZK_SERVER (1)  H1_WIRE (0; 1: the selftest's zk_worker_wire, zk_worker_finish, zk_worker_level0, zk_worker_inner and
 #      zk_worker_pads on honest's statement, under the ZK server, after the proofs, twenty ZK server sessions; a failure fails
 #      the job)  H1_ONLY (the plan's tags to prove and check, space-separated: "honest other-window-own" skips the negatives; all)
 #      HZ_RUNS (1): sessions a statement, all verified by one Lean process, which reads the circuit once
@@ -70,13 +70,13 @@ log "h1-prove: K=$K cols=${COLS:-all} draw=$DRAW tokens=$TOKENS layer=$LAYER qua
   echo $! > "$W/stager.pid" )
 STAGER=$(cat "$W/stager.pid")
 setup
-FW=${H1_FIREWALL:-1}
+FW=${H1_ZK_SERVER:-1}
 if [ "$FW" = 1 ]; then
-  export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
-  (exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_FIREWALL_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-firewall)) \
-    > "$OUT/build-firewall.log" 2>&1
-  [ -x "$FC_FIREWALL_LEAN" ] || { tail -20 "$OUT/build-firewall.log"; log "no firewall frame beside $LEAN"; kill $STAGER; exit 1; }
-  sha256sum "$FC_FIREWALL_LEAN" | tee -a "$OUT/binaries.sha256" | tee -a "$OUT/job.log"
+  export FC_ZK_SERVER_LEAN=${LEAN%/*}/flock-zk-server
+  (exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_ZK_SERVER_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-zk-server)) \
+    > "$OUT/build-zk-server.log" 2>&1
+  [ -x "$FC_ZK_SERVER_LEAN" ] || { tail -20 "$OUT/build-zk-server.log"; log "no ZK server frame beside $LEAN"; kill $STAGER; exit 1; }
+  sha256sum "$FC_ZK_SERVER_LEAN" | tee -a "$OUT/binaries.sha256" | tee -a "$OUT/job.log"
 fi
 
 LPY=$(cached venv-layer numpy2.5.3-tokenizers0.22.1 build_layer_venv)/bin/python
@@ -105,17 +105,17 @@ cp "$WK/record.json" "$WK/plan.json" "$OUT/" 2>/dev/null
 mkdir -p "$OUT/verifier" && cp "$WK"/verifier/*.pub.bin "$WK"/verifier/*.registered.json "$WK/verifier/partition.json" "$OUT/verifier/"   # program.json: record.json's program_sha512, rebuilt from the shape
 
 # ---- proofs: one --zk session per statement ------------------------------------------------------------------------------
-# a firewalled prover's Lean Hello sets each session up at the verifier's own statement, partition and window Program (live
+# the Lean Hello of a prover behind the ZK server sets each session up at the verifier's own statement, partition and window Program (live
 # PROTOCOL.md §10.4); the registered reads are the offline verifier's, outside the session's spec
 VLIMIT=$(declare -f vlimit)
 if [ "$FW" = 1 ]; then
-  export FC_FIREWALL=1 FC_HOST_WITNESS=1 FC_FIREWALL_STATEMENT=verity/flock-circuit
-  export FC_FIREWALL_HELLO_ARGS="--partition $WK/verifier/partition.json --program $WK/verifier/program.json"
+  export FC_ZK_SERVER=1 FC_HOST_WITNESS=1 FC_ZK_SERVER_STATEMENT=verity/flock-circuit
+  export FC_ZK_SERVER_HELLO_ARGS="--partition $WK/verifier/partition.json --program $WK/verifier/program.json"
   # the ZK server's Lean processes are the prover's children, and under an address-space limit (ulimit -v) their runtime
   # can't create its threads: a ZK server session is bounded by the run's cgroup (--mem-gb) alone
   vlimit() { :; }
 fi
-log "prove: firewall $FW"
+log "prove: ZK server $FW"
 while IFS=$'\t' read -r kind tag D n; do
   [ "$kind" = S ] || continue
   ln -sf "$SW/circuit.txt" "$D/circuit.txt" && cp "$SW/pin.txt" "$D/pin.txt"
@@ -137,14 +137,14 @@ if [ "$FW" = 1 ] && [ "${H1_WIRE:-0}" = 1 ]; then
   HD=$(awk -F'\t' '$1 == "S" && $2 == "honest" {print $3}' "$WK/plan.tsv")
   HN=$(awk -F'\t' '$1 == "S" && $2 == "honest" {print $4}' "$WK/plan.tsv")
   for c in zk_worker_wire zk_worker_finish zk_worker_level0 zk_worker_inner zk_worker_pads; do
-    FC_FIREWALL_STATEMENT=verity/flock-circuit+seed-injection \
+    FC_ZK_SERVER_STATEMENT=verity/flock-circuit+seed-injection \
       $TIME "$OUT/honest/selftest-$c.time" bash -c "exec $SBIN selftest --zk --instances $HD/inst.bin \
       --circuit $HD/circuit.txt --draw subset:$HN --only $c" > "$OUT/honest/selftest-$c.out" 2> "$OUT/honest/selftest-$c.err"
     grep -Eq '^NEG.*"pass":true([,}]|$)' "$OUT/honest/selftest-$c.out" || WIRE=FAIL
     log "$c controls: $(grep -E '^NEG' "$OUT/honest/selftest-$c.out" | cut -c1-300)"
   done
 fi
-unset FC_FIREWALL FC_HOST_WITNESS FC_FIREWALL_STATEMENT FC_FIREWALL_HELLO_ARGS
+unset FC_ZK_SERVER FC_HOST_WITNESS FC_ZK_SERVER_STATEMENT FC_ZK_SERVER_HELLO_ARGS
 eval "$VLIMIT"
 
 # ---- Lean: the plan's checks, then the selftest build's controls on the sampled proof blocks' statement ----------------------------
@@ -182,7 +182,7 @@ if [ -n "$CONTROLS" ] && [ -e "$HD/inst.bin" ] && [ -n "$HREG" ]; then
   done
 fi
 wait
-"$PY" "$H/recorded.py" summarize --work "$WK" --out "$OUT" --controls "$CONTROLS" --firewall "$FW" 2>&1 | tee -a "$OUT/job.log"
+"$PY" "$H/recorded.py" summarize --work "$WK" --out "$OUT" --controls "$CONTROLS" --zk-server "$FW" 2>&1 | tee -a "$OUT/job.log"
 rc=${PIPESTATUS[0]}
 [ "$WIRE" = ok ] || { log "the wire's controls failed: $OUT/honest/selftest-zk_worker_{wire,finish}.out"; rc=1; }
 du -sh "$SW/circuit.txt" "$HD/sessions" 2>/dev/null | tee -a "$OUT/job.log"

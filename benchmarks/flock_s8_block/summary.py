@@ -122,7 +122,7 @@ def statement(st: Path) -> dict:
 
 
 def lean_set(d: Path) -> dict:
-    """Lean's flock-verify over one kept session set: each session's exit (0: accepted), wall and peak memory."""
+    """Lean's verity-verify-proof over one kept session set: each session's exit (0: accepted), wall and peak memory."""
     runs = {f.stem: (text(f).strip(), time_v(d / f"time-{f.stem}.txt")) for f in sorted(d.glob("*.rc"))}
     walls = [t["wall_s"] for _, t in runs.values() if t["wall_s"] is not None]
     peaks = [t["peak_rss_gb"] for _, t in runs.values() if t["peak_rss_gb"] is not None]

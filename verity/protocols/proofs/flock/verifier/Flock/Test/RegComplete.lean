@@ -1,12 +1,13 @@
-/-
-`Registered.checkComplete`, which `flock-verify` runs whenever `--registered` is given: a lane statement whose index row
-`pub` its public file states, committed afresh (no registered read), passes `Registered.check` on its other ports and is
-refused by `checkComplete`; with `pub` among the verifier's ports, it passes.
--/
 module
 
 public import Flock.Test.RegFormats
 meta import Flock.Test.RegFormats
+
+/-!
+`Registered.checkComplete`, which `verity-verify-proof` runs whenever `--registered` is given: a lane statement whose index row
+`pub` its public file states, committed afresh (no registered read), passes `Registered.check` on its other ports and is
+refused by `checkComplete`; with `pub` among the verifier's ports, it passes.
+-/
 
 @[expose] public section
 
@@ -38,7 +39,7 @@ def wEntry : Json := Json.mkObj [("value", Json.str "weights"), ("root", Json.st
 
 def file : Json := Json.mkObj [("format", Json.str Registered.FORMAT), ("ports", Json.mkObj [("w", wEntry)])]
 
-/-- `flock-verify`'s registered reads of `f`: `Registered.check`, then `checkComplete`. -/
+/-- `verity-verify-proof`'s registered reads of `f`: `Registered.check`, then `checkComplete`. -/
 def run (c : Circuit) (f : Json) (p : Public := pub) : Except String Unit := do
   let own ← Registered.ofJson f
   Registered.check c p (some own) true

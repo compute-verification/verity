@@ -44,7 +44,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 # The fork's coin coupling at coins that are uniform functions of the live history
 
 A simulator whose deployed coin `j` takes its first `n j` entries from the live coin and the rest from a uniform
-function `f j` on its tape, read at a key of the live coins (`fnC`, `fnAt`), has coins of uniform law; its fork, which
+function `f j` on its tape, read at a key of the live coins (`fnC`, `fnAt`), has coins of uniform distribution; its fork, which
 flips the live coins again past round `t`, is the deployed fork until the redrawn live coin agrees with the first
 branch's on the entries the key reads. That is identical-until-bad (Bellare–Rogaway), used multiplicatively: on the
 bad event the simulated fork at round `t` is the simulated fork at `t + 1`.
@@ -366,7 +366,7 @@ theorem fnC_forkN_eq {n : Fin K → ℕ} {key : Fin K → (Fin K → Fin M → X
 
 variable [Fintype X] [Nonempty X] [Fintype D] [DecidableEq D]
 
-/-- **Off agreement, the simulated fork over the tape is the deployed fork's law at the live coins**: the keys differ
+/-- **Off agreement, the simulated fork over the tape is the deployed fork's sampling design at the live coins**: the keys differ
 at every round from `t` on (`sep`), so the tape's values at the two keys are independent and uniform
 (`Pr_evalAt₂`, with any other point before round `t`), and the second branch's coins are the fork of the two merges. -/
 theorem Pr_disagree {n : Fin K → ℕ} {key : Fin K → (Fin K → Fin M → X) → D}
@@ -568,7 +568,7 @@ theorem simF_step [DecidableEq X] {n : Fin K → ℕ}
     Pr_and_agree hk E t]
   linarith [Pr_disagree_le hk E t]
 
-/-- **Past the last round the simulated fork is one run**: the fork at `K` is the first branch, of uniform law
+/-- **Past the last round the simulated fork is one run**: the fork at `K` is the first branch, of uniform distribution
 (`Pr_fnC`). -/
 theorem simF_last {n : Fin K → ℕ} {key : Fin K → (Fin K → Fin M → X) → D}
     (E : (Fin K → Fin M → X) → (Fin K → Fin M → X) → Prop) :

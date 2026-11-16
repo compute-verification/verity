@@ -72,8 +72,8 @@ open Classical in
 /-- `prCoin` is the average of the indicator. -/
 theorem avgR_ind_eq_prCoin {C : Type} [Fintype C] [Nonempty C] (p : C → Prop) :
     avgR (Game.ind p) = (prCoin p).toReal := by
-  have h := prob_toReal p (Game.draw C) (drawStrat C)
-  have e : prob p (Game.draw C) (drawStrat C) = prCoin p := by
+  have h := prob_toReal p (Game.draw C) (sampleStrat C)
+  have e : prob p (Game.draw C) (sampleStrat C) = prCoin p := by
     simp only [Game.draw, prob, prCoin, avg]
   rw [e] at h
   rw [h]

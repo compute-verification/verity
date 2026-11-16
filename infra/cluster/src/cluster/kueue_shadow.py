@@ -2,7 +2,7 @@
 
 Four things decide what runs on node 1 today: Kueue (the dispatcher's Jobs, SkyPilot's pods, the lease pools' holders), the
 lease pools (`n1_lease.py`: which `gpu-lease` waiter gets a pool GPU, under its own `max`, `borrow` and `borrow-until`), the
-merge-check slots (`tools/verity/check/slot.py`) and the Lean slots (`tools/verity/check/lean_slot.py`). Each tick the shadow mirrors the
+merge-check slots (`tools/check/slot.py`) and the Lean slots (`tools/check/lean_slot.py`). Each tick the shadow mirrors the
 demand of all four as bare Kueue Workloads, which Kueue admits against quota but which run no pods, and records where Kueue's
 admission differs from what the node did. Kueue is asked, not simulated, so the comparison is with the real admission logic
 (priority, FIFO, borrowing, preemption) at the node's own quotas.
@@ -14,7 +14,7 @@ directories and the slot files and never changes any of them.
 
 **The queues** (`queues`): each of the node's ClusterQueues as it is now (quotas, preemption, stop policy) as `shadow-<name>`;
 `shadow-checks`, whose resource `vy.dev/check-slot` counts the check slots, the `only=trains` ones in a flavor tainted
-`vy.dev/trains` that only a `--priority` (train) check tolerates; and `shadow-lean`, one resource `vy.dev/lean-<pool>` per
+`vy.dev/trains` that only a `--priority` check (a candidate's) tolerates; and `shadow-lean`, one resource `vy.dev/lean-<pool>` per
 Lean pool, as many as the pool's N.
 
 **The demand** (`demand`), one `Item` per allocation or waiter, its key stable from waiting to running:
@@ -22,12 +22,12 @@ Lean pool, as many as the pool's N.
   (their pod template's `verity.dev/gpu-pool` label), whose GPUs are the leases below;
 - a `gpu-lease` lease or waiter of a pool (`POOLS`): its GPUs, on the pool's ClusterQueue at the pool's priority class.
   Fences (`who=kubernetes`) are not leases;
-- a check slot's holder or waiter: one `vy.dev/check-slot`, a train check's at priority 1;
+- a check slot's holder or waiter: one `vy.dev/check-slot`, a candidate's check's at priority 1;
 - a Lean slot's holder or waiter: one `vy.dev/lean-<pool>`.
 
 **The comparison** (`compare`), on two ticks in a row: an item the node runs that Kueue holds pending is `node-ran` (the node let it past Kueue's
 quota, or Kueue would have preempted it); an item the node keeps waiting that Kueue admitted is `kueue-ran` (a rule outside
-Kueue held it back: a pool's `max` or expired `borrow-until`, a slot reserved for trains). Each tick appends one record to
+Kueue held it back: a pool's `max` or expired `borrow-until`, a slot reserved for candidates). Each tick appends one record to
 `--out` (`cluster/kueue-shadow/v1`): the time, the item and divergence counts, and each divergence's key and reason.
 
 Not covered yet, and needed before Kueue can be the only scheduler: `research run --on vy-nebius-1` direct runs on
@@ -59,7 +59,7 @@ FLAVOR = "vy-nebius-1"
 SLOT_FLAVOR = "vy-shadow-slots"
 TRAIN_FLAVOR = "vy-shadow-train-slots"
 TRAINS_TAINT = {"key": "vy.dev/trains", "value": "only", "effect": "NoSchedule"}
-#: which slot a holder has, as its flavor's node label: Kueue would otherwise put a train holding a trains-only slot in the
+#: which slot a holder has, as its flavor's node label: Kueue would otherwise put a candidate's check holding an `only=trains` slot in the
 #: first flavor it tolerates, and count it against the slots everyone may take
 SLOT_KIND = "vy.dev/slot-kind"
 CHECK_SLOT = "vy.dev/check-slot"
@@ -68,8 +68,8 @@ POOL_LABEL = "verity.dev/gpu-pool"
 POOLS = {"node1": ("/run/gpu-lease", "provers", "dev"),
          "circuits": ("/run/gpu-lease-circuits", "deployments-gpu", "circuits-gpu")}
 TREE = Path(__file__).resolve().parents[4]
-SLOT_PY = TREE / "tools/verity/check/slot.py"
-LEAN_SLOT_PY = TREE / "tools/verity/check/lean_slot.py"
+SLOT_PY = TREE / "tools/check/slot.py"
+LEAN_SLOT_PY = TREE / "tools/check/lean_slot.py"
 TICK_S = 60
 
 
@@ -77,7 +77,7 @@ TICK_S = 60
 class Item:
     """One allocation or waiter as a Workload: `key` names it from waiting to running, `queue` is its shadow ClusterQueue,
     `pod_sets` the Workload's podSets, `priority` its value (with `priority_class` the WorkloadPriorityClass it came from),
-    `running` what the node did, `since` when it arrived (ISO), and `trains` whether it may take a trains-only check slot."""
+    `running` what the node did, `since` when it arrived (ISO), and `trains` whether it may take an `only=trains` check slot."""
     key: str
     queue: str
     pod_sets: tuple[dict[str, Any], ...]
@@ -189,7 +189,7 @@ def demand(workloads: list[dict], local_queues: dict[str, str], leases: dict[str
         for s in slots["slots"]:
             h = s.get("holder")
             if h:
-                # a holder's ticket said whether it was a train; a held trains-only slot can only be one
+                # a holder's ticket said whether it was a candidate's check; a held `only=trains` slot can only be one
                 out.append(Item(key=f"slot/{h.get('run') or h['pid']}", queue=shadow_name("checks"),
                                 pod_sets=(_pod_set({CHECK_SLOT: "1"}, toleration if s.get("trains") else (),
                                                    {SLOT_KIND: "trains" if s.get("trains") else "any"}),),
@@ -278,17 +278,16 @@ def compare(t: str, items: list[Item], shadow: list[dict], before: frozenset[str
 
 def last_disagree(out: Path) -> frozenset[str]:
     """The keys the record's last tick disagreed on (none without a record, or after a failed tick)."""
-    try:
-        with out.open("rb") as f:
-            f.seek(max(0, f.seek(0, os.SEEK_END) - (1 << 20)))
-            lines = f.read().decode(errors="replace").splitlines()
-    except FileNotFoundError:
+    if not out.exists():
         return frozenset()
+    with out.open("rb") as f:
+        f.seek(max(0, f.seek(0, os.SEEK_END) - (1 << 20)))
+        lines = f.read().decode(errors="replace").splitlines()
     for line in reversed(lines):
         try:
             return frozenset(json.loads(line).get("disagree") or ())
-        except ValueError:
-            continue
+        except ValueError as e:
+            print(f"kueue shadow: a line of {out} is not JSON, skipped ({e})", file=sys.stderr)
     return frozenset()
 
 

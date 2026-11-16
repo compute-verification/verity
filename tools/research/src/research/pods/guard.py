@@ -5,16 +5,18 @@
     research pods guard stop [--dry-run]
 
 Scope.  Live pods (desiredStatus not EXITED/TERMINATED) whose name a budget line covers or a `[guard] project` prefix starts.  The
-guard's own host and `[guard] exempt` names are never counted or terminated; every other pod on the account is invisible to it.
+guard's own host and `[guard] exempt` names are never counted or terminated; every other pod on the account is invisible to it,
+but for the state's `rate_all` and `unrated`: every live pod's costPerHr summed, and the pods that list none or one that is not
+a number (infra's hourly total, infra/control/loop_metrics.py, reads them).
 
 Every `--poll` seconds (default 60), from the budgets in memory (the last good read):
   tally      each pod's costPerHr x the time since the last poll (RunPod bills a running pod whether or not anything uses it), added
              to the pod and to the line that covers it.  A line's tally starts when the guard first sees the line and lives in the
              state file, so a restart continues it.
-  cap        a line whose spend reaches its cap_usd trips: the pods under it then are terminated.  The trip holds until cap_usd is raised
-             above the spend; pods that appear under a tripped line are counted, not terminated (`pods create` refuses them).
-  per day    the same for cap_usd_per_day over the rolling 24 hours (spend kept in BUCKET_S buckets in the state); that trip clears by
-             itself once the window's spend falls back under the cap.
+  limit      a line whose spend reaches its limit_usd trips: the pods under it then are terminated.  The trip holds until limit_usd is
+             raised above the spend; pods that appear under a tripped line are counted, not terminated (`pods create` refuses them).
+  per day    the same for limit_usd_per_day over the rolling 24 hours (spend kept in BUCKET_S buckets in the state); that trip clears by
+             itself once the window's spend falls back under the limit.
   balance    the account's clientBalance (GraphQL; account-wide) at or under `[guard] balance_floor`: every pod in scope is terminated,
              each poll while it holds.
   max age    a pod under a line older than the line's max_pod_hours (RunPod's createdAt) is terminated: the bound for a pod whose lease
@@ -27,7 +29,7 @@ termination is one log line and an entry in the state's `terminated`.  `--dry-ru
 its own files.  After acting, the guard records, then reads budgets.toml again for the next poll (a notes clone: from its origin).
 
 Fail closed.  A fault on the guard's own machine never stops enforcement and never loosens a limit (a full disk on the control pod
-must not end the guard on its state write and leave every cap unenforced).
+must not end the guard on its state write and leave every limit unenforced).
   * Each poll decides and terminates from memory first, then records.  Every log, state and pid write is best effort: a failure is
     kept in memory (`faults`), printed to stderr when it starts and when it clears, and written into the state once a write succeeds.
   * A read that fails keeps the last value read: budgets.toml that cannot be fetched, parsed or validated keeps the last good budgets
@@ -46,9 +48,10 @@ RUNPOD_POD_ID (from /proc/1/environ when an ssh session did not inherit it), els
 from __future__ import annotations
 
 import argparse
-import datetime as dt
 import json
+import math
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -57,6 +60,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
+from .. import settings
 from . import budgets as B
 
 DEAD = ("EXITED", "TERMINATED")
@@ -65,7 +69,8 @@ KEEP_TERMINATED = 500
 STOP_CODES = (0, 2, 3)          # the guard's exits the supervisor does not answer with a restart: stopped, bad arguments, another guard
 EXIT_NO_KEY = 4                 # no RunPod API key here: the guard refuses to loop (it could terminate nothing); the supervisor retries
 SCHEMA = "research/budgets-guard/v1"
-WINDOW_S = 86400                # cap_usd_per_day's rolling window
+WINDOW_S = 86400                # limit_usd_per_day's rolling window
+OLD_TRIP_KINDS = {"cap": "limit"}   # a trip a guard before the rename recorded, read as its kind now
 BUCKET_S = 300                  # its spend is kept in buckets this long; a bucket that straddles the window's edge counts whole
 SUPERVISED_ENV = "RESEARCH_GUARD_SUPERVISED"
 
@@ -96,7 +101,7 @@ class Config:
 
 
 def guard_dir() -> Path:
-    return Path(os.environ.get("RESEARCH_GUARD_DIR", Path.home() / ".research" / "pods"))
+    return Path(settings.get("RESEARCH_GUARD_DIR", Path.home() / ".research" / "pods"))
 
 
 def paths(dry_run: bool = False, log: str | None = None) -> dict[str, Path]:
@@ -109,27 +114,26 @@ def parse_time(s: str | None) -> float | None:
     """Epoch seconds from ISO 8601 or RunPod's `YYYY-MM-DD HH:MM:SS.fff +0000 UTC`; None when absent or unparseable."""
     if not s:
         return None
-    t = str(s).strip().removesuffix(" UTC")
-    for fmt in ("%Y-%m-%d %H:%M:%S.%f %z", "%Y-%m-%d %H:%M:%S %z"):
-        try:
-            return dt.datetime.strptime(t, fmt).timestamp()
-        except ValueError:
-            pass
-    return B.parse_time(t)
+    # RunPod's form is ISO 8601 but for the space before its offset
+    return B.parse_time(re.sub(r" ([+-]\d{4})$", r"\1", str(s).strip().removesuffix(" UTC")))
 
 
 iso = B.iso
 
 
 def self_pod_id() -> str | None:
-    if os.environ.get("RUNPOD_POD_ID"):
-        return os.environ["RUNPOD_POD_ID"]
+    if settings.get("RUNPOD_POD_ID"):
+        return settings.need("RUNPOD_POD_ID")
+    environ = Path("/proc/1/environ")
+    if not environ.exists():
+        return None
     try:
-        for item in Path("/proc/1/environ").read_bytes().split(b"\0"):
+        for item in environ.read_bytes().split(b"\0"):
             if item.startswith(b"RUNPOD_POD_ID="):
                 return item.split(b"=", 1)[1].decode() or None
-    except OSError:
-        pass
+    except OSError as e:
+        print(f"research pods guard: {environ} unread, so this machine's own pod is unknown ({type(e).__name__}: {e})",
+              file=sys.stderr, flush=True)
     return None
 
 
@@ -159,8 +163,8 @@ def load_state(path: Path, now: float, log: Callable[[str], None]) -> dict[str, 
     aside = path.with_name(f"{path.name}.corrupt-{int(now)}")
     try:
         path.replace(aside)
-    except OSError:
-        aside = path
+    except OSError as e:
+        aside, why = path, f"{why}; not moved aside ({type(e).__name__}: {e})"
     log(f"STATE {path.name} {why}: kept as {aside.name}; new tallies start now")
     state = new_state(now)
     state["tally_restarted"] = {"at": iso(now), "why": why, "kept": str(aside)}
@@ -195,10 +199,8 @@ class Recorder:
         self.faults: dict[str, dict[str, Any]] = {}
 
     def _say(self, msg: str) -> None:
-        try:
-            print(f"research pods guard: {msg}", file=sys.stderr, flush=True)
-        except Exception:  # noqa: BLE001 -- stderr may be the log on the same full disk
-            pass
+        # stderr may be the log on the same full disk: its failure is a fault like the files', kept in the state
+        self.attempt("stderr", lambda: print(f"research pods guard: {msg}", file=sys.stderr, flush=True))
 
     def attempt(self, what: str, fn: Callable[[], None]) -> bool:
         try:
@@ -245,26 +247,37 @@ def refresh(cfg: Config, state: dict[str, Any], current: B.Budgets | None, now: 
     old = {p: ln.view() for p, ln in (current.lines.items() if current else [])}
     for p, v in sorted(new.view()["lines"].items()):
         if p not in old:
-            caps = [f"{k} ${v[k]:g}" for k in B.CAP_KEYS if v.get(k) is not None]
-            log(f"LINE {p!r} added: {', '.join(caps)}, expires {v['expires']}, max_pod_hours {v['max_pod_hours']:g}" + (f", by {v['by']}" if v.get("by") else ""))
+            limits = [f"{k} ${v[k]:g}" for k in B.LIMIT_KEYS if v.get(k) is not None]
+            log(f"LINE {p!r} added: {', '.join(limits)}, expires {v['expires']}, max_pod_hours {v['max_pod_hours']:g}" + (f", by {v['by']}" if v.get("by") else ""))
         elif old[p] != v:
             log(f"LINE {p!r} changed: " + ", ".join(f"{k} {old[p][k]} -> {v[k]}" for k in v if old[p].get(k) != v[k]))
     for p in sorted(set(old) - set(new.lines)):
         log(f"LINE {p!r} removed: its pods are uncovered now")
     if b.get("error"):
         log(f"BUDGETS readable again ({where})")
-    state["budgets"] = {**new.view(), "source": where, "read_utc": iso(now), "error": None, "text": text}
+    if new.old_keys and new.old_keys != tuple(b.get("old_keys") or ()):
+        log(f"BUDGETS name {', '.join(new.old_keys)}, read as {', '.join(B.OLD_KEYS[k] for k in new.old_keys)} ({where})")
+    state["budgets"] = {**new.view(), "source": where, "read_utc": iso(now), "error": None, "text": text, "old_keys": list(new.old_keys)}
     return new
 
 
 def budgets_from_state(state: dict[str, Any]) -> B.Budgets | None:
     try:
         return B.parse((state.get("budgets") or {})["text"])
-    except (KeyError, TypeError, B.BudgetError):
+    except (KeyError, TypeError, B.BudgetError) as e:
+        print(f"research pods guard: the state holds no budgets that parse, so none are carried over ({type(e).__name__}: "
+              f"{e})", file=sys.stderr)
         return None
 
 
 # ---- one poll ---------------------------------------------------------------------------------------------------------------------------------
+
+def listed_rate(v: Any) -> float | None:
+    """A pod's listed costPerHr as dollars an hour, or None when it is not a finite JSON number (a string included)."""
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return None
+    return float(v) if math.isfinite(v) else None
+
 
 def poll(api: Any, budgets: B.Budgets, cfg: Config, state: dict[str, Any], now: float, log: Callable[[str], None]) -> list[dict[str, Any]]:
     """One guard step over the provider's current pod list: tally, decide, terminate, and only then log.  Returns the terminations it
@@ -303,6 +316,11 @@ def poll(api: Any, budgets: B.Budgets, cfg: Config, state: dict[str, Any], now: 
             del w[k]
         t["window_usd"] = sum(w.values())
     state["last_poll"], state["rate_now"] = now, rate_now
+    # every listed pod, its own host, exempt and foreign ones too: what the account pays an hour (infra/control/loop_metrics.py);
+    # a rate that is not a number makes its pod unrated and never fails the poll
+    rates = {p["id"]: listed_rate(p.get("costPerHr")) for p in listed}
+    state["rate_all"] = sum(r for r in rates.values() if r is not None)
+    state["unrated"] = sorted(k for k, r in rates.items() if r is None)
 
     balance = floor = None
     if budgets.balance_floor is not None:
@@ -318,32 +336,40 @@ def poll(api: Any, budgets: B.Budgets, cfg: Config, state: dict[str, Any], now: 
     kills: dict[str, tuple[dict[str, Any], str]] = {}
     for prefix, line in budgets.lines.items():
         t = state["lines"][prefix]
+        kind = t["tripped"].get("kind", "cap") if t.get("tripped") else None
+        if kind in OLD_TRIP_KINDS:
+            t["tripped"]["kind"] = OLD_TRIP_KINDS[kind]
+            notes.append(f"TRIP {prefix!r}: its recorded kind is read as {t['tripped']['kind']!r}")
         members = [p for p, ln in scope if ln is line]
         over = []
-        if line.cap_usd is not None and t["spent"] >= line.cap_usd:
-            over.append(("cap", f"{prefix!r} CAP ${line.cap_usd:g} reached (spent ${t['spent']:.2f})"))
-        if line.cap_usd_per_day is not None and t["window_usd"] >= line.cap_usd_per_day:
-            over.append(("per_day", f"{prefix!r} DAILY CAP ${line.cap_usd_per_day:g} reached (${t['window_usd']:.2f} in the last 24 h)"))
+        if line.limit_usd is not None and t["spent"] >= line.limit_usd:
+            over.append(("limit", f"{prefix!r} LIMIT ${line.limit_usd:g} reached (spent ${t['spent']:.2f})"))
+        if line.limit_usd_per_day is not None and t["window_usd"] >= line.limit_usd_per_day:
+            over.append(("per_day", f"{prefix!r} DAILY LIMIT ${line.limit_usd_per_day:g} reached (${t['window_usd']:.2f} in the last 24 h)"))
         if t.get("tripped") and not over:
-            notes.append(f"UNTRIPPED {prefix!r}: " + (f"${t['window_usd']:.2f} in the last 24 h is under the daily cap ${line.cap_usd_per_day:g}"
+            notes.append(f"UNTRIPPED {prefix!r}: " + (f"${t['window_usd']:.2f} in the last 24 h is under the daily limit ${line.limit_usd_per_day:g}"
                                                      if t["tripped"].get("kind") == "per_day" else
-                                                     f"cap ${line.cap_usd:g} is over the spend ${t['spent']:.2f}" if line.cap_usd is not None else
-                                                     "no cap applies any more"))
+                                                     f"limit ${line.limit_usd:g} is over the spend ${t['spent']:.2f}" if line.limit_usd is not None else
+                                                     "no limit applies any more"))
             t["tripped"] = None
         if not t.get("tripped") and over:
             kind, why = over[0]
             t["tripped"] = {"at": iso(now), "why": why, "kind": kind, "pods": sorted(p["id"] for p in members)}
             notes.append(f"TRIPPED: {why}")
-        elif t.get("tripped") and over and t["tripped"].get("kind", "cap") not in [k for k, _ in over]:
-            t["tripped"].update(kind=over[0][0], why=over[0][1])          # still over, now on the other cap: the trip holds
+        elif t.get("tripped") and over and t["tripped"].get("kind") not in [k for k, _ in over]:
+            t["tripped"].update(kind=over[0][0], why=over[0][1])          # still over, now on the other limit: the trip holds
             notes.append(f"STILL TRIPPED: {over[0][1]}")
         if t.get("tripped"):
             for p in members:
                 if p["id"] in t["tripped"]["pods"]:
                     kills.setdefault(p["id"], (p, t["tripped"]["why"]))
-                elif not state["pods"][p["id"]].get("over_cap_noted"):
-                    state["pods"][p["id"]]["over_cap_noted"] = True
-                    notes.append(f"OVER-CAP {p['id']} {p.get('name')} appeared under the tripped line {prefix!r}: counted, not terminated")
+                    continue
+                e = state["pods"][p["id"]]
+                if e.pop("over_cap_noted", None):
+                    e["over_limit_noted"] = True
+                if not e.get("over_limit_noted"):
+                    e["over_limit_noted"] = True
+                    notes.append(f"OVER-LIMIT {p['id']} {p.get('name')} appeared under the tripped line {prefix!r}: counted, not terminated")
     for p, line in scope:
         e = state["pods"][p["id"]]
         if below:
@@ -376,8 +402,8 @@ def poll(api: Any, budgets: B.Budgets, cfg: Config, state: dict[str, Any], now: 
 
 
 def _line_spend(prefix: str, t: dict[str, Any], line: B.Line) -> str:
-    return (f"{prefix}=${t['spent']:.2f}" + (f"/{line.cap_usd:g}" if line.cap_usd is not None else "")
-            + (f" 24h ${t.get('window_usd', 0.0):.2f}/{line.cap_usd_per_day:g}" if line.cap_usd_per_day is not None else ""))
+    return (f"{prefix}=${t['spent']:.2f}" + (f"/{line.limit_usd:g}" if line.limit_usd is not None else "")
+            + (f" 24h ${t.get('window_usd', 0.0):.2f}/{line.limit_usd_per_day:g}" if line.limit_usd_per_day is not None else ""))
 
 
 def _terminate(api: Any, cfg: Config, state: dict[str, Any], kills: list[tuple[dict[str, Any], str]], now: float) -> list[dict[str, Any]]:
@@ -407,16 +433,21 @@ def _alive(pid: int) -> bool:
         os.kill(pid, 0)
     except (OSError, ValueError):
         return False
+    if not Path("/proc/self").exists():
+        return True                                                         # no /proc (macOS): the signal probe is all there is
     try:
         return b"guard" in Path(f"/proc/{pid}/cmdline").read_bytes()
     except OSError:
-        return True                                                         # no /proc (macOS): the signal probe is all there is
+        return False                                                        # exited since the signal probe
 
 
 def recorded_pid(pid_path: Path) -> int | None:
+    if not pid_path.exists():
+        return None
     try:
         return int(pid_path.read_text().split()[0])
-    except (OSError, ValueError, IndexError):
+    except (OSError, ValueError, IndexError) as e:
+        print(f"research pods guard: {pid_path} unread, so no guard is recorded ({type(e).__name__}: {e})", file=sys.stderr)
         return None
 
 
@@ -479,11 +510,16 @@ def supervise(cmd: list[str], poll_s: float, *, call: Callable[[list[str]], int]
               sleep: Callable[[float], None] = time.sleep, clock: Callable[[], float] = time.time) -> int:
     """Run the guard `cmd` until it stops on purpose (STOP_CODES), starting it again `poll_s` after any other exit: a crash, a kill,
     an uncaught error.  A crash costs one poll, not the evening.  Returns the guard's last exit code."""
+    unsaid = 0
+
     def say(msg: str) -> None:
+        nonlocal unsaid
         try:
-            print(f"{iso(clock())} supervisor pid {os.getpid()}: {msg}", flush=True)
-        except Exception:  # noqa: BLE001 -- its output is the log, on a disk that may be full
-            pass
+            print(f"{iso(clock())} supervisor pid {os.getpid()}: {msg}"
+                  + (f" ({unsaid} earlier line(s) unwritten)" if unsaid else ""), flush=True)
+            unsaid = 0
+        except (OSError, ValueError):   # its output is the log, on a disk that may be full: the next line written counts it
+            unsaid += 1
 
     call = call or (lambda c: subprocess.call(c, env={**os.environ, SUPERVISED_ENV: "1"}))
     restarts = 0
@@ -551,10 +587,12 @@ def status(dry_run: bool = False, as_json: bool = False, clock: Callable[[], flo
     print("  " + ", ".join(g) + (f"; balance ${out['balance']:.2f}" if out["balance"] is not None else "") + f"; ${out['rate_now'] or 0:.2f}/h in scope")
     for pre, ln in sorted((b.get("lines") or {}).items()):
         t = out["lines"].get(pre) or {}
-        caps = ([f"${t.get('spent', 0.0):.2f} of ${ln['cap_usd']:g}"] if ln.get("cap_usd") is not None else [f"${t.get('spent', 0.0):.2f}"]) \
-            + ([f"${t.get('window_usd', 0.0):.2f} in 24 h of ${ln['cap_usd_per_day']:g}/day"] if ln.get("cap_usd_per_day") is not None else [])
-        print(f"  {pre!r}: {', '.join(caps)}, expires {ln['expires']}, max_pod_hours {ln['max_pod_hours']:g}"
-              + (f" -- TRIPPED {t['tripped']['at']} ({t['tripped'].get('kind', 'cap')})" if t.get("tripped") else "")
+        limit, per_day = B.limits(ln)
+        spend = ([f"${t.get('spent', 0.0):.2f} of ${limit:g}"] if limit is not None else [f"${t.get('spent', 0.0):.2f}"]) \
+            + ([f"${t.get('window_usd', 0.0):.2f} in 24 h of ${per_day:g}/day"] if per_day is not None else [])
+        kind = t["tripped"].get("kind", "limit") if t.get("tripped") else None
+        print(f"  {pre!r}: {', '.join(spend)}, expires {ln['expires']}, max_pod_hours {ln['max_pod_hours']:g}"
+              + (f" -- TRIPPED {t['tripped']['at']} ({OLD_TRIP_KINDS.get(kind, kind)})" if t.get("tripped") else "")
               + (f" (by {ln['by']})" if ln.get("by") else ""))
     for pid_, e in sorted(out["pods"].items(), key=lambda kv: kv[1].get("created") or 0):
         print(f"  {pid_} {e.get('name')} ${e.get('rate', 0):g}/h spent ${e.get('spent', 0):.2f} created {iso(e.get('created'))} "
@@ -607,10 +645,13 @@ def main(argv: list[str]) -> int:
                  self_pod=ns.self_pod or self_pod_id())
     if ns.supervise:
         return supervise([sys.executable, "-m", "research", "pods", "guard", *[a for a in argv if a != "--supervise"]], ns.poll)
-    if not os.environ.get(SUPERVISED_ENV):
+    if not settings.get(SUPERVISED_ENV):
         try:
-            prior = budgets_from_state(json.loads(paths(ns.dry_run)["state"].read_text()))
-        except (OSError, ValueError):
+            state_path = paths(ns.dry_run)["state"]
+            prior = budgets_from_state(json.loads(state_path.read_text())) if state_path.exists() else None
+        except (OSError, ValueError) as e:
+            print(f"research pods guard: {paths(ns.dry_run)['state']} unread, so no budgets are carried over ({type(e).__name__}: "
+                  f"{e})", file=sys.stderr)
             prior = None
         try:
             B.load(cfg.source)
@@ -627,7 +668,7 @@ def main(argv: list[str]) -> int:
     if ns.detach:
         return detach(argv, ns.dry_run, ns.log)
 
-    def on_term(signum, frame):  # noqa: ARG001
+    def on_term(signum, frame):
         Recorder(paths(cfg.dry_run, ns.log), time.time).log(f"guard pid {os.getpid()} stopped (signal {signum})")
         raise SystemExit(0)
 

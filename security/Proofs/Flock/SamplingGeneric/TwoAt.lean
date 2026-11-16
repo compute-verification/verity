@@ -294,7 +294,7 @@ def toyCode : Code where
   parse _ := none
   scopeCheck _ := false
   partition _ := none
-  stage2 _ := ∅
+  secondStage _ := ∅
   checked _ _ := []
   rounds _ _ := ∅
   session _ _ _ := none

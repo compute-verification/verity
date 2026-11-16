@@ -12,8 +12,8 @@ The proofs of the exfiltration statements of `Partitioning.Guarantees`.
 
 * `ExfiltrationOptimum`. A sampling design certifying `ℓ` below the `(K+1)`-th rung has `miss (K + 1) ≤ δ`
   (`Exfil.miss_le_of_certifies`), so `ConverseExact` at `K + 1` gives the lower bound; when `K ≥ n` it is at most `0`.
-  Independent samples just above `Λ/(K+1)` give the upper bound (`Exfil.exists_certifying_law`).
-* `RefinementRule`. The unsplit side is `ExfiltrationOptimum`'s law at `ε / (c(s) + 1)`. On the split partition, the
+  Independent samples just above `Λ/(K+1)` give the upper bound (`Exfil.exists_certifying_samplingDesign`).
+* `RefinementRule`. The unsplit side is `ExfiltrationOptimum`'s sampling design at `ε / (c(s) + 1)`. On the split partition, the
   width condition and the counting of `Exfil.locBits_succ_le` and `Exfil.locBits_succ_ge` put `ℓ` below the `(K+1)`-th
   rung of `r·n` units of width `b'`, so `ConverseAsymptotic` at `K + 1` applies there, and
   `(r·n − K)·c(s/r) ≥ (n − K)·c(s)` since `r ≥ 1` and `f, o ≥ 0`.
@@ -30,7 +30,7 @@ open Finset
 
 theorem ExfiltrationOptimum : Guarantees.ExfiltrationOptimum := by
   intro n b K δ ℓ hδ0 hδ1 hlo hhi
-  refine ⟨fun L hL => ?_, fun ε hε => Exfil.exists_certifying_law n b K hδ0 hδ1 hlo hε⟩
+  refine ⟨fun L hL => ?_, fun ε hε => Exfil.exists_certifying_samplingDesign n b K hδ0 hδ1 hlo hε⟩
   have hmiss := Exfil.miss_le_of_certifies (J := K + 1) hδ0.le hL (by push_cast; exact hhi)
   rcases le_or_gt (K + 1) n with hKn | hKn
   · have h := ConverseExact n (K + 1) L δ (Nat.succ_pos K) hKn hmiss
@@ -42,7 +42,7 @@ theorem ExfiltrationOptimum : Guarantees.ExfiltrationOptimum := by
     have h2 : 0 ≤ 1 - δ ^ ((K + 1 : ℝ)⁻¹) := by
       have : δ ^ ((K + 1 : ℝ)⁻¹) ≤ 1 := Real.rpow_le_one hδ0.le hδ1 (by positivity)
       linarith
-    exact (mul_nonpos_of_nonpos_of_nonneg h1 h2).trans (Exfil.meanDraws_nonneg L)
+    exact (mul_nonpos_of_nonpos_of_nonneg h1 h2).trans (Exfil.meanSamples_nonneg L)
 
 theorem RefinementRule : Guarantees.RefinementRule := by
   intro n r b b' K s f o δ ℓ hr hs hf ho hδ0 hδ1 hn hlo hhi hw
@@ -51,12 +51,12 @@ theorem RefinementRule : Guarantees.RefinementRule := by
   have hc' : 0 ≤ unitCost f o (s / r) := add_nonneg hf (mul_nonneg ho (div_nonneg hs.le hr0.le))
   have hK0 : (0 : ℝ) < K + 1 := by positivity
   refine ⟨fun ε hε => ?_, fun L' hL' => ?_⟩
-  · obtain ⟨L, hL, hm⟩ := Exfil.exists_certifying_law n b K (ε := ε / (unitCost f o s + 1)) hδ0 hδ1 hlo
+  · obtain ⟨L, hL, hm⟩ := Exfil.exists_certifying_samplingDesign n b K (ε := ε / (unitCost f o s + 1)) hδ0 hδ1 hlo
       (div_pos hε (by linarith))
     refine ⟨L, hL, ?_⟩
     rw [Exfil.cost_const]
     have hfrac : unitCost f o s / (unitCost f o s + 1) ≤ 1 := (div_le_one (by linarith)).2 (by linarith)
-    calc meanDraws L * unitCost f o s
+    calc meanSamples L * unitCost f o s
         ≤ (n * Real.log δ⁻¹ / (K + 1) + ε / (unitCost f o s + 1)) * unitCost f o s :=
           mul_le_mul_of_nonneg_right hm hc
       _ = unitCost f o s * (n * Real.log δ⁻¹ / (K + 1)) + ε * (unitCost f o s / (unitCost f o s + 1)) := by ring
@@ -87,7 +87,7 @@ theorem RefinementRule : Guarantees.RefinementRule := by
         (n - K) * unitCost f o s * (Real.log δ⁻¹ / (K + 1) * (1 - Real.log δ⁻¹ / (2 * (K + 1)))) := by
       field_simp
     have hA' : ((r : ℝ) * n - K) * (Real.log δ⁻¹ / (K + 1) * (1 - Real.log δ⁻¹ / (2 * (K + 1)))) ≤
-        meanDraws L' := by
+        meanSamples L' := by
       have e : ((r : ℝ) * n - (K + 1) + 1) / (K + 1) * Real.log δ⁻¹ * (1 - Real.log δ⁻¹ / (2 * (K + 1))) =
           ((r : ℝ) * n - K) * (Real.log δ⁻¹ / (K + 1) * (1 - Real.log δ⁻¹ / (2 * (K + 1)))) := by
         field_simp
@@ -115,9 +115,9 @@ theorem RefinementRule : Guarantees.RefinementRule := by
             mul_le_mul_of_nonneg_right hcmp hy
         _ = ((r : ℝ) * n - K) * (Real.log δ⁻¹ / (K + 1) * (1 - Real.log δ⁻¹ / (2 * (K + 1)))) *
               unitCost f o (s / r) := by ring
-        _ ≤ meanDraws L' * unitCost f o (s / r) := mul_le_mul_of_nonneg_right hA' hc'
+        _ ≤ meanSamples L' * unitCost f o (s / r) := mul_le_mul_of_nonneg_right hA' hc'
     · have hnK' : (0 : ℝ) ≤ n - K := by linarith
       exact (mul_nonpos_of_nonneg_of_nonpos (mul_nonneg hnK' hc) hy).trans
-        (mul_nonneg (Exfil.meanDraws_nonneg L') hc')
+        (mul_nonneg (Exfil.meanSamples_nonneg L') hc')
 
 end FlockSoundness.Audit.Partitioning.SecurityProofs

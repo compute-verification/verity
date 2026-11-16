@@ -58,7 +58,7 @@ points, which are `pointsOf` the first coin:
 * the record's link points are the challenger's live-coin part's: `RecVStar.innerLink` refuses others (`innerLink_points`, `held_eq`);
 * the challenger's live-coin part's record read in its own format holds them (`RecSetup.checkReads`), and the reader reads that record
   back off the first coin (`Drawn`);
-* the record decodes at a spec of two points of the files' `m_pts`, whatever full sample it carries (`drawnSpec_shape`),
+* the record decodes at a spec of two points of the files' `m_pts`, whatever full sample it carries (`sampledSpec_shape`),
   as the deployed spec (`innerSetup_same`), so its points are `pointsOf` the first coin (`points_of_flat`).
 -/
 
@@ -244,10 +244,10 @@ theorem held_eq {spec : SessionSpec} {text : String} {sess : RunRecord} {j l : L
 /-! ## The inner session check 5 loads -/
 
 /-- **What `Inner.load` reads its extra claims at**: the files' statement's, at the link points of the record decoded
-at the spec its sample gives (`Files.drawnSpec`). -/
+at the spec its sample gives (`Files.sampledSpec`). -/
 theorem load_extras {unit : String} {f : RecCoins.Files} {inn : RecCoins.Inner}
     (h : RecCoins.Inner.load unit f = .ok inn) :
-    ∃ spec st specD sess, f.stmt unit = .ok (spec, st) ∧ f.drawnSpec spec st = .ok specD ∧
+    ∃ spec st specD sess, f.stmt unit = .ok (spec, st) ∧ f.sampledSpec spec st = .ok specD ∧
       Record.decode specD f.record = .ok sess ∧ inn.extras = (Setup.ofCircuit st).extra sess.points := by
   unfold RecCoins.Inner.load at h
   obtain ⟨⟨spec, st⟩, hs, h⟩ := RecDeploy.CoinTie.tie_bind h
@@ -270,14 +270,14 @@ theorem load_extras {unit : String} {f : RecCoins.Files} {inn : RecCoins.Inner}
     exact ⟨_, _, hs, by assumption, by assumption, rfl⟩
 
 /-- **The record decodes at two link points of the files' `m_pts`**: without a sample at the files' spec, and at a sample
-that proves every unit in order (the only one `drawnSpec` takes) at the sampled statement's, whose `nbl` is the files'
-(`drawn_same`). -/
-theorem drawnSpec_shape {f : RecCoins.Files} {spec' : SessionSpec} {st' : Stmt} {specD : SessionSpec}
-    (h : f.drawnSpec spec' st' = .ok specD)
+that proves every unit in order (the only one `sampledSpec` takes) at the sampled statement's, whose `nbl` is the files'
+(`sampled_same`). -/
+theorem sampledSpec_shape {f : RecCoins.Files} {spec' : SessionSpec} {st' : Stmt} {specD : SessionSpec}
+    (h : f.sampledSpec spec' st' = .ok specD)
     (hst' : Stmt.setupHidden RecCoins.innerTags f.circuit f.pub RecVStar.innerTree [] none (some f.partition) f.program =
       .ok st')
     (hspec : spec' = st'.spec) : specD.points = 2 ∧ specD.mPts = st'.mPts := by
-  unfold RecCoins.Files.drawnSpec RecCoins.drawnSpec at h
+  unfold RecCoins.Files.sampledSpec RecCoins.sampledSpec at h
   cases hr : RecCoins.recordDraw f.record with
   | none =>
     rw [hr] at h
@@ -297,7 +297,7 @@ theorem drawnSpec_shape {f : RecCoins.Files} {spec' : SessionSpec} {st' : Stmt} 
     simp only [pure, Except.pure, Except.ok.injEq] at h
     subst h
     have hp' : D.proved = Array.range st'.n := by simpa using hp
-    obtain ⟨-, -, hn, -⟩ := SetupSame.drawn_same hst' hst'' hD hp'
+    obtain ⟨-, -, hn, -⟩ := SetupSame.sampled_same hst' hst'' hD hp'
     refine ⟨rfl, ?_⟩
     show st''.mPts = st'.mPts
     rw [(FlockSoundness.Discharge.Hidden.setupHidden_spec' hst'').mPts,
@@ -399,7 +399,7 @@ theorem staged_extrasR {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : 
   rw [← hsL, ← hstLe] at hdS
   rw [← hstLe] at hext
   obtain ⟨hst', hspec'⟩ := files_stmt hstm
-  obtain ⟨hDp, hDm⟩ := drawnSpec_shape hdS hst' hspec'
+  obtain ⟨hDp, hDm⟩ := sampledSpec_shape hdS hst' hspec'
   -- the decoded link points are the challenger's live-coin part's, so the first coin's
   have hdec' : Record.decode specD record = .ok sess := by rw [← hrec]; exact hdec
   obtain ⟨j, l, -, hj, hl, -⟩ := Claims.Bridge.Custody.decode_ok hdec'

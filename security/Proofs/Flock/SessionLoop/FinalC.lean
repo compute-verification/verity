@@ -38,7 +38,7 @@ import Mathlib.Topology.Sheaves.Init
 
 The ZK server's finish sends the inner proof's round 0 only where the request's `final_c` is the one its passed values
 fix: the rep's `zerocheck c_eval` constraint, `Σ_i λ_i(z)·r1c_i + final_c` with each value under its own pad, holds on
-the pads (`Flock.Firewall.Finish.consWhy`). This file states that identity on the switched session's values, a premise
+the pads (`Flock.ZkServer.Finish.consWhy`). This file states that identity on the switched session's values, a premise
 over `vs` beside `Loop.TakesVals` and `Loop.RowsOK`:
 
 * **`Loop.FinalCFixed`**: at each table and rep, at every nonce, opened coins and tape at which none of the table's

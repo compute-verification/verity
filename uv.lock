@@ -22,46 +22,62 @@ conflicts = [[
 [manifest]
 members = [
     "cluster",
+    "cluster-tests",
     "core-identity",
     "memory-challenger-lean",
     "pous-check",
     "research",
+    "research-tests",
     "verity",
     "verity-bench",
     "verity-bench-specs",
+    "verity-bench-tests",
     "verity-certifier-timing",
     "verity-check",
+    "verity-check-tests",
     "verity-circuit-check",
+    "verity-circuit-check-tests",
     "verity-cli",
-    "verity-commit-slots",
+    "verity-cli-tests",
     "verity-commitments-benchmarks",
     "verity-config",
+    "verity-config-tests",
     "verity-core-composition",
     "verity-core-evaluate",
-    "verity-core-firewall",
     "verity-core-sampled-proofs",
+    "verity-core-zk-server",
     "verity-difftest",
+    "verity-difftest-tests",
     "verity-exact-kit",
+    "verity-exact-kit-tests",
     "verity-flock",
+    "verity-flock-tests",
     "verity-graph",
+    "verity-graph-tests",
     "verity-landq",
+    "verity-landq-tests",
     "verity-lean-audit",
     "verity-machine-model",
+    "verity-machine-model-tests",
     "verity-native-peak",
     "verity-network-e2e",
-    "verity-network-sim",
     "verity-network-traces",
     "verity-numerical",
+    "verity-numerical-tests",
     "verity-ops",
+    "verity-ops-tests",
     "verity-pouw-benchmarks",
     "verity-pouw-check-difftest",
     "verity-pouw-window-difftest",
     "verity-proof-throughput",
-    "verity-sha512-rows",
+    "verity-proof-throughput-tests",
     "verity-slack-events",
     "verity-tc-probe",
     "verity-tc-probe-fp4",
+    "verity-torch",
+    "verity-torch-tests",
     "verity-vllm",
+    "verity-vllm-tests",
 ]
 
 [[package]]
@@ -170,6 +186,17 @@ version = "0.1.0"
 source = { editable = "infra/cluster" }
 
 [[package]]
+name = "cluster-tests"
+version = "0.0.0"
+source = { virtual = "tests/infra/cluster" }
+dependencies = [
+    { name = "cluster" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "cluster", editable = "infra/cluster" }]
+
+[[package]]
 name = "colorama"
 version = "0.4.6"
 source = { registry = "https://pypi.org/simple" }
@@ -261,7 +288,7 @@ wheels = [
 [[package]]
 name = "core-identity"
 version = "0.1.0"
-source = { virtual = "verity/commitments/identity" }
+source = { virtual = "tests/verity/commitments/identity" }
 dependencies = [
     { name = "hypothesis" },
     { name = "verity" },
@@ -280,7 +307,7 @@ name = "cuda-bindings"
 version = "13.4.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cuda-pathfinder", marker = "python_full_version < '3.15'" },
+    { name = "cuda-pathfinder", marker = "(python_full_version < '3.15' and extra == 'extra-11-verity-vllm-torch') or (python_full_version < '3.15' and extra == 'extra-18-verity-native-peak-torch') or (python_full_version < '3.15' and extra != 'extra-6-verity-torch-cpu') or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/27/df/281aa982f033426d59c6276b6643637746b6bf0a883186443daa89717291/cuda_bindings-13.4.2-cp312-cp312-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:bb2e91717c83ea550ef1b19ebafd25c9fe805478f479d04b3fc798cc6d29d453", size = 6479822, upload-time = "2026-09-17T22:06:01.3Z" },
@@ -319,43 +346,43 @@ wheels = [
 
 [package.optional-dependencies]
 cublas = [
-    { name = "nvidia-cublas", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32')" },
-    { name = "nvidia-cuda-nvrtc", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32')" },
+    { name = "nvidia-cublas", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra != 'extra-6-verity-torch-cpu') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'win32' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'win32' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
+    { name = "nvidia-cuda-nvrtc", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra != 'extra-6-verity-torch-cpu') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'win32' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'win32' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
 ]
 cudart = [
-    { name = "nvidia-cuda-runtime", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32')" },
+    { name = "nvidia-cuda-runtime", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra != 'extra-6-verity-torch-cpu') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'win32' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'win32' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
 ]
 cufft = [
-    { name = "nvidia-cufft", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32')" },
-    { name = "nvidia-nvjitlink", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32')" },
+    { name = "nvidia-cufft", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra != 'extra-6-verity-torch-cpu') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'win32' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'win32' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
+    { name = "nvidia-nvjitlink", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra != 'extra-6-verity-torch-cpu') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'win32' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'win32' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
 ]
 cufile = [
-    { name = "nvidia-cufile", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "nvidia-cufile", marker = "(platform_machine != 'aarch64' and platform_machine != 'x86_64' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (platform_machine != 'aarch64' and platform_machine != 'x86_64' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (sys_platform != 'linux' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform != 'linux' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
 ]
 cupti = [
-    { name = "nvidia-cuda-cupti", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32')" },
+    { name = "nvidia-cuda-cupti", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra != 'extra-6-verity-torch-cpu') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'win32' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'win32' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
 ]
 curand = [
-    { name = "nvidia-curand", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32')" },
+    { name = "nvidia-curand", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra != 'extra-6-verity-torch-cpu') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'win32' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'win32' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
 ]
 cusolver = [
-    { name = "nvidia-cublas", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32')" },
-    { name = "nvidia-cusolver", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32')" },
-    { name = "nvidia-cusparse", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32')" },
-    { name = "nvidia-nvjitlink", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32')" },
+    { name = "nvidia-cublas", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra != 'extra-6-verity-torch-cpu') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'win32' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'win32' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
+    { name = "nvidia-cusolver", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra != 'extra-6-verity-torch-cpu') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'win32' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'win32' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
+    { name = "nvidia-cusparse", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra != 'extra-6-verity-torch-cpu') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'win32' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'win32' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
+    { name = "nvidia-nvjitlink", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra != 'extra-6-verity-torch-cpu') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'win32' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'win32' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
 ]
 cusparse = [
-    { name = "nvidia-cusparse", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32')" },
-    { name = "nvidia-nvjitlink", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32')" },
+    { name = "nvidia-cusparse", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra != 'extra-6-verity-torch-cpu') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'win32' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'win32' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
+    { name = "nvidia-nvjitlink", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra != 'extra-6-verity-torch-cpu') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'win32' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'win32' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
 ]
 nvjitlink = [
-    { name = "nvidia-nvjitlink", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32')" },
+    { name = "nvidia-nvjitlink", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra != 'extra-6-verity-torch-cpu') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'win32' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'win32' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
 ]
 nvrtc = [
-    { name = "nvidia-cuda-nvrtc", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32')" },
+    { name = "nvidia-cuda-nvrtc", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra != 'extra-6-verity-torch-cpu') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'win32' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'win32' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
 ]
 nvtx = [
-    { name = "nvidia-nvtx", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine == 'AMD64' and sys_platform == 'win32')" },
+    { name = "nvidia-nvtx", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-11-verity-vllm-torch') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra == 'extra-18-verity-native-peak-torch') or (platform_machine == 'AMD64' and sys_platform == 'win32' and extra != 'extra-6-verity-torch-cpu') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'win32' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform == 'win32' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
 ]
 
 [[package]]
@@ -1032,7 +1059,7 @@ wheels = [
 [[package]]
 name = "memory-challenger-lean"
 version = "0.0.0"
-source = { virtual = "verity/protocols/accounting/pous/device/lean" }
+source = { virtual = "tests/verity/protocols/resource_accounting/memory/pous/attester/lean" }
 dependencies = [
     { name = "hypothesis" },
     { name = "verity" },
@@ -1042,8 +1069,8 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "hypothesis", specifier = ">=6.100" },
-    { name = "verity", editable = "." },
-    { name = "verity-difftest", editable = "tools/difftest" },
+    { name = "verity" },
+    { name = "verity-difftest" },
 ]
 
 [[package]]
@@ -1194,7 +1221,7 @@ name = "nvidia-cublas"
 version = "13.1.1.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "nvidia-cuda-nvrtc" },
+    { name = "nvidia-cuda-nvrtc", marker = "extra == 'extra-11-verity-vllm-torch' or extra == 'extra-18-verity-native-peak-torch' or extra != 'extra-6-verity-torch-cpu'" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a7/a1/0bd24ee8c8d03adac032fd2909426a00c88f8c57961b1277ded97f91119f/nvidia_cublas-13.1.1.3-py3-none-manylinux_2_27_aarch64.whl", hash = "sha256:b7a210458267ac818974c53038fbec2e969d5c99f305ab15c72522fa9f001dd5", size = 542848918, upload-time = "2026-04-08T18:46:22.985Z" },
@@ -1237,7 +1264,7 @@ name = "nvidia-cudnn-cu13"
 version = "9.24.0.43"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "nvidia-cublas" },
+    { name = "nvidia-cublas", marker = "extra == 'extra-11-verity-vllm-torch' or extra == 'extra-18-verity-native-peak-torch' or extra != 'extra-6-verity-torch-cpu'" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ca/30/7c257e3d5cb4fecb147b93895c66e29c93f8e76d74b45bb418ff0587c4ec/nvidia_cudnn_cu13-9.24.0.43-py3-none-manylinux_2_27_aarch64.whl", hash = "sha256:a6812a554a1ff0413e9c52b84c26c050380649ab9615f9c16bded368ce9f421f", size = 650976863, upload-time = "2026-07-02T16:23:39.248Z" },
@@ -1250,7 +1277,7 @@ name = "nvidia-cufft"
 version = "12.0.0.61"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "nvidia-nvjitlink" },
+    { name = "nvidia-nvjitlink", marker = "extra == 'extra-11-verity-vllm-torch' or extra == 'extra-18-verity-native-peak-torch' or extra != 'extra-6-verity-torch-cpu'" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8b/ae/f417a75c0259e85c1d2f83ca4e960289a5f814ed0cea74d18c353d3e989d/nvidia_cufft-12.0.0.61-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:2708c852ef8cd89d1d2068bdbece0aa188813a0c934db3779b9b1faa8442e5f5", size = 214053554, upload-time = "2025-09-04T08:31:38.196Z" },
@@ -1282,9 +1309,9 @@ name = "nvidia-cusolver"
 version = "12.0.4.66"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "nvidia-cublas" },
-    { name = "nvidia-cusparse" },
-    { name = "nvidia-nvjitlink" },
+    { name = "nvidia-cublas", marker = "extra == 'extra-11-verity-vllm-torch' or extra == 'extra-18-verity-native-peak-torch' or extra != 'extra-6-verity-torch-cpu'" },
+    { name = "nvidia-cusparse", marker = "extra == 'extra-11-verity-vllm-torch' or extra == 'extra-18-verity-native-peak-torch' or extra != 'extra-6-verity-torch-cpu'" },
+    { name = "nvidia-nvjitlink", marker = "extra == 'extra-11-verity-vllm-torch' or extra == 'extra-18-verity-native-peak-torch' or extra != 'extra-6-verity-torch-cpu'" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c8/c3/b30c9e935fc01e3da443ec0116ed1b2a009bb867f5324d3f2d7e533e776b/nvidia_cusolver-12.0.4.66-py3-none-manylinux_2_27_aarch64.whl", hash = "sha256:02c2457eaa9e39de20f880f4bd8820e6a1cfb9f9a34f820eb12a155aa5bc92d2", size = 223467760, upload-time = "2025-09-04T08:33:04.222Z" },
@@ -1297,7 +1324,7 @@ name = "nvidia-cusparse"
 version = "12.6.3.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "nvidia-nvjitlink" },
+    { name = "nvidia-nvjitlink", marker = "extra == 'extra-11-verity-vllm-torch' or extra == 'extra-18-verity-native-peak-torch' or extra != 'extra-6-verity-torch-cpu'" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f8/94/5c26f33738ae35276672f12615a64bd008ed5be6d1ebcb23579285d960a9/nvidia_cusparse-12.6.3.3-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:80bcc4662f23f1054ee334a15c72b8940402975e0eab63178fc7e670aa59472c", size = 162155568, upload-time = "2025-09-04T08:33:42.864Z" },
@@ -1467,7 +1494,7 @@ wheels = [
 [[package]]
 name = "pous-check"
 version = "0.1.0"
-source = { virtual = "verity/protocols/accounting/pous/verifier/check" }
+source = { virtual = "tests/verity/protocols/resource_accounting/memory/pous/verifier/check" }
 dependencies = [
     { name = "hypothesis" },
     { name = "verity" },
@@ -1776,6 +1803,17 @@ version = "0.1.0"
 source = { editable = "tools/research" }
 
 [[package]]
+name = "research-tests"
+version = "0.0.0"
+source = { virtual = "tests/tools/research" }
+dependencies = [
+    { name = "research" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "research", editable = "tools/research" }]
+
+[[package]]
 name = "rpds-py"
 version = "2026.6.3"
 source = { registry = "https://pypi.org/simple" }
@@ -2028,13 +2066,13 @@ resolution-markers = [
     "python_full_version < '3.15' and sys_platform == 'darwin'",
 ]
 dependencies = [
-    { name = "filelock", marker = "sys_platform == 'darwin'" },
-    { name = "fsspec", marker = "sys_platform == 'darwin'" },
-    { name = "jinja2", marker = "sys_platform == 'darwin'" },
-    { name = "networkx", marker = "sys_platform == 'darwin'" },
-    { name = "setuptools", marker = "sys_platform == 'darwin'" },
-    { name = "sympy", marker = "sys_platform == 'darwin'" },
-    { name = "typing-extensions", marker = "sys_platform == 'darwin'" },
+    { name = "filelock", marker = "(sys_platform == 'darwin' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
+    { name = "fsspec", marker = "(sys_platform == 'darwin' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
+    { name = "jinja2", marker = "(sys_platform == 'darwin' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
+    { name = "networkx", marker = "(sys_platform == 'darwin' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
+    { name = "setuptools", marker = "(sys_platform == 'darwin' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
+    { name = "sympy", marker = "(sys_platform == 'darwin' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
+    { name = "typing-extensions", marker = "(sys_platform == 'darwin' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
 ]
 wheels = [
     { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.14.0-cp312-cp312-macosx_14_0_arm64.whl", hash = "sha256:ab7e226c18d3cbc134dfa952d18ab1df202055dd33446837c8fd050ad449e6f5", upload-time = "2026-09-02T00:26:12Z" },
@@ -2054,20 +2092,20 @@ resolution-markers = [
     "python_full_version < '3.15'",
 ]
 dependencies = [
-    { name = "cuda-bindings", marker = "python_full_version < '3.15' and sys_platform == 'linux'" },
+    { name = "cuda-bindings", marker = "(python_full_version < '3.15' and sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (python_full_version < '3.15' and sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (python_full_version < '3.15' and sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (python_full_version >= '3.15' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (python_full_version >= '3.15' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform != 'linux' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform != 'linux' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
     { name = "cuda-toolkit", extra = ["cublas", "cudart", "cufft", "cufile", "cupti", "curand", "cusolver", "cusparse", "nvjitlink", "nvrtc", "nvtx"], marker = "(sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
-    { name = "filelock" },
-    { name = "fsspec" },
-    { name = "jinja2" },
-    { name = "networkx" },
-    { name = "nvidia-cudnn-cu13", marker = "sys_platform == 'linux'" },
-    { name = "nvidia-cusparselt-cu13", marker = "sys_platform == 'linux'" },
-    { name = "nvidia-nccl-cu13", marker = "sys_platform == 'linux'" },
-    { name = "nvidia-nvshmem-cu13", marker = "sys_platform == 'linux'" },
-    { name = "setuptools" },
-    { name = "sympy" },
-    { name = "triton", marker = "python_full_version < '3.15' and sys_platform == 'linux'" },
-    { name = "typing-extensions" },
+    { name = "filelock", marker = "extra == 'extra-11-verity-vllm-torch' or extra == 'extra-18-verity-native-peak-torch' or extra != 'extra-6-verity-torch-cpu'" },
+    { name = "fsspec", marker = "extra == 'extra-11-verity-vllm-torch' or extra == 'extra-18-verity-native-peak-torch' or extra != 'extra-6-verity-torch-cpu'" },
+    { name = "jinja2", marker = "extra == 'extra-11-verity-vllm-torch' or extra == 'extra-18-verity-native-peak-torch' or extra != 'extra-6-verity-torch-cpu'" },
+    { name = "networkx", marker = "extra == 'extra-11-verity-vllm-torch' or extra == 'extra-18-verity-native-peak-torch' or extra != 'extra-6-verity-torch-cpu'" },
+    { name = "nvidia-cudnn-cu13", marker = "(sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
+    { name = "nvidia-cusparselt-cu13", marker = "(sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
+    { name = "nvidia-nccl-cu13", marker = "(sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
+    { name = "nvidia-nvshmem-cu13", marker = "(sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
+    { name = "setuptools", marker = "extra == 'extra-11-verity-vllm-torch' or extra == 'extra-18-verity-native-peak-torch' or extra != 'extra-6-verity-torch-cpu'" },
+    { name = "sympy", marker = "extra == 'extra-11-verity-vllm-torch' or extra == 'extra-18-verity-native-peak-torch' or extra != 'extra-6-verity-torch-cpu'" },
+    { name = "triton", marker = "(python_full_version < '3.15' and sys_platform == 'linux' and extra == 'extra-11-verity-vllm-torch') or (python_full_version < '3.15' and sys_platform == 'linux' and extra == 'extra-18-verity-native-peak-torch') or (python_full_version < '3.15' and sys_platform == 'linux' and extra != 'extra-6-verity-torch-cpu') or (python_full_version >= '3.15' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (python_full_version >= '3.15' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform != 'linux' and extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (sys_platform != 'linux' and extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
+    { name = "typing-extensions", marker = "extra == 'extra-11-verity-vllm-torch' or extra == 'extra-18-verity-native-peak-torch' or extra != 'extra-6-verity-torch-cpu'" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/17/76/bb4770f56cf6d8971671dbcbb7493e5a6a15ad2825f4e359b02c27c38297/torch-2.14.0-cp312-cp312-macosx_14_0_arm64.whl", hash = "sha256:c1f844f1c750e87df4b68bc3afbc0e2b0c7ef19d7b8f666e48bdcf6a0c4f0056", size = 127303200, upload-time = "2026-09-02T13:43:20.311Z" },
@@ -2097,13 +2135,13 @@ resolution-markers = [
     "python_full_version < '3.15' and sys_platform != 'darwin'",
 ]
 dependencies = [
-    { name = "filelock", marker = "sys_platform != 'darwin'" },
-    { name = "fsspec", marker = "sys_platform != 'darwin'" },
-    { name = "jinja2", marker = "sys_platform != 'darwin'" },
-    { name = "networkx", marker = "sys_platform != 'darwin'" },
-    { name = "setuptools", marker = "sys_platform != 'darwin'" },
-    { name = "sympy", marker = "sys_platform != 'darwin'" },
-    { name = "typing-extensions", marker = "sys_platform != 'darwin'" },
+    { name = "filelock", marker = "(sys_platform != 'darwin' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
+    { name = "fsspec", marker = "(sys_platform != 'darwin' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
+    { name = "jinja2", marker = "(sys_platform != 'darwin' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
+    { name = "networkx", marker = "(sys_platform != 'darwin' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
+    { name = "setuptools", marker = "(sys_platform != 'darwin' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
+    { name = "sympy", marker = "(sys_platform != 'darwin' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
+    { name = "typing-extensions", marker = "(sys_platform != 'darwin' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
 ]
 wheels = [
     { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.14.0%2Bcpu-cp312-cp312-linux_s390x.whl", hash = "sha256:07aefe1a437b6f1b41b0cba15e16583e2f43549ec9d062fcea8e7981a78e014a", upload-time = "2026-09-02T18:31:32Z" },
@@ -2358,12 +2396,23 @@ requires-dist = [
 [[package]]
 name = "verity-bench-specs"
 version = "0.0.0"
-source = { virtual = "benchmarks/harness/specs" }
+source = { virtual = "tests/benchmarks/harness/specs" }
+
+[[package]]
+name = "verity-bench-tests"
+version = "0.0.0"
+source = { virtual = "tests/benchmarks/harness" }
+dependencies = [
+    { name = "verity-bench" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity-bench", editable = "benchmarks/harness" }]
 
 [[package]]
 name = "verity-certifier-timing"
 version = "0.0.0"
-source = { virtual = "benchmarks/certifier_timing" }
+source = { virtual = "tests/benchmarks/certifier_timing" }
 dependencies = [
     { name = "verity" },
     { name = "verity-config" },
@@ -2378,7 +2427,18 @@ requires-dist = [
 [[package]]
 name = "verity-check"
 version = "0.0.0"
-source = { virtual = "tools/verity/check" }
+source = { virtual = "tools/check" }
+dependencies = [
+    { name = "research" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "research", editable = "tools/research" }]
+
+[[package]]
+name = "verity-check-tests"
+version = "0.0.0"
+source = { virtual = "tests/tools/check" }
 dependencies = [
     { name = "research" },
 ]
@@ -2408,6 +2468,17 @@ requires-dist = [
 ]
 
 [[package]]
+name = "verity-circuit-check-tests"
+version = "0.0.0"
+source = { virtual = "tests/tools/verity/circuit_check" }
+dependencies = [
+    { name = "verity-circuit-check" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity-circuit-check", editable = "tools/verity/circuit_check" }]
+
+[[package]]
 name = "verity-cli"
 version = "0.0.0"
 source = { editable = "tools/verity/cli" }
@@ -2419,24 +2490,20 @@ dependencies = [
 requires-dist = [{ name = "verity-graph", editable = "tools/verity/graph" }]
 
 [[package]]
-name = "verity-commit-slots"
+name = "verity-cli-tests"
 version = "0.0.0"
-source = { virtual = "benchmarks/torch_gpu/commit_slots" }
+source = { virtual = "tests/tools/verity/cli" }
 dependencies = [
-    { name = "numpy" },
-    { name = "verity" },
+    { name = "verity-cli" },
 ]
 
 [package.metadata]
-requires-dist = [
-    { name = "numpy" },
-    { name = "verity", editable = "." },
-]
+requires-dist = [{ name = "verity-cli", editable = "tools/verity/cli" }]
 
 [[package]]
 name = "verity-commitments-benchmarks"
 version = "0.0.0"
-source = { virtual = "benchmarks/commitments" }
+source = { virtual = "tests/benchmarks/commitments" }
 dependencies = [
     { name = "blake3" },
     { name = "numpy" },
@@ -2468,25 +2535,47 @@ dependencies = [
 requires-dist = [{ name = "verity", editable = "." }]
 
 [[package]]
+name = "verity-config-tests"
+version = "0.0.0"
+source = { virtual = "tests/tools/config" }
+dependencies = [
+    { name = "verity-config" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity-config", editable = "tools/config" }]
+
+[[package]]
 name = "verity-core-composition"
 version = "0.0.0"
-source = { virtual = "verity/protocols/compose/verifier/lean" }
+source = { virtual = "tests/verity/protocols/compose/verifier/lean" }
 dependencies = [
     { name = "verity-difftest" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "verity-difftest", editable = "tools/difftest" }]
+requires-dist = [{ name = "verity-difftest" }]
 
 [[package]]
 name = "verity-core-evaluate"
 version = "0.0.0"
-source = { virtual = "verity/circuits/evaluate" }
+source = { virtual = "tests/verity/circuits/evaluate" }
 
 [[package]]
-name = "verity-core-firewall"
+name = "verity-core-sampled-proofs"
+version = "0.0.0"
+source = { virtual = "tests/verity/protocols/proofs/spot/verifier/lean" }
+dependencies = [
+    { name = "hypothesis" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "hypothesis", specifier = ">=6.100" }]
+
+[[package]]
+name = "verity-core-zk-server"
 version = "0.1.0"
-source = { virtual = "verity/protocols/proofs/recursion/verifier/firewall" }
+source = { virtual = "tests/verity/protocols/proofs/recursion/verifier/zk_server" }
 dependencies = [
     { name = "hypothesis" },
     { name = "verity-difftest" },
@@ -2496,20 +2585,9 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "hypothesis", specifier = ">=6.100" },
-    { name = "verity-difftest", editable = "tools/difftest" },
-    { name = "verity-flock", editable = "verity/protocols/proofs/flock/prover" },
+    { name = "verity-difftest" },
+    { name = "verity-flock" },
 ]
-
-[[package]]
-name = "verity-core-sampled-proofs"
-version = "0.0.0"
-source = { virtual = "verity/protocols/proofs/spot/verifier/lean" }
-dependencies = [
-    { name = "hypothesis" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "hypothesis", specifier = ">=6.100" }]
 
 [[package]]
 name = "verity-difftest"
@@ -2521,6 +2599,17 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [{ name = "hypothesis", specifier = ">=6.100" }]
+
+[[package]]
+name = "verity-difftest-tests"
+version = "0.0.0"
+source = { virtual = "tests/tools/difftest" }
+dependencies = [
+    { name = "verity-difftest" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity-difftest", editable = "tools/difftest" }]
 
 [[package]]
 name = "verity-exact-kit"
@@ -2538,6 +2627,17 @@ requires-dist = [
     { name = "python-sat", specifier = ">=1.8.dev0" },
     { name = "sympy", specifier = ">=1.13" },
 ]
+
+[[package]]
+name = "verity-exact-kit-tests"
+version = "0.0.0"
+source = { virtual = "tests/benchmarks/pouw/exact_kit" }
+dependencies = [
+    { name = "verity-exact-kit" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity-exact-kit" }]
 
 [[package]]
 name = "verity-flock"
@@ -2566,9 +2666,31 @@ requires-dist = [
 provides-extras = ["bench"]
 
 [[package]]
+name = "verity-flock-tests"
+version = "0.0.0"
+source = { virtual = "tests/verity/protocols/proofs/flock/prover" }
+dependencies = [
+    { name = "verity-flock", extra = ["bench"] },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity-flock", extras = ["bench"] }]
+
+[[package]]
 name = "verity-graph"
 version = "0.0.0"
 source = { editable = "tools/verity/graph" }
+
+[[package]]
+name = "verity-graph-tests"
+version = "0.0.0"
+source = { virtual = "tests/tools/verity/graph" }
+dependencies = [
+    { name = "verity-graph" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity-graph", editable = "tools/verity/graph" }]
 
 [[package]]
 name = "verity-landq"
@@ -2576,9 +2698,20 @@ version = "0.0.0"
 source = { editable = "tools/verity/landq" }
 
 [[package]]
+name = "verity-landq-tests"
+version = "0.0.0"
+source = { virtual = "tests/tools/verity/landq" }
+dependencies = [
+    { name = "verity-landq" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity-landq", editable = "tools/verity/landq" }]
+
+[[package]]
 name = "verity-lean-audit"
 version = "0.0.0"
-source = { virtual = "tools/verity/lean" }
+source = { virtual = "tests/tools/verity/lean" }
 dependencies = [
     { name = "research" },
 ]
@@ -2602,9 +2735,20 @@ requires-dist = [
 ]
 
 [[package]]
+name = "verity-machine-model-tests"
+version = "0.0.0"
+source = { virtual = "tests/benchmarks/machine_model" }
+dependencies = [
+    { name = "verity-machine-model" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity-machine-model", editable = "benchmarks/machine_model" }]
+
+[[package]]
 name = "verity-native-peak"
 version = "0.0.0"
-source = { virtual = "benchmarks/native_peak" }
+source = { virtual = "tests/benchmarks/native_peak" }
 dependencies = [
     { name = "numpy" },
     { name = "research" },
@@ -2626,18 +2770,7 @@ provides-extras = ["torch"]
 [[package]]
 name = "verity-network-e2e"
 version = "0.0.0"
-source = { virtual = "benchmarks/network_e2e" }
-dependencies = [
-    { name = "verity" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "verity", editable = "." }]
-
-[[package]]
-name = "verity-network-sim"
-version = "0.0.0"
-source = { virtual = "benchmarks/network_sim" }
+source = { virtual = "tests/benchmarks/network_e2e" }
 dependencies = [
     { name = "verity" },
 ]
@@ -2648,7 +2781,7 @@ requires-dist = [{ name = "verity", editable = "." }]
 [[package]]
 name = "verity-network-traces"
 version = "0.0.0"
-source = { virtual = "benchmarks/network_traces" }
+source = { virtual = "tests/benchmarks/network_traces" }
 dependencies = [
     { name = "verity" },
 ]
@@ -2678,6 +2811,17 @@ requires-dist = [
 ]
 
 [[package]]
+name = "verity-numerical-tests"
+version = "0.0.0"
+source = { virtual = "tests/benchmarks/numerical" }
+dependencies = [
+    { name = "verity-numerical" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity-numerical", editable = "benchmarks/numerical" }]
+
+[[package]]
 name = "verity-ops"
 version = "0.1.0"
 source = { editable = "infra/ops" }
@@ -2689,9 +2833,20 @@ dependencies = [
 requires-dist = [{ name = "research", editable = "tools/research" }]
 
 [[package]]
+name = "verity-ops-tests"
+version = "0.0.0"
+source = { virtual = "tests/infra/ops" }
+dependencies = [
+    { name = "verity-ops" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity-ops", editable = "infra/ops" }]
+
+[[package]]
 name = "verity-pouw-benchmarks"
 version = "0.0.0"
-source = { virtual = "benchmarks/pouw" }
+source = { virtual = "tests/benchmarks/pouw" }
 dependencies = [
     { name = "blake3" },
     { name = "numpy" },
@@ -2727,12 +2882,12 @@ provides-extras = ["research", "exact-kit"]
 [[package]]
 name = "verity-pouw-check-difftest"
 version = "0.0.0"
-source = { virtual = "verity/protocols/accounting/pouw/verifier/lean/check" }
+source = { virtual = "tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check" }
 
 [[package]]
 name = "verity-pouw-window-difftest"
 version = "0.0.0"
-source = { virtual = "verity/protocols/accounting/pouw/verifier/lean/window" }
+source = { virtual = "tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/window" }
 
 [[package]]
 name = "verity-proof-throughput"
@@ -2756,24 +2911,20 @@ requires-dist = [
 ]
 
 [[package]]
-name = "verity-sha512-rows"
+name = "verity-proof-throughput-tests"
 version = "0.0.0"
-source = { virtual = "benchmarks/torch_gpu/sha512_rows" }
+source = { virtual = "tests/benchmarks/proof_throughput" }
 dependencies = [
-    { name = "numpy" },
-    { name = "verity" },
+    { name = "verity-proof-throughput" },
 ]
 
 [package.metadata]
-requires-dist = [
-    { name = "numpy" },
-    { name = "verity", editable = "." },
-]
+requires-dist = [{ name = "verity-proof-throughput", editable = "benchmarks/proof_throughput" }]
 
 [[package]]
 name = "verity-slack-events"
 version = "0.0.0"
-source = { virtual = "infra/slack-events" }
+source = { virtual = "tests/infra/slack-events" }
 dependencies = [
     { name = "fastapi" },
     { name = "tzdata" },
@@ -2792,7 +2943,7 @@ requires-dist = [
 [[package]]
 name = "verity-tc-probe"
 version = "0.0.0"
-source = { virtual = "benchmarks/tc_probe" }
+source = { virtual = "tests/benchmarks/tc_probe" }
 dependencies = [
     { name = "numpy" },
     { name = "research" },
@@ -2811,7 +2962,7 @@ requires-dist = [
 [[package]]
 name = "verity-tc-probe-fp4"
 version = "0.0.0"
-source = { virtual = "benchmarks/tc_probe_fp4" }
+source = { virtual = "tests/benchmarks/tc_probe_fp4" }
 dependencies = [
     { name = "numpy" },
     { name = "research" },
@@ -2826,6 +2977,41 @@ requires-dist = [
 ]
 
 [[package]]
+name = "verity-torch"
+version = "0.1.0"
+source = { editable = "adapters/torch" }
+dependencies = [
+    { name = "verity" },
+]
+
+[package.optional-dependencies]
+torch = [
+    { name = "torch", version = "2.14.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform == 'darwin' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
+    { name = "torch", version = "2.14.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-11-verity-vllm-torch' or extra == 'extra-18-verity-native-peak-torch' or extra != 'extra-6-verity-torch-cpu'" },
+    { name = "torch", version = "2.14.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform != 'darwin' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-11-verity-vllm-torch' and extra == 'extra-6-verity-torch-cpu') or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
+    { name = "triton" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "torch", marker = "extra == 'torch'", specifier = ">=2.4" },
+    { name = "triton", marker = "extra == 'torch'" },
+    { name = "verity", editable = "." },
+]
+provides-extras = ["torch"]
+
+[[package]]
+name = "verity-torch-tests"
+version = "0.0.0"
+source = { virtual = "tests/adapters/torch/tests" }
+dependencies = [
+    { name = "verity-torch" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity-torch", editable = "adapters/torch" }]
+
+[[package]]
 name = "verity-vllm"
 version = "0.1.0"
 source = { editable = "adapters/vllm" }
@@ -2833,6 +3019,7 @@ dependencies = [
     { name = "numpy" },
     { name = "verity" },
     { name = "verity-config" },
+    { name = "verity-torch" },
 ]
 
 [package.optional-dependencies]
@@ -2850,8 +3037,20 @@ requires-dist = [
     { name = "torch", marker = "extra == 'torch'", specifier = ">=2.4" },
     { name = "verity", editable = "." },
     { name = "verity-config", editable = "tools/config" },
+    { name = "verity-torch", editable = "adapters/torch" },
 ]
 provides-extras = ["torch", "research"]
+
+[[package]]
+name = "verity-vllm-tests"
+version = "0.0.0"
+source = { virtual = "tests/adapters/vllm/tests" }
+dependencies = [
+    { name = "verity-vllm", extra = ["research"] },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity-vllm", extras = ["research"], editable = "adapters/vllm" }]
 
 [[package]]
 name = "z3-solver"

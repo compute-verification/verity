@@ -191,6 +191,7 @@ theorem runOf_eq {zk : Bool} {seen : Claims.Seen} {f : Final} {x : Claims.Msg} {
     ∃ st extras, sts[0]? = some st ∧ (Setup.ofCircuit st).extra lv.points = .ok extras ∧
       rr = { m := (Setup.ofCircuit st).m, kLog := (Setup.ofCircuit st).kLog, claims := 2 + extras.size,
              hashLen := (Setup.ofCircuit st).merkle.digestLen, saltLen := saltLenOf zk (Setup.ofCircuit st),
+             wideLeaf := zk && (Setup.ofCircuit st).wideLeaf,
              reps := [(lv.streams.getD 0 #[], f.proofs.getD 0 ByteArray.empty),
                       (lv.streams.getD 1 #[], f.proofs.getD 1 ByteArray.empty)] } := by
   unfold runOf at hr
@@ -455,7 +456,7 @@ theorem zk_opening {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     (hu : Claims.Flock.lookCol (cols true (Claims.run sha512 P (V true) x ω r).seen 0) q = some u) :
     ∃ (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (st : Stmt) (sch : Flock.Schedule) (tPad : ℕ)
       (link : List ByteArray × List ByteArray) (row : Array F128),
-      setupOf true x = some (s, spec, sts) ∧ sts[0]? = some st ∧ Zk.schedule st.m = .ok (sch, tPad) ∧
+      setupOf true x = some (s, spec, sts) ∧ sts[0]? = some st ∧ Zk.schedule st.wideLeaf st.m = .ok (sch, tPad) ∧
       linkOf ((P.next x [] ω).eval sha512).1 = some link ∧
       Opening MerkleScheme.hm96Sha512 (sch.levels.getD 0 default)
         (2 ^ (sch.levels.getD 0 default).lanes + Zk.EXTRA_LANES) link.1.toArray[0]!
@@ -507,7 +508,7 @@ theorem zk_opening {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
   subst hys
   have hcoins := forall₂_coins (fun _ _ hab => hab.2.1) hfa
   have hcolsEq : Claims.Flock.zkRepColsOf
-      (Claims.Flock.zkProofShape (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog (2 + extras.size)
+      (Claims.Flock.zkProofShape (Setup.ofCircuit st).wideLeaf (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog (2 + extras.size)
         (Setup.ofCircuit st).merkle.digestLen (saltLenOf true (Setup.ofCircuit st)))
       (lv.streams.getD k #[]) (f.proofs.getD k ByteArray.empty) =
       (Claims.Flock.zkRepCols (sch.levels.getD 0 default)

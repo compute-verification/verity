@@ -8,7 +8,7 @@ public import Proofs.Properties.Verity.Sampled.CoinMap
 public import Proofs.Properties.Verity.Sampled.OpenEmpty
 
 /-!
-# Sampled proofs' coupling: one hiding swap per opened leaf
+# SPOT's coupling: one hiding swap per opened leaf
 
 An opening's node costs the coupling two terms: the opening's gap and its empty class (`openGap`, `openEmpty`, in
 `Proofs.Properties.Verity.Sampled.CoinMap`). Both are read off one partition, the rounds of the leaf's fiber
@@ -457,7 +457,7 @@ theorem prCoin_pair_eq {Ω Ys Λ : Type} [Fintype Ω] [Fintype Ys] [DecidableEq 
 
 /-- **Events of a release under its sampling design**: a map whose means are those of `bits` gives every event of it the
 probability of the event of `bits`. -/
-theorem prCoin_law {Ω Q R : Type} [Fintype Ω] [Fintype Q] {P : Ω → R} {bits : Q → R}
+theorem prCoin_distribution {Ω Q R : Type} [Fintype Ω] [Fintype Q] {P : Ω → R} {bits : Q → R}
     (hlaw : ∀ g : R → ℝ≥0∞, avg (fun ω => g (P ω)) = avg fun u => g (bits u)) (A : R → Prop) :
     prCoin (fun ω => A (P ω)) = prCoin fun u => A (bits u) := by
   classical
@@ -497,7 +497,7 @@ theorem avg_iSup_classErr_le {Ω Ys Zs Λ ι : Type} [Fintype Ω] [Nonempty Ω] 
     intro i ω
     by_contra hne
     have h0 : prCoin (fun ω => ¬ ∃ u, P i ω = bits i u) = 0 := by
-      rw [prCoin_law (hlaw i) (fun r => ¬ ∃ u, r = bits i u)]
+      rw [prCoin_distribution (hlaw i) (fun r => ¬ ∃ u, r = bits i u)]
       exact le_antisymm ((prCoin_mono fun v hv => hv ⟨v, rfl⟩).trans_eq prCoin_false) zero_le
     rw [prCoin_eq_card, ENNReal.div_eq_zero_iff] at h0
     rcases h0 with h0 | h0
@@ -511,7 +511,7 @@ theorem avg_iSup_classErr_le {Ω Ys Zs Λ ι : Type} [Fintype Ω] [Nonempty Ω] 
     intro i u
     have hQ0 : (Fintype.card (Q i) : ℝ≥0∞) ≠ 0 := by exact_mod_cast Fintype.card_ne_zero
     have hΩ0 : (Fintype.card Ω : ℝ≥0∞) ≠ 0 := by exact_mod_cast Fintype.card_ne_zero
-    have h := prCoin_law (hlaw i) (fun r => r = bits i u)
+    have h := prCoin_distribution (hlaw i) (fun r => r = bits i u)
     have h1 : (Finset.univ.filter fun v : Q i => bits i v = bits i u).card = 1 := by
       rw [Finset.card_eq_one]
       exact ⟨u, Finset.ext fun v => by simp [(hinj i).eq_iff]⟩

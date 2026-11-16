@@ -96,7 +96,7 @@ def why (p : Public) (f : Json := file) : String :=
 #guard !passes (pub [0, 2] [1, 3] (value := "h1/b"))
 
 /-! A port named twice: `JsonParse.parse` keeps one of the two, so the file reads as naming it once (here as one port, `a1`'s
-reads under `a0`); `flock-verify` refuses the text first (`JsonKeys.dupKey`). -/
+reads under `a0`); `verity-verify-proof` refuses the text first (`JsonKeys.dupKey`). -/
 
 /-- The file with port `a1` renamed `a0`: `a0` twice. -/
 def twice : String := file.compress.replace "\"a1\":" "\"a0\":"

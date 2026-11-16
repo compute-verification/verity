@@ -46,7 +46,7 @@ def blockAt (msg : List Lin) (off : Nat) : List Lin := (List.range 1024).map fun
 
 /-- One compression of the chaining value `st` (512 forms, word order) and the block `blk` (1024), its words
 concatenated. -/
-def shaBlock (st blk : List Lin) : M (List Lin) := do
+def shaChunk (st blk : List Lin) : M (List Lin) := do
   let out ← compress (words st 8) (words blk 16)
   pure out.flatten
 
@@ -54,7 +54,7 @@ def shaBlock (st blk : List Lin) : M (List Lin) := do
 def shaBlocks (msg : List Lin) : Nat → Nat → List Lin → M (List Lin)
   | 0, _, st => pure st
   | n + 1, k, st => do
-    let st ← shaBlock st (blockAt msg (1024 * k))
+    let st ← shaChunk st (blockAt msg (1024 * k))
     shaBlocks msg n (k + 1) st
 
 /-- `rec_open._sha`: SHA-512 of a message whose first `pre` bytes left the chaining value `cv` and whose rest has the bits

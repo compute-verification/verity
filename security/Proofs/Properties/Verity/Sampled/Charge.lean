@@ -5,7 +5,7 @@ public import Proofs.Properties.Verity.Sampled.Stops
 public import Proofs.Properties.Verity.Sampled.Walk
 
 /-!
-# Sampled proofs' coupling: the stops' term within the hiding term
+# SPOT's coupling: the stops' term within the hiding term
 
 The coupling's stops' term (`couplesErr`) charges each stop's opening its gap and empty class: the link's at the
 first stop, at each later one the round's whose submission the stop decodes. Each is within the class error of the
@@ -391,7 +391,7 @@ theorem avg_pathCharge_finish_le {E : List Release → Game Exchange} (hE' : ∀
   · exact avg_pathCharge_send_le _ (openErr_none e openingOf_send) fun _ s => le_of_eq (avg_pathCharge_ret _ _ s)
   · simp only [zero_add, avg_const, le_refl]
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 variable (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
 

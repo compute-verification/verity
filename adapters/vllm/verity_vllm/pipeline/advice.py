@@ -1,4 +1,4 @@
-"""`verity-vllm advice RUN`: the compiler's advice (I1, `verity.protocols.accounting.certifier.verifier.advice`) for a served run, from its
+"""`verity-vllm advice RUN`: the compiler's advice (I1, `verity.protocols.resource_accounting.network.verifier.advice`) for a served run, from its
 scheduler step trace and its Commit record.
 
 The precommitted compiler turns advice into each step's circuit; the advice says everything serving decided that nothing
@@ -65,9 +65,10 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-import verity.protocols.accounting.certifier.verifier.advice as I1
-from verity.protocols.accounting.registration.verifier import registration as REG
-from verity.commitments.windows import interface as IF
+import verity.protocols.resource_accounting.network.verifier.advice as I1
+from verity.protocols.registration.verifier import registration as REG
+from verity.commitments.periods import interface as IF
+from verity_vllm import messages as M
 from verity_vllm.config import UsageError, option
 from verity_vllm.engine import step_trace as ST
 
@@ -109,7 +110,7 @@ def registered_compiler(name: str = COMPILER, digest: str | None = None, cap_bit
 
 def builder_item(compiler: AW.Capped) -> dict[str, Any]:
     """B's item in the deployment's registration log
-    (`verity.protocols.accounting.registration.verifier.registration`, kind ``builder``): the inner compiler's digest,
+    (`verity.protocols.registration.verifier.registration`, kind ``builder``): the inner compiler's digest,
     the format of the advice it reads (`certifier.advice.SCHEMA`) and ℓ, as the log decodes it."""
     return REG.item_of({"kind": "builder", "digest": compiler.inner.digest, "advice": I1.SCHEMA, "cap": compiler.cap_bits})
 
@@ -515,7 +516,7 @@ def write_served(run: Path, out: Path, recs: list[dict[str, Any]], trace: Path, 
     final = stopped(run)
     commits: dict[int, dict[str, Any]] = {}
     for name in ("seals.jsonl", "windows.jsonl"):       # a window's line waits for its H1 release; its seal's comes first
-        lines = (run / name).read_text().splitlines() if (run / name).exists() else []
+        lines = M.lines(run / name, "Run") if (run / name).exists() else []
         commits.update({int(d["window"]): {"run_id": d.get("run_id"), "run_root": d.get("run_root")}
                         for d in (json.loads(line) for line in lines if line.strip())})
     per, still_open = windows_of(recs)
@@ -553,7 +554,7 @@ def write_served(run: Path, out: Path, recs: list[dict[str, Any]], trace: Path, 
              "refused": refused, "open": still_open}
     if not pending:
         out.mkdir(parents=True, exist_ok=True)
-        (out / "windows.json").write_text(json.dumps(index, indent=1) + "\n")
+        M.write(out / "windows.json", "Advice", (json.dumps(index, indent=1) + "\n").encode())
     return {**index, "pending": pending, "reports": reports}
 
 
@@ -561,7 +562,7 @@ def stopped(run: Path) -> bool:
     """Whether ``run``'s server has stopped with every Commit record written: its ``summary.json`` says ``final`` (one without
     the key is from a server that wrote each window's records on its engine loop, before any summary)."""
     try:
-        return json.loads((run / "summary.json").read_text()).get("final", True) is True
+        return json.loads(M.read(run / "summary.json", "RunTotals")).get("final", True) is True
     except (OSError, ValueError):
         return False
 
@@ -584,10 +585,10 @@ def _written(run: Path, out: Path, b: Built, recs: list[dict[str, Any]], trace: 
     public.update(extra or {})
     private = out / "private"
     private.mkdir(parents=True, exist_ok=True)
-    (out / "registration.json").write_text(json.dumps(public, indent=1) + "\n")
-    (private / "advice.bin").write_bytes(data)
-    (private / "advice.json").write_text(json.dumps(WA.to_json(a), separators=(",", ":")) + "\n")
-    (private / "opening.json").write_text(json.dumps(opened) + "\n")
+    M.write(out / "registration.json", "Advice", (json.dumps(public, indent=1) + "\n").encode())
+    M.write(private / "advice.bin", "Advice", data)
+    M.write(private / "advice.json", "Advice", (json.dumps(WA.to_json(a), separators=(",", ":")) + "\n").encode())
+    M.write(private / "opening.json", "Advice", (json.dumps(opened) + "\n").encode())
     steps = ST.steps(recs)
     charged = WA.bits_by_window(a, T)
     outputs = WA.outputs(a)
@@ -657,8 +658,8 @@ def main(a: Options) -> int:
         roots = None
         if a.weights_of_record:
             serve = Path(a.run) / "serve.json"
-            roots = registered_weights(json.loads(Path(a.weights_of_record).read_text()),
-                                       json.loads(serve.read_text()) if serve.exists() else None)
+            roots = registered_weights(json.loads(M.read(Path(a.weights_of_record), "RegisteredWeights")),
+                                       json.loads(M.read(serve, "ServingConfiguration")) if serve.exists() else None)
         rep = write(a.run, a.out, trace=a.trace, io=a.io, T=a.T, tau=a.tau, window=a.window,
                     compiler=registered_compiler(a.compiler_name, a.compiler_digest, a.cap), registered_roots=roots)
     except ValueError as e:

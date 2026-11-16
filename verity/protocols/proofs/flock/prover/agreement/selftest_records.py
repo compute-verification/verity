@@ -12,7 +12,7 @@ import json, sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from record_text import session_text  # noqa: E402
+from record_text import session_text
 
 
 def main():

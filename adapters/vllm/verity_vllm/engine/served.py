@@ -261,7 +261,7 @@ def collectives() -> dict[str, Any]:
     """In a serving process: the TP group's all-reduce routes as vLLM resolved them on this rank, in `CudaCommunicator.all_reduce`'s
     order: each communicator on or off, FlashInfer's workspace backend (which the fused all-reduce + RMSNorm shares; None before its
     first call, and in a process that never loaded FlashInfer's all-reduce), the custom all-reduce's and torch symmetric memory's
-    byte caps, and the NCCL version pynccl loaded.  Without a TP group it raises, as `read_rank`'s rank does."""
+    byte limits, and the NCCL version pynccl loaded.  Without a TP group it raises, as `read_rank`'s rank does."""
     from vllm.distributed.parallel_state import get_tp_group
 
     dc = getattr(get_tp_group(), "device_communicator", None)

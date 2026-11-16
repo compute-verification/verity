@@ -22,7 +22,7 @@ computes (`Served`).
 Every other unit holds its Definition's function of the window's values:
 - a slot's `ScanSlots_v2` every lane's first token and slot, occupancy word and head of the scan state row at its anchor
   (`io_shell.scan_reference`; its lane's row is the slot's, `scan_slots`), every later position's `TokenFeed_v1` below the
-  prompt cap its token and the slot it carries (`io_shell.feed_reference`), each token select's `SelectCollect_v1` its
+  prompt bound its token and the slot it carries (`io_shell.feed_reference`), each token select's `SelectCollect_v1` its
   second row, the select collected on from the lane's head (`io_shell.collect_reference`), and the last position's
   `SelectEntry_v1` the slot's entry (`io_shell.entry_reference`);
 - each token select's group units each group's first maximum above -inf of its logits and its index in the group
@@ -55,21 +55,21 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.refs import runs
 from verity.commitments.gates import embedding as E
-from verity.commitments.windows import interface as IF
-from verity.definitions.numerics.rows import ROWS
-from verity.definitions.numerics.token_select_rows import token_select_chunk_bests
-from verity.definitions.registry import io_shell as IO
-from verity.protocols.accounting.certifier.prover import ingress_scan as IS
+from verity.commitments.periods import interface as IF
+from verity_vllm.definitions.numerics.rows import ROWS
+from verity_vllm.definitions.numerics.token_select_rows import token_select_chunk_bests
+from verity_vllm.definitions.registry import io_shell as IO
+from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
 from verity_vllm.check.replay.checks import check_rows
-from verity_vllm.protocols.pouw.h1 import registered as H1R
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import registered_commit, registered_salts
 from verity_vllm.query.manifest import format as RM
 
 from . import scan_state as SS
 from . import window_weights as WW
-from .window_builder import WEIGHTS
-from .window_circuit import Lowered, WindowClass, _spans
+from .window_builder import WEIGHTS, _spans
+from .window_circuit import Lowered, WindowClass
 
 #: a unit's source: its node's served value, the class Program's value at a node the engine didn't compute, or its
 #: Definition's function of the window's values. It follows occupancy and lengths, so it is the committer's own bookkeeping
@@ -156,7 +156,7 @@ class Slot:
     None for an empty slot; ``cut`` the nodes a circuit cut at its linears takes as registered (`Lowered.cut`), whose
     served value is taken under any statics of its Definition and at every prompt position, a pruned one's too
     (`Served`'s ``cut``). Each node's value (its return fields) and source, each
-    position's token and, below the class's prompt cap, the slot its `TokenFeed_v1` reads and the one it carries on."""
+    position's token and, below the class's prompt bound, the slot its `TokenFeed_v1` reads and the one it carries on."""
 
     def __init__(self, fn: Any, cls: WindowClass, row: Sequence[int], weights: Weights, served: Served | None = None,
                  cut: Collection[int] = frozenset()) -> None:
@@ -205,8 +205,8 @@ class Slot:
         self.source.append(SERVED)
 
     def _token(self, p: int, tok: Any) -> None:
-        """Position ``p``'s token (`window_circuit._Program._token`): the first position's its slot row's first id, below the
-        prompt cap `TokenFeed_v1`'s of the slot carried and the previous select, past it the previous select."""
+        """Position ``p``'s token (`window_lowering._Program._token`): the first position's its slot row's first id, below the
+        prompt bound `TokenFeed_v1`'s of the slot carried and the previous select, past it the previous select."""
         NP = self.cls.prompt
         sel = None if p == 0 else int(self.operand(tok)[0])
         slot = self.row[1:] if p == 0 else self.carried[-1]
@@ -329,7 +329,7 @@ def _fold_narrowed(ops: dict[tuple[str, tuple[str, ...]], list[Mapping[str, Any]
     -> the ops folded into. A narrowed op with no such op beside it stays, for the prefill's check to name."""
     out = []
     for o in [o for o in ops if o[1] and all(_NARROWED.fullmatch(m) for m in o[1])]:
-        w = (o[0], tuple(_NARROWED.fullmatch(m)[1] for m in o[1]))
+        w = (o[0], tuple(x[1] for x in map(_NARROWED.fullmatch, o[1]) if x))
         if len(ops.get(w, ())) != 1:
             continue
         rows, end = sorted(ops.pop(o), key=lambda d: int(d["row"])), ops[w][0]
@@ -448,7 +448,7 @@ class Served:
             raise ValueError(f"position {p}'s node {k} is {descriptor_id(node.fn)}, served as {d['spec']} ({d['op_path']})")
         members = list(d["members"])
         if len(members) > 1:
-            if not all(str(m[0]).isdigit() for m in members):
+            if not all(str(m[0]).isdecimal() for m in members):
                 raise ValueError(f"{d['op_path']}: members {[m[0] for m in members]}, not its return fields by index")
             members.sort(key=lambda m: int(m[0]))
         step, op = int(d["step"]), str(d["op_path"])
@@ -475,7 +475,7 @@ class Rows:
     """Every unit's output rows of ``lowered``'s circuit (module docstring) as u16 words by template and output, with each
     unit's source and an embedding read's opening ports, from each slot's `Slot` (in slot order) and the circuit's
     registered values by parameter (`window_weights.weight_values` with their rows kept, and the scan state's,
-    `scan_state.SCAN_STATE`, with its rows: the network certifier's, a row a bucket of the window), of which an embedding
+    `scan_state.SCAN_STATE`, with its rows: the network attester's, a row a bucket of the window), of which an embedding
     read opens its table's (its ``rows``, ``salts`` and ``path``) and a slot's `ScanSlots_v2` reads the scan state's row at
     its anchor. Refused unless every unit's every row is filled once."""
 
@@ -720,7 +720,7 @@ def state_value(program: str, cls: WindowClass, rows: Sequence[Sequence[int]], k
         raise ValueError(f"a window of {cls.buckets} buckets reads {cls.buckets} state rows of {IS.state_bits(cls.scan)} "
                          f"bits, not {bits.shape}")
     words = (bits.reshape(cls.buckets, -1, 16) << np.arange(16, dtype=np.uint16)).sum(axis=2, dtype=np.uint16)
-    return H1R.commit(program, SS.SCAN_STATE, words, key, STATE_NONCE + index, keep_rows=True, window=window)
+    return registered_commit(program, SS.SCAN_STATE, words, key, STATE_NONCE + index, keep_rows=True, window=window)
 
 
 def standin_state(program: str, cls: WindowClass, slots: Sequence[tuple[Sequence[int], int]], key: bytes, index: int, *,
@@ -743,7 +743,7 @@ def index_salt(key: bytes, index: int) -> bytes:
     takes, so the committer samples it again from its key alone."""
     if not 0 <= index < 1 << 32:
         raise ValueError(f"window {index}: a window's index is a u32")
-    return H1R.salts(key, INDEX_NONCE + index, 1)
+    return registered_salts(key, INDEX_NONCE + index, 1)
 
 
 __all__ = ["COMPUTED", "EVALUATED", "FORMS", "INDEX_NONCE", "Rows", "SERVED", "SOURCES", "STATE_NONCE", "Served",

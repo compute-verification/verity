@@ -1,8 +1,12 @@
-/-
+module
+
+public import Spot.Run
+
+/-!
 # The proof system's stream: its own rules (`service._Control`)
 
 What `service.Stream` decides of each op on its own, around the checks whose verifiers are their own pieces
-(`Service.checkPublic`, `Registration.check`, `Select.select`, `Select.selectSecond`, `Draw.checkDraw`,
+(`Service.checkPublic`, `Docket.check`, `Select.select`, `Select.selectSecond`, `Draw.checkDraw`,
 `Service.checkVerdicts`, `Record.record`, `Run.run`): the failure budget, the registrations open at once, the epoch's salt
 and registration deadline, and each registration's once-only orders (sampled, under a two-stage rule its interior
 registration and second stage, session, delivered, final) and proof deadline. `run` decides one op on
@@ -58,9 +62,6 @@ A halt is final. It ends every registration without a final outcome at once, as 
 nothing accepts it after that, and outcomes already final stay. A halted stream refuses every op (`halted`) and changes
 nothing, so it receives no registration again.
 -/
-module
-
-public import Spot.Run
 
 @[expose] public section
 set_option backward.privateInPublic true

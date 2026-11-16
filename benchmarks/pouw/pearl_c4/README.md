@@ -1,9 +1,12 @@
-# pearl_c4: Pearl-C4's kernels on sm_120, checked byte for byte
+# pearl_c4: Pearl-C4's kernels on sm_120, run, shipped and replayed
 
-Pearl-C4 is Pearl-C on FP4 operands that carry one scale a scale group (`pearl-c-nvfp4-v0` and `pearl-c-mxfp4-v0`). This
-directory holds its device kernels for the RTX PRO 6000 (`pearl_c4.cu`, sm_120a), the check that every buffer they write
-is the scalar reference's (`verity.protocols.accounting.pouw.prover.schemes.pearl_c4`), and the reference replay of what a device
-ran. Its timing is self-timing for development; a number of record is the GPU harness's (`../harness/`).
+Pearl-C4 is Pearl-C on FP4 operands that carry one scale a scale group (`pearl-c-nvfp4-v0` and `pearl-c-mxfp4-v0`), an
+experimental protocol (`verity/protocols/experimental/pearl_c4/`). Its device kernels for the RTX PRO 6000
+(`pearl_c4.cu`, sm_120a), their build and offline gate, the card-side runner (`run.sh`, `dev.py`) and the check that every
+buffer they write is the scalar reference's (`verity.protocols.experimental.pearl_c4.prover.pearl_c4`) are in the
+protocol's `prover/kernels/` (`../../../verity/protocols/experimental/pearl_c4/prover/kernels/`). This directory holds what ships a build as a run's source and the
+reference replay of what a device ran. Its timing is self-timing for development; a number of record is the GPU
+harness's (`../harness/`).
 
 ## The device check, `run.sh`
 
@@ -11,7 +14,7 @@ ran. Its timing is self-timing for development; a number of record is the GPU ha
 the shipped tree, which is built off the GPU machine, so nothing is compiled on the card:
 
 ~~~text
-bash benchmarks/pouw/pearl_c4/build.sh [OUT]        # with CUDA 12.9's nvcc; OUT defaults to /tmp/pearl-c4-ship
+bash verity/protocols/experimental/pearl_c4/prover/kernels/build.sh [OUT]        # with CUDA 12.9's nvcc; OUT defaults to /tmp/pearl-c4-ship
 bash benchmarks/pouw/pearl_c4/ship.sh [OUT] [REPO]  # OUT as a one-commit repository for `research run --source`
 bash run.sh [check]                                 # in the shipped tree, on the card
 bash run.sh time [MxNxK ...]
@@ -42,12 +45,13 @@ and a replay's ACCEPT is never its verdict.
 | `real.py CAPTURE OUT [--layers RE] [--tiles N]` | judges a model's captured activations and weights as the scheme judges a unit: admission per row, the screened blocks, and sampled tiles' inert work | a JSON file a task and `summary.json`; exit 99 while tasks remain |
 | `real_table.py SUMMARY.json...` | `real.py`'s summaries as one table a linear | the table, and its rows with `--json` |
 
-`f1_fast.py` is the vectorised evaluation of the scheme's F1′ item that `real.py --f1 fast` uses.
+`f1_fast.py` (`verity/protocols/experimental/pearl_c4/prover/f1_fast.py`) is the vectorised evaluation of the scheme's
+F1′ item that `real.py --f1 fast` uses.
 
 ## Who reads it
 
-The tests in `../tests/` import `twin.py`, `replay.py`, `real.py`, `real_table.py` and `f1_fast.py` by name and start
-`sass.py` and `fixture.py` by their command lines, and `../settings.py` declares the variables `dev.py` reads. `dev.py`
-runs beside the cubin on the card with the standard library and numpy alone, so it imports nothing of the tree. Nothing
-here is a verifier: no script writes a verdict a guarantee reads, and only `run.sh` and the `dev.py` it starts touch a
-GPU.
+The tests in `../../../tests/benchmarks/pouw/` import `replay.py`, `real.py` and `real_table.py` by name; the protocol's own tests
+(`tests/verity/protocols/experimental/pearl_c4/`) import `twin.py` and `f1_fast.py` and start `sass.py` and `fixture.py`
+by their command lines. `../settings.py` declares the variables `dev.py` reads. `dev.py` runs beside the cubin on the
+card with the standard library and numpy alone, so it imports nothing of the tree. Nothing here is a verifier: no script
+writes a verdict a guarantee reads, and only `run.sh` and the `dev.py` it starts touch a GPU.

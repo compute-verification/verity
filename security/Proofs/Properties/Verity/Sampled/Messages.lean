@@ -5,7 +5,7 @@ public import Proofs.Core.Game.TwoRun
 public import Proofs.Flock.Claims.Prob
 
 /-!
-# Sampled proofs' coupling: the messages
+# SPOT's coupling: the messages
 
 `CouplingTarget`'s messages piece: each message the evidence reveals for a round the device opens after its digest, and
 the record the commitment is a digest of, is the most likely one at its digest, but on plays whose chance is at most the
@@ -360,7 +360,7 @@ namespace Verity.Sampled
 open Verity.Game
 open scoped ENNReal
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The period's game is the prover's request, the device's releases, then the close**, as one game. -/
 theorem game_eq_relK (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) :

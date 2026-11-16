@@ -19,8 +19,8 @@ theorem pearlCProtocol_accounting (sem : PearlCSem Q R S) (c : Costs) (ρ : ℚ)
     PearlCAccounting (pearlCProtocol sem c ρ) Params.pi c ρ := by
   refine ⟨fun _ _ => rfl, fun H s U u act h => ?_⟩
   show (((1 - ρ) * creditOf Params.pi c (U.layout.shape u) : ℚ) : ℝ) ≤
-    ((creditOf Params.pi c (U.layout.shape u) - debitOf Params.pi c (sem.unitDebit H s U u act) : ℚ) : ℝ)
-  have h' : debitOf Params.pi c (sem.unitDebit H s U u act) ≤ ρ * creditOf Params.pi c (U.layout.shape u) := h
+    ((creditOf Params.pi c (U.layout.shape u) - inertWorkOf Params.pi c (sem.unitInertWork H s U u act) : ℚ) : ℝ)
+  have h' : inertWorkOf Params.pi c (sem.unitInertWork H s U u act) ≤ ρ * creditOf Params.pi c (U.layout.shape u) := h
   exact_mod_cast (by linarith)
 
 end Pouw.PearlC

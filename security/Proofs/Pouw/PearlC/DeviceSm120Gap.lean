@@ -1,16 +1,17 @@
 module
 
-public import Definitions.Pouw.Guarantees.PearlC
-public import Proofs.Pouw.PearlC.DeviceCapGap
-public import Proofs.Pouw.PearlC.DeviceChainCapGap
+public import Proofs.Pouw.Lemmas.PearlCRecords
+public import Proofs.Pouw.PearlC.DeviceInertBoundGap
+public import Proofs.Pouw.PearlC.DeviceChainInertBoundGap
 public import Proofs.Pouw.PearlC.UOnlyGap
 public import Proofs.Pouw.PearlC.FreezeP
 public import Proofs.Pouw.PearlC.TTOutW1
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
-import Proofs.Pouw.PearlC.DeviceCapGap
+import Proofs.Pouw.PearlC.DeviceInertBoundGap
 import Proofs.Pouw.PearlC.TTOutW1Variants
+public import Proofs.Pouw.PearlC.Records
 
 /-!
 # g at the RTX PRO 6000 (sm_120) records (staging, nothing pinned)
@@ -23,9 +24,11 @@ and sm_120's measured prices. This file adds no definitions.
 * **The flags** (`devSm120v1_flags`, `devSm120v2_flags`): v1's are `SkipP.unitFlagsP sm120E4m3 4`, debit (A)'s joint
   flags per group of 4, and v2's are the pure chain's lone skips `SkipP.pureFlagsP sm120E4m3`, both by `rfl` from
   `devAt`'s `SkipP.unitFlagsAt`.
-* **The floor is unobservable** (`devAt_sm120_floor`, `devSm120v1_floor`, `devSm120v2_floor`): at every floor
-  `z ≤ −126`, `devAt (sm120E4m3K32 z) G pr = devAt sm120E4m3 G pr`, so the pinned −133 is no choice. Each map reads the
-  step only through `p.step` (`devAt_step`), and `FreezeP.sm120_floor` gives one step for every such floor.
+* **The floor is unobservable in the record's six maps** (`devAt_sm120_floor`, `devSm120v1_floor`,
+  `devSm120v2_floor`): at every floor `z ≤ −126`, `devAt (sm120E4m3K32 z) G pr` with its `pipe` set to `sm120E4m3` is
+  `devAt sm120E4m3 G pr`, so the pinned −133 is no choice for `G`, the prices, the ticket, U, the flags or the salt-dead
+  elements. Each of those reads the step only through `p.step` (`devAt_step`), and `FreezeP.sm120_floor` gives one step
+  for every such floor. The mend's debit reads the pipeline (`pipe`), so the record as a whole tells floors apart.
 * **The domains are not empty** (`devSm120v1_domain`, `devSm120v2_domain`): a one-unit layout of either headline shape
   is in `pearlCDomainDevAt` at both records.
 * **The gap at the records**, from the instances at any record with `hG` and `hp`, each hypothesis by `rfl`:
@@ -60,8 +63,10 @@ the unpromoted chain's output unchanged (`FreezePPure.pureFlags_iff`). -/
 theorem devSm120v2_flags (pr : Prices) {m n k : ℕ} (A : Matrix (Fin m) (Fin k) Code) (B : Matrix (Fin n) (Fin k) Code)
     (i : Fin m) (j : Fin n) : (devSm120v2 pr).flags A B i j = SkipP.pureFlagsP sm120E4m3 k (A i) (B j) := rfl
 
-/-- The record of a captured step reads the step only through `p.step`. -/
-theorem devAt_step {p p' : Pipeline} (h : p.step = p'.step) (G : ℕ) (pr : Prices) : devAt p G pr = devAt p' G pr := by
+/-- The record of a captured step reads the step only through `p.step`, outside its `pipe`: two pipelines of one step
+give records that differ in `pipe` alone. -/
+theorem devAt_step {p p' : Pipeline} (h : p.step = p'.step) (G : ℕ) (pr : Prices) :
+    { devAt p G pr with pipe := p' } = devAt p' G pr := by
   unfold devAt Accum.chainAt Accum.ctChainP Accum.chainP Accum.totalP PeelExactP.peelExactValP
     PeelExactP.peelExactP PeelExactP.chainWordP? PeelExactP.windowWordP? SkipP.unitFlagsAt SkipP.flagsAt
     SkipP.pureFlagsP SkipP.pureSkipP Accum.pureChain SkipP.wordFlagsP SkipP.jointFlagsP SkipP.jointAtP SkipP.keepsP
@@ -69,15 +74,18 @@ theorem devAt_step {p p' : Pipeline} (h : p.step = p'.step) (G : ℕ) (pr : Pric
     FormingP.saltDeadP FormingP.atomMixP
   rw [h]
 
-/-- **The floor is unobservable in the record**: at every floor at most −126 the sm_120 record is the one at −133. -/
+/-- **The floor is unobservable in the record's six maps**: at every floor at most −126 the sm_120 record is, outside
+its `pipe`, the one at −133. -/
 theorem devAt_sm120_floor {z : ℤ} (hz : z ≤ -126) (G : ℕ) (pr : Prices) :
-    devAt (sm120E4m3K32 z) G pr = devAt sm120E4m3 G pr :=
+    { devAt (sm120E4m3K32 z) G pr with pipe := sm120E4m3 } = devAt sm120E4m3 G pr :=
   devAt_step (FreezeP.sm120_floor hz (by norm_num)) G pr
 
-theorem devSm120v1_floor {z : ℤ} (hz : z ≤ -126) (pr : Prices) : devAt (sm120E4m3K32 z) 4 pr = devSm120v1 pr :=
+theorem devSm120v1_floor {z : ℤ} (hz : z ≤ -126) (pr : Prices) :
+    { devAt (sm120E4m3K32 z) 4 pr with pipe := sm120E4m3 } = devSm120v1 pr :=
   devAt_sm120_floor hz 4 pr
 
-theorem devSm120v2_floor {z : ℤ} (hz : z ≤ -126) (pr : Prices) : devAt (sm120E4m3K32 z) 0 pr = devSm120v2 pr :=
+theorem devSm120v2_floor {z : ℤ} (hz : z ≤ -126) (pr : Prices) :
+    { devAt (sm120E4m3K32 z) 0 pr with pipe := sm120E4m3 } = devSm120v2 pr :=
   devAt_sm120_floor hz 0 pr
 
 /-- v1's domain at one headline shape admits a one-unit layout of that shape. -/
@@ -140,73 +148,73 @@ theorem pearlCGapUOnlySm120v1Rev1_8192
 /-! ## v2 (`devSm120v2 Prices.sm120`, G = 0) at the cap 1/1,000 -/
 
 /-- **v2 at the cap 1/1,000 at 8192³**: `g = 216793/59950000`. -/
-theorem pearlCGapSm120v2Cap1000_8192
+theorem pearlCGapSm120v2InertShare1000_8192
     (hTT : TTOutPearlCDev CM (devSm120v2 Prices.sm120) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDev (devSm120v2 Prices.sm120) sem (1 / 1000))
       (pearlCDomainDevAt (devSm120v2 Prices.sm120) sh8192) ((216793 / 59950000 : ℚ) : ℝ) δPearlC :=
-  pearlCGapUnpromotedCap1000_8192 CM (devSm120v2 Prices.sm120) sem rfl rfl hTT
+  pearlCGapUnpromotedInertShare1000_8192 CM (devSm120v2 Prices.sm120) sem rfl rfl hTT
 
 /-- **v2 at the cap 1/1,000 at 16384³**: `g = 2950127/829250000`. -/
-theorem pearlCGapSm120v2Cap1000_16384
+theorem pearlCGapSm120v2InertShare1000_16384
     (hTT : TTOutPearlCDev CM (devSm120v2 Prices.sm120) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDev (devSm120v2 Prices.sm120) sem (1 / 1000))
       (pearlCDomainDevAt (devSm120v2 Prices.sm120) sh16384) ((2950127 / 829250000 : ℚ) : ℝ) δPearlC :=
-  pearlCGapUnpromotedCap1000_16384 CM (devSm120v2 Prices.sm120) sem rfl rfl hTT
+  pearlCGapUnpromotedInertShare1000_16384 CM (devSm120v2 Prices.sm120) sem rfl rfl hTT
 
 /-- **v2 at the cap 1/1,000 per audit tile at 8192³**: `g = 216793/59950000`. -/
-theorem pearlCSampledSm120v2Cap1000_8192
+theorem pearlCSampledSm120v2InertShare1000_8192
     (hTT : TTOutTilePearlCDev CM (devSm120v2 Prices.sm120) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDev (devSm120v2 Prices.sm120) sem (1 / 1000))
       (pearlCTilesDev (devSm120v2 Prices.sm120) sem (1 / 1000))
       (pearlCDomainDevAt (devSm120v2 Prices.sm120) sh8192) ((216793 / 59950000 : ℚ) : ℝ) δPearlC :=
-  pearlCSampledUnpromotedCap1000_8192 CM (devSm120v2 Prices.sm120) sem rfl rfl hTT
+  pearlCSampledUnpromotedInertShare1000_8192 CM (devSm120v2 Prices.sm120) sem rfl rfl hTT
 
 /-- **v2 at the cap 1/1,000 per audit tile at 16384³**: `g = 2950127/829250000`. -/
-theorem pearlCSampledSm120v2Cap1000_16384
+theorem pearlCSampledSm120v2InertShare1000_16384
     (hTT : TTOutTilePearlCDev CM (devSm120v2 Prices.sm120) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDev (devSm120v2 Prices.sm120) sem (1 / 1000))
       (pearlCTilesDev (devSm120v2 Prices.sm120) sem (1 / 1000))
       (pearlCDomainDevAt (devSm120v2 Prices.sm120) sh16384) ((2950127 / 829250000 : ℚ) : ℝ) δPearlC :=
-  pearlCSampledUnpromotedCap1000_16384 CM (devSm120v2 Prices.sm120) sem rfl rfl hTT
+  pearlCSampledUnpromotedInertShare1000_16384 CM (devSm120v2 Prices.sm120) sem rfl rfl hTT
 
 /-- **v2 at the cap 1/1,000 with U-only binding at 8192³**: `g = 216793/59950000`. -/
-theorem pearlCGapUOnlySm120v2Cap1000_8192
+theorem pearlCGapUOnlySm120v2InertShare1000_8192
     (hTT : TTOutPearlCDevUOnly CM (devSm120v2 Prices.sm120) sem (1 / 1000)) :
     GGapU CM (pearlCProtocolDevRev1 (devSm120v2 Prices.sm120) sem (1 / 1000))
       (pearlCDomainDevAt (devSm120v2 Prices.sm120) sh8192) ((216793 / 59950000 : ℚ) : ℝ) δPearlC :=
-  pearlCGapUOnlyUnpromotedCap1000_8192 CM (devSm120v2 Prices.sm120) sem rfl rfl hTT
+  pearlCGapUOnlyUnpromotedInertShare1000_8192 CM (devSm120v2 Prices.sm120) sem rfl rfl hTT
 
 /-! ## v2 at the chain cap 1/1,000 -/
 
 /-- **v2 at the chain cap 1/1,000 at 8192³**, per unit: `g = 26921/7493750`. -/
-theorem pearlCGapSm120v2ChainCap1000_8192
-    (hTT : TTOutPearlCDevChainCap CM (devSm120v2 Prices.sm120) sem (1 / 1000)) :
-    GGap CM (pearlCProtocolDevChainCap (devSm120v2 Prices.sm120) sem (1 / 1000))
+theorem pearlCGapSm120v2ChainInertShare1000_8192
+    (hTT : TTOutPearlCDevChainInertBound CM (devSm120v2 Prices.sm120) sem (1 / 1000)) :
+    GGap CM (pearlCProtocolDevChainInertBound (devSm120v2 Prices.sm120) sem (1 / 1000))
       (pearlCDomainDevAt (devSm120v2 Prices.sm120) sh8192) ((26921 / 7493750 : ℚ) : ℝ) δPearlC :=
-  pearlCGapUnpromotedChainCap1000_8192 CM (devSm120v2 Prices.sm120) sem rfl rfl hTT
+  pearlCGapUnpromotedChainInertShare1000_8192 CM (devSm120v2 Prices.sm120) sem rfl rfl hTT
 
 /-- **v2 at the chain cap 1/1,000 at 16384³**, per unit: `g = 367519/103656250`. -/
-theorem pearlCGapSm120v2ChainCap1000_16384
-    (hTT : TTOutPearlCDevChainCap CM (devSm120v2 Prices.sm120) sem (1 / 1000)) :
-    GGap CM (pearlCProtocolDevChainCap (devSm120v2 Prices.sm120) sem (1 / 1000))
+theorem pearlCGapSm120v2ChainInertShare1000_16384
+    (hTT : TTOutPearlCDevChainInertBound CM (devSm120v2 Prices.sm120) sem (1 / 1000)) :
+    GGap CM (pearlCProtocolDevChainInertBound (devSm120v2 Prices.sm120) sem (1 / 1000))
       (pearlCDomainDevAt (devSm120v2 Prices.sm120) sh16384) ((367519 / 103656250 : ℚ) : ℝ) δPearlC :=
-  pearlCGapUnpromotedChainCap1000_16384 CM (devSm120v2 Prices.sm120) sem rfl rfl hTT
+  pearlCGapUnpromotedChainInertShare1000_16384 CM (devSm120v2 Prices.sm120) sem rfl rfl hTT
 
 /-- **v2 at the chain cap 1/1,000 per audit tile at 8192³**: `g = 216793/59950000`. -/
-theorem pearlCSampledSm120v2ChainCap1000_8192
-    (hTT : TTOutTilePearlCDevChainCap CM (devSm120v2 Prices.sm120) sem (1 / 1000)) :
-    GGapSampled CM (pearlCProtocolDevChainCap (devSm120v2 Prices.sm120) sem (1 / 1000))
-      (pearlCTilesDevChainCap (devSm120v2 Prices.sm120) sem (1 / 1000))
+theorem pearlCSampledSm120v2ChainInertShare1000_8192
+    (hTT : TTOutTilePearlCDevChainInertBound CM (devSm120v2 Prices.sm120) sem (1 / 1000)) :
+    GGapSampled CM (pearlCProtocolDevChainInertBound (devSm120v2 Prices.sm120) sem (1 / 1000))
+      (pearlCTilesDevChainInertBound (devSm120v2 Prices.sm120) sem (1 / 1000))
       (pearlCDomainDevAt (devSm120v2 Prices.sm120) sh8192) ((216793 / 59950000 : ℚ) : ℝ) δPearlC :=
-  pearlCSampledUnpromotedChainCap1000_8192 CM (devSm120v2 Prices.sm120) sem rfl rfl hTT
+  pearlCSampledUnpromotedChainInertShare1000_8192 CM (devSm120v2 Prices.sm120) sem rfl rfl hTT
 
 /-- **v2 at the chain cap 1/1,000 per audit tile at 16384³**: `g = 2950127/829250000`. -/
-theorem pearlCSampledSm120v2ChainCap1000_16384
-    (hTT : TTOutTilePearlCDevChainCap CM (devSm120v2 Prices.sm120) sem (1 / 1000)) :
-    GGapSampled CM (pearlCProtocolDevChainCap (devSm120v2 Prices.sm120) sem (1 / 1000))
-      (pearlCTilesDevChainCap (devSm120v2 Prices.sm120) sem (1 / 1000))
+theorem pearlCSampledSm120v2ChainInertShare1000_16384
+    (hTT : TTOutTilePearlCDevChainInertBound CM (devSm120v2 Prices.sm120) sem (1 / 1000)) :
+    GGapSampled CM (pearlCProtocolDevChainInertBound (devSm120v2 Prices.sm120) sem (1 / 1000))
+      (pearlCTilesDevChainInertBound (devSm120v2 Prices.sm120) sem (1 / 1000))
       (pearlCDomainDevAt (devSm120v2 Prices.sm120) sh16384) ((2950127 / 829250000 : ℚ) : ℝ) δPearlC :=
-  pearlCSampledUnpromotedChainCap1000_16384 CM (devSm120v2 Prices.sm120) sem rfl rfl hTT
+  pearlCSampledUnpromotedChainInertShare1000_16384 CM (devSm120v2 Prices.sm120) sem rfl rfl hTT
 
 end Gap
 
@@ -222,25 +230,25 @@ theorem Pouw.SecurityProofs.PearlC.GapSm120v1Rev1_8192 : Pouw.Guarantees.PearlC.
     @Pouw.PearlC.pearlCGapSm120v1Rev1_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) sem
       (Pouw.PearlC.TTOutW1.ttOutPearlCDevRev1_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.GapSm120v2Cap1000_16384 : Pouw.Guarantees.PearlC.GapSm120v2Cap1000_16384 :=
+theorem Pouw.SecurityProofs.PearlC.GapSm120v2InertShare1000_16384 : Pouw.Guarantees.PearlC.GapSm120v2InertShare1000_16384 :=
   fun sha fetch salt sem hTT =>
-    @Pouw.PearlC.pearlCGapSm120v2Cap1000_16384 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) sem
+    @Pouw.PearlC.pearlCGapSm120v2InertShare1000_16384 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) sem
       (Pouw.PearlC.TTOutW1.ttOutPearlCDev_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.GapSm120v2Cap1000_8192 : Pouw.Guarantees.PearlC.GapSm120v2Cap1000_8192 :=
+theorem Pouw.SecurityProofs.PearlC.GapSm120v2InertShare1000_8192 : Pouw.Guarantees.PearlC.GapSm120v2InertShare1000_8192 :=
   fun sha fetch salt sem hTT =>
-    @Pouw.PearlC.pearlCGapSm120v2Cap1000_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) sem
+    @Pouw.PearlC.pearlCGapSm120v2InertShare1000_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) sem
       (Pouw.PearlC.TTOutW1.ttOutPearlCDev_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.GapSm120v2ChainCap1000_16384 : Pouw.Guarantees.PearlC.GapSm120v2ChainCap1000_16384 :=
+theorem Pouw.SecurityProofs.PearlC.GapSm120v2ChainInertShare1000_16384 : Pouw.Guarantees.PearlC.GapSm120v2ChainInertShare1000_16384 :=
   fun sha fetch salt sem hTT =>
-    @Pouw.PearlC.pearlCGapSm120v2ChainCap1000_16384 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) sem
-      (Pouw.PearlC.TTOutW1.ttOutPearlCDevChainCap_of_w1 hTT)
+    @Pouw.PearlC.pearlCGapSm120v2ChainInertShare1000_16384 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutPearlCDevChainInertBound_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.GapSm120v2ChainCap1000_8192 : Pouw.Guarantees.PearlC.GapSm120v2ChainCap1000_8192 :=
+theorem Pouw.SecurityProofs.PearlC.GapSm120v2ChainInertShare1000_8192 : Pouw.Guarantees.PearlC.GapSm120v2ChainInertShare1000_8192 :=
   fun sha fetch salt sem hTT =>
-    @Pouw.PearlC.pearlCGapSm120v2ChainCap1000_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) sem
-      (Pouw.PearlC.TTOutW1.ttOutPearlCDevChainCap_of_w1 hTT)
+    @Pouw.PearlC.pearlCGapSm120v2ChainInertShare1000_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutPearlCDevChainInertBound_of_w1 hTT)
 
 theorem Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_16384 : Pouw.Guarantees.PearlC.SampledSm120v1Rev1_16384 :=
   fun sha fetch salt sem hTT =>
@@ -252,22 +260,22 @@ theorem Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_8192 : Pouw.Guarantees.Pea
     @Pouw.PearlC.pearlCSampledSm120v1Rev1_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) sem
       (Pouw.PearlC.TTOutW1.ttOutTilePearlCDevRev1_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_16384 : Pouw.Guarantees.PearlC.SampledSm120v2Cap1000_16384 :=
+theorem Pouw.SecurityProofs.PearlC.SampledSm120v2InertShare1000_16384 : Pouw.Guarantees.PearlC.SampledSm120v2InertShare1000_16384 :=
   fun sha fetch salt sem hTT =>
-    @Pouw.PearlC.pearlCSampledSm120v2Cap1000_16384 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) sem
+    @Pouw.PearlC.pearlCSampledSm120v2InertShare1000_16384 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) sem
       (Pouw.PearlC.TTOutW1.ttOutTilePearlCDev_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192 : Pouw.Guarantees.PearlC.SampledSm120v2Cap1000_8192 :=
+theorem Pouw.SecurityProofs.PearlC.SampledSm120v2InertShare1000_8192 : Pouw.Guarantees.PearlC.SampledSm120v2InertShare1000_8192 :=
   fun sha fetch salt sem hTT =>
-    @Pouw.PearlC.pearlCSampledSm120v2Cap1000_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) sem
+    @Pouw.PearlC.pearlCSampledSm120v2InertShare1000_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) sem
       (Pouw.PearlC.TTOutW1.ttOutTilePearlCDev_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_16384 : Pouw.Guarantees.PearlC.SampledSm120v2ChainCap1000_16384 :=
+theorem Pouw.SecurityProofs.PearlC.SampledSm120v2ChainInertShare1000_16384 : Pouw.Guarantees.PearlC.SampledSm120v2ChainInertShare1000_16384 :=
   fun sha fetch salt sem hTT =>
-    @Pouw.PearlC.pearlCSampledSm120v2ChainCap1000_16384 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) sem
-      (Pouw.PearlC.TTOutW1.ttOutTilePearlCDevChainCap_of_w1 hTT)
+    @Pouw.PearlC.pearlCSampledSm120v2ChainInertShare1000_16384 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutTilePearlCDevChainInertBound_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192 : Pouw.Guarantees.PearlC.SampledSm120v2ChainCap1000_8192 :=
+theorem Pouw.SecurityProofs.PearlC.SampledSm120v2ChainInertShare1000_8192 : Pouw.Guarantees.PearlC.SampledSm120v2ChainInertShare1000_8192 :=
   fun sha fetch salt sem hTT =>
-    @Pouw.PearlC.pearlCSampledSm120v2ChainCap1000_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) sem
-      (Pouw.PearlC.TTOutW1.ttOutTilePearlCDevChainCap_of_w1 hTT)
+    @Pouw.PearlC.pearlCSampledSm120v2ChainInertShare1000_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutTilePearlCDevChainInertBound_of_w1 hTT)

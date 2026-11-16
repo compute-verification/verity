@@ -12,7 +12,7 @@ import Mathlib.Data.EReal.Inv
 
 `Definitions.Spot.Exfiltration`'s game, with the halt `Δ` windows after the first caught window's commitment
 instead of at it. A window's leak is the harm it does: what its egress carries beyond the honest run, or, in the
-cheating pool, the declared work it skips. A caught window's verdict arrives only after the next `Δ` windows have run,
+cheating pool, the registered circuit's work it skips. A caught window's verdict arrives only after the next `Δ` windows have run,
 so a cheater keeps skipping work in each of them until the halt. `Strategy.cum` stops at the caught window, so it omits
 those windows; `Strategy.cumLag Δ` counts them.
 

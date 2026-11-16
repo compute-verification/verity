@@ -7,12 +7,12 @@ public import Base.Hash
 /-!
 # The MUFU primitives
 
-`verity.ml.circuits.ops.mufu` (and the vLLM integration's `hopper.Fa3InvSum_v1`): the special-function unit's `ex2`, `rcp`,
+`verity.circuits.ops.mufu` (and the vLLM integration's `hopper.Fa3InvSum_v1`): the special-function unit's `ex2`, `rcp`,
 `sqrt`, `rsqrt` and `tanh` as sm_89 computes them, FA2's and FA3's inverse sums, and `div.full.f32`'s reciprocal. Each is an
 exact bit rule around a table read, transcribed from the Python. Security has no MUFU definition yet.
 
 The Python reads the measured tables (`mufu.table`, the library's words; `mufu_tanh_shards` for MUFU.TANH). Here a table is
-its interpolant (`Evaluate.MufuFits`, from `verity.ml.circuits.ops.boolean.mufu`, where the circuit build checks it against
+its interpolant (`Evaluate.MufuFits`, from `verity.circuits.ops.boolean.mufu`, where the circuit build checks it against
 the measured words), and `tableSha512` hashes each table as the library stores it, so the suite holds the words to the
 library's SHA-512 (`Flock.LIBRARY_TABLES`).
 -/
@@ -184,7 +184,7 @@ def tanhTableWord (i : Nat) : Nat :=
   let w := if w < IDENTITY_BELOW then w + 2 ^ 27 else w
   if w < SATURATE_FROM then tanhWord w else 0
 
-/-- The library tables these primitives read (`verity.ml.circuits.library.TABLES`): each one's word count and words. -/
+/-- The library tables these primitives read (`verity.circuits.library.TABLES`): each one's word count and words. -/
 def libraryTable? (name : String) : Option (Nat × (Nat → Nat)) :=
   match name with
   | "rsq" => some (2 ^ 24, RSQ_FIT.word)

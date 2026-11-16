@@ -10,7 +10,7 @@ stopped and nothing is launched or posted twice:
               helper) and add a worktree of its tip under `--work`/trees. Both are on the pod's own disk: on /data's NFS a tree
               takes minutes to add and remove. Origin unreachable is tried again each pass, and is an error after PREPARE_S.
     launch    in that worktree, with its own tools/research/src alone on PYTHONPATH and TMPDIR `--tmp`:
-                  python tools/verity/check/check.py --record --on NODE --pool POOL --base <git's empty tree> --no-cache --timeout S
+                  python tools/check/check.py --record --on NODE --pool POOL --base <git's empty tree> --no-cache --timeout S
               the dispatcher's `audit-main` command (`research.jobs.dispatch.command`) in a pool of its own: every path counts as
               changed, so every step runs and the Lean agreement's inputs are sent. The launch returns once the run is launched;
               the run is the one its `research: run R launched` line names, and a launch that names none is an error. Its output
@@ -95,7 +95,7 @@ SCHEMA = "verity/nightly-check/v1"
 STAMP, iso = monitors.STAMP, monitors.iso       # the state's times, as the monitors' nightly-check reads them
 URL = "https://github.com/compute-verification/verity.git"
 HELPER = "!/data/infra/gh_app_token.sh git"     # hands git the App's token when git asks: never in a config or an argument
-CHECK = "tools/verity/check/check.py"
+CHECK = "tools/check/check.py"
 KIND = "audit-main"                             # the dispatcher's name for this check, whose records `dispatch.classify` reads
 SUITE_FILES = ("suites.json", "suites-lean.json")     # check's suite reports, beside its result.json in the run dir
 LEAN_AUDIT = "lean-audit/audit.json"            # the Lean check's report there: each package's

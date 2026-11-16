@@ -37,11 +37,11 @@ def InfluenceTwoPatterns : Prop :=
 /-- **The per-window cap**: at a first stage that catches each replay block at rate `r₁` (`Design.Two.FirstRate`) and
 a second stage that samples each cell at rate `r₂` (`Design.Two.SecondRate`), for every boundary trace `w` and
 interiors `ι`, the acceptance probability at their footprint is at most `(1 − r₁·r₂)^m`, `m` the replay blocks the
-footprint marks incorrect (`Design.Two.wrongBlocks`). -/
+footprint marks incorrect (`Design.Two.incorrectBlocks`). -/
 def CapTwo : Prop :=
   ∀ (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt : Partition) (d : Design.Two) (r₁ r₂ : ℝ),
     d.FirstRate r₁ → d.SecondRate Pt r₂ → 0 ≤ r₁ → r₁ ≤ 1 → 0 ≤ r₂ → ∀ (w : Wit) (ι : ℕ → ℕ → Bool),
       d.Pa Pt (footprint H Cm s Pt d.part w ι) ≤
-        (1 - r₁ * r₂) ^ (d.wrongBlocks Pt (footprint H Cm s Pt d.part w ι)).card
+        (1 - r₁ * r₂) ^ (d.incorrectBlocks Pt (footprint H Cm s Pt d.part w ι)).card
 
 end Claims.Guarantees

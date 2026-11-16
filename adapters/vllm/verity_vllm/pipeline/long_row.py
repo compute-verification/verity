@@ -52,15 +52,16 @@ from collections.abc import Sequence
 from typing import Any
 
 import numpy as np
-
 from verity.circuits import boolean as BL
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array, Tuple
-from verity.definitions.registry import dsa_topk_mask_cut as X
-from verity.definitions.registry import dsa_topk_reads as R
+from verity_vllm.definitions.registry import dsa_topk_mask_cut as X
+from verity_vllm.definitions.registry import dsa_topk_reads as R
 from verity_vllm.pipeline import boundary_rows as BR
+
+__all__ = ["SERVED", "DsaTopKReadRowsCut", "layout", "served"]
 
 #: the long row's served statics: a class of 2^17 keys, GLM-5.3's INDEX_TOPK, `dsa_topk_reads.BLOCK` keys a block
 SERVED = {"N": 1 << 17, "TOPK": 2048, "BLOCK": R.BLOCK}
@@ -132,7 +133,7 @@ DsaTopKReadRowsCut = CompositeDefinition(
     "DsaTopKReadRowsCut", 1, ("N", "TOPK", "BLOCK", "READ"), _signature, _body, refuse=R.DsaTopKReadRows.refuse,
     conformance="model-untested: DsaTopKReadRows_v1's ok as its cut (dsa_topk_reads.cut) where index rows c[k] = k and "
                 "i[k] = k, its read units' outputs that Definition's kv: both held to DsaTopKReadRows_v1 at small statics by "
-                "adapters/vllm/tests/pipeline/test_long_row.py; the check that would hold it to the model is "
+                "tests/adapters/vllm/tests/pipeline/test_long_row.py; the check that would hold it to the model is "
                 "DsaTopKReadRows_v1's",
     doc="DsaTopKReadRows_v1{N,TOPK,BLOCK,READ}'s ok as its cut, the chunks' and slots' index rows (c, i) its last two "
         "parameters: every unit serving proves the row by is a call reading whole parameter rows and whole outputs, and "
@@ -172,7 +173,9 @@ def window(check: SpecializedDefinition, n_rho: int) -> tuple[tuple[Any, ...], t
     `interior_rows.interior_window` takes it: the templates ``check``'s body calls, in the order of their first call
     (`boundary_rows.Layout.templates`), each its unit member on bit rows named after its parameters (`chunk_rows.unit_member`,
     `interior_rows.named`), and each one's units a block, its calls an instance times ``n_rho``."""
-    from verity_vllm.pipeline import chunk_rows as CR, interior_rows as IR, serving_rows as SRW
+    from verity_vllm.pipeline import chunk_rows as CR
+    from verity_vllm.pipeline import interior_rows as IR
+    from verity_vllm.pipeline import serving_rows as SRW
 
     calls = Counter(descriptor_id(d) for _, d in units(check))
     cells = tuple(n * n_rho for n in calls.values())
@@ -200,7 +203,8 @@ def links(check: SpecializedDefinition, n_rho: int, tables: bool = False) -> tup
       and ``path``, a row a read (`Operand`).
 
     ValueError where the row's blocks are not all `BLOCK` keys: a block's scores are one row of the parameter."""
-    from verity_vllm.pipeline import chunk_rows as CR, interior_links as IL
+    from verity_vllm.pipeline import chunk_rows as CR
+    from verity_vllm.pipeline import interior_links as IL
 
     N, TOPK, block, READ = (check.bindings[k] for k in ("N", "TOPK", "BLOCK", "READ"))
     bl = X.blocks(N, TOPK, block)
@@ -312,7 +316,9 @@ def spans(check: SpecializedDefinition, rid: str, rows: Sequence[tuple[Sequence[
     unit's rows and outputs in u16 words. ``rows``: each instance's (scores, n), the row's N index scores as f32 words and
     its n, as the replay gives them; ``table``: the history table the span's reads open (`interior_links.kept_table`, the
     one round 1 served); ``rid`` and ``program``: the request and the digest of the Program it was replayed from."""
-    from verity_vllm.pipeline import chunk_rows as CR, interior_rows as IR, serving_rows as SRW
+    from verity_vllm.pipeline import chunk_rows as CR
+    from verity_vllm.pipeline import interior_rows as IR
+    from verity_vllm.pipeline import serving_rows as SRW
 
     ids = [descriptor_id(d) for _, d in units(check)]
     per: dict[str, list[tuple[list, list]]] = {t: [] for t in ids}

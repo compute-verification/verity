@@ -1,7 +1,7 @@
-"""capture-flows: a packet capture summed by flow and direction, and held against the network certifier's record of the
+"""capture-flows: a packet capture summed by flow and direction, and held against the network attester's record of the
 same run.
 
-A run through the network certifier (`warden_serve.py serve`) leaves the certifier's own count of what it sent the
+A run through the network attester (`network_attester_serve.py serve`) leaves the certifier's own count of what it sent the
 server and what the server sent it. A capture taken beside the run, by a machine that is neither the server nor the
 certifier, counts the same bytes a second time. This reads the capture, sums it, says for the flows between the
 server and the certifier whether the two counts agree in each direction, and lists every other flow that has an
@@ -85,7 +85,7 @@ it. No address is printed or written: the table and the result name the server, 
     python capture_flows.py --capture FILE [--capture FILE ...] --server ADDR[:PORT] [--certifier ADDR[:PORT]]
         [--run DIR] [--skip-foreign] --out RESULT.json
 
-Without `--run` (a `warden_serve.py serve` run directory) it sums and lists only. It imports the standard library
+Without `--run` (a `network_attester_serve.py serve` run directory) it sums and lists only. It imports the standard library
 alone until it reads a run."""
 
 from __future__ import annotations
@@ -99,6 +99,8 @@ import sys
 from collections import defaultdict
 from collections.abc import Iterator
 from pathlib import Path
+
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
 #: a capture file's first four bytes, and the byte order of what follows
 MAGICS = {b"\xa1\xb2\xc3\xd4": ">", b"\xd4\xc3\xb2\xa1": "<", b"\xa1\xb2\x3c\x4d": ">", b"\x4d\x3c\xb2\xa1": "<"}
@@ -431,28 +433,28 @@ def read_flows(paths: list[Path], servers: list[tuple[bytes, int | None]],
 
 
 def record_counts(run: Path) -> dict:
-    """What the network certifier's record of the run in `run` (`warden_serve.py serve`'s directory) says each of its
+    """What the network attester's record of the run in `run` (`network_attester_serve.py serve`'s directory) says each of its
     connections to the server carried (the module docstring's "Which bytes are compared"): each admitted connection's
     `release` (its place in the release order, None if it was never released), `to_server` and `from_server`, whether
     they are `exact`, and `why` not (then the first is a ceiling and the second a floor); the watermark stream's where
     `warden.json` has one, its `release` and `from_server` None; and how many of the records it read, each execution
     phase's ingress, egress and reasons, are certified under the deployment's key."""
-    import warden_serve as ws
-    from verity.protocols.accounting.certifier.verifier.active import DATA
-    from verity.protocols.accounting.certifier.verifier.certificate import record_head
-    from verity.protocols.accounting.certifier.verifier.grid import row_count
-    from verity.protocols.accounting.certifier.verifier.release import WATERMARK_END, watermark_chunk, watermark_head, with_release
-    from verity.protocols.accounting.certifier.verifier.warden import END, WardenParams, audit, read_cell
+    from verity.protocols.resource_accounting.network.verifier import record_files as RF, relay_check as RC
+    from verity.protocols.resource_accounting.network.verifier.link_frame import DATA
+    from verity.protocols.resource_accounting.network.verifier.certificate import record_head
+    from verity.protocols.resource_accounting.network.verifier.grid import row_count
+    from verity.protocols.resource_accounting.network.verifier.release import WATERMARK_END, watermark_chunk, watermark_head, with_release
+    from verity.protocols.resource_accounting.network.verifier.network_attester import END, NetworkAttesterParams, audit, read_cell
 
     dep = json.loads((run / "deployment.json").read_text())
-    params = WardenParams(**dep["params"])
+    params = NetworkAttesterParams(**dep["params"])
     run_id = bytes.fromhex(dep["run_id"]) if dep.get("run_id") else None
-    records = ws.read_records(run, params)
-    key, session = ws.cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
-    certified, _ = ws.read_certified(run / "certified.jsonl")
+    records = RC.read_records(run, params)
+    key, session = RF.read_public(dep["key"]), bytes.fromhex(dep["session"])
+    certified, _ = RC.read_certified(run / "certified.jsonl")
     windows = 0
-    for name, (link, direction) in ws.CERTIFIED.items():
-        grid = params.fails_grid if name == ws.FAILS else params.grid
+    for name, (link, direction) in RC.CERTIFIED.items():
+        grid = params.fails_grid if name == RC.FAILS else params.grid
         for record in records[name]:
             c = certified.get((link, direction, record.window))
             windows += bool(c is not None and c.verify(key, session) and c.head == record_head(
@@ -462,7 +464,7 @@ def record_counts(run: Path) -> dict:
     # records' order, and that cell's bucket
     released: dict[int, tuple[int, int]] = {}
     ends = 0
-    for record in sorted(records[ws.INGRESS], key=lambda r: r.window):
+    for record in sorted(records[RC.INGRESS], key=lambda r: r.window):
         for b, row in enumerate(record.grid):
             for frame in row[:row_count(row)]:
                 try:
@@ -474,7 +476,7 @@ def record_counts(run: Path) -> dict:
                 if kind == END:
                     released.setdefault(ordinal, (ends, record.window * params.window + b))
                     ends += 1
-    connections = audit(params, records[ws.INGRESS], records[ws.EGRESS], records[ws.FAILS])["connections"]
+    connections = audit(params, records[RC.INGRESS], records[RC.EGRESS], records[RC.FAILS])["connections"]
     log = json.loads((run / "warden.json").read_text()) if (run / "warden.json").exists() else {}
     mark = log.get("watermark") or {}
     lost = set(mark.get("lost") or ())
@@ -500,7 +502,7 @@ def record_counts(run: Path) -> dict:
         out.append({"connection": "watermark", "release": None, "exact": stopped is None,
                     "why": stopped and f"stopped ({stopped})",
                     "to_server": size + (0 if stopped else len(WATERMARK_END)), "from_server": None})
-    return {"phase_records": {"certified": windows, "of": len(ws.CERTIFIED) * dep["windows"]}, "connections": out}
+    return {"phase_records": {"certified": windows, "of": len(RC.CERTIFIED) * dep["windows"]}, "connections": out}
 
 
 def _signed(n: int) -> str:
@@ -676,7 +678,7 @@ def parser() -> argparse.ArgumentParser:
                     help="an address of the server's, with its port where the certifier shares the address")
     ap.add_argument("--certifier", action="append", default=[], type=endpoint, metavar="ADDR[:PORT]",
                     help="an address of the network certifier's")
-    ap.add_argument("--run", type=Path, metavar="DIR", help="the run's directory, as `warden_serve.py serve` wrote it")
+    ap.add_argument("--run", type=Path, metavar="DIR", help="the run's directory, as `network_attester_serve.py serve` wrote it")
     ap.add_argument("--skip-foreign", action="store_true",
                     help="count and skip flows between addresses that weren't given, and frames that aren't IP")
     ap.add_argument("--out", required=True, type=Path, metavar="FILE", help="the result, as JSON")

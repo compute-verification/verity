@@ -2,7 +2,7 @@
 the one circuit it serves that day in the deployment's registration log, and every window it ties names that declaration.
 
 * **The declaration.** A ``verity/registration/declaration/v1`` entry
-  (`verity.protocols.accounting.registration.verifier.registration.Declaration`):
+  (`verity.protocols.registration.verifier.registration.Declaration`):
   the day, by its index among the monitoring period's days (the caller's, on the auditor's clock), the SHA-512 of the
   program the day's windows register (``--day-program``: under ``--h1-window-commit`` the audited window circuit's, R's
   ``program``), and its block Definitions by descriptor key (``--day-blocks``).
@@ -20,7 +20,7 @@ the one circuit it serves that day in the deployment's registration log, and eve
 * **Each window names it.** Each W (`pouw_h1_commit.registration`) carries ``window.day`` and ``window.declaration``, the
   declaration's digest with no ``previous`` (`named`), which R2 rebuilds from the day, program and blocks of the log's
   entry or of the challenger device's signed one, so both paths name it alike. Before an R is named the window's Commit
-  record, its ``program`` must be the day's (`Day.refusal`): the server's own guard, the window's visible refusal. What counts is R2's (sampled proofs' ``R2-declared``, which the audit
+  record, its ``program`` must be the day's (`Day.refusal`): the server's own guard, the window's visible refusal. What counts is R2's (SPOT's ``R2-declared``, which the audit
   runs with the day and the log's declarations).
 
 Without ``--day`` nothing here runs, and every byte the server writes is as before.
@@ -37,7 +37,7 @@ from pathlib import Path
 from typing import Any
 
 from verity import device as S
-from verity.protocols.accounting.registration.verifier import registration as G
+from verity.protocols.registration.verifier import registration as G
 from verity_vllm.config import UsageError, option
 
 #: the serve dir's record of the day's declaration

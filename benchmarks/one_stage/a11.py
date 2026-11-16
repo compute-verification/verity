@@ -3,9 +3,9 @@ the one-stage audit A6 ran on stand-in coordinates: each Definition kind (family
 is a template, its units staged from the step's own values, sampled by the stratified sampling design in one audit, proved by M0 under
 ``--zk`` and held by the Lean verifier.
 
-    PYTHONPATH=<tree>:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm \\
+    PYTHONPATH=<tree>:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm:<tree>/adapters/torch \\
       python benchmarks/one_stage/a11.py --values DIR --kinds kinds.json --roles derive-report.json --bin flock-circuit \\
-      --lean flock-verify --out DIR [--per-kind 8] [--steps 1,0] [--layers 0,3] [--k K]
+      --lean verity-verify-proof --out DIR [--per-kind 8] [--steps 1,0] [--layers 0,3] [--k K]
 
 ``--save-values DIR`` stops after the values, writing each kind's rows and its unit Definitions (a few MB); ``--load-values
 DIR`` stages from them without the fold, which is most of a run's time on a shared CPU node.
@@ -27,14 +27,14 @@ DIR`` stages from them without the fold, which is most of a run's time on a shar
   transcript's returns must agree. A kind the table lowers through its Boolean version (``boolean``: MoeSum_v1 as
   MoeSum_v3's 64-column members, TokenSelect_v1 as TokenSelect_v2's argmax leaves) evaluates that version bit-sliced on the
   same operands (`boolean_units`), holds its returns to the snapshot as words, and stages its unit's bits.
-* **Audit.** As `a6.py`: kinds sharing a unit Definition share its template, one member each; one registration before the
+* **Audit.** As `a6.py`: kinds sharing a unit Definition share its template, one member each; one docket before the
   sample; the verifier's Lean stratified sample over its own program and partition; each member serves its share
   (``serve --zk --draw-file``) and Lean ``verify --zk --partition --program`` holds each session; the audit record and
   a6's negatives. A tampered copy of one kind's member (bit 0 of every instance's first output word flipped before it is
   committed) is registered and proved on its own (``subset:2``), and the Lean verifier must refuse its session: its
   proof, or, where the prover's self-check stopped it and no proof left, the session for want of one, which the
   negative names (``lean_read_no_proof``; `benchmarks/one_stage/forged_proofs.py` hands Lean the forged proof).
-* **Statement form.** Each template is a flat statement (its unit's whole netlist in the circuit file, which the verifier
+* **Statement form.** Each template is a flat statement (its unit's whole circuit description in the circuit file, which the verifier
   reads line by line), or with ``--layout MODE`` (``iv/hybrid/4``) a templated one (`UnitStager`'s ``layout``, statement
   ``verity/flock-circuit/tmpl``; with ``--structural``, `struct_lower`'s template, which not every Definition lowers yet),
   which `verify --zk` takes (`ProvedScope.served`): its scope and the sampled audit's knowledge-soundness form are
@@ -79,7 +79,7 @@ from verity.circuits.program import Program  # noqa: E402
 from verity.circuits.refs import runs  # noqa: E402
 from verity_flock import circuit as FC  # noqa: E402
 from verity_flock import class_statement as CS  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V  # noqa: E402
 
 ROW = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
 WINDOW_OF = ("GLM-5.3 TP8 B1 rank 0's step values: the Match capture's activation snapshots of row " + ROW
@@ -552,7 +552,8 @@ def pick(res, kind: str, unit_fam: str, steps: list[int], layers: set[int], unit
     or with ``boolean`` its Boolean version) and its unit: the deepest Definition of that one's chain in the probed unit's
     family. Calls of the probed specialization come first (the unit the table sized; prefill's attention, say, has one per
     prefix length), then by step preference."""
-    from verity.definitions.boolean import boolean_version
+    from verity.circuits.ops.boolean.versions import boolean_version
+    import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
     cands = []
     for m in res.instances:
         if K.family(m["spec"]) != kind or m["step"] not in steps:
@@ -715,8 +716,8 @@ def save_values(d: Path, staged: dict, rows_of_kind: dict, weights_notes, a) -> 
 #: also registers its Boolean form for M0's lowering (`ir_lower._boolean_build`), which finds no other in a fresh process.
 # TODO: once its `tail_pieces.FAMILIES` lowers `GatherE4m3x{V}_v1` and `MoeSelectBf16x{E}_v1` in a fresh process, lower
 # through those pieces and keep this only for the decoded units' builders.
-LAZY = {r"GatherE4m3x(\d+)_v2": ("verity.definitions.registry.boolean_fp8_moe", "gather_e4m3"),
-        r"GatherF32x(\d+)_v2": ("verity.definitions.registry.boolean_gather", "gather_f32")}
+LAZY = {r"GatherE4m3x(\d+)_v2": ("verity_vllm.definitions.registry.boolean_fp8_moe", "gather_e4m3"),
+        r"GatherF32x(\d+)_v2": ("verity_vllm.definitions.registry.boolean_gather", "gather_f32")}
 
 
 def live(fn, registry):
@@ -747,7 +748,7 @@ def load_values(d: Path, lowers: list[str], per_kind: int | None = None) -> tupl
     again from the registry, refused unless it encodes as the decoded one; ``per_kind``: each kind's first that many units
     (a kind saved with more loads only those, and says so)."""
     from verity.circuits.codec import decode_program
-    from verity.definitions.registry.catalog import load as load_registry
+    from verity_vllm.definitions.registry.catalog import load as load_registry
     registry = load_registry()[0]
     doc = json.loads((d / "values.json").read_text())
     defs = {x.id: x for x in decode_program(json.loads((d / "units.json").read_text()), registry).defs.values()}
@@ -809,7 +810,7 @@ def main() -> int:
     summary: dict = {"row": ROW, "rank": 0, "steps": a.steps, "layers": a.layers, "per_kind": a.per_kind}
     # M0 lowers a word primitive by the Boolean Definition registered for it (`ir_lower._boolean_build`), some of which only
     # the integration's registry modules register (U32And_v1's); a11_kinds' decode loads them all the same way
-    from verity.definitions.registry.catalog import load as load_registry
+    from verity_vllm.definitions.registry.catalog import load as load_registry
     summary["registry_errors"] = load_registry()[1]
 
     table = json.loads(Path(a.kinds).read_text())
@@ -866,7 +867,7 @@ def main() -> int:
     (out / "partition.json").write_text(json.dumps(part, sort_keys=True))
     (out / "program.json").write_bytes(canonical_json(encode_program(program)))
     k = a.k or len(defs)
-    law = D.parse_design(f"stratified:{k}")
+    sampling_design = D.parse_design(f"stratified:{k}")
     bound = {"partition": pd, "program": part["program"]}
 
     members, tags = [], {}
@@ -919,7 +920,7 @@ def main() -> int:
                            "k_log": m["st"]["meta"].get("k_log"), "pin": m["st"]["pin"], "class": m["st"]["class"],
                            "twin": m["st"]["twin"], "stage_s": m["st"]["seconds"]} for m in members]
 
-    # one registration, before the sample
+    # one docket, before the sample
     want, roots, publics = {}, [], {}
     for m in members:
         fv = m["header"]["frame_v3"]
@@ -931,9 +932,9 @@ def main() -> int:
     window = {"kind": "stand-in", "of": WINDOW_OF, "link": LINK,
               "members": {m["name"]: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + m["n"]],
                                       "call": staged[m["kind"]]["name"], "step": staged[m["kind"]]["step"]} for m in members}}
-    rec = R.record(program, query, law, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
+    rec = R.record(program, query, sampling_design, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
-    checks = {"registration": V.check(rec, program, query, law, a0.SCHEME, want, leaf_layer=leaf_layer).to_json()}
+    checks = {"registration": V.check(rec, program, query, sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer).to_json()}
     for m in members:
         checks[f"statement/{m['name']}"] = a6.statement_checks(m, rec, want)
         ok = m["st"]["twin"]["agrees"] and m["st"]["twin"]["call"].get("agree") is not False
@@ -950,7 +951,7 @@ def main() -> int:
 
     # the verifier's stratified sample, by its own Lean over its own program and partition object on a development
     # challenger's coins; each member serves its share
-    p = a0.challenger_draw(a.lean, ["--program", str(out / "program.json"), "--partition", str(out / "partition.json"),
+    p = a0.challenger_sample(a.lean, ["--program", str(out / "program.json"), "--partition", str(out / "partition.json"),
                                     "--stratified", str(k)], rec["law"], n_all, R.digest(rec), out / "draw.log")
     lean_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     (out / "draw.json").write_text(json.dumps(lean_draw, sort_keys=True))
@@ -966,7 +967,7 @@ def main() -> int:
         with slot("session"):
             t = time.time()
             record, live = a0.session(a.bin, m["st"], m["n"], f"subset:{len(local)}", session_port(a.port, j), sdir,
-                                      draw_file=sdir / "draw.json", zk=True)
+                                      sample_file=sdir / "draw.json", zk=True)
             session_s = round(time.time() - t, 1)
         draw_t = (record or {}).get("unit_draw") or {}
         v = V.check_draw(draw_t, {"population": m["n"]}, {"law": "subset", "k": len(local)})
@@ -974,7 +975,7 @@ def main() -> int:
         session_roots.update({f"{m['name']}/{port}": r for port, r in ((live or {}).get("roots") or {}).items()})
         proved += a0.proved_units(m["header"], live or {})
         instances += (live or {}).get("instances", 0)
-        lean_u = a0.lean_draw_test(a.lean, [{"record": draw_t or None, "statement": (live or {}).get("unit_draw"),
+        lean_u = a0.lean_sample_test(a.lean, [{"record": draw_t or None, "statement": (live or {}).get("unit_draw"),
                                              "instances": (live or {}).get("instances", 0)}], sdir, "u1-u3")
         verdicts[f"m0-verifier/{m['name']}"] = {"accepted": ((record or {}).get("verdict") or {}).get("accepted") is True
                                                 and (live or {}).get("roots") == m["header"]["frame_v3"]["roots"] and v.ok,
@@ -982,7 +983,7 @@ def main() -> int:
         verdicts[f"lean-draw/{m['name']}"] = {"accepted": bool(lean_u) and all(c["ok"] for c in lean_u), "detail": lean_u}
         with slot("lean"):
             lean_v = a0.lean_verify(a.lean, m["st"], m["n"], sdir, zk=True)
-        verdicts[f"lean-verify/{m['name']}"] = {**lean_v, "tool": "flock-verify verify --zk --archive --partition --program"}
+        verdicts[f"lean-verify/{m['name']}"] = {**lean_v, "tool": "verity-verify-proof verify --zk --archive --partition --program"}
         statement[m["name"]] = {"session_s": session_s, **{x: (live or {}).get(x) for x in ("circuit_sha512", "statement_digest", "sigma")},
                                 "timing": {x: (live or {}).get(x) for x in ("e2e_s", "witness_s", "prove_total_s", "k_log", "units", "proof_bytes")},
                                 "verify_s": ((record or {}).get("verdict") or {}).get("verify_s"),
@@ -1001,16 +1002,16 @@ def main() -> int:
     # negatives: a6's, each re-deciding one input altered
     neg: dict[str, dict] = {}
     fewer = R2.program(list(zip(defs, ns)), mixed=True)
-    v = V.check(rec, fewer, query, law, a0.SCHEME, want, leaf_layer=leaf_layer)
+    v = V.check(rec, fewer, query, sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer)
     neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
     if len(defs) > 1:
-        v = V.check(rec, program, P.template_instances_query(defs[:-1]), law, a0.SCHEME, want, leaf_layer=leaf_layer)
+        v = V.check(rec, program, P.template_instances_query(defs[:-1]), sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer)
         neg["registration-query-drops-a-template (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
     for name, other in (("registration-law-another-k (R1)", D.parse_design(f"stratified:{k + 1}")),
                         ("registration-law-subset-not-stratified (R1)", D.parse_design(f"subset:{k}"))):
         v = V.check(rec, program, query, other, a0.SCHEME, want, leaf_layer=leaf_layer)
         neg[name] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = V.check(rec, program, query, law, a0.SCHEME, want,
+    v = V.check(rec, program, query, sampling_design, a0.SCHEME, want,
                 leaf_layer=hashlib.sha512(canonical_json({**publics, members[0]["name"]: "00" * 64})).hexdigest())
     neg["public-file-not-the-registered-leaf-layer (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
     v = V.check_draw({**lean_draw, "units": lean_draw["units"][:-1] + [n_all]}, rec, rec["law"])

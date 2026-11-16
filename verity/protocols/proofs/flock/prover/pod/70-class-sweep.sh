@@ -9,7 +9,7 @@
 #      RESOLVER=path/to/module.py:FUNC (GRAPH and DEFS name Definitions by id: FUNC(id) is the registered Definition an id names,
 #      class_statement --resolver; refused without one)
 #      PARTITION=q-word (partition_units' spec; q-template-instance: a population program's instances, each one unit)
-#      FLOCK_DRAW_LAW=path/to/law.json (each session proves the units the verifier samples by this sampling design at Register: serve --draw-law)
+#      FLOCK_SAMPLE_DESIGN=path/to/law.json (each session proves the units the verifier samples by this sampling design at Register: serve --sample-design)
 #      SELECT=table-free  MODULES= (a module-path prefix)
 #      BATCH=auto  WARM=1  RUNS=3  SELFTEST=25  JOBS=1 (shapes staged in parallel)  GPU=1  SM (from nvidia-smi)  PORT=7710
 #      SELFTEST_GPU=1 (the selftests on the GPU, its paths against each other and the CPU's included)  SELFTEST_CASES=a,b (only these)
@@ -86,7 +86,7 @@ if [ -z "${PYBIN:-}" ]; then
   [ -x $W/py/bin/python ] || { $HOME/.local/bin/uv venv -q --python 3.12 $W/py && $HOME/.local/bin/uv pip install -q --python $W/py/bin/python numpy blake3; }
   PYBIN=$W/py/bin/python3
 fi
-export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/tools/verity/circuit_check/src
+export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch:$REPO/tools/verity/circuit_check/src
 # the challengers' Lean, where this pod serves sessions (not a staging run, nor a prover whose verifier is another pod's)
 if [ "$FLOCK_CHALLENGER" = 1 ] && [ "${STAGE_ONLY:-0}" != 1 ] && [ -z "${FC_VERIFIERS:-}" ]; then
   export CHALLENGER_REPO=$REPO CHALLENGER_PY=$PYBIN CHALLENGER_WORK=$O/challenger-build

@@ -63,24 +63,24 @@ public import Proofs.Flock.Claims.KS.FnFork
 public import Proofs.Flock.Claims.KS.PlainWire
 public import Proofs.Flock.Claims.KS.PlainClashL
 public import Proofs.Flock.Claims.KS.ForkCoupling
-public import Proofs.Flock.Claims.KS.PlainDraw
-public import Proofs.Flock.Claims.KS.PlainDrawAcc
-public import Proofs.Flock.Claims.KS.PlainDrawDec
-public import Proofs.Flock.Claims.KS.PlainDrawSim
-public import Proofs.Flock.Claims.KS.PlainDrawKDefs
-public import Proofs.Flock.Claims.KS.PlainDrawRCols
-public import Proofs.Flock.Claims.KS.PlainDrawRColsE
-public import Proofs.Flock.Claims.KS.PlainDrawK
-public import Proofs.Flock.Claims.KS.PlainDrawAccK
-public import Proofs.Flock.Claims.KS.PlainDrawDecK
+public import Proofs.Flock.Claims.KS.PlainSample
+public import Proofs.Flock.Claims.KS.PlainSampleAcc
+public import Proofs.Flock.Claims.KS.PlainSampleDec
+public import Proofs.Flock.Claims.KS.PlainSampleSim
+public import Proofs.Flock.Claims.KS.PlainSampleKDefs
+public import Proofs.Flock.Claims.KS.PlainSampleRCols
+public import Proofs.Flock.Claims.KS.PlainSampleRColsE
+public import Proofs.Flock.Claims.KS.PlainSampleK
+public import Proofs.Flock.Claims.KS.PlainSampleAccK
+public import Proofs.Flock.Claims.KS.PlainSampleDecK
 public import Proofs.Flock.Claims.KS.PlainLeafDecK
 public import Proofs.Flock.Claims.KS.PlainClashLaterK
 public import Proofs.Flock.Claims.KS.PlainClash0K
 public import Proofs.Flock.Claims.KS.PlainLeafClashK
-public import Proofs.Flock.Claims.KS.PlainDrawJ
-public import Proofs.Flock.Claims.KS.PlainDrawJMove
-public import Proofs.Flock.Claims.KS.PlainDrawJRun
-public import Proofs.Flock.Claims.KS.PlainDrawJCols
+public import Proofs.Flock.Claims.KS.PlainSampleJ
+public import Proofs.Flock.Claims.KS.PlainSampleJMove
+public import Proofs.Flock.Claims.KS.PlainSampleJRun
+public import Proofs.Flock.Claims.KS.PlainSampleJCols
 public import Proofs.Flock.Claims.KS.PlainSlackFit
 public import Proofs.Flock.Claims.KS.PlainSim
 public import Proofs.Flock.Claims.KS.PlainLock
@@ -110,7 +110,7 @@ public import Proofs.Flock.Claims.KS.PlainRdRun
 public import Proofs.Flock.Claims.KS.PlainKSLin
 public import Proofs.Flock.Claims.KS.ZkPlanJ
 public import Proofs.Flock.Claims.KS.ZkPlanHJ
-public import Proofs.Flock.Claims.KS.ZkDrawJ
+public import Proofs.Flock.Claims.KS.ZkSampleJ
 public import Proofs.Flock.Claims.KS.ZkDecJ
 public import Proofs.Flock.Claims.KS.ZkXferJ
 public import Proofs.Flock.Claims.KS.ZkSessionSC
@@ -190,7 +190,7 @@ with `k ≥ 8` wherever the verifier accepts at SHA-512 (`Range`, `FlockDeploy.K
 `FlockDeploy.KS.zk_of_oneWait_sha512`).
 
 One wait's bound from a fixed table's bound (`Joint`): the old theorems' `joint_acc_le` on the deployed verifier's own
-run law (`Flock.runGame`, `Flock.oneWait_lhs_eq`), with three obligations: a fixed table's bound over tables of
+run sampling design (`Flock.runGame`, `Flock.oneWait_lhs_eq`), with three obligations: a fixed table's bound over tables of
 well-formed or unopened (`0`) columns, accepted runs opening only well-formed columns, and conflicts tied to collisions
 (`Flock.TableBoundθ`, `Flock.orZero`, `Flock.ColsOk`, `Flock.ConflictTied`, `Flock.oneWait_of_tableBound`,
 `FlockDeploy.KS.plain_KS_of_tableBound`, `FlockDeploy.KS.zk_KS_of_tableBound`). At the records the claims read, whose
@@ -299,17 +299,17 @@ session's count (`FlockDeploy.zkNs`, `FlockDeploy.custody_vals_zk`). An accepted
 level 0's, at the positions of the coins of the round `k0 + 6` after Ligerito's first (`LevelZero`:
 `FlockSoundness.Refine.ligerito_refines_req0`, `FlockSoundness.Refine.ligerito_accepts_opening_req0`), so an accepted
 rep's is at the stream's round `plainQueryRound` (`FlockSoundness.Refine.lincheck_moves`,
-`FlockSoundness.Refine.ringSwitch_moves`, `FlockSoundness.Refine.rep_refines_req0`). At flock-verify's acceptance, every
+`FlockSoundness.Refine.ringSwitch_moves`, `FlockSoundness.Refine.rep_refines_req0`). At verity-verify-proof's acceptance, every
 result of each table's reps' runs requests level 0 first there, and every request has its level's lanes and path length
 (`LevelZeroAcc`: `FlockSoundness.Discharge.Exec.accepts_req0`). A position the deployed reader is given below `2^d` is
 looked up, to a column it was given there, so an output whose level-0 openings verify and are the reader's entries opens
 a position off `C` without a self-clash only where the reader looks up a column off `C` (`OffSC`:
 `Claims.Flock.lookCol_distinctBelow_of_mem`, `Claims.Flock.exists_ne_of_off₀L_sc`); an accepted salted table's level-0
-openings verify (`Claims.Flock.verified_opens₀L`). At flock-verify's acceptance, every accepted salted output of a
+openings verify (`Claims.Flock.verified_opens₀L`). At verity-verify-proof's acceptance, every accepted salted output of a
 table's reps' runs has its level-0 openings verifying below `2^d`, with positions and rows its reps' `plainRepColsOf`
 entries (`Entries`: `FlockSoundness.Discharge.Exec.accepts_opens₀L`, `Claims.Flock.exists_ne_of_entries`). So at `wrP`,
 at one table, the deployed plain decoders are right for accepting with no level-0 opening off `C` unless it
-self-clashes, on the outcomes flock-verify accepts at the live root where the deployed reader looks up no column off `C`
+self-clashes, on the outcomes verity-verify-proof accepts at the live root where the deployed reader looks up no column off `C`
 (`DecodeSC`: `Claims.Bridge.DecodePlain.TxNoOff`, `Claims.Bridge.DecodePlain.decodesTable_wrP_sc`). At a plain statement
 in scope with public outputs, that table is `plainTab`, so those decoders are the ones `PlainLiveAccAt` asks for
 (`DecodeDeploy`: `FlockDeploy.KS.plain_hdec`). With hidden outputs and `hm96-sha512/v1` leaves, the hidden table is
@@ -317,7 +317,7 @@ in scope with public outputs, that table is `plainTab`, so those decoders are th
 `FlockDeploy.KS.plain_hdecH`). A statement some run accepts sets up at a sample, so the plain chain asks only for the
 mixture at those decoders, whether or not the outputs are hidden, and for `PlainLiveAccAt` itself at hidden outputs
 under the plain SHA-512 leaves the scope also admits, where the decoders at `leaf512` are not right (`PlainWrP`:
-`FlockDeploy.KS.acc_draw`, `FlockDeploy.KS.PlainLiveWrPAt`,
+`FlockDeploy.KS.acc_sample`, `FlockDeploy.KS.PlainLiveWrPAt`,
 `FlockDeploy.KS.PlainLiveW`, `FlockDeploy.KS.plain_KS_of_w`). On an accepting deployed run whose record carries the
 statement's sample, the event the mixture's first bound reads gives that verdict at the run's live outcome (`PlainEvent`:
 `FlockDeploy.KS.cols_plain`, `FlockDeploy.KS.plainVerdict_of_run`). A prover that plays the live session with the rest
@@ -325,12 +325,12 @@ of each deployed coin on its tape bounds an event of the deployed coins by a mix
 coins being uniform, and the mixture by an event of the deployed coins the live event implies (`LiveMix`:
 `Claims.Bridge.Live.Pr_mergeC`, `Claims.Bridge.Live.Pr_mergeAt`, `Claims.Bridge.Live.liveMix_eq`,
 `Claims.Bridge.Live.Pr_le_liveMix`, `Claims.Bridge.Live.liveMix_le_Pr`). A live prover simulates the deployed prover on
-coins of uniform law where its live outcome is the run's wherever the run accepts, and at the coins that merge each live
+coins of uniform distribution where its live outcome is the run's wherever the run accepts, and at the coins that merge each live
 coin with the rest of a deployed coin the sampling design holds, so the simulation of the runs alone suffices (`PlainFirst`:
 `FlockDeploy.KS.PlainSim`, `FlockDeploy.KS.PlainSimRun`, `FlockDeploy.KS.plainCoins`,
 `FlockDeploy.KS.plainSim_of_run`); the checks compare samples only up to `JsonEquiv`, which holds between different
-terms (`FlockDeploy.KS.drawEq_ne`), so acceptance gives the sample only up to it (`FlockDeploy.KS.RecordDrawEquiv`,
-`FlockDeploy.KS.recordDrawEquiv`). At those coins, a deployed event that the live event implies bounds the mixture, the
+terms (`FlockDeploy.KS.sampleEq_ne`), so acceptance gives the sample only up to it (`FlockDeploy.KS.RecordSampleEquiv`,
+`FlockDeploy.KS.recordSampleEquiv`). At those coins, a deployed event that the live event implies bounds the mixture, the
 third bound's form (`PlainThird`: `FlockDeploy.KS.plainMix_le_of_run`). The simulator's bounds read an accepting run or
 fork with its collision, and its fork bound holds up to a slack (`PlainSimW`: `FlockDeploy.KS.plainEv₁`,
 `FlockDeploy.KS.plainForkEv`, `FlockDeploy.KS.PlainClashRun`). The slack is the later rounds' forks and
@@ -359,24 +359,24 @@ simulated fork at `t + 1`, with `δ_t` the chance that two coins agree on the en
 `Claims.Flock.FnFork.δAt_eq`), so the simulator on such a tape has the coupling at those `δ_t`, and its slack
 (`ForkCoupling`: `Claims.Flock.forkCoinCoupling_fnAt`, `Claims.Flock.slack_fnAt`,
 `FlockDeploy.KS.forkCoinCoupling_plain`). The verdict at the statement's sample reads `verify` at the setup at that sample,
-not the record's, so an accepting run gives it at its live outcome whatever sample its record carries (`PlainDraw`:
-`Claims.Bridge.PlainDraw.AcceptsAtD`, `Claims.Bridge.PlainDraw.wrPD`, `FlockDeploy.KS.plainVerdictAt`,
+not the record's, so an accepting run gives it at its live outcome whatever sample its record carries (`PlainSample`:
+`Claims.Bridge.PlainSample.AcceptsAtD`, `Claims.Bridge.PlainSample.wrPD`, `FlockDeploy.KS.plainVerdictAt`,
 `FlockDeploy.KS.plainVerdictAt_of_run`), and at every `keep` an accepting run of `VK keep` gives it read through
-`keep`, its rounds the live outcome's up to their digests (`PlainDrawK`:
-`Claims.Bridge.PlainDraw.AcceptsAtDK`, `Claims.Bridge.PlainDraw.RecordsLiveAtDK`,
+`keep`, its rounds the live outcome's up to their digests (`PlainSampleK`:
+`Claims.Bridge.PlainSample.AcceptsAtDK`, `Claims.Bridge.PlainSample.RecordsLiveAtDK`,
 `FlockDeploy.KS.plainVerdictAtK_of_run`), and the acceptance lemmas and decoders below hold at it by their proofs
-(`PlainDrawAccK`, `PlainDrawDecK`: `FlockDeploy.KS.plain_hdecAtK`, `FlockDeploy.KS.plain_hdecHAtK`), the rep's run
+(`PlainSampleAccK`, `PlainSampleDecK`: `FlockDeploy.KS.plain_hdecAtK`, `FlockDeploy.KS.plain_hdecHAtK`), the rep's run
 reading no round's digest (`FlockSoundness.Discharge.PlaysCoin.repRun_of_erase`), and so do the decoders at plain
 SHA-512 leaves and the later entries (`PlainLeafDecK`: `FlockDeploy.KS.plain_hdecHUAtK`; `PlainClashLaterK`:
 `FlockDeploy.KS.plain_laterClashAtK`, `FlockDeploy.KS.plain_laterClashHAtK`) and the level-0 clashes
 (`PlainClash0K`, `PlainLeafClashK`: `FlockDeploy.KS.plain_clash₀AtK`, `FlockDeploy.KS.plain_clash₀HUAtK`,
 `FlockDeploy.KS.plain_laterClashHUAtK`). The acceptance lemmas the plain
 decoders read hold at a sample value by their proofs, through `keep` and at `keep := id`
-(`PlainDrawAccK`: `FlockSoundness.Discharge.AtDraw.accepts_oneAnyDK`; `PlainDrawAcc`:
-`FlockSoundness.Discharge.AtDraw.tableAt_of_acceptsD`), so the plain decoders decode the verdict at the sample
-(`PlainDrawDec`: `Claims.Bridge.PlainDraw.decodesTable_wrPD_sc`, `FlockDeploy.KS.plain_hdecAt`,
+(`PlainSampleAccK`: `FlockSoundness.Discharge.AtSample.accepts_oneAnyDK`; `PlainSampleAcc`:
+`FlockSoundness.Discharge.AtSample.tableAt_of_acceptsD`), so the plain decoders decode the verdict at the sample
+(`PlainSampleDec`: `Claims.Bridge.PlainSample.decodesTable_wrPD_sc`, `FlockDeploy.KS.plain_hdecAt`,
 `FlockDeploy.KS.plain_hdecHAt`), and the plain table bound at a statement holds from a simulator at that verdict, with
-nothing asked of the record's sample (`PlainDrawSim`: `FlockDeploy.KS.plain_first_of_simD`,
+nothing asked of the record's sample (`PlainSampleSim`: `FlockDeploy.KS.plain_first_of_simD`,
 `FlockDeploy.KS.PlainSimWrPAtD`, `FlockDeploy.KS.PlainSimWD`, `FlockDeploy.KS.plain_tableBoundθAt_of_simD`). At the
 coupling's
 chances with every revealed length before the last round positive, each `δ_t` there is at most `2^{-128}`, the plain
@@ -414,7 +414,7 @@ levels `1, …, R` in order, each at the positions of the coins of its query rou
 `FlockSoundness.Refine.LaterAt`, `FlockSoundness.Refine.find?_later`, `FlockSoundness.Refine.rep_refines_reqs`).
 So a self-clash past level 0 at the concrete simulator's outcome is two of one rep's level-`ℓ` entries at one position
 with different columns, which are the run's level-`ℓ` rows and clash in its log, so the clash holds at every
-statement (`PlainClashLater`: `FlockSoundness.Discharge.AtDraw.accepts_opensLD`, `FlockDeploy.KS.plainClashQL`,
+statement (`PlainClashLater`: `FlockSoundness.Discharge.AtSample.accepts_opensLD`, `FlockDeploy.KS.plainClashQL`,
 `FlockDeploy.KS.plainSimLaterClashAt`).
 Two runs forked after `j` coins pass through a simulation, which matches the model's coins with the live ones one to
 one, and at the live session, whose every coin answers its own send, `B`'s fork at round `j` is the fork after `j`
@@ -463,14 +463,14 @@ Where `verify --zk` sets its session up at a sample (`FlockDeploy.KS.setupAt`), 
 (`ZkPlanJ`: `FlockDeploy.KS.table_eq_zkTab`, `FlockDeploy.KS.planZJ_eq_tabsJ`), and so are the hidden-output plan's
 (`ZkPlanHJ`: `FlockDeploy.KS.tableH_eq_zkTab`, `FlockDeploy.KS.planZHJ_eq_tabsJ`). `Deploy.V`'s checks pin the record's
 sample to the statement's only up to key order, so the old discharge is read at the setup at the statement's sample, which
-reads no sample in the record, with a writer that records the live session there (`ZkDrawJ`:
+reads no sample in the record, with a writer that records the live session there (`ZkSampleJ`:
 `FlockSoundness.Discharge.Composed.AcceptsAt`, `FlockSoundness.Discharge.Composed.runsAtZCJ_live`,
 `FlockSoundness.Discharge.ZkHidden.runsAtZCJH_live`, `Claims.Bridge.Custody.wrS`,
 `Claims.Bridge.Custody.recordsLiveAtS_wrS`), and an accepting run of `Deploy.V` is accepted there
 (`Claims.Bridge.Custody.acceptsAt_wrS`). So at the empty sample the deployed `--zk` decoders are right at `zkTabs` at
-public and hidden outputs (`FlockDeploy.KS.drawOkZKJ_empty`, `FlockDeploy.KS.decodesTable_zkTabs`,
+public and hidden outputs (`FlockDeploy.KS.sampleOkZKJ_empty`, `FlockDeploy.KS.decodesTable_zkTabs`,
 `FlockDeploy.KS.decodesTableH_zkTabs`), and so at every masked statement in scope that `Deploy.V` sets up at a sample,
-which every statement some run accepts carries (`FlockDeploy.KS.acc_draw_of_setup`; `ZkDecJ`:
+which every statement some run accepts carries (`FlockDeploy.KS.acc_sample_of_setup`; `ZkDecJ`:
 `FlockDeploy.KS.decodesTable_deploy`), `ZkLiveAccAtJ`'s `hdec` at the verdict `accepted`. The masked session's bound
 reads its level-0 term only on runs that do not self-clash, a self-clash being in `ε_c⁻` already (`ZkSessionSC`:
 `FlockSoundness.Discharge.ZkLink.bad_pointwise_ofZ_sc`,
@@ -510,7 +510,7 @@ the deployed decoders are right at that verdict on those outcomes, at a masked s
 `FlockDeploy.KS.decodesTableHW_zkTabs`, `FlockDeploy.KS.decodesTableW_deploy`). On an accepting deployed masked run, the
 event of no column of table `j` off `C` gives that verdict at the run's live outcome (`ZkEvent`:
 `FlockDeploy.KS.cols_zk`, `FlockDeploy.KS.accTxJ_of_run`), with no premise on the record's sample, so a simulation of
-the deployed masked prover by a live prover on coins of uniform law gives the masked mixture's first bound at that
+the deployed masked prover by a live prover on coins of uniform distribution gives the masked mixture's first bound at that
 verdict, and at the coins that merge each live coin with the rest of a deployed coin, a deployed event a live event
 implies bounds the mixture (`ZkFirst`: `FlockDeploy.KS.ZkSimRun`, `FlockDeploy.KS.ZkSim`, `FlockDeploy.KS.zkCoins`,
 `FlockDeploy.KS.zk_first_of_sim`, `FlockDeploy.KS.zk_first_of_run`, `FlockDeploy.KS.zkMix_le_of_run`).
@@ -579,7 +579,7 @@ column at a position of its word (`FlockDeploy.KS.okThroughJ_nil`), so with no `
 counted per round at full-width columns (`FlockDeploy.KS.zk_KS_trim_of_tableBoundJR`), so from `ZkLiveAccWJ` or
 `ZkXferWJ` where some run accepts alone (`FlockDeploy.KS.zk_KS_trim_of_liveAccWJ`,
 `FlockDeploy.KS.zk_KS_trim_of_xferWJ`). With an accepting run or fork with its collision as the events, `ZkXferWJ`
-holds from a live prover for each prover, with a finite tape and coins of uniform law, that sends its roots, simulates
+holds from a live prover for each prover, with a finite tape and coins of uniform distribution, that sends its roots, simulates
 its accepting runs, whose self-clashes give its accepting runs with a collision and whose fork bounds hold (`ZkSimW`:
 `FlockDeploy.KS.zkRoot`, `FlockDeploy.KS.zkRoot_of_first`, `FlockDeploy.KS.ZkClashRun`, `FlockDeploy.KS.ZkSimWJ`,
 `FlockDeploy.KS.zkXferWJ_of_simWJ`), with no premise on the record's sample, so `Flock.KS` at the trimmed masked record

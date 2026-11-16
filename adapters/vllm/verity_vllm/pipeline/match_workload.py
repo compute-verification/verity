@@ -20,9 +20,12 @@ def _workload_doc(path: str | None) -> dict | None:
     if not path or not Path(path).exists():
         return None
     try:
-        return json.loads(Path(path).read_text())
+        doc = json.loads(Path(path).read_text())
     except (OSError, ValueError, RecursionError):   # unreadable, not JSON, or nested past what the parser reads
         return None
+    if doc and not isinstance(doc, dict):          # an empty one states nothing and takes the defaults
+        raise SystemExit(f"workload {path}: its JSON is a {type(doc).__name__}, not an object")
+    return doc
 
 
 def _workload_max_tokens(path: str | None) -> int | None:

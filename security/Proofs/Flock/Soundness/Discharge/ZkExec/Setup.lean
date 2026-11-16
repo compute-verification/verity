@@ -6,7 +6,7 @@ import Proofs.Flock.Soundness.Discharge.Exec.Retained
 import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 
 /-!
-# flock-verify `--zk`'s acceptance sets up each table with `Stmt.setupH`
+# verity-verify-proof `--zk`'s acceptance sets up each table with `Stmt.setupH`
 
 `AcceptsZK I t` sets up the session with `Stmt.setupTables` at `zkInputs I`, whose tags differ from `--statement`'s
 only in the identity (`zkTags_eq`), so `Exec`'s facts about `setupTables` apply at `zkInputs I` (under `hh`, as

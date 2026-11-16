@@ -197,7 +197,7 @@ class Idle:
     name: str = "idle"
     lineage: dict = field(default_factory=lambda: {
         "parent": None, "approach": "pouw/filler-idle", "mechanism": ["place:none"],
-        "hypothesis": "serving alone: coverage is serving's certified share, and the A/A slowdown is the timing noise"})
+        "hypothesis": "serving alone: coverage is serving's utilization, and the A/A slowdown is the timing noise"})
     sources: tuple = ("benchmarks/pouw/filler/arms.py",)
     filler: Filler | None = None
     choice: str = "nothing to choose"
@@ -232,7 +232,7 @@ class FillV1:
         "parent": "cursor/dram-free-filler-ea24@e015e0515", "approach": "pouw/filler-dram-free",
         "mechanism": ["filler:chained-imma-registers", "place:split", "split:per-point-table", "prefill:none"],
         "hypothesis": "FILL v1 as measured: 0.35–0.62 certified ÷ capacity at ≤ 5% decode slowdown"})
-    sources: tuple = ("benchmarks/pouw/filler/dcap.cu", "benchmarks/pouw/filler/arms.py")
+    sources: tuple = ("verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler/dcap.cu", "benchmarks/pouw/filler/arms.py")
     filler: Filler | None = Filler(W=8, NC=4, S=2048, chunk_log2=19, noise="chained")
     choice: str = "an offline table of 11 (B, L) splits from FILL's runs 2–5; a lookup and a green split at serving time"
     #: dcap.cu builds pfill.cuh's filler unless -DDFILL_V1; score.py's nvcc reads NVCC_APPEND_FLAGS after the arm loads

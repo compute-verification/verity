@@ -35,7 +35,7 @@ import numpy as np
 from verity.commitments import row_table as RT
 from verity.commitments.rowleaf import sha512_row_seg_digest
 from verity_vllm.commit import row_tables as RTB
-from verity.commitments.windows import rows as SR
+from verity.commitments.periods import rows as SR
 
 RESULT_SCHEMA = "research/result/v0.1"
 #: Llama-3.1-8B's int8 linears and their K
@@ -146,7 +146,7 @@ def main(argv: list[str] | None = None) -> int:
             "validation": {"status": "passed" if ok else "failed",
                            "checker": "the step root equals verity.commitments.row_table.commit_step's over the same rows and salts",
                            "detail": "ok" if ok else f"reference root {ref.hex()[:16]}", "evidence": []},
-            "measurements": [{"name": f"step_roots.w{w}.seconds", "value": v["seconds"], "unit": "s"} for w, v in by_workers.items()]
+            "measurements": [{"name": f"proofs/step-roots.w{w}.seconds", "value": v["seconds"], "unit": "s"} for w, v in by_workers.items()]
             + [{"name": f"step_roots.w{w}.cold_seconds", "value": v["cold_s"], "unit": "s"} for w, v in by_workers.items()]
             + ([{"name": "step_roots.w1.cpu_seconds", "value": by_workers[1]["cpu_s"], "unit": "s"}] if 1 in by_workers else [])
             + [{"name": f"sha512_floor.w{w}.seconds", "value": v, "unit": "s"} for w, v in floor.items()]

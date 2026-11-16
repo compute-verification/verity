@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One-stage audit, run A5, over a TP Commit's windows, one per rank (a5.py --tp-commit), on a CPU machine: each rank's served
-# window through registration, the verifier's Lean sample, M0's prover and the Lean verifier. M0's flock-circuit and
-# Lean's flock-verify are built from this tree, in scratch. A5 takes a TP window as served only under a SHA-512 TP run root
+# window through docket, the verifier's Lean sample, M0's prover and the Lean verifier. M0's flock-circuit and
+# Lean's verity-verify-proof are built from this tree, in scratch. A5 takes a TP window as served only under a SHA-512 TP run root
 # (tp.serving_rows.source: sha512): a TP Commit's ranks, the stand-in's too, commit under rows-sha512 under the SHA-512 TP run
 # root (tp.run_root, verity/tp-run-root/v2); an old record's SHA-256 v1 root is refused before the sample.
 #   GLM-5.3 TP8: A5_TP=DIR holds the TP Commit's record (commit/runs.jsonl, commit/versions.json) and its windows (serving-rows/
@@ -11,8 +11,8 @@
 #     rank's stand-in window is made here first from its bundle (`verity-vllm tp-serving-rows`, up to A5_JOBS ranks at once);
 #     A5_CHECKPOINT=DIR opens the registered tensors the bundles don't carry (a MoE partition's expert stacks) from the checkpoint
 #     of record, without its shard sha256 (each tensor read is held to the committed weights root).
-#   The stand-in (no A5_TP): the CPU TP Commit tests/pipeline/served_tp, world 2, once per STANDIN entry I:LAW (its SiluMul_v2{I}
-#     rows, its partition's law); with A5_WINDOWS=bundles it is served_tp --deferred and its windows come from its bundles.
+#   The stand-in (no A5_TP): the CPU TP Commit tests/pipeline/served_tp, world 2, once per STANDIN entry I:SAMPLING_DESIGN (its SiluMul_v2{I}
+#     rows, its partition's sampling design); with A5_WINDOWS=bundles it is served_tp --deferred and its windows come from its bundles.
 #     The STANDIN entry sparse-mla is a5_sparse_mla.py: test_serving_rows_splits' window (one SparseMlaSplit row's key blocks,
 #     column ends and combines, each read row wired to the unit that wrote it), run as the entry row-tables is; the entry
 #     sparse-mla:units is its --units, each key block served as its scores unit and its values units, which read the block's
@@ -25,15 +25,15 @@
 #     Lean's verify --zk.
 #     The STANDIN entry row-tables is a5_row_tables.py: test_row_tables' window (ScaledMmS8Coordinate chunks whose x rows link
 #     its row tables) as rank 0 of a one-rank step, on a local challenger's coins (it needs A5_CHALLENGER for --main).
-#     The STANDIN entries warden and warden:KIND are a5_warden.py: transfer-gate chunks whose ports open the bucket rows of
-#     one connection's cells under the warden's signed roots, beside a sampled rest, on a warden run rehearsed here first (warden_serve.py
+#     The STANDIN entries network_attester and network_attester:KIND are a5_network_attester.py: transfer-gate chunks whose ports open the bucket rows of
+#     one connection's cells under the network attester's signed roots, beside a sampled rest, on a network attester run rehearsed here first (network_attester_serve.py
 #     rehearse --fake, about a minute, its prompts up to 2048 tokens so that seed 0's traffic has a connection admitted in its
-#     link-window with a5_warden.py's 16 ingress cells and D·r + 16 egress cells; only its public deployment.json, cells.jsonl
+#     execution phase with a5_network_attester.py's 16 ingress cells and D·r + 16 egress cells; only its public deployment.json, cells.jsonl
 #     and check.json are kept), on a local challenger's coins (A5_CHALLENGER=local);
-#     warden:altered reads one cell a bit off, and warden:pad, warden:pad-named and warden:swapped make the egress chunk's
+#     network_attester:altered reads one cell a bit off, and network_attester:pad, network_attester:pad-named and network_attester:swapped make the egress chunk's
 #     statement for another units' wiring (--made-for); each is to be refused by Lean's registered reads. A5_WARDEN_RUN=DIR
-#     audits that warden run instead of rehearsing one (e.g. warden_replay.py's, a served window's traffic through the
-#     warden), A5_WARDEN_UNITS=N each transfer-gate chunk's units (a5_warden.py --units, default 16).
+#     audits that network attester run instead of rehearsing one (e.g. network_attester_replay.py's, a served window's traffic through the
+#     network attester), A5_WARDEN_UNITS=N each transfer-gate chunk's units (a5_network_attester.py --units, default 16).
 #     The STANDIN entries tp-gates and tp-gates:KIND are a5_tp_gates.py: both ranks of a synthetic Llama TP2 step of two
 #     requests, each rank's AllReduce2 chunks reading both ranks' registered partials of each request (layer 0's embedding,
 #     o_proj and down_proj at H = 2048), beside a sampled rest, on one local challenger session's coins (A5_CHALLENGER=local); tp-gates:altered
@@ -71,7 +71,7 @@
 # A5_ADVICE=workload (with A5_WINDOWS=bundles, the stand-in or A5_TP): advice windows. The advice A (I1, the schedule of the
 #   fixed-length workload the Commit served, `advice_windows.advice_of_workload`) and A' (A less its last request) are written
 #   in scratch, each rank's window is committed from its bundle over the stand-in compiler's Programs for A, and for A', its
-#   registration binding the advice's hiding root (`verity-vllm advice-windows`), and a5 derives its own from the record, the
+#   docket binding the advice's hiding root (`verity-vllm advice-windows`), and a5 derives its own from the record, the
 #   advice's opening and the compiler, never the workload (a5.py --advice-opening; --other-advice-opening and --other-windows
 #   its negatives). The advice and its openings are the prover's: never kept.
 #   Another TP Commit than GLM-5.3's: A5_ROW its row (the workload adapters/vllm/workloads/$A5_ROW.json), A5_NAME the
@@ -88,7 +88,7 @@
 # A5_PLAIN=1 (with A5_CHALLENGER): plain sessions (a5.py --plain), not --zk: each rank's window is one member sampled by its stream
 #   under the partition's stratified rate, inside PLAIN_SCOPE, e.g. STANDIN=256:stratified-rate:1/2 A5_SETS=256 A5_CHALLENGER=local
 #   A5_JOBS=2.
-# ZK_SERVER=1: every session's prover runs behind the Lean ZK server's send check (--firewall to a5.py and each STANDIN
+# ZK_SERVER=1: every session's prover runs behind the Lean ZK server's send check (--zk-server to a5.py and each STANDIN
 #   script, the core protocols' path); by default each runs `prove --zk` itself, as SPOT[Flock]'s proof server does (Figure
 #   1's dev arm). An audit's members are then verified by one kept process (Lean's `verify-members`, a0.VerifyMembers).
 # A5_MEMBER_SECONDS=1: each audit's seconds a member outside its prover's clock and in Lean's verify before its first check,
@@ -147,7 +147,7 @@ command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/de
 command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
 uv sync --all-packages --extra torch-cpu > $O/sync.log 2>&1 || { tail -20 $O/sync.log; exit 5; }
 
-(cd verity/protocols/proofs/flock/verifier && lake build flock-verify flock-firewall) > $O/build-lean.log 2>&1 &
+(cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-zk-server) > $O/build-lean.log 2>&1 &
 LP=$!
 mkdir -p $O/m0-build
 FW=${A5_FLOCK_WORK:-$W}   # a kept build dir: 20-gpu-link.sh re-applies this tree's patches and cargo rebuilds what changed
@@ -155,15 +155,15 @@ RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protoco
   || { tail -40 $O/m0-build/build.log; exit 6; }
 BIN=$FW/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 $O/build-lean.log; exit 7; }
-LEAN=$REPO/verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-verify; FWL=${LEAN%/*}/flock-firewall
+LEAN=$REPO/verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof; FWL=${LEAN%/*}/flock-zk-server
 PLAINS=(); if [ "${A5_PLAIN:-0}" = 1 ]; then PLAINS=(--plain); fi
-(cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }
+(cd verity/protocols/proofs/spot/verifier/lean && lake build spot-verifier) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }
 sha256sum $BIN $LEAN $FWL | tee $O/binaries.sha256
 if [ "${A5_MEMBER_SECONDS:-0}" = 1 ]; then
   STAMPED=$($PY benchmarks/one_stage/member_seconds.py wrap $W/stamped $BIN $LEAN $FWL) || exit 9
   read -r BIN LEAN FWL <<< "$STAMPED"
 fi
-ZKS=(); if [ "${ZK_SERVER:-0}" = 1 ]; then ZKS=(--firewall $FWL); fi
+ZKS=(); if [ "${ZK_SERVER:-0}" = 1 ]; then ZKS=(--zk-server $FWL); fi
 
 # the verifier's lowering: a synthetic input set per template (its values are never read)
 for I in ${A5_SETS:-256 1536}; do
@@ -173,7 +173,7 @@ done
 TG=(); TPL=()
 for t in ${A5_TRANSFER_GATES:-}; do TG+=(--transfer-gate "$t"); TPL+=(--template "$t"); done
 [ ${#TG[@]} -eq 0 ] || [ -n "${A5_ADVICE:-}" ] || { echo "A5_TRANSFER_GATES lists the advice compiler's transfer gates: set A5_ADVICE=workload"; exit 3; }
-M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm
+M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch
 export RAYON_NUM_THREADS=$(nproc)
 MAIN=${A5_MAIN:-}
 if [ -n "${A5_CHALLENGER:-}" ] && [ -z "$MAIN" ]; then
@@ -265,9 +265,11 @@ else
       keep $N
       continue
     fi
-    if [ "${e%%:*}" = warden ]; then
-      case $e in warden) REFUSE=();; warden:altered) REFUSE=(--altered);; warden:pad|warden:pad-named|warden:swapped) REFUSE=(--made-for ${e#warden:});;
-        *) echo "STANDIN $e: warden, warden:altered, warden:pad, warden:pad-named or warden:swapped"; exit 3;; esac
+    case $e in warden|warden:*) echo "STANDIN $e: its name is network_attester${e#warden}; set that instead"; exit 3;; esac
+    case $e in network_certifier|network_certifier:*) echo "STANDIN $e: its name is network_attester${e#network_certifier}; set that instead"; exit 3;; esac
+    if [ "${e%%:*}" = network_attester ]; then
+      case $e in network_attester) REFUSE=();; network_attester:altered) REFUSE=(--altered);; network_attester:pad|network_attester:pad-named|network_attester:swapped) REFUSE=(--made-for ${e#network_attester:});;
+        *) echo "STANDIN $e: network_attester, network_attester:altered, network_attester:pad, network_attester:pad-named or network_attester:swapped"; exit 3;; esac
       [ "${A5_CHALLENGER:-}" = local ] || { echo "STANDIN $e draws through its stream: set A5_CHALLENGER=local"; exit 3; }
       N=${e/:/-}; mkdir -p $O/$N
       if [ -n "${A5_WARDEN_RUN:-}" ] && [ ! -d $W/warden-run ]; then
@@ -275,13 +277,13 @@ else
         ln -s $A5_WARDEN_RUN $W/warden-run
       fi
       if [ ! -d $W/warden-run ]; then
-        (cd benchmarks/network_traces && $PY warden_serve.py rehearse --fake --out $W/warden-run --requests 6 --rate 1 --tail 5 \
+        (cd benchmarks/network_traces && $PY network_attester_serve.py rehearse --fake --out $W/warden-run --requests 6 --rate 1 --tail 5 \
           --max-tokens 64 --prompt-max 2048 --start-in 2) > $O/warden-rehearse.log 2>&1; r=$?
         mkdir -p $O/warden-run && cp $W/warden-run/{deployment.json,cells.jsonl,check.json} $O/warden-run/
         [ $r = 0 ] || { tail -20 $O/warden-rehearse.log; $PY -c 'import json, sys; print(*json.load(open(sys.argv[1])).get("problems", []), sep="\n")' \
           $O/warden-run/check.json; exit 8; }
       fi
-      $TIME $PY benchmarks/one_stage/a5_warden.py --run $W/warden-run --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN "${ZKS[@]}" \
+      $TIME $PY benchmarks/one_stage/a5_network_attester.py --run $W/warden-run --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN "${ZKS[@]}" \
         --challenger local --main $MAIN "${REFUSE[@]}" ${A5_SESSION_TIMEOUT:+--session-timeout $A5_SESSION_TIMEOUT} ${A5_WARDEN_UNITS:+--units $A5_WARDEN_UNITS} \
         --out $W/$N > $O/$N/a5.log 2> $O/$N/a5.err || rc=1
       grep '^A5' $O/$N/a5.log | cut -c1-4000; tail -25 $O/$N/a5.err
@@ -302,9 +304,9 @@ else
       keep $N
       continue
     fi
-    I=${e%%:*}; LAW=${e#*:}; S=$W/served-i$I
+    I=${e%%:*}; SAMPLING_DESIGN=${e#*:}; S=$W/served-i$I
     DEFERRED=$([ "${A5_WINDOWS:-served}" = bundles ] && echo --deferred)
-    (cd adapters/vllm && $PY -m tests.pipeline.served_tp $S --world 2 --I $I --law $LAW $DEFERRED "${TPL[@]}") \
+    (cd tests/adapters/vllm && $PY -m tests.pipeline.served_tp $S --world 2 --I $I --law $SAMPLING_DESIGN $DEFERRED "${TPL[@]}") \
       > $O/standin-i$I.json 2> $O/standin-i$I.err || { tail -20 $O/standin-i$I.err; exit 8; }
     WL=$S/workload.json; ADV=()
     if [ -n "${A5_ADVICE:-}" ]; then

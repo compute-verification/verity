@@ -42,7 +42,7 @@ HEADROOM_BYTES = 128 * GB
 #: the mark's key in status.json
 KEY = "memory"
 SAMPLES = "resources.jsonl"
-#: what a pool run's `--mem-gb` reaches its slot as (tools/verity/check/slot.py's RUN_MEM_ENV)
+#: what a pool run's `--mem-gb` reaches its slot as (tools/check/slot.py's RUN_MEM_ENV)
 RUN_MEM_ENV = "CHECK_RUN_MEM_GB"
 FROM_ASK = f"ask+{HEADROOM_BYTES // GB}GB"
 #: a held slot record without `reserves_gib`: neither the ask nor where the workload ran is known, so nothing is marked

@@ -78,7 +78,7 @@ theorem value_foldRounds_length (A : Arith F K) (hA : A.Correct) :
       simp
   | k + 1, s, q => by
       rw [foldRounds_succ]
-      refine le_antisymm ((value_drawK_le A hA _ _ (fun _ => False) 0 0 (by simp [prCoin, avg])
+      refine le_antisymm ((value_sampleK_le A hA _ _ (fun _ => False) 0 0 (by simp [prCoin, avg])
         fun r _ => ?_).trans (by simp)) zero_le
       rw [value_send]
       refine iSup_le fun msg => ?_

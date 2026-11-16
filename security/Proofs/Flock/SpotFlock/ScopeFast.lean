@@ -8,7 +8,7 @@ public import Definitions.Claims.SamplingTwo
 `SpotFlock.scopeOk` decides the two-stage scope as the claims state it, and as stated its checks walk lists by
 position: the program's gates are a list that `topoOk`, the coverage check and `Prog.Boundary` index at every gate;
 `Prog.Unread` scans every gate's reads at every gate; `Prog.Boundary` scans every gate at each gate it is asked
-about, and `unitClass` asks `committed` once for each size class it tries; `Nodup` compares every pair; and the
+about, and `sizeClass` asks `committed` once for each size class it tries; `Nodup` compares every pair; and the
 replay check asks `replayOf` at every proof block, which scans the replay blocks by position. So the size classes take
 time cubic in the program's gates and the rest quadratic. These decide the same from arrays marked in one pass each,
 equal to the statement's checks; `SpotFlock.Code` compiles `topoOk`, `partitionsOk` and `scopeOk` as them
@@ -401,7 +401,7 @@ def classesFast (gs : Array BGate) (out cross : Array Bool) (bs : List (List ℕ
 theorem classesFast_eq {C : Prog} {P : Partition} (hnd : P.gates.Nodup) (hlt : ∀ g ∈ P.gates, g < C.gates.length) :
     classesFast C.gates.toArray (outMarks C C.gates.length)
         (crossMarks C.gates.toArray (blockIdx C.gates.length P.blocks) C.gates.length) P.blocks =
-      P.blocks.all fun u => (unitClass C u).any fun w => decide (committed C u ≤ w) := by
+      P.blocks.all fun u => (sizeClass C u).any fun w => decide (committed C u ≤ w) := by
   rw [classesFast]
   apply all_congr_of_mem
   intro u hu
@@ -427,7 +427,7 @@ theorem partitionsFast_eq (P : Partition) (C : Prog) : partitionsFast P C =
       (List.range C.gates.length).all
         (fun g => constArr C.gates.toArray g || decide (C.Unread g) || P.gates.contains g) &&
       P.blocks.all (fun u => !u.isEmpty) &&
-      P.blocks.all fun u => (unitClass C u).any fun w => decide (committed C u ≤ w)) := by
+      P.blocks.all fun u => (sizeClass C u).any fun w => decide (committed C u ≤ w)) := by
   simp only [partitionsFast, List.size_toArray]
   cases hm : firstMarks C.gates.length P.gates with
   | none =>

@@ -52,7 +52,7 @@ open Flock FlockLevel3 FlockVBridge.Compiled FlockVBridge.InnerAccepts FlockVBri
 /-- **The digest a session's value binding registers at a row** is the leaf of the public file's `b ‖ c` of unit `u`'s
 row `q` (`keyReaders`' `regBc`, `Readers.regLeaf` at a row), at every registration. -/
 theorem vb_cs_inl {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
-    {hscope : Layout.scopeOk c = true} {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv) (R' : Reg')
+    {hscope : Layout.scopeOk c = true} {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv) (R' : Reg')
     (u : Fin nv) (q : Fin c.ports.size) :
     zo.vb.cs R' (Sum.inl (u, q) : PosK c hU nv) =
       ((Sum.inl (u, q) : PosK c hU nv),
@@ -143,7 +143,7 @@ section family
 
 variable {nT nR : ℕ} {T : Fin nT → Type} {CT : Fin nR → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
 variable {cls : HClass} {regs : List (Region cls.kLog (cls.m - cls.kLog))} {sch : Flock.Schedule}
-variable {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
+variable {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
 local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 InnerAccepts.leafPlain cls regs (schedOf sch)
 
@@ -240,10 +240,10 @@ theorem reads_of_skOf {own : Fin F.stmts.size → Array Flock.Registered.Port} {
 theorem hFull_of (hrd : F.RowsRead) : F.HFull := hrd
 
 /-- **`VFull` at the read wires**, the restatement of `VFull` that V*'s padded rows need (`RowsRead`): `VFullR` at the
-family, each wire of `Sk i j` (`i < r`) some unit reads being a wire of a unit session `j`'s law samples. -/
+family, each wire of `Sk i j` (`i < r`) some unit reads being a wire of a unit session `j`'s sampling design samples. -/
 def VFullRead : Prop := VFullR (ℐ).r F.Sk
 
-/-- **`VFullRead` without `RowsRead`**: V*'s laws are the full sample, which samples every unit (`vFullR_of_read`). -/
+/-- **`VFullRead` without `RowsRead`**: V*'s sampling designs are the full sample, which samples every unit (`vFullR_of_read`). -/
 theorem vFullRead_of : F.VFullRead := vFullR_of_read _ _
 
 end VStarFamily

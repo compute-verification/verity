@@ -171,7 +171,7 @@ variable {Col' T' : Type} [DecidableEq Col']
 `E_O` skips, and the outer Flock at a decoder: the compiled verifier, its inner statement and form, `E_O`
 (`Claims.Recursion.EO`) with the relation every witness list meets (its sessions' checks are inside `E_O`), the inner
 messages the witnesses give (`RecAt.msgs`), the calls a finder searches at a rerun (`Deploy.callsAt`) and the compiled
-verifier's own at a run's staged V\* statements (`setupCalls`, as `Claims.Recursion.drawCalls` reads them), and the errors
+verifier's own at a run's staged V\* statements (`setupCalls`, as `Claims.Recursion.sampleCalls` reads them), and the errors
 `κ_O = Σ_s κ_s`, `γ_O = (Σ_s √(γ_s·k(x)))²`. -/
 noncomputable def Comp.ofRec (D : RecAt Coin) (IV : Verifier Coin) {W : Type} (I : Claims.Recursion.Inner Coin W)
     (DO : Claims.Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T') : Comp Coin where

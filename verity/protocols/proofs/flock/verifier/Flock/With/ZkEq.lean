@@ -1,12 +1,13 @@
-/-
-The `--zk` copies under the deployed hashes: run in `V` with `Hashes.ofSha512 Sha512.hash`, each `Zk.…With` is the compiled
-verifier's function it copies, so `Zk.verifyWith Sha512.hash` is `Zk.verify` for every session whose tables' Merkle schemes
-are the registry's.
--/
 module
 
 public import Flock.With.Eq
 public import Flock.With.Zk
+
+/-!
+The `--zk` copies under the deployed hashes: run in `V` with `Hashes.ofSha512 Sha512.hash`, each `Zk.…With` is the compiled
+verifier's function it copies, so `Zk.verifyWith Sha512.hash` is `Zk.verify` for every session whose tables' Merkle schemes
+are the registry's.
+-/
 
 @[expose] public section
 

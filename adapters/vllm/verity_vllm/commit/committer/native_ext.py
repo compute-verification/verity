@@ -4,6 +4,7 @@ here, so neither imports the other."""
 from __future__ import annotations
 
 import os
+from typing import Any
 
 from verity_vllm import settings
 from verity_vllm.log import init_logger
@@ -14,7 +15,7 @@ _EXT = None
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
-def ext(build_dir: str | None = None, verbose: bool = False):
+def ext(build_dir: str | None = None, verbose: bool = False) -> Any:
     """JIT-build the C++ collector (pybind11 + cudart + .cu kernels) once per process.  `NATIVE_COLLECT_BUILD` (or `build_dir`) names the
     PARENT of the build directory; the source-set digest picks the child (`<parent>/<digest12>`, native_jit) -- torch's
     mtime test is never the arbiter of staleness (a ship that preserves source mtimes would otherwise adopt a pod-wide dir warmed by

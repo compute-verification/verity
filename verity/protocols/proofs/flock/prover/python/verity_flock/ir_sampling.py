@@ -82,7 +82,7 @@ PIECES = IL.PIECES
 
 def _composites(V: int):
     from verity.circuits.defs import bind
-    from verity.definitions.registry import sampling as SM
+    from verity_vllm.definitions.registry import sampling as SM
 
     return SM.TemperatureLane, bind(SM.TopPMaskStep, V=V), SM.GumbelSelectStep
 
@@ -161,12 +161,12 @@ class Lane:
 
     @property
     def text(self) -> str:
-        return IL.netlist(self.layout, self.name, self.cut)
+        return IL.circuit_description(self.layout, self.name, self.cut)
 
     @property
     def unit_text(self) -> str:
         """The circuit description without its cut line: what does not depend on V (:data:`PIN`)."""
-        return IL.netlist(self.layout, self.name)
+        return IL.circuit_description(self.layout, self.name)
 
     @property
     def sha256(self) -> str:
@@ -187,7 +187,7 @@ def lane(V: int) -> Lane:
 # --- the words of one row, as the verifier computes them ------------------------------------------------------------------------
 
 def _prim(name: str):
-    from verity.definitions.registry import prims as P
+    from verity_vllm.definitions.registry import prims as P
     from verity.circuits.ops import scalar as S
 
     return getattr(P, name, None) or getattr(S, name)
@@ -202,7 +202,7 @@ def row_scalars(temp: int) -> list[int]:
 
 def _add_ftz_rows(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     """``F32AddFtz_v1`` lane for lane: the vectorised twin, and the primitive itself on every lane with a NaN operand."""
-    from verity.definitions.registry import sampling_rows as SR
+    from verity_vllm.definitions.registry import sampling_rows as SR
 
     out = np.asarray(SR.add_ftz(a, b), dtype=np.uint32)
     nan = ((a & 0x7F800000) == 0x7F800000) & ((a & 0x7FFFFF) != 0) | ((b & 0x7F800000) == 0x7F800000) & ((b & 0x7FFFFF) != 0)
@@ -231,10 +231,10 @@ def _scan(y: np.ndarray):
 
 def row_words(logits: np.ndarray, top_p: int, seed: int, pos: int, temp: int, splits: int) -> tuple[np.ndarray, int]:
     """Every cut word of one instance (:func:`words` of them) and its token: the units' words by the vectorised twins of the
-    circuits' primitives (``verity.definitions.registry.sampling_rows``, held word-equal to them), the native ones by the
+    circuits' primitives (``verity_vllm.definitions.registry.sampling_rows``, held word-equal to them), the native ones by the
     primitives and the top-p split pipeline (``TopPMaskWordx{V}``'s own reference)."""
-    from verity.definitions.registry import sampling as SM
-    from verity.definitions.registry import sampling_rows as SR
+    from verity_vllm.definitions.registry import sampling as SM
+    from verity_vllm.definitions.registry import sampling_rows as SR
 
     logits = np.asarray(logits, dtype=np.uint16).reshape(-1)
     V = len(logits)
@@ -256,8 +256,8 @@ def row_words(logits: np.ndarray, top_p: int, seed: int, pos: int, temp: int, sp
 def native_words(cuts: np.ndarray, top_p: int, seed: int, pos: int, temp: int, splits: int) -> np.ndarray:
     """The native cut words of one instance recomputed from its public words (the scalar ports and the units' ``scaled``
     words): what :func:`check_native` holds a file's cut words to."""
-    from verity.definitions.registry import sampling as SM
-    from verity.definitions.registry import sampling_rows as SR
+    from verity_vllm.definitions.registry import sampling as SM
+    from verity_vllm.definitions.registry import sampling_rows as SR
 
     V = (len(cuts) - len(SCALARS) - len(INIT)) // len(LANE)
     lane = np.asarray(cuts[len(SCALARS) + len(INIT):], dtype=np.uint32).reshape(V, len(LANE))
@@ -374,7 +374,7 @@ def write(low: Lane, input_set, lo: int, hi: int, path, k_max: int = IF.K_MAX) -
     logits, scalars, outs = instances(input_set, lo, hi)
     n, V = logits.shape
     if V != low.V:
-        raise ValueError(f"the lane netlist is for V = {low.V}, the set's rows have {V} logits")
+        raise ValueError(f"the lane circuit description is for V = {low.V}, the set's rows have {V} logits")
     cuts = np.zeros((n, words(V)), dtype=np.uint32)
     for i in range(n):
         cuts[i], tok = row_words(logits[i], *(int(scalars[p][i]) for p in PUBLIC_PORTS))
@@ -424,7 +424,7 @@ def write(low: Lane, input_set, lo: int, hi: int, path, k_max: int = IF.K_MAX) -
 
 
 def stage(low: Lane, input_set, lo: int, hi: int, out_dir, k_max: int = IF.K_MAX) -> Path:
-    """Write ids [lo, hi) of ``input_set`` as ``<out_dir>/frame-<n>.bin`` and the lane netlist as ``<out_dir>/net.txt``: the
+    """Write ids [lo, hi) of ``input_set`` as ``<out_dir>/frame-<n>.bin`` and the lane circuit description as ``<out_dir>/net.txt``: the
     verifier's own staging, every cut word the verifier's own computation."""
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)

@@ -27,7 +27,7 @@ from verity_flock import subcircuit_templates as TM
 
 SOURCE = b"verity input-set synthetic"
 DOMAIN = "verity/input-sets/synthetic/v1"
-MAX_DRAW_FACTOR = 4
+MAX_SAMPLE_FACTOR = 4
 #: the sources a set's recipe depends on, each by its path under its import package
 _SOURCES = {"verity_flock/subcircuit_templates.py": TM.__file__, "verity_flock/synthetic.py": __file__,
             "verity_flock/input_sets.py": IS.__file__}
@@ -65,7 +65,7 @@ def generate(sub: TM.Subcircuit, n: int, seed: int, out: str | Path, *, procs: i
     t0 = time.time()
     kept: list[tuple[int, TM.Draw, dict[str, np.ndarray]]] = []
     rejected: list[int] = []
-    limit = MAX_DRAW_FACTOR * n + 64
+    limit = MAX_SAMPLE_FACTOR * n + 64
     _CTX.update(sub=sub, key=key)
     pool = ProcessPoolExecutor(max_workers=procs, mp_context=__import__("multiprocessing").get_context("fork")) if procs > 1 else None
     try:
@@ -92,8 +92,8 @@ def generate(sub: TM.Subcircuit, n: int, seed: int, out: str | Path, *, procs: i
         _CTX.clear()
         if pool is not None:
             pool.shutdown()
-    draws_used = kept[-1][0] + 1
-    rejected = [r for r in rejected if r < draws_used]
+    samples_used = kept[-1][0] + 1
+    rejected = [r for r in rejected if r < samples_used]
     ports: dict[str, list[np.ndarray]] = {p.name: [d.inputs[p.name] for _j, d, _o in kept] for p in sub.inputs}
     ports.update({p.name: [o[p.name] for _j, _d, o in kept] for p in sub.outputs})
     rows = [[i, None, None, None, None, None, None, "synthetic", {"draw": jj, **d.sub}] for i, (jj, d, _o) in enumerate(kept)]
@@ -101,13 +101,13 @@ def generate(sub: TM.Subcircuit, n: int, seed: int, out: str | Path, *, procs: i
               "seed": int(seed), "n": n, "key": f"verity.commitments.randomness.derive({SOURCE!r}, {DOMAIN!r}, {{'subcircuit': {sub.id!r}, 'seed': {int(seed)}}})",
               "draw": "templates.Subcircuit.draw(key, j): each port's words from key.stream((port, j), 4 bytes per word)",
               "samplers": sub.recipe, "admission": "every BF16 output word finite (Subcircuit.admitted); instance i = the i-th admitted draw",
-              "draws": draws_used, "rejected": len(rejected), "rejected_draws": rejected[:64]}
+              "draws": samples_used, "rejected": len(rejected), "rejected_draws": rejected[:64]}
     prov = {k: None for k in IS.PROVENANCE_FIELDS}
     prov.update({"source": "synthetic", "recipe": recipe,
                  "program_digests": sub.program_digests([d.instance_statics for _j, d, _o in kept]),
                  "selection": "the first n admitted draws, in draw order", "versions": versions()})
     prov.update(provenance or {})
     summary = IS.write(Path(out) / "sets", sub.set_name, sub.relation, ports, rows, prov, schema=IS.SCHEMA)
-    summary.update(path=str(Path(out) / "sets" / sub.set_name), subcircuit=sub.id, draws=draws_used, rejected=len(rejected),
+    summary.update(path=str(Path(out) / "sets" / sub.set_name), subcircuit=sub.id, draws=samples_used, rejected=len(rejected),
                    seconds=round(time.time() - t0, 3))
     return summary

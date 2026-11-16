@@ -54,7 +54,7 @@ brings `b`:
 * check 5's rows are two of `portWordsOf nv` words (`resRows_dense`), so as wide as `v`'s port;
 * table 0 labels its instances `0..n-1` (`idx_of_dec`): setup checks the labels against the statement's sample
   (`checkLabels`), and the decision's checks and last refusals make that sample every unit (`labels_full`). Setup alone
-  doesn't: without a sample `checkLabels` passes, and only the decision refuses that (`drawLaw`).
+  doesn't: without a sample `checkLabels` passes, and only the decision refuses that (`sampleDesign`).
 
 The decision is part `s`'s, at its staged statement `xO`, not the inner statement's (`Rows.DecAt`, which reads the inner
 session `xI x` and says nothing of `xO`'s sample). An accepted run gives it at each part it stages (`partDec_run`).

@@ -8,12 +8,12 @@ public import Proofs.Properties.Pouw.Commit
 /-!
 # What Pearl+'s run verdict establishes (`Properties.Pouw.PearlPlus`)
 
-`PlanMeans`, `AcceptMeans`, `RefusedBeforeTheCoin`, `LoadedGivesUp`, `TileAcceptMeans`, `TileKeepsTheCap`,
+`PlanMeans`, `AcceptMeans`, `RefusedBeforeTheCoin`, `LoadedGivesUp`, `TileAcceptMeans`, `TileKeepsTheInertBound`,
 `YIsTheUnscale` and `WorkIsTheCredit`, by unfolding the port's definitions step by step: each `Except` chain one bind
 at a time (`bind_ok`),
 each `for` loop by induction over its list with the loop's state as the invariant's, and the replay's tasks by their
 pure model (a task's `get` is its function's value). The unscale is the Definition's through `Properties.Evaluator`'s FP32 equalities. A tile
-`checkOpened` passes keeps the inert-work bound (`TileKeepsTheCap`); one over it is `checkTile`'s `overCap`, which the
+`checkOpened` passes keeps the inert-work bound (`TileKeepsTheInertBound`); one over it is `checkTile`'s `overInertBound`, which the
 run accepts only when it credits such a tile nothing (`AcceptMeans`). The work an accepted run publishes is the credit
 on the verdicts it answers with, and a rejected run publishes none (`WorkIsTheCredit`, `check`'s two branches).
 -/
@@ -434,11 +434,11 @@ theorem forIn_tasks {α σ τ : Type} (V : α → τ) (I : σ → Prop)
     rw [forIn_tasks V I f hf l n' _ hn']
     simp
 
-/-- The units of one weight have one k. -/
+/-- The units of one fixed operand have one k. -/
 def KConsistent (p : Pass) : Prop :=
   ∀ r ∈ p.records, ∀ r' ∈ p.records, r.matmul.weight = r'.matmul.weight → r.matmul.k = r'.matmul.k
 
-/-- One tile's verdict as `replay` computes it, on the fixed operand's noise of its weight. -/
+/-- One tile's verdict as `replay` computes it, on its fixed operand's noise. -/
 def verdictOf (pl : Plan) (opener : Nat → Nat → Except String TileOpening) (x : Nat × Nat) : TileVerdict :=
   let p := pl.passes[x.1]!
   match p.tile? x.2 with
@@ -482,7 +482,7 @@ theorem tile?_pos {p : Pass} {tid pos : Nat} {rows cols : List Nat} (h : p.tile?
     exact (List.getElem?_eq_some_iff.1 (List.mem_zipIdx_iff_getElem?.1 hm)).1
   · cases h
 
-/-- What the replay's noise cache holds: each pass and weight's noise at a unit of that weight. -/
+/-- What the replay's noise cache holds: each pass and fixed operand's noise at a unit of that fixed operand. -/
 def NoiseHeld (pl : Plan) (noise : List ((Nat × Nat) × Task (Except String FixedNoise))) : Prop :=
   ∀ e ∈ noise, ∃ r ∈ (pl.passes[e.1.1]!).records, r.matmul.weight = e.1.2 ∧
     e.2.get = fixedNoise (pl.passes[e.1.1]!).salt (((pl.passes[e.1.1]!).weightRoots.lookup e.1.2).getD .empty) r.matmul.k
@@ -573,8 +573,8 @@ theorem tileAcceptMeans : TileAcceptMeans := by
   · exact (hnf _ h.symm).elim
   rename_i hrows
   obtain ⟨d, hdb, hdt, hy⟩ : ∃ d : TileOutcome,
-      (Rule.capCheck p.scheme p.records[pos]! rows cols ops = .ok none ∧ d = .pass ∨
-        ∃ w, Rule.capCheck p.scheme p.records[pos]! rows cols ops = .ok (some w) ∧ d = .overCap w) ∧ d = t ∧
+      (Rule.inertBoundCheck p.scheme p.records[pos]! rows cols ops = .ok none ∧ d = .pass ∨
+        ∃ w, Rule.inertBoundCheck p.scheme p.records[pos]! rows cols ops = .ok (some w) ∧ d = .overInertBound w) ∧ d = t ∧
       ∀ yRoot, p.yRoots[pos]! = some yRoot → ∃ ys, o.y = .ok ys ∧
         ys.map (·.position) = rows.filter (· < p.records[pos]!.realRows) ∧
         ys.all (opens (rowsDomain (yBinding p.salt p.records[pos]!.matmul.index) p.records[pos]!.matmul.index
@@ -605,7 +605,7 @@ theorem tileAcceptMeans : TileAcceptMeans := by
         exact ⟨ys, hys, eq_of_not_bne hyp, of_not_not hyo', hyr'⟩
       · rename_i hnone
         exact ⟨h, fun yRoot hy => absurd hy (hnone yRoot)⟩
-  have hbound : Rule.capCheck p.scheme p.records[pos]! rows cols ops = .ok bound := by
+  have hbound : Rule.inertBoundCheck p.scheme p.records[pos]! rows cols ops = .ok bound := by
     subst hdt
     rcases hdb with ⟨hc, rfl⟩ | ⟨w, hc, rfl⟩
     · cases bound with
@@ -663,23 +663,23 @@ theorem forIn_ok_all {ε α β γ : Type} (Q : α → Prop)
       have hs' : (some (some v), g') = s := Except.ok.inj h
       exact absurd (by rw [← hs']) (hs v)
 
-theorem capCheck_of_checkOpened {s : Scheme} {r : UnitRecord} {rows cols : List Nat} {ops : Ops}
-    (h : Rule.checkOpened s r rows cols ops = none) : Rule.capCheck s r rows cols ops = .ok none := by
+theorem inertBoundCheck_of_checkOpened {s : Scheme} {r : UnitRecord} {rows cols : List Nat} {ops : Ops}
+    (h : Rule.checkOpened s r rows cols ops = none) : Rule.inertBoundCheck s r rows cols ops = .ok none := by
   unfold Rule.checkOpened at h
   cases hr : Rule.rowsFailure r rows cols ops with
   | some w => rw [hr] at h; cases h
   | none =>
   rw [hr] at h
-  change Rule.capFailure s r rows cols ops = none at h
-  unfold Rule.capFailure at h
+  change Rule.inertBoundFailure s r rows cols ops = none at h
+  unfold Rule.inertBoundFailure at h
   split at h
   · rename_i why hc; rw [hc, h]
   · cases h
 
-theorem tileKeepsTheCap : TileKeepsTheCap := by
+theorem tileKeepsTheInertBound : TileKeepsTheInertBound := by
   intro s r rows cols ops h
-  have hc := capCheck_of_checkOpened h
-  unfold Rule.capCheck at hc
+  have hc := inertBoundCheck_of_checkOpened h
+  unfold Rule.inertBoundCheck at hc
   revert hc
   cases r.credited rows cols with
   | mk cr cc =>
@@ -692,21 +692,23 @@ theorem tileKeepsTheCap : TileKeepsTheCap := by
     exact (hE.elim hcr hcc).elim
   split at hc
   · cases hc
-  rename_i rowDebit hrd
+  rename_i rowInertWork hrd
   obtain ⟨words, hw, hrd⟩ := bind_ok hrd
   obtain ⟨elems, he, hrd⟩ := bind_ok hrd
+  obtain ⟨endsA, hea, hrd⟩ := bind_ok hrd
+  obtain ⟨endsB, heb, hrd⟩ := bind_ok hrd
   obtain rfl := (Except.ok.inj hrd).symm
   split at hc
   · cases hc
   rename_i hcap
-  refine ⟨words, elems, hw, he, Nat.not_lt.mp hcap, ?_⟩
+  refine ⟨words, elems, endsA, endsB, hw, he, hea, heb, Nat.not_lt.mp hcap, ?_⟩
   obtain ⟨st, hst, hc⟩ := bind_ok hc
-  have hall := forIn_ok_all (fun x : Nat × Nat => x.2 * Rule.CAP_DEN ≤
-      Rule.CAP_NUM * creditOf 1 r.kKept r.matmul.n * cc.length * (if s.censusKs.contains r.matmul.k then 4 else 1)) _
+  have hall := forIn_ok_all (fun x : Nat × Nat => x.2 * Rule.INERT_BOUND_DEN ≤
+      Rule.INERT_BOUND_NUM * creditOf 1 r.kKept r.matmul.n * cc.length * (if s.censusKs.contains r.matmul.k then 4 else 1)) _
     (by
       intro x g
-      by_cases hb : x.2 * Rule.CAP_DEN ≤
-          Rule.CAP_NUM * creditOf 1 r.kKept r.matmul.n * cc.length * (if s.censusKs.contains r.matmul.k then 4 else 1)
+      by_cases hb : x.2 * Rule.INERT_BOUND_DEN ≤
+          Rule.INERT_BOUND_NUM * creditOf 1 r.kKept r.matmul.n * cc.length * (if s.censusKs.contains r.matmul.k then 4 else 1)
       · exact .inl ⟨_, by rw [ite_eq_right_of_eq_false _ _ (eq_false (Nat.not_lt.mpr hb))]; rfl, hb⟩
       · exact .inr ⟨_, _, by rw [ite_eq_left_of_eq_true _ _ (eq_true (Nat.lt_of_not_le hb))]; rfl⟩) _ _ _ hst (by
       intro v hv
@@ -714,14 +716,16 @@ theorem tileKeepsTheCap : TileKeepsTheCap := by
       cases hc)
   have hlw : words.length = cr.length := mapM_ok_length hw
   have hle : elems.length = cr.length := by rw [mapM_ok_length he, List.length_zip, hlw, Nat.min_self]
+  have hla : endsA.length = cr.length := mapM_ok_length hea
   intro d hd
   obtain ⟨i, hi⟩ := mem_zip_snd (l := cr)
-    (Nat.le_of_eq (by rw [List.length_map, List.length_zip, hlw, hle, Nat.min_self])) d hd
+    (Nat.le_of_eq (by rw [List.length_map, List.length_zip, List.length_zip, hlw, hle, hla, Nat.min_self,
+      Nat.min_self])) d hd
   exact hall (i, d) hi
 
 /-! ## The run's acceptance -/
 
-/-- A loaded pass's units of one weight have one k: its split's `k_unit` (`checkRecords`). -/
+/-- A loaded pass's units of one fixed operand have one k: its split's `k_unit` (`checkRecords`). -/
 theorem load_kconsistent {coins : EpochCoins} {man : Lean.Json} {p : Pass} (h : load coins man = .ok p) :
     KConsistent p := by
   obtain ⟨-, splits, hc, -⟩ := load_facts h
@@ -748,13 +752,13 @@ theorem verdictOf_key (pl : Plan) (opener : Nat → Nat → Except String TileOp
 
 theorem default_tile? (tid : Nat) : (default : Pass).tile? tid = none := rfl
 
-/-- A tile whose verdict is ok under `m` is a pass's, opened, and passed `checkTile` on its weight's noise, or was over its
+/-- A tile whose verdict is ok under `m` is a pass's, opened, and passed `checkTile` on its fixed operand's noise, or was over its
 inert-work bound with `m` crediting it nothing. -/
-theorem verdictOf_ok {pl : Plan} {opener : Nat → Nat → Except String TileOpening} {m : OverCap} {pi tid : Nat}
+theorem verdictOf_ok {pl : Plan} {opener : Nat → Nat → Except String TileOpening} {m : OverInertBound} {pi tid : Nat}
     (h : (verdictOf pl opener (pi, tid)).ok m = true) :
     ∃ p o, pl.passes[pi]? = some p ∧ opener pi tid = .ok o ∧
       (checkTile p (noiseOf p tid) tid o = .pass ∨
-        m = .uncredited ∧ ∃ why, checkTile p (noiseOf p tid) tid o = .overCap why) := by
+        m = .uncredited ∧ ∃ why, checkTile p (noiseOf p tid) tid o = .overInertBound why) := by
   unfold verdictOf at h
   dsimp only at h
   split at h
@@ -771,7 +775,7 @@ theorem verdictOf_ok {pl : Plan} {opener : Nat → Nat → Except String TileOpe
     revert h
     cases checkTile pl.passes[pi]! (noiseOf pl.passes[pi]! tid) tid o with
     | pass => exact fun _ => .inl rfl
-    | overCap why =>
+    | overInertBound why =>
       intro h
       cases m with
       | uncredited => exact .inr ⟨rfl, why, rfl⟩
@@ -800,11 +804,11 @@ theorem acceptMeans : AcceptMeans := by
   split
   case isFalse hb' => exact absurd hb hb'
   have hr := replay_eq pl opener (passes_kconsistent hp)
-  have hok : ∀ v ∈ replay pl opener, v.ok i.overCap = true := by
+  have hok : ∀ v ∈ replay pl opener, v.ok i.overInertBound = true := by
     intro v hv
     simp only [List.isEmpty_iff, List.filterMap_eq_nil_iff] at hb
     have hv' := hb v hv
-    by_cases hk : v.ok i.overCap = true
+    by_cases hk : v.ok i.overInertBound = true
     · exact hk
     · rw [ite_eq_right_of_eq_false _ _ (eq_false hk), Option.map_eq_none_iff] at hv'
       unfold TileVerdict.reason at hv'
@@ -841,7 +845,7 @@ theorem yIsTheUnscale : YIsTheUnscale := by
 /-- Once `plan` succeeds, `check` publishes the credit on its own verdicts when it accepts, and none when it rejects. -/
 theorem check_work {i : Input} {pl : Plan} (opener : Nat → Nat → Except String TileOpening) (hp : plan i = .ok pl) :
     ((check i opener).accept = true → (check i opener).work = some (testCredit i.testInstance
-        (creditAtAssumption pl.passes i.draws (overCapDraws pl (check i opener).verdicts) DELTA))) ∧
+        (creditAtAssumption pl.passes i.draws (overInertBoundDraws pl (check i opener).verdicts) DELTA))) ∧
       ((check i opener).accept = false → (check i opener).work = none) := by
   unfold check
   rw [hp]
@@ -865,7 +869,7 @@ one names its plan, since `WorkIsTheCredit` is a conjunction and the lock reads 
 theorem workIsTheCredit_acceptAll :
     ¬ (acceptAllCheck emptyRun noOpening).work = some (testCredit emptyRun.testInstance
       (creditAtAssumption acceptAllPlan.passes emptyRun.draws
-        (overCapDraws acceptAllPlan (acceptAllCheck emptyRun noOpening).verdicts) DELTA)) := by
+        (overInertBoundDraws acceptAllPlan (acceptAllCheck emptyRun noOpening).verdicts) DELTA)) := by
   intro h
   cases h
 

@@ -9,7 +9,7 @@ for layer l and KV head g:
 * s_k[l, g] = RN32(max(amax[l, g], RN32(1e-30)) / 127) (one float32 division).
 
 The table lives in ``manifests/int8-k-scales.json``, one entry per served checkpoint revision (its scales as ``float.hex`` of the
-float32 values, ``scales[l][g]``), so a new choice replaces an entry and nothing else (``tests/engine/int8_kscale_gpu.py`` calibrates
+float32 values, ``scales[l][g]``), so a new choice replaces an entry and nothing else (``benchmarks/ppl/int8_kscale_gpu.py`` calibrates
 one).  `table` refuses a revision without one: the attention never serves without its K scales.
 """
 from __future__ import annotations
@@ -23,6 +23,8 @@ import numpy as np
 
 from verity_vllm import config as C
 from verity_vllm.records.schema_ids import INT8_K_SCALES_SCHEMA
+
+__all__ = ["MANIFEST", "entry", "table", "with_entry"]
 
 RECIPE = "verity-int8-kscale-amax/v0"
 SCHEMA = INT8_K_SCALES_SCHEMA

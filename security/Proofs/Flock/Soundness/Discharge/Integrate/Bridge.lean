@@ -293,14 +293,14 @@ theorem model_eq_stmtOf {tags : Tags} {cf pf : ByteArray} {coins : Coins} {table
 
 /-- **A sampled table of `sitesAt` is `stmtOf` of its statement**, at the statement's own regions (`regionsOf`). -/
 theorem table_stmtOf {I : Exec.Inputs} {mPts n : ℕ} (ht : I.tags.typed = false) {S : Finset (Fin n)} {d : Lean.Json}
-    (x : DrawSetup I mPts S d) : (x.table ht).T.S = stmtOf x.st x.wf.1 (regionsOf x.st) :=
+    (x : SampleSetup I mPts S d) : (x.table ht).T.S = stmtOf x.st x.wf.1 (regionsOf x.st) :=
   model_eq_stmtOf ht x.h x.wf.1 _
 
 /-- **`tableAt`'s table at a sample that sets up is `stmtOf` of a statement `Stmt.setupH` accepted** on the session's inputs
 and the sample's JSON, with the same statement as any other setup of that sample. -/
 theorem tableAt_stmtOf {I : Exec.Inputs} {mPts n : ℕ} (ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json)
-    {S₀ : Finset (Fin n)} (x₀ : DrawSetup I mPts S₀ (dj S₀)) {S : Finset (Fin n)} (x : DrawSetup I mPts S (dj S)) :
-    ∃ y : DrawSetup I mPts S (dj S), y.st = x.st ∧
+    {S₀ : Finset (Fin n)} (x₀ : SampleSetup I mPts S₀ (dj S₀)) {S : Finset (Fin n)} (x : SampleSetup I mPts S (dj S)) :
+    ∃ y : SampleSetup I mPts S (dj S), y.st = x.st ∧
       (tableAt ht dj x₀ S).T.S = stmtOf y.st y.wf.1 (regionsOf y.st) := by
   obtain ⟨y, hy, e⟩ := tableAt_stmt ht dj x₀ x
   exact ⟨y, hy, by rw [e]; exact table_stmtOf ht y⟩

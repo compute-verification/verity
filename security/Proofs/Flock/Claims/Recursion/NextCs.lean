@@ -133,11 +133,11 @@ theorem verdictM_of_parse {M : Type → Type} [Monad M] [LawfulMonad M] [MonadEx
 def checksJ (zk : Bool) (s : Ins) (spec : SessionSpec) (x : Claims.Msg) (link : List ByteArray × List ByteArray)
     (c₁ : Coin) (mids : List (Claims.Msg × Coin)) (f : Final) (j : Json) : Flock.V Unit := do
   Record.check (f.stmt == x) "live: the last message's statement is not the statement"
-  Record.check (drawEq (FlockSoundness.Discharge.Exec.recordDraw f.record) s.read.draw)
+  Record.check (sampleEq (FlockSoundness.Discharge.Exec.recordDraw f.record) s.read.draw)
     "live: the record's draw is not the statement's"
   custody spec (← liveOfJ spec j) link c₁ mids
   s.read.check
-  (if s.read.draw.isNone then ProvedScope.drawLaw zk s.read.tags false none else pure ())
+  (if s.read.draw.isNone then ProvedScope.sampleDesign zk s.read.tags false none else pure ())
   RecordText.check f.record
 
 theorem checks_of_parse (zk : Bool) (s : Ins) (spec : SessionSpec) (x : Claims.Msg)

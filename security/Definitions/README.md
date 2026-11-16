@@ -13,8 +13,8 @@ reads. [`security/README.md`](../README.md) has the argument, the lock and what 
   both.
 - The Lean check (`tools/verity/lean/check.py`) fails on an import outside `layers` or `trees`, and on a `.lean` file
   that no root imports.
-- One pin's command (`tools/verity/check/pins.py`) runs Lean in this package's Lake environment:
-  `verity/protocols/accounting/pouw/verifier/tests/ncp_lean.py` writes a scratch file importing `Definitions.Pouw.NCP.RouteU` into
+- One pin's command (`tools/check/pins.py`) runs Lean in this package's Lake environment:
+  `tests/verity/protocols/resource_accounting/compute/pouw/verifier/ncp_lean.py` writes a scratch file importing `Definitions.Pouw.NCP.RouteU` into
   `security/`, and the command runs it there and removes it.
 
 ## Areas
@@ -24,26 +24,26 @@ path: `research msg owners PATH`.
 
 | Area | What it states |
 |---|---|
-| `Accounting` | The device model every resource audit is about, and a joint audit's run on it |
+| `ResourceAccounting` | The device model every resource audit is about, and a joint audit's run on it |
 | `Assumptions` | The named assumptions: the few `Prop`s the guarantees take without proof |
+| `Certifier` | The network attester's protocol: grids, the interaction, the Program |
 | `Claims` | Flock's claim statements, over Core's interaction model |
 | `Core` | The model every area states its guarantees in: circuits, partitions, coins |
 | `Flock` | The vocabulary Flock's guarantees are stated in, extracted from `Proofs/Flock` |
 | `Hash` | Messages, digests and collisions; frame-v3 trees; the served row leaf; the keyed leaf |
-| `Nci` | The inference-only policy: `Complies c k`, `CompliesRate c α` |
-| `NetworkCertifier` | The network certifier's protocol: grids, the interaction, the Program |
+| `InferenceOnly` | The inference-only policy: `Complies c k`, `CompliesRate c α` |
 | `Pous` | PoUS: its game, its models and the requirement `Pous.Meets` |
 | `Pouw` | PoUW's protocol: the definitions its statements read |
-| `Spot` | Populations: units over committed value slots, their dataflow, cones and egress |
+| `Spot` | Populations: proof blocks over committed value slots, their dataflow, cones and egress |
 | `WeightSecurity` | Model weight security: the setting |
 
 ## Generated files
 
 A generated file is its generator's: change the generator and run it, never the file.
 
-- `Accounting/Headline/` and `Accounting/HeadlineDc/`: `machine-model lean-headline` writes the instances there, which
+- `ResourceAccounting/Headline/` and `ResourceAccounting/HeadlineDc/`: `machine-model lean-headline` writes the instances there, which
   import the `Encoding.lean` beside them.
-- `Accounting/Sheets/`: `benchmarks/machine_model/`, the ACCEL model of each measured card, prints each file
+- `ResourceAccounting/Sheets/`: `benchmarks/machine_model/`, the ACCEL model of each measured card, prints each file
   from the card's data sheet (`machine-model --device DEVICE sheet --lean`).
 
 Each generator's tests hold the files to its output. `security/README.md` lists every program that writes Lean under

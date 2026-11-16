@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # PoUW's piece of a served H1 window with its sampled proof blocks proved (served_verdicts.sh's POUW_CMD): drawn.py (the CLI of
-# verity_vllm.protocols.pouw.h1.drawn, reading --checkpoint with the live challenger's model registry) stages each
+# verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.sampled, reading --checkpoint with the live challenger's model registry) stages each
 # sampled call's J10-R units on the window's own registered values, and each sampled proof block of a lanes-form K as its lanes and
 # combine; each staged statement is proved by one Flock --zk session sampling all its instances (hidden_zk/job.sh's
 # `session`, at the slot its circuit file's META names), one session at a time, its prover under the ZK server
-# (FC_FIREWALL=1, FC_HOST_WITNESS=1: the Lean session loop flock-firewall, live PROTOCOL.md §10.4, whose Hello is set up
+# (FC_ZK_SERVER=1, FC_HOST_WITNESS=1: the Lean session loop flock-zk-server, live PROTOCOL.md §10.4, whose Hello is set up
 # on the statement's own program.json and partition.json, the Program and partition credit verifies it under, so what
 # leaves for the live verifier is the loop's), as h1_prove/job.sh, live.sh and h1_lanes/served.sh prove theirs; the
 # live verifier (`serve --zk --operator loopback`) listens on 127.0.0.1 beside it. drawn.py writes the statements file and
@@ -18,10 +18,10 @@
 #      files, --lanes K)  H1_CHECKPOINT (the served model's
 #      safetensors dir, b/<K>'s rows) or H1_WEIGHTS (an npz of w<i>, s<i>)  H1_GATE and H1_MODEL (the auditor's model-key
 #      for b/<K>, the server's --h1-model; or H1_WEIGHTS_KEY, a key file)  H1_DRAW_K (else period.json's)
-#      FLOCK_PROVE, FLOCK_SELFTEST, FLOCK_VERIFY (prebuilt; else job.sh builds them under HZ_CACHE)  FC_FIREWALL_LEAN (the
-#      ZK server's flock-firewall, prebuilt; else built beside FLOCK_VERIFY)  H1_DRAWN_MEM_GB (the job's budget, default
+#      FLOCK_PROVE, FLOCK_SELFTEST, FLOCK_VERIFY (prebuilt; else job.sh builds them under HZ_CACHE)  FC_ZK_SERVER_LEAN (the
+#      ZK server's flock-zk-server, prebuilt; else built beside FLOCK_VERIFY)  H1_DRAWN_MEM_GB (the job's budget, default
 #      90% of the host's memory)  H1_ZK_SERVER_GB (a session's live verifier, `serve --zk`, its limit, default 125)
-#      H1_ZK_LEAN_GB (what the prover's share leaves the ZK server's Lean processes, default 145)  H1_FIREWALL (1; 0 the
+#      H1_ZK_LEAN_GB (what the prover's share leaves the ZK server's Lean processes, default 145)  H1_ZK_SERVER (1; 0 the
 #      --zk path with no ZK server, for a cost comparison only)
 #      PY (served_verdicts.sh's venv python, default .venv's)  H1_DRAWN_ONLY=1: write and check the statements, no verdict
 #      H1_DRAWN_CHECK=0: no drawn.py check, for a caller whose credit verifies the statements itself
@@ -63,7 +63,7 @@ export HZ_MEM_GB=${H1_DRAWN_MEM_GB:-$(awk '/MemTotal/ {print int($2 * 0.9 / 1048
 # shellcheck source=../hidden_zk/job.sh
 . benchmarks/pouw/hidden_zk/job.sh
 trap 'cp "$OUT/job.log" "$P/drawn/" 2>/dev/null; rm -rf "$W"; [ -n "${H1_DRAWN_WORK:-}" ] || rm -rf "$SCR"' EXIT
-FW=${H1_FIREWALL:-1}
+FW=${H1_ZK_SERVER:-1}
 SERVE_GB=${H1_ZK_SERVER_GB:-125} LEAN_GB=0
 [ "$FW" = 1 ] && LEAN_GB=${H1_ZK_LEAN_GB:-145}
 PROVE_GB=$(( MEM_GB - SERVE_GB - LEAN_GB ))
@@ -73,20 +73,20 @@ PROVE_GB=$(( MEM_GB - SERVE_GB - LEAN_GB ))
 vlimit() { echo "ulimit -S -v $(( $1 * 1024 * 1024 ));"; }
 setup
 if [ "$FW" = 1 ]; then
-  FWL=${FC_FIREWALL_LEAN:-${LEAN%/*}/flock-firewall}
+  FWL=${FC_ZK_SERVER_LEAN:-${LEAN%/*}/flock-zk-server}
   if [ ! -x "$FWL" ]; then
     command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
-    (exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FWL" ] || (cd "${LEAN%/.lake/*}" && lake build flock-firewall)) \
-      > "$OUT/build-firewall.log" 2>&1
+    (exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FWL" ] || (cd "${LEAN%/.lake/*}" && lake build flock-zk-server)) \
+      > "$OUT/build-zk-server.log" 2>&1
   fi
-  [ -x "$FWL" ] || { tail -20 "$OUT/build-firewall.log" 2>/dev/null; log "drawn: no ZK server frame at $FWL (lake build" \
-    "flock-firewall beside FLOCK_VERIFY, or FC_FIREWALL_LEAN)"; exit 1; }
+  [ -x "$FWL" ] || { tail -20 "$OUT/build-zk-server.log" 2>/dev/null; log "drawn: no ZK server frame at $FWL (lake build" \
+    "flock-zk-server beside FLOCK_VERIFY, or FC_ZK_SERVER_LEAN)"; exit 1; }
   sha256sum "$FWL" | tee -a "$OUT/binaries.sha256" | tee -a "$OUT/job.log"
-  printf '#!/usr/bin/env bash\nulimit -S -v "$(ulimit -H -v)" && exec %q "$@"\n' "$FWL" > "$W/flock-firewall" \
-    && chmod 700 "$W/flock-firewall" || exit 1
-  export FC_FIREWALL_LEAN=$W/flock-firewall
+  printf '#!/usr/bin/env bash\nulimit -S -v "$(ulimit -H -v)" && exec %q "$@"\n' "$FWL" > "$W/flock-zk-server" \
+    && chmod 700 "$W/flock-zk-server" || exit 1
+  export FC_ZK_SERVER_LEAN=$W/flock-zk-server
 fi
-log "drawn: ZK server $([ "$FW" = 1 ] && echo "on ($FWL)" || echo "OFF (H1_FIREWALL=0)"), caps: verifier $SERVE_GB GB," \
+log "drawn: ZK server $([ "$FW" = 1 ] && echo "on ($FWL)" || echo "OFF (H1_ZK_SERVER=0)"), caps: verifier $SERVE_GB GB," \
   "prover $PROVE_GB GB, its ZK server's Lean $LEAN_GB GB left"
 export PYTHONPATH=$SRC:$SRC/adapters/vllm:$SRC/verity/protocols/proofs/flock/prover/python${PYTHONPATH:+:$PYTHONPATH}
 WK=${H1_DRAWN_STAGED:-$SCR/stage} ST=$P/drawn/statements.json
@@ -123,8 +123,8 @@ for d in $("$PY" -c 'import json, sys; p = json.load(open(sys.argv[1])); print("
   if [ "$FW" = 1 ]; then
     [ -s "$D/program.json" ] && [ -s "$D/partition.json" ] \
       || { log "drawn: $(basename "$D"): no program.json and partition.json to set the ZK server's Hello up on"; exit 1; }
-    export FC_FIREWALL=1 FC_HOST_WITNESS=1 FC_FIREWALL_STATEMENT=verity/flock-circuit
-    export FC_FIREWALL_HELLO_ARGS="--partition $D/partition.json --program $D/program.json"
+    export FC_ZK_SERVER=1 FC_HOST_WITNESS=1 FC_ZK_SERVER_STATEMENT=verity/flock-circuit
+    export FC_ZK_SERVER_HELLO_ARGS="--partition $D/partition.json --program $D/program.json"
   fi
   c0=$(cg_cpu)
   session "$D" "$O"; rc=$?
@@ -136,7 +136,7 @@ for d in $("$PY" -c 'import json, sys; p = json.load(open(sys.argv[1])); print("
   [ "$rc" = 0 ] && grep -q '"accepted":true' "$O/prove.out" \
     || { log "drawn: $(basename "$D"): --zk session FAILED: $(tail -1 "$O/prove.out") $(tail -1 "$O/serve.log")"; exit 1; }
 done
-unset FC_FIREWALL FC_HOST_WITNESS FC_FIREWALL_STATEMENT FC_FIREWALL_HELLO_ARGS
+unset FC_ZK_SERVER FC_HOST_WITNESS FC_ZK_SERVER_STATEMENT FC_ZK_SERVER_HELLO_ARGS
 "$PY" "$J/../h1_prove/drawn.py" statements --work "$WK" --out "$ST" 2>&1 | tee -a "$OUT/job.log"
 [ "${PIPESTATUS[0]}" = 0 ] || exit 1
 if [ "${H1_DRAWN_CHECK:-1}" != 0 ]; then

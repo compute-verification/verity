@@ -21,12 +21,12 @@ process has loaded, and `replay(port, value)` compares one input. Nothing here r
 (`tests/test_no_wall_clock.py`): a port whose Lean never answers hangs its test.
 
 A port names its verifier (`of_record`): ``"python"`` until its protocol switches to its Lean by the friction
-skill's switching ruling, ``"lean"`` after (PoUW's switch is `verity/protocols/accounting/pouw/verifier/verifier.py`). Either way the
+skill's switching ruling, ``"lean"`` after (PoUW's switch is `verity/protocols/resource_accounting/compute/pouw/verifier/verifier.py`). Either way the
 two sides must agree; the side of record is the verdict a `Mismatch` holds the other to, and what a run's `Stats` count.
 
 The harness never skips: when `lake` is missing or the build fails it raises. A port's test module skips on `lake` itself
 (`pytestmark = pytest.mark.skipif(shutil.which("lake") is None, ...)`), which puts its suite among those `check` runs after
-its Lean steps (`AFTER_LEAN` in `tools/verity/check/check.py`, held by `tests/test_no_wall_clock.py`).
+its Lean steps (`AFTER_LEAN` in `tools/check/check.py`, held by `tests/test_no_wall_clock.py`).
 
 Only `run` imports Hypothesis: `build`, `Server` and `canonical` need the stdlib alone, so a port's Lean can serve at run
 time (the memory challenger's `verdict.py` in the PoUS harness) where no test dependency is installed.
@@ -431,7 +431,7 @@ def run(port: Port | ProtocolPort, examples: int = 100, seed: int = 0, server: S
             lean_of_record = port.of_record == "lean"
             e.report = "\n".join([
                 f"difftest of {port.label!r} ({s.argv[0]}): "
-                + ("Python differs from the Lean, the verifier of record" if lean_of_record else "Lean and Python differ")
+                + ("Python differs from the Lean, the verifier" if lean_of_record else "Lean and Python differ")
                 + f"; the {'minimal' if shrink else 'first'} input Hypothesis found:",
                 f"  input:  {canonical(e.input)}",
                 f"  lean:   {_show(e.lean)}" + ("  (of record)" if lean_of_record else ""),
@@ -444,7 +444,7 @@ def run(port: Port | ProtocolPort, examples: int = 100, seed: int = 0, server: S
         raise Vacuous(f"difftest of {port.label!r}: none of {total} inputs gave {port.accepted!r}; the strategy reaches "
                       f"only refusals")
     if port.need_rejects and total == seen[port.accepted]:
-        raise Vacuous(f"difftest of {port.label!r}: none of {total} inputs was rejected; draw invalid inputs too, or set "
+        raise Vacuous(f"difftest of {port.label!r}: none of {total} inputs was rejected; sample invalid inputs too, or set "
                       f"need_rejects=False for a total function")
     return Stats(total, dict(seen))
 

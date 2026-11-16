@@ -1,8 +1,8 @@
 """`lanes.py KIND K R C PATH TREE STAGING`: an R x C leaf's lane statement (`PouwH1LaneZy_v1`, one circuit for all its lanes,
 each 4 rows by 8 columns) or its combine (`PouwH1Combine_v1`) at K, written to PATH as TREE's leaf module stages it
 (`leaf_file`; its `stager`, at its leaf ``RC`` set to R x C), bound to the Program a served window's verifier derives for it
-(`derived`), flat unless ``H1_TMPL`` says otherwise. At STAGING ``fast`` `fast_stage` is installed first, as
-`pouw_h1_circuits --lower` installs it under ``HZ_STAGE=fast``.
+(`derived`), flat unless ``H1_TMPL`` says otherwise; or KIND ``tile``, the H1 tile unit's statement at K on R x C
+(`h1unit.Shape.stager`, TREE's), bound to `ZERO_BIND`. At STAGING ``fast`` `fast_stage` is installed first.
 """
 from __future__ import annotations
 
@@ -11,7 +11,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
-__all__ = ["leaf_file", "stage"]
+__all__ = ["ZERO_BIND", "leaf_file", "stage"]
+
+#: a tile's binding: it has no leaf Program (`run.py`'s ``BIND``)
+ZERO_BIND = {"partition": "0" * 128, "program": "0" * 128}
 
 
 def leaf_file(tree: Path) -> Path:
@@ -41,10 +44,14 @@ def main(kind: str, k: int, r: int, c: int, path: Path, tree: Path, staging: str
     if staging == "fast":
         import fast_stage
         fast_stage.install(path.parent / f".scratch-{kind}-k{k}")
+    if kind == "tile":
+        import h1form as F
+        F.shape(k, r, c).stager("unit/pouw-h1-tile", circuit=path, bind=ZERO_BIND, layout=F.layout())
+        return
     stage(kind, k, r, c, path.parent, tree).circuit.rename(path)
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 8 or sys.argv[1] not in ("lane", "combine") or sys.argv[7] not in ("fast", "library"):
+    if len(sys.argv) != 8 or sys.argv[1] not in ("tile", "lane", "combine") or sys.argv[7] not in ("fast", "library"):
         sys.exit(__doc__.split("\n")[0])
     main(sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4]), Path(sys.argv[5]), Path(sys.argv[6]), sys.argv[7])

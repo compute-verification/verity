@@ -5,12 +5,12 @@ public import Evaluate.Casts
 /-!
 # PoUW's and NCP's word primitives
 
-Executable transcriptions of `verity.ml.protocols.pouw.circuit.words` (the `Pouw*` primitives: `ncp-v2`'s word
+Executable transcriptions of `verity.protocols.accounting.pouw.prover.circuit.words` (the `Pouw*` primitives: `ncp-v2`'s word
 operations, Pearl-C4's tile check, Pearl-C's exact sums of squares and its cap's window words and salt-dead bit) and of the
 three `Ncp*` primitives of the vLLM integration's `pouw_rows`. Words as in `Evaluate.Scalar`; `sx` reads a two's-complement
 encoding as the Python's `sx` does, and a signed result is taken mod `2^k` as the Python's `& (2^k - 1)` (`lowBits`).
 
-`Security/Definitions/Pouw/PearlC/RowPrims.lean` defines six of them (`Pouw.PearlC.RowCircuit`): the four over naturals are
+`security/Definitions/Pouw/PearlC/RowPrims.lean` defines six of them (`Pouw.PearlC.RowCircuit`): the four over naturals are
 copied here, and the two it states over rationals (`eTildeWord`, `sqrtWord`) are computed exactly on naturals and name the
 definition each must equal. `Pouw.NCP.accWFrom` is route U's int32 accumulator, of which `PouwDot16U8S8_v1` is 16 steps.
 Security defines none of the others: the Python function is the definition.
@@ -108,7 +108,7 @@ def addSub8 (b f g : Nat) : Nat := lowBits (sx b 7 + sx f 8 - sx g 8) 8
 
 /-! ## The accumulators -/
 
-/-- `wrap32`, the int32 an integer wraps to. Must equal `Pouw.Basic.wrap32` (`Security/Definitions/Pouw/Basic/Mat.lean`). -/
+/-- `wrap32`, the int32 an integer wraps to. Must equal `Pouw.Basic.wrap32` (`security/Definitions/Pouw/Basic/Mat.lean`). -/
 def wrap32 (x : Int) : Int := (x + 2 ^ 31) % 2 ^ 32 - 2 ^ 31
 
 /-- An int32 accumulator started at `c`. Must equal `Pouw.NCP.accWFrom`. -/

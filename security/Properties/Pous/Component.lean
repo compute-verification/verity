@@ -12,13 +12,13 @@ import Mathlib.Basic.ENNReal.Real
 (`Pous.EndToEnd.AcceptedAt`, read by `AuditsOf.Accepts`) accepts a period with no break while the node held too few
 bit-ticks, over an audit whose verifier's keys and session id are fixed and whose setup commitment, `C*`, setup outputs
 and table are functions of the coins flipped before the memory challenger's (`AuditsOf`). Onsite's verifier
-runs `PousCheck.RunProtocol.protocol` on bytes instead: the one theorem's leg for PoUS turns that protocol's acceptance
-into `AcceptedAt` on fields of that kind.
+runs `PousCheck.RunProtocol.protocol` on bytes instead: protocol soundness's subprotocol for PoUS turns that protocol's
+acceptance into `AcceptedAt` on fields of that kind.
 Each statement below is one step of it, about one function of the code, in the shape of the code's properties.
 
 * `RunAccepts`: what the compiled check accepts is `AcceptedAt` at the auditor's point, keys and session id, on the
   case's setup, table and session, and what it publishes is `certify` of the point alone. With
-  `Properties.Composition.DecodedAccepted` at `Verity.component .pous`, which yields `RunProtocol.protocol.Accepts`, it
+  `Properties.Composition.DecodedAccepted` at `Verity.Subprotocol.protocolAt .pous`, which yields `RunProtocol.protocol.Accepts`, it
   gives the event `PeriodHeldAt` bounds.
 * `RunDigest`: the digest the composition binds for PoUS's case is SHA-512 of the commitment's bytes, so the
   composition's commitment, fixed before the coins, fixes those bytes outside a SHA-512 collision, and they decode to
@@ -27,8 +27,8 @@ Each statement below is one step of it, about one function of the code, in the s
   runs' trees and blocks hold a SHA-512 collision (`forkStrings`): the fork form of the commit-then-coin step, which
   makes `AuditsOf`'s `commitment`, `store` and `digests` functions of the coins before PoUS's.
 
-The wipe (`MemoryChallenger.WipeProtocol.protocol`, `verity/wipe/v0`) is no component of onsite yet; its statements are
-the same steps for the composition that takes it.
+The wipe (`MemoryChallenger.WipeProtocol.protocol`, `verity/wipe/v0`) is onsite's component too
+(`Core.Onsite.components`); its statements are the same steps.
 
 * `WipeChecked`: the signed session passes every check of the wipe judge of record (`StreamedWipe.verdict`), as
   propositions: a signature under a trusted key on the session's message, the session's commitment, batch size 1,
@@ -36,7 +36,7 @@ the same steps for the composition that takes it.
 * `WipeAccepts`: what the compiled check accepts is of the period's server and session and carries a signed session
   that is `WipeChecked`, and it publishes `certify` of the commitment's parameters at `EGRESS_MAX_UNITS`, which
   certifies nothing, whatever egress count the evidence names (`WipeProtocol.Evidence.egress`; no session and no
-  network certifier signs one). It is the accepted session that `MemoryChallenger.Properties.WipeSurvivorBound` reads.
+  network attester signs one). It is the accepted session that `MemoryChallenger.Properties.WipeSurvivorBound` reads.
 * `WipeDigest`: the wipe's `RunDigest`.
 
 Each is proved in `Proofs.Properties.Pous.Component` (`Pous.Component.SecurityProofs`) and listed in the lock.
@@ -123,7 +123,7 @@ of `p`'s server and session, and `e` carries a signed session that passes every 
 under `p`'s keys (`WipeChecked`); and it publishes `certify` of `c`'s parameters at `EGRESS_MAX_UNITS`, which
 certifies nothing, whatever count the evidence gives, and profiles `c`'s parameters with the evidence's egress in MiB
 (`e.egress`: the count the evidence gives beside the signed session, `EGRESS_MAX_UNITS` when it gives none). Neither
-the signed session nor a network certifier signs that count. -/
+the signed session nor a network attester signs that count. -/
 def WipeAccepts : Prop :=
   ∀ (p : WipeProtocol.Params) (c : StreamedWipe.Commitment) (e : WipeProtocol.Evidence) (out : WipeProtocol.Public)
     (prof : StreamedWipe.Params × Int),

@@ -28,12 +28,12 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
 
 `checked_of_accepts`: at an outcome `verify --zk --registered F` accepts, the shadow layout's registered reads that are
 the verifier's own at the outcome's sample (`OwnReads`) are `Checked` at the outcome's registration, through `regPaths`.
-The one table's statement is setupH's at the record's sample `d`, over `HmRow.drawn c pub d` (`setupH_drawn`);
+The one table's statement is setupH's at the record's sample `d`, over `HmRow.drawn c pub d` (`setupH_sampled`);
 `checkRegistered` accepting it is `Registered.check` accepting it (`checkRegistered_ok`), at a circuit naming each port
 once (`dupName_of_checkRegistered`, `names_once_of_dupName`), which opens each sampled
 instance's row of each of `own`'s ports at the position `own` gives for its unit, through the path the header gives
 (`check_tables`, `checkPort_at`: `FlockProofs.Registered.check_ok` keeping the positions and paths). The sampled
-instance at `u`'s rank holds the population's row of `u` (`Hidden.drawn_digestW`), whose leaf is the layout's
+instance at `u`'s rank holds the population's row of `u` (`Hidden.sampled_digestW`), whose leaf is the layout's
 registered leaf at `(u, q)`.
 -/
 
@@ -162,7 +162,7 @@ variable {mPts n : ℕ} {Reg : Type}
 accepts (`own` F's ports), each registered read of the shadow layout that is the verifier's own at the outcome's sample
 (`OwnReads`) has its registered leaf open the root `own` holds at the position `own` gives, through `regPaths`. -/
 theorem checked_of_accepts (I : Inputs) (ht : I.tags.typed = false) (own : Array Registered.Port)
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZK I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : SampleSetupZK I mPts S₀ (dj S₀))
     {c : Flock.Circuit} (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     {pub : Public} (hpub : HmRow.loadPublic (zkTags I) c I.publicFile = .ok pub) (hscope : Layout.scopeOk c = true)
     (hTags : TagsOk I) (o : Reg × Finset (Fin n) × Exec.Transcript) (hacc : LiveAcceptsZKR I own o)
@@ -184,7 +184,7 @@ theorem checked_of_accepts (I : Inputs) (ht : I.tags.typed = false) (own : Array
     have h1 := (setupH_spec ((zkTags_typed I).trans ht) hst).1
     rw [hc] at h1
     exact (Except.ok.inj h1).symm
-  obtain ⟨pop', hpop', hdr⟩ := Layout.setupH_drawn hst
+  obtain ⟨pop', hpop', hdr⟩ := Layout.setupH_sampled hst
   rw [hcst, hpub] at hpop'
   cases hpop'
   rw [hcst, hdp] at hdr
@@ -198,7 +198,7 @@ theorem checked_of_accepts (I : Inputs) (ht : I.tags.typed = false) (own : Array
   obtain ⟨p', positions, paths, hp', hent, hall⟩ := checkPort_at (hports _ hmem)
   rw [hfind] at hp'
   cases hp'
-  obtain ⟨D', hD', -, hn, -, -⟩ := Layout.drawn_spec hdp
+  obtain ⟨D', hD', -, hn, -, -⟩ := Layout.sampled_spec hdp
   rw [hD] at hD'
   cases hD'
   have hi : D.proved.idxOf u.val < D.proved.size := Array.idxOf_lt_length_of_mem hu
@@ -223,7 +223,7 @@ theorem checked_of_accepts (I : Inputs) (ht : I.tags.typed = false) (own : Array
     exact this
   have hdig : pub.digest u.val q.val c.ports.size =
       Registered.tableRow dp tb q.val (Registered.ref tb c.ports.size q.val (D.proved.idxOf u.val)) := by
-    have h1 := Hidden.drawn_digestW hpub hdp hD (Layout.proved_lt_population hD) hi q.isLt
+    have h1 := Hidden.sampled_digestW hpub hdp hD (Layout.proved_lt_population hD) hi q.isLt
     rw [hget] at h1
     rw [← h1]
     simp only [Public.digest, htb, Registered.tableRow, Registered.ref]

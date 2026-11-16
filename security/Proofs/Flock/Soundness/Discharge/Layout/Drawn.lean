@@ -12,11 +12,11 @@ set_option Elab.async false
 /-!
 # The sampled proof blocks' `b ‖ c`: the population's
 
-A sampled statement's public file is `HmRow.drawn` of the registered population's (`setupH_drawn`): its instances are the
-sample's proved units, and instance `r`'s `b ‖ c` is proved unit `D.proved[r]`'s in the population (`drawn_digest`, for a
+A sampled statement's public file is `HmRow.drawn` of the registered population's (`setupH_sampled`): its instances are the
+sample's proved units, and instance `r`'s `b ‖ c` is proved unit `D.proved[r]`'s in the population (`sampled_digest`, for a
 file without shared rows, whose `b ‖ c` are `n · np` pieces of 128 bytes, `loadPublic_digests`; the sample's units are in
 the population, `ofJson_lt`). So at a proved unit's `hm96` slot, block `o` and template instance `g` with `o · c.g + g = r`, a satisfying
-witness holds the population's `b ‖ c` of unit `D.proved[r]` (`bc_drawn`): the registration's, fixed by the public file
+witness holds the population's `b ‖ c` of unit `D.proved[r]` (`bc_sampled`): the registration's, fixed by the public file
 before the sample.
 -/
 
@@ -28,7 +28,7 @@ open Flock Refine
 set_option maxHeartbeats 2000000 in
 /-- **A sampled statement's public file is the sampled proof blocks' over the population's**: setupH loads the population's public
 file and takes `HmRow.drawn` of it at the sample. -/
-theorem setupH_drawn {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
+theorem setupH_sampled {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
     {tables : List (String × ByteArray)} {d : Lean.Json} {partition : Option Lean.Json} {program : Option ByteArray}
     {st : Stmt} (h : Stmt.setupH tags circuitFile publicFile coins tables (some d) partition program = .ok st) :
     ∃ pop, HmRow.loadPublic tags st.c publicFile = .ok pop ∧ HmRow.drawn st.c pop d = .ok st.pub := by
@@ -45,8 +45,8 @@ theorem setupH_drawn {tags : Tags} {circuitFile publicFile : ByteArray} {coins :
 set_option maxHeartbeats 2000000 in
 /-- **`HmRow.drawn`'s statement**: the sample parses (`D`), its population is the registered one, its instances are the
 proved units, and its `b ‖ c` are the proved units' (a shared-row file keeps its tables). -/
-theorem drawn_spec {c : Circuit} {pop pub : Public} {d : Lean.Json} (h : HmRow.drawn c pop d = .ok pub) :
-    ∃ D, Draw.UnitDraw.ofJson d = .ok D ∧ D.population = pop.n ∧ pub.n = D.proved.size ∧
+theorem sampled_spec {c : Circuit} {pop pub : Public} {d : Lean.Json} (h : HmRow.drawn c pop d = .ok pub) :
+    ∃ D, Draw.UnitSample.ofJson d = .ok D ∧ D.population = pop.n ∧ pub.n = D.proved.size ∧
       pub.tables = pop.tables.map (fun t => { t with refs := (D.proved.foldl
         (fun acc u => acc ++ t.refs.extract (u * c.ports.size) (u * c.ports.size + c.ports.size)) #[]) }) ∧
       pub.digests = if pop.tables.isSome then pop.digests else
@@ -166,11 +166,11 @@ theorem of_not_or_not_true {a b : Bool} (h : ¬ (a || !b) = true) : b = true := 
 
 -- `walk_step` down the unfolded do-block of `ofJson`, the sample's decoder, a goal per branch
 set_option maxHeartbeats 2000000 in
-/-- **A sample's units are in its population**: `UnitDraw.ofJson` checks the sampled proof blocks, and a closure's units, against
+/-- **A sample's units are in its population**: `UnitSample.ofJson` checks the sampled proof blocks, and a closure's units, against
 `[0, population)`. -/
-theorem ofJson_lt {d : Lean.Json} {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson d = .ok D) :
+theorem ofJson_lt {d : Lean.Json} {D : Draw.UnitSample} (h : Draw.UnitSample.ofJson d = .ok D) :
     (∀ u ∈ D.units, u < D.population) ∧ ∀ u ∈ D.closure, u < D.population := by
-  unfold Draw.UnitDraw.ofJson at h
+  unfold Draw.UnitSample.ofJson at h
   dsimp only at h
   simp only [throw_bind'] at h
   repeat' walk_step
@@ -186,20 +186,20 @@ theorem ofJson_lt {d : Lean.Json} {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson 
     | simp
 
 /-- A sample without a closure proves its sampled proof blocks, which are in its population. -/
-theorem proved_lt {d : Lean.Json} {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson d = .ok D) (hcl : D.closure = #[]) :
+theorem proved_lt {d : Lean.Json} {D : Draw.UnitSample} (h : Draw.UnitSample.ofJson d = .ok D) (hcl : D.closure = #[]) :
     ∀ u ∈ D.proved, u < D.population := by
-  unfold Draw.UnitDraw.proved
+  unfold Draw.UnitSample.proved
   rw [hcl]
   exact (ofJson_lt h).1
 
 /-- **Instance `r`'s `b ‖ c` in a sampled statement is its proved unit's in the population's** (a file without shared
 rows). -/
-theorem drawn_digest {c : Circuit} {pop pub : Public} {d : Lean.Json} {D : Draw.UnitDraw}
-    (h : HmRow.drawn c pop d = .ok pub) (hD : Draw.UnitDraw.ofJson d = .ok D) (hpt : pop.tables = none)
+theorem sampled_digest {c : Circuit} {pop pub : Public} {d : Lean.Json} {D : Draw.UnitSample}
+    (h : HmRow.drawn c pop d = .ok pub) (hD : Draw.UnitSample.ofJson d = .ok D) (hpt : pop.tables = none)
     (hsz : pop.digests.size = pop.n * c.ports.size) (hlt : ∀ u ∈ D.proved, u < D.population)
     {r p : ℕ} (hr : r < D.proved.size) (hp : p < c.ports.size) :
     pub.digest r p c.ports.size = pop.digest D.proved[r] p c.ports.size := by
-  obtain ⟨D', hD', hpopn, -, htab, hdig⟩ := drawn_spec h
+  obtain ⟨D', hD', hpopn, -, htab, hdig⟩ := sampled_spec h
   rw [hD] at hD'
   cases hD'
   have hpub : pub.tables = none := by rw [htab, hpt]; rfl
@@ -213,18 +213,18 @@ theorem drawn_digest {c : Circuit} {pop pub : Public} {d : Lean.Json} {D : Draw.
 
 /-- **A sampled statement's `hm96` chunk at block `o`, template instance `g`** is, at a proved unit, that unit's
 population `b ‖ c`. -/
-theorem bcChunk_drawn {c : Circuit} {pop pub : Public} {d : Lean.Json} {D : Draw.UnitDraw}
-    (h : HmRow.drawn c pop d = .ok pub) (hD : Draw.UnitDraw.ofJson d = .ok D) (hpt : pop.tables = none)
+theorem bcChunk_sampled {c : Circuit} {pop pub : Public} {d : Lean.Json} {D : Draw.UnitSample}
+    (h : HmRow.drawn c pop d = .ok pub) (hD : Draw.UnitSample.ofJson d = .ok D) (hpt : pop.tables = none)
     (hsz : pop.digests.size = pop.n * c.ports.size) (hlt : ∀ u ∈ D.proved, u < D.population)
     {o g p : ℕ} (hr : o * c.g + g < D.proved.size) (hp : p < c.ports.size) :
     bcChunk c pub o g p = pop.digest D.proved[o * c.g + g] p c.ports.size := by
-  obtain ⟨D', hD', -, hn, -, -⟩ := drawn_spec h
+  obtain ⟨D', hD', -, hn, -, -⟩ := sampled_spec h
   rw [hD] at hD'
   cases hD'
   unfold bcChunk Circuit.instOf
   rw [hn]
   simp only [hr, ↓reduceIte]
-  exact drawn_digest h hD hpt hsz hlt hr hp
+  exact sampled_digest h hD hpt hsz hlt hr hp
 
 /-- A population unit's `b ‖ c` is 128 bytes (a file without shared rows). -/
 theorem pop_digest_size {tags : Tags} {c : Circuit} {file : ByteArray} {pop : Public}
@@ -244,11 +244,11 @@ the instance `o · c.g + g` is proved unit `D.proved[o · c.g + g]`, and the 128
 `b ‖ c`. It holds in the model's statement at setupH's layout whose regions contain the executable's (`hregs`), for a
 population file without shared rows (`hpt`) and a sample whose proved units are in the population (`hlt`; `proved_lt`
 without a closure). -/
-theorem bc_drawn {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
+theorem bc_sampled {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
     {tables : List (String × ByteArray)} {d : Lean.Json} {partition : Option Lean.Json} {program : Option ByteArray}
     {st : Stmt} (h : Stmt.setupH tags circuitFile publicFile coins tables (some d) partition program = .ok st)
     {pop : Public} (hpop : HmRow.loadPublic tags st.c publicFile = .ok pop) (hpt : pop.tables = none)
-    {D : Draw.UnitDraw} (hD : Draw.UnitDraw.ofJson d = .ok D) (hlt : ∀ u ∈ D.proved, u < D.population)
+    {D : Draw.UnitSample} (hD : Draw.UnitSample.ofJson d = .ok D) (hlt : ∀ u ∈ D.proved, u < D.population)
     (L : FlockSoundness.Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
     (hregs : ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs)
     {z : Model.Witness (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
@@ -257,19 +257,19 @@ theorem bc_drawn {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coi
     Binding.bytesAt z (fun (j : Fin 128) (t : Fin 8) =>
         (L.model regs).addr o (inBlockOr st.c.kLog (bcAddr st.c g p j.val t.val))) =
       (pop.digest D.proved[o.val * st.c.g + g] p st.c.ports.size).data.toList := by
-  obtain ⟨pop', hpop', hdr⟩ := setupH_drawn h
+  obtain ⟨pop', hpop', hdr⟩ := setupH_sampled h
   rw [hpop] at hpop'
   cases hpop'
   have hsz := (loadPublic_digests hpop hpt).1
   have hpopn : D.population = pop.n := by
-    obtain ⟨D', hD', hpn, -⟩ := drawn_spec hdr
+    obtain ⟨D', hD', hpn, -⟩ := sampled_spec hdr
     rw [hD] at hD'
     cases hD'
     exact hpn
-  rw [← bcChunk_drawn hdr hD hpt hsz hlt hr hp]
+  rw [← bcChunk_sampled hdr hD hpt hsz hlt hr hp]
   refine bc_pinned L regs hregs (setupH_regions h) hz o hg hg2 hp fun g' hg' => ?_
   have hr' : o.val * st.c.g + g' < D.proved.size := by omega
-  rw [bcChunk_drawn hdr hD hpt hsz hlt hr' hp]
+  rw [bcChunk_sampled hdr hD hpt hsz hlt hr' hp]
   exact pop_digest_size hpop hpt (by rw [← hpopn]; exact hlt _ (Array.getElem_mem hr')) hp
 
 end FlockSoundness.Discharge.Layout

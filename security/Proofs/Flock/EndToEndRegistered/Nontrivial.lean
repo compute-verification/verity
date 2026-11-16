@@ -3,13 +3,13 @@ module
 public import Flock.Canon
 public import Flock.Circuit
 public import Flock.Draw
-public import Flock.Firewall
+public import Flock.ZkServer
 public import Flock.HmRow
 public import Flock.Public
 public import Flock.Registered
 public import Mathlib
 public import Proofs.Flock.EndToEndRegistered.Inputs
-public import Proofs.Flock.Recursive.FirewallJson
+public import Proofs.Flock.Recursive.ZkServerJson
 public import Proofs.Flock.SessionLoop.Concrete.Public
 public import Proofs.Flock.Soundness.BindSound
 public import Proofs.Flock.Soundness.Binding.Layout
@@ -66,7 +66,7 @@ The instance: no gate (`circ0`), one unit and one table (`tabW`); the circuit fi
 of `portW`, a registered value of two rows whose root the row's leaf climbs to through `pathW`; the record samples unit
 0 (`tr0`), and the public file (`pubW`) names no registered tables, so the read's registered path is empty and
 `opensLeaf` refuses it on its length. `Flock.SecurityProofs.EndToEndRegisteredDrawn_nontrivial` is the same for
-`EndToEndRegisteredDrawn`, whose conclusion is `EndToEndRegistered`'s.
+`EndToEndRegisteredSampled`, whose conclusion is `EndToEndRegistered`'s.
 -/
 
 @[expose] public section
@@ -80,8 +80,8 @@ open FlockSoundness.Discharge.Composed (drawJ partOf)
 /-- **`regPathsHJ` is empty** at a read whose public file, sampled at the record's sample, names no registered tables. -/
 theorem regPaths_none {n : ℕ} {Gate : Type} {I : Inputs} {c : Flock.Circuit} {pub : Flock.Public}
     {t : Exec.Transcript} {port : (Fin n × Fin c.ports.size) ⊕ Gate → Flock.Registered.Port} {u : Fin n}
-    {q : Fin c.ports.size} {d : Json} {D : Flock.Draw.UnitDraw} {dp : Flock.Public}
-    (hd : recordDraw t.record = some d) (hD : Flock.Draw.UnitDraw.ofJson (drawJ I d (partOf I d u.val)) = .ok D)
+    {q : Fin c.ports.size} {d : Json} {D : Flock.Draw.UnitSample} {dp : Flock.Public}
+    (hd : recordDraw t.record = some d) (hD : Flock.Draw.UnitSample.ofJson (drawJ I d (partOf I d u.val)) = .ok D)
     (hdp : Flock.HmOut.drawn c pub (drawJ I d (partOf I d u.val)) = .ok dp) (ht : dp.tables = none) :
     regPathsHJ I c pub t port (.inl (u, q)) = ByteArray.empty := by
   simp [regPathsHJ, hd, hD, hdp, ht, Except.toOption]
@@ -216,54 +216,54 @@ def drawW : Json := Json.mkObj [("k", jn 1), ("law", .str "subset"), ("populatio
 
 def recW : Json := Json.mkObj [("unit_draw", drawW)]
 
-def tr0 : Exec.Transcript := { record := Flock.Firewall.printJson recW, proofs := #[] }
+def tr0 : Exec.Transcript := { record := Flock.ZkServer.printJson recW, proofs := #[] }
 
 /-- The public file: one instance, at population index 0, with no digests, outputs or registered tables. -/
 def pubW : Flock.Public :=
   { header := Json.mkObj [("units", Json.mkObj [("indices", .arr #[jn 0])])], n := 1, digests := #[], outputs := #[],
     sha := ByteArray.empty }
 
-def drawU : Flock.Draw.UnitDraw := { law := .subset 1, population := 1, units := #[0] }
+def sampleU : Flock.Draw.UnitSample := { samplingDesign := .subset 1, population := 1, units := #[0] }
 
-theorem drawW_obj : drawW = .obj ⟨⟨FlockDeploy.Concrete.objT drawW⟩⟩ := by kernel_rfl
+theorem sampleW_obj : drawW = .obj ⟨⟨FlockDeploy.Concrete.objT drawW⟩⟩ := by kernel_rfl
 
-theorem drawW_model : (FlockDeploy.Concrete.objT drawW).toListModel =
+theorem sampleW_model : (FlockDeploy.Concrete.objT drawW).toListModel =
     [⟨"k", jn 1⟩, ⟨"law", .str "subset"⟩, ⟨"population", jn 1⟩, ⟨"units", .arr #[jn 0]⟩] := by kernel_rfl
 
-theorem drawW_asc : Flock.Firewall.ascending (FlockDeploy.Concrete.objT drawW) = true := by kernel_rfl
+theorem sampleW_asc : Flock.ZkServer.ascending (FlockDeploy.Concrete.objT drawW) = true := by kernel_rfl
 
 /-- `plainStr` reads its strings through `String.all`, which the kernel doesn't evaluate, so `simp` decides them. -/
-theorem plain_drawW : Flock.Firewall.plain drawW = true := by
-  rw [drawW_obj]
-  refine FlockDeploy.Concrete.plain_obj_of drawW_model drawW_asc ?_
+theorem plain_sampleW : Flock.ZkServer.plain drawW = true := by
+  rw [sampleW_obj]
+  refine FlockDeploy.Concrete.plain_obj_of sampleW_model sampleW_asc ?_
   simp only [List.mem_cons, List.not_mem_nil, or_false, forall_eq_or_imp, forall_eq]
-  simp [Flock.Firewall.plain, Flock.Firewall.plainList, Flock.Firewall.plainStr, String.all_bool_eq, jn]
+  simp [Flock.ZkServer.plain, Flock.ZkServer.plainList, Flock.ZkServer.plainStr, String.all_bool_eq, jn]
 
 theorem recW_obj : recW = .obj ⟨⟨FlockDeploy.Concrete.objT recW⟩⟩ := by kernel_rfl
 
 theorem recW_model : (FlockDeploy.Concrete.objT recW).toListModel = [⟨"unit_draw", drawW⟩] := by kernel_rfl
 
-theorem recW_asc : Flock.Firewall.ascending (FlockDeploy.Concrete.objT recW) = true := by kernel_rfl
+theorem recW_asc : Flock.ZkServer.ascending (FlockDeploy.Concrete.objT recW) = true := by kernel_rfl
 
-theorem plain_recW : Flock.Firewall.plain recW = true := by
+theorem plain_recW : Flock.ZkServer.plain recW = true := by
   rw [recW_obj]
   refine FlockDeploy.Concrete.plain_obj_of recW_model recW_asc ?_
   simp only [List.mem_cons, List.not_mem_nil, or_false, forall_eq]
-  exact ⟨by simp [Flock.Firewall.plainStr, String.all_bool_eq], plain_drawW⟩
+  exact ⟨by simp [Flock.ZkServer.plainStr, String.all_bool_eq], plain_sampleW⟩
 
-theorem norm_recW : Recursion.FirewallJson.norm recW = recW := by kernel_rfl
+theorem norm_recW : Recursion.ZkServerJson.norm recW = recW := by kernel_rfl
 
-theorem recordDraw_tr0 : recordDraw tr0.record = some drawW := by
-  show recordDraw (Flock.Firewall.printJson recW) = some drawW
+theorem recordSample_tr0 : recordDraw tr0.record = some drawW := by
+  show recordDraw (Flock.ZkServer.printJson recW) = some drawW
   unfold recordDraw
-  rw [Recursion.FirewallJson.parse_printJson plain_recW, norm_recW]
+  rw [Recursion.ZkServerJson.parse_printJson plain_recW, norm_recW]
   kernel_rfl
 
-theorem ofJson_drawW : Flock.Draw.UnitDraw.ofJson drawW = .ok drawU := by kernel_rfl
+theorem ofJson_sampleW : Flock.Draw.UnitSample.ofJson drawW = .ok sampleU := by kernel_rfl
 
 /-- The sampled statement's header: `pubW`'s, with the sample, its size, the population's and the proved units. -/
 def hdrW : Json :=
-  (((pubW.header.setObjVal! "unit_draw" drawW).setObjVal! "instances" (Lean.toJson drawU.proved.size)).setObjVal!
+  (((pubW.header.setObjVal! "unit_draw" drawW).setObjVal! "instances" (Lean.toJson sampleU.proved.size)).setObjVal!
     "population" (Lean.toJson pubW.n)).setObjVal! "units" (Flock.HmRow.unitsEntry { circW with outPorts := #[] } #[0])
 
 def hdrS : String := (Flock.canonUtf8 hdrW).toOption.getD ""
@@ -273,27 +273,27 @@ def hdrS : String := (Flock.canonUtf8 hdrW).toOption.getD ""
 theorem hdr_of : Flock.canonUtf8 hdrW = .ok hdrS := FlockDeploy.Concrete.canonUtf8_eq (by kernel_rfl)
 
 set_option maxHeartbeats 2000000 in -- the walk steps through `HmRow.drawn` and leaves closed checks to the kernel
-fwd_def drawnPub drawn_pubW : Flock.HmOut.drawn circW pubW drawW by
-  [hdr_of, ofJson_drawW]
+fwd_def sampledPub sampled_pubW : Flock.HmOut.drawn circW pubW drawW by
+  [hdr_of, ofJson_sampleW]
   block [Flock.canonUtf8, Flock.Sha512.hash]
   shallow []
 
-theorem drawnPub_tables : drawnPub.tables = none := by kernel_rfl
+theorem sampledPub_tables : sampledPub.tables = none := by kernel_rfl
 
-theorem unitIndices_drawnPub : Flock.Registered.unitIndices drawnPub = .ok #[0] := by kernel_rfl
+theorem unitIndices_sampledPub : Flock.Registered.unitIndices sampledPub = .ok #[0] := by kernel_rfl
 
 theorem regPaths0 : regPathsHJ ins circW pubW tr0 rd0.port (Sum.inl (0, q0)) = ByteArray.empty :=
-  regPaths_none recordDraw_tr0 (by rw [drawJ_one ins_count]; exact ofJson_drawW)
-    (by rw [drawJ_one ins_count]; exact drawn_pubW) drawnPub_tables
+  regPaths_none recordSample_tr0 (by rw [sampleJ_one ins_count]; exact ofJson_sampleW)
+    (by rw [sampleJ_one ins_count]; exact sampled_pubW) sampledPub_tables
 
 /-- **The read is the record's own**: `OwnReadsHJ` lists it, at the record's sample of unit 0. -/
 theorem ownReads0 : OwnReadsHJ ins own0 circW pubW tr0 rd0.isRead rd0.port rd0.readAt := by
   intro p hp
   change p = Sum.inl (0, q0) at hp
   subst hp
-  refine ⟨0, q0, drawW, drawU, drawnPub, #[0], rfl, by simp [own0, rd0], by kernel_rfl, recordDraw_tr0,
-    by rw [drawJ_one ins_count]; exact ofJson_drawW, by rw [drawJ_one ins_count]; exact drawn_pubW,
-    unitIndices_drawnPub, by decide +kernel, by kernel_rfl⟩
+  refine ⟨0, q0, drawW, sampleU, sampledPub, #[0], rfl, by simp [own0, rd0], by kernel_rfl, recordSample_tr0,
+    by rw [sampleJ_one ins_count]; exact ofJson_sampleW, by rw [sampleJ_one ins_count]; exact sampled_pubW,
+    unitIndices_sampledPub, by decide +kernel, by kernel_rfl⟩
 
 /-- **The read is not `Checked`**: the public file names no path to `portW`'s root, and an empty path is no path through
 a tree of two leaves. -/
@@ -321,7 +321,7 @@ theorem _root_.Flock.SecurityProofs.EndToEndRegistered_nontrivial :
       ¬ rd.Checked o.1 (regPathsHJ ins circW pubW o.2.2 rd.port) :=
   ⟨((), ∅, tr0), rd0, ownReads0, notChecked0⟩
 
-/-- **`EndToEndRegisteredDrawn` rules out a verifier that accepts everything**, at `EndToEndRegistered`'s instance. -/
+/-- **`EndToEndRegisteredSampled` rules out a verifier that accepts everything**, at `EndToEndRegistered`'s instance. -/
 theorem _root_.Flock.SecurityProofs.EndToEndRegisteredDrawn_nontrivial :
     ∃ (o : Unit × Finset (Fin 1) × Exec.Transcript) (rd : Registered.ReadsX lay0 rs0)
       (_ : OwnReadsHJ ins own0 circW pubW o.2.2 rd.isRead rd.port rd.readAt),

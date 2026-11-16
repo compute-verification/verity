@@ -79,15 +79,15 @@ def runSteps (j : Json) (whole steps : Bool) : IO Unit := do
   let outputs := strs (getD j "outputs")
   let rec_ := getD j "record"
   let v := p.verifier
-  let qd ← IO.ofExcept (← timed "queryDigest" v.query Registration.queryDigest isOk)
+  let qd ← IO.ofExcept (← timed "queryDigest" v.query Docket.queryDigest isOk)
   let _ ← timed "checkPublic" rec_ (fun r => Service.checkPublic r (Json.str v.scheme) qd values declared)
     (fun c => match c with | .ok c => c.codes.isEmpty | .error _ => false)
   let n := (nat? (getD rec_ "population")).getD 0
   let some rule' := rule.over n (Select.strataSizes v.program v.query)
     | throw (IO.userError "the rule's rate law refuses the population")
-  let law ← IO.ofExcept (rule'.lawOver n)
-  let v := { v with law }
-  let _ ← timed "registration" rec_ (fun r => Registration.check r v) (·.isEmpty)
+  let samplingDesign ← IO.ofExcept (rule'.samplingDesignOver n)
+  let v := { v with samplingDesign }
+  let _ ← timed "registration" rec_ (fun r => Docket.check r v) (·.isEmpty)
   let _ ← timed "partition.evaluate" v.program (fun pr => Partition.evaluate pr v.query) isOk
     (fun r => match r with | .ok rs => [("ranges", toJson rs.size)] | .error _ => [])
   let _ ← timed "partition.unitGates" v.program (fun pr => Partition.unitGates pr v.query) isOk
@@ -95,7 +95,7 @@ def runSteps (j : Json) (whole steps : Bool) : IO Unit := do
   let _ ← timed "slots.layout" v.program (fun pr => Slots.layout pr v.query) isOk
   let _ ← timed "popOk" v.program (fun pr => Slots.popOk pr v.query n) id
   let receipt ← IO.ofExcept (← timed "receipt" rec_ (fun r => Run.receipt r challenger received) isOk)
-  let derived ← IO.ofExcept (← timed "derive" v.program (fun pr => Draw.derive pr v.query law v.workTable) isOk)
+  let derived ← IO.ofExcept (← timed "derive" v.program (fun pr => Draw.derive pr v.query samplingDesign v.workTable) isOk)
   let res ← IO.ofExcept (← timed "resolve" v.program (fun pr => Select.resolve rule pr v.query) isOk)
   let (draw, _, read) ← IO.ofExcept (← timed "select" v.program
     (fun pr => Select.select res pr v.query v.workTable none source) isOk)

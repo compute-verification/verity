@@ -70,7 +70,7 @@ theorem ringSwitchCut_x (io : Asks M) (sv : ℕ → Array F128) {cs cs' : Array 
 
 end FlockComplete
 
-namespace Flock.Firewall.Finish
+namespace Flock.ZkServer.Finish
 
 open Flock
 
@@ -118,4 +118,4 @@ theorem claimsOf_map_x (xs : Array (Array F128)) : (claimsOf xs).map (·.x) = xs
 
 end
 
-end Flock.Firewall.Finish
+end Flock.ZkServer.Finish

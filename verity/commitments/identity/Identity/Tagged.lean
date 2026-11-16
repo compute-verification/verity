@@ -6,7 +6,7 @@ meta import Base.Canon
 meta import Identity.Sha512
 
 /-!
-The tagged SHA-512 identity hash (`verity/ml/commitments/identity.py`'s `tagged_sha512` and `identity_digest_sha512`):
+The tagged SHA-512 identity hash (`verity/commitments/identity.py`'s `tagged_sha512` and `identity_digest_sha512`):
 
 ~~~text
 tagged_sha512(tag, x) = SHA512("verity/tagged-sha512/v1\0" ‖ u32be(len tag) ‖ tag ‖ u64be(len x) ‖ x)

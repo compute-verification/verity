@@ -8,7 +8,7 @@
 #   the node), reads the Build's rank 0 Program and the required manifest from the Build's row dir ($A10_ROW, on the
 #   machine that built it), runs `a10.py values`, and keeps $OUT/compare.json, the logs and $OUT/saved-a11.tar, $OUT/saved-a9.tar
 #   (a11.py --load-values' directories).
-#   audit builds the sampled-proofs Lean in the tree, so it runs from a clone:
+#   audit builds the SPOT Lean in the tree, so it runs from a clone:
 #     A10_MODE=audit A10_MEM_GB=128 A10_VALUES=art:ID A10_SET=a11 A10_ARGS="--only K1,K2 --tamper none" bash benchmarks/one_stage/a10.sh
 #     (a job run from a clone of the tree, 128 GB, up to 4 h)
 #   It runs `a10.py audit` (a11.py with the committed window) on $A10_SET's saved directory from the values run's record
@@ -20,7 +20,7 @@ export HZ_CACHE=${A11_CACHE:-$HOME/.cache/verity-a11}
 mkdir -p "$HZ_CACHE"
 source benchmarks/pouw/hidden_zk/job.sh
 export PATH=$HOME/.elan/bin:$PATH
-export PYTHONPATH=$SRC:$SRC/verity/protocols/proofs/flock/prover/python:$SRC/adapters/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
+export PYTHONPATH=$SRC:$SRC/verity/protocols/proofs/flock/prover/python:$SRC/adapters/vllm:$SRC/adapters/torch:$SRC/tools/config:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
 C=${A10_CACHE:-$HOME/.cache/verity-a10}
 mkdir -p "$C"
 # the store CLI from the tree (a node's job has none on its PATH), with the run's custody key in its environment only
@@ -28,7 +28,7 @@ R() { PYTHONPATH=$SRC/benchmarks/proof_throughput python3 -c 'import os, sys
 from verity_proof_throughput.store import store_env
 os.execvpe(sys.executable, [sys.executable, "-m", "research", *sys.argv[1:]], store_env())' "$@"; }
 R keep "$HZ_CACHE" --owner @circuits --expires 4d --priority low --root / \
-  --why "A10's builds (flock-circuit, flock-verify, the venv), keyed by their inputs" >> "$OUT/job.log" 2>&1
+  --why "A10's builds (flock-circuit, verity-verify-proof, the venv), keyed by their inputs" >> "$OUT/job.log" 2>&1
 
 # the record's store ids and the Build's row dir, in a10_inputs.json
 IN() { python3 -c 'import json, sys; v = json.load(open(sys.argv[1]))[sys.argv[2]]; print(" ".join(v) if isinstance(v, list) else v)' \
@@ -95,7 +95,7 @@ values)
   ;;
 audit)
   setup
-  (cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
+  (cd verity/protocols/proofs/spot/verifier/lean && lake build spot-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
     || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
   S=$W/saved && mkdir -p "$S"
   R data fetch "${A10_VALUES:?}" --to "$W/fetch" --path "out/saved-${A10_SET:?}.tar" >> "$OUT/fetch.log" 2>&1 \

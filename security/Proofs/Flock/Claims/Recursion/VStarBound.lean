@@ -286,7 +286,7 @@ def LayoutB.piecesOf (L : LayoutB) (x : Msg) (s : ℕ) (w : Flock.Wit) (i : ℕ)
 /-- **The compiled verifier's SHA-512 evaluations at a V\* statement `xO`**, each `(u, H u)`: its setup's there
 (`Deploy.setup`), among them check 5's row commitments (`RecCoins.checkRows`: at each row port the statement registers,
 the commitment the verifier recomputes from its own rows, the verifier's `v` at its coins or zero rows, under the
-salt the statement carries). They are `setupCalls` at `xO` alone, so route 2C's finders search them (`drawCalls`). -/
+salt the statement carries). They are `setupCalls` at `xO` alone, so route 2C's finders search them (`sampleCalls`). -/
 def vcallsAt {Coin : Type} (H : Msg → Msg) (D : Deploy Coin) (xO : Msg) : List (Msg × Msg) :=
   (D.setup xO).map fun u => (u, H u)
 

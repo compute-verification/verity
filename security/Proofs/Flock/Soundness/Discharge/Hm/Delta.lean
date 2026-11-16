@@ -1,10 +1,3 @@
-/-
-Δ in a typed template statement, pair by pair (`delta_rows`): every slot's constant from the pin (`constPairs`), then
-each row's constant bits (`rowPairs`: its first `cv` the row prefix's midstate, its `hm96` slot's `pad` the padding
-block, bit 1 from the pin and bit 0 from the unit range's forced-zero row), the units' leaf and cut bits, every wire's
-destination bits from its source's, then the typed tail. Δ writes each row's constant bits as `rowPairsOf`, which for
-`sha512/row/v1` rows (`16 · words` bits in at least one chunk) are `rowPairs`'s (`rowPairsAll_v1`).
--/
 module
 
 public import Proofs.Flock.Soundness.ExecFlatCopies
@@ -24,6 +17,14 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Hm.Accept
+
+/-!
+Δ in a typed template statement, pair by pair (`delta_rows`): every slot's constant from the pin (`constPairs`), then
+each row's constant bits (`rowPairs`: its first `cv` the row prefix's midstate, its `hm96` slot's `pad` the padding
+block, bit 1 from the pin and bit 0 from the unit range's forced-zero row), the units' leaf and cut bits, every wire's
+destination bits from its source's, then the typed tail. Δ writes each row's constant bits as `rowPairsOf`, which for
+`sha512/row/v1` rows (`16 · words` bits in at least one chunk) are `rowPairs`'s (`rowPairsAll_v1`).
+-/
 
 @[expose] public section
 
@@ -112,13 +113,13 @@ theorem constBit_v1 {p : Port} {n t : ℕ} (hv : p.v2 = false) (hs : p.segs = no
     (hw : 2 * p.words = 128 * n) (ht : t < 1024) :
     HmRow.constBit p (HmRow.tailOf p) n t = some (wordsBit (HmRow.padWords p.words) t) := by
   have hby : p.bytes = 2 * p.words := by simp [Port.bytes, hv]
-  have hj : (HmRow.blockBit t).1 = 8 * (t / 64) + 7 - t % 64 / 8 := rfl
-  have hb8 : (HmRow.blockBit t).2 = t % 8 := rfl
+  have hj : (HmRow.chunkBit t).1 = 8 * (t / 64) + 7 - t % 64 / 8 := rfl
+  have hb8 : (HmRow.chunkBit t).2 = t % 8 := rfl
   unfold HmRow.constBit HmRow.tailOf
   simp only [hby, hb, hs]
   rw [if_neg (by rw [hj, hb8]; omega), padTail_eq (by omega), HmRow.padWords,
     wordsBit_eq _ (n := 16) (by omega), decide_eq_true (by omega), Bool.true_and,
-    show 128 * n + (HmRow.blockBit t).1 - 2 * p.words = 8 * (t / 64) + 7 - t % 64 / 8 by rw [hj]; omega, hb8, wbit,
+    show 128 * n + (HmRow.chunkBit t).1 - 2 * p.words = 8 * (t / 64) + 7 - t % 64 / 8 by rw [hj]; omega, hb8, wbit,
     List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_range (by omega), Option.map_some, Option.getD_some,
     wordsBE_getElem! (by omega), getLsbD_wordL _ _ _ (by omega), get!_eq_getD,
     show 0 + 8 * (t / 64) + (7 - t % 64 / 8) = 8 * (t / 64) + 7 - t % 64 / 8 by omega,

@@ -1,16 +1,17 @@
-/-
-`RecSetup.fullDraw` on a population of four units, under F1's inner shape (m 27, k_log 24, claims 8 over 3 regions):
-the `subset` sample of all four passes, and a sample of fewer units, a stratified sample of all four and a subset sample with a
-closure are refused; with no sample, or no inner shape outside a recursive session, it passes whatever the record holds.
-A recursive session (`--rec-part`, `--rec-bindings` or `--rec-rows`) without an inner shape is refused, whatever its
-sample. `RecSetup.innerDrawn`: an inner session's record whose `unit_draw` is absent or null, or that is not a JSON object,
-is refused, from the inner statement's files or the verifier's inner coins alike; one with a sample passes, and so does a
-session without the inner record.
--/
 module
 
 public import Flock.RecSetup
 meta import Flock.RecSetup
+
+/-!
+`RecSetup.fullSample` on a population of four units, under F1's inner shape (m 27, k_log 24, claims 8 over 3 regions):
+the `subset` sample of all four passes, and a sample of fewer units, a stratified sample of all four and a subset sample with a
+closure are refused; with no sample, or no inner shape outside a recursive session, it passes whatever the record holds.
+A recursive session (`--rec-part`, `--rec-bindings` or `--rec-rows`) without an inner shape is refused, whatever its
+sample. `RecSetup.innerSampled`: an inner session's record whose `unit_draw` is absent or null, or that is not a JSON object,
+is refused, from the inner statement's files or the verifier's inner coins alike; one with a sample passes, and so does a
+session without the inner record.
+-/
 
 @[expose] public section
 
@@ -38,7 +39,7 @@ def inner : RecVStar.Inner := { m := 27, kLog := 24, claims := 8, regions := 3 }
 def record (d : Json) : String := (Json.mkObj [("unit_draw", d)]).compress
 
 def why (i : Option RecVStar.Inner) (d : Option Json) (rec : Bool := true) : Option String :=
-  match RecSetup.fullDraw i rec d (record (d.getD Json.null)) with
+  match RecSetup.fullSample i rec d (record (d.getD Json.null)) with
   | .ok () => none
   | .error e => some e
 
@@ -64,18 +65,18 @@ def tail : String := ": a V* session draws every unit of its population, the onl
 def files (r : String) : RecCoins.Source := .files { circuit := .empty, pub := .empty, partition := Json.null, record := r }
 
 def innerWhy (src : Option RecCoins.Source) : Option String :=
-  match RecSetup.innerDrawn src with
+  match RecSetup.innerSampled src with
   | .ok () => none
   | .error e => some e
 
 #guard innerWhy (some (files (record (subset [0, 1, 2, 3])))) == none
 #guard innerWhy (some (.coins Json.null (record (subset [1])))) == none
-#guard innerWhy (some (files (record Json.null))) == some RecSetup.noInnerDraw
-#guard innerWhy (some (.coins Json.null (record Json.null))) == some RecSetup.noInnerDraw
-#guard innerWhy (some (files (Json.mkObj [("verdict", Json.null)]).compress)) == some RecSetup.noInnerDraw
-#guard innerWhy (some (files "not json")) == some RecSetup.noInnerDraw
-#guard innerWhy (some (files "[]")) == some RecSetup.noInnerDraw
+#guard innerWhy (some (files (record Json.null))) == some RecSetup.noInnerSample
+#guard innerWhy (some (.coins Json.null (record Json.null))) == some RecSetup.noInnerSample
+#guard innerWhy (some (files (Json.mkObj [("verdict", Json.null)]).compress)) == some RecSetup.noInnerSample
+#guard innerWhy (some (files "not json")) == some RecSetup.noInnerSample
+#guard innerWhy (some (files "[]")) == some RecSetup.noInnerSample
 #guard innerWhy none == none
-#guard RecSetup.noInnerDraw.startsWith "refused: the inner session's record (--rec-inner-session) holds no draw"
+#guard RecSetup.noInnerSample.startsWith "refused: the inner session's record (--rec-inner-session) holds no draw"
 
 end Flock.Test.FullDraw

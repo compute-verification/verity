@@ -82,7 +82,7 @@ OUT_WORDS = 64
 ACC_WORDS = 64
 DIRS_WORDS = 64
 DIRS_BITS = 32
-ROW_BLOCK = 64
+ROW_CHUNK = 64
 F_WORDS = 8
 
 
@@ -101,7 +101,7 @@ def row_words(LANES: int) -> int:
 
 
 def aux_words(H: int) -> int:
-    return max(1, -(-NODE_WORDS * H // ROW_BLOCK)) * ROW_BLOCK
+    return max(1, -(-NODE_WORDS * H // ROW_CHUNK)) * ROW_CHUNK
 
 
 def coef_words(LANES: int) -> int:

@@ -55,7 +55,7 @@ theorem getD_get! {top : ByteArray} {k : ℕ} : top.get! k = top.data.toList.get
   cases top.data[k]? <;> rfl
 
 /-- **Bit `b` of a 64-byte node's row is the node's bit `b`**: word `b / 16` is bytes `b / 8` (low) and `b / 8 + 1`
-(high) of the node, little-endian (`Firewall.topRows`). -/
+(high) of the node, little-endian (`ZkServer.topRows`). -/
 theorem capRow_bit {top : ByteArray} (htop : top.size = 64) {b : ℕ} (hb : b < 512) :
     ((capRow top)[b / 16]!).testBit (b % 16) = bitL top.data.toList b := by
   rw [capRow, topRows_of_size htop, List.headD_cons, getElem!_pos _ (b / 16)
@@ -79,7 +79,7 @@ theorem capAt_size {sch : Flock.Schedule} {cap : Array ByteArray} {lig : Flock.L
 section Session
 
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
+  {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
 /-- **The registered `out` row's bits are `top`'s**: `hT_of_root`'s conclusion where `out`'s row bytes are `top`'s
 row's (`rowInV (capRow top)`). -/

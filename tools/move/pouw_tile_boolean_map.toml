@@ -1,0 +1,58 @@
+# PoUW's tile Definitions and the Boolean-versions lookup, out of the vLLM adapter back under `verity/`: what
+# `tools/move/layout.py --map tools/move/pouw_tile_boolean_map.toml` moves and rewrites.
+#
+# - The four `pearl_c_*` Definition modules, with their circuit-check sidecars, go to PoUW's circuit
+#   (`verity/protocols/accounting/pouw/prover/circuit/`), beside the tile Program that reads them.
+# - The Boolean-versions lookup (`definitions/boolean.py`), which those four import, goes to
+#   `verity/circuits/ops/boolean/versions.py`: it walks `verity.circuits.ops.boolean`, so it is in the place
+#   `verity/circuits/ops` (`tests/import_order.toml`), not `verity/circuits`, which loads nothing. It imports no catalog:
+#   the adapter's `definitions` package registers its registry with it (`catalog_loader`).
+# - `registry/boolean_gather.py` stays: it imports the adapter's `b1`, `prims`, `dsv4_decode_indices`, `ref_prims` and
+#   `sampling`, and the adapter hands its families to the lookup with its registry.
+#
+# Nothing is edited or deleted, and no file is added. The format is `layout_map.toml`'s.
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+[paths]
+"adapters/vllm/verity_vllm/definitions/registry/pearl_c_call.py" = "verity/protocols/accounting/pouw/prover/circuit/pearl_c_call.py"
+"adapters/vllm/verity_vllm/definitions/registry/pearl_c_call.circuit-check.py" = "verity/protocols/accounting/pouw/prover/circuit/pearl_c_call.circuit-check.py"
+"adapters/vllm/verity_vllm/definitions/registry/pearl_c_call.circuit-check.json" = "verity/protocols/accounting/pouw/prover/circuit/pearl_c_call.circuit-check.json"
+"adapters/vllm/verity_vllm/definitions/registry/pearl_c_forming.py" = "verity/protocols/accounting/pouw/prover/circuit/pearl_c_forming.py"
+"adapters/vllm/verity_vllm/definitions/registry/pearl_c_forming.circuit-check.py" = "verity/protocols/accounting/pouw/prover/circuit/pearl_c_forming.circuit-check.py"
+"adapters/vllm/verity_vllm/definitions/registry/pearl_c_forming.circuit-check.json" = "verity/protocols/accounting/pouw/prover/circuit/pearl_c_forming.circuit-check.json"
+"adapters/vllm/verity_vllm/definitions/registry/pearl_c_noise.py" = "verity/protocols/accounting/pouw/prover/circuit/pearl_c_noise.py"
+"adapters/vllm/verity_vllm/definitions/registry/pearl_c_noise.circuit-check.py" = "verity/protocols/accounting/pouw/prover/circuit/pearl_c_noise.circuit-check.py"
+"adapters/vllm/verity_vllm/definitions/registry/pearl_c_noise.circuit-check.json" = "verity/protocols/accounting/pouw/prover/circuit/pearl_c_noise.circuit-check.json"
+"adapters/vllm/verity_vllm/definitions/registry/pearl_c_tile.py" = "verity/protocols/accounting/pouw/prover/circuit/pearl_c_tile.py"
+"adapters/vllm/verity_vllm/definitions/registry/pearl_c_tile.circuit-check.py" = "verity/protocols/accounting/pouw/prover/circuit/pearl_c_tile.circuit-check.py"
+"adapters/vllm/verity_vllm/definitions/registry/pearl_c_tile.circuit-check.json" = "verity/protocols/accounting/pouw/prover/circuit/pearl_c_tile.circuit-check.json"
+"adapters/vllm/verity_vllm/definitions/boolean.py" = "verity/circuits/ops/boolean/versions.py"
+[drop]
+paths = []
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves, the
+# archive), files whose bytes a digest pins, and Lean sources, as in `definitions_served_map.toml`; nor the
+# lakefile of Flock's sigma package, whose comments name `boolean.sigma_check`, so this map changes no Lean input.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**", "archive/**",
+           "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json",
+           "verity/circuits/silicon/captures/**", "verity/circuits/silicon/hawkeye/**", "tools/verity/check/tests/test_suites.py",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json",
+           "benchmarks/network_e2e/tests/data/**", "adapters/vllm/manifests/**", "adapters/vllm/workloads/**",
+           "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**",
+           "adapters/vllm/tools/migrate/superseded_quarantine.py",
+           "adapters/vllm/tests/migrate/test_superseded_quarantine.py", "**/*.lean",
+           "verity/protocols/proofs/flock/verifier/sigma/lakefile.toml"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
+           "adapters/vllm/manifests/definitions.json"]
+
+[modules]
+# the renames [paths] implies (`layout.py --modules`)
+"verity_vllm.definitions.boolean" = "verity.circuits.ops.boolean.versions"
+"verity_vllm.definitions.registry.pearl_c_call" = "verity.protocols.accounting.pouw.prover.circuit.pearl_c_call"
+"verity_vllm.definitions.registry.pearl_c_forming" = "verity.protocols.accounting.pouw.prover.circuit.pearl_c_forming"
+"verity_vllm.definitions.registry.pearl_c_noise" = "verity.protocols.accounting.pouw.prover.circuit.pearl_c_noise"
+"verity_vllm.definitions.registry.pearl_c_tile" = "verity.protocols.accounting.pouw.prover.circuit.pearl_c_tile"

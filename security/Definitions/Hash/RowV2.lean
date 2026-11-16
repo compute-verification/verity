@@ -36,7 +36,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # `sha512/row/v2` over a hash (trusted)
 
-The unsegmented bit row's digest (`verity/ml/commitments/frame_v3/PROTOCOL.md` §6, "Bit rows"), with the hash a parameter
+The unsegmented bit row's digest (`verity/commitments/frame_v3/PROTOCOL.md` §6, "Bit rows"), with the hash a parameter
 `G` (SHA-512 is the instance of record; the reference is `rowleaf.sha512_row_v2_digest`). A row is `ℓ` bits (`Row`),
 its bytes as `sha512/row-seg/v1` packs them (`RowSeg.packBits`), and
 

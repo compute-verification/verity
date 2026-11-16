@@ -31,10 +31,10 @@ record, by the manifest's lookup of record.  The ahead-of-time compiler takes it
 **Transfer gates**: the units holding transfer gates, the I/O shell's ingress parse and egress render units, are
 proved with selection All, never sampled; every other unit is sampled as before.  The compiler lists them (``transfer_gates``: the
 templates whose units hold them, which its digest covers), and a ``work:K`` window samples by the work table
-`window_law.work_table_of` derives from that list and the window's own counts: each transfer-gate template works 0 with its
+`window_sampling_design.work_table_of` derives from that list and the window's own counts: each transfer-gate template works 0 with its
 floor all its units, so its whole stratum is in the sample, beside the rest's strata at the stratified share of K.  Core's work sampling design
-(`draw.work_k`) is the All stratum, with no new verifier form; both sides derive the table, the registration's law is expanded
-under it (R1), and the Stream registers with it.  A partition that leaves a transfer-gate template out, or samples it by another law,
+(`draw.work_k`) is the All stratum, with no new verifier form; both sides derive the table, the registration's sampling design is expanded
+under it (R1), and the Stream registers with it.  A partition that leaves a transfer-gate template out, or samples it by another sampling design,
 is refused by name.  Until COMPILER lists the I/O shell's units, the stand-in's list is given (``--transfer-gate``), a template
 Flock proves today: the toy Commit's ``RoPEHead_v1{D=64}`` (its egress render, ``TokenSelect_v1``, has no Flock lowering).
 
@@ -61,11 +61,11 @@ from typing import Any
 
 from verity.circuits.codec import canonical_json
 from verity.commitments import advice as AC
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 from verity_vllm.config import option, workload_arg
 
 TRACED = "verity-vllm/advice-windows/traced-of-record/v0"
-I1 = "verity.protocols.accounting.certifier.verifier.advice"
+I1 = "verity.protocols.resource_accounting.network.verifier.advice"
 SCHEME = IF.ADVICE_SCHEME
 ROW_BITS = IF.ADVICE_ROW_BITS
 _DIGEST = re.compile(r"^[0-9a-f]{128}$")
@@ -353,7 +353,7 @@ class Options:
     ranks: str | None = option("--ranks", default=None, help="comma-separated ranks (default: every rank of the world)")
     transfer_gate: list[str] = option("--transfer-gate", action="append", default=[],
                                       help="a template the stand-in compiler lists as holding transfer gates, every unit of it proved "
-                                           "(repeatable; the partition's law is then work:K)")
+                                           "(repeatable; the partition's sampling design is then work:K)")
     write_from_workload: str | None = option("--write-from-workload", type=workload_arg, default=None,
                                              help="first write --advice as the stand-in's advice for this fixed-length workload (`advice_of_workload`)")
     drop: list[str] = option("--drop", action="append", default=[], help="with --write-from-workload: leave this request out (repeatable)")

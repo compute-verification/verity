@@ -6,7 +6,7 @@ public import Evaluate.TC.Fp4
 /-!
 # The tensor-core dot primitives
 
-The seven accumulator steps `verity.ml.circuits.ops.prims` registers, each one accumulator coordinate of one instruction:
+The seven accumulator steps `verity.circuits.ops.prims` registers, each one accumulator coordinate of one instruction:
 the accumulator word and the operand words in parameter order (the walk gives a gate the leaves of its operands, so an
 `Array<16, BF16>` operand is 16 words). Each is the total step of `Evaluate.TC.Spec`, `Evaluate.TC.Fp8Atom` or
 `Evaluate.TC.Fp4` on its pipeline, and names the Security definition it must equal on the primitive's domain (the

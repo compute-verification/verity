@@ -1,13 +1,13 @@
-"""Figure 1's model and its bounds against proof overhead, derived from the sampled-proofs planner: what an adversary
+"""Figure 1's model and its bounds against proof overhead, derived from the SPOT planner: what an adversary
 serving a model on all of a scope's compute over a monitoring period can exfiltrate, infiltrate or skip while evading
 detection with probability above δ, against proof overhead, at each share of compute spent on verification.  Figure 1
 itself plots the same model against total cost (`total_cost.py`).
 
 Every input is a card marked measured or modeled with its source: the model's `spot-card/v1` cards (`cards.py`), the
-census and rho's reference.  The output carries them all beside every plotted series (`figure1_overhead.json`), which
+census and the slowdown calculator's reference.  The output carries them all beside every plotted series (`figure1_overhead.json`), which
 the console reads.
 
-**Workload.**  A scope's compute is its GPUs (the world: rho's `world-h200` fleet, the census's `world-inference-2027`;
+**Workload.**  A scope's compute is its GPUs (the world: the slowdown calculator's `world-h200` fleet, the census's `world-inference-2027`;
 a datacenter: the census's `dc-12500-machines-600s`) over a monitoring period (`verity.protocol`'s `MONITORING_PERIODS`), serving at
 the fleet's MFU on the H200's dense FP8 peak.  It serves the model's requests of the census's tokens each, at the
 circuit's MACs a token (the `workload` card's `served_macs_per_token` where its proof blocks leave some out), cut into
@@ -15,7 +15,7 @@ proof blocks as the card has them; the captions give the share of MACs in no pro
 That is the `assumed` reading of serving's rate, the default.  Under `serving="measured"` (`SERVING`) a scope serves
 at the model's `serving_rate` card's computed tokens a GPU-second instead: its requests are its GPU-seconds times the
 rate over a request's tokens, a replay takes the request's tokens over the rate, and no MACs a token enters either;
-the scope's GPUs stay rho's.  The output then says which rate it read (`serving`), every caption says so too
+the scope's GPUs stay the slowdown calculator's.  The output then says which rate it read (`serving`), every caption says so too
 (`reading_note`), and each exfiltration row names the rate beside the rate at which its bound would reach `SERVING_GOAL`
 (`at_reading`).
 
@@ -39,12 +39,13 @@ block's outputs under one-stage, outside the budget, and the token ids under two
   `CompiledTwo.Exfil`'s count, each admissible set of incorrect proof blocks charged its own blocks' committed bits
   (`optimize.two_stage_exfil`), so a wholly incorrect request is charged every bit it commits.
 * `two-stage-capped` and `two-stage-capped-uniform`, `two-stage-patterns` and `two-stage-patterns-uniform`: the same
-  designs with each request charged at most the bits it serves (the `served_bits` input: every one of its tokens
-  served as the token select's output word), in `two_stage_exfil`'s sets' form (`card_influenceTwo_le_served_min`),
-  which still counts which of a request's proof blocks are incorrect, and never above the scope's served bits
-  (`card_influenceTwo_le_min`), or its patterns' form (`card_influenceTwo_le_patterns`), which counts a request's sets
-  of more than its served bits once, at most the served bits too (`card_influenceTwo_le_two_pow_outs`).  `CAP_STATUS`,
-  `SERVED_STATUS` and `OUTS_STATUS` say what each rests on.
+  designs with each request charged at most the bits it serves (the `served_bits` input: each of its tokens served
+  as the token select's output word, at most the network attester's registered response cap where the model's
+  `certifier` card registers one, else every one of its tokens), in `two_stage_exfil`'s sets' form
+  (`card_influenceTwo_le_served_min`), which still counts which of a request's proof blocks are incorrect, and never
+  above the scope's served bits (`card_influenceTwo_le_min`), or its patterns' form (`card_influenceTwo_le_patterns`),
+  which counts a request's sets of more than its served bits once, at most the served bits too
+  (`card_influenceTwo_le_two_pow_outs`).  `CAP_STATUS`, `SERVED_STATUS` and `OUTS_STATUS` say what each rests on.
 * `one-stage`: every proof block sampled uniformly, each sampled one's request replayed.  Its serve-time commitment,
   every proof block's outputs, is outside the budget, and the output gives its share of compute (`serve_hash_share`).
   For exfiltration it is in `consumers.exfiltration_bound`'s form, the incorrect proof blocks' output bits plus which
@@ -66,7 +67,7 @@ sets' form, and request-level sampling (`MAIN`), and an appendix figure every de
 card's request.  Skipped work is the work in incorrect proof blocks, under one-stage and request-level sampling: the
 two-stage design's interior commitments come after its first stage, so they don't show the work was done at serve
 time.  Infiltration is a panel of its own, plotted from the model's `infiltration` card and pending without one.  Each
-panel names the deployment it assumes (`DEPLOYMENT`).  The horizontal lines are rho's reference objects
+panel names the deployment it assumes (`DEPLOYMENT`).  The horizontal lines are the slowdown calculator's reference objects
 (`REFERENCES`, its reference model's; SparseLoCo's syncs scaled to the served model's parameters where its `workload`
 card gives them), the model's checkpoint and every `references` card's.  `figures.py` writes it with Figure 1 and
 Figures 2 and 3.
@@ -86,6 +87,7 @@ from typing import Callable, Iterator, Sequence
 
 import cards as spot_cards
 from verity.protocol import MONITORING_PERIODS
+from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
 from verity.protocols.proofs.spot.prover import plancheck
 from verity.protocols.proofs.spot.prover.optimize import (Cell, Grain, ReplayGrain, grain_costs, leak_count, loc_bits,
                                                            two_stage_design, two_stage_strata)
@@ -94,7 +96,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = Path(__file__).resolve().parents[2]
 ADVERSARY, DEPLOYMENTS, HARDWARE = ("benchmarks/census/adversary.json", "benchmarks/census/deployments.json",
                                     "benchmarks/census/hardware.json")
-RHO, RHO_HARDWARE = "benchmarks/rho/data/reference.toml", "benchmarks/rho/data/hardware.toml"
+SLOWDOWN, SLOWDOWN_HARDWARE = "benchmarks/slowdown/data/reference.toml", "benchmarks/slowdown/data/hardware.toml"
 WORLD, DATACENTER, CENSUS_WORLD = "world-h200", "dc-12500-machines-600s", "world-inference-2027"
 #: the H200's dense FP8 peak is the H100 SXM5's (one die, one clock)
 PEAK = "h100-sxm5-80gb/e4m3"
@@ -132,22 +134,26 @@ def returned_bits(served: float) -> int:
 
 #: a request's tokens: the census's mean, or the `workload` card's request
 REQUESTS = ("census", "workload")
-#: where serving's rate comes from: rho's fleet utilization on the dense peak, or the model's `serving_rate` card, the
+#: where serving's rate comes from: the slowdown calculator's fleet utilization on the dense peak, or the model's `serving_rate` card, the
 #: engine's measured computed tokens a GPU-second, read only when asked for
 SERVING = ("assumed", "measured")
 #: the exfiltration capacity a row at the measured reading is held against, in bits: 300 GB
 SERVING_GOAL = 8 * 300e9
+#: the tokens a request serves: at most the network attester's registered response cap, or every one of its tokens
+SERVED = ("cap", "request")
+#: what holds each response the network attester releases to its registered cap
+CAP_RULE = "NetTiming.Guarantees.ResponseCapped"
 #: the deployment each panel assumes: what serving commits, and the replay block
 DEPLOYMENT = {"exfiltration": "Tokens only: serving commits each request's token ids, and a replay block is a request.",
               "skipped_work": "Every block: serving commits every proof block's outputs, and a replay block is a "
                               "request.",
-              "layer_of_token": "Deferred interiors at a layer of a token: serving commits each layer's residual "
+              "layer_of_token": "Interior commitments at a layer of a token: serving commits each layer's residual "
                                 "stream and the K and V a later token reads, and a replay block is one layer of one "
                                 "token."}
-#: the deployment every panel prices: SPOT[Flock]'s three roles, and the network certifier a layer of its own
+#: the deployment every panel prices: SPOT[Flock]'s three roles, and the network attester a layer of its own
 ROLES = ("The deployment is SPOT[Flock]'s three roles: an inference server serves and commits its values; a proof "
          "server replays each sampled replay block and proves it with flock-circuit prove --zk, with no ZK server and "
-         "no recursion (the proof_overhead card's dev arm); and a verifier draws the sample on the challenger's live "
+         "no recursion (the proof_overhead card's dev arm); and a verifier samples the sample on the challenger's live "
          "coins and decides with the Lean verifier. The network certifier, which stamps each request's release order "
          "and bucket at ingress, is a layer of its own.")
 #: what every bound rests on
@@ -157,13 +163,13 @@ TRUST = ("Every bound is soundness alone, resting on SHA-512's collision resista
 #: the share of compute the infiltration caption compares the two panels' bounds at
 RATIO_BUDGET = 0.01
 SCHEMA = "spot-figure1/v1"
-#: rho's reference model, whose pretraining run, optimizer step and SparseLoCo syncs its references are
-REF_MODEL, RHO_MODEL = "DeepSeek-V4-Pro", "deepseek-v4-pro"
-#: the reference objects rho's reference rules, as cards: (table, key, field)
+#: the slowdown calculator's reference model, whose pretraining run, optimizer step and SparseLoCo syncs its references are
+REF_MODEL, SLOWDOWN_MODEL = "DeepSeek-V4-Pro", "deepseek-v4-pro"
+#: the reference objects the slowdown calculator's reference rules, as cards: (table, key, field)
 REFERENCES = {"ref_sparseloco": ("exfil", "sparseloco-1000", "bits"), "ref_rollouts": ("exfil", "rl-rollouts", "bits"),
               "ref_pretrain": ("work", "v4-pretrain", "flops"), "ref_step": ("work", "v4-step", "flops")}
 #: the circuit-check pin a MAC's AND gates are read from: the Hopper dot's FP8 MoE coordinate
-AND_PIN = ("verity/definitions/registry/boolean_fp8_moe.circuit-check.json",
+AND_PIN = ("adapters/vllm/verity_vllm/definitions/registry/boolean_fp8_moe.circuit-check.json",
            "MoeExpertFp8BlockCoordinateW_v4{K=128,G=128,KB=128,SWAP=True,DOT=HopperE4m3MmaV2Dot32_v2}")
 
 
@@ -203,8 +209,9 @@ def slot_cards(model: str, serving: str = "assumed") -> dict:
     out = {s: spot_cards.load(s, model) for s in ("workload", "proof_overhead", "commitment", "replay", "design")}
     if serving == "measured":
         out["serving_rate"] = spot_cards.load("serving_rate", model)
-    if inf := spot_cards.load("infiltration", model, required=False):
-        out["infiltration"] = inf
+    for slot in ("infiltration", "certifier"):
+        if card := spot_cards.load(slot, model, required=False):
+            out[slot] = card
     return out | ({"references": refs} if (refs := spot_cards.load_all("references", model)) else {})
 
 
@@ -213,12 +220,15 @@ def _card(c: dict, value, unit: str, field: str) -> InputCard:
     return InputCard(value, unit, c["status"], f"{c['slot']} card's {field}{art}: {c['source']}", c["provisional"])
 
 
-def cards(model: str = "GLM-5.3", request: str = "census", serving: str = "assumed") -> dict[str, InputCard]:
-    """Every input: the model's slot cards', those read from the census and rho's reference, and the bits a request
+def cards(model: str = "GLM-5.3", request: str = "census", serving: str = "assumed",
+          served: str | None = None) -> dict[str, InputCard]:
+    """Every input: the model's slot cards', those read from the census and the slowdown calculator's reference, and the bits a request
     serves, each of its tokens as the token select's output word, the `design` card's `token_bytes`.  A request is
-    the census's mean or, under `request="workload"`, the `workload` card's.  Under `serving="measured"` the inputs
-    hold the `serving_rate` card's rate (`serving_rate`), which the lines that price serving then read in place of
-    rho's utilization; under the default they hold none, whatever cards exist."""
+    the census's mean or, under `request="workload"`, the `workload` card's.  It serves at most the response cap its
+    `certifier` card's schedule registers (`max_tokens_cap`, the parameters its digest binds), where the card registers
+    one and `served` isn't "request", else every one of its tokens.  Under `serving="measured"` the inputs hold the
+    `serving_rate` card's rate (`serving_rate`), which the lines that price serving then read in place of the slowdown calculator's
+    utilization; under the default they hold none, whatever cards exist."""
     if request not in REQUESTS:
         raise ValueError(f"a request is one of {REQUESTS}, not {request!r}")
     sc = slot_cards(model, serving)
@@ -237,12 +247,12 @@ def cards(model: str = "GLM-5.3", request: str = "census", serving: str = "assum
                                       ("ranks", "tokens", "strata", "served_macs_per_token")}, "", "strata")}
     census, dc = _entry(ADVERSARY, CENSUS_WORLD), _entry(DEPLOYMENTS, DATACENTER)
     peak = _entry(HARDWARE, PEAK)
-    rho = _toml(RHO)
-    fleet = rho["fleet"][WORLD]
-    devices = _toml(RHO_HARDWARE)["location"][fleet["location"]]["devices"]["value"]
+    registry = _toml(SLOWDOWN)
+    fleet = registry["fleet"][WORLD]
+    devices = _toml(SLOWDOWN_HARDWARE)["location"][fleet["location"]]["devices"]["value"]
 
-    def from_rho(name: str, value, unit: str, where: str, entry: dict) -> None:
-        out[name] = InputCard(value, unit, "modeled", f"{RHO} {where}: {entry['source']}")
+    def from_registry(name: str, value, unit: str, where: str, entry: dict) -> None:
+        out[name] = InputCard(value, unit, "modeled", f"{SLOWDOWN} {where}: {entry['source']}")
 
     pin, coordinate = AND_PIN
     ands = json.loads((ROOT / pin).read_text())["definitions"][coordinate]["and"]
@@ -263,16 +273,16 @@ def cards(model: str = "GLM-5.3", request: str = "census", serving: str = "assum
                                   f"{pin} {coordinate}: {ands:,} ANDs over its K MACs, the pinned Boolean lowering "
                                   "nearest GLM-5.3's FP8 MoE coordinates, taken for every MAC"),
     }
-    session = rho["policy"]["v4-pro-session"]["k"]
-    from_rho("output_cap", session["value"], "bit", "policy.v4-pro-session.k", session)
-    from_rho("world_gpus", fleet["count"]["value"] * devices, "GPU", f"fleet.{WORLD}, its locations' devices",
+    session = registry["policy"]["v4-pro-session"]["k"]
+    from_registry("output_cap", session["value"], "bit", "policy.v4-pro-session.k", session)
+    from_registry("world_gpus", fleet["count"]["value"] * devices, "GPU", f"fleet.{WORLD}, its locations' devices",
              fleet["count"])
-    from_rho("mfu_serve", fleet["mfu_serve"]["value"], "", f"fleet.{WORLD}.mfu_serve", fleet["mfu_serve"])
+    from_registry("mfu_serve", fleet["mfu_serve"]["value"], "", f"fleet.{WORLD}.mfu_serve", fleet["mfu_serve"])
     for name, (table, key, field) in REFERENCES.items():
-        entry = rho[table][key][field]
-        from_rho(name, entry["value"], entry["unit"], f"{table}.{key}", entry)
-    basis = rho["model"][RHO_MODEL]["n_total"]
-    from_rho("ref_params", basis["value"], "param", f"model.{RHO_MODEL}.n_total, the reference model's", basis)
+        entry = registry[table][key][field]
+        from_registry(name, entry["value"], entry["unit"], f"{table}.{key}", entry)
+    basis = registry["model"][SLOWDOWN_MODEL]["n_total"]
+    from_registry("ref_params", basis["value"], "param", f"model.{SLOWDOWN_MODEL}.n_total, the reference model's", basis)
     if work["value"].get("params") is not None:
         out["params"] = _card(work, work["value"]["params"], "param", "params")
     elif model == REF_MODEL:
@@ -282,10 +292,28 @@ def cards(model: str = "GLM-5.3", request: str = "census", serving: str = "assum
     if (rate := sc.get("serving_rate")) is not None:
         out["serving_rate"] = _card(rate, rate["value"]["tokens_per_gpu_second"], "token/GPU-s", "tokens_per_gpu_second")
     tokens, bits = out["tokens_per_request"].value, round(8 * out["token_bytes"].value)
-    out["served_bits"] = InputCard(tokens * bits, "bit", "modeled",
-                                   f"every one of a request's {tokens:,} tokens served as the token select's output "
-                                   f"word, {bits} bits (the design card's token_bytes), the registered circuit's "
-                                   "only output a token")
+    word = (f"served as the token select's output word, {bits} bits (the design card's token_bytes), the registered "
+            "circuit's only output a token")
+    cert = sc.get("certifier")
+    schedule = NetworkAttesterParams(**cert["value"]["schedule"]) if cert else None
+    cap = schedule.max_tokens_cap if schedule else None
+    if served not in (None, *SERVED):
+        raise ValueError(f"a request's served tokens are one of {SERVED}, not {served!r}")
+    if served == "cap" and cap is None:
+        raise ValueError(f"{model} has no certifier card registering a response cap, so a request serves every one of "
+                         "its tokens (served='request')")
+    if served == "request" or cap is None:
+        out["served_bits"] = InputCard(tokens * bits, "bit", "modeled", f"every one of a request's {tokens:,} tokens "
+                                       f"{word}")
+        return out
+    out["max_tokens_cap"] = InputCard(cap, "token", cert["status"],
+                                      f"certifier card's schedule, parameters digest {schedule.digest.hex()}, which "
+                                      "every record head binds: the network certifier refuses at ingress a request "
+                                      "whose max_tokens exceeds the cap and releases at most a request's max_tokens "
+                                      f"tokens of its response ({CAP_RULE}): {cert['source']}", cert["provisional"])
+    out["served_bits"] = InputCard(cap * bits, "bit", cert["status"],
+                                   f"at most {cap:,} tokens a response, the network certifier's registered cap "
+                                   f"({CAP_RULE}), each {word}", cert["provisional"])
     return out
 
 
@@ -377,7 +405,7 @@ PRIMARY, SECONDARY = "world year", "datacenter year"
 
 
 def token_seconds(c: dict[str, InputCard], served_macs: float) -> float:
-    """The GPU-seconds serving takes a computed token: its FLOP at rho's fleet utilization on the dense peak, or under
+    """The GPU-seconds serving takes a computed token: its FLOP at the slowdown calculator's fleet utilization on the dense peak, or under
     the measured reading the `serving_rate` card's rate inverted, with no MACs a token in it."""
     if "serving_rate" in c:
         return 1 / c["serving_rate"].value
@@ -385,9 +413,9 @@ def token_seconds(c: dict[str, InputCard], served_macs: float) -> float:
 
 
 def scopes(c: dict[str, InputCard], part: TokenBlocks) -> list[Scope]:
-    """Each scope's GPU-seconds and the requests it serves in them: at rho's fleet utilization on the dense peak, or
+    """Each scope's GPU-seconds and the requests it serves in them: at the slowdown calculator's fleet utilization on the dense peak, or
     under the measured reading at the `serving_rate` card's tokens a GPU-second over a request's own tokens.  The
-    GPUs are rho's and the census's under either."""
+    GPUs are the slowdown calculator's and the census's under either."""
     flop_request = c["tokens_per_request"].value * 2 * part.served_macs
     rate = c.get("serving_rate")
     out = []
@@ -445,7 +473,7 @@ def model(c: dict[str, InputCard], part: TokenBlocks, s: Scope, overhead: float,
 
 def reading(sc: dict, c: dict[str, InputCard], part: TokenBlocks) -> dict:
     """What an output at the measured reading says of the rate it read: the `serving_rate` card's value, whether the
-    card is provisional, and beside it the rate rho's utilization comes to on this circuit, which the assumed
+    card is provisional, and beside it the rate the slowdown calculator's utilization comes to on this circuit, which the assumed
     reading serves at."""
     card = sc["serving_rate"]
     return {"reading": "measured", **card["value"], "provisional": card["provisional"],
@@ -474,7 +502,7 @@ def reading_note(serving: dict) -> str:
     goal = f"{SERVING_GOAL / 8e9:,.0f} GB"
     floor = ("" if serving["saturated"] else f" Each bound here is then a lower bound on the bound at the engine's own "
              f"rate: one under {goal} does not show that {goal} is met.")
-    return (f"Serving is planned at the measured {rate:,.5g} computed tokens a GPU-second ({what}), not at rho's "
+    return (f"Serving is planned at the measured {rate:,.5g} computed tokens a GPU-second ({what}), not at the slowdown calculator's "
             f"fleet utilization, {assumed:,.5g} on this circuit: the scope's GPUs are the same, and its requests "
             f"{rate / assumed:.2g} of that reading's.{floor} {REGISTRATION_NOTE}")
 
@@ -540,6 +568,15 @@ def cap(m: Model, target: str) -> float:
 def served_total(m: Model) -> float:
     """The scope's served bits, |outs| of its period's audit: every request's `served`."""
     return m.request.units * m.served
+
+
+def served_tokens(c: dict[str, InputCard]) -> tuple[int, int, str]:
+    """The tokens a request serves, the bits each serves and, as the captions say it, what bounds them."""
+    bits = round(8 * c["token_bytes"].value)
+    if cap := c.get("max_tokens_cap"):
+        return cap.value, bits, (f"at most the network certifier's registered response cap ({CAP_RULE}; the tie of "
+                                 "the statement's served outputs to the tokens it releases is pending)")
+    return c["tokens_per_request"].value, bits, "every one of the request's tokens"
 
 
 def two_stage_top(m: Model, design: str, top: float | None = None) -> float:
@@ -699,9 +736,9 @@ def overheads(c: dict[str, InputCard], points: int) -> list[float]:
 
 
 def references(c: dict[str, InputCard], model: str, refs: list[dict] = ()) -> dict[str, list[dict]]:
-    """The panels' horizontal lines, in the panel's unit (bits, or FLOP for skipped work): rho's reference objects, the
-    served model's weights, and every `references` card's lines, a line that depends on the scope by scope.  rho's
-    references are its reference model's; SparseLoCo's sync goes as the parameters, so it is scaled to the served
+    """The panels' horizontal lines, in the panel's unit (bits, or FLOP for skipped work): the slowdown calculator's reference objects, the
+    served model's weights, and every `references` card's lines, a line that depends on the scope by scope.  The
+    slowdown calculator's references are its reference model's; SparseLoCo's sync goes as the parameters, so it is scaled to the served
     model's where its `workload` card gives them."""
     def ref(label: str, name: str, scale: float = 1.0) -> dict:
         return {"label": label, "value": c[name].value * scale, "input": name}
@@ -785,10 +822,11 @@ def zero_lines(refs: dict[str, list[dict]], scope: str) -> dict[str, list[str]]:
 
 def captions(serve_hash_share: float, infiltration: dict | None = None, coverage: dict | None = None,
              boundary_hash_share: float = 0.0, zeros: dict[str, list[str]] | None = None,
-             notes: dict[str, list[str]] | None = None, served: tuple[float, int, int, float] | None = None
-             ) -> dict[str, str]:
-    """Each panel's caption.  `served` is (S, tokens, bits a token, N, total) for the capped designs' sentences: the
-    bits a request serves, its tokens at their bits, a request's proof blocks and the scope's served bits."""
+             notes: dict[str, list[str]] | None = None,
+             served: tuple[float, int, int, str, float, float] | None = None) -> dict[str, str]:
+    """Each panel's caption.  `served` is (S, tokens, bits a token, why, N, total) for the capped designs' sentences:
+    the bits a request serves, its tokens at their bits and what bounds them (`served_tokens`), a request's proof
+    blocks and the scope's served bits."""
     serve = (f"hashes every proof block's outputs at serve time, {serve_hash_share:.2g}× the scope's compute, outside "
              "the budget")
     tokens = f"the token ids, {boundary_hash_share:.2g} of the scope's compute"
@@ -808,10 +846,10 @@ def captions(serve_hash_share: float, infiltration: dict | None = None, coverage
     request = "Request-level (dotted) proves each sampled request whole; serving commits only the token ids."
     capped = patterns = ""
     if served:
-        cap, count, bits, blocks, total = served
+        cap, count, bits, why, blocks, total = served
         capped = (f" Capped (dash-dot; {CAP_STATUS['sets']}): two-stage with each request charged at most the "
-                  f"{cap:,.0f} bits it serves ({count:,} tokens of {bits} bits), so a wholly incorrect request is "
-                  f"charged which of its {blocks:.2g} proof blocks are incorrect and what it serves, about "
+                  f"{cap:,.0f} bits it serves ({count:,} tokens of {bits} bits, {why}), so a wholly incorrect request "
+                  f"is charged which of its {blocks:.2g} proof blocks are incorrect and what it serves, about "
                   f"{blocks + cap:.2g} bits; and never above the {total:.2g} bits the scope serves ({SERVED_STATUS}), "
                   "flat where that binds.")
         patterns = (f" Patterns (dash-dot-dot; {CAP_STATUS['patterns']}): a request's incorrect sets of more than "
@@ -839,7 +877,7 @@ def captions(serve_hash_share: float, infiltration: dict | None = None, coverage
         out[panel] += "".join(f" {s}" for s in sentences)
     for panel, labels in (zeros or {}).items():
         if labels:
-            out[panel] += f" At 0, drawn along the axis's floor: {'; '.join(labels)}."
+            out[panel] += f" At 0, sampled along the axis's floor: {'; '.join(labels)}."
     return out
 
 
@@ -856,20 +894,21 @@ def infiltration_panel(card: dict | None, scope_names: list[str]) -> dict:
 
 def run(model_name: str = "GLM-5.3", points: int = 57, scope_names: tuple[str, ...] | None = None,
         request: str = "census", workers: int = 1, designs: tuple[str, ...] | None = None, lean: bool = True,
-        serving: str = "assumed") -> dict:
+        serving: str = "assumed", served: str | None = None) -> dict:
     """Figure 1's JSON at `points` proof overheads besides the vertical line's, over the scopes and designs named
     (default all), with Lean checking every design unless `lean` is off: every point of every curve one job
     (`checked_point`) on `workers` processes (`processes`), the JSON the same at any number.  `serving` is where
-    serving's rate comes from (`SERVING`); the measured reading's JSON says so (`serving`), the default's is as it was."""
+    serving's rate comes from (`SERVING`); the measured reading's JSON says so (`serving`), the default's is as it was.
+    A request's served tokens are as `cards`' `served` takes them."""
     with processes(workers, lean) as each:
-        return _run(model_name, points, scope_names, request, designs, each, lean, serving)
+        return _run(model_name, points, scope_names, request, designs, each, lean, serving, served)
 
 
 def _run(model_name: str, points: int, scope_names: tuple[str, ...] | None, request: str,
-         designs: tuple[str, ...] | None, each, lean: bool, serving: str = "assumed") -> dict:
+         designs: tuple[str, ...] | None, each, lean: bool, serving: str = "assumed", served: str | None = None) -> dict:
     planned = {panel: [d for d in ds if designs is None or d in designs] for panel, ds in DESIGNS.items()}
     sc = slot_cards(model_name, serving)
-    c = cards(model_name, request, serving)
+    c = cards(model_name, request, serving, served)
     part = TokenBlocks.of(c["partition"].value["strata"], c["partition"].value["served_macs_per_token"])
     fill = Fill.of(c["partition"].value["strata"], c["proof_blocks"].value)
     xs = overheads(c, points)
@@ -922,11 +961,11 @@ def _run(model_name: str, points: int, scope_names: tuple[str, ...] | None, requ
                                                    boundary_hash, zero_lines(shown, s.name),
                                                    notes | ({"infiltration": [*notes.get("infiltration", []), ratio]}
                                                             if ratio else {}),
-                                                   (base.served, c["tokens_per_request"].value,
-                                                    round(base.served / c["tokens_per_request"].value),
-                                                    base.blocks_per_request, served_total(base)) if capped else None)}
+                                                   (base.served, *served_tokens(c), base.blocks_per_request,
+                                                    served_total(base)) if capped else None)}
     return ({"serving": reading(sc, c, part)} if serving == "measured" else {}) | {
         "schema": SCHEMA, "model": model_name, "request": request,
+        "served": "cap" if "max_tokens_cap" in c else "request",
         "lean": {"exe": plancheck.EXE, "slack": str(plancheck.SLACK), "search": plancheck.SEARCH,
                  "precision": plancheck.TWO_P} if lean else None,
         "inputs": {k: v.__dict__ for k, v in c.items()},

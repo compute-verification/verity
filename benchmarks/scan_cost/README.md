@@ -1,6 +1,6 @@
 # scan_cost
 
-What the network certifier's scan costs to prove and to verify, for each second of execution phase it covers. The
+What the network attester's scan costs to prove and to verify, for each second of execution phase it covers. The
 scan is `benchmarks/network_traces/scan_zk.sh`'s: the step-indexed scan of one link, composed in zero knowledge, on a
 CPU machine. This benchmark runs it once at a fixed identity, puts two numbers on its honest round with the stages
 they are made of, and refuses to write them unless the round's answer is the pinned one.
@@ -10,10 +10,10 @@ and `out/scan_cost.json` in the evidence store, and `result.py table RUN` prints
 
 ## The two numbers
 
-A registration holds a group of G execution phases of T ticks each, so a round covers `G · T · tick` seconds of
-execution phase. The honest round proves every block of it, one session a member: `first` (tick 0's ingress block),
-`ingress-0` … `ingress-(G−1)` (the ingress template's other ticks, a member an execution phase), `last` (the last
-tick's ingress block) and `egress-0` … `egress-(G−1)`: 2G + 2 sessions over 2 · G · T blocks.
+A group is G execution phases of T ticks each, each a registration of its own, so the round, the group's honest
+rounds, covers `G · T · tick` seconds of execution phase. An execution phase's honest round proves every block of it,
+one session a member: `start` (the state it starts from), `ingress-0` (ticks 0 … T − 2's ingress blocks), `last` (the
+last tick's ingress block) and `egress-0`: four sessions over 2T + 1 blocks.
 
 | Number | What it is |
 | --- | --- |
@@ -49,17 +49,15 @@ Two results compare only at one identity, and `result.py compare` refuses any ot
 | Field | The benchmark's | Why it is fixed |
 | --- | --- | --- |
 | `class` | `w63k4` | the Definitions' parameters, so every block's size |
-| `sample` | every unit | the honest round proves every block, with no sampling; read from the answers' public parts |
+| `sample` | every proof block | the honest round proves every block, with no sampling; read from the answers' public parts |
 | `ticks`, `tick_ms` | T = 32 ticks of 100 ms: an execution phase of 3.2 s | the class's T and the scan's tick, which the numbers divide by |
 | `source` | the synthetic run | the traffic the blocks hold |
 | `cores` | 21 | the job is pinned to its first 21 cores, the least a slot of the network pool gives, and its provers size their threads by that |
 | `verifier_cores` | 1 | each Lean verifier process is pinned to one core (`scan_zk.sh`'s `SC_LEAN_ONE`) |
 
 The group is a setting, written in the result beside the identity: the numbers are for a second of execution phase
-at any G, which is what lets a grouped run be compared with the baseline. The period check's rows form reads one
-execution phase a registration (`benchmarks/network_traces/scan_period.py`'s `rows_case` refuses a group of more), so
-a result at a group above 1 is the cost of a form the period check does not read today. The machine is not in the
-identity; the result's host stamp and `out/host.txt` say what it was.
+at any G, which is what lets a grouped run be compared with the baseline. The machine is not in the identity; the
+result's host stamp and `out/host.txt` say what it was.
 
 ## The guard
 
@@ -68,7 +66,7 @@ A number stands only where the scan did what it measures:
 - `scan_zk.sh` exits 0: every round came out as the scan expects, the honest round accepted and each round it
   expects refused refused at the members it names.
 - Each execution phase's answer in `answers.json` accepts, and its public part equals `public.json`'s for the class:
-  the bound 0 for each template, every block sampled and proved (over a group, G times the blocks), and the tied value
+  the bound 0 for each template, every block of the execution phase sampled and proved, every verdict of its audit run (`complete`), and the tied value
   the acceptance rests on.
 
 Where the guard does not hold, `result.py write` writes the document with the reasons and a failed validation, no
@@ -77,7 +75,7 @@ Definitions changes its template ids, and the pin with it.
 
 ## Running it
 
-`run.sh` is the command of a `research run`, from a clone, in one slot of the network pool, as a job of at most 180
+`run.sh` is the command of a `research run` (the team's job runner), from a clone, in one slot of the network pool, as a job of at most 180
 minutes. The slot must give at least 21 cores and 128 GB:
 
 ~~~sh
@@ -98,9 +96,9 @@ SHA-512: the verifier's command names its circuit and its program by digest. A c
 
 | Setting | What it changes |
 | --- | --- |
-| `SC_GROUP=G` | G execution phases in one registration (the first target below) |
+| `SC_GROUP=G` | G execution phases, each a registration and an honest round of its own |
 | `SC_CORES=N` | the cores the job is pinned to; another identity, which compares with no result at 21 |
-| `SC_CLASS=test` | the certifier tests' class, to rehearse the runner in minutes; another identity |
+| `SC_CLASS=test` | the network attester's tests' class, to rehearse the runner in minutes; another identity |
 
 ~~~text
 result.py table DOC                      a result's round, a session a line and a stage a column
@@ -123,18 +121,9 @@ times an execution phase at G = 1. `result.py table` prints them a session, and 
 phase, so a candidate's lines say whether they fell. No field of a session's log says what fills Register to the
 repetitions beyond the witness, so naming its parts is the first measurement to add.
 
-Two steps, in order, each a candidate run compared with the baseline at the identity:
-
-1. **The grouping.** A setting, with no change to the scan: at `SC_GROUP=G` the round has 2G + 2 sessions for G
-   execution phases, so `first` and `last` are paid once a group. The target is the proving number below the
-   baseline's at G = 8, with the comparison's stage lines saying which stages fell. A group above 1 does not count
-   toward the target until the period check reads a group: until then its number says what that change to the
-   period check would buy.
-2. **One session for a template over the whole group.** A change to the scan's layout: a template's blocks over all G
-   execution phases in one session, so the round's sessions no longer grow with G and what a session pays once (to
-   Register, Register to the repetitions, the tail, the Lean verifier's inputs and setup) is divided by G. The target
-   is both numbers falling with G until the repetitions and the verifier's checks, which are paid a block, are what is
-   left. It is a group's form too, and counts on the same condition.
+The target is the proving number below the baseline's, a candidate run compared with the baseline at the
+identity, with the comparison's stage lines saying which stages fell. A group changes no number: each of its
+execution phases is a registration with its own four sessions.
 
 A candidate lands only if the guard holds on its run: a faster scan that answers anything but the pinned public part
 has no number.

@@ -9,7 +9,7 @@ from typing import Any
 from verity_vllm import protocols
 
 #: the PoUB driver's name in `protocols.DRIVERS`
-POUB = "remote-bandwidth"
+POUB = "poub"
 
 
 def commit_session(opts: Any, out: Any, kv_pages: int | None) -> Any:

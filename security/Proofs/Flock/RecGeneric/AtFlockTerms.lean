@@ -9,7 +9,7 @@ public import Proofs.Flock.RecGeneric.AtFlockReruns
 `Claims.Recursion`'s finders over `E_O`'s samples:
 
 * `forkPlansLeBinnerV`: `forkPlan` in either model finds a collision at most as often as `BinnerV`, which searches a
-  superset of true evaluations (`drawCalls`) at the same two samples (`ForkPlansLeBinnerV`);
+  superset of true evaluations (`sampleCalls`) at the same two samples (`ForkPlansLeBinnerV`);
 * `capPlanIsFCI`: `capPlan` in `innerModel` is `FCI` (`CapPlanIsFCI`);
 * `conflictPlanIsF0I`: `conflictPlan` in `innerModel` is `F0I` (`ConflictPlanIsF0I`).
 
@@ -199,12 +199,12 @@ variable {Coin W Col' T' : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
   (P : Prover Ω) (x : Msg)
 
 /-- **`forkPlan` over samples is at most `BinnerV`**: in a model of `E_O`'s samples that forks at the inner rounds as
-`fork` does and whose evaluations at a sample are among its `drawCalls`, which are true, `forkPlan` finds a collision at
+`fork` does and whose evaluations at a sample are among its `sampleCalls`, which are true, `forkPlan` finds a collision at
 most as often as `BinnerV`: both search one sample and its fork at a guessed inner round, `BinnerV` a superset. -/
 theorem forkPlan_PrAt_le (m : RunModel Coin Ω (D.V.k x) ((EO D I DO decO).C x))
     (hcut : ∀ j, j < I.V.k (xI D x) → m.cut j = j)
-    (hlog : ∀ ω u e, e ∈ m.log ω u → e ∈ drawCalls H D I DO decO P x ω u)
-    (hT : ∀ ω u e, e ∈ drawCalls H D I DO decO P x ω u → H e.1 = e.2) :
+    (hlog : ∀ ω u e, e ∈ m.log ω u → e ∈ sampleCalls H D I DO decO P x ω u)
+    (hT : ∀ ω u e, e ∈ sampleCalls H D I DO decO P x ω u → H e.1 = e.2) :
     (forkPlan (Coin := Coin) I.V.k).PrAt H m (xI D x) ≤ PrBinnerV H D I DO decO P x := by
   unfold RunFinder.PrAt PrBinnerV
   by_cases hk : 0 < I.V.k (xI D x)
@@ -219,12 +219,12 @@ theorem forkPlan_PrAt_le (m : RunModel Coin Ω (D.V.k x) ((EO D I DO decO).C x))
   have hout' : findColl (m.log ω (r₀, c₀) ++ (m.log ω (fork (m.cut j.val) r₀ r₁, c₁) ++ [])) = some (a, b) := hout
   rw [hcut j.val j.isLt, List.append_nil] at hout'
   have hsub : ∀ e ∈ m.log ω (r₀, c₀) ++ m.log ω (fork j.val r₀ r₁, c₁),
-      e ∈ drawCalls H D I DO decO P x ω (r₀, c₀) ++ drawCalls H D I DO decO P x ω (fork j.val r₀ r₁, c₁) := by
+      e ∈ sampleCalls H D I DO decO P x ω (r₀, c₀) ++ sampleCalls H D I DO decO P x ω (fork j.val r₀ r₁, c₁) := by
     intro e he
     rcases List.mem_append.1 he with he | he
     · exact List.mem_append_left _ (hlog ω _ e he)
     · exact List.mem_append_right _ (hlog ω _ e he)
-  have hT' : ∀ e ∈ drawCalls H D I DO decO P x ω (r₀, c₀) ++ drawCalls H D I DO decO P x ω (fork j.val r₀ r₁, c₁),
+  have hT' : ∀ e ∈ sampleCalls H D I DO decO P x ω (r₀, c₀) ++ sampleCalls H D I DO decO P x ω (fork j.val r₀ r₁, c₁),
       H e.1 = e.2 := fun e he => by
     rcases List.mem_append.1 he with he | he
     · exact hT ω _ e he
@@ -241,15 +241,15 @@ variable {Coin Col T Col' T' : Type} [Fintype Coin] [Nonempty Coin] [Inhabited C
   [DecidableEq Col']
 
 /-- **`B`'s plan at the reruns is at most `B_I`** (`ForkPlansLeBinnerV`), in `innerModel` and in `verModel`: both fork
-at the inner rounds as `BinnerV` does, and search evaluations among the samples' `drawCalls` (`rerunCalls_sub`,
-`verModel_log_sub`), true where `CallsTrue` and `CallsNil` hold (`drawCalls_true_at`). -/
+at the inner rounds as `BinnerV` does, and search evaluations among the samples' `sampleCalls` (`rerunCalls_sub`,
+`verModel_log_sub`), true where `CallsTrue` and `CallsNil` hold (`sampleCalls_true_at`). -/
 theorem forkPlansLeBinnerV (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
     (DO : Claims.Flock.Deploy Coin Col' T') : ForkPlansLeBinnerV H D Bd DO := by
   intro decI decO x hT hN Ω _ _ P
   have hcut : ∀ j, j < (Inner.ofFlock Bd.deploy decI).V.k (Claims.Recursion.xI (D.record Bd.IVStar) x) →
       min j (Bd.DE.V.k (Claims.Recursion.xI (D.record Bd.IVStar) x)) = j :=
     fun j hj => Nat.min_eq_left hj.le
-  have hTd := drawCalls_true_at D Bd.IVStar (Inner.ofFlock Bd.deploy decI) DO decO (P := P) hT hN
+  have hTd := sampleCalls_true_at D Bd.IVStar (Inner.ofFlock Bd.deploy decI) DO decO (P := P) hT hN
   exact ⟨forkPlan_PrAt_le H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x
       ((compAt D Bd decI DO decO).innerModel ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans) H P x) hcut
       (fun _ _ _ he => rerunCalls_sub D Bd.IVStar (Inner.ofFlock Bd.deploy decI) DO decO he) hTd,
@@ -369,13 +369,13 @@ theorem conflictPlan_coll (D : RecAt Coin) (Bd : Bound Coin Col T) (decI : List 
           (ws t)).map (((compAt D Bd decI DO decO).innerModel Bd.IVStar H P x).log ω) =
         (firstPick (accAtI H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x ω) R (ws t)).map
           fun d => (D.record Bd.IVStar).callsAt H x d.1
-            (drawWits H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x ω d) :=
+            (sampleWits H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x ω d) :=
       fun t => firstPick_map_congr (fun d hd =>
         innerModel_log_of_acc D Bd.IVStar (Inner.ofFlock Bd.deploy decI) DO decO ((hacc d).2 hd)) R (ws t)
     rw [if_pos ha, innerModel_log_of_acc D Bd.IVStar (Inner.ofFlock Bd.deploy decI) DO decO ((hacc d₀).2 ha)]
     simp only [F0I, ha, ↓reduceIte]
     refine coll_iff_of_eq (congrArg (fun l => (D.record Bd.IVStar).callsAt H x d₀.1
-      (drawWits H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x ω d₀) ++ l) ?_)
+      (sampleWits H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x ω d₀) ++ l) ?_)
     exact congrArg (fun f => (List.finRange (Bd.DE.k ((compAt D Bd decI DO decO).xI x))).flatMap f)
       (funext fun t => congrArg (fun o => Option.getD o []) (hL t))
   · rw [if_neg ha]

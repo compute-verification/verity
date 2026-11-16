@@ -25,17 +25,17 @@ them in the frames it read, and a frame keeping its schedule so far before its o
 namespace Claims.ZKServer.Relay
 
 open _root_.Flock (F128 Stmt)
-open _root_.Flock.Firewall.Frames (Sessions Rep Release)
-open _root_.Flock.Firewall.Frame (Req Place)
+open _root_.Flock.ZkServer.Frames (Sessions Rep Release)
+open _root_.Flock.ZkServer.Frame (Req Place)
 
 /-- **Where `placeOf` places the opening's first round, it found the rep's salts** among the loop's salts `salts`: it
 begins the opening only on them. -/
-theorem placeOf_salts {salts : Array (ByteArray × Nat × Array ByteArray)} {l0 : _root_.Flock.Firewall.Level0.Level0}
+theorem placeOf_salts {salts : Array (ByteArray × Nat × Array ByteArray)} {l0 : _root_.Flock.ZkServer.Level0.Level0}
     {s : Release} {p : Rep} {dom : ByteArray} {v : Place × Nat × Rep}
-    (h : _root_.Flock.Firewall.Frames.placeOf salts l0 s p dom = .ok v) (hle : p.alg.size ≤ p.coins.size)
+    (h : _root_.Flock.ZkServer.Frames.placeOf salts l0 s p dom = .ok v) (hle : p.alg.size ≤ p.coins.size)
     (ho : p.opened = false) (hop : p.opening = none) :
     ∃ r0 q0 hi, salts.find? (fun x => x.1 == l0.root && x.2.1 == p.rep) = some (r0, q0, hi) := by
-  unfold _root_.Flock.Firewall.Frames.placeOf at h
+  unfold _root_.Flock.ZkServer.Frames.placeOf at h
   simp only [Nat.not_lt.mpr hle, ↓reduceDIte, ho, hop, Option.isNone_none, Bool.false_eq_true, ↓reduceIte, bind,
     Except.bind] at h
   repeat' split at h
@@ -47,16 +47,16 @@ theorem placeOf_salts {salts : Array (ByteArray × Nat × Array ByteArray)} {l0 
 set_option maxHeartbeats 1000000 in
 /-- **Past the stream's first round `placeOf` placed the found frame's round**, at the session `s`, its table `name`
 and its level 0 `l0`. -/
-theorem roundPlace_placeOf {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {sid i r j : Nat}
+theorem roundPlace_placeOf {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r j : Nat}
     {dom content : ByteArray} {n : Nat} {p q : Rep} {pl : Place} {f : Bool} {nd : Option String}
     (hf : R.find sid i r = some (j, p))
-    (h : _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, f, nd))
+    (h : _root_.Flock.ZkServer.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, f, nd))
     (hfst : (p.coins.isEmpty && !p.st.begun) = false) {s : Release} {name : String}
-    {l0 : _root_.Flock.Firewall.Level0.Level0} (hs : R.sessions.find? (·.sid == sid) = some s)
-    (hn : s.spec.tables[i]? = some name) (hl0 : _root_.Flock.Firewall.Level0.ofSession L0 sid name = some l0) :
-    ∃ v, _root_.Flock.Firewall.Frames.placeOf R.salts l0 s p (s.spec.domain name r).toUTF8 = .ok v := by
-  rcases hv : _root_.Flock.Firewall.Frames.placeOf R.salts l0 s p (s.spec.domain name r).toUTF8 with e | v
-  · unfold _root_.Flock.Firewall.Frames.roundPlace at h
+    {l0 : _root_.Flock.ZkServer.Level0.Level0} (hs : R.sessions.find? (·.sid == sid) = some s)
+    (hn : s.spec.tables[i]? = some name) (hl0 : _root_.Flock.ZkServer.Level0.ofSession L0 sid name = some l0) :
+    ∃ v, _root_.Flock.ZkServer.Frames.placeOf R.salts l0 s p (s.spec.domain name r).toUTF8 = .ok v := by
+  rcases hv : _root_.Flock.ZkServer.Frames.placeOf R.salts l0 s p (s.spec.domain name r).toUTF8 with e | v
+  · unfold _root_.Flock.ZkServer.Frames.roundPlace at h
     simp only [hf, bind, Except.bind, pure, Except.pure] at h
     repeat' (first
       | simp only [hs, hn, hl0, hfst, hv, Bool.false_eq_true, ↓reduceIte] at h
@@ -65,13 +65,13 @@ theorem roundPlace_placeOf {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slo
   · exact ⟨v, rfl⟩
 
 /-- **A round that releases is one `roundPlace` readied.** -/
-theorem roundPlace_of_out {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {sid i r : Nat}
+theorem roundPlace_of_out {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r : Nat}
     {dom content : ByteArray} {n : Nat} {o : ByteArray}
-    (ho : (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dom content n).out = .ok o) :
-    ∃ q pl f nd, _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, f, nd) := by
-  rcases h : _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom content n with e | ⟨q, pl, f, nd⟩
-  · have he : (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dom content n).out = .error e := by
-      unfold _root_.Flock.Firewall.Frames.roundStep
+    (ho : (_root_.Flock.ZkServer.Frames.roundStep R L0 sid i r dom content n).out = .ok o) :
+    ∃ q pl f nd, _root_.Flock.ZkServer.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, f, nd) := by
+  rcases h : _root_.Flock.ZkServer.Frames.roundPlace R L0 sid i r dom content n with e | ⟨q, pl, f, nd⟩
+  · have he : (_root_.Flock.ZkServer.Frames.roundStep R L0 sid i r dom content n).out = .error e := by
+      unfold _root_.Flock.ZkServer.Frames.roundStep
       rw [h]
     rw [he] at ho
     cases ho
@@ -79,13 +79,13 @@ theorem roundPlace_of_out {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slot
 
 /-- **Past the stream's first round the frames the round read hold the rep's salts wherever `placeOf` reads them**:
 at the opening's first round, `placeOf` found them. -/
-theorem roundPlace_salts {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {sid i r : Nat}
+theorem roundPlace_salts {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r : Nat}
     {dom content : ByteArray} {n : Nat} {p q : Rep} {pl : Place} {f : Bool} {nd : Option String}
     (hfa : frameAt R sid i r = some p) (hk : p.coins.isEmpty = false)
-    (hrp : _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, f, nd))
-    {s : Release} {name : String} {l0 : _root_.Flock.Firewall.Level0.Level0}
+    (hrp : _root_.Flock.ZkServer.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, f, nd))
+    {s : Release} {name : String} {l0 : _root_.Flock.ZkServer.Level0.Level0}
     (hss : R.sessions.find? (·.sid == sid) = some s) (hn : s.spec.tables[i]? = some name)
-    (hl0 : _root_.Flock.Firewall.Level0.ofSession L0 sid name = some l0) :
+    (hl0 : _root_.Flock.ZkServer.Level0.ofSession L0 sid name = some l0) :
     ∃ r0 q0 hi, p.alg.size ≤ p.coins.size → p.opened = false → p.opening = none →
       R.salts.find? (fun x => x.1 == l0.root && x.2.1 == p.rep) = some (r0, q0, hi) := by
   by_cases hc : p.alg.size ≤ p.coins.size ∧ p.opened = false ∧ p.opening = none
@@ -98,14 +98,14 @@ theorem roundPlace_salts {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots
 /-- **At the stream's first round the frames the round read hold the rep's salts where `withAlg` scheduled no
 rounds**: there the round is the opening's first, which `placeOf` places on the frame `withAlg` gave, after rep 0's
 algebraic-phase coins at rep 1. -/
-theorem roundPlace_salts_first {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {sid i r j : Nat}
+theorem roundPlace_salts_first {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r j : Nat}
     {dom content : ByteArray} {n : Nat} {p q : Rep} {pl : Place} {f : Bool} {nd : Option String}
     (hf : R.find sid i r = some (j, p)) (hp : FreshRep p)
-    (hrp : _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, f, nd))
-    {s : Release} {name : String} {l0 : _root_.Flock.Firewall.Level0.Level0}
+    (hrp : _root_.Flock.ZkServer.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, f, nd))
+    {s : Release} {name : String} {l0 : _root_.Flock.ZkServer.Level0.Level0}
     (hss : R.sessions.find? (·.sid == sid) = some s) (hn : s.spec.tables[i]? = some name)
-    (hl0 : _root_.Flock.Firewall.Level0.ofSession L0 sid name = some l0) {p' : Rep}
-    (hw : _root_.Flock.Firewall.Frames.withAlg s l0 name p = .ok p') :
+    (hl0 : _root_.Flock.ZkServer.Level0.ofSession L0 sid name = some l0) {p' : Rep}
+    (hw : _root_.Flock.ZkServer.Frames.withAlg s l0 name p = .ok p') :
     ∃ r0 q0 hi, p'.alg.size = 0 →
       R.salts.find? (fun x => x.1 == l0.root && x.2.1 == p.rep) = some (r0, q0, hi) := by
   by_cases h0 : p'.alg.size = 0
@@ -126,7 +126,7 @@ theorem roundPlace_salts_first {R : Sessions} {L0 : _root_.Flock.Firewall.Level0
   · exact ⟨.empty, 0, #[], fun h => absurd h h0⟩
 
 /-- **Before its opening begins, a frame keeps its schedule so far at any salts**: only the opening reads them. -/
-theorem repInv_hi {t : _root_.Flock.Firewall.Finish.Tab} {dom : ByteArray} {xs : Array (Array F128)}
+theorem repInv_hi {t : _root_.Flock.ZkServer.Finish.Tab} {dom : ByteArray} {xs : Array (Array F128)}
     {hi hi' : Array ByteArray} {p : Rep} (h : Loop.RepInv t dom xs hi p) (hop : p.opening = none)
     (ho : p.opened = false) : Loop.RepInv t dom xs hi' p := by
   refine ⟨h.alg, h.toOpening, Or.inl ⟨hop, ho, ?_⟩⟩
@@ -141,15 +141,15 @@ theorem repInv_hi {t : _root_.Flock.Firewall.Finish.Tab} {dom : ByteArray} {xs :
 salts the frames the round read hold wherever `placeOf` reads them (`hsalt`), the found ones at the opening's first
 round, before which nothing reads the salts. -/
 theorem sameInv_salts {W Rr : Type} {L : LeanRelease W Rr} {x : Msg} {ρ : Rr} {h : List (Msg × Msg)}
-    {cs : List FlockDeploy.Coin} {q₀ j : Nat} {t : _root_.Flock.Firewall.Finish.Tab} {dom' : ByteArray}
+    {cs : List FlockDeploy.Coin} {q₀ j : Nat} {t : _root_.Flock.ZkServer.Finish.Tab} {dom' : ByteArray}
     {xs : Array (Array F128)} {hi : Array ByteArray} {pre : List Req}
     {ev : List (Nat × ByteArray × Place × Array F128)} {p : Rep} (hI : SameInv L x ρ h cs q₀ j t dom' xs hi pre ev p)
-    {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {sid i r : Nat} {dom content : ByteArray} {n : Nat}
+    {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r : Nat} {dom content : ByteArray} {n : Nat}
     {q : Rep} {pl : Place} {f : Bool} {nd : Option String} (hfa : frameAt R sid i r = some p)
-    (hrp : _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, f, nd))
-    {s : Release} {name : String} {l0 : _root_.Flock.Firewall.Level0.Level0}
+    (hrp : _root_.Flock.ZkServer.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, f, nd))
+    {s : Release} {name : String} {l0 : _root_.Flock.ZkServer.Level0.Level0}
     (hss : R.sessions.find? (·.sid == sid) = some s) (hn : s.spec.tables[i]? = some name)
-    (hl0 : _root_.Flock.Firewall.Level0.ofSession L0 sid name = some l0) :
+    (hl0 : _root_.Flock.ZkServer.Level0.ofSession L0 sid name = some l0) :
     ∃ r0 q0 hi', SameInv L x ρ h cs q₀ j t dom' xs hi' pre ev p ∧
       (p.alg.size ≤ p.coins.size → p.opened = false → p.opening = none →
         R.salts.find? (fun x => x.1 == l0.root && x.2.1 == p.rep) = some (r0, q0, hi')) := by

@@ -51,7 +51,7 @@ sizes give.
   injection of places, so with fibers of one size (`fibersEq_exeRead`; `fibersEq_pair` where two coordinates share one
   array). Levels ≥ 1's salt `k` of rep `r` is the salt at the level and position `hiIdx` puts at `k` (`hiEmbOf`).
 * `TapeLayout.exe`, `exeTape`: the layout, and the masked prover's tape read from the cells (`exeTape`), its PoW
-  nonces `0` (the live device grinds with nonce `0`, `firewall.rs`'s `grind_pow`).
+  nonces `0` (the live device grinds with nonce `0`, `zk_server.rs`'s `grind_pow`).
 * `agrees0_exe`: the layout agrees with the executable at round `0` (`Agrees0`), so round `0`'s honest message is
   `enc0`'s (`honest_round0_exe`), and `HonestPreOn` at that layout is its rounds after the first
   (`honestPreOn_exe_of_pos`).

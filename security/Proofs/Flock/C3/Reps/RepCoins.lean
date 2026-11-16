@@ -21,7 +21,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 
 `repCoins_repsOfVals`: `StageCoins`' two rep conjuncts at the tied source `tiedSrc (repsOfVals stp sh rep vals)`. Rep
 `i`'s coin steps are its consumed rounds' coins (`repIdx`, `UnitWoven`'s), so its `p`-th is round `repIdx p`'s
-(`unitCoins_eq`); the history's round `repStart c₀ i + p` samples it from the rep's stream (`RepsDrawn`), where custody's
+(`unitCoins_eq`); the history's round `repStart c₀ i + p` samples it from the rep's stream (`RepsSampled`), where custody's
 coins half (`Assumptions.InnerRecordCustody` at a map `m`, round `i` sampling round `q` of `s` where `m.selC i s q`) holds
 what the map reads off the coins up to that round, the rep's rounds are the record's (`RepRoundsHeld`), and the map's
 coins are the round's coordinate (`CoinsEncoded`).
@@ -151,7 +151,7 @@ open FlockVBridge.Family (skOf maskOf)
 open FlockC3.Compose
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-  {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type} {S : ℕ} {Vs : Fin S → VStmt}
+  {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type} {S : ℕ} {Vs : Fin S → VStmt}
   {zs : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
   {dg : ByteArray → ByteArray} {N k Rw : ℕ}
   {stp : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
@@ -202,7 +202,7 @@ theorem repRoundsHeld_of_rounds (h : ∀ R ω t Lb i, (rep R ω t Lb i).rounds =
 /-- **Hypothesis: the map samples the reps' consumed rounds** (`InnerRecordMap.selC`, `selC`): at every accepted outer proof
 whose rep `i` meets E's preconditions, the history's round `repStart c₀ i + p` (`c₀` rep 0's consumed rounds) samples
 round `ix i q` of stream `s i`, `q` the `p`-th of rep `i`'s, and those rounds are below `r`. -/
-def RepsDrawn (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
+def RepsSampled (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (sh : Flock.Shape)
     (rep : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData)
     (vals : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals)
@@ -223,7 +223,7 @@ theorem repCoins_repsOfVals (hleaf : HLeafC3 zs dg N k Rw)
     (hf : FramesOfVals zs dg N k Rw sh rep vals)
     (hcus : FlockSoundness.Assumptions.InnerRecordCustody wr held sparse m)
     (hheld : RepRoundsHeld zs dg N k Rw sh rep wr held s ix) (henc : CoinsEncoded (CT := CT) m.selC m.coin)
-    (hdr : RepsDrawn zs dg N k Rw sh rep vals m.selC s ix) :
+    (hdr : RepsSampled zs dg N k Rw sh rep vals m.selC s ix) :
     AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun t u =>
       CoinsAt (CT := CT) (t.map Prod.snd) 1 (nCoins (u.ts 0)) (u.ts 0) ∧
         CoinsAt (CT := CT) (t.map Prod.snd) (1 + nCoins (u.ts 0)) (nCoins (u.ts 1)) (u.ts 1) := by

@@ -35,7 +35,6 @@ import collections
 import json
 import os
 import resource
-import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -43,11 +42,8 @@ from typing import Any
 import numpy as np
 from verity_config.settings import SHARED
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-
-import slots as S  # noqa: E402
-from verity.commitments.identity import identity_digest_sha512  # noqa: E402
+from verity.commitments.cuda.commit_slots import slots as S
+from verity.commitments.identity import identity_digest_sha512
 
 CTX = identity_digest_sha512("verity/commit-slots/step/context/v1", {"step": 1})
 KEY = bytes(range(96, 128))
@@ -116,11 +112,13 @@ def compressions(layout: S.CommitShape) -> dict[str, int]:
 def count(a: argparse.Namespace) -> int:
     """The layout's compressions and ChaCha20 chunks as the engine's host twin hashes them (its counters), over steps of one
     and two slots: what a slot adds, and what a step costs once (each unit's frame table an add)."""
-    import slots_gpu as G
+    import torch_plan as P
+
+    from verity.commitments.cuda.commit_slots import slots_gpu as G
 
     t = time.perf_counter()
     layout = S.load(a.layout) if a.layout else uniform(a.uniform, a.units)
-    plan = G.Plan(CTX, layout, "host")
+    plan = P.Plan(CTX, layout, "host")
     got = {}
     for slots in (1, 2):
         outputs = S.random_outputs(layout, slots, np.random.default_rng(slots))
@@ -199,7 +197,7 @@ def result(a: argparse.Namespace, docs: dict[str, dict[str, Any]], ok: bool, lin
     run_dir = Path(SHARED.need("RESEARCH_RUN_DIR"))
     ms = []
     for k, d in docs.items():
-        ms.append({"name": f"{k}.step_gpu_s", "value": best_s(d), "unit": "s"})
+        ms.append({"name": f"kernels/commit-slots.{k}.step-gpu-s", "value": best_s(d), "unit": "s"})
         for g in sorted({st["graphs"] for st in d["steps"]}):
             ms.append({"name": f"{k}.{'graphs' if g else 'eager'}.enqueue_s", "value": best_enqueue_s(d, g), "unit": "s"})
         ms.append({"name": f"{k}.rows_a_slot", "value": d["layout"]["rows"], "unit": "rows"})
@@ -221,7 +219,9 @@ def result(a: argparse.Namespace, docs: dict[str, dict[str, Any]], ok: bool, lin
 def time_layout(a: argparse.Namespace, path: Path, out: Path) -> dict[str, Any]:
     import torch
 
-    import slots_gpu as G
+    import torch_plan as P
+
+    from verity.commitments.cuda.commit_slots import slots_gpu as G
 
     out.mkdir(parents=True, exist_ok=True)
     slots = a.slots
@@ -241,7 +241,7 @@ def time_layout(a: argparse.Namespace, path: Path, out: Path) -> dict[str, Any]:
 
     m0 = torch.cuda.memory_allocated()
     t = time.perf_counter()
-    plan = G.Plan(CTX, layout, temp_bytes=a.temps[0], leaf_minb=a.leaf_minb[0])
+    plan = P.Plan(CTX, layout, "cuda", temp_bytes=a.temps[0], leaf_minb=a.leaf_minb[0])
     torch.cuda.synchronize()
     distinct = {id(g): g for g in layout.groups}
     gen = torch.Generator(device="cuda")

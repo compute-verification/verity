@@ -94,7 +94,7 @@ theorem goals_plain (H : Claims.Msg → Claims.Msg) (h64 : Claims.Out64 H) :
       sends := sendCount_goal H _
       linkFirst := linkFirst_goal H h64 _
       finalFits := JsonRT.finalFits_goal h64 hP
-      draw := JsonRT.drawMatches_goal h64 hP
+      draw := JsonRT.sampleMatches_goal h64 hP
       liveReads := JsonRT.liveReads_goal h64 hP
       canonical := JsonRT.canonical_goal h64 hP
       rootB := JsonRT.custodyRootB_goal h64 hP
@@ -159,10 +159,10 @@ theorem run_recordJ (h64 : Claims.Out64 H) (hP : ProverOk H rel)
     intro p hp
     obtain ⟨i, -, rfl⟩ := Array.mem_map.1 hp
     simp
-  have hd : Good (o.spec.unitDraw.getD Json.null) := by
-    unfold DrawOk at hdraw
+  have hd : Good (o.spec.unitSample.getD Json.null) := by
+    unfold SampleOk at hdraw
     revert hdraw
-    cases o.spec.unitDraw with
+    cases o.spec.unitSample with
     | none => exact fun _ => .null
     | some d => exact fun hd => hd.2.1
   dsimp only at hrec

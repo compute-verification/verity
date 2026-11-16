@@ -27,7 +27,9 @@ holds only `served-measured` rows, and Figure 5 names each row's basis.  A `serv
 computed tokens, prompt and output, a GPU-second on the mix its `plan` names (the art id of the plan file or of the
 record that holds it, or the id of the run that does), measured; `saturated` only where a rate above it was served and
 computed no more, so a lower bound is `saturated` false on a `provisional` card, and `bound` says what held the rate
-(`BOUNDS`).  No figure reads it unless asked to (`figure1.SERVING`).  A card reaches the figures by art id, a later one
+(`BOUNDS`).  No figure reads it unless asked to (`figure1.SERVING`).  A `certifier` card is the model's deployment
+schedule for the network attester, `NetworkAttesterParams`' fields (the parameters every record head's digest binds), whose
+response cap, where it has one, bounds what a request serves.  A card reaches the figures by art id, a later one
 naming the earlier card it replaces:
 
     uv run python benchmarks/spot_figures/cards.py check CARD.json ...       # refuses unknown and missing fields
@@ -44,6 +46,8 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+
+from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
 
 HERE = Path(__file__).resolve().parent
 CARDS = HERE / "cards"
@@ -137,6 +141,7 @@ SLOTS = {
                       "families": F(list, each=VERIFY_FAMILY)},
     "headline": {"bases": F(list), "rows": F(list, each=HEADLINE_ROW), "quote": F(str)},
     "serving_rate": {"tokens_per_gpu_second": F(NUM), "plan": F(str), "saturated": F(bool), "bound": F(str, choices=BOUNDS)},
+    "certifier": {"schedule": F(dict)},
 }
 
 
@@ -249,6 +254,11 @@ def check(card: dict) -> dict:
         if not value["saturated"] and not card["provisional"]:
             errors.append("serving_rate.value.saturated: false on a card that is not provisional; a lower bound is "
                           "provisional, so that a floor is never read as the rate")
+    if slot == "certifier" and not errors:
+        try:
+            NetworkAttesterParams(**value["schedule"])
+        except (TypeError, ValueError) as e:
+            errors.append(f"certifier.value.schedule: not a network certifier schedule (NetworkAttesterParams): {e}")
     if slot == "workload" and not errors and value.get("served_macs_per_token") is not None:
         in_blocks = sum(s["per_token"] * s["macs"] for s in value["strata"])
         if value["served_macs_per_token"] < in_blocks * (1 - 1e-9):

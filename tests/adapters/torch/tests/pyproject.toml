@@ -1,0 +1,26 @@
+# The suite of the distribution `verity-torch`: a virtual member that depends on it, so the suite keys on what the
+# distribution's dependents read, and `tools/check/suites.py` names it as the distribution.
+[project]
+name = "verity-torch-tests"
+version = "0.0.0"
+requires-python = ">=3.12"
+dependencies = ["verity-torch"]
+
+# Not an installable package: a workspace member so that its tests run in the workspace environment.
+[tool.uv]
+package = false
+
+[tool.verity.tests]
+# the translator reads the served kernels' Definitions from the vLLM adapter, which depends on this package, so they are
+# inputs rather than a dependency; loading them reads the package's `__init__.py`
+inputs = [
+    "adapters/vllm/verity_vllm/__init__.py",
+    "adapters/vllm/verity_vllm/definitions",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["."]
+addopts = "-q -p no:cacheprovider"
+markers = [
+    "slow: takes over about 5 s; deselect with -m 'not slow'",
+]

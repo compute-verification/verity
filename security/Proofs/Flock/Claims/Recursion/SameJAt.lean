@@ -241,7 +241,7 @@ theorem same_link {spec : SessionSpec} {t : String} (ht : spec.tables = #[t]) (h
 `SS` is alike its stream of `S` through the two round maps. -/
 theorem same_record {spec : SessionSpec} {t : String} (ht : spec.tables = #[t]) (h : ByteArray → ByteArray)
     (rb : ByteArray) (P : Array (Array F128)) (S SS : Array (Array Round)) (F : Array ByteArray)
-    (g₁ g₂ : String → ℕ → Json → Json) (hdg : Good (spec.unitDraw.getD Json.null)) (hsz : SS.size = S.size)
+    (g₁ g₂ : String → ℕ → Json → Json) (hdg : Good (spec.unitSample.getD Json.null)) (hsz : SS.size = S.size)
     (hst : ∀ i (h₁ : i < spec.repStreams.size) (h₂ : i < S.size),
       Same (streamObj spec h #[rb] (spec.repStreams[i], SS[i]'(by omega)))
         (mapStream g₂ (mapStream g₁ (streamObj spec h #[rb] (spec.repStreams[i], S[i]))))) :
@@ -330,7 +330,7 @@ and its coins substituted is alike the record whose rounds hold the fill's coins
 recorded round. -/
 theorem same_coinSubJ {spec : SessionSpec} {t : String} (ht : spec.tables = #[t]) (h : ByteArray → ByteArray)
     (rb : ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin)) (S : Array (Array Round)) (F : Array ByteArray)
-    (hdg : Good (spec.unitDraw.getD Json.null))
+    (hdg : Good (spec.unitSample.getD Json.null))
     (hfill : ∀ i (hi : i < spec.repStreams.size) (hS : i < S.size) k, k < S[i].size →
       (mids[streamOffset spec (eraseCoins (shaSubJ spec (F.map (dgOf spec h))
         (recordObj spec h #[rb] (FlockDeploy.pointsOf spec c₁) S F))) spec.repStreams[i].2.2 + k]?).isSome) :

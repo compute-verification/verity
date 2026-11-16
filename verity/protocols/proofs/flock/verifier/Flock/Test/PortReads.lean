@@ -1,11 +1,12 @@
-/-
-`ProvedScope.portReadsB`, which compiled code runs as `portReadsBFast`: computed rows reading only port bits, or columns
-past the input rows, pass; a row reading an input column outside every port fails, in A or in B.
--/
 module
 
 public import Flock.ProvedScope
 meta import Flock.ProvedScope
+
+/-!
+`ProvedScope.portReadsB`, which compiled code runs as `portReadsBFast`: computed rows reading only port bits, or columns
+past the input rows, pass; a row reading an input column outside every port fails, in A or in B.
+-/
 
 @[expose] public section
 

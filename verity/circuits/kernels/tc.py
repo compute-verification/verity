@@ -436,7 +436,7 @@ def pv_row_pad_kernel(steps: Mapping[Any, GroupSum]) -> Callable[..., Any]:
 
 def _words(rng: np.random.Generator, fmt: Format, shape: tuple[int, ...], specials: tuple[int, ...], p_special: np.ndarray,
            regime: np.ndarray, spread: int = 6) -> np.ndarray:
-    """Operand words with exponents clustered around a per-instance centre (so products align, cancel and overflow),
+    """Operand words with exponents near a per-instance centre (so products align, cancel and overflow),
     a uniform word one time in eight, and ``specials`` with probability ``p_special`` (per input).  The centre is
     uniform (regime 0), at the unit binade (1), or where products land at the bottom of the FP32 range (2)."""
     n = shape[0]

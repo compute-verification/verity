@@ -1,5 +1,5 @@
 /-
-A window circuit's wires, checked at the size of their description (`verity.ml.windows.interface.Wire`).
+A window circuit's wires, checked at the size of their description (`verity.commitments.periods.interface.Wire`).
 
 A window's circuit is a population of template instances (`TemplatePopulations_v1`), whose inputs are all Input gates: the
 program holds no dataflow between units. The wires are that dataflow. A wire states, once for many units, that reader

@@ -6,7 +6,7 @@
 # Each sampled member is proved by Flock `prove --zk` (CPU), as SPOT[Flock]'s proof server proves it, one outer proof at a
 # time, and decided by Lean `verify --zk`. The negatives are the first session's one-bit proof edits, refused by Lean, and
 # the member of PB_TAMPERED (with the fixture, its tampered twin unless PB_TAMPERED= is given empty), refused by Lean.
-# ZK_SERVER=1 runs every prover behind the Lean ZK server instead (prove_bundle.py --firewall, the core protocols' path),
+# ZK_SERVER=1 runs every prover behind the Lean ZK server instead (prove_bundle.py --zk-server, the core protocols' path),
 # which must also stop the tampered member. PB_LIVE=1 requires the bundle's sample to be live, with its receipt.
 #   bash benchmarks/one_stage/prove_bundle.sh [PB_BUNDLE=F PB_WINDOW=DIR [PB_TAMPERED=DIR]] [PB_MEMBERS=N] [PB_FLIPS=1] [PB_BINARIES=DIR] [PB_BUILD_ONLY=1]
 #   (a job run from a clone of the tree)
@@ -28,7 +28,7 @@ PY=$REPO/.venv/bin/python
 
 STAMP=$(git rev-parse HEAD:verity/protocols/proofs/flock/prover HEAD:verity/protocols/proofs/flock/prover/pod HEAD:verity/protocols/proofs/flock/prover/agreement HEAD:verity/protocols/proofs/flock/prover/tool.py HEAD:verity/protocols/proofs/flock/verifier HEAD:verity/circuits/base HEAD:verity/circuits/lean HEAD:verity/commitments/lean 2>/dev/null | tr '\n' ' ')
 [ -n "${STAMP// }" ] || { echo "prove-bundle: no git trees to stamp binaries with"; exit 4; }
-BUNDLE_WINDOW=benchmarks/one_stage/tests/fixtures/bundle-window
+BUNDLE_WINDOW=tests/benchmarks/one_stage/fixtures/bundle-window
 FX=$REPO/$BUNDLE_WINDOW
 if [ -n "${PB_WINDOW:-}" ]; then
   BUNDLE=${PB_BUNDLE:?PB_WINDOW needs its PB_BUNDLE} WINDOW=$PB_WINDOW TAMPERED=${PB_TAMPERED:-}
@@ -37,22 +37,22 @@ else
 fi
 log "prove-bundle: source $(git rev-parse HEAD), bundle $BUNDLE, window $WINDOW, builds in $W"
 if [ -n "${PB_BINARIES:-}" ] && [ "$(cat "$PB_BINARIES/stamp" 2>/dev/null)" = "$STAMP" ]; then
-  BIN=$PB_BINARIES/flock-circuit LEAN=$PB_BINARIES/flock-verify FWL=$PB_BINARIES/flock-firewall
+  BIN=$PB_BINARIES/flock-circuit LEAN=$PB_BINARIES/verity-verify-proof FWL=$PB_BINARIES/flock-zk-server
   log "binaries: prebuilt in $PB_BINARIES, stamp $STAMP"
 else
   [ -n "${PB_BINARIES:-}" ] && log "binaries: $PB_BINARIES's stamp is not this source's ($STAMP), so they're built here"
-  (cd verity/protocols/proofs/flock/verifier && lake build flock-verify flock-firewall) > "$O/build-lean.log" 2>&1 &
+  (cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-zk-server) > "$O/build-lean.log" 2>&1 &
   LP=$!
   mkdir -p "$O/m0-build"
   RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$W MODE=build GPU=0 bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh > "$O/m0-build/build.log" 2>&1 \
     || { tail -40 "$O/m0-build/build.log"; exit 6; }
   BIN=$W/flock-gpu-link/flock/target/release/flock-circuit
   wait $LP || { tail -40 "$O/build-lean.log"; exit 7; }
-  LEAN=$REPO/verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-verify
-  FWL=${LEAN%/*}/flock-firewall
+  LEAN=$REPO/verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof
+  FWL=${LEAN%/*}/flock-zk-server
 fi
 sha256sum "$BIN" "$LEAN" "$FWL" | tee "$O/binaries.sha256" | tee -a "$O/job.log"
-ZKS=(); if [ "${ZK_SERVER:-0}" = 1 ]; then ZKS=(--firewall "$FWL"); fi
+ZKS=(); if [ "${ZK_SERVER:-0}" = 1 ]; then ZKS=(--zk-server "$FWL"); fi
 if [ "${PB_BUILD_ONLY:-0}" = 1 ]; then
   mkdir -p "$O/bin" && cp "$BIN" "$LEAN" "$FWL" "$O/bin/" && echo "$STAMP" > "$O/bin/stamp" || exit 9
   log "build only: $O/bin, stamp $STAMP"
@@ -61,10 +61,10 @@ fi
 export PYTHONPATH=$REPO:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/benchmarks/one_stage/interfaces:$REPO/benchmarks/numerical/python
 export RAYON_NUM_THREADS=$(nproc)
 # flock-circuit's rayon pool keeps Rust's default 2 MiB thread stack, which a --zk prover can overflow on a many-core node
-# (prove_path/run.sh)
+# (prove_path.sh)
 export RUST_MIN_STACK=$((64 << 20))
 
-if [ -z "${PB_WINDOW:-}" ]; then   # the store CLI with the run's custody key in its environment only, as prove_path/run.sh's R
+if [ -z "${PB_WINDOW:-}" ]; then   # the store CLI with the run's custody key in its environment only, as prove_path.sh's R
   PYTHONPATH=$REPO/benchmarks/proof_throughput "$PY" -c 'import os, sys
 from verity_proof_throughput.store import store_env
 os.execvpe(sys.executable, [sys.executable, "-m", "research", *sys.argv[1:]], store_env())' data fetch-fixtures --repo "$REPO" "$BUNDLE_WINDOW" > "$O/fetch.log" 2>&1 \

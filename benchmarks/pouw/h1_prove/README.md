@@ -1,8 +1,8 @@
 # h1_prove
 
-H1 tile units through SPOT: a recorded or served int8 Llama-3.1-8B window's units sampled by the live coin,
+H1 tile proof blocks through SPOT: a recorded or served int8 Llama-3.1-8B window's proof blocks sampled by the live coin,
 proved by Flock `--zk` under the ZK server and checked by the Lean verifier against the verifier's own public files,
-beside controls each refused or rejected by the check it breaks; and the units a served window's own sampling coin
+beside controls each refused or rejected by the check it breaks; and the proof blocks a served window's own sampling coin
 selects, read from that window's run.
 
 **Hardware:** a node's CPUs, no GPU, with the memory the job's header sizes: `job` at K = 4096 wants hundreds of GB
@@ -22,11 +22,11 @@ research run --on MACHINE --project verity --source . --cwd source --mem-gb G --
 | job | what it runs | writes |
 |---|---|---|
 | `job` | one recorded window: `layer.py` records two windows' int8 codes from the checkpoint, `recorded.py prepare` commits, serves, samples, opens and stages, one loopback `--zk` session a statement, the Lean checks of the plan and the selftest build's controls, then `recorded.py summarize` | `$OUT/summary.json`, and the sessions', Lean checks' and controls' logs under `$OUT` |
-| `live` | a served window's live units, from its dump (`H1_LIVE`): `live.py prepare`, a session a round, the Lean check of each, `live.py summarize` and `evidence` | `out/<window>/live-summary.json`, `out/<window>/live-evidence.json` |
-| `served` | `served.py` over a served window's run (`H1_SERVED`), against the challenger's pinned key, the pins log and `main`'s commits, then three negatives each refused | the selected units, `out/program/window-program.json.gz`, a log a negative |
+| `live` | a served window's live proof blocks, from its dump (`H1_LIVE`): `live.py prepare`, a session a round, the Lean check of each, `live.py summarize` and `evidence` | `out/<window>/live-summary.json`, `out/<window>/live-evidence.json` |
+| `served` | `served.py` over a served window's run (`H1_SERVED`), against the challenger's pinned key, the pins log and `main`'s commits, then three negatives each refused | the selected proof blocks, `out/program/window-program.json.gz`, a log a negative |
 
 One more job has no row, because its name is a term the Glossary retires; `run.sh` with no argument lists every job. It
-is PoUW's piece of a served window with its sampled proof blocks proved: each sampled call's units staged on the
+is PoUW's piece of a served window with its sampled proof blocks proved: each sampled call's proof blocks staged on the
 window's registered values, a session a statement, the statements file checked as credit does, then
 `served_verdicts.py pouw`. It writes `PIECE_DIR/` (the statements file, a directory of logs a session).
 
@@ -40,10 +40,13 @@ peak RSS summed over the ZK server's processes) and each arm's log and piece dir
 
 ## The Python modules
 
-`h1unit.py` is the tile unit as a Flock statement and the commitments it is opened against, which the committer, prover
-and verifier share; `window.py` is the window's committer and prover, which `recorded.py` drives and the verifier never
-imports; `stage.py K WORK` builds the unit's circuit once and stages each round on it; `layer.py` records a decoder
-layer's int8 codes and scales from a checkpoint on the CPU. `live.py` is also read by the vLLM adapter's tests and
-`benchmarks/one_stage/`, and `h1_lanes/served.py` takes the units `served.py` samples. `h1unit.py`, `window.py`,
+H1's lowering is the prover's (`verity/protocols/resource_accounting/compute/pouw/prover/lowering/`): `h1unit.py`, the tile proof block as a
+Flock statement and the commitments it is opened against, which the committer, prover and verifier share; `stagers.py`,
+the stagers `drawn.py` hands the sampled prover; and `live.py`, the live proof blocks' lowering and the verifier's own files of
+them. `h1form.py` hands it this harness's ``H1_TILE`` and ``H1_TMPL`` (`benchmarks/pouw/settings.py`) as arguments.
+`window.py` is the window's committer and prover, which `recorded.py` drives and the verifier never imports;
+`stage.py K WORK` builds the proof block's circuit once and stages each round on it; `layer.py` records a decoder layer's int8
+codes and scales from a checkpoint on the CPU; `live.py` is the live proof blocks' CLI over the lowering, which `live.sh` runs
+and `benchmarks/one_stage/` reads, and `h1_lanes/served.py` takes the proof blocks `served.py` samples. `window.py`,
 `recorded.py`, `stage.py`, `layer.py` and `live.py` list in `__all__` the names other files read through them, the tests'
-included, except underscore names. Their tests are the `test_h1_prove*.py` files under `benchmarks/pouw/tests/`.
+included, except underscore names. Their tests are the `test_h1_prove*.py` files under `tests/benchmarks/pouw/`.

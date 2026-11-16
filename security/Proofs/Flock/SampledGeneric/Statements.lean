@@ -8,7 +8,7 @@ public import Proofs.Flock.SampledGeneric.Defs
 Proof material, listed in no lock: the statement is the claims core's (`Claims.SamplingGeneric`).
 
 Take any proof system for proof blocks (`ProofSystem`) with a knowledge extractor (`Extractor`, `Trials`), a binding
-commitment to the trace (`Binding`) and a sampling design (`Audit.Law`). The sampled audit (`Audit.audit`: the prover
+commitment to the trace (`Binding`) and a sampling design (`Audit.SamplingDesign`). The sampled audit (`Audit.audit`: the prover
 registers, the verifier samples proof blocks with live coins after the registration, the proof system's session proves
 the sample) accepts a trace with incorrect set `F` with probability at most the sampling design's acceptance
 probability `P_a(F)`, plus the knowledge error at one sampled proof block, plus the binding term `ε_bind`, which is
@@ -18,7 +18,7 @@ $$\Pr[\text{accept}]\le P_a(F)+\varepsilon_{\rm ks}+\varepsilon_{\rm bind}.$$
 before the verifier's first coin.
 
 * `GenericSampledKS`: the event form, `Pr[accept ∧ E(X, S)] ≤ Pr_S[E(X, S) ∧ S ∩ F = ∅] + ε_ks + ε_bind`;
-* `GenericSampledKSPa`: `Pr[accept] ≤ P_a(F) + ε_ks + ε_bind`, with `P_a(F) = L.escape F`;
+* `GenericSampledKSPa`: `Pr[accept] ≤ P_a(F) + ε_ks + ε_bind`, with `P_a(F) = L.missProb F`;
 * `GenericSampledKSEscape`: `Pr[accept ∧ W ⊆ F] ≤ P_a(W) + ε_ks + ε_bind` at every set `W` of proof blocks;
 * `GenericSampledKSCount`: `Pr[accept ∧ |F| ≥ K] ≤ miss(K) + ε_ks + ε_bind`, the count curve;
 * `GenericSampledKSJoint`: the same for an extractor in the textbook form (`JointExtractor`), with the knowledge error
@@ -48,7 +48,7 @@ $$\Pr[\text{accept}\wedge E(X,S)]\le\Pr_S[E(X,S)\wedge S\cap F(X)=\emptyset]+\va
 with `X = Xc(σ)` fixed at registration, `F(X)` its incorrect set, `ε_ks` the knowledge term at one sampled proof block
 averaged over the sample (`Extractor.ksAvg`) and `ε_bind` the binding term (`Trials.bindErr`). -/
 def GenericSampledKS : Prop :=
-  ∀ (n : ℕ) (Reg Dh : Type) (Hc : List UInt8 → Dh) (L : Law n) (PS : ProofSystem n Reg) (B : Binding Reg Hc)
+  ∀ (n : ℕ) (Reg Dh : Type) (Hc : List UInt8 → Dh) (L : SamplingDesign n) (PS : ProofSystem n Reg) (B : Binding Reg Hc)
     (Correct : Reg → B.Trace → Fin n → Prop) (Ex : Extractor PS B) (Tr : Trials L PS B)
     (Xc : (R : Reg) → Cont L Reg PS.session R → B.Trace) (M : ℕ),
     Ex.Covers Correct → Tr.Opens → Tr.WellFormed → Tr.Transfers Ex → Tr.Plurality Xc → 1 ≤ M →
@@ -61,34 +61,34 @@ def GenericSampledKS : Prop :=
 
 /-- **The sampled audit's knowledge soundness, generic in the proof system**:
 $$\Pr[\text{accept}]\le P_a(F)+\varepsilon_{\rm ks}(\sigma)+\varepsilon_{\rm bind}(\sigma),$$
-`GenericSampledKS` at the sure event, with `P_a(F) = L.escape F` the sampling design's acceptance probability at the
+`GenericSampledKS` at the sure event, with `P_a(F) = L.missProb F` the sampling design's acceptance probability at the
 committed trace's incorrect set. -/
 def GenericSampledKSPa : Prop :=
-  ∀ (n : ℕ) (Reg Dh : Type) (Hc : List UInt8 → Dh) (L : Law n) (PS : ProofSystem n Reg) (B : Binding Reg Hc)
+  ∀ (n : ℕ) (Reg Dh : Type) (Hc : List UInt8 → Dh) (L : SamplingDesign n) (PS : ProofSystem n Reg) (B : Binding Reg Hc)
     (Correct : Reg → B.Trace → Fin n → Prop) (Ex : Extractor PS B) (Tr : Trials L PS B)
     (Xc : (R : Reg) → Cont L Reg PS.session R → B.Trace) (M : ℕ),
     Ex.Covers Correct → Tr.Opens → Tr.WellFormed → Tr.Transfers Ex → Tr.Plurality Xc → 1 ≤ M →
     ∀ σ : Strategy (audit L Reg PS.session), Tr.CR (reg σ) (cont σ) M →
       prob (fun o => o.1 = true) (audit L Reg PS.session) σ ≤
-        L.escape (incorrect B Correct (reg σ) (Xc (reg σ) (cont σ))) + Ex.ksAvg L (reg σ) (cont σ) +
+        L.missProb (incorrect B Correct (reg σ) (Xc (reg σ) (cont σ))) + Ex.ksAvg L (reg σ) (cont σ) +
           Tr.bindErr (reg σ) (cont σ) M
 
-/-- **The escape bound at a set of proof blocks, generic in the proof system**: for every set `W` of proof blocks,
+/-- **The missProb bound at a set of proof blocks, generic in the proof system**: for every set `W` of proof blocks,
 `Pr[accept ∧ W ⊆ F] ≤ P_a(W) + ε_ks(σ) + ε_bind(σ)`, `GenericSampledKS` at `W ⊆ F`. -/
 def GenericSampledKSEscape : Prop :=
-  ∀ (n : ℕ) (Reg Dh : Type) (Hc : List UInt8 → Dh) (L : Law n) (PS : ProofSystem n Reg) (B : Binding Reg Hc)
+  ∀ (n : ℕ) (Reg Dh : Type) (Hc : List UInt8 → Dh) (L : SamplingDesign n) (PS : ProofSystem n Reg) (B : Binding Reg Hc)
     (Correct : Reg → B.Trace → Fin n → Prop) (Ex : Extractor PS B) (Tr : Trials L PS B)
     (Xc : (R : Reg) → Cont L Reg PS.session R → B.Trace) (M : ℕ),
     Ex.Covers Correct → Tr.Opens → Tr.WellFormed → Tr.Transfers Ex → Tr.Plurality Xc → 1 ≤ M →
     ∀ (W : Finset (Fin n)) (σ : Strategy (audit L Reg PS.session)), Tr.CR (reg σ) (cont σ) M →
       prob (fun o => o.1 = true ∧ W ⊆ incorrect B Correct (reg σ) (Xc (reg σ) (cont σ)))
           (audit L Reg PS.session) σ ≤
-        L.escape W + Ex.ksAvg L (reg σ) (cont σ) + Tr.bindErr (reg σ) (cont σ) M
+        L.missProb W + Ex.ksAvg L (reg σ) (cont σ) + Tr.bindErr (reg σ) (cont σ) M
 
 /-- **The count curve, generic in the proof system**: `Pr[accept ∧ |F| ≥ K] ≤ miss(K) + ε_ks(σ) + ε_bind(σ)`, with
 `miss(K)` the sampling design's largest acceptance probability over incorrect sets of at least `K` proof blocks. -/
 def GenericSampledKSCount : Prop :=
-  ∀ (n : ℕ) (Reg Dh : Type) (Hc : List UInt8 → Dh) (L : Law n) (PS : ProofSystem n Reg) (B : Binding Reg Hc)
+  ∀ (n : ℕ) (Reg Dh : Type) (Hc : List UInt8 → Dh) (L : SamplingDesign n) (PS : ProofSystem n Reg) (B : Binding Reg Hc)
     (Correct : Reg → B.Trace → Fin n → Prop) (Ex : Extractor PS B) (Tr : Trials L PS B)
     (Xc : (R : Reg) → Cont L Reg PS.session R → B.Trace) (M : ℕ),
     Ex.Covers Correct → Tr.Opens → Tr.WellFormed → Tr.Transfers Ex → Tr.Plurality Xc → 1 ≤ M →
@@ -104,13 +104,13 @@ $$\Pr[\text{accept}]\le P_a(F)+\mathbb E_S\max_{u\in S}\kappa_u+\varepsilon_{\rm
 with `F` the incorrect set of the plurality of its trials (`Trials.plur`) and `ε_bind` with no slack
 (`JointExtractor.toTrials`). -/
 def GenericSampledKSJoint : Prop :=
-  ∀ (n : ℕ) (Reg Dh : Type) (Hc : List UInt8 → Dh) (L : Law n) (PS : ProofSystem n Reg) (B : Binding Reg Hc)
+  ∀ (n : ℕ) (Reg Dh : Type) (Hc : List UInt8 → Dh) (L : SamplingDesign n) (PS : ProofSystem n Reg) (B : Binding Reg Hc)
     (Correct : Reg → B.Trace → Fin n → Prop) (J : JointExtractor PS B)
     (κ : (S : Finset (Fin n)) → (R : Reg) → Strategy (PS.session S R) → Fin n → ℝ≥0∞) (M : ℕ),
     J.Judged → J.Sound Correct → (∀ S R o, 0 ≤ J.cost S R o) → J.KnowledgeSound κ → 1 ≤ M →
     ∀ σ : Strategy (audit L Reg PS.session), (J.toTrials L).CR (reg σ) (cont σ) M →
       prob (fun o => o.1 = true) (audit L Reg PS.session) σ ≤
-        L.escape (incorrect B Correct (reg σ) ((J.toTrials L).plur (reg σ) (cont σ))) +
+        L.missProb (incorrect B Correct (reg σ) ((J.toTrials L).plur (reg σ) (cont σ))) +
           avg (fun ω => ⨆ u ∈ L.draw ω, κ (L.draw ω) (reg σ) (cont σ ω) u) +
           (J.toTrials L).bindErr (reg σ) (cont σ) M
 

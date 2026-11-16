@@ -135,7 +135,7 @@ after `Hello` as coins (`Loop.PhaseBlind`) is `Loop.phased` at an algebraic phas
 
 namespace Claims.ZKServer.Loop
 
-/-- **The loop's own tables are `RealTabs`**: each is `tabOfLevel0` at a level 0 `Level0.ofDraws` drew. -/
+/-- **The loop's own tables are `RealTabs`**: each is `tabOfLevel0` at a level 0 `Level0.ofSamples` drew. -/
 theorem realTabs_realOf {R : Type}
     (src : Msg → Flock.Wit → R → ℕ → _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))
     (x : Msg) (w : Flock.Wit) (ρ : R) {s0 : _} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}

@@ -60,8 +60,8 @@ import Proofs.Flock.VBridge.Family.Lig
 
 At a dense inner statement where the last step reads and the base checks hold, the record value the verdict reads
 (`jAt`) decodes at the setup SHA-512 gives (`decode_at`, `TargetDecode` with `At` unfolded), with no JSON
-premise: the verifier keeps the public header and the sample normalized, so both are well-formed (`unitDraw_of`,
-`draw_wf`), and the statement's coin tree is its coins' (`setupOne_stmt`), none at `.seed` (`tree?_none`). `jAt` is the reader's record (`recJ`) with its digests and coins
+premise: the verifier keeps the public header and the sample normalized, so both are well-formed (`unitSample_of`,
+`sample_wf`), and the statement's coin tree is its coins' (`setupOne_stmt`), none at `.seed` (`tree?_none`). `jAt` is the reader's record (`recJ`) with its digests and coins
 substituted, so it is alike the honest record whose rounds hold the fill's coins (`same_coinSubJ`, with the fill finding
 a coin wherever `liveOf` reads, `fill_of_live`), and an honest record of a one-table statement decodes
 (`decodeJ_same`). What `decodeJ_same` asks:
@@ -84,7 +84,7 @@ open Claims (Msg)
 open Claims.Json (Same Good)
 open FlockDeploy (Coin FinalP ReadOkR holdsR liveOfJ coinSubJ pointsOf tabsOf shapeAt cutLens level0Lens repLens
   recStreams)
-open FlockComplete.JsonRT (DrawOk)
+open FlockComplete.JsonRT (SampleOk)
 
 /-! ## Bytes -/
 
@@ -152,8 +152,8 @@ tree, a non-empty Σ, a printable sample that decodes to its instances, two link
 theorem dense_stmt {xo : Msg} {sto : Claims.Recursion.CompiledStatement}
     (hst : parse xo = some sto) (hf : Claims.Recursion.Form.Dense sto.form) {s : FlockDeploy.Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : FlockDeploy.setupOf false (xIOf xo) = some (s, spec, sts)) :
-    ∃ st t, sts = #[st] ∧ spec.tables = #[t] ∧ spec.coinTree = none ∧ 0 < spec.sigma.size ∧ DrawOk spec ∧
-      Good (spec.unitDraw.getD Json.null) ∧ spec.points = 2 ∧ st.regions.size ≤ 1024 ∧ (fast100 st.m).isSome := by
+    ∃ st t, sts = #[st] ∧ spec.tables = #[t] ∧ spec.coinTree = none ∧ 0 < spec.sigma.size ∧ SampleOk spec ∧
+      Good (spec.unitSample.getD Json.null) ∧ spec.points = 2 ∧ st.regions.size ≤ 1024 ∧ (fast100 st.m).isSome := by
   obtain ⟨s', spec', st, sch, hset', htags, hpi, hsch⟩ := Rows.dense_inner hst hf
   rw [hset] at hset'
   obtain ⟨rfl, rfl, rfl⟩ : s = s' ∧ spec = spec' ∧ sts = #[st] := by simpa using hset'
@@ -182,20 +182,20 @@ theorem dense_stmt {xo : Msg} {sto : Claims.Recursion.CompiledStatement}
   rw [hx] at hset2
   have hds := inner_drawn hr ha hset2
   obtain ⟨d, hdd⟩ := Option.isSome_iff_exists.1 hds
-  have hu := FlockComplete.JsonRT.unitDraw_of hl (hd d hdd)
-  have hU : st.spec.unitDraw = some d := by simp [Stmt.spec, hu, Except.toOption]
+  have hu := FlockComplete.JsonRT.unitSample_of hl (hd d hdd)
+  have hU : st.spec.unitSample = some d := by simp [Stmt.spec, hu, Except.toOption]
   obtain ⟨D, hD, hn⟩ := hinst d hu
-  have hdl := FlockComplete.JsonRT.Ins.setup_drawLaw hsu hds
+  have hdl := FlockComplete.JsonRT.Ins.setup_sampleDesign hsu hds
   rw [hdd, hz] at hdl
-  simp only [ProvedScope.drawLaw, hD] at hdl
-  have hlw : ProvedScope.lawWhy false s.read.tags false D = none := by
-    cases e : ProvedScope.lawWhy false s.read.tags false D with
+  simp only [ProvedScope.sampleDesign, hD] at hdl
+  have hlw : ProvedScope.samplingDesignWhy false s.read.tags false D = none := by
+    cases e : ProvedScope.samplingDesignWhy false s.read.tags false D with
     | none => rfl
     | some _ => rw [e] at hdl; cases hdl
   have hg : Good d := by
-    rcases FlockComplete.JsonRT.law_of_lawWhy hlw with ⟨K, strata, hK⟩ | ⟨k, hk⟩
-    · exact FlockComplete.JsonRT.good_stratified (FlockComplete.JsonRT.draw_wf hdraw hdd) hD hK
-    · exact FlockComplete.JsonRT.good_subset (FlockComplete.JsonRT.draw_wf hdraw hdd) hD hk
+    rcases FlockComplete.JsonRT.samplingDesign_of_samplingDesignWhy hlw with ⟨K, strata, hK⟩ | ⟨k, hk⟩
+    · exact FlockComplete.JsonRT.good_stratified (FlockComplete.JsonRT.sample_wf hdraw hdd) hD hK
+    · exact FlockComplete.JsonRT.good_subset (FlockComplete.JsonRT.sample_wf hdraw hdd) hD hk
   have hnn : d ≠ Json.null := by
     intro hn'
     rw [hn'] at hD
@@ -206,7 +206,7 @@ theorem dense_stmt {xo : Msg} {sto : Claims.Recursion.CompiledStatement}
     refine FlockComplete.JsonRT.tree?_none ?_
     simp only [Readable.Read.coins, hz, Bool.false_eq_true, ↓reduceIte]
     exact hcoins hwz
-  · unfold DrawOk
+  · unfold SampleOk
     rw [hU]
     dsimp only
     exact ⟨hnn, hg, D, hD, hn⟩

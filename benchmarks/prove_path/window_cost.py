@@ -58,13 +58,13 @@ from verity_vllm.program.predict.window_circuit import WindowClass
 from verity.protocol import MONITORING_PERIODS
 from verity.protocols.proofs.spot.prover.optimize import SHA512_ROWS
 from verity.circuits.defs import bind
-from verity.definitions.registry import io_shell as IO
-from verity.commitments.windows import interface as IF
+from verity_vllm.definitions.registry import io_shell as IO
+from verity.commitments.periods import interface as IF
 
-HERE = Path(__file__).resolve().parent
+HERE = (Path(__file__).resolve().parent)
 sys.path.insert(0, str(HERE))
 import class_rows as CR  # noqa: E402
-import class_size as CS  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import class_size as CS  # noqa: E402
 
 FIRST, END = "AttnBlockFirst_v1", "AttnHeadEnd_v1"
 #: a first block's families (`class_size.FIRSTS`): v2's body is v1's node for node, so it is priced as v1
@@ -100,7 +100,7 @@ CENSUS = Costs("census", CR.FRESH_EXTRA, CR.REUSED)
 ENGINE = Costs("engine", CR.FRESH_EXTRA + 1, CR.REUSED + 1)
 
 #: ANDs a unit on the H200 (int8 linears, FA3 attention), each `BS.compile(...).counts["and"]` of its Boolean twin at
-#: GEMM_SM90_S8 / HopperBF16WgmmaDot16 (`tests/test_window_cost.py` holds them to it): `ScaledMmS8Coordinate_v2{K}` and
+#: GEMM_SM90_S8 / HopperBF16WgmmaDot16 (`../../tests/benchmarks/prove_path/test_window_cost.py` holds them to it): `ScaledMmS8Coordinate_v2{K}` and
 #: `Int8RowQuant_v2{K}` by K, `GemmCoordinate_v3{K}` by K, `AttnBlock_v9{D=64, NVIS=BN, FIRST=False, BN, CHECK}` by (BN, CHECK)
 S8_COORD = {2048: 271_342, 8192: 1_069_678}
 ROW_QUANT = {2048: 7_727_887, 8192: 30_903_055}
@@ -340,7 +340,7 @@ def window_units(rest: list[Unit], heads: Heads, levers: frozenset[str]) -> list
     return us
 
 
-#: b || c, a row's public commit string (hm96 at SHA-512), and a row's salt (`verity.commitments.windows.rows`)
+#: b || c, a row's public commit string (hm96 at SHA-512), and a row's salt (`verity.commitments.periods.rows`)
 BC_BYTES, SALT_BYTES = 128, 192
 #: a member's entry in the leaf layer's canonical JSON: its name and 128 hex
 LEAF_JSON_BYTES = 150
@@ -348,7 +348,7 @@ LEAF_JSON_BYTES = 150
 
 @dataclass(frozen=True)
 class RegistrationSize:
-    """The window's registration as `verity.commitments.windows.rows.write` makes it, members of `CAP` units: ``members``, port
+    """The window's registration as `verity.commitments.periods.rows.write` makes it, members of `CAP` units: ``members``, port
     ``roots`` (a unit's rows each a port, the cut rows ``p#j`` included), the public bodies' bytes (b || c a row a unit) and
     the private bodies' (every row's words and salt), the compressions (each public body's SHA-512 twice, for the leaf layer
     and for its member's entry, and one over the leaf layer's canonical JSON), the JSON's bytes and the files (a member's
@@ -564,7 +564,7 @@ def project(census: dict, slots: int, prompt: int, outputs: int, target: str = "
         raise ValueError(f"the probe's token selects are group units of {sorted(groups)} logits, not one count")
     out = []
     for u in rest:
-        lab, n = CS.projected(u.label, u.n, at, to)
+        lab, n = CS.projected(u.label, u.n, at, to, CS.label(SS.bridge(to.scan, to.prompt)))
         if CS.placed(u.label, 1, at.positions) is not None:
             u = _slot_unit(u, lab, at, to, next(iter(groups), None))
         out.append(replace(u, label=lab, n=slots * n))
@@ -755,7 +755,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--layout-levers", default="L1", help="the levers the layouts are under, comma-separated (default L1)")
     ap.add_argument("--stream", default=None, metavar="SIZING", help="price serving's own stream commit (`stream`) at this arena "
                     "sizing record's widths, or a fixture's under \"sizing\" (Llama-3.2-1B's: "
-                    "adapters/vllm/tests/pipeline/fixtures/admission/b16.json)")
+                    "tests/adapters/vllm/tests/pipeline/fixtures/admission/b16.json)")
     ap.add_argument("--out", default=None)
     a = ap.parse_args(argv)
     to = tuple(int(v) for v in a.project.split(",")) if a.project else None

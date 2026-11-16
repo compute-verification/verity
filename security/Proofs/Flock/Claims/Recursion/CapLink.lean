@@ -50,7 +50,7 @@ coins before `q`'s round tie a collision among their calls:
 * **The plurality after the round** (`capPlur`): the value that runs forked at the round from `d₀` open most often. It
   reads only `d₀`'s coins before the round (`capPlur_prefix`).
 * **A fork at a fixed round of a uniform run is uniform** (`Ex_capFork`), `Ex_fork` at a constant round.
-* **One base run's forks** (`off_le_succ`): `LinkFinder.succ_ge` at `drawGame`, one reading per run: forks open off
+* **One base run's forks** (`off_le_succ`): `LinkFinder.succ_ge` at `sampleGame`, one reading per run: forks open off
   their plurality at most as often as the link finder over them succeeds, plus `1/(eM)`.
 * **The link** (`Pr_off_le_capHit`): the finder's success is `FC`'s hit at the fork (`fork_fork`: `FC`'s loop from a
   fork is the finder's loop), and averaging over the base run, a run opens `q` off the plurality after `q`'s round with
@@ -122,18 +122,18 @@ theorem off_le_succ {Dr Val : Type} [Fintype Dr] [Nonempty Dr] [Fintype Val] [De
       (Ex fun e => Ex fun vs : Fin M → Dr =>
         ind (LinkFinder.Succ (rdAt (fun e (_ : Unit) => f e) ())) (e, (List.finRange M).map vs)) +
         1 / (Real.exp 1 * M) := by
-  have hX : ∀ v, LinkFinder.pRd (drawGame Dr) (drawS Dr) (rdAt (fun e (_ : Unit) => f e) ()) v ≤
-      LinkFinder.pRd (drawGame Dr) (drawS Dr) (rdAt (fun e (_ : Unit) => f e) ()) (plurOf f) := fun v => by
-    simp only [pRd_rdAt, expect_drawGame]
+  have hX : ∀ v, LinkFinder.pRd (sampleGame Dr) (drawS Dr) (rdAt (fun e (_ : Unit) => f e) ()) v ≤
+      LinkFinder.pRd (sampleGame Dr) (drawS Dr) (rdAt (fun e (_ : Unit) => f e) ()) (plurOf f) := fun v => by
+    simp only [pRd_rdAt, expect_sampleGame]
     have := plurOf_max f v
     rwa [Claims.Bridge.Pr_eq_Ex, Claims.Bridge.Pr_eq_Ex] at this
-  have h := LinkFinder.succ_ge (drawGame Dr) (drawS Dr) (rdAt (fun e (_ : Unit) => f e) ()) hX M hM
+  have h := LinkFinder.succ_ge (sampleGame Dr) (drawS Dr) (rdAt (fun e (_ : Unit) => f e) ()) hX M hM
   rw [sRd_rdAt, zero_add, LinkFinder.expect_finderG] at h
-  simp only [pRd_rdAt, expect_drawGame, expectN_drawGame] at h
+  simp only [pRd_rdAt, expect_sampleGame, expectN_sampleGame] at h
   have hoff : (Pr fun e => (f e).isSome ∧ f e ≠ some (plurOf f)) =
       (∑ v, Ex (ind fun e => f e = some v)) - Ex (ind fun e => f e = some (plurOf f)) := by
     rw [Claims.Bridge.Pr_eq_Ex]
-    exact expect_off_eq (fun e (_ : Unit) => f e) (drawGame Dr) (drawS Dr) (fun _ => plurOf f) ()
+    exact expect_off_eq (fun e (_ : Unit) => f e) (sampleGame Dr) (drawS Dr) (fun _ => plurOf f) ()
   rw [hoff]
   linarith
 

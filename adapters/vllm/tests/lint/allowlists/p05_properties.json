@@ -1,6 +1,0 @@
-{
-  "rule": "P5 (property logic lives in properties/)",
-  "entries": [
-    {"file": "verity_vllm/check/replay/stoch_recompute.py", "kind": "import", "symbol": "<module>", "detail": "verity_vllm.check.replay.stoch_recompute -> verity_vllm.properties.admission"}
-  ]
-}

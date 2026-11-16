@@ -42,7 +42,7 @@ import VCVio.Prelude.Core
 # Two runs forked after a number of coins, through a simulation
 
 `forkC F j g s` runs `s` in `g` to its `j`-th coin and then continues it twice independently, `F` read on the two
-outcomes, in expectation; a run that ends first is its own pair. It is the game-side law of two runs sharing their
+outcomes, in expectation; a run that ends first is its own pair. It is the game-side sampling design of two runs sharing their
 first `j` coins.
 
 * `forkC_send`, `forkC_nonneg`, `forkC_le_expect`, `forkC_eqRec`: it follows the strategy at a send, is nonnegative,

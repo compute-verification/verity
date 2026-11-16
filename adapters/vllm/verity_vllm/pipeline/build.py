@@ -1,5 +1,5 @@
 """Export a wrapper around the ACTUAL pinned vLLM model class and derive it with
-`verity_vllm.program.frontend.derive` + the per-op vLLM bindings. Wrappers (`vllm_meta.make_wrapper`): `step` (one engine step, M tokens at
+`verity_torch.frontend.derive` + the per-op vLLM bindings. Wrappers (`vllm_meta.make_wrapper`): `step` (one engine step, M tokens at
 pos0), `request` (prefill LP + T decode steps, flat), `padded` (the fixed padded rectangle prefill | decode 1..D_MAX with liveness
 values). Writes the derive report (provenance: every rule application), the program's descriptor + digest, a per-spec histogram,
 the instance sequence (comparator input), and the inputs trace.
@@ -23,11 +23,12 @@ import traceback
 from dataclasses import dataclass
 from typing import Any
 
-from verity.definitions.boolean import write_word
+from verity.circuits.ops.boolean.versions import write_word
 
 from verity_vllm.config import RowConfig, option, workload_arg
 from verity_vllm.engine import env as engine_env
 from verity_vllm.engine import hooks
+from verity_vllm.errors import Refused
 from verity_vllm.log import init_logger
 from verity_vllm.pipeline import launch_context as LC
 from verity_vllm.pipeline.build_instances import (  # noqa: F401 (read through here)
@@ -43,15 +44,16 @@ from verity_vllm.pipeline.build_sampling import (
     sampler_geometry,
     sampling_policy,
 )
+from verity_vllm.pipeline.cli import write
 from verity_vllm.pipeline.tp.links import (  # noqa: F401 (read through here)
     module_in_model_vocabulary,
     read_tp_links,
     same_module_path,
     write_tp_links,
 )
-from verity_vllm.program.frontend.boolean import derived
+from verity_torch.frontend.boolean import derived
 from verity_vllm.program.frontend.inputs_trace import InputsTrace
-from verity_vllm.program.prune import BATCHED, registered_form
+from verity_torch.prune import BATCHED, registered_form
 from verity_vllm.records import schema_ids as SID
 
 __all__ = ["Options", "main", "read_tp_links", "same_module_path", "sampler_geometry", "sampling_policy", "write_instances"]
@@ -76,32 +78,32 @@ _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verit
                          "verity_vllm/program/frontend/rules/vllm_bindings/fp8.py", "verity_vllm/program/frontend/rules/vllm_bindings/fused_norm.py",
                          "verity_vllm/program/frontend/rules/vllm_bindings/int8.py", "verity_vllm/program/frontend/rules/vllm_bindings/kv_prefix.py",
                          "verity_vllm/program/frontend/rules/vllm_bindings/norm_chain.py", "verity_vllm/program/frontend/rules/vllm_bindings/observations.py",
-                         "verity_vllm/program/frontend/rules/vllm_bindings/operands.py", "verity_vllm/program/frontend/rules/vllm_bindings/pins.py",
+                         "verity_torch/frontend/rules/bindings/operands.py", "verity_vllm/program/frontend/rules/vllm_bindings/pins.py",
                          "verity_vllm/program/frontend/rules/vllm_bindings/triton_launches.py",
-                         "verity_vllm/program/frontend/rules/vllm_bindings/views.py",
+                         "verity_torch/frontend/rules/bindings/views.py",
                          "verity_vllm/program/frontend/rules/vocab.py", "verity_vllm/program/frontend/rules/triton_iface.py",
-                         "verity_vllm/program/frontend/rules/vllm_iface.py", "verity_vllm/program/frontend/derive.py",
-                         "verity_vllm/program/frontend/derive_context.py", "verity_vllm/program/frontend/target_profile.py",
-                         "verity_vllm/program/frontend/rules/common.py", "verity_vllm/program/frontend/value_types.py",
+                         "verity_vllm/program/frontend/rules/vllm_iface.py", "verity_torch/frontend/derive.py",
+                         "verity_torch/frontend/derive_context.py", "verity_vllm/program/frontend/target_profile.py",
+                         "verity_torch/frontend/rules/common.py", "verity_torch/frontend/value_types.py",
                          "verity_vllm/program/frontend/targets.py",
                          # the TP construction scaffolding (group stub, collective bus, verity_tp ops) and the TP2 Definitions
-                         "verity_vllm/program/frontend/export_ops.py", "verity/definitions/registry/b1_tp2.py",
+                         "verity_vllm/program/frontend/export_ops.py", "verity_vllm/definitions/registry/b1_tp2.py",
                          # the stochastic token-select rule (the sampler Definitions are registry digests in the descriptor); the fused-MoE rules
                          "verity_vllm/program/frontend/rules/vllm_sampling.py", "verity_vllm/program/frontend/rules/vllm_moe.py",
                          "verity_vllm/program/frontend/rules/vllm_moe_fp8.py", "verity_vllm/program/frontend/rules/vllm_moe_router.py",
                          "verity_vllm/program/frontend/rules/vllm_dsa.py", "verity_vllm/program/frontend/rules/vllm_dsa_dense.py",
+                         "verity_vllm/program/frontend/rules/vllm_dsa_fp8.py", "verity_vllm/program/frontend/dsa_leaves.py",
                          # `TargetProfile.ir == "boolean"`: the derived Program on bits (the Boolean Definitions are digests in the descriptor)
-                         "verity/definitions/boolean.py",
+                         "verity/circuits/ops/boolean/versions.py",
                          # the vLLM switches the meta instantiation pins (engine.env.EXPORT)
                          "verity_vllm/engine/env.py",
                          # the derive's report and its relabel per TP rank (`--emit-ranks`), and the tp_links.json writer
-                         "verity_vllm/program/frontend/report.py", "verity_vllm/program/frontend/relabel.py",
+                         "verity_torch/frontend/report.py", "verity_vllm/program/frontend/relabel.py",
                          "verity_vllm/pipeline/tp/emit_ranks.py", "verity_vllm/pipeline/tp/links.py")
 
 
 def _source_root(rel: str) -> str:
-    """The directory a `_CONSTRUCTION_SOURCES` path is relative to: the one holding its top-level package (`verity_vllm`, or
-    `verity` for the Definitions), which in a checkout are different directories."""
+    """The directory a `_CONSTRUCTION_SOURCES` path is relative to: the one holding its top-level package (`verity_vllm`)."""
     from importlib import resources
     from pathlib import Path
     return str(Path(str(resources.files(rel.split("/", 1)[0]))).resolve().parent)
@@ -123,7 +125,7 @@ def construction_version(rules, root: str | None = None) -> dict:
             b = f.read()
         files.append({"file": rel, "sha256": hashlib.sha256(b).hexdigest()})
         h.update(rel.encode() + b"\0" + b + b"\0")
-    return {"schema": SID.CONSTRUCTION_VERSION_SCHEMA, "mechanism": "torch.export(strict=False) on meta + verity_vllm.program.frontend.derive (profile mode)",
+    return {"schema": SID.CONSTRUCTION_VERSION_SCHEMA, "mechanism": "torch.export(strict=False) on meta + verity_torch.frontend.derive (profile mode)",
             "rules": [{"id": r.rule_id, "version": r.info.version} for r in rules], "sources_sha256": h.hexdigest(), "files": files}
 
 
@@ -146,7 +148,7 @@ def workload_engine_args(workload: str | None, tp: int) -> dict:
 def applicability_conditions(profile, applied: dict, attention_impls: dict, export_facts: dict, sampling: dict | None = None, tp: dict | None = None,
                              launch: dict | None = None) -> dict:
     """The facts READ BACK from the environment/model/export that the Program's Definition selection rests on — the conditions under
-    which the artifact may be reused (`target_profile.check_reuse`). Every value is observed, none is a literal."""
+    which the artifact may be reused (`artifact.check_reuse`). Every value is observed, none is a literal."""
     from verity_vllm.program.frontend.gemm_targets import try_gemm_target_for
     from verity_vllm.program.frontend.rules.vllm_bindings import (
         GEMM_PINS,
@@ -209,7 +211,7 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
     `export_compat.select_cuda_platform`).  `batch_dispatch`: see `LC.missing_batch`.
     `cached`: the request's prefix-cached rows C (`vllm_meta.CachedGreedyRequest`; `prefix_cache.json`, `program.prefix_plan`).
     `dead_free`: a TP rank's request wrapper in the registered compiler's form too (`program.prune.dead_free`), as one rank's always is:
-    the rank Programs `predict.steps.compile_steps` compiles.  A TP row of record keeps every unit (its Match counts every collective row).  `batched`: that form batched (`program.prune.BATCHED`), class G's.
+    the rank Programs `predict.steps.compile_steps` compiles.  A TP workload of record keeps every unit (its Match counts every collective row).  `batched`: that form batched (`program.prune.BATCHED`), class G's.
     `table_reads`: in that form, DSA's rows past TOPK keys by table reads (`program.dsa_table`, `Registered.dsa_table_reads`).
     `stop`: the request's length rule over its outputs (`frontend.stop_rule.spec`), the derive config's ``stop``: its last check."""
     from verity_vllm.program.frontend.target_profile import TargetProfile
@@ -256,7 +258,7 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
                                   "hint": (f"the row's sampling policy is {sampling} (source: {sampling.get('source')}); this builder binds the token-select "
                                            f"kinds {sorted(SAMPLERS_BOUND)} only ({'; '.join(f'{k}: {v}' for k, v in SAMPLERS_BOUND.items())}). A stochastic "
                                            f"row needs a token-select Definition for the pinned BI sampler and a rule that emits it — not the greedy argmax. "
-                                           f"`GumbelTokenSelect_v1{{V}}(logits, seed, pos, temp)` (verity.definitions.registry.sampling; seed/pos/temperature as "
+                                           f"`GumbelTokenSelect_v1{{V}}(logits, seed, pos, temp)` (verity_vllm.definitions.registry.sampling; seed/pos/temperature as "
                                            f"bound inputs) is exact to `_temperature_kernel` -> `_gumbel_sample_kernel` for top_p == 1 / no top_k; the top-p "
                                            f"mask (`topk_topp_triton._topp_sb_{{stats,step,mask}}_kernel`) has no exact Definition and no "
                                            f"wrapper authors the stochastic select yet."),
@@ -264,21 +266,22 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
                                              "definitions_available": {"GumbelTokenSelect_v1": "temperature + Gumbel-max, top_p == 1, no top_k"},
                                              "missing": ["TopPMask", "wrapper authoring of the stochastic select (Bet A)",
                                                          "eager resolver patterns for _temperature_kernel / stochastic _gumbel_sample_kernel"]}}
-            raise _Refused()
+            raise Refused(res["unsupported"]["reason"], what=_CONSTRUCTION)
         # the request's launch batch where the row's kernels read it; the stochastic policy's Definition coverage and launch geometry (S)
         geo_refusal = ((wrapper == "request" and batch_dispatch and LC.missing_batch(launch, LP, T)) or LC.bad_chunks(launch, wrapper, LP, T, cached)
                        or sampler_geometry(sampling, target, LP=LP if wrapper == "request" else None, T=T if wrapper == "request" else None))
         if geo_refusal:
             res["unsupported"] = geo_refusal
-            raise _Refused()
+            raise Refused(res["unsupported"]["reason"], what=_CONSTRUCTION)
         res["sampling"] = sampling
         if res_target_source == "declared":   # the declared target decides the platform, not the host's NVML (a GPU-free Build host has none)
             from verity_vllm.program.frontend.export_compat import select_cuda_platform
             logger.info("[derive_step] declared target %s x%s: vLLM platform %s", target.sm_arch, tp, select_cuda_platform(tp, device_name))
         _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, LP, T, eos, model_id, revision, max_model_len, t_start, sampling,
                    tp=tp, rank=rank, launch=launch, emit=emit, engine_args=engine_args, C=cached, dead_free=dead_free, stop=stop, batched=batched, table_reads=table_reads)
-    except _Refused:
-        pass
+    except Refused as e:
+        if e.what != _CONSTRUCTION:
+            raise
     res = _finish(out, res, t_start)
     if emit is not None:
         from verity_vllm.pipeline.tp.emit_ranks import finish
@@ -289,8 +292,9 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
 _WRAPPER_NAMES = {"step": "vLLMStep", "request": "vLLMRequest", "padded": "vLLMPaddedRequest"}
 
 
-class _Refused(Exception):
-    """The construction refused before derive (target profile mismatch, unbound sampler); `res["unsupported"]` carries the verbatim reason."""
+# the `what` of the construction's own refusals before derive (target profile mismatch, unbound sampler), whose verbatim reason
+# `res["unsupported"]` carries; any other `Refused` propagates
+_CONSTRUCTION = "the construction"
 
 
 def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, LP, T, eos, model_id, revision, max_model_len, t_start, sampling,
@@ -301,13 +305,28 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
         profile_mismatches,
     )
     with InputsTrace(os.path.join(out, "inputs.json")), contextlib.ExitStack() as tp_stack:
-        from verity_vllm.program.frontend import loader_parity, vllm_meta as vm
-        from verity_vllm.program.frontend.export_compat import apply_target_profile, host_facts, read_back_applied
-        from verity_vllm.program.frontend.triton_capture import TritonLaunchLog
         import torch
-        from verity_vllm.program.frontend.derive import derive_report
-        from verity_vllm.program.frontend.rules.vllm_bindings import (VLLM_BINDING_RULES, vllm_ruleset, observe_attention_impls, observe_export_facts, observe_batched_form,
-                                                            observe_target_profile, declared_derived_accounting, clear_observations, observe_allreduce_settings, observe_launch_context)
+
+        from verity_vllm.program.frontend import loader_parity
+        from verity_vllm.program.frontend import vllm_meta as vm
+        from verity_vllm.program.frontend.export_compat import (
+            apply_target_profile,
+            host_facts,
+            read_back_applied,
+        )
+        from verity_vllm.program.frontend.rules.vllm_bindings import (
+            VLLM_BINDING_RULES,
+            clear_observations,
+            declared_derived_accounting,
+            observe_attention_impls,
+            observe_batched_form,
+            observe_export_facts,
+            observe_launch_context,
+            observe_target_profile,
+            vllm_ruleset,
+        )
+        from verity_vllm.program.frontend.triton_capture import TritonLaunchLog
+        from verity_vllm.program.frontend.vllm_derive import derive_report
         clear_observations()
         observe_target_profile(target)
         observe_launch_context(launch)
@@ -323,28 +342,15 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             res["model_pin"] = {"model": model_id or vm.PIN["model"], "revision": revision or vm.PIN["revision"], "dtype": engine_dtype(cfg.model_config), "tp": tp,
                                 "rank": rank, "max_model_len": max_model_len}
             vm.ensure_distributed(cfg, backend)
-            bus = None
-            if tp > 1:
-                # rank `rank` of `tp`: vLLM's TP group := TPStub (shard sizes + collectives -> CollectiveBus) for instantiation, export and derive
-                from verity_vllm.program.frontend.export_ops import CollectiveBus, bind_vocab_parallel_embeddings, tp_group_override
-                from verity.definitions.registry.tp_allreduce import settings_of
-                env_now = engine_env.snapshot()
-                allreduce_settings = settings_of(cfg.parallel_config.disable_custom_all_reduce, env_now)
-                observe_allreduce_settings(allreduce_settings)
-                bus = CollectiveBus(rank=rank, world=tp, settings=allreduce_settings)
-                tp_stack.enter_context(tp_group_override(rank, tp, bus))
-                car_off = bool(cfg.parallel_config.disable_custom_all_reduce)
-                res["tp"]["engine_args_required"] = {"tensor_parallel_size": tp, "disable_custom_all_reduce": car_off}
-                # the workload's transport as the row set it (`row_tp.TpRow.p2p_env`) -- recorded, not consulted here
-                res["tp"]["env_required"] = {k: v for k, v in env_now.items() if k == "NCCL_P2P_DISABLE"}
-                res["tp"]["allreduce_settings"] = allreduce_settings
-                res["tp"]["collective_backend"] = ("pynccl (custom all-reduce disabled; BI pins NCCL tree/Simple/1 channel)" if car_off else
-                                                   "vLLM's custom all-reduce where it admits the tensor, else pynccl")
+            bus = _tp_bus(cfg, rank, tp, res, tp_stack) if tp > 1 else None
             from verity_vllm.engine import sparse_mla
             sparse_mla.arm()   # FA3's sparse-MLA split pin, armed as a serving process arms it before vLLM builds the model
             model = vm.instantiate_meta(cfg)
             res.update(loader_parity.as_the_loader_does(model, cfg))   # the Parameters the served model has once its weights are loaded
             if tp > 1:
+                from verity_vllm.program.frontend.export_ops import (
+                    bind_vocab_parallel_embeddings,
+                )
                 res["tp"]["embedding_shards"] = bind_vocab_parallel_embeddings(model, tp_stack.enter_context(hooks.Hooks()))
                 res["tp"]["sharded_params"] = _sharded_param_summary(model)
             res["model_class"] = f"{type(model).__module__}.{type(model).__qualname__}"
@@ -361,19 +367,12 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             applied.update(applied_kernels(target, model))
             # derived (observed) selection fields: the instantiated layers' attention impl; the fused-norm dispatch (after export)
             res["attention_impls_observed"] = vm.attention_impls(model)
-            # READ BACK the FA version the selector gave the layers (one value over all layers, else None = mismatch): the
-            # declared `flash_attn_version` (or the selector's default for the declared capability) must be what was instantiated
-            favs = {v.get("vllm_flash_attn_version") for v in res["attention_impls_observed"].values() if v.get("kind") != "mla"}
-            fav_ints = {int(x) for x in favs if isinstance(x, int) and not isinstance(x, bool)}
-            if fav_ints or len(favs) > 1:        # FlashAttention layers (or a mixed tree): judged here.  A backend that carries no FA
-                applied["flash_attn_version"] = fav_ints.pop() if (len(fav_ints) == 1 and len(favs) == 1) else None
-            # else: no layer is a FlashAttention impl (e.g. TritonAttentionImpl) -> not an FA-version question; the attention rule refuses
-            # the unregistered impl verbatim (numerics_unregistered) instead of a mismatch on a fact the backend does not have
+            _read_back_flash_attn_version(res["attention_impls_observed"], applied)
             res["target"]["applied"] = applied
             bad = profile_mismatches(target, applied)
             if bad:
                 res["unsupported"] = {"reason": "target_profile_mismatch", "phase": "instantiation", "hint": "; ".join(bad)}
-                raise _Refused()
+                raise Refused(res["unsupported"]["reason"], what=_CONSTRUCTION)
             observe_attention_impls(res["attention_impls_observed"])
             log = TritonLaunchLog()
             chunks = list((launch or {}).get("chunks", ()))
@@ -403,7 +402,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             bad = profile_mismatches(target, applied_export)
             if bad:
                 res["unsupported"] = {"reason": "target_profile_mismatch", "phase": "export", "hint": "; ".join(bad)}
-                raise _Refused()
+                raise Refused(res["unsupported"]["reason"], what=_CONSTRUCTION)
             res["declared_derived"] = declared_derived_accounting(target, applied)
             # derive: the wrapper module IS the source, derived from the export above (same module, same example input, same shims)
             t1 = time.time()
@@ -420,27 +419,65 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
         res["bindings_rules"] = [r.info.to_json() for r in VLLM_BINDING_RULES]
         res["ok"] = rep.ok
         if not rep.ok:
+            assert rep.unsupported is not None
             res["unsupported"] = rep.unsupported.to_json()
             res["rules_applied_before_refusal"] = rep.provenance.get("rules_applied_before_refusal")
             res["n_applications_before_refusal"] = len(rep.provenance.get("applications_before_refusal", []))
-            json.dump(rep.provenance, open(os.path.join(out, "derive-report.json"), "w"), indent=1, default=str)
+            with open(os.path.join(out, "derive-report.json"), "w") as f:
+                json.dump(rep.provenance, f, indent=1, default=str)
         else:
             # the model's path INSIDE the traced wrapper, by object identity (`WithPeers.inner` -> wrapper `.model`):
             # the derive's module paths are the wrapper's `named_modules()` vocabulary, the recorder's are `model.named_modules()`;
             # the root is recorded as DATA so no reader spells the wrapper prefix
             model_root = next((n for n, m in mod.named_modules() if m is model), None) if tp > 1 else None
-            write = functools.partial(_write_program, target=target, applied=applied, sampling=sampling, launch=launch, tp=tp, model_root=model_root)
-            pre = copy.deepcopy(res) if emit is not None else None      # rank r's `res` before its writer: the template's, at rank r
-            write(out, res, rep, rank=rank)
+            write_program = functools.partial(_write_program, target=target, applied=applied, sampling=sampling, launch=launch, tp=tp, model_root=model_root)
+            pre = copy.deepcopy(res) if emit is not None else {}        # rank r's `res` before its writer: the template's, at rank r
+            write_program(out, res, rep, rank=rank)
             if emit is not None:
                 from verity_vllm.pipeline.tp import emit_ranks
                 from verity_vllm.program.frontend.export_ops import (
                     rank_embedding_shards,
                 )
-                rep = None                                                 # the template's descriptor and correspondence: freed
+                del rep                                                    # the template's descriptor and correspondence: freed
                 emit_ranks.emit(emit, out, pre, session[0] if session else None, shards=lambda r: rank_embedding_shards(model, r),
                                 context=lambda: _derive_context(vm, cfg, ntok, target, model, apply_target=True),
-                                post=derived if target.ir == "boolean" else None, write=write)
+                                post=derived if target.ir == "boolean" else None, write=write_program)
+
+
+def _tp_bus(cfg, rank: int, tp: int, res: dict, stack: contextlib.ExitStack):
+    """Rank ``rank`` of ``tp``: vLLM's TP group := TPStub (shard sizes + collectives -> CollectiveBus) for instantiation,
+    export and derive, entered on ``stack``; the group's settings and what serving must match into ``res["tp"]``. The bus."""
+    from verity_vllm.definitions.registry.tp_allreduce import settings_of
+
+    from verity_vllm.program.frontend.export_ops import CollectiveBus, tp_group_override
+    from verity_vllm.program.frontend.rules.vllm_bindings import (
+        observe_allreduce_settings,
+    )
+    env_now = engine_env.snapshot()
+    allreduce_settings = settings_of(cfg.parallel_config.disable_custom_all_reduce, env_now)
+    observe_allreduce_settings(allreduce_settings)
+    bus = CollectiveBus(rank=rank, world=tp, settings=allreduce_settings)
+    stack.enter_context(tp_group_override(rank, tp, bus))
+    car_off = bool(cfg.parallel_config.disable_custom_all_reduce)
+    res["tp"]["engine_args_required"] = {"tensor_parallel_size": tp, "disable_custom_all_reduce": car_off}
+    # the workload's transport as the row set it (`row_tp.TpRow.p2p_env`) -- recorded, not consulted here
+    res["tp"]["env_required"] = {k: v for k, v in env_now.items() if k == "NCCL_P2P_DISABLE"}
+    res["tp"]["allreduce_settings"] = allreduce_settings
+    res["tp"]["collective_backend"] = ("pynccl (custom all-reduce disabled; BI pins NCCL tree/Simple/1 channel)" if car_off else
+                                       "vLLM's custom all-reduce where it admits the tensor, else pynccl")
+    return bus
+
+
+def _read_back_flash_attn_version(impls: dict, applied: dict) -> None:
+    """READ BACK the FA version the selector gave the layers ``impls`` into ``applied`` (one value over all layers, else None =
+    mismatch): the declared `flash_attn_version` (or the selector's default for the declared capability) must be what was
+    instantiated. Where no layer is a FlashAttention impl (e.g. TritonAttentionImpl) it is not an FA-version question and
+    ``applied`` gets none: the attention rule refuses the unregistered impl verbatim (numerics_unregistered) instead of a
+    mismatch on a fact the backend does not have."""
+    favs = {v.get("vllm_flash_attn_version") for v in impls.values() if v.get("kind") != "mla"}
+    fav_ints = {int(x) for x in favs if isinstance(x, int) and not isinstance(x, bool)}
+    if fav_ints or len(favs) > 1:        # FlashAttention layers (or a mixed tree): judged here
+        applied["flash_attn_version"] = fav_ints.pop() if (len(fav_ints) == 1 and len(favs) == 1) else None
 
 
 def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling: dict, launch: dict | None, tp: int, rank: int,
@@ -448,11 +485,11 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
     """A successful derive's files under `out` (descriptor, derive report, instances, tp_links, artifact) and its `res` fields."""
     from verity.circuits.codec import canonical_json, encode_program
 
-    from verity_vllm.correspondence.runtime import NAMESPACE as CORR_NS
-    from verity_vllm.correspondence.runtime import correspondence_digest
+    from verity_torch.correspondence.runtime import NAMESPACE as CORR_NS
+    from verity_torch.correspondence.runtime import correspondence_digest
     from verity_vllm.program.frontend.rules.vllm_bindings import VLLM_BINDING_RULES
     from verity_vllm.program.frontend.rules.vllm_bindings import kv_prefix as KP
-    from verity_vllm.program.frontend.target_profile import ArtifactIdentity
+    from verity_vllm.program.frontend.artifact import ArtifactIdentity
     program, supplied = rep.program, ({"supplied": s} if (s := rep.provenance.get("supplied")) else {})   # a registered_values derive's
     supplied |= {"ir": ir} if (ir := rep.provenance.get("ir")) else {}   # ir=boolean: the word root and digest the bits were lifted from
     desc = {**rep.descriptor, "annotations": dict(program.annotations)} if rep.descriptor is not None else encode_program(program)  # annotations re-read: the derive adds provenance after its digest
@@ -586,7 +623,7 @@ def _write_manifest(out: str, res: dict) -> None:
          "target": res.get("target"), "artifact": res.get("artifact"),
          "declared": declared.get("declared") if declared else None, "derived": declared.get("derived") if declared else None,
          "observed": {"attention_impls": res.get("attention_impls_observed"), "export_facts": res.get("export_facts")},
-         "construction": {"mechanism": "torch.export(strict=False) of the vLLM model class on meta + verity_vllm.program.frontend.derive (profile mode)",
+         "construction": {"mechanism": "torch.export(strict=False) of the vLLM model class on meta + verity_torch.frontend.derive (profile mode)",
                           "export": res.get("export"), "derive_secs": res.get("derive_secs"), "wall_secs_total": res.get("wall_secs_total"),
                           "max_rss_mb": res.get("max_rss_mb"), "cuda_available": res.get("cuda_available"), "param_device": res.get("param_device"),
                           "real_inference": False, "weights_loaded": False},
@@ -636,7 +673,7 @@ class Options:
     emit_root: str | None = option("--emit-root", default=None, help="with --emit-ranks: rank r's files go to <root>/rank<r>/<name of --out>")
     dead_free: bool = option("--dead-free", action="store_true", default=False,
                              help="a TP rank's request wrapper in the registered compiler's form (program.prune.dead_free), as one rank's always is: "
-                                  "the rank Programs predict.steps.compile_steps compiles; a TP row of record keeps every unit")
+                                  "the rank Programs predict.steps.compile_steps compiles; a TP workload of record keeps every unit")
     batched: bool = option("--batched", action="store_true", default=False, help="the request wrapper's registered compiler's form batched (program.prune.batched_form): class G's, as predict.steps.compile_steps compiles it; with --dead-free at a TP rank")
     dsa_table_reads: bool = option("--dsa-table-reads", action="store_true", default=False,
                                    help="with --batched: DSA's rows past TOPK keys read their history by table (program.dsa_table), as "
@@ -694,7 +731,7 @@ def main(a: Options) -> int:
     target, artifact = res.get("target"), res.get("artifact")   # a Build that crashed before its construction states neither
     summary["target"] = {k: target.get(k) if target else None for k in ("declared", "applied")}
     summary["artifact_identity"] = artifact.get("identity") if artifact else None
-    print(json.dumps(summary, indent=1, default=str))
+    write(json.dumps(summary, indent=1, default=str))
     if res.get("ok"):
-        print(json.dumps(res["spec_histogram"], indent=1))
+        write(json.dumps(res["spec_histogram"], indent=1))
     return 0 if res.get("ok") else 1

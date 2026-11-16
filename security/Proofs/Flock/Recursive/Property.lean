@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.Recursive.ExecClass
-public import Proofs.Flock.Recursive.Firewall
+public import Proofs.Flock.Recursive.ZkServer
 public import Proofs.Flock.Recursive.Description
 public import Proofs.Flock.Recursive.VStarCheck
 import Mathlib.Tactic.Echelon.Zsqrtd
@@ -22,7 +22,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 # The recursive audit's property (trusted)
 
 One statement, `RecursiveAudit`, of the recursive audit as the verifier runs it: V*'s outer sessions verified
-by `flock-verify verify --zk --registered` (each session's verdict `Flock.Zk.verify` and the statement check
+by `verity-verify-proof verify --zk --registered` (each session's verdict `Flock.Zk.verify` and the statement check
 `Flock.ProvedScope.check`), the inner protocol Flock's compiled table (`flockInnerCL` at `execArith`), and the
 private circuit registered by hm96 leaves. It is a conjunction:
 
@@ -33,9 +33,9 @@ private circuit registered by hm96 leaves. It is a conjunction:
   prover's own runs, or Lean's verifier accepts `st` and its description and the verifier every session
   while the registered private circuit's hidden statement fails with probability at most `RecursiveSound`'s bound with
   the compiled table's error as its inner term;
-* (ii) zero knowledge with circuit privacy, stated about the ZK server's code (`Flock.Firewall.run`) and V*'s outer
-  sessions run by the honest prover's code (`Recursion.OuterZK.proverExe`), `RecursiveFirewallPrivate`'s form
-  (`Proofs.Flock.Recursive.Firewall`), the inner coins live: a simulator that reads only the class, the schedule's
+* (ii) zero knowledge with circuit privacy, stated about the ZK server's code (`Flock.ZkServer.run`) and V*'s outer
+  sessions run by the honest prover's code (`Recursion.OuterZK.proverExe`), `RecursiveZkServerPrivate`'s form
+  (`Proofs.Flock.Recursive.ZkServer`), the inner coins live: a simulator that reads only the class, the schedule's
   transcript and the owed outputs, at the pinned key's hiding gap with no premise, and what it takes of the code each an
   obligation.
 
@@ -58,7 +58,7 @@ case: at a statement Lean's verifier refuses, (i)'s event is empty.
   to.
 
 Flock's definitions and the recursion's model are still in the proofs package, so the statement is here rather than
-in `Security/Properties/`.
+in `security/Properties/`.
 -/
 
 @[expose] public section
@@ -85,7 +85,7 @@ def VerifiesVR {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} (zr : Reg�
   AcceptsVR zr o ∧ ∀ j, FailClosed.ScopeZR (zr o.1 j).I
 
 /-- **The verifier accepts every one of V*'s sessions as V*'s statement of its index**, as the prover
-supplies them: each session's proof and the check that it is V*'s statement `j` (`AcceptsVRV`: flock-verify with
+supplies them: each session's proof and the check that it is V*'s statement `j` (`AcceptsVRV`: verity-verify-proof with
 `--rec-inner` at `i`, `--rec-part j`, `--rec-bindings` at `bind j` and `--rec-rows` at `rows`, `RecVStar.checkStmt`),
 and its statement's form (`FailClosed.ScopeZR`), at the registration the outcome records. -/
 def VerifiesVStar {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} (i : RecVStar.Inner) (bind : Fin S → VStar.Bindings)
@@ -145,7 +145,7 @@ noncomputable abbrev custodied {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B C D : 
 
 /-- **The prover's strategy against the typed sessions** (`Recursion.recT`): its strategy against the sessions as it
 supplies them, with the same registrations and rounds. -/
-noncomputable abbrev transported {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ}
+noncomputable abbrev transported {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ}
     {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} {dg : ByteArray → ByteArray} {N : ℕ}
     (zr : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).OuterR Reg')
     (hC : Flock.Premises.RecordCustody zr) (h : Typed zr)
@@ -166,18 +166,18 @@ abbrev hiddenAt {Ω H : Type} (st : Flock.Stmt) (rt : Flock.Registered.Port)
     (stmt : (Fin rt.leaves → ByteArray) → Ω → H) {Reg : Type} : Reg → Ω → H :=
   fun _ ω => stmtAt rt stmt (Flock.Registered.rowsOf st.c st.pub rt) ω
 
-/-- **The sampling design of a finite space of samples with an element**: `Law` at `Ω` and the units each sample takes, nonempty by
-the element. Every law is one (`Classical.inhabited_of_nonempty`); (i) binds the space, its element and the sample rather
+/-- **The sampling design of a finite space of samples with an element**: `SamplingDesign` at `Ω` and the units each sample takes, nonempty by
+the element. Every sampling design is one (`Classical.inhabited_of_nonempty`); (i) binds the space, its element and the sample rather
 than a sampling design, whose `nonempty` field would be a hypothesis of the statement. -/
-abbrev drawLaw {n : ℕ} {Ω : Type} [Fintype Ω] [Inhabited Ω] (draw : Ω → Finset (Fin n)) : Law n := ⟨Ω, draw⟩
+abbrev sampleDesign {n : ℕ} {Ω : Type} [Fintype Ω] [Inhabited Ω] (draw : Ω → Finset (Fin n)) : SamplingDesign n := ⟨Ω, draw⟩
 
 /-- **The recursive audit, as the verifier runs it.**
 
 (i) For every inner statement `st`, with its class, regions and schedule `execClassAt st`, and every prover `σ` of the
 recursive audit with Flock's compiled table there as its inner protocol (`innerAt`): V*'s statements `Vs`, as many
-as V*'s staging lays out over the class and its regions (`outerStatementsAt`), each sampling all its units (`VLaw`:
+as V*'s staging lays out over the class and its regions (`outerStatementsAt`), each sampling all its units (`VSamplingDesign`:
 the full sample on the operating system's bytes, `--draw subset:<units>`), V*'s sessions `zr R ω t R₂ j` under
-their laws as the prover supplies them (`ZkOuterR`: inputs, own ports, sample file and record writer, with nothing
+their sampling designs as the prover supplies them (`ZkOuterR`: inputs, own ports, sample file and record writer, with nothing
 assumed of what the inputs parse to), their records' custody `_hCust`, the verifier's own inputs to them
 (the inner shape `ish`, V*'s bindings `bind` and the shared rows `rows`; session `j` runs as V*'s statement `j`), at
 which V*'s statements' files parse to `Vs` (`VStarParses`, an obligation until gap 4), the messages V*'s layers hold
@@ -203,17 +203,17 @@ $$\Pr[\text{Lean's verifier accepts } st \text{ and its description} \wedge \tex
 is at most V*'s sessions' expected statistical errors under the full sample's model, `r` times their expected stage
 slack, and the compiled table's error.
 
-(ii) `RecursiveFirewallPrivate`, with no premise: for the class's private circuits registered by hm96 leaves
+(ii) `RecursiveZkServerPrivate`, with no premise: for the class's private circuits registered by hm96 leaves
 (`regLeaves rows pub`), the auditor's whole view (`fwRealPr`: the registration's, what the ZK server sends,
-`Flock.Firewall.run` at the pinned schedule `s` on the honest worker's requests `reqs` and `nh` salts of 192 uniform
+`Flock.ZkServer.run` at the pinned schedule `s` on the honest worker's requests `reqs` and `nh` salts of 192 uniform
 bytes, and V*'s outer sessions `V` run by the honest prover's code `OuterZK.proverExe`) and the simulated one
 (`fwSimPr`: `p₀` registered, the schedule's transcript `T` on ideal commit strings, V*'s simulator at the public
 context `pubS` reads), which reads only the class, `T` and the owed outputs, give every event probabilities within
 `2 n_r·δ_{K*} + ε_V(δ_{K*}) + n_h·δ_{K*}` both ways, `δ_{K*}` the hiding gap of hm96-sha512's pinned key
 (`hidingGap My saltHash`) and `ε_V(δ)` V*'s sessions' error at `δ` (`OuterZK.Sessions.errAt`). The inner coins are
 live: the auditor samples each after the commit strings before it, and each message `msgs … i` and the requests `reqs`
-read those strings (`firewallStrings`, `firewallCommits`). What it takes of the code is each an obligation: the requests run through the ZK server to `T` with the messages' salted commit strings in
-it (`FirewallSends`), and V*'s staging (`SessionsPublic`, `SessionsCoined`, `SessionsHonest`, and `OuterZK.Sessions`'
+read those strings (`zkServerStrings`, `zkServerCommits`). What it takes of the code is each an obligation: the requests run through the ZK server to `T` with the messages' salted commit strings in
+it (`ZkServerSends`), and V*'s staging (`SessionsPublic`, `SessionsCoined`, `SessionsHonest`, and `OuterZK.Sessions`'
 `hz`, `hR`, `hS`).
 
 (i) is in fork form and states no bits. The recursion's knowledge form, `Claims.Recursion.KS`, is at its level
@@ -230,7 +230,7 @@ def RecursiveAudit : Prop :=
     -- V*'s statements over the class, each sampling all its units, and V*'s sessions at each history and
     -- registration `R₂`, as the prover supplies them
     {Vs : Fin (outerStatementsAt st) → VStmt}
-    (zr : Reg → (drawLaw draw).Ω → List (Cm × (innerAt T CT st).Coin) → Reg₂ →
+    (zr : Reg → (sampleDesign draw).Ω → List (Cm × (innerAt T CT st).Coin) → Reg₂ →
       (j : Fin (outerStatementsAt st)) → (Vs j).OuterR Reg')
     -- the records' custody
     (_hCust : Flock.Premises.RecordCustody zr)
@@ -244,7 +244,7 @@ def RecursiveAudit : Prop :=
     (_hF : ∀ R ω t R₂ j, TagsFound (zr R ω t R₂ j).I)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the recursive prover
-    (σ : Strategy (recGame (drawLaw draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N))
+    (σ : Strategy (recGame (sampleDesign draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N))
     -- the messages V*'s layers hold, the rounds' commit strings and commitments
     (wmsg : ((j : Fin (outerStatementsAt st)) → (Vs j).Bits) → List (innerAt T CT st).Msg)
     (Sk : ℕ → (j : Fin (outerStatementsAt st)) →
@@ -256,7 +256,7 @@ def RecursiveAudit : Prop :=
       PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) →
       (innerAt T CT st).Msg)
     -- the registration's root, and the private circuit's statement by the commit strings of its rows
-    (rt : Flock.Registered.Port) (stmt : (Fin rt.leaves → ByteArray) → (drawLaw draw).Ω → Hidden (execClassAt st).cls)
+    (rt : Flock.Registered.Port) (stmt : (Fin rt.leaves → ByteArray) → (sampleDesign draw).Ω → Hidden (execClassAt st).cls)
     -- A3
     (_hA3 : Flock.Premises.UniformRandomBytes Vs)
     -- the registered commit strings, each opening `rt` at its row through the developer's path
@@ -264,14 +264,14 @@ def RecursiveAudit : Prop :=
     -- the count curve, bounding every session's rate
     {k Rw M : ℕ} (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) {ρ : ℝ} (_hρ : ρ < 1)
     (_hr : ∀ R ω t R₂ j S₀
-      (d₀ : Lean.Json) (y₀ : ZkHidden.DrawSetupZHJ (inputsJ (zr R ω t R₂ j).I 0) (Vs j).mPts S₀ d₀) S' R' i,
+      (d₀ : Lean.Json) (y₀ : ZkHidden.SampleSetupZHJ (inputsJ (zr R ω t R₂ j).I 0) (Vs j).mPts S₀ d₀) S' R' i,
       rateZ (ZkHidden.planZHJ (Reg := Reg') (zr R ω t R₂ j).dj y₀ S' R') i k ≤ ρ)
     -- V*'s bridge at the committed rounds, at the typed sessions
     (_hbr : ∀ h : Typed zr,
       Flock.Premises.VBridgeC (custodied zr _hCust h) dg N k Rw (hiddenAt st rt stmt) wmsg Sk cmt msg),
     prob (fun o => AcceptsStmt st ∧ AcceptsDescription rt st ∧
           VerifiesVStar ish bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ (innerAt T CT st).holds (stmtAt rt stmt p o.2.1))
-        (recGame (drawLaw draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N) σ = 0 ∨
+        (recGame (sampleDesign draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N) σ = 0 ∨
     (∃ r < rt.leaves, Flock.Registered.rowsOf st.c st.pub rt r ≠ p r ∧
       Flock.Registered.Collides (Flock.Registered.bcPair rt r (Flock.Registered.rowsOf st.c st.pub rt r)
         (Flock.Registered.pathOf st.pub rt r) (p r) (path₀ r))) ∨
@@ -285,10 +285,10 @@ def RecursiveAudit : Prop :=
       prob (fun o => AcceptsStmt st ∧ AcceptsDescription rt st ∧
             VerifiesVStar ish bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
             ¬ (innerAt T CT st).holds (stmtAt rt stmt p o.2.1))
-          (recGame (drawLaw draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N) σ ≤
+          (recGame (sampleDesign draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N) σ ≤
         expAt (transported zr _hCust h σ) (fun ω t s => sumV (custodied zr _hCust h σ.1 ω t) dg N
             (fun R₂ j τ =>
-              (custodied zr _hCust h σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +
+              (custodied zr _hCust h σ.1 ω t R₂ j).boundCR dg N (Vs j).samplingDesign.model k Rw M ρ τ) s) +
           ((innerAt T CT st).r : ℝ≥0∞) *
             expAt (transported zr _hCust h σ) (fun ω t s => sumV (custodied zr _hCust h σ.1 ω t) dg N
               (fun R₂ j τ => (custodied zr _hCust h σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) +
@@ -296,7 +296,7 @@ def RecursiveAudit : Prop :=
             ⟨(execClassAt st).cls.kLog, (execClassAt st).regs.length, (execClassAt st).cls.mPts⟩)) ∧
   (∀ {Out Prog Wit Rv Ωa Ωp Pub : Type} [Fintype Ωa] [Inhabited Ωa] [Fintype Ωp] [Inhabited Ωp]
     -- the ZK server's pinned schedule
-    (s : Flock.Firewall.Schedule)
+    (s : Flock.ZkServer.Schedule)
     -- the registration: the private circuit's rows, and what the auditor sees of their leaves
     (nr : ℕ) (rows : Prog → Fin nr → ByteArray) (pub : (Fin nr → ByteArray) → Rv)
     (honest : Out → Prog → Wit → Prop)
@@ -304,15 +304,15 @@ def RecursiveAudit : Prop :=
     -- ZK server sent before it (the inner coins live), and the schedule's transcript
     (nh : ℕ) (reqs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → (Fin nh → ByteArray) → List ByteArray)
     (msgs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray)
-    (T : (Fin nh → ByteArray) → Array Flock.Firewall.Sent)
+    (T : (Fin nh → ByteArray) → Array Flock.ZkServer.Sent)
     -- V*'s outer sessions, the public context their simulator reads, and what a stopped run sends
     (V : OuterZK.Sessions (OuterZK.HCtx Prog Wit Ωa Ωp nr nh) Pub)
     (pubS : Out → Rv → Ωa → (Fin nh → ByteArray) → Pub) (stopped : OuterZK.Stopped)
     (p₀ : Prog) (o : Out) (P : Prog) (w : Wit)
     -- what it takes of the code, each an obligation
-    (_hF : FirewallSends s reqs msgs T) (_hpub : SessionsPublic rows pub honest msgs V pubS) (_hC : SessionsCoined V)
+    (_hF : ZkServerSends s reqs msgs T) (_hpub : SessionsPublic rows pub honest msgs V pubS) (_hC : SessionsCoined V)
     (_hH : SessionsHonest honest msgs V), honest o P w →
-    ∀ E : Rv × Ωa × (Array Flock.Firewall.Sent × Bool) × V.View → Prop,
+    ∀ E : Rv × Ωa × (Array Flock.ZkServer.Sent × Bool) × V.View → Prop,
       fwRealPr rows pub s reqs msgs V (OuterZK.proverExe stopped) P w E ≤ fwSimPr rows pub T V pubS o p₀ E +
           (2 * nr * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash) +
             V.errAt (ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash)) +

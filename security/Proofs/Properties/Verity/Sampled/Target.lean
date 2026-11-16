@@ -58,23 +58,23 @@ noncomputable abbrev stmt :=
 noncomputable abbrev part := Flock.Bridge.partOf A.P A.κ (Flock.Bridge.nsOf A.desc A.qr)
 
 /-- **The transcript a witness opens, on the committed files' circuit**: its first passing opening at each gate's claims
-position under the deployed commitment, read at the circuit's gates with its constants (`Flock.Bridge.transcriptOf`). -/
-noncomputable def transcriptAt (w : Claims.Sampling.Wit) : A.fileRead.circuit.Trace :=
+position under the deployed commitment, read at the circuit's gates with its constants (`Flock.Bridge.traceOf`). -/
+noncomputable def traceAt (w : Claims.Sampling.Wit) : A.fileRead.circuit.Trace :=
   cast (congrArg Verity.Circuit.Trace A.circuit_eq.symm)
-    (Flock.Bridge.transcriptOf A.D A.hU A.n A.κ (w.val Claims.Sampling.sha512Msg A.Cd A.stmt))
+    (Flock.Bridge.traceOf A.D A.hU A.n A.κ (w.val Claims.Sampling.sha512Msg A.Cd A.stmt))
 
 theorem extract_eq (τ : FlockSoundness.Game.Strategy A.game) :
-    A.extract τ = A.transcriptAt (Flock.Bridge.witDep A.Cc A.Cd Claims.Sampling.sha512Msg A.roots (A.Xr τ)) :=
+    A.extract τ = A.traceAt (Flock.Bridge.witDep A.Cc A.Cd Claims.Sampling.sha512Msg A.roots (A.Xr τ)) :=
   rfl
 
 end Live
 
 /-- **The openings `op` of the committed files `r` hold at their constants**: a gate `r` fixes to `b` opens to every
 value all of whose bits are `b`, as `Vocab.Opens` reads a constant. -/
-def ConstsOpen (r : Verity.FileRead) (op : (g : Fin r.circuit.N) → BitVec (r.circuit.w g) → Prop) : Prop :=
+def ConstsOpen (r : Verity.ExecutionPhaseFiles) (op : (g : Fin r.circuit.N) → BitVec (r.circuit.w g) → Prop) : Prop :=
   ∀ g b, r.consts g = some b → ∀ v : BitVec (r.circuit.w g), (∀ i : Fin (r.circuit.w g), v.getLsbD i.val = b) → op g v
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 namespace Live
 
@@ -86,7 +86,7 @@ charged `t + w` per run and the tables' finders at `2t + 2v` and `t + v`, at a s
 at the session's bytes and sampling design; at `L = A.L` (`Live.L_eq`) its simulator and extractor are the session's
 (`Live.sim`, `Live.Xr`). The session's `--zk` tags are in `TagsOkZHJ` (`Live.hTags`), so V5's bound is the one it states
 there, and `live-verifier` at the registration's sampling design is the sample file's (`Live.hsub`, `Live.hCust`). -/
-theorem v5_at (L : FlockSoundness.Audit.Law A.n) (hL : Flock.Bridge.execSel (n := A.n) A.src A.design A.n = L) (t : ℕ)
+theorem v5_at (L : FlockSoundness.Audit.SamplingDesign A.n) (hL : Flock.Bridge.execSel (n := A.n) A.src A.design A.n = L) (t : ℕ)
     (B : Finset ℕ) (τ : FlockSoundness.Game.Strategy (auditLive L A.Reg (liveOfZJ A.dg (planZHJP A.dj A.y₀) A.N A.wr))) :
     let σ := simZJA execArith hs512 (planZHJP A.dj A.y₀) (AcceptsZKP A.I A.own) A.wr
       (opnAtZHJP (planZHJP A.dj A.y₀) A.I A.own A.dj) A.dg (decAtZJ (planZHJP A.dj A.y₀)) (fun _ _ _ _ => true)
@@ -130,10 +130,10 @@ theorem units_eq : A.fileRead.units = A.n :=
 `tr`, on the committed files `r` the session reads, fails the claim at the session's share under openings that hold
 wherever the deployed commitment opens and at the constants, is accepted by Flock's `--zk` verifier with probability at
 most the session's error at `t` calls, where the session's per-finder premises hold at `t`. -/
-theorem ks {r : Verity.FileRead} (hr : r = A.fileRead)
+theorem ks {r : Verity.ExecutionPhaseFiles} (hr : r = Verity.ExecutionPhaseFiles.one A.fileRead)
     (op : (g : Fin r.circuit.N) → BitVec (r.circuit.w g) → Prop) (hop : A.OpensUnder r op) (hc : ConstsOpen r op)
     (tr : r.circuit.Trace) (τ : FlockSoundness.Game.Strategy A.game) (htr : HEq tr (A.extract τ)) (t : ℕ)
-    (hF : A.FinderCR τ t) (hI : ¬ Accounting.IntegrityHolds r.parts op tr A.ε) :
+    (hF : A.FinderCR τ t) (hI : ¬ ResourceAccounting.IntegrityHolds r.parts op tr A.ε) :
     Verity.Game.prob (fun o => LiveAcceptsZKP A.I A.own o) A.game τ ≤ A.sessionDelta t := by
   classical
   subst hr
@@ -146,11 +146,11 @@ theorem ks {r : Verity.FileRead} (hr : r = A.fileRead)
     have h := (Finset.mem_filter.1 hv).1
     rwa [Flock.Bridge.blocks_length_partOf A.P hns] at h
   have hcard : A.ε * A.n < (Fs.card : ℝ) := by
-    have h1 : (Accounting.unbound A.fileRead.parts op (A.transcriptAt w)).card ≤ Fs.card := by
+    have h1 : (ResourceAccounting.unbound A.fileRead.parts op (A.traceAt w)).card ≤ Fs.card := by
       rw [← Finset.card_image_of_injective _ Fin.val_injective]
       exact Finset.card_le_card (A.unbound_subset_faulty_part op hop hc w)
     have h2 : A.ε * (A.fileRead.units : ℝ) <
-        ((Accounting.unbound A.fileRead.parts op (A.transcriptAt w)).card : ℝ) := not_le.mp hI
+        ((ResourceAccounting.unbound A.fileRead.parts op (A.traceAt w)).card : ℝ) := not_le.mp hI
     calc A.ε * A.n = A.ε * (A.fileRead.units : ℝ) := by rw [A.units_eq]
       _ < _ := h2
       _ ≤ (Fs.card : ℝ) := by exact_mod_cast h1
@@ -164,7 +164,7 @@ theorem ks {r : Verity.FileRead} (hr : r = A.fileRead)
     Verity.Game.prob_mono (fun o ho => ⟨ho, fun hR =>
       lt_irrefl ((Flock.Bridge.designOf (_root_.Properties.Spot.oneStageOf A.design)).Pa A.part Fs) hR⟩) _ τ
   refine (hmono.trans hv).trans (add_le_add (add_le_add (add_le_add ?_ ?_) le_rfl) le_rfl)
-  · unfold Live.drawMiss
+  · unfold Live.sampleMiss
     rw [Flock.Bridge.pa_partOf A.P hns _ Fs hFs]
     apply ENNReal.ofReal_le_ofReal
     have : Finite {B : Finset ℕ // B ⊆ Finset.range A.n ∧ A.ε * A.n < B.card} :=
@@ -196,13 +196,13 @@ theorem spotSound_of_targets {K : Constructions V} {S : ByteArray → Array Byte
   by_cases hP : ∃ p, ParamsAt θ p
   swap
   · exact recursiveForm_refused V k θ hP F c σ
-  unfold Vocab.error Accounting.condError
+  unfold Vocab.error ResourceAccounting.condError
   beta_reduce
   split_ifs with hE
   swap
   · exact le_top
   obtain ⟨hfs, hpr, hFC, hUf⟩ := hE
-  by_cases hI : Accounting.IntegrityHolds (V.partsOf θ F) (V.Opens θ F c) (V.extract θ F c σ) (V.certOf θ).ε
+  by_cases hI : ResourceAccounting.IntegrityHolds (V.partsOf θ F) (V.Opens θ F c) (V.extract θ F c σ) (V.certOf θ).ε
   · calc Verity.Game.prob (fun o => V.Verdict k .sampled o ∧ ¬ V.Holds k θ F c σ .sampled o) (V.game θ F c) σ
           ≤ Verity.Game.prob (fun _ => False) (V.game θ F c) σ :=
             Verity.Game.prob_mono (fun o ho => ho.2 hI) _ σ
@@ -212,7 +212,7 @@ theorem spotSound_of_targets {K : Constructions V} {S : ByteArray → Array Byte
       Verity.Game.prob (fun o => V.Verdict k .sampled o) (V.game θ F c) σ :=
     Verity.Game.prob_mono (fun o ho => ho.1) _ σ
   cases hS : S θ F with
-  | none => exact hver.trans ((hCov θ F hS hP c σ hfs).trans (le_add_right (le_add_right le_rfl)))
+  | none => exact hver.trans ((hCov θ F hS hP c σ hfs hFC).trans (le_add_right (le_add_right le_rfl)))
   | some A =>
     have hsu := hD.setsUp θ F A hS
     have hFin := hD.finderCR θ F A hS c σ hfs hpr

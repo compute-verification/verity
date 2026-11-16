@@ -12,7 +12,7 @@ With each level, that level's committed tops are staged too, every node held at 
     python -m verity_flock.rec_vstage stage-links CIRCUIT INST LINKS OUT [--forge link]
 
 ``stage`` refuses an inner session whose record holds no sample (`rec_live.inner_draw`, exit 2): the verifier refuses every
-session over it (`RecSetup.innerDrawn`), so the challenger answers ``Register`` with the verifier's full sample
+session over it (`RecSetup.innerSampled`), so the challenger answers ``Register`` with the verifier's full sample
 (``rec_live --draw``).
 
 **The verifier's side** reads the inner session's public record and the inner statement, never the prover's records: the
@@ -30,7 +30,7 @@ rep r's) under `rec_outer.session_program` of ``public.json``, which the chain s
 
 **Hidden unit circuits** (`verity_flock.rec_session`, ``fold.json``'s ``hidden``: ``InnerFold.lean --hide``): the comb is the
 public part's fold, the shape is holo (`rec_algebra.Shape.holo`), and h's round is one of the message rounds, its row
-registered as the others' are; z_partial's round flips no coins, which `rec_algebra.CoinSource` skips.
+registered as the others' are; z_partial's round flips no coins, which `rec_algebra.RoundCoins` skips.
 
 **The sparse phase and R** (``--sparse``, with ``--circuit``): RecSparse over both reps' sparse streams (`stage_sparse`) and,
 when the session committed the stacked table R, R's levels as RecOpen statements, its openings on the chain after both
@@ -362,7 +362,7 @@ def shared_rows(algebra, stacked=(), tops=()) -> dict:
 
 def staged_shared_rows(v: Path) -> dict:
     """The one shared rows file (`--rec-rows`) that every V* part of the statements staged under ``v`` is verified against,
-    and whose SHA-512 `flock-verify rec-compose` holds every part's verdict to: `shared_rows` of the algebra's parts, R's
+    and whose SHA-512 `verity-verify-proof rec-compose` holds every part's verdict to: `shared_rows` of the algebra's parts, R's
     levels, and the levels and caps that read the tops; without the algebra, the first level's ``acc`` as ``acc0``, the one
     `rec-acc` registration every part's chain must be (`RecVStar.checkAcc`)."""
     v = Path(v)

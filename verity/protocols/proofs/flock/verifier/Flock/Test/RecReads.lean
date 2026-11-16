@@ -64,7 +64,7 @@ def why (t : String) : String := match checkReads inner t tr record cs with
   | .ok () => ""
   | .error e => e
 
-def at_ : String := "rec inner transcript: the coin server's record read in its own format holds "
+def at_ : String := "rec inner transcript: the challenger's live-coin part's record read in its own format holds "
 
 /-- `r`'s rounds with the `j`-th round of stream `s` holding something under `f`. -/
 def change (r : Record) (s : String) (j : Nat) (f : RecRecord.Round → RecRecord.Round) : Record :=

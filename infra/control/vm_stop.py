@@ -37,6 +37,8 @@ import time
 import tomllib
 from pathlib import Path
 
+from research import settings
+
 EVERY_S = 300
 IDLE_S = 7200
 LEASE_IDLE_S = 7200
@@ -44,9 +46,9 @@ BUSY_PCT = 5
 DEADLINE_LEAD_S = 300
 LEASE_GRACE_S = 600
 STAMP = "%Y-%m-%dT%H:%M:%SZ"
-KEY_ENV = Path(os.environ.get("VM_STOP_KEY_ENV", "/data/watchers/nebius-stop.env"))
-SSH_KEY = os.environ.get("VM_STOP_SSH_KEY", "/root/.runpod/ssh/runpodctl-ssh-key")
-MACHINES_D = Path(os.environ.get("VM_STOP_MACHINES_D", "/data/steward/research-notes/machines.d"))
+KEY_ENV = Path(settings.get("VM_STOP_KEY_ENV", "/data/watchers/nebius-stop.env"))
+SSH_KEY = settings.get("VM_STOP_SSH_KEY", "/root/.runpod/ssh/runpodctl-ssh-key")
+MACHINES_D = Path(settings.get("VM_STOP_MACHINES_D", "/data/steward/research-notes/machines.d"))
 # GPUs' highest utilization, the live `research run`s (status running, runner alive) of the last 3 days, the gpu-leases held,
 # and the lease this VM holds (vy-dc-*), as one line
 PROBE = r'''m=0; for u in $(nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null); do [ "$u" -gt "$m" ] && m=$u; done
@@ -152,6 +154,7 @@ def ssh_probe(vm: dict, known_hosts: Path) -> dict | None:
     try:
         r = subprocess.run(argv, capture_output=True, text=True, timeout=90)
     except subprocess.TimeoutExpired:
+        print(f"{vm['name']}: ssh probe timed out after 90 s; read as no probe", file=sys.stderr, flush=True)
         return None
     lines = r.stdout.strip().splitlines()
     return parse_probe(lines[-1]) if r.returncode == 0 and lines else None

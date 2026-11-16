@@ -2,7 +2,8 @@
 """The fleet's usage record, daily compute report and quota watch: every Nebius VM recorded, the H200s included.
 
     fleet.py sample              one pass: each RUNNING VM's state from the API, and over ssh its GPUs' utilization, its load
-                                 and memory; one JSON line per VM in $FLEET_DIR/samples-YYYYMMDD.jsonl
+                                 and memory; one JSON line per VM in $FLEET_DIR/samples-YYYYMMDD.jsonl, and the pass's time
+                                 and rows (none when no VM runs) in $FLEET_DIR/last-sample.json, replaced whole
     fleet.py report [--hours 24] [--now ISO]   per VM over the window: $ (rate x hours seen RUNNING), GPU busy %, CPU load, peak
                                  memory, idle hours (no GPU at >= 5%, load under a tenth of its cores and memory in use
                                  under 15%)
@@ -45,17 +46,20 @@ import subprocess
 import sys
 import time
 import tomllib
-import urllib.error
-import urllib.request
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Callable
 from zoneinfo import ZoneInfo
 
 try:
+    from research import metrics
     from research.pods.nebius import settings
-except ModuleNotFoundError:     # run by path with a bare python3.12 (cloud_watch.toml's instances_command): this file's own tree
+except ImportError:     # run by path with a bare python3.12 (cloud_watch.toml's instances_command), or beside an older `research`
+    # that lacks one of them: this file's own tree, with none of the other tree's modules kept
+    for name in [n for n in sys.modules if n == "research" or n.startswith("research.")]:
+        del sys.modules[name]
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+    from research import metrics
     from research.pods.nebius import settings
 
 HERE = Path(__file__).resolve().parent
@@ -81,6 +85,8 @@ PACIFIC = ZoneInfo("America/Los_Angeles")
 #: the site refuses a body over this (its MAX_BODY_BYTES): a panel that doesn't fit drops its oldest slots and says so
 PANEL_MAX_BYTES = 64 * 1024
 PANELS_NOTE = "Nebius VMs only: RunPod pods aren't sampled."
+#: each pass's time and rows, none when no VM runs, replaced whole (infra/control/loop_metrics.py reads it)
+LAST_SAMPLE = "last-sample.json"
 #: a platform's GPU, for the machine class the usage tab groups by; any other `gpu-` platform is named from its own name
 GPU_CLASS = {"gpu-h200-sxm": "H200", "gpu-h100-sxm": "H100", "gpu-b200-sxm": "B200", "gpu-l40s-a": "L40S", "gpu-l40s-d": "L40S",
              "gpu-rtx6000": "RTX PRO 6000", "gpu-rtx6000-a": "RTX PRO 6000"}
@@ -92,7 +98,7 @@ PROBE = ("echo gpu=$(nvidia-smi --query-gpu=utilization.gpu --format=csv,noheade
 
 
 def utc(t: float) -> str:
-    return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.fromtimestamp(t, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def nb(*args: str, timeout: float = 120) -> dict:
@@ -109,8 +115,9 @@ def registry() -> dict[str, dict]:
     for f in sorted(MACHINES_D.glob("*.toml")) if MACHINES_D.is_dir() else []:
         try:
             out[f.stem] = tomllib.loads(f.read_text())
-        except (OSError, tomllib.TOMLDecodeError):
-            continue
+        except (OSError, tomllib.TOMLDecodeError) as e:
+            print(f"fleet.py: {f.name} unread, so {f.stem} has no registry entry ({type(e).__name__}: {e})", file=sys.stderr,
+                  flush=True)
     return out
 
 
@@ -147,6 +154,7 @@ def probe(host: str, user: str) -> dict | None:
     try:
         p = subprocess.run([*ssh, f"{user}@{host}", PROBE], capture_output=True, text=True, timeout=60)
     except subprocess.TimeoutExpired:
+        print(f"fleet.py: ssh as {user} gave no answer in 60 s, so its machine is unread this sample", file=sys.stderr, flush=True)
         return None
     return parse_probe(p.stdout) if p.returncode == 0 and "cores=" in p.stdout else None
 
@@ -169,6 +177,12 @@ def sample(now: float | None = None) -> list[dict]:
     with open(FLEET_DIR / f"samples-{utc(now)[:10].replace('-', '')}.jsonl", "a") as f:
         for r in rows:
             f.write(json.dumps(r) + "\n")
+    try:
+        tmp = FLEET_DIR / f".{LAST_SAMPLE}.{os.getpid()}"
+        tmp.write_text(json.dumps({"t": utc(now), "rows": rows}) + "\n")
+        os.replace(tmp, FLEET_DIR / LAST_SAMPLE)
+    except Exception as e:  # noqa: BLE001 (only infra/control/loop_metrics.py reads it: the pass goes on without it)
+        print(f"{utc(now)} {LAST_SAMPLE} failed: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
     record_deadlines(rows, reg)
     return rows
 
@@ -259,18 +273,18 @@ def record_deadlines(rows: list[dict], reg: dict[str, dict]) -> list[str]:
 
 
 def sync_registry(message: str) -> None:
-    research = Path(os.environ.get("FLEET_RESEARCH", "/workspace/.venv/bin/research"))
+    research = settings.research_bin()
     subprocess.run([str(research), "notes", "sync", "--root", str(MACHINES_D.parent), "--path", MACHINES_D.name, "-m", message],
                    timeout=300, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def load_samples(start: float, end: float) -> list[dict]:
-    rows, day = [], datetime.fromtimestamp(start, timezone.utc).date()
-    while day <= datetime.fromtimestamp(end, timezone.utc).date():
+    rows, day = [], datetime.fromtimestamp(start, UTC).date()
+    while day <= datetime.fromtimestamp(end, UTC).date():
         f = FLEET_DIR / f"samples-{day.strftime('%Y%m%d')}.jsonl"
         for line in f.read_text().splitlines() if f.exists() else []:
             r = json.loads(line)
-            t = datetime.strptime(r["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp()
+            t = datetime.strptime(r["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC).timestamp()
             if start <= t < end:
                 rows.append(r)
         day += timedelta(days=1)
@@ -398,9 +412,9 @@ def quota_findings() -> list[dict]:
 
 def card_finding(rows_today: list[dict]) -> dict | None:
     """The card's UTC day so far (rate x hours seen) against $FLEET_CARD_DAILY_USD, when set, at >= 80%."""
-    cap = float(os.environ.get("FLEET_CARD_DAILY_USD") or 0)
+    limit = settings.card_daily_usd()
     spent = sum((r.get("rate_usd_per_hour") or 0) * INTERVAL_S / 3600 for r in rows_today)
-    return {"spent": round(spent, 2), "cap": cap} if cap and spent >= QUOTA_ALERT * cap else None
+    return {"spent": round(spent, 2), "limit": limit} if limit and spent >= QUOTA_ALERT * limit else None
 
 
 def machine_class(platform: str | None) -> str:
@@ -510,16 +524,7 @@ def put_panel(panel: dict, key: str) -> str | None:
     """PUT one panel; None when the site took it, else why not. Only an https site is sent the key."""
     if not (PANELS_URL or "").startswith("https://"):
         return f"{panel['id']}: $FLEET_PANELS_URL is {PANELS_URL!r}, not an https URL: nothing sent"
-    url = f"{PANELS_URL}/api/panels/{panel['id']}"
-    req = urllib.request.Request(url, data=json.dumps(panel).encode(), method="PUT",  # noqa: S310 (https, checked above)
-                                 headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
-    try:
-        with urllib.request.urlopen(req, timeout=30):  # noqa: S310 (https, checked above)
-            return None
-    except urllib.error.HTTPError as e:
-        return f"{panel['id']}: HTTP {e.code} {e.read()[:300].decode(errors='replace')}"
-    except (urllib.error.URLError, OSError) as e:
-        return f"{panel['id']}: {e}"
+    return metrics.send_json("PUT", f"{PANELS_URL}/api/panels/{panel['id']}", panel, key, panel["id"])
 
 
 def publish(rows: list[dict], now: float, put: Callable[[dict, str], str | None] = put_panel) -> list[str]:
@@ -639,9 +644,9 @@ def loop(clock: Callable[[], float] = time.time, sleep: Callable[[float], None] 
             try:
                 found = [(f"{q['quota']}@{q['region']}", f"{q['quota']} in {q['region']}: {q['usage']} of {q['limit']} "
                           f"({q['share']:.0%})") for q in quota_findings()]
-                start = datetime.strptime(day, "%Y-%m-%d").replace(tzinfo=timezone.utc).timestamp()
+                start = datetime.strptime(day, "%Y-%m-%d").replace(tzinfo=UTC).timestamp()
                 if c := card_finding(load_samples(start, now)):
-                    found.append(("card", f"the card's day so far: ${c['spent']:,.0f} of its ${c['cap']:,.0f} daily limit"))
+                    found.append(("card", f"the card's day so far: ${c['spent']:,.0f} of its ${c['limit']:,.0f} daily limit"))
                 for key, line in found:
                     if (day, key) not in told:
                         told.add((day, key))
@@ -651,7 +656,7 @@ def loop(clock: Callable[[], float] = time.time, sleep: Callable[[float], None] 
                              f"the card: Daniel), before it stops a launch. (fleet.py quota)")
             except Exception as e:  # noqa: BLE001
                 print(f"{utc(now)} quota failed: {e}", file=sys.stderr, flush=True)
-        if datetime.fromtimestamp(now, timezone.utc).hour == REPORT_HOUR_UTC and reported != day:
+        if datetime.fromtimestamp(now, UTC).hour == REPORT_HOUR_UTC and reported != day:
             reported = day
             daily(now, send)
         try:
@@ -698,7 +703,7 @@ def main(argv: list[str] | None = None) -> int:
         print("\n".join(errors) or "published")
         return 1 if errors else 0
     elif a.cmd == "report":
-        end = datetime.strptime(a.now, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp() if a.now else time.time()
+        end = datetime.strptime(a.now, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC).timestamp() if a.now else time.time()
         rep = report(load_samples(end - a.hours * 3600, end), a.hours)
         if a.lanes:
             for lane, rows in sorted(idle_by_lane(rep, registry()).items()):

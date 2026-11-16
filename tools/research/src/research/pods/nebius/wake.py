@@ -27,11 +27,12 @@ import time
 from pathlib import Path
 from typing import Callable
 
+from research import settings
 from research.pods import budgets, registry
 
-MACHINES_D = Path(os.environ.get("WAKE_MACHINES_D", "/workspace/steward/research-notes/machines.d"))
-GUARD_STATE = Path(os.environ.get("WAKE_GUARD_STATE", budgets.GUARD_STATE))
-WAKE_ENV = Path(os.environ.get("WAKE_ENV", "/root/.config/verity/nebius-wake.env"))
+MACHINES_D = Path(settings.get("WAKE_MACHINES_D", "/workspace/steward/research-notes/machines.d"))
+GUARD_STATE = Path(settings.get("WAKE_GUARD_STATE", budgets.GUARD_STATE))
+WAKE_ENV = Path(settings.get("WAKE_ENV", "/root/.config/verity/nebius-wake.env"))
 DEADLINE_LEAD_S = 300            # vm_setup.sh's vy-deadline-check stops the VM from its deadline - 300 s
 INSTANCE_RE = re.compile(r"computeinstance-[a-z0-9]{8,40}")
 

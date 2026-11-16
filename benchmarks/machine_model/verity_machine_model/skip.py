@@ -508,7 +508,7 @@ def summary(name: str, ctx: int, phase: str, d: Design, rates: dict = RATES, blo
             checked: bool = False, credit: str = "honest", vector: str = "") -> Summary:
     """ε_skip = skippable / (honest - skippable), by int8 products and by honest seconds, whole and per component (each
     component's skippable share over the same whole denominator); γ = honest / plain int8 time − 1, the honest
-    overhead. With credit "floor", eps_time is Corollary D3's instead (`floor_eps` on sm_120 at `vector`): the skippable
+    overhead. With credit "floor", eps_time is Corollary D3's instead (`floor_eps` on sm_120 at `vector`): the ε_skip
     work at its model price over ♭'s bound B_♭; honest's time above it is γ's."""
     ps = parts(name, ctx, phase, d.noise, rates, block, checked)
     macs, secs = sum(p.macs for p in ps), sum(p.seconds for p in ps)

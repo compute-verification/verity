@@ -16,7 +16,7 @@ Primitives are the registry's, the two IMMA steps among them: `BlackwellS8ImmaDo
 `BlackwellU8S8ImmaDot32_v1` (the s8 family's u8·s8 step without .satfinite). A case that binds the s8 family
 (`verity.circuits.ops.s8`: `S8Dot_v1`, `S8Matmul_v1`, `LimbSplit_v1`) names it in ``needs``.
 Every honest case does, since property/v1 refuses a bare IMMA. The receipt fold (`PouwDuoAbsorb_v1`) is
-registered nowhere yet, so ``fold-reused`` uses its LOP3+IMAD step (`benchmarks/pouw/edited_gemm/receipt_folds_r9.py`) as a
+registered nowhere yet, so ``fold-reused`` uses its LOP3+IMAD step (`tests/verity/protocols/resource_accounting/compute/pouw/verifier/receipts/fixtures/receipt_folds_r9.py`) as a
 Definition of its own.
 """
 from __future__ import annotations
@@ -26,7 +26,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-import verity.protocols.accounting.pouw.prover.circuit.words  # noqa: F401  (PouwNoiseByte)
+import verity.protocols.resource_accounting.compute.pouw.prover.circuit.words  # noqa: F401  (PouwNoiseByte)
 from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll, array_of, concat, tuple_of
@@ -37,14 +37,14 @@ from verity.circuits.ops import (
     s8,
     scalar,  # noqa: F401  (I32Add, SelectI32, F32Fmaxf, F32Fminf register on import)
 )
-from verity.definitions.registry import (  # noqa: F401
+from verity_vllm.definitions.registry import (  # noqa: F401
     dsa,
     dsv4_qnorm_insert,
     flashmla,
     marlin_moe,
     topp_word_gates,
 )
-from verity.definitions.registry.ref_prims import gather_f32
+from verity_vllm.definitions.registry.ref_prims import gather_f32
 from verity.circuits.silicon.integer import S32_MAX, s32_word
 
 CLASSES = ("roundings", "compare_select", "gathers", "products", "other")

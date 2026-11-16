@@ -35,7 +35,7 @@ import triton
 from verity_vllm.engine import int8_fused as X
 
 HERE = Path(__file__).resolve().parent
-sys.path[:0] = [str(HERE), str(Path(__file__).resolve().parents[1] / "exactlin")]
+sys.path[:0] = [str(HERE), str(Path(__file__).resolve().parents[2] / "kernels" / "exactlin")]
 import kbench  # noqa: E402
 import kgate  # noqa: E402
 

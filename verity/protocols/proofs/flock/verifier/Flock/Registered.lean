@@ -173,7 +173,7 @@ theorem dupName?_none {ps : List Port} (h : dupName? ps = none) :
 
 /-- **The verifier's registered reads**: a `FORMAT` (or `FORMAT_V0`) file's ports (`portsOf`), each name naming one port
 (`ofJson_names`). A verdict reports a port by its name (`finding`) and every check of a statement's reads finds a port by
-its name, so a second port of a name would be one neither reads. `flock-verify` refuses a file whose text names a key
+its name, so a second port of a name would be one neither reads. `verity-verify-proof` refuses a file whose text names a key
 twice (`JsonKeys.dupKey`) and `JsonParse.parse` keeps one of the two, so no file it reads gets here with one; this
 refusal holds for any `Json` the verifier is given. -/
 def ofJson (j : Json) : V (Array Port) := do
@@ -363,7 +363,7 @@ theorem checkProgram_ok {b : ByteArray} {registered : Bool} (h : checkProgram (s
 /-- Every port of the circuit, each input port and each output row, is a port of `own`. -/
 def complete (c : Circuit) (own : Array Port) : Bool := c.ports.all fun p => own.any (·.name == p.name)
 
-/-- **Every port a statement's outputs read is registered** (PROTOCOL.md §16.10; `flock-verify` runs it on every
+/-- **Every port a statement's outputs read is registered** (PROTOCOL.md §16.10; `verity-verify-proof` runs it on every
 statement whenever `--registered F` is given): every port of the circuit is a port of the verifier's own registered
 reads (`checkComplete_ok`), so no output's cone reads a row the statement commits afresh and its public file states (a
 lane's index, say), and `check` opens each of them at its registered root. It reads the circuit's ports, not its gates:
@@ -524,11 +524,11 @@ def roundCommitment (value : String) : Bool :=
   let index (s : String) := !s.isEmpty && s.all Char.isDigit
   roundNamed.contains value || roundIndexed.any fun pre => value.startsWith pre && index (value.drop pre.length).toString
 
-/-- Whether every sample by `d`'s law samples unit `u`: a subset sample of the whole population, a `p = 1` sample, or a unit whose
+/-- Whether every sample by `d`'s sampling design samples unit `u`: a subset sample of the whole population, a `p = 1` sample, or a unit whose
 stratum samples all of its units (`k_s = n_s`). -/
-def drawsInFull (d : Draw.UnitDraw) (u : Nat) : Bool :=
+def samplesInFull (d : Draw.UnitSample) (u : Nat) : Bool :=
   let full (s : Draw.Stratum) := s.units.any (fun (lo, hi) => lo ≤ u && u < hi) && s.k == s.size
-  match d.law with
+  match d.samplingDesign with
   | .subset k => k == d.population
   | .bernoulli a b => a == b
   | .stratified _ strata => strata.any full
@@ -536,10 +536,10 @@ def drawsInFull (d : Draw.UnitDraw) (u : Nat) : Bool :=
 
 /-- The first port of `own` and unit that reads a round's commitment (`roundCommitment`) by `own`'s reads, and that `d`
 does not sample in full. -/
-def fullMiss (own : Array Port) (d : Draw.UnitDraw) : Option (Port × Nat) :=
+def fullMiss (own : Array Port) (d : Draw.UnitSample) : Option (Port × Nat) :=
   own.findSome? fun p =>
     if roundCommitment p.value then
-      ((List.range p.reads.size).find? fun u => p.reads[u]!.isSome && !drawsInFull d u).map (p, ·)
+      ((List.range p.reads.size).find? fun u => p.reads[u]!.isSome && !samplesInFull d u).map (p, ·)
     else none
 
 /-- U4 (`Flock.HmRow`): a sampled statement samples in full every unit that reads a round's commitment by the verifier's
@@ -547,7 +547,7 @@ own reads `own` (`fullMiss`), so no stage's message is read off a sample. `draw`
 sample proves its whole population. -/
 def checkFull (own : Option (Array Port)) (draw : Option Json) : V Unit := do
   let (some own, some j) := (own, draw) | pure ()
-  let d ← Draw.UnitDraw.ofJson j
+  let d ← Draw.UnitSample.ofJson j
   match fullMiss own d with
   | none => pure ()
   | some (p, u) =>

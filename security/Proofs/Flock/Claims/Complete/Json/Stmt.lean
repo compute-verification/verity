@@ -56,7 +56,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 # What the record needs of the statement, from its setup
 
 `stmtOk`: at every good case, the session spec names no keyed coin tree, a non-empty `Σ`, a printable sample that decodes
-to the statement's instances (`DrawOk`), and the statement's sample is the one it was set up at: `StmtOk`, from the case's
+to the statement's instances (`SampleOk`), and the statement's sample is the one it was set up at: `StmtOk`, from the case's
 setup alone, with no premise on the JSON library: the verifier keeps what it parsed rebuilt (`Flock.norm`), and the coin
 tree its coins name.
 
@@ -66,9 +66,9 @@ tree its coins name.
   verifier's statements.
 * `Σ` is a SHA-512 digest (`setupH_stmt`, `Hidden.setupHidden_spec'`).
 * The public header is the population's, rebuilt (`loadPublic_header`), with the sample put in (`HmRow.drawn`), so its
-  `unit_draw` is the sample (`unitDraw_of`), which decodes to the statement's instances (`PublicTies.instances`).
+  `unit_draw` is the sample (`unitSample_of`), which decodes to the statement's instances (`PublicTies.instances`).
 * The sample is the statement's parsed JSON (`jsonOf`) and stratified or, at hidden outputs, a subset (the setup's
-  `ProvedScope.drawLaw`, `Ins.setup_drawLaw`, `law_of_lawWhy`), and a stratified or subset sample that decodes has exactly
+  `ProvedScope.sampleDesign`, `Ins.setup_sampleDesign`, `samplingDesign_of_samplingDesignWhy`), and a stratified or subset sample that decodes has exactly
   the keys it reads, each a string, a natural number or an array of them (`good_stratified`, `good_subset`), so it is
   printable.
 -/
@@ -89,7 +89,7 @@ open private stratumOfJson from Commitments.Draw
 theorem Raw.ins_read {w : Raw} {s : Ins} (h : w.ins = .ok s) :
     s.read.zk = w.zk ∧ (w.zk = false → s.read.I.coins = .seed) ∧
       ∃ draw, w.draw.mapM (jsonOf "draw") = .ok draw ∧ s.read.draw = draw.map Flock.norm := by
-  refine ⟨Raw.ins_zk h, ?_, Raw.ins_draw h⟩
+  refine ⟨Raw.ins_zk h, ?_, Raw.ins_sample h⟩
   unfold Raw.ins at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
@@ -98,7 +98,7 @@ theorem Raw.ins_read {w : Raw} {s : Ins} (h : w.ins = .ok s) :
     | (cases h; exact fun hz => by simp_all)
 
 /-- The sample is well formed: the verifier rebuilt it (`Flock.norm`, `wf_norm`). -/
-theorem draw_wf {w : Raw} {draw : Option Json}
+theorem sample_wf {w : Raw} {draw : Option Json}
     (h : ∃ dr, w.draw.mapM (jsonOf "draw") = .ok dr ∧ draw = dr.map Flock.norm) {d : Json} (hd : draw = some d) :
     Claims.Json.Wf d := by
   obtain ⟨dr, -, rfl⟩ := h
@@ -224,10 +224,10 @@ theorem mapM_ok_mem {α β : Type} {f : α → V β} {a : Array α} {b : Array �
 
 /-! ## What the setup checked -/
 
-/-- A sampled session's setup checked its sample's law (`ProvedScope.drawLaw`). -/
-theorem Ins.setup_drawLaw {s : Ins} {p : SessionSpec × Array Stmt} (h : s.setup = .ok p)
+/-- A sampled session's setup checked its sample's sampling design (`ProvedScope.sampleDesign`). -/
+theorem Ins.setup_sampleDesign {s : Ins} {p : SessionSpec × Array Stmt} (h : s.setup = .ok p)
     (hd : s.read.draw.isSome = true) :
-    ProvedScope.drawLaw s.read.zk s.read.tags false s.read.draw = .ok () := by
+    ProvedScope.sampleDesign s.read.zk s.read.tags false s.read.draw = .ok () := by
   unfold Ins.setup at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
@@ -282,7 +282,7 @@ theorem setupOne_stmt {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables 
     (h : HiddenExec.setupOne tags cf pf coins tables draw partition program = .ok st) :
     (∃ c pop, HmRow.loadPublic tags c pf = .ok pop ∧ ∀ d, draw = some d → HmRow.drawn c pop d = .ok st.pub) ∧
       (∀ d, st.pub.header.getObjVal? "unit_draw" = .ok d →
-        ∃ u, Draw.UnitDraw.ofJson d = .ok u ∧ u.proved.size = st.n) ∧
+        ∃ u, Draw.UnitSample.ofJson d = .ok u ∧ u.proved.size = st.n) ∧
       0 < st.sigma.size ∧ Flock.helloOf tags st.sigma (PT_LOCAL + st.nbl) coins = .ok st.hello ∧
       st.coinTree = coins.tree? := by
   rcases Bool.eq_false_or_eq_true tags.hiddenOutputs with hh | hh
@@ -321,7 +321,7 @@ theorem loadPublic_header {tags : Tags} {c : Circuit} {f : ByteArray} {pop : Pub
 
 set_option maxHeartbeats 4000000 in
 /-- `HmRow.drawn` puts the sample in the population's header. -/
-theorem drawn_header {c : Circuit} {pub pub' : Public} {d : Json} {m : Std.TreeMap.Raw String Json compare}
+theorem sampled_header {c : Circuit} {pub pub' : Public} {d : Json} {m : Std.TreeMap.Raw String Json compare}
     (hm : m.WF) (hp : pub.header = .obj m) (h : HmRow.drawn c pub d = .ok pub') :
     pub'.header.getObjVal? "unit_draw" = .ok d := by
   unfold HmRow.drawn at h
@@ -342,14 +342,14 @@ theorem drawn_header {c : Circuit} {pub pub' : Public} {d : Json} {m : Std.TreeM
 
 /-- **The statement's header names its sample**: a sample's statement over a loaded public file has that sample as its
 `unit_draw`. -/
-theorem unitDraw_of {tags : Tags} {c : Circuit} {pf : ByteArray}
+theorem unitSample_of {tags : Tags} {c : Circuit} {pf : ByteArray}
     {pop pub : Public} {d : Json} (hl : HmRow.loadPublic tags c pf = .ok pop) (hd : HmRow.drawn c pop d = .ok pub) :
     pub.header.getObjVal? "unit_draw" = .ok d := by
   obtain ⟨⟨j, hj⟩, m, hm⟩ := loadPublic_header hl
   have hw := FlockDeploy.wf_norm j
   rw [← hj, hm] at hw
   cases hw with
-  | obj hwf _ => exact drawn_header hwf hm hd
+  | obj hwf _ => exact sampled_header hwf hm hd
 
 /-! ## The coins name no coin tree -/
 
@@ -470,11 +470,11 @@ theorem good_stratum {j : Json} (hw : Wf j) {s : Draw.Stratum} (h : stratumOfJso
       exact asNat_good hn
 
 set_option maxHeartbeats 4000000 in
-/-- **A stratified sample that decodes is printable**: an object of exactly `law`, `population`, `units`, `k` and
+/-- **A stratified sample that decodes is printable**: an object of exactly `samplingDesign`, `population`, `units`, `k` and
 `strata`, a string, natural numbers, an array of them, and strata that decode. -/
-theorem good_stratified {j : Json} (hw : Wf j) {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson j = .ok D) {K : ℕ}
-    {strata : Array Draw.Stratum} (hl : D.law = .stratified K strata) : Good j := by
-  unfold Draw.UnitDraw.ofJson at h
+theorem good_stratified {j : Json} (hw : Wf j) {D : Draw.UnitSample} (h : Draw.UnitSample.ofJson j = .ok D) {K : ℕ}
+    {strata : Array Draw.Stratum} (hl : D.samplingDesign = .stratified K strata) : Good j := by
+  unfold Draw.UnitSample.ofJson at h
   dsimp only at h
   simp only [throw_bind'] at h
   repeat' walk_step
@@ -482,7 +482,7 @@ theorem good_stratified {j : Json} (hw : Wf j) {D : Draw.UnitDraw} (h : Draw.Uni
     simp only [pure, Except.pure, Except.ok.injEq] at h
     subst h
   all_goals
-    have hp := ‹(pure _ : V Draw.Law) = Except.ok _›
+    have hp := ‹(pure _ : V Draw.SamplingDesign) = Except.ok _›
     simp only [pure, Except.pure, Except.ok.injEq, reduceCtorEq] at hp
   all_goals
     try simp only [reduceCtorEq] at hl
@@ -508,11 +508,11 @@ theorem good_stratified {j : Json} (hw : Wf j) {D : Draw.UnitDraw} (h : Draw.Uni
       | arr ha => exact good_stratum (ha x hx) hy
 
 set_option maxHeartbeats 4000000 in
-/-- **A subset sample that decodes is printable**: an object of exactly `law`, `population`, `units` and `k`, a string,
+/-- **A subset sample that decodes is printable**: an object of exactly `samplingDesign`, `population`, `units` and `k`, a string,
 natural numbers and an array of them. -/
-theorem good_subset {j : Json} (hw : Wf j) {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson j = .ok D) {k : ℕ}
-    (hl : D.law = .subset k) : Good j := by
-  unfold Draw.UnitDraw.ofJson at h
+theorem good_subset {j : Json} (hw : Wf j) {D : Draw.UnitSample} (h : Draw.UnitSample.ofJson j = .ok D) {k : ℕ}
+    (hl : D.samplingDesign = .subset k) : Good j := by
+  unfold Draw.UnitSample.ofJson at h
   dsimp only at h
   simp only [throw_bind'] at h
   repeat' walk_step
@@ -520,7 +520,7 @@ theorem good_subset {j : Json} (hw : Wf j) {D : Draw.UnitDraw} (h : Draw.UnitDra
     simp only [pure, Except.pure, Except.ok.injEq] at h
     subst h
   all_goals
-    have hp := ‹(pure _ : V Draw.Law) = Except.ok _›
+    have hp := ‹(pure _ : V Draw.SamplingDesign) = Except.ok _›
     simp only [pure, Except.pure, Except.ok.injEq, reduceCtorEq] at hp
   all_goals
     try simp only [reduceCtorEq] at hl
@@ -539,14 +539,14 @@ theorem good_subset {j : Json} (hw : Wf j) {D : Draw.UnitDraw} (h : Draw.UnitDra
     · exact ⟨_, arr_ok ‹J.arr _ "units" _ = _›, good_of_asNat_mapM ‹Array.mapM _ _ = Except.ok _›⟩
     · exact ⟨_, nat_ok ‹J.nat _ "k" _ = _›, .num _⟩
 
-/-- A sample a soundness claim samples by is stratified or a subset (a subset only where `lawWhy`'s form covers it). -/
-theorem law_of_lawWhy {zk : Bool} {tags : Tags} {D : Draw.UnitDraw} (h : ProvedScope.lawWhy zk tags false D = none) :
-    (∃ K strata, D.law = .stratified K strata) ∨ ∃ k, D.law = .subset k := by
+/-- A sample a soundness claim samples by is stratified or a subset (a subset only where `samplingDesignWhy`'s form covers it). -/
+theorem samplingDesign_of_samplingDesignWhy {zk : Bool} {tags : Tags} {D : Draw.UnitSample} (h : ProvedScope.samplingDesignWhy zk tags false D = none) :
+    (∃ K strata, D.samplingDesign = .stratified K strata) ∨ ∃ k, D.samplingDesign = .subset k := by
   revert h
-  cases hl : D.law with
+  cases hl : D.samplingDesign with
   | stratified K s => exact fun _ => Or.inl ⟨K, s, rfl⟩
   | subset k => exact fun _ => Or.inr ⟨k, rfl⟩
-  | _ => simp [ProvedScope.lawWhy, hl]
+  | _ => simp [ProvedScope.samplingDesignWhy, hl]
 
 /-! ## The statement at a good case -/
 
@@ -555,7 +555,7 @@ variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Rel
 /-- **What the record needs of the statement**, at every good case: no keyed coin tree, a non-empty `Σ`, a printable
 sample that decodes to the statement's instances, and the statement's sample the one it was set up at. -/
 def StmtOk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
-  ∀ c : Case H rel, c.spec.coinTree = none ∧ 0 < c.spec.sigma.size ∧ DrawOk c.spec ∧ c.spec.unitDraw = c.s.read.draw
+  ∀ c : Case H rel, c.spec.coinTree = none ∧ 0 < c.spec.sigma.size ∧ SampleOk c.spec ∧ c.spec.unitSample = c.s.read.draw
 
 /-- **The case's one table**: its statement is `setupOne`'s, at the statement's tags, coins and sample. -/
 theorem _root_.FlockComplete.Case.one (c : Case H rel) :
@@ -595,8 +595,8 @@ theorem stmtOk : StmtOk H rel := by
   obtain ⟨hzk, hcoins, hdraw⟩ := Raw.ins_read hw
   have hz : c.s.read.zk = false := hzk.trans hwz
   obtain ⟨d, hdd⟩ := Option.isSome_iff_exists.1 c.ready_parts.1
-  have hu := unitDraw_of hl (hd d hdd)
-  have hU : c.spec.unitDraw = some d := by
+  have hu := unitSample_of hl (hd d hdd)
+  have hU : c.spec.unitSample = some d := by
     rw [hspec]
     simp [Stmt.spec, hu, Except.toOption]
   refine ⟨?_, ?_, ?_, by rw [hU, hdd]⟩
@@ -608,21 +608,21 @@ theorem stmtOk : StmtOk H rel := by
     exact hcoins hwz
   · rw [hspec]
     exact hsig
-  · unfold DrawOk
+  · unfold SampleOk
     rw [hU]
     dsimp only
     obtain ⟨D, hD, hn⟩ := hinst d hu
-    have hdl := Ins.setup_drawLaw (setupOf_some c.setup).2 c.ready_parts.1
+    have hdl := Ins.setup_sampleDesign (setupOf_some c.setup).2 c.ready_parts.1
     rw [hdd, hz] at hdl
-    simp only [ProvedScope.drawLaw, hD] at hdl
-    have hlw : ProvedScope.lawWhy false c.s.read.tags false D = none := by
-      cases e : ProvedScope.lawWhy false c.s.read.tags false D with
+    simp only [ProvedScope.sampleDesign, hD] at hdl
+    have hlw : ProvedScope.samplingDesignWhy false c.s.read.tags false D = none := by
+      cases e : ProvedScope.samplingDesignWhy false c.s.read.tags false D with
       | none => rfl
       | some _ => rw [e] at hdl; cases hdl
     have hg : Good d := by
-      rcases law_of_lawWhy hlw with ⟨K, strata, hK⟩ | ⟨k, hk⟩
-      · exact good_stratified (draw_wf hdraw hdd) hD hK
-      · exact good_subset (draw_wf hdraw hdd) hD hk
+      rcases samplingDesign_of_samplingDesignWhy hlw with ⟨K, strata, hK⟩ | ⟨k, hk⟩
+      · exact good_stratified (sample_wf hdraw hdd) hD hK
+      · exact good_subset (sample_wf hdraw hdd) hD hk
     refine ⟨fun hn' => ?_, hg, D, hD, by rw [hspec]; exact hn⟩
     rw [hn'] at hg
     rw [hn'] at hD

@@ -89,7 +89,7 @@ theorem bodyOf_geometry_of (Tz : TabZK 𝔽 mPts) (st : Stmt) :
 
 /-- `bodyOf_geometry` at the sample. -/
 theorem bodyOf_geometry (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZK I mPts S (dj S)) :
+    (y₀ : SampleSetupZK I mPts S₀ (dj S₀)) (S : Finset (Fin n)) (R : Reg) (y : SampleSetupZK I mPts S (dj S)) :
     let C := coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st
     C.cols ≤ 40 ∧ C.z.tpad ≤ 2 ^ C.cols ∧ C.z.nS ≤ C.z.tpad ∧
       ∀ c, C.Admits c → Function.Injective (C.pos c) ∧ ∀ q, C.pos c q < 2 ^ (C.cols + 1) :=
@@ -129,7 +129,7 @@ theorem bodyOf_padsOnto_of (Tz : TabZK 𝔽 mPts) (st : Stmt) :
 
 /-- `bodyOf_padsOnto` at the sample. -/
 theorem bodyOf_padsOnto (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZK I mPts S (dj S)) :
+    (y₀ : SampleSetupZK I mPts S₀ (dj S₀)) (S : Finset (Fin n)) (R : Reg) (y : SampleSetupZK I mPts S (dj S)) :
     let C := coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st
     ∀ c, C.Admits c → (C.T c).tab.PadsOnto :=
   bodyOf_padsOnto_of P _ _
@@ -158,8 +158,8 @@ theorem coinedOf_setup_of (Tz : TabZK 𝔽 mPts) (st : Stmt) (hwf : StmtWF st) (
     innerOf_holds_of P Tz st hwf hS M hdm c hc⟩
 
 theorem coinedOf_setup (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (ht : I.tags.typed = false)
-    (hdm : ∀ (S : Finset (Fin n)) (y : DrawSetupZK I mPts S (dj S)), avoidsMask y.x.st = true) :
+    (y₀ : SampleSetupZK I mPts S₀ (dj S₀)) (ht : I.tags.typed = false)
+    (hdm : ∀ (S : Finset (Fin n)) (y : SampleSetupZK I mPts S (dj S)), avoidsMask y.x.st = true) :
     CoinedOfSetup (Reg := Reg) P I dj y₀ := by
   intro S R y
   exact coinedOf_setup_of P _ y.x.st y.x.wf.1 (by rw [tablesAtZK_eq dj y₀ S R y]; rfl)

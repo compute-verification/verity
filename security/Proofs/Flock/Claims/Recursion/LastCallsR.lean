@@ -478,8 +478,8 @@ theorem callsR_of_files {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as
     (hacc : ((nextR rd x as cs).eval sha512).1 = .acc) (hacc' : ((nextR rd x as' cs').eval sha512).1 = .acc)
     (hF : filesAt (tabsOf sts) (pointsOf spec c₁) f.ps = filesAt (tabsOf sts) (pointsOf spec c₁) f'.ps) :
     ((nextR rd x as cs).eval sha512).2.toFinset = ((nextR rd x as' cs').eval sha512).2.toFinset := by
-  obtain ⟨hv, hck, hsu, -, hpi⟩ := Claims.Bridge.PlainDraw.decideR_sha512 ha hacc
-  obtain ⟨hv', hck', -, -, -⟩ := Claims.Bridge.PlainDraw.decideR_sha512 ha' hacc'
+  obtain ⟨hv, hck, hsu, -, hpi⟩ := Claims.Bridge.PlainSample.decideR_sha512 ha hacc
+  obtain ⟨hv', hck', -, -, -⟩ := Claims.Bridge.PlainSample.decideR_sha512 ha' hacc'
   have hr := (decideR_runs ha hacc).1
   have hr' := (decideR_runs ha' hacc').1
   have hs : ((setupM Claims.Hashes.oc s.read).run.eval sha512).1 = .ok (spec, sts) := by

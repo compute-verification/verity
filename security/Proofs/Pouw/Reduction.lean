@@ -16,14 +16,14 @@ open Finset
 
 variable {Q R S : Type}
 
-theorem correctSet_subset_checkedSet (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) :
+theorem correctSet_subset_checkedSet (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Trace) :
     correctSet P U H s τ ⊆ checkedSet P U H s τ := by
   intro u hu
   simp only [correctSet, checkedSet, Finset.mem_filter] at hu ⊢
   obtain ⟨hu, c, hc, hcor⟩ := hu
   exact ⟨hu, c, hc, hcor.1⟩
 
-theorem correctSet_subset_range (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) :
+theorem correctSet_subset_range (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Trace) :
     correctSet P U H s τ ⊆ range U.layout.N := fun u hu => by
   simp only [correctSet, Finset.mem_filter] at hu; exact hu.1
 
@@ -35,7 +35,7 @@ theorem reductionGap_lt_one {g₀ Ωmax : ℝ} (hg₀ : g₀ < 1) (hΩ : 0 < Ωm
   unfold reductionGap; linarith
 
 /-- The pointwise reduction: a win at `g = 1 − (1 − g₀)/Ω_max` is a TT event. -/
-theorem wins_imp_tt (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) {g₀ Ωmax T : ℝ}
+theorem wins_imp_tt (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Trace) {g₀ Ωmax T : ℝ}
     (hΩ : 0 < Ωmax)
     (hW : ∀ u < U.layout.N, (P.Wref U.layout u : ℝ) ≤ Ωmax * ((U.layout.shape u).Wmm : ℝ))
     (hwin : Wins P U (reductionGap g₀ Ωmax) T τ H s) :

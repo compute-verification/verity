@@ -102,7 +102,7 @@ NEW_SLICE = dict(
 
 
 MODEL = "claude-fable-5-2"
-EFFORT = "xhigh"
+EFFORT = "medium"
 FOLLOW_UPS = "https://cursor.com/docs/cloud-agent/api/endpoints"
 CLOUD_AGENT = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
 
@@ -118,10 +118,12 @@ def user_key() -> str:
 def call(method: str, path: str, key: str, body: dict | None = None) -> tuple[int, dict]:
     auth = base64.b64encode(f"{key}:".encode()).decode()
     data = json.dumps(body).encode() if body is not None else None
-    req = urllib.request.Request(API + path, data=data, method=method,
+    if (scheme := urllib.parse.urlsplit(API).scheme) not in ("http", "https"):
+        sys.exit(f"CURSOR_API_URL is not an http or https URL (scheme {scheme!r})")
+    req = urllib.request.Request(API + path, data=data, method=method,  # noqa: S310 (http or https, checked above)
                                  headers={"Authorization": f"Basic {auth}", "Content-Type": "application/json"})
     try:
-        with urllib.request.urlopen(req) as resp:
+        with urllib.request.urlopen(req) as resp:  # noqa: S310 (http or https, checked above)
             return resp.status, decoded(resp.read())
     except urllib.error.HTTPError as err:
         return err.code, decoded(err.read())
@@ -166,7 +168,9 @@ def fetch_artifact(author: str, name: str, key: str) -> str:
                  f"then rerun this")
     query = urllib.parse.urlencode({"path": want})
     url = ok(*call("GET", f"/v1/agents/{author}/artifacts/download?{query}", key), f"download {want}")["url"]
-    with urllib.request.urlopen(url) as resp:
+    if (scheme := urllib.parse.urlsplit(url).scheme) not in ("http", "https"):
+        sys.exit(f"the download URL of {want} is not an http or https URL (scheme {scheme!r})")
+    with urllib.request.urlopen(url) as resp:  # noqa: S310 (http or https, checked above)
         return resp.read().decode()
 
 
@@ -294,7 +298,7 @@ def main(argv: list[str] | None = None) -> None:
     src.add_argument("--charter-from", help="a new slice: the charter author's agent id (reads artifacts/charter-HANDLE.md)")
     q.add_argument("--pairing-thread", required=True, help="ts of the handover or launch thread in #agent-coordination")
     q.add_argument("--generation", type=int, help="default: 2 for a successor, 1 for a new slice")
-    q.add_argument("--model", default=MODEL, help=f"a canonical model id from GET /v1/models; default {MODEL} (coordinators run Fable 5.2 at xhigh, never the account default)")
+    q.add_argument("--model", default=MODEL, help=f"a canonical model id from GET /v1/models; default {MODEL} (coordinators run Fable 5.2 at medium, never the account default)")
     q.add_argument("--effort", default=EFFORT, help=f"the model's effort parameter; default {EFFORT}")
     q.add_argument("--text-file", help="read the handoff or charter from this file instead of the author's artifacts")
     q.add_argument("--dry-run", action="store_true", help="print the create request and send nothing")

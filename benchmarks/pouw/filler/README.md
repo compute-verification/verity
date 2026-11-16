@@ -12,6 +12,11 @@ attention, each held to the host bit for bit before it is timed), not a served v
 quantization are left out, so a step here is a lower bound on a served step. `comm/` is the same question for a
 Llama-3.1-70B tensor-parallel decode step, one process a rank, with the filler inside its collectives.
 
+The kernels are in PoUW's prover, `../../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler/`: `dcap.cu`,
+`pfill.cuh` with its host build `pfill_host.cpp`, `lfill.cuh` and `flin.cuh`; their Python twins, `pfill_ref.py` and
+`dfill_ref.py`, are here. This directory's jobs and drivers (`dscore.cu`, `fscore.cu`, `pscore.cu`, `comm/tpcomm.cu`) build them
+from there.
+
 ## Jobs
 
 Each job is the command of a `research run` from a pushed commit, with the source tree as its working directory, on a
@@ -60,7 +65,8 @@ a machine with no GPU.
 
 ## Reading a run
 
-These run on any machine, on a job's out directory.
+These run on any machine, on a job's out directory. `psum.py` reads the GPU's card through `verity.device`, so it runs
+in the workspace's environment.
 
 ~~~text
 python3 benchmarks/pouw/filler/score.py report OUT [--json] [--as v4] [--coins X]   # score a measured run again
@@ -68,7 +74,7 @@ python3 benchmarks/pouw/filler/score.py tp-report OUT... --bin|--nvd X          
 python3 benchmarks/pouw/filler/score.py --leaderboard [--refresh] [--local DIR...]  # every scored attempt, best first
 python3 benchmarks/pouw/filler/share.py OUT [--fill OUT] [--dfill OUT...] [--fstep OUT...] [--json F] # dcap.sh's tables
 python3 benchmarks/pouw/filler/capacity_of.py [OUT] [--lfill|--dfill|--fstep F.jsonl] [--json]   # σ of a run or a probe
-python3 benchmarks/pouw/filler/psum.py OUT... [--limit 1.05]                        # psched.sh's rows by point and arm
+uv run python3 benchmarks/pouw/filler/psum.py OUT... [--limit 1.05]                 # psched.sh's rows by point and arm
 python3 benchmarks/pouw/filler/psched_probe.py OUT...                               # psched_probe.sh's rows
 python3 benchmarks/pouw/filler/pfill_phase_screen.py NAME                           # psched_probe.sh's PROBES, by name
 python3 benchmarks/pouw/filler/pfill_proved.py OUT [--json]                         # its SCORE at each proved fraction
@@ -77,21 +83,22 @@ python3 benchmarks/pouw/filler/comm/report.py OUT [--json]                      
 
 ## What the directory offers
 
-`dfill_ref.py` and `pfill_ref.py` are the filler tiles' receipts in Python, held to the kernels' own host reference
-(`pfill_host.cpp` builds `pfill.cuh`'s with g++ for the tests); `pfill_ref.py` and `pfill.cuh` take their folds, key
-rules and lane starts from the receipts reference (`verity/protocols/accounting/pouw/verifier/receipts/`). One test outside the directory,
-`../tests/test_receipts_adopters.py`, loads `pfill_ref.py`, `pfill.cuh` and `scoring.py`'s `FOLDS` and `RECEIPT_TAGS`
-and holds them to that reference; nothing else outside the directory loads its Python or includes its kernels.
-`arms.py`, `score.py`, `scoring.py`, `share.py`, `pfill_ref.py`, `dfill_ref.py`, `capacity_of.py`, `pfill_proved.py` and
-`comm/report.py` list in `__all__` the names other files read; the other files in an arm's `sources` list none, since a
-byte changed in one is a new variant of every arm that lists it.
-`scoring.py`, `share.py`, the two references and the readers above start no process and touch no GPU, and import
-nothing beyond the standard library, numpy, the receipts reference and `verity_machine_model`; `score.py` and the
-three arm runners build with `nvcc` and take a lease.
+`dfill_ref.py` and `pfill_ref.py` are the filler tiles' receipts in Python, held to the kernels'
+own host reference (`pfill_host.cpp` builds `pfill.cuh`'s with g++ for the tests); `pfill_ref.py` and `pfill.cuh` take
+their folds, key rules and lane starts from the receipts reference
+(`verity/protocols/resource_accounting/compute/pouw/verifier/receipts/`). One test outside the directory,
+`../../../tests/benchmarks/pouw/test_receipts_adopters.py`, loads `pfill_ref.py`, `pfill.cuh` and `scoring.py`'s `FOLDS` and `RECEIPT_TAGS`
+and holds them to that reference; nothing else outside the directory loads its Python, and nothing else includes the
+kernels. `arms.py`, `score.py`, `scoring.py`, `share.py`, `pfill_ref.py`, `dfill_ref.py`, `capacity_of.py`,
+`pfill_proved.py` and `comm/report.py` list in `__all__` the names other files read; the other files in an arm's
+`sources` list none, since a byte changed in one is a new variant of every arm that lists it. `scoring.py`, `share.py`,
+the two references and the readers above start no process and touch no GPU, and import nothing beyond the standard
+library, numpy, the receipts reference and `verity_machine_model`; `score.py` and the three arm runners build with
+`nvcc` and take a lease.
 
-The tests are one suite, `uv run tools/verity/check/suites.py benchmarks/pouw/filler`, on a machine with no GPU.
-A test imports the directory's modules and the harness's `ledger` by name: the suite's `pyproject.toml` puts both
-directories on pytest's `pythonpath`. The harness has a `report.py` too, so `test_comm_report.py` takes
+The tests are one suite, `uv run tools/check/suites.py benchmarks/pouw/filler`, on a machine with no GPU.
+A test imports the directory's modules, the kernels' twins and the harness's `ledger` by name: the suite's
+`pyproject.toml` puts the three directories on pytest's `pythonpath`. The harness has a `report.py` too, so `test_comm_report.py` takes
 `comm/report.py` from `load` in the suite's `tests/conftest.py`, as the module `comm_report`.
-`../tests/test_budget.py` and `test_eps_budget.py` test `benchmarks/pouw`'s own modules, and
+`../../../tests/benchmarks/pouw/test_budget.py` and `test_eps_budget.py` test `benchmarks/pouw`'s own modules, and
 `test_lean_headline_dc.py` tests `verity_machine_model.lean_headline_dc`.

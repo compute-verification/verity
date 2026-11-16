@@ -36,7 +36,7 @@ H1_PROVE = ROOT / "benchmarks" / "pouw" / "h1_prove"
 PHASES = (("unit_lowering", "CS.unit_lowering"), ("ir_lower.lower", "IL.lower"), ("ir_lower.standalone", "IL.standalone"),
           ("ir_lower.lower_gates", "IL.lower_gates"), ("ir_lower.layout", "IL.layout"),
           ("fast_stage.ands_layout", "fast_stage.ands_layout"), ("Program", "CS.Program"), ("program_digest", "CS.program_digest"),
-          ("circuit.compose_to", "FC.compose_to"), ("circuit.compose", "FC.compose"), ("compose.netlist", "FC._write_netlist"),
+          ("circuit.compose_to", "FC.compose_to"), ("circuit.compose", "FC.compose"), ("compose.circuit_description", "FC._write_circuit_description"),
           ("compose.dummy", "FC._dummy"), ("circuit.digests", "FC._file_digests"), ("circuit.meta_of", "FC.meta_of"))
 CENSUS = ("ir_lower.lower_gates", "fast_stage.ands_layout")
 GIB = 1 << 30
@@ -173,9 +173,10 @@ def main(argv: list[str] | None = None) -> int:
     if a.frames:
         tracemalloc.start(a.frames)
     if a.unit == "tile":
-        import h1unit as U
+        import h1form as F
         path = a.scratch / f"k{a.k}.circuit.txt"
-        st = phases.wrap("stager", lambda: U.Shape(a.k, *a.tile).stager(PC.NAME, circuit=path, bind=BIND))()
+        st = phases.wrap("stager", lambda: F.shape(a.k, *a.tile).stager(PC.NAME, circuit=path, bind=BIND,
+                                                                             layout=F.layout()))()
     else:
         import lanes
         st = phases.wrap("stager", lambda: lanes.stage(a.unit, a.k, *a.tile, a.scratch, ROOT))()

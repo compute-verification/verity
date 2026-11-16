@@ -27,7 +27,7 @@ import Proofs.Pous.Prob
 * **The survivor bound** (`survivorBound_of_observed`): the game's event splits on whether the egress is in `A`. In `A`
   it is the distinguisher on the labels `prf K`: at most its value on uniform labels plus the PRF's advantage
   (`Pous.StreamedWipe.prfAdvantage`, which is that difference). Outside `A` it is `δ_net`
-  (`Accounting.Wipe.Strategy.deltaNet`).
+  (`ResourceAccounting.Wipe.Strategy.deltaNet`).
 * **The ratio** (`ratioSearch_samples`, `ratio_samples`): `ratio`'s bisection keeps a lower end `lo ≥ 1` that samples,
   so at `k ≥ 1` reads `ratio k ≥ 1` and `(ratio k − 1)^k · 2^129 ≤ (ratio k)^k`, `StreamedWipeMeetsReads`' condition.
 * **The decoded commitment** (`decodeCommitment_k`): `decodeCommitment` decodes with `StreamedWipe.Commitment.ofJson`
@@ -61,7 +61,7 @@ theorem value_draw {X : Type} [Fintype X] [Nonempty X] (p : X → Prop) [Decidab
   by_cases hx : p x <;> simp [hx]
 
 /-- The value of a sample with no prover move is the probability of its event. -/
-theorem value_draw_pr {X : Type} [Fintype X] [Nonempty X] (p : X → Prop) :
+theorem value_sample_pr {X : Type} [Fintype X] [Nonempty X] (p : X → Prop) :
     Game.value p (Game.draw X) = Pous.pr p := by
   classical
   rw [value_draw, Pous.pr_def]
@@ -120,15 +120,15 @@ theorem winIdeal_le_of_reads {n k r R q E : ℕ} (hn : 0 < n) (hr : 0 < r) (hk :
     tsub_self, add_zero] at h
 
 /-- The device's state as a pair of bit strings: its chip and its store. -/
-def stateEquiv {ι : Type} (d : Accounting.Device ι) :
+def stateEquiv {ι : Type} (d : ResourceAccounting.Device ι) :
     Verity.Device.State d ≃ (Fin d.chip → Bool) × (Fin d.mem → Bool) :=
   ⟨fun σ => (σ.chip, σ.store), fun x => ⟨x.1, x.2⟩, fun _ => rfl, fun _ => rfl⟩
 
-noncomputable local instance instFintypeState {ι : Type} (d : Accounting.Device ι) :
+noncomputable local instance instFintypeState {ι : Type} (d : ResourceAccounting.Device ι) :
     Fintype (Verity.Device.State d) :=
   Fintype.ofEquiv _ (stateEquiv d).symm
 
-theorem card_state {ι : Type} (d : Accounting.Device ι) :
+theorem card_state {ι : Type} (d : ResourceAccounting.Device ι) :
     Fintype.card (Verity.Device.State d) = 2 ^ d.chip * 2 ^ d.mem := by
   rw [Fintype.card_congr (stateEquiv d)]
   simp
@@ -137,20 +137,20 @@ theorem card_state {ι : Type} (d : Accounting.Device ι) :
 `(r − 1)^k · 2^129 ≤ r^k`, a verdict whose accepted runs answer every read with its label, and a set `A` of at most
 `2^E` egress strings, the adversary's distinguisher outputs true on uniform labels with probability at most `2^-128`
 once `S_φ` is at least `512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130 + R + E + chip + (mem − (n · 512 + R))`. -/
-theorem pr_distinguisher_le {ι : Type} {d : Accounting.Device ι} {C : Circuit} {B : ℕ} {s : Blocks C B} {b : Fin B}
+theorem pr_distinguisher_le {ι : Type} {d : ResourceAccounting.Device ι} {C : Circuit} {B : ℕ} {s : Blocks C B} {b : Fin B}
     {n k r R : ℕ} (hn : 0 < n) (hr : 0 < r) (hk : (r - 1) ^ k * 2 ^ 129 ≤ r ^ k)
-    (τ : Accounting.Wipe.Strategy d s b n k)
-    (acc : Device.State d → Accounting.Wipe.Labels n → Accounting.Wipe.Reads n k → Prop)
+    (τ : ResourceAccounting.Wipe.Strategy d s b n k)
+    (acc : Device.State d → ResourceAccounting.Wipe.Labels n → ResourceAccounting.Wipe.Reads n k → Prop)
     (hacc : ∀ σ L c, acc σ L c → ∀ i, τ.answer (τ.filled σ L).1 (τ.filled σ L).2
       (Pous.StreamedWipe.revealed c i) (c i) = L (c i))
     {K : ℕ} (A : Finset (Fin τ.egress → Bool)) (hA : A.card ≤ 2 ^ K) {S : ℕ}
     (hS : 512 * ((n + r - 1) / r - 1) + n + Nat.log2 k + 130 + R + (K + d.chip + (d.mem - (n * 512 + R))) ≤ S)
     (hold : Pous.Bits S → Device.State d)
-    (keep : Device.State d → (Fin τ.egress → Bool) → Accounting.Wipe.Reads n k → Pous.Bits S) :
+    (keep : Device.State d → (Fin τ.egress → Bool) → ResourceAccounting.Wipe.Reads n k → Pous.Bits S) :
     Pous.pr (τ.distinguisher acc A hold keep) ≤ (2⁻¹ : ℝ≥0∞) ^ 128 := by
   classical
   rcases A.eq_empty_or_nonempty with rfl | ⟨a₀, ha₀⟩
-  · rw [pr_eq_zero fun x hx => by simp [Accounting.Wipe.Strategy.distinguisher] at hx]
+  · rw [pr_eq_zero fun x hx => by simp [ResourceAccounting.Wipe.Strategy.distinguisher] at hx]
     exact zero_le
   have hcard : Fintype.card (Device.State d × A) ≤
       Fintype.card (Pous.Bits (n * 512 + R) × Pous.Bits (K + d.chip + (d.mem - (n * 512 + R)))) := by
@@ -195,13 +195,13 @@ reads and a fill of at most `n · 512 + R` bits, at a ratio `r ≥ 1` with `(r �
 accepted runs answer every read with its label, meets the survivor bound at
 `512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130 + R + E` bits and `ε₀ ≥ 2^-128` plus the PRF's advantage against the adversary's
 distinguisher plus `δ_net`, at every set `A` of at most `2^E` egress strings. -/
-theorem survivorBound_of_observed {ι : Type} {d : Accounting.Device ι} {C : Circuit} {B : ℕ} {s : Blocks C B}
+theorem survivorBound_of_observed {ι : Type} {d : ResourceAccounting.Device ι} {C : Circuit} {B : ℕ} {s : Blocks C B}
     {b : Fin B} {n k r R : ℕ} [NeZero n] (hr : 0 < r) (hk : (r - 1) ^ k * 2 ^ 129 ≤ r ^ k)
-    (τ : Accounting.Wipe.Strategy d s b n k) (hfill : τ.fill ≤ n * 512 + R)
-    (acc : Device.State d → Accounting.Wipe.Labels n → Accounting.Wipe.Reads n k → Prop)
+    (τ : ResourceAccounting.Wipe.Strategy d s b n k) (hfill : τ.fill ≤ n * 512 + R)
+    (acc : Device.State d → ResourceAccounting.Wipe.Labels n → ResourceAccounting.Wipe.Reads n k → Prop)
     (hacc : ∀ σ L c, acc σ L c → ∀ i, τ.answer (τ.filled σ L).1 (τ.filled σ L).2
       (Pous.StreamedWipe.revealed c i) (c i) = L (c i))
-    {κ : ℕ} (prf : Pous.Bits κ → Accounting.Wipe.Labels n) {K : ℕ} (A : Finset (Fin τ.egress → Bool))
+    {κ : ℕ} (prf : Pous.Bits κ → ResourceAccounting.Wipe.Labels n) {K : ℕ} (A : Finset (Fin τ.egress → Bool))
     (hA : A.card ≤ 2 ^ K) {foreignBits : ℕ}
     (hf : 512 * ((n + r - 1) / r - 1) + n + Nat.log2 k + 130 + R + K ≤ foreignBits) {ε₀ : ℝ≥0∞}
     (hε₀ : (2⁻¹ : ℝ≥0∞) ^ 128 ≤ ε₀) :
@@ -214,29 +214,29 @@ theorem survivorBound_of_observed {ι : Type} {d : Accounting.Device ι} {C : Ci
     have : (τ.wipe acc prf).unfilled = d.chip + (d.mem - τ.fill) := rfl
     omega
   have hD := pr_distinguisher_le (Nat.pos_of_ne_zero (NeZero.ne n)) hr hk τ acc hacc A hA hS' hold keep
-  let e : Pous.Bits S × Pous.Bits κ × Accounting.Wipe.Reads n k ≃
-      (Pous.Bits S × Accounting.Wipe.Reads n k) × Pous.Bits κ :=
+  let e : Pous.Bits S × Pous.Bits κ × ResourceAccounting.Wipe.Reads n k ≃
+      (Pous.Bits S × ResourceAccounting.Wipe.Reads n k) × Pous.Bits κ :=
     ⟨fun x => ((x.1, x.2.2), x.2.1), fun y => (y.1.1, y.2, y.1.2), fun _ => rfl, fun _ => rfl⟩
   beta_reduce
-  rw [value_draw_pr]
-  unfold Accounting.Wipe.Strategy.deltaNet
-  calc _ ≤ Pous.pr (fun x : Pous.Bits S × Pous.Bits κ × Accounting.Wipe.Reads n k =>
+  rw [value_sample_pr]
+  unfold ResourceAccounting.Wipe.Strategy.deltaNet
+  calc _ ≤ Pous.pr (fun x : Pous.Bits S × Pous.Bits κ × ResourceAccounting.Wipe.Reads n k =>
           τ.distinguisher acc A hold keep ((x.1, x.2.2), prf x.2.1)) +
-        Pous.pr (fun x : Pous.Bits S × Pous.Bits κ × Accounting.Wipe.Reads n k =>
+        Pous.pr (fun x : Pous.Bits S × Pous.Bits κ × ResourceAccounting.Wipe.Reads n k =>
           acc (hold x.1) (prf x.2.1) x.2.2 ∧ (τ.filled (hold x.1) (prf x.2.1)).2 ∉ A) := by
         refine pr_le_add fun x hx => ?_
         by_cases hm : (τ.filled (hold x.1) (prf x.2.1)).2 ∈ A
         · exact Or.inl ⟨hx.1, hx.2, hm⟩
         · exact Or.inr ⟨hx.1, hm⟩
-    _ = Pous.pr (fun y : (Pous.Bits S × Accounting.Wipe.Reads n k) × Pous.Bits κ =>
+    _ = Pous.pr (fun y : (Pous.Bits S × ResourceAccounting.Wipe.Reads n k) × Pous.Bits κ =>
           τ.distinguisher acc A hold keep (y.1, prf y.2)) +
-        Pous.pr (fun x : Pous.Bits S × Pous.Bits κ × Accounting.Wipe.Reads n k =>
+        Pous.pr (fun x : Pous.Bits S × Pous.Bits κ × ResourceAccounting.Wipe.Reads n k =>
           acc (hold x.1) (prf x.2.1) x.2.2 ∧ (τ.filled (hold x.1) (prf x.2.1)).2 ∉ A) := by
         congr 1
         exact pr_congr_equiv e fun _ => Iff.rfl
     _ ≤ Pous.pr (τ.distinguisher acc A hold keep) +
           Pous.StreamedWipe.prfAdvantage prf (τ.distinguisher acc A hold keep) +
-        Pous.pr (fun x : Pous.Bits S × Pous.Bits κ × Accounting.Wipe.Reads n k =>
+        Pous.pr (fun x : Pous.Bits S × Pous.Bits κ × ResourceAccounting.Wipe.Reads n k =>
           acc (hold x.1) (prf x.2.1) x.2.2 ∧ (τ.filled (hold x.1) (prf x.2.1)).2 ∉ A) := by
         gcongr
         exact le_add_tsub
@@ -390,8 +390,8 @@ theorem wipeSurvivorBound : WipeSurvivorBound := by
 
 /-! ## The honest and nontrivial lemmas -/
 
-theorem honestRead_honestFill {ι : Type} {d : Accounting.Device ι} {n : ℕ} (h : n * 512 ≤ d.mem)
-    (σ : Device.State d) (L : Accounting.Wipe.Labels n) (i : Fin n) : honestRead h (honestFill σ L) i = L i := by
+theorem honestRead_honestFill {ι : Type} {d : ResourceAccounting.Device ι} {n : ℕ} (h : n * 512 ≤ d.mem)
+    (σ : Device.State d) (L : ResourceAccounting.Wipe.Labels n) (i : Fin n) : honestRead h (honestFill σ L) i = L i := by
   funext t
   have hi := i.isLt
   have ht := t.isLt
@@ -409,15 +409,15 @@ theorem wipeSurvivorBoundHonest : WipeSurvivorBoundHonest := by
   · exact honestRead_honestFill h σ L (c i)
 
 /-- Foreign content held in the first `S` bits of the device's store. -/
-def storeHold {ι : Type} (d : Accounting.Device ι) {S : ℕ} (z : Pous.Bits S) : Device.State d :=
+def storeHold {ι : Type} (d : ResourceAccounting.Device ι) {S : ℕ} (z : Pous.Bits S) : Device.State d :=
   ⟨fun _ => false, fun a => if ha : a.val < S then z ⟨a.val, ha⟩ else false⟩
 
 /-- The foreign content read back from the first `S` bits of the store. -/
-def storeKeep {ι : Type} {d : Accounting.Device ι} {S : ℕ} (hS : S ≤ d.mem) {E : ℕ} {Ch : Type}
+def storeKeep {ι : Type} {d : ResourceAccounting.Device ι} {S : ℕ} (hS : S ≤ d.mem) {E : ℕ} {Ch : Type}
     (σ : Device.State d) (_ : Fin E → Bool) (_ : Ch) : Pous.Bits S :=
   fun i => σ.store ⟨i.val, lt_of_lt_of_le i.isLt hS⟩
 
-theorem storeKeep_hold {ι : Type} {d : Accounting.Device ι} {S : ℕ} (hS : S ≤ d.mem) {E : ℕ} {Ch : Type}
+theorem storeKeep_hold {ι : Type} {d : ResourceAccounting.Device ι} {S : ℕ} (hS : S ≤ d.mem) {E : ℕ} {Ch : Type}
     (z : Pous.Bits S) (ξ : Fin E → Bool) (c : Ch) : storeKeep hS (storeHold d z) ξ c = z := by
   funext i
   simp [storeKeep, storeHold]
@@ -425,9 +425,9 @@ theorem storeKeep_hold {ι : Type} {d : Accounting.Device ι} {S : ℕ} (hS : S 
 /-- A strategy that keeps the whole store, under a verdict that accepts every run, fails the survivor bound at any
 `ε₀ < 1` on a device whose store holds `F` bits of foreign content beside its on-chip state: the PRF's advantage and
 `δ_net` are 0 there, and the foreign content is read back with probability 1. -/
-theorem not_survivorBound_cheat {ι : Type} (d : Accounting.Device ι) {C : Circuit} {B : ℕ} (s : Blocks C B)
+theorem not_survivorBound_cheat {ι : Type} (d : ResourceAccounting.Device ι) {C : Circuit} {B : ℕ} (s : Blocks C B)
     (b : Fin B) {n k : ℕ} [NeZero n] (carry : Device.State d → s.Carried b) {κ : ℕ}
-    (prf : Pous.Bits κ → Accounting.Wipe.Labels n) {F : ℕ} (hF : F + d.chip ≤ d.mem) {ε₀ : ℝ≥0∞} (hε : ε₀ < 1) :
+    (prf : Pous.Bits κ → ResourceAccounting.Wipe.Labels n) {F : ℕ} (hF : F + d.chip ≤ d.mem) {ε₀ : ℝ≥0∞} (hε : ε₀ < 1) :
     ¬ ((cheat d s b n k carry).wipe (fun _ _ _ => True) prf).SurvivorBound F fun _ hold keep =>
         ε₀ + Pous.StreamedWipe.prfAdvantage prf
             ((cheat d s b n k carry).distinguisher (fun _ _ _ => True) Finset.univ hold keep) +
@@ -447,7 +447,7 @@ theorem not_survivorBound_cheat {ι : Type} (d : Accounting.Device ι) {C : Circ
       (cheat d s b n k carry).deltaNet (fun _ _ _ => True) prf Finset.univ (storeHold d (S := F + d.chip)) = ε₀ := by
     rw [hadv, hdelta, add_zero, add_zero]
   beta_reduce at h
-  rw [value_draw_pr, Pous.pr_eq_one] at h
+  rw [value_sample_pr, Pous.pr_eq_one] at h
   · exact absurd (h.trans_eq key) (not_le.mpr hε)
   · exact fun x => ⟨trivial, storeKeep_hold hF _ _ _⟩
 

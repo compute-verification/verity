@@ -28,7 +28,7 @@ Snapshots (evidence path, `--snapshot-steps`): after every recorded dispatcher c
 step, every non-root tensor argument / output is copied D2H (async, pinned arena, stream-ordered right after the
 call) as the raw bytes of the storage range the view spans; the files are content-addressed (sha256) under
 `values/<step>/` with an index in `snapshots.json`.  Tensors larger than `snapshot_max_bytes` whose one dimension
-equals the KV cache's block count are snapshotted per (leading index, block-in-use) sub-view; other oversize
+equals the KV cache's page count are snapshotted per (leading index, page-in-use) sub-view; other oversize
 tensors are listed in the index as skipped.  `snapshot_max_bytes_op` (optional, lower) is the limit applied at
 dispatcher-call events only: a large buffer produced by a Triton launch is then copied once, at the launch (where the
 Compute's output snapshot is looked up), and not again at every aten view / custom-op call that touches it (the
@@ -474,7 +474,7 @@ class Capture:
         # non-snapshot steps: the deferred write happens at the next execute_model; keep the buffer
 
     def _end_timing_only(self, st: _Step) -> None:
-        """M0 rungs (a)/(b): no facts, no events; only the per-step timing."""
+        """The overhead ladder's rungs (a)/(b): no facts, no events; only the per-step timing."""
         st.wall_s = time.perf_counter() - st.t_wall0
         self.step_times.append({"step": st.step, "forward_s": st.forward_s, "sample_s": st.sample_s, "wall_s": st.wall_s,
                                 "num_reqs": len(st.facts.get("sched_req_ids", [])), "events": 0, "snapshots": 0})
@@ -705,7 +705,7 @@ class Capture:
             self._cur.n_snap += 1
 
     def _blocks_in_use(self) -> list[int]:
-        """The physical KV blocks of every request scheduled in the current step (read once per snapshot step from the
+        """The KV pages of every request scheduled in the current step (read once per snapshot step from the
         runner's block table, whose staged writes are applied at the start of execute_model; this read synchronises,
         which is allowed in snapshot steps only)."""
         if self._kv_blocks_in_step or self._cur is None:
@@ -714,8 +714,8 @@ class Capture:
             bt = self.runner.block_tables
             rs = self.runner.req_states
             blocks: set[int] = set()
-            # [r8 E-cleanup, hybrid KV cache] the blocks of EVERY KV-cache group: with several groups the physical tensors
-            # are shared and a group-1 layer's rows live in group-1 blocks (group 0 alone left them un-snapshotted)
+            # [r8 E-cleanup, hybrid KV cache] the pages of EVERY KV-cache group: with several groups the physical tensors
+            # are shared and a group-1 layer's rows live in group-1 pages (group 0 alone left them un-snapshotted)
             for g in range(int(bt.num_kv_cache_groups or 1)):
                 for rid in self._cur.facts.get("sched_req_ids", []):
                     ri = rs.req_id_to_index.get(rid)

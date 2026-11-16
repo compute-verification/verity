@@ -46,7 +46,7 @@ sends `abort`. `Sampled c` is that protocol's data at the code `c`, and `Sampled
 * **Rounds**: `Hello`, then the sampled verifier's rounds after its first, each answered with the opening of that
   round's coin, the last with the decision. The sampled verifier's first round is the `Hello` round (`HelloRounds`), so
   the protocol's `K + 2` rounds are `c.V.k` (`Sampled.rounds`), and the coins it opens are `c.V`'s at rounds `1` to
-  `c.V.k − 2`, in the deployed order: the first stage's sample, then the rounds `c.stage2` holds, each checked unit's
+  `c.V.k − 2`, in the deployed order: the first stage's sample, then the rounds `c.secondStage` holds, each checked unit's
   session's at its `c.rounds`.
 * **The opening check**: the coin-tree walk `treeChk` and the opening's coins as its coin (`decOf`), as ZKS's reference
   session's (`RefSession.refP`), so `CoinCheck` holds by definition (`Sampled.coinCheck`).

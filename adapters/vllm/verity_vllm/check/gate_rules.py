@@ -137,8 +137,8 @@ def gate_observation(run: RunArtifacts) -> GateResult:
     step_errors = [s for s in census_steps if isinstance(s, dict) and "error" in s] if census_steps else []
     if step_errors:
         problems.append(f"{len(step_errors)} census steps without a resolved log step")
-    counts = _int(_get(t, "count_mismatches", "census_reconcile.totals (a reconciliation without the launch-count gate: "
-                                              "rerun `verity-vllm census --reconcile`)"), "count_mismatches")
+    counts = _int(_get(t, "count_mismatches", "census_reconcile.totals (a reconciliation without the launch-count gate)"),
+                  "count_mismatches")
     if counts:
         problems.append(f"census: {counts} launch counts differ from their declaring events {t.get('count_mismatch_kernels')}")
     detail["census"] = {"census_kernels": t.get("census_kernels"), "distinct_kernel_names": t.get("distinct_kernel_names"),
@@ -485,7 +485,7 @@ def gate_composition(run: RunArtifacts) -> GateResult:
 @_gate(CANONICALITY)
 def gate_canonicality(run: RunArtifacts) -> GateResult:
     """Canonicality + regression: two independent folds (separate processes) of the same log give one digest, and
-    `golden.json` (`verity_vllm.properties.golden --check`) passes with every entry's digest and attribution sha as expected.
+    `golden.json` passes with every entry's digest and attribution sha as expected.
     Equal digests across two captures of one workload are NOT required (recorded as detail when available)."""
     a = run.need("fold_summary")
     b = run.need("fold_summary_2")

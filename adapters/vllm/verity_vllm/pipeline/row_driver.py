@@ -41,6 +41,7 @@ from verity_vllm.config import (
 )
 from verity_vllm.engine import served
 from verity_vllm.pipeline import gpu_lease as GL
+from verity_vllm.pipeline.cli import write
 from verity_vllm.pipeline.row_json import load_json
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.records.schema_ids import TIMELINE_SCHEMA
@@ -201,9 +202,11 @@ class Row:
             print(f"PRECHECK_FAIL_SOURCE_IDENTITY: no tools/research/src beside {self.tree}", file=sys.stderr)
             raise Stop(3)
         core_s, research_s = os.path.realpath(core), os.path.realpath(research)
+        # the torch adapter and the settings package, which the stages import and a venv made without the workspace lacks
+        imported = ":".join(os.path.join(core_s, p) for p in ("adapters/torch", "tools/config"))
         env = dict(self.env.environ)
         env.update({"VERITY_TREE": self.tree, "VERITY_CORE": core_s, "VERITY_RESEARCH": research_s,
-                    "PYTHONPATH": f".:{core_s}:{research_s}", "HF_HOME": self.env.hf_home, "HF_HUB_OFFLINE": "1",
+                    "PYTHONPATH": f".:{core_s}:{imported}:{research_s}", "HF_HOME": self.env.hf_home, "HF_HUB_OFFLINE": "1",
                     **served.execution_env(self.execution()), "TOKENIZERS_PARALLELISM": "false", "CUDA_HOME": self.env.cuda_home})
         env.update(pins)
         jit_cache(env, self.tree, lambda: jit_key(self.py, env["CUDA_HOME"], self.row, self.tree) if self.bi_eager() else None)
@@ -279,14 +282,14 @@ class Row:
     # ------------------------------------------------------------------------------------------------ records
     def log(self, msg: str) -> None:
         line = f"{utc()} [row {self.row}] {msg}"
-        print(line, flush=True)
+        write(line)
         with open(f"{self.d}/row.log", "a") as f:
             f.write(line + "\n")
 
     def verdict(self, stage: str, status: str, detail: str, *, quiet: bool = False) -> None:
         line = f"{stage} {status} {utc()} {detail}"
         if not quiet:
-            print(line, flush=True)
+            write(line)
         with open(f"{self.d}/stages.txt", "a") as f:
             f.write(line + "\n")
 

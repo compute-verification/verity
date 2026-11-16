@@ -48,7 +48,7 @@ instruction on Hopper, so those two ids are not single-instruction probes.  The 
 lowering around Hopper's K=16 HMMA pipeline with exact FP8 products (``SM90_FP8_MMA_LOWERING``).
 
     python benchmarks/tc_probe/tc_probe.py --instruction sm89.mma.m16n8k16.bf16 --out $RESEARCH_RUN_DIR \\
-        --replay-golden verity/circuits/ops/tests/fixtures/golden/ada_bf16_m16n8k16.json --sweep --n-random 100000
+        --replay-golden tests/verity/circuits/ops/fixtures/golden/ada_bf16_m16n8k16.json --sweep --n-random 100000
     python benchmarks/tc_probe/tc_probe.py --instruction sm89.mma.m16n8k32.e4m3 --out $RESEARCH_RUN_DIR --sweep --sass-check
     python benchmarks/tc_probe/tc_probe.py --instruction sm90.wgmma.m64n8k32.e4m3,sm90.mma.m16n8k32.e4m3 --out DIR --compile-only
 
@@ -1966,7 +1966,7 @@ def main() -> int:
             evidence["total_mismatches_by_model"] = sw["total_mismatches_by_model"]
             measurements.append({"name": "elements", "value": sw["total_elements"], "unit": "elements"})
             for mname, count in sw["total_mismatches_by_model"].items():
-                measurements.append({"name": f"mismatches[{mname}]", "value": count, "unit": "elements"})
+                measurements.append({"name": f"circuits/tc-probe.mismatches[{mname}]", "value": count, "unit": "elements"})
             for name, f in sw["families"].items():
                 measurements.append({"name": f"{name}.elements", "value": f["elements"], "unit": "elements"})
                 for m, v in f["models"].items():

@@ -2,7 +2,7 @@
 (`verity_flock.proof_server.ProofServer`'s ``provers``), its sessions back to back, each K in turn.
 
     python benchmarks/one_stage/server_rate.py --bin flock-circuit --staged Z --types frw13,frw2 --provers 1,2,4 --out DIR \\
-        --device D [--sessions 24] [--warm 2] [--ahead 2] [--lean flock-verify [--lean-sessions 2] [--lean-program F]] \\
+        --device D [--sessions 24] [--warm 2] [--ahead 2] [--lean verity-verify-proof [--lean-sessions 2] [--lean-program F]] \\
         [--tmpl-unit-bin B] [--wide-leaf]
 
 * **Statements**: ``Z/<type>/c<n>/stage`` (`stationary_gpu.sh`'s layout), the type's largest n, every unit sampled: a
@@ -32,7 +32,7 @@
   its circuit holds (`statement_blocks`); ``flat``, whether the provers' statement caches had stopped filling, with the
   hit series and the rule that decide it (``cache``; `cache_flat`); and ``cores``, the CPUs the row's processes could run
   on: their ``count``, their ``list`` and the ``numa_nodes`` that hold them (`cores`).
-* **The verdict of record** (``--lean``): at K = 1, the last ``--lean-sessions`` sessions get Lean `flock-verify verify
+* **The verdict of record** (``--lean``): at K = 1, the last ``--lean-sessions`` sessions get Lean `verity-verify-proof verify
   --zk` on their record on the server's verdict pool, one at a time and after the steady window, each with its own CPU
   seconds and peak RSS (`os.wait4`), the circuit and the public file archived once a type. ``--lean-program`` is the
   row's Program's descriptor, archived with them and handed to `verify` (``--program``); without it every Lean verdict
@@ -102,6 +102,10 @@ PROGRAM_FIELDS = ("program_sha512", "program_handed_sha512", "program_note")
 PAGE_KB = os.sysconf("SC_PAGE_SIZE") // 1024
 #: where the kernel lists each NUMA node's CPUs
 NODES = Path("/sys/devices/system/node")
+#: the cgroup whose cpu.max is the machine's CPU quota, gpu-lease's (its $GPU_LEASE_CPU_MAX's directory), and the line of
+#: /proc/self/cgroup that says which cgroup that is
+CGROUP, OWN_CGROUP = Path("/sys/fs/cgroup"), Path("/proc/self/cgroup")
+THROTTLE_KEYS = ("nr_throttled", "throttled_usec")
 # the CUDA prover prints the runtime's error string ("FFI CUDA error out of memory at ...") before it fails the session
 DEVICE_OOM = re.compile(r"out of memory", re.IGNORECASE)
 
@@ -292,10 +296,24 @@ def version_reasons(asked: str, ran: dict[str, int]) -> list[str]:
     return [why]
 
 
-def throttled() -> dict:
-    """The cgroup's CPU throttling so far (cgroup v2's cpu.stat; none without it)."""
-    p = Path("/sys/fs/cgroup/cpu.stat")
-    return {k: int(v) for k, v in (x.split() for x in p.read_text().splitlines())} if p.exists() else {}
+def _text(p: Path) -> str | None:
+    return p.read_text().strip() if p.is_file() else None
+
+
+def throttled() -> dict | None:
+    """`CGROUP`'s CPU throttling so far, its cpu.stat's `THROTTLE_KEYS`; None where it has no cpu.stat or the file counts
+    no throttling (a host's root cgroup), which is not having been throttled no times."""
+    if not (CGROUP / "cpu.stat").is_file():
+        return None
+    stat = dict(x.partition(" ")[::2] for x in (CGROUP / "cpu.stat").read_text().splitlines())
+    return {k: int(stat[k]) for k in THROTTLE_KEYS} if all(stat.get(k, "").isdigit() for k in THROTTLE_KEYS) else None
+
+
+def throttling(before: dict | None, after: dict | None) -> dict:
+    """The row's `throttled`: each of `THROTTLE_KEYS` from `before` to `after` (null where either is None, so the check
+    can't tell), the cgroup read and its cpu.max (null without one)."""
+    return {**{k: None if before is None or after is None else after[k] - before[k] for k in THROTTLE_KEYS},
+            "cgroup": str(CGROUP), "own_cgroup": _text(OWN_CGROUP), "cpu_max": _text(CGROUP / "cpu.max")}
 
 
 def cpu_list(cpus) -> str:
@@ -328,15 +346,15 @@ def no_verdict(statement: str, rc: int, said: str) -> str:
     and a wide-leaf name is known only to a Lean verifier whose `Flock/Tags.lean` lists it."""
     if "unknown statement" not in said:
         return f"no verdict (rc {rc})"
-    why = f"no verdict (rc {rc}): this flock-verify does not know the statement {statement!r} and refused it unread"
+    why = f"no verdict (rc {rc}): this verity-verify-proof does not know the statement {statement!r} and refused it unread"
     if statement.endswith(WIDE_LEAF):
-        why += ("; the wide level-0 leaf's names are known only to a flock-verify built from a tree whose "
+        why += ("; the wide level-0 leaf's names are known only to a verity-verify-proof built from a tree whose "
                 "Flock/Tags.lean lists them, so this says nothing of the proof")
     return why
 
 
 class Lean:
-    """Lean `flock-verify verify --zk` on a session's record, with its own CPU seconds and peak RSS; the circuit, public
+    """Lean `verity-verify-proof verify --zk` on a session's record, with its own CPU seconds and peak RSS; the circuit, public
     file and tables archived once, in scratch outside ``out`` (`close` removes it); ``statement``, the one `verify` sets
     up; ``program``, the Program's descriptor `verify` is handed (``--program``), archived with them: without it `verify`
     refuses every session, for lack of its program. A verdict keeps what `verify` says of the Program (`PROGRAM_FIELDS`).
@@ -396,7 +414,7 @@ def one(a, dev: str, t: str, K: int) -> dict:
                  "verify_ahead": a.ahead,
                  "warm": a.warm, "sessions": timed_n, "device": dev, "stage": stage | statement_blocks(stage)}
     ps = ProofServer(a.bin, out, devices=devices, provers=K, verify_ahead=a.ahead, verdicts=1, wide_leaf=a.wide_leaf,
-                     env={"FC_FIREWALL": "0", "FC_HOST_WITNESS": None, "FC_PHASE_TIMES": "1"})
+                     env={"FC_ZK_SERVER": "0", "FC_HOST_WITNESS": None, "FC_PHASE_TIMES": "1"})
     host = Host(ps)
     provers_cpu = lambda: cpu_s(pid for name, pid in ps.pids.items() if name.startswith("prover-"))  # noqa: E731
     verifiers_cpu = lambda: cpu_s(pid for name, pid in ps.pids.items() if name.startswith("verifier-"))  # noqa: E731
@@ -473,7 +491,7 @@ def one(a, dev: str, t: str, K: int) -> dict:
     rec |= {"statements_per_s": round((i1 - i0) / span, 4) if span > 0 else None, "window_s": round(span, 2),
             "window_sessions": i1 - i0, "busy": gpu.busy(w0["filed"], w1["filed"]), "device_peak_mib": gpu.peak_mib(),
             "load1": [round(w0["load1"], 1), round(w1["load1"], 1)],
-            "throttled": {k: throttled().get(k, 0) - cpu0.get(k, 0) for k in ("nr_throttled", "throttled_usec")},
+            "throttled": throttling(cpu0, throttled()),
             "median": {k: med(k) for k in ("e2e_s", "prove_total_s", "witness_s", "wait_s", "verdict_wait_s", "tp_s")},
             "prebuilt_used": sum(1 for r in win if r["s"].live.get("witness_prebuilt_s") is not None),
             "per_prover": dict(sorted(Counter(r["s"].prover for r in win).items()))}

@@ -23,10 +23,10 @@ if [ -z "${J10R_GPU_S:-}" ]; then
   S=$(mktemp -d)
   trap 'rm -rf "$S"' EXIT
   nice -n 10 "$NVCC" -O3 -std=c++17 --expt-relaxed-constexpr -gencode "$GENCODE" -Xcompiler -fPIC \
-    -shared -DH1U_KSPLIT=4 -DH1K_AUTO=1 -DH1K_RONLY=1 -o "$S/h1u_hbc.so" benchmarks/hash/dither/h1u.cu \
+    -shared -DH1U_KSPLIT=4 -DH1K_AUTO=1 -DH1K_RONLY=1 -o "$S/h1u_hbc.so" verity/protocols/experimental/dither/prover/kernels/h1u.cu \
     > "$OUT/build-hbc.log" 2>&1 || { echo "j10r_gpu: NVCC_FAIL h1u.cu"; tail -30 "$OUT/build-hbc.log"; exit 11; }
-  nice -n 10 "$NVCC" -O3 -std=c++17 -I verity/circuits/kernels -gencode "$GENCODE" -cubin \
-    -o "$S/noise.cubin" verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/noise.cu > "$OUT/build-noise.log" 2>&1 \
+  nice -n 10 "$NVCC" -O3 -std=c++17 -I verity/commitments/cuda -gencode "$GENCODE" -cubin \
+    -o "$S/noise.cubin" verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/noise.cu > "$OUT/build-noise.log" 2>&1 \
     || { echo "j10r_gpu: NVCC_FAIL noise.cu"; tail -30 "$OUT/build-noise.log"; exit 11; }
   sha256sum "$S/h1u_hbc.so" "$S/noise.cubin" | tee "$OUT/builds.txt"
   lease=$(command -v gpu-lease || echo /workspace/pouw/infra/bin/gpu-lease)
@@ -60,7 +60,7 @@ case "${JOB:-tests}" in
     [ "${COMMIT:-1}" = 0 ] && commit=
     cd adapters/vllm
     # shellcheck disable=SC2086
-    "$PY" -m tests.protocols.pouw_h1_gpu --workload fill --served $commit --receipts "$so" $j10r \
+    "$PY" ../../benchmarks/pouw/served_h1/h1_gpu.py --workload fill --served $commit --receipts "$so" $j10r \
       --declare "${DECLARE:-32,3,32,4}" ${WINDOW_ARGS:-} --out "$OUT" --at 2026-10-24T00:00:00Z --by compute-accounting 2>&1 \
       | tee "$OUT/window.log"
     exit "${PIPESTATUS[0]}" ;;

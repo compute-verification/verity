@@ -10,7 +10,7 @@ word maps of `tools/move/`, which name the words they retire; and of a `.lean` f
 (``lean_prose``, the lane-text lint's reader), where every site is held to its file's count in ``LEAN_LIST``: a file past
 its count, or with a site and no entry, fails, and the ratchet gate holds the list's total from rising, so it only shrinks
 (``--prune`` lowers it to what the tree holds). A term matches case-insensitively as two words, hyphenated, or wrapped onto
-the next line (behind a comment marker or not). Every file under `benchmarks/rho/`, `benchmarks/network_traces/` and the
+the next line (behind a comment marker or not). Every file under `benchmarks/slowdown/`, `benchmarks/network_traces/` and the
 network tests retires more (``INCORRECT_TERMS``): its proof blocks, their steps, outputs and windows, and K's terms for
 them are incorrect, never faulty or wrong, while a faulty node, link or device keeps the word. Identifiers (`proof_unit`,
 a key that mirrors a Lean name such as `faulty_bits`) are code; the retired-terms table
@@ -21,6 +21,17 @@ The Lean's declaration names get a pass of their own (``LEAN_WORDS``): a name th
 names keeps it until it is renamed, and each word's count of names only falls (``RETIRED_NAMES``). SPOT's older name,
 sampled proofs, is held by count in every scanned file's whole text (``SPOT_NAMES``): its words until the prose move
 (`tools/move/spot_term_map.toml`) and the strings' owners rename them, and the code's names until SPOT's code move does.
+The network attester's older name is held in every tracked file but the few that spell it to move or find it
+(``CERTIFIER_LEFT_OUT``): in no file's name, and in a file's text only in what the Glossary's row says keeps it
+(``CERTIFIER_KEPT``), by count (``CERTIFIER_NAMES``).
+
+The slowdown's older name, "rho" and ρ, is held at zero by path (``SLOWDOWN_HOME``: the slowdown calculator, the benchmarks
+that read it and the two documents that state the slowdown bound), in each file's whole text: there the word only ever
+named the slowdown, while in the rest of the tree it is another quantity's (Flock's coins, Pearl-C's statistic, a clock
+sync's rate, SPOT's risk, the ACCEL model's resource rate) and stays. What may stay there is a stored key, renamed with
+its schema, and another quantity's symbol (``SLOWDOWN_KEPT``, one reason each). The calculator's directories before its
+moves, `inference_only/rho` and `benchmarks/rho`, are named nowhere but in the records of moves already made
+(``MOVE_RECORDS``), which a tool reads to map a stored old path to today's and which are exempt by path.
 
 The maintained docs (every tracked Markdown file but a CHANGELOG) retire more (``DOC_TERMS``:
 "block" is reserved for parts of circuits, a proof block is incorrect or correct, never faulty, the subprotocols go by
@@ -47,7 +58,7 @@ _SEP = r"(?:[ \t]+|-|[ \t]*\n[ \t]*(?:#+|//+|--|\*|;+)?[ \t]*)"
 _TERM = re.compile(rf"\b(?:(?:proof|faulty){_SEP}units?|proof{_SEP}services?|faulty{_SEP}ANDs)\b", re.I)
 
 #: Retired in every file under INCORRECT too, and what to write instead.
-INCORRECT = ("benchmarks/rho/", "benchmarks/network_traces/", "verity/protocols/accounting/certifier/verifier/network/tests/")
+INCORRECT = ("benchmarks/slowdown/", "benchmarks/network_traces/", "tests/verity/protocols/resource_accounting/network/verifier/network/")
 INCORRECT_TERMS = {"faulty outputs, faulty step, faulty ingress unit, faulty block, faulty set":
                    "incorrect outputs, incorrect step, incorrect ingress unit, incorrect proof block, the incorrect set",
                    "faulty window, wrong unit": "incorrect window, incorrect proof block",
@@ -72,8 +83,8 @@ DOC_TERMS = {
     "verity example": "verity demo",
     "components, the composite's product": "subprotocols, composition",
     "firewall": "ZK server",
-    "warden, network warden": "the network certifier (`warden.py`, `WardenParams` and the `warden_*` modules stay in backticks "
-                              "until renamed)",
+    "warden, network warden": "the network attester (what keeps the older name, a format's value or a name a caller "
+                              "outside the tree gives, stays in backticks: GLOSSARY.md, Older names)",
     "flock-verify, remote check, naming the verifier": "verity verify proof, verity verify remote (a command someone runs today "
                                                       "stays in backticks)",
     "coin server, coin source, coin device, randomness source": "the challenger",
@@ -107,8 +118,8 @@ DOC_TERMS = {
     "verifier of record": "the verifier (other checking code is named for what it is: the Rust cross-check, a Python mirror)",
     "audit coin": "the challenger's coins (the step that reads them is the verification phase)",
     "declaration block, declaration period": "execution block, execution phase",
-    "uplink tap, the auditor's tap": "the network certifier, and its records network certificates",
-    "timed verifier": "the memory challenger",
+    "uplink tap, the auditor's tap": "the network attester, and its records network certificates",
+    "timed verifier": "the memory attester",
     "network transparency": "network accounting",
     "prover gateway, verifier gateway": "the ZK server; the challenger",
     "batch verifier": "the verifier",
@@ -127,7 +138,7 @@ DOC_TERMS = {
     "sampling period, sampling block, PoUW's commit period": "execution phase (work plus its audit: an execution phase and its "
                                                             "verification phase)",
     "hm96 rows, outside the commitments' docs": "hiding commitments",
-    "integrity period": "execution phase (`IntegrityPeriod` stays in backticks until renamed)",
+    "integrity period": "execution phase",
     "execution transcript": "trace (a proof's or a session's messages stay its transcript)",
     "that period's coins": "before any coins are flipped",
     "rejection dominates, reject dominance": "any rejection rejects the whole",
@@ -157,6 +168,8 @@ DOC_TERMS = {
                                           "renamed)",
     "leg": "the subprotocol's name (SPOT, PoUW, PoUS, PoUB, network certification), the bandwidth audit's or the "
            "memory wipe's, or run",
+    "remote bandwidth audit, remote bandwidth, remote audit, proof of useful bandwidth":
+        "PoUB (the `verity/remote-bandwidth/` ids are bytes and stay, in backticks, until PoUB's next version)",
 }
 _SPACE = r"(?:[ \t]+|-|[ \t]*\n[ \t]*)"
 _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}units?|(?:physical|thread|KV){_SPACE}blocks?"
@@ -194,6 +207,7 @@ _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}u
                        rf"|(?:isolation|certified|transformer){_SPACE}blocks?|audit{_SPACE}(?:phases?|rounds?)"
                        rf"|monitored{_SPACE}(?:compute|hardware|servers?)|staging{_SPACE}decodes?"
                        rf"|pinned{_SPACE}(?:theorems?|statements?)|trusted{_SPACE}texts?"
+                       rf"|remote{_SPACE}(?:bandwidth(?:{_SPACE}audits?)?|audits?)|proof{_SPACE}of{_SPACE}useful{_SPACE}bandwidth"
                        rf"|novel{_SPACE}communication{_SPACE}intensity)\b)|\bIUs?\b|\bNCI\b"
                        rf"|(?i:\bC-Flock\b|\bnetlists?\b|\bverifiers?{_SPACE}of{_SPACE}record\b)|\bM0\b|\bIRs?\b"
                        rf"|\bcommit{_SPACE}periods?\b")
@@ -204,7 +218,7 @@ _CODE = re.compile(r"^[ \t]*(`{3,}|~{3,}).*?^[ \t]*\1[^\n]*$|(`+)[\s\S]*?(?<!`)\
 
 ALLOWED: dict[str, str] = {
     "N, the window's proof units": "a public item's reason in A5's Spec (`benchmarks/one_stage/a5.py`): `Spec.digest` hashes it",
-    "N, the round's proof units": "a public item's reason in scan_zk's Spec (`benchmarks/network_traces/scan_zk.py`): "
+    "N, the round's proof units": "a public item's reason in scan_zk's Spec (`verity/protocols/resource_accounting/network/prover/scan_zk.py`): "
                                   "`Spec.digest` hashes it",
     "one proof unit per registration: the link-window": "a public item's reason in N2's Spec "
                                                         "(`certifier.service`): `Spec.digest` hashes it",
@@ -220,7 +234,7 @@ ALLOWED: dict[str, str] = {
     "report-proof-service-": "a cited note's id",
     "Faulty ANDs (`Stratified.harm_bound`": "`sampling_plan/h200.py`'s docstring: a queued PR on next rewrites the line beside "
                                             "it; renamed after it lands",
-    "no wrong certificate, faulty block or detection": "a comment beside `Remote.CITES` in `benchmarks/rho/rho/envelopes.py`, "
+    "no wrong certificate, faulty block or detection": "a comment beside `Remote.CITES` in `benchmarks/slowdown/slowdown/envelopes.py`, "
                                                        "which a queued PR on next rewrites; renamed after it lands",
     "no faulty proof block, every one being drawn": "`benchmarks/network_traces/leak_bounds.py`'s docstring: a queued PR on "
                                                     "next rewrites the line beside it; renamed after it lands",
@@ -468,6 +482,77 @@ def test_spot_s_older_name_only_falls():
           "Older names): `git diff -U0 origin/main | grep -i -E 'sampled.?proofs'` shows it")
 
 
+#: Where "rho" and ρ only ever named the slowdown (GLOSSARY.md, Older names), so no file there says either.
+SLOWDOWN_HOME = ("benchmarks/slowdown/", "benchmarks/circuit_properties/", "benchmarks/inference_only/",
+                 "benchmarks/training_slowdown/", "security/README.md", "verity/protocols/compose/verifier/remote/README.md")
+#: the word alone or as one part of a name (`rho_worst`, `RHO_MODEL`, `Overhead.rho`, `rhos`), and the symbol
+_RHO = re.compile(r"(?<![A-Za-z])(?:rho|Rho|RHO)s?(?![A-Za-z])|ρ")
+#: What stays under SLOWDOWN_HOME, each spelling with its reason; an entry that matches nothing fails too.
+SLOWDOWN_KEPT: dict[str, str] = {
+    'out["rho"]': "the key of the circuit properties' output, renamed with its schema",
+    "`ln(1/δ) / ρ(1)` blocks": "SPOT's risk ρ(m), the integrity profile's",
+    "`ρ(1) = -ln(1 - q)`": "SPOT's risk ρ(m), the integrity profile's",
+    "level.rho(1)": "SPOT's risk ρ(m): the integrity profile's method",
+}
+#: the calculator's directories before its moves
+_SLOWDOWN_OLD_PATH = re.compile(r"(?:inference_only|benchmarks)/rho(?![A-Za-z0-9_])")
+#: The records of moves already made: data a tool reads to map a stored old path to today's, so they keep the old paths.
+MOVE_RECORDS = (MAPS, "tools/move/layout_maps.json", "tools/research/src/research/store/moves.json")
+
+
+def slowdown_offenders(files: list[str], read=_read) -> tuple[list[tuple[str, int, str]], set[str]]:
+    """(file, line, what it says) for each "rho" or ρ in a file under SLOWDOWN_HOME and each mention of the calculator's old
+    path in any scanned file outside MOVE_RECORDS, and the SLOWDOWN_KEPT spellings used."""
+    out, used = [], set()
+    for f in scanned(files):
+        if f.startswith(MOVE_RECORDS) or (text := read(f)) is None:
+            continue
+        found = list(_SLOWDOWN_OLD_PATH.finditer(text))
+        if f.startswith(SLOWDOWN_HOME) and ("rho" in text.lower() or "ρ" in text):
+            kept = [(m.start(), m.end(), s) for s in SLOWDOWN_KEPT for m in re.finditer(re.escape(s), text)]
+            for m in _RHO.finditer(text):
+                if spelling := next((s for a, b, s in kept if a <= m.start() and m.end() <= b), None):
+                    used.add(spelling)
+                elif not any(o.start() <= m.start() < o.end() for o in found):
+                    found.append(m)
+        out += [(f, text.count("\n", 0, m.start()) + 1, m[0]) for m in sorted(found, key=lambda m: m.start())]
+    return out, used
+
+
+def test_the_slowdown_s_older_name_is_gone():
+    """The training-cost ratio is the slowdown: no "rho" or ρ where the word only ever named it, and no mention of the
+    calculator's old directory outside the records of moves already made."""
+    bad, used = slowdown_offenders(_tracked())
+    assert not bad, (
+        f'"rho", ρ or the calculator\'s older directory for the slowdown: under {", ".join(SLOWDOWN_HOME)} say "the slowdown" in prose '
+        "(the package is the slowdown calculator), `slowdown` in a name and in a formula (`slowdown >= ...`), and "
+        f"`{SLOWDOWN_HOME[0]}` for the calculator's directory ({GLOSSARY}, Older names). A stored key "
+        "that keeps the word until its schema changes, or another quantity's symbol, goes in SLOWDOWN_KEPT with its reason. "
+        f"The records of moves already made ({', '.join(MOVE_RECORDS)}) map stored old paths to today's: they keep the old "
+        "path and are exempt by path:\n" + "\n".join(f"  {f}:{n}: {term}" for f, n, term in bad))
+    unused = set(SLOWDOWN_KEPT) - used
+    assert not unused, f"SLOWDOWN_KEPT entries that match nothing any more: {sorted(unused)}"
+
+
+def test_the_slowdown_scan_reads_each_form():
+    """On toy files: under the calculator's directory the word counts alone, as a part of a name and as the symbol, a kept
+    spelling and a word that only holds the letters don't; outside it only the calculator's old path counts, and a record
+    of a move keeps it."""
+    home = SLOWDOWN_HOME[0]
+    # spelled from today's, so that the map that moved the directory, run again, leaves this file as it is
+    old = home.removesuffix("slowdown/") + "rho/"
+    toy = {home + "a.py": ('"""rho is ρ = m c / |C|; `Overhead.rho`."""\nrho_worst, RHO_MODEL, rhos = 1, 2, []\n'
+                           'x = out["rho"]  # a rhombus, a throw\n'),
+           "b.py": f"rho = coins()  # ρ, Flock's; see {old}README.md\n",
+           "c.py": f"# {old.rstrip('/')}_notes is another path\n",
+           "tools/move/old_map.toml": f'"{old}" = "{home}"\n',
+           MOVE_RECORDS[-1]: f'{{"{old}run.py": "{home}run.py"}}\n'}
+    found, used = slowdown_offenders(list(toy), read=toy.get)
+    assert found == [("b.py", 1, old.rstrip("/")), (home + "a.py", 1, "rho"), (home + "a.py", 1, "ρ"),
+                     (home + "a.py", 1, "rho"), (home + "a.py", 2, "rho"), (home + "a.py", 2, "RHO"), (home + "a.py", 2, "rhos")]
+    assert used == {'out["rho"]'}
+
+
 def test_the_spot_scan_reads_each_form():
     """On toy files: the words count in either case and wrapped behind a comment marker, a sampled proof block doesn't,
     and each code spelling counts under its own key, never under the words."""
@@ -476,6 +561,132 @@ def test_the_spot_scan_reads_each_form():
            "c.toml": 'id = "verity/sampled-proofs/v1"\n'}
     assert spot_names(list(toy), read=toy.get) == {"sampled proof(s)": 3, "sampled_proofs": 2, "SampledProofs": 2,
                                                    "sampled-proofs": 1}
+
+
+#: The network attester's older name (GLOSSARY.md, Older names), as a word or as a part of a name in any of its three
+#: spellings; `BackwardEntry` holds none of them.
+CERTIFIER_OLD = re.compile(r"(?<![a-z])warden|Warden|WARDEN")
+#: The files the scan leaves out, each for what it holds the name for today.
+CERTIFIER_LEFT_OUT = {
+    MAPS: "the word maps, the move tool, its tests and its fixtures spell the name to move it",
+    "tools/research/src/research/store/moves.json": "the store's record of the moves names the paths each one renamed",
+    "tests/tools/research/test_queue.py": "a test of the words a word map retires spells one in its map",
+    "tests/tools/research/test_store_vocab.py": "a test of the store's label values spells the ones that hold it",
+    LINTS[0]: "this test spells the name to find it",
+}
+#: The public items' reasons that hold it, which a spec's digest takes in (`warden_map.toml`'s [keep]).
+CERTIFIER_SPEC_REASONS = (
+    "the active warden's schedule (`warden.WardenParams`, the digest both ends' heads ",
+    "the warden's domain (`warden_rows.domain`), which binds the session, the ",
+    "the warden's salted root over the window's bucket rows, its signed head's",
+    "B, L, R and T: the cells' bytes, the warden's lanes, its r and its buckets a ",
+    "prompt lengths and the warden's release give each bucket's lanes (`io_request.lanes`), a unit's public ",
+    "the round's provenance: its link-window of the warden's run",
+)
+#: What keeps it, as the Glossary's row says: each kind's spellings and what ends it. A site is the first kind's that
+#: spells it: the row's own line first, and the quoted word alone after every spelling that holds it but the trace
+#: corpus's `ingress="warden"`.
+CERTIFIER_KEPT = {
+    "said": (r"(?m)^\| \"warden\", \"network warden\".*$|\bsay \"warden\"|\ban \*?active warden\b|\ba passive warden\b",
+             "the Glossary's row of older names, the domain table's sentence on what its tags say, and network "
+             "steganography's terms"),
+    "domain tag": (r"verity-network-warden/[a-z-]+/v\d+|\ba5[/-]warden(?:-stand-in/v1\b|/rest/)|"
+                   + "|".join(map(re.escape, CERTIFIER_SPEC_REASONS)),
+                   "a domain tag of the network certifier's records or of a stand-in for them, or a public item's "
+                   "reason in a spec, which a digest takes in, until the network certifier's next format version"),
+    "circuit": (r"\bWardenRowIdentity\b|\bunit/(?:warden-row|a5-warden)\b",
+                "a circuit's name and the name its units are staged under, which the circuit's pin takes in, until the "
+                "network certifier's next format version"),
+    "caller's": (r"\bwarden-rehearse\b|(?<![A-Z0-9])(?:(?:A5|CR|N2|SC)_WARDEN_RUN|A5_WARDEN_UNITS|WARDEN_SERVE_C_ALLOCATOR)"
+                 r"(?![A-Z0-9_])|--warden(?:-run)?(?![\w-])|(?:--class (?:test\|served\|)?|\bN2_CLASS=|\bserved or )warden\b"
+                 r"|\bCR_PATH(?::-\}\")?(?: = |=)warden\b|\bnegatives\.py warden\b",
+                 "the auditor gate's verb, and a variable, a flag, a class, a path or a subcommand that a caller outside "
+                 "the tree gives, until its callers change with it"),
+    "kind": (r"\bwarden/(?:(?:e|in)gress|<direction>|\{d\})/|\bwarden-fails\b|(?<!ingress=)\"warden\"",
+             "a row registration's value, a fails certificate's link, and a link window's kind and its key in a case and "
+             "in a statement, until the network certifier's next format version"),
+    "recorded": (r"\bwarden-(?:heavy|smallkv)\b|\bwarden\.(?:released|ordinal|admitted|json)\b|\bingress=\"warden\""
+                 r"|[\"']warden_run[\"']|(?<=/)warden(?![\w-]|\.\w)|(?<![\w./-])warden/(?=[\w$<{*])|[\"']warden:"
+                 r"|\['warden'\]|\bclient or warden\b",
+                 "a kept run's log, its directory and its reports' key, which programs read back, and the trace corpus's "
+                 "labels, keys and values, which recorded data holds"),
+}
+#: Each kind's count, which only falls (`_held`).
+CERTIFIER_NAMES = {"said": 43, "domain tag": 37, "circuit": 18, "caller's": 201, "kind": 172, "recorded": 149}
+
+
+def certifier_files(files: list[str]) -> list[str]:
+    """``files`` but those CERTIFIER_LEFT_OUT names, a file by its path and a directory by its prefix."""
+    out = tuple(CERTIFIER_LEFT_OUT)
+    return [f for f in files if not f.startswith(tuple(o for o in out if o.endswith("/"))) and f not in out]
+
+
+def certifier_names(files: list[str], read=_read) -> tuple[dict[str, int], list[str]]:
+    """The network attester's older name in ``files``: each of CERTIFIER_KEPT's count, and what it keeps nowhere, a file's
+    name that holds it (`FILE`) and a site none of the kinds spells (`FILE:LINE TEXT`)."""
+    kept = {k: re.compile(spelling) for k, (spelling, _) in CERTIFIER_KEPT.items()}
+    counts, other = dict.fromkeys(kept, 0), []
+    for f in sorted(files):
+        if CERTIFIER_OLD.search(f):
+            other.append(f)
+        if (text := read(f)) is None or not CERTIFIER_OLD.search(text):
+            continue
+        spans = {k: [m.span() for m in spelling.finditer(text)] for k, spelling in kept.items()}
+        for m in CERTIFIER_OLD.finditer(text):
+            kind = next((k for k, ss in spans.items() if any(s <= m.start() and m.end() <= e for s, e in ss)), None)
+            if kind is None:
+                n = text.count("\n", 0, m.start())
+                other.append(f"{f}:{n + 1} {text.splitlines()[n].strip()[:120]}")
+            else:
+                counts[kind] += 1
+    return counts, other
+
+
+def test_the_network_attester_s_older_name_stays_only_where_the_glossary_keeps_it():
+    """No file's name holds the network attester's older name, a file's text holds it only in what a format fixes, a
+    caller outside the tree gives, recorded data holds or a sentence says of the name itself, and each kind's count
+    only falls. The files it reads are every tracked one but CERTIFIER_LEFT_OUT's."""
+    counts, other = certifier_names(certifier_files(_tracked()))
+    assert not other, ("the network certifier's older name, outside what keeps it: say the network certifier "
+                       "(GLOSSARY.md, Older names), or name a kept value as CERTIFIER_KEPT spells it:\n  "
+                       + "\n  ".join(other))
+    _held("CERTIFIER_NAMES", CERTIFIER_NAMES, counts, "the network certifier's older name",
+          "a new format, flag or key says the network certifier (GLOSSARY.md, Older names): " + "; ".join(
+              f"{k}: {why}" for k, (_, why) in CERTIFIER_KEPT.items()))
+
+
+def test_the_certifier_scan_leaves_out_only_files_that_hold_the_name():
+    """Each of CERTIFIER_LEFT_OUT's entries names tracked files that hold the older name today: an entry whose files
+    no longer hold it goes, and the scan reads them."""
+    files = _tracked()
+    idle = [o for o in CERTIFIER_LEFT_OUT
+            if not any(CERTIFIER_OLD.search(f + (_read(f) or "")) for f in files if f not in certifier_files([f]) and f.startswith(o))]
+    assert not idle, f"CERTIFIER_LEFT_OUT names files that no longer hold the network certifier's older name: drop {idle}"
+
+
+def test_the_certifier_scan_reads_each_form():
+    """On toy files: each kept kind counts under its own key, the Glossary's row is one kind whatever it quotes, the
+    quoted word alone is a kind and a tag's or the trace corpus's value isn't, a name that only spells the letters
+    (`BackwardEntry`) is no site, and a file's name, a name in code and a word in prose are kept nowhere. A directory is
+    left out by its prefix and a file by its whole path."""
+    toy = {"a.py": 'TAG = "verity-network-warden/cells/v2"\nKIND = "warden"  # say "warden"\nbind(EmbeddingBackwardEntry)\n'
+                   'ROOT = b"verity/a5/warden-stand-in/v1", b"a5-warden/rest/%d"\nUnitStager(defn, "unit/warden-row")\n',
+           "b.md": "`warden-rehearse --scan`, `A5_WARDEN_RUN`, `--warden-run`, `--warden`; `WardenRowIdentity{B}`\n"
+                   '| "warden", "network warden"; the kind `warden`, `--warden-run`, `warden.json` | the network certifier |\n'
+                   "It is an *active warden*, never a passive warden.\n",
+           "c.json": '{"source": "warden-heavy.released", "about": "warden.ordinal", "note": "an active warden"}\n',
+           "d/warden_rows.py": "class WardenParams:\n    pass  # the warden's schedule, MY_WARDEN_RUN\n",
+           "e.sh": 'CR_PATH=warden N2_CLASS=warden n2_tie_zk.py --class warden; negatives.py warden\n'
+                   'cp "$W/warden/$f" "$OUT/warden/"; ls warden/check.json d/warden.json\n',
+           "f.py": 'got = {"warden_run": run, "value": "warden/egress/0", "link": "warden-fails", "watch": "warden:7"}\n'
+                   "label, note = \"warden-smallkv\", f'{meta['warden']} at ingress=\"warden\": client or warden'\n"}
+    counts, other = certifier_names(list(toy), read=toy.get)
+    assert counts == {"said": 9, "domain tag": 3, "circuit": 2, "caller's": 8, "kind": 3, "recorded": 12}
+    assert other == ["d/warden_rows.py", "d/warden_rows.py:1 class WardenParams:",
+                     "d/warden_rows.py:2 pass  # the warden's schedule, MY_WARDEN_RUN",
+                     "d/warden_rows.py:2 pass  # the warden's schedule, MY_WARDEN_RUN"]
+    assert certifier_files([MAPS + "a_map.toml", LINTS[0], LINTS[0] + ".orig", "tools/mover.py"]) == \
+        [LINTS[0] + ".orig", "tools/mover.py"]
 
 
 def test_the_lean_name_scan_reads_each_form():
@@ -512,28 +723,28 @@ def test_the_scan_reads_each_form():
     assert used == {"N, the round's proof units", "verity/proof-service/"}
 
 
-def test_the_scan_reads_rho_terms():
-    """`benchmarks/rho`'s incorrect outputs, steps and ingress units, on toy files: its keys and Lean-mirroring names,
+def test_the_scan_reads_the_slowdown_calculators_terms():
+    """`benchmarks/slowdown`'s incorrect outputs, steps and ingress units, on toy files: its keys and Lean-mirroring names,
     a faulty node, link or device, and the same words outside it stay."""
     docs = {
-        "benchmarks/rho/a.py": ('"""The faulty-outputs channel: each faulty\n    step; a faulty ingress unit and the faulty '
+        "benchmarks/slowdown/a.py": ('"""The faulty-outputs channel: each faulty\n    step; a faulty ingress unit and the faulty '
                                 'set."""\nx = s["exfil.faulty"], c.faulty_unit_bits  # faultyIngressBits; a faulty node, '
                                 "link or device\n"),
-        "benchmarks/rho/data/b.toml": "# Faulty outputs, a faulty proof block, two faulty blocks\n[incorrect]\n",
+        "benchmarks/slowdown/data/b.toml": "# Faulty outputs, a faulty proof block, two faulty blocks\n[incorrect]\n",
         "c.py": "# faulty outputs and faulty blocks outside it\n",
     }
     assert offenders(list(docs), read=docs.__getitem__)[0] == [
-        ("benchmarks/rho/a.py", 1, "faulty-outputs"), ("benchmarks/rho/a.py", 1, "faulty step"),
-        ("benchmarks/rho/a.py", 2, "faulty ingress unit"), ("benchmarks/rho/a.py", 2, "faulty set"),
-        ("benchmarks/rho/data/b.toml", 1, "Faulty outputs"), ("benchmarks/rho/data/b.toml", 1, "faulty proof block"),
-        ("benchmarks/rho/data/b.toml", 1, "faulty blocks")]
+        ("benchmarks/slowdown/a.py", 1, "faulty-outputs"), ("benchmarks/slowdown/a.py", 1, "faulty step"),
+        ("benchmarks/slowdown/a.py", 2, "faulty ingress unit"), ("benchmarks/slowdown/a.py", 2, "faulty set"),
+        ("benchmarks/slowdown/data/b.toml", 1, "Faulty outputs"), ("benchmarks/slowdown/data/b.toml", 1, "faulty proof block"),
+        ("benchmarks/slowdown/data/b.toml", 1, "faulty blocks")]
 
 
 def test_the_scan_reads_the_network_terms():
     """The network tests' and `benchmarks/network_traces`' incorrect proof blocks, windows and K's terms for them, on toy
     files: a key or a name that mirrors the Lean's (`faulty_bits`, `wrong_units`, `faultySets`), a faulty certifier, a
     wrong verdict, and the same words outside them stay."""
-    net = "verity/protocols/accounting/certifier/verifier/network/tests/a.py"
+    net = "tests/verity/protocols/resource_accounting/network/verifier/network/a.py"
     docs = {
         net: ('"""Its faulty bits, no faulty\n    term and at most 3 wrong units."""\n'
               'class _Faulty(Certifier):  # a faulty certifier; a wrong verdict\n'
@@ -548,14 +759,14 @@ def test_the_scan_reads_the_network_terms():
 
 def test_the_scan_reads_the_incorrect_ands():
     """`sampling_plan`'s incorrect ANDs, on toy files, in every file: an AND gate in another sense stays."""
-    docs = {"a.py": "# 9 faulty ANDs and faulty\n# ANDs; a faulty AND gate, faulty outputs outside rho\n"}
+    docs = {"a.py": "# 9 faulty ANDs and faulty\n# ANDs; a faulty AND gate, faulty outputs outside the calculator\n"}
     assert offenders(list(docs), read=docs.__getitem__)[0] == [("a.py", 1, "faulty ANDs"), ("a.py", 1, "faulty # ANDs")]
 
 
 def test_the_doc_scan_reads_the_trace_and_phase_terms():
-    """A run's trace and the execution phase, on toy files: a proof's transcript and `IntegrityPeriod` stay."""
+    """A run's trace and the execution phase, on toy files: a proof's transcript and `IntegrityMonitoringPeriod` stay."""
     docs = {"a.md": "An integrity period, two integrity\nperiods and an execution-transcript; a proof's transcript, "
-                    "`IntegrityPeriod`.\n"}
+                    "`IntegrityMonitoringPeriod`.\n"}
     assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
         ("a.md", 1, "integrity period"), ("a.md", 1, "integrity periods"), ("a.md", 2, "execution-transcript")]
 
@@ -615,8 +826,17 @@ def test_the_doc_scan_reads_the_protocol_terms():
         ("a.md", 4, "flock-verify"), ("verity/commitments/x/PROTOCOL.md", 1, "draw")]
 
 
+def test_the_doc_scan_reads_poub_s_older_names():
+    """PoUB's older names, on a toy file: its ids and the bandwidth audit over PoUS's store stay."""
+    docs = {"a.md": "The remote bandwidth audit, a remote-bandwidth session, the remote\naudit, the proof of useful bandwidth.\n"
+                    "`verity/remote-bandwidth/v0` and the bandwidth audit over PoUS's store stay.\n"}
+    assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
+        ("a.md", 1, "remote bandwidth audit"), ("a.md", 1, "remote-bandwidth"), ("a.md", 1, "remote audit"),
+        ("a.md", 2, "proof of useful bandwidth")]
+
+
 def test_the_doc_scan_reads_the_network_and_process_terms():
-    """The network certifier's, the lock's and the landing's older names, on toy files: a Commit period, a pinned key and
+    """The network attester's, the lock's and the landing's older names, on toy files: a Commit period, a pinned key and
     a trusted host stay."""
     docs = {
         "a.md": "The uplink\ntap and the auditor's tap.\n"

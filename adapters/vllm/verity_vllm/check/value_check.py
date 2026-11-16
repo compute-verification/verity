@@ -1,4 +1,4 @@
-"""Value-correctness acceptance check for the native rows (VALUE-FIRST §5): the bytes the committer BOUND equal the exact required
+"""Value-correctness acceptance check for the native rows: the bytes the committer BOUND equal the exact required
 values, at the right identity and occurrence — including repeated calls of the same module and buffer reuse across steps.  Matching
 final logits is not enough, so two independent references are compared against the committed bytes of every acquired tensor:
 
@@ -11,10 +11,10 @@ final logits is not enough, so two independent references are compared against t
       bit-for-bit with the committed bytes.  (Attention needs the KV cache state, the sampler needs the sampling metadata: T only.)
       Bit-identity of a re-execution is exactly what `VLLM_BATCH_INVARIANT=1` promises.
 
-The references are host tensors: a run's every output does not fit beside the engine on the device (GLM-5.3 TP8 B8 commits 25.6 GB
-a rank in one run, with about 9 GB of the GPU free).
+The references are host tensors:
+a run's every output does not fit beside the engine on the device.
 
-Run by `commit_delta.py --value-check` on one extra instrumented run; result in `value_check.json` (+ printed).  Labels: measured.
+Run by the Commit's driver (`verity_vllm.pipeline.commit`, `--value-check`) on one extra instrumented run; result in `value_check.json` (+ printed).  Labels: measured.
 """
 from __future__ import annotations
 

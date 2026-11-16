@@ -6,11 +6,12 @@
     slot     the check slot (slot.py) or Lean slot (lean_slot.py) whose holder names the run
     waits    a live gpu-lease wait file naming the run: its place among the directory's waiters and how many GPUs are
              unlocked there; on node 1, the lease pool's record and the limit that binds it (`n1_limit`).  A check-line or
-             Lean-line ticket naming the run: its place in line, and the slots it may take (a lane's check never takes a
-             trains-only slot) or its pool's N
+             Lean-line ticket naming the run: its place in line, and the slots it may take (a lane's check never takes an
+             `only=trains` slot) or its pool's N
 """
 from __future__ import annotations
 
+import sys
 import tomllib
 from datetime import UTC, datetime
 from pathlib import Path
@@ -67,7 +68,8 @@ def n1_limit(lease_dir: str, n: int, waits: list[dict], limits: str | None, now:
         name, pool = next((k, p) for k, p in pools.items() if p.get("dir", DEFAULT_LEASE_DIR) == lease_dir)
         queue = pool.get("queue", name)
         quota = next(int(w["gpus"]) for w in doc["workstreams"] if w["name"] == queue and w["node"] == NODE1)
-    except (OSError, KeyError, StopIteration, ValueError, tomllib.TOMLDecodeError):
+    except (OSError, KeyError, StopIteration, ValueError, tomllib.TOMLDecodeError) as e:
+        print(f"research holds: node 1's GPU limit for {lease_dir} not read from {desc} ({type(e).__name__}: {e})", file=sys.stderr)
         return None
     every = bool(waits) and all(w.get("preempt") == "1" for w in waits)
     lim = dict(tok.split("=", 1) for tok in (limits or "").split() if "=" in tok)
@@ -131,7 +133,7 @@ def slots(run_id: str, node: dict[str, Any]) -> tuple[list[str], list[str]]:
             mine = [s for s in check.get("slots") or () if w.get("priority") or not s.get("trains")]
             trains = [s["name"] for s in check.get("slots") or () if s not in mine]
             waits.append(f"check slot since {w['since']}" + (" with priority" if w.get("priority") else "") + f": {i} ahead in line; "
-                         + ", ".join(f"{s['name']} {_state(s)}" for s in mine) + (f" ({', '.join(trains)} trains only)" if trains else ""))
+                         + ", ".join(f"{s['name']} {_state(s)}" for s in mine) + (f" ({', '.join(trains)}: candidates only)" if trains else ""))
     for pool, p in ((sl.get("lean") or {}).get("pools") or {}).items():
         for s in p.get("slots") or ():
             if (s.get("holder") or {}).get("run") == run_id:

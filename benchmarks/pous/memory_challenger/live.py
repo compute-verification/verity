@@ -1,5 +1,5 @@
-"""The memory challenger's process in the harness's timed audit (`p2-v3-mc-gpu`): `verity.protocols.accounting.pous.verifier.
-memory_challenger` against the responder, over the harness's responder wire (`verity/protocols/accounting/pous/device/timed_audit.py`).
+"""The memory challenger's process in the harness's timed audit (`p2-v3-mc-gpu`): `verity.protocols.resource_accounting.memory.pous.verifier.
+memory_challenger` against the responder, over the harness's responder wire (`verity/protocols/resource_accounting/memory/pous/attester/timed_audit.py`).
 
     python benchmarks/pous/memory_challenger/live.py --ready READY.json --leaves DIGESTS.bin --out AUDIT.json [--audits N]
         [--pings N] [--k K] [--verifier-cpu C] [--limit-ns N] [--calibrate-only] [--clock logical] [--strict]
@@ -18,7 +18,7 @@ against C's leaf).
   `--strict` refuses a `k` or limit no certificate covers (`covering_certificate`) before any round.  Every session's
   binding is `setup_root`, the root the setup publishes for the `C*` of these digests under READY's salt
   (`VerifierKey.from_row_digests`), recorded as `setup_root`.
-- **The coins.** A session's indices are a function of its coin source, its session id, the store's block count and `k`
+- **The coins.** A session's indices are a function of its live coins, its session id, the store's block count and `k`
   (`CoinTree.draw`), and both come from `os.urandom`.  `--seed HEX` derives them from the seed instead (`seeded_session`),
   so a CPU test's samples, and with them its controls' verdicts, are the same on every run: a control's gate is a
   statistical test that real samples fail now and then.  It is refused, before any session, key or connection, unless the
@@ -40,7 +40,7 @@ against C's leaf).
   (`lean_verdict`, built with `lake` on first use) and with the Python, which stays the reference, and keeps both in the
   witness (`verdicts`).  `RECORD_VERDICT` names the one that is the record's (the Lean's); where the two disagree, on the
   accept bit or the reasons, the session is rejected for it (`DISAGREE`, listing both).
-  `verity/protocols/accounting/pous/device/lean/tests/test_verdict.py` holds the Lean to the Python on generated records.
+  `tests/verity/protocols/resource_accounting/memory/pous/attester/lean/test_verdict.py` holds the Lean to the Python on generated records.
   `accepted_under_signer` is the same verdict under the signer's own mapping (`memory_challenger.SCHEMES` for `lms`, the
   test signer's for `test`): for `test`, every check but the scheme's acceptance, and never the verdict.
 - **The record** separates what is published (`public`: the commitment, the verdict, the coin openings) from the witness
@@ -71,7 +71,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from verity.protocols.accounting.pous.device.timed_audit import (  # noqa: E402
+from verity.protocols.resource_accounting.memory.pous.attester.timed_audit import (  # noqa: E402
     ALLOWANCE_KIND,
     HEADER,
     OP_CHALLENGE,
@@ -87,8 +87,8 @@ from verity.protocols.accounting.pous.device.timed_audit import (  # noqa: E402
 )
 
 ROOT = Path(__file__).resolve().parents[3]
-TEST_SIGNER = ROOT / "verity" / "protocols" / "accounting" / "pous" / "verifier" / "tests" / "pous_test_signer.py"
-LEAN_VERDICT = ROOT / "verity" / "protocols" / "accounting" / "pous" / "device" / "lean" / "verdict.py"
+TEST_SIGNER = ROOT / "tests" / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier" / "pous_test_signer.py"
+LEAN_VERDICT = ROOT / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "attester" / "lean" / "verdict.py"
 RECORD_VERDICT = "lean"
 """Which verdict is the record's: `"lean"` (`lean_verdict`) or `"python"` (`memory_challenger.verdict`, the reference).
 `judge` computes both on every session and records both either way."""
@@ -103,7 +103,7 @@ SEEDED_ONLY = ("a seeded session runs on the logical clock under the test signer
 
 
 def seeded_session(seed: bytes, j: int) -> tuple[bytes, bytes]:
-    """Session `j`'s coin source and session id under `--seed`: with the block count and `k`, all its indices rest on."""
+    """Session `j`'s live coins and session id under `--seed`: with the block count and `k`, all its indices rest on."""
     d = hashlib.sha512(b"verity-pous/bench/memory-challenger/seeded-session/v1\0" + seed + j.to_bytes(4, "big")).digest()
     return d[:32], d[32:]
 
@@ -149,7 +149,7 @@ def write_sessions(path: str | os.PathLike, sig: Any, sessions: list[dict[str, A
 
 
 def rtt_cap_ns() -> int:
-    from verity.protocols.accounting.pous.verifier.schemes import p2
+    from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2
     return p2.RTT_ALLOWANCE_CAP_NS
 
 
@@ -157,7 +157,7 @@ def lms_signer(directory: str | os.PathLike, workers: int = 1, params: Any = Non
     """The memory challenger's S1 signer whose key is in `directory`, made there first when absent; at `params` other than
     `lms.DEPLOYED` (tests), under a `test/` id."""
     from verity.commitments.crypto import lms
-    from verity.protocols.accounting.pous.device import memory_challenger as mc
+    from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
 
     p = params or lms.DEPLOYED
     d = Path(directory)
@@ -194,7 +194,7 @@ def lms_signer(directory: str | os.PathLike, workers: int = 1, params: Any = Non
 
 def session_log(path: str | os.PathLike, new_key: bool) -> Any:
     """The memory challenger's used-session log at `path` (`memory_challenger.SessionLog`), made there when the key is new."""
-    from verity.protocols.accounting.pous.device import memory_challenger as mc
+    from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
 
     if new_key and not Path(path).exists():
         mc.SessionLog.create(path)
@@ -204,7 +204,7 @@ def session_log(path: str | os.PathLike, new_key: bool) -> Any:
 def signer_schemes(scheme: str) -> Mapping[str, Any]:
     """The mapping a session signed under `scheme` is judged by beside `memory_challenger.SCHEMES`: that one for S1's
     scheme, the test signer's for a test one."""
-    from verity.protocols.accounting.pous.device import memory_challenger as mc
+    from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
 
     return mc.SCHEMES if scheme in mc.SCHEMES else test_signer().SCHEMES
 
@@ -212,7 +212,7 @@ def signer_schemes(scheme: str) -> Mapping[str, Any]:
 def setup_root(params: Any, salt: bytes, digests: bytes) -> bytes:
     """What a session audits: the root the setup publishes for the `C*` whose block digests are `digests`, under `salt`
     (`VerifierKey.root`)."""
-    from verity.protocols.accounting.pous.verifier.verifier import VerifierKey
+    from verity.protocols.resource_accounting.memory.pous.verifier.verifier import VerifierKey
 
     return VerifierKey.from_row_digests(params, salt, [digests[64 * i:64 * (i + 1)] for i in range(params.blocks)]).root
 
@@ -222,7 +222,7 @@ def verdicts(s: dict[str, Any], expected: Callable[[int], bytes], trusted: set[b
     """Session `s` judged by the Lean verdict and by the Python's: the record's verdict, which is `RECORD_VERDICT`'s unless
     the two disagree (accept bit or reasons), and then a rejection for it naming both; and both as recorded.  A record the
     Lean refuses to read (`ValueError`) is its rejection."""
-    from verity.protocols.accounting.pous.device import memory_challenger as mc
+    from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
 
     args = (s["signed"], s["commitment"], s["openings"], expected)
     kw = {"trusted": trusted, **({} if schemes is None else {"schemes": schemes})}
@@ -267,7 +267,7 @@ def signature_control(doc: dict[str, Any], expected: Callable[[int], bytes]) -> 
     """The bad-signature control, on the honest audit's signed sessions: each with one signature bit flipped, and each with
     one round's receipt time moved 1 ns earlier after signing (an on-time bit forged), judged under the signer's own
     mapping (`signer_schemes`); every one must be rejected for its signature, and the unedited sessions must pass."""
-    from verity.protocols.accounting.pous.device import memory_challenger as mc
+    from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
 
     schemes = signer_schemes(doc["signer"]["scheme"])
     out = {"sessions": 0, "unedited_accepted": 0, "flipped_rejected": 0, "edited_rejected": 0}
@@ -307,11 +307,11 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
     sessions are written to `sessions_out` (`write_sessions`) when the session loop ends, however it ends, before any
     verdict runs.  Every session's id is in `session_log_path` (`session_log`) before its first round; without one (the
     test signer), in a temporary directory with the test signer's leaf state, removed once the sessions are signed.  Each
-    session's coin source and session id are `os.urandom`'s, or `seeded_session(seed, j)` with `seed`, which only a
+    session's live coins and session id are `os.urandom`'s, or `seeded_session(seed, j)` with `seed`, which only a
     test-signed audit on the logical clock takes (`SEEDED_ONLY`)."""
-    from verity.protocols.accounting.pous.verifier import audit as pous_audit
-    from verity.protocols.accounting.pous.device import memory_challenger as mc
-    from verity.protocols.accounting.pous.verifier.protocol import StorageProfile
+    from verity.protocols.resource_accounting.memory.pous.verifier import audit as pous_audit
+    from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+    from verity.protocols.resource_accounting.memory.pous.verifier.protocol import StorageProfile
 
     if seed is not None and not (isinstance(clock, LogicalClock) and signer == "test"):
         raise ValueError(SEEDED_ONLY)
@@ -332,7 +332,7 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
     cert = scheme.certificate
     k = k or (cert.k if cert is not None else pous_audit.CHALLENGES)
     binding = setup_root(params, salt, digests)
-    base = {"memory_challenger": "memory_challenger.MemoryChallenger", "protocol": mc.PROTOCOL, "coin_tree": mc.COIN_TREE, "records_tree": mc.RECORDS_TREE,
+    base = {"memory_challenger": "memory_challenger.MemoryChallenger", "protocol": mc.PROTOCOL, "coin_tree": mc.COIN_TREE, "records": mc.RECORDS,
             "strict": strict, "warmup_pings": WARMUP_PINGS, "limit_ns": limit, "limit_fixed_before_load": fixed, "deadline_ns": deadline_ns,
             "allowance": "cap", "allowance_kind": ALLOWANCE_KIND, "rtt_allowance_ns": limit - deadline_ns, "rtt_cap_ns": cap,
             "k": k, "scheme": scheme.name, "setup_root": binding.hex(), **({} if seed is None else {"seed": seed.hex()})}
@@ -426,7 +426,7 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
 
 
 def main(argv: list[str] | None = None) -> int:
-    from verity.protocols.accounting.pous.verifier import audit as pous_audit
+    from verity.protocols.resource_accounting.memory.pous.verifier import audit as pous_audit
 
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--ready", required=True)
@@ -450,7 +450,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--sessions", default=None,
                     help="where the signed sessions go before any verdict runs (default: sessions-<--out's name> beside it)")
     ap.add_argument("--seed", type=bytes.fromhex, default=None, metavar="HEX",
-                    help="derive each session's coin source and session id from this seed (--clock logical --signer test only)")
+                    help="derive each session's live coins and session id from this seed (--clock logical --signer test only)")
     a = ap.parse_args(argv)
     if a.seed is not None and not (a.clock == "logical" and a.signer == "test"):
         ap.error(SEEDED_ONLY)

@@ -39,7 +39,7 @@ def OpenOK {N m n k : ℕ} (pb cs : ℕ) : List (Noise N m n k → ℚ) → List
 /-- **The open quadratic pipe** at big price `pb` and FP32 price `cs`. -/
 def OpenQuadPipe {N m n k : ℕ} (pb cs : ℕ) (P : List (Instr (Noise N m n k))) : Prop := OpenOK pb cs [] P
 
-/-! ## Pinned statements -/
+/-! ## Guarantees -/
 
 /-- **The open pipe contains the quadratic closed pipe**: every `QuadPipe cs` program is an `OpenQuadPipe 16 cs`
 one. -/

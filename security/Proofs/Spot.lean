@@ -22,7 +22,7 @@ public import Proofs.Spot.JointPressure
 public import Proofs.Spot.ChiPool
 
 /-!
-# Populations: which object each policy needs of sampled proofs' guarantee
+# Populations: which object each policy needs of SPOT's guarantee
 
 `Determinacy`: robust determinacy and the downstream cone from single assignment and acyclicity, and the honest
 evaluation. `Necessity`: determinacy for every choice of unit functions holds exactly when the checker's two checks do.
@@ -64,7 +64,7 @@ probability at least `1 − (1 − ε)^k`; a policy is inferable from the certif
 bounded (`inference_iff`), and each tier-1 item has a counterexample family.
 `NecessityMatrix`: the policy × property matrix's cells a theorem settles: integrity off the always-proved set,
 control at the public widths and what a width bound buys the count sample, the late cone and commit-before-the-work-coin
-each necessary for skippable work, and weight isolation by range restriction.
+each necessary for ε_skip work, and weight isolation by range restriction.
 `Exfiltration`: under detection pressure `κ` and a per-window leak `ℓ`, what leaves through the first detection reaches
 `x` with probability at most `exp (-κ (x - ℓ))` for every adaptive strategy and horizon (`exp (-κ x)` when a caught
 window's egress is withheld), and at most `j (ℓ + 1/κ)` leaves on average before the `j`-th detection.

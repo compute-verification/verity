@@ -270,7 +270,7 @@ and it sent `3 + (m − 6) + 3 + (k_log − 6) + (2 + |extras|) + 1` bodies, all
 theorem piopFw_at {coin : ℕ → ℕ → F128} {n : ℕ} {st : Setup} {lay : Zk.PadLayout} {g : Array F128} {mk : ℕ → F128}
     {cap root : ByteArray} {extras : Array Claim} {t₀ : Transcript} {l : Array Claims.Msg} {zp lp ss T sws t₃ l₃}
     (hm : 14 ≤ st.m)
-    (h : ((_root_.Flock.Firewall.Finish.piopFw (asksCut coin n) st lay g mk cap root extras).run t₀).go l =
+    (h : ((_root_.Flock.ZkServer.Finish.piopFw (asksCut coin n) st lay g mk cap root extras).run t₀).go l =
       (.ok ((zp, lp, ss, T, sws), t₃), l₃)) (tr : Trace) :
     sws = Rs.sws (abcClaims st.m st.kLog (Zc.out st.m (zcCoins coin l.size) tr)
           (Lc.out st.fold st.m tr (Zc.out st.m (zcCoins coin l.size) tr)
@@ -278,7 +278,7 @@ theorem piopFw_at {coin : ℕ → ℕ → F128} {n : ℕ} {st : Setup} {lay : Zk
         ⟨fun k => coin (l.size + 3 + (st.m - 6) + 3 + (st.fold.kLog - 6) + k),
           coin (l.size + 3 + (st.m - 6) + 3 + (st.fold.kLog - 6) + (2 + extras.size))⟩ ∧
       l₃.size = l.size + 3 + (st.m - 6) + 3 + (st.fold.kLog - 6) + (2 + extras.size) + 1 ∧ l₃.size ≤ n := by
-  obtain ⟨zc, t₁, l₁, lc, t₂, l₂, h₁, h₂, h₃⟩ := _root_.Flock.Firewall.Finish.piopFw_split h
+  obtain ⟨zc, t₁, l₁, lc, t₂, l₂, h₁, h₂, h₃⟩ := _root_.Flock.ZkServer.Finish.piopFw_split h
   obtain ⟨hz, hl₁⟩ := zerocheckCut_at coin n hm _ _ _ _ _ h₁
   obtain ⟨hlc, hl₂⟩ := lincheckCut_at coin n _ _ _ _ _ h₂
   have hsz : (abcClaims st.m st.kLog zc lc ++ extras).size = 2 + extras.size := by

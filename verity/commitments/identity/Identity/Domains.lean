@@ -1,6 +1,11 @@
-/-
+module
+
+public import Identity.Domains.Pouw
+public import Identity.Domains.Shared
+
+/-!
 One table of domain separators: every versioned string a protocol hashes, derives from or commits under, or names its
-records, schemes and protocols by. `verity/ml/commitments/domains.py` mirrors it, entry for entry
+records, schemes and protocols by. `verity/commitments/domains.py` mirrors it, entry for entry
 (`tests/test_domains.py`).
 
 A name is in today's words; the bytes keep the words of their version (a PoUW period's tags say "window", its
@@ -13,16 +18,19 @@ The table is `Identity.Domains.Pouw`'s entries (PoUW's, and Pearl's labels), the
 more than one protocol reads), then this module's. PoUW's Lean imports `Identity.Domains.Pouw`, which imports the shared
 ones, and never the other protocols' separators.
 -/
-module
-
-public import Identity.Domains.Pouw
-public import Identity.Domains.Shared
 
 @[expose] public section
 
 namespace Domains
 
--- Not yet read from here: the commitments' own (`verity.ml.commitments`)
+-- The network attester's mark certificate (`verity.protocols.accounting.certifier.verifier.certificate`)
+abbrev CERTIFIER_MARK : String := "verity-network-certifier/mark/v1"
+
+-- The network attester's count over a span between two marks (`verity.protocols.accounting.certifier.verifier.span`)
+abbrev CERTIFIER_SPAN : String := "verity-network-certifier/span/v0"
+abbrev CERTIFIER_SPAN_PROTOCOL : String := "verity/certifier/span/v0"
+
+-- Not yet read from here: the commitments' own (`verity.commitments`)
 abbrev BLAKE3_KEYED_ROW_NVFP4 : String := "blake3-keyed/row-nvfp4/v1"
 abbrev BLAKE3_KEYED_ROW : String := "blake3-keyed/row/v2"
 abbrev SHA256_ROW_NVFP4_DIGEST : String := "sha256/row-nvfp4/v1"
@@ -48,10 +56,10 @@ abbrev SHA256_ROW : String := "verity/sha256-row/v1"
 abbrev VLLM_V1_DOMAIN : String := "verity/vllm-v1/domain/v1"
 abbrev WORD_CODEC_KV : String := "verity/word-codec/kv/v0"
 
--- Not yet read from here: signatures and AEAD (`verity.ml.crypto`, `Lms`)
+-- Not yet read from here: signatures and AEAD (`verity.commitments.crypto`, `Lms`)
 abbrev LMS_I : String := "verity/lms/v0/I"
 
--- Not yet read from here: sampled proofs and the proof system's challenger
+-- Not yet read from here: SPOT and the proof system's challenger
 abbrev CHALLENGER_KEY : String := "challenger-key/v1"
 abbrev COIN_TREE_HM96_SHA512 : String := "coin-tree/hm96-sha512/v2"
 abbrev CHALLENGER_AUDITOR_RECORD : String := "verity/challenger-auditor-record/v1"
@@ -78,7 +86,7 @@ abbrev REGISTRATION_PRODUCED : String := "verity/registration/produced/v1"
 
 -- Not yet read from here: Flock and the ZK server
 abbrev COIN_COMMIT_SHA256 : String := "coin-commit/sha256/v1"
-abbrev FIREWALL_RECORD : String := "firewall/v0"
+abbrev ZK_SERVER_RECORD : String := "firewall/v0"
 abbrev FLOCK_CIRCUIT_BLOCK_COVER : String := "flock-circuit/unit-cover/v0"
 abbrev FLOCK_IR_TMPL : String := "flock-ir-tmpl/v2"
 abbrev FLOCK_IR_BLOCK : String := "flock-ir-unit/v2"
@@ -88,10 +96,11 @@ abbrev FLOCK_R1CS_ROWS : String := "flock-r1cs-rows/v1"
 abbrev REC_INNER_TRANSCRIPT : String := "rec/inner-transcript/v1"
 abbrev REC_INNER_TRANSCRIPT_SCHEDULE : String := "rec/inner-transcript/v1/schedule"
 abbrev CIRCUIT_TYPE : String := "verity/circuit-type/v1"
-abbrev FIREWALL_COINS : String := "verity/firewall-coins/v0"
-abbrev FIREWALL_PUBLIC : String := "verity/firewall-public/v0"
-abbrev FIREWALL_RELEASE : String := "verity/firewall-release/v0"
-abbrev FIREWALL_TRANSCRIPT : String := "verity/firewall-transcript/v0"
+abbrev ZK_SERVER_COINS : String := "verity/firewall-coins/v0"
+abbrev ZK_SERVER_PUBLIC : String := "verity/firewall-public/v0"
+abbrev ZK_SERVER_RELEASE : String := "verity/firewall-release/v0"
+abbrev ZK_SERVER_TRANSCRIPT : String := "verity/firewall-transcript/v0"
+abbrev FLOCK_CIRCUIT_BINDING : String := "verity/flock-circuit/binding/v2"
 abbrev FLOCK_NETLIST_SIGMA : String := "verity/flock-netlist/sigma/v1"
 abbrev FLOCK_NETLIST : String := "verity/flock-netlist/v1"
 abbrev FLOCK_ZK_TAU : String := "verity/flock-zk/tau/v1"
@@ -109,15 +118,14 @@ abbrev POUS_P2_8 : String := "p2-8/v4"
 abbrev POUS_P2_SCHEME : String := "p2/v4"
 abbrev POUS_P3 : String := "p3/v1"
 abbrev POUS_COIN_HM96_SHA512 : String := "pous/coin/hm96-sha512/v1"
-abbrev POUS_ROUND_RECORD : String := "pous/round-record/v2"
 abbrev POUS_STREAMED_WIPE_BATCH_RECORD : String := "pous/streamed-wipe/batch-record/v1"
 abbrev POUS_COIN_TREE_HM96_SHA512 : String := "verity-pous/coin-tree/hm96-sha512/v1"
 abbrev POUS_MEMORY_CHALLENGER_COIN_TREE : String := "verity-pous/memory-challenger/coin-tree/v1"
 abbrev POUS_MEMORY_CHALLENGER_COIN : String := "verity-pous/memory-challenger/coin/v1"
-abbrev POUS_MEMORY_CHALLENGER_ROUND_RECORDS : String := "verity-pous/memory-challenger/round-records/v1"
 abbrev POUS_MEMORY_CHALLENGER_SESSION_LOG : String := "verity-pous/memory-challenger/session-log/v1"
 abbrev POUS_MEMORY_CHALLENGER_SESSION : String := "verity-pous/memory-challenger/session/v1"
-abbrev POUS_MEMORY_CHALLENGER : String := "verity-pous/memory-challenger/v1"
+abbrev POUS_MEMORY_CHALLENGER_SETUP_RECORD : String := "verity-pous/memory-challenger/setup-record/v1"
+abbrev POUS_MEMORY_CHALLENGER : String := "verity-pous/memory-challenger/v2"
 abbrev POUS_ROUND_RECORDS_FRAME_V3_SHA512 : String := "verity-pous/round-records/frame-v3-sha512/v1"
 abbrev POUS_STORAGE_PROFILE : String := "verity-pous/storage-profile/v1"
 abbrev POUS_STREAMED_WIPE_BATCH_RECORDS_FRAME_V3_SHA512 : String :=
@@ -143,6 +151,7 @@ abbrev POUS_P2_SEED : String := "verity/pous/p2/seed/v1"
 abbrev POUS_P2_TRANSCRIPT : String := "verity/pous/p2/transcript/v4"
 abbrev POUS_P2_RUN : String := "verity/pous/p2/v4/run"
 abbrev POUS_P2_SETUP : String := "verity/pous/p2/v4/setup"
+abbrev POUS_P2_SIGNED_RUN : String := "verity/pous/p2/v4/signed-run"
 abbrev POUS_SALT : String := "verity/pous/salt/v1"
 abbrev POUS_STREAMED_WIPE_COINS : String := "verity/pous/streamed-wipe-coins/v1"
 abbrev POUS_STREAMED_WIPE_LABELS : String := "verity/pous/streamed-wipe-labels/v1"
@@ -150,36 +159,38 @@ abbrev WIPE_MONITORING_PERIOD : String := "verity/wipe-monitoring-period/v1"
 abbrev WIPE_PROTOCOL : String := "verity/wipe/v0"
 abbrev WIPE_EGRESS : String := "wipe-egress/v1"
 
--- Not yet read from here: the remote bandwidth audit
-abbrev REMOTE_BANDWIDTH_P2_BLOCK4 : String := "p2-unit4/v0"
+-- Not yet read from here: PoUB
+abbrev POUB_P2_BLOCK4 : String := "p2-unit4/v0"
 abbrev STORE_ORDER : String := "store-order/v0"
-abbrev REMOTE_BANDWIDTH_MONITORING_PERIOD : String := "verity/remote-bandwidth-monitoring-period/v1"
-abbrev REMOTE_BANDWIDTH_PERIOD_CHALLENGER : String := "verity/remote-bandwidth-period/challenger/v1"
-abbrev REMOTE_BANDWIDTH_APPEND : String := "verity/remote-bandwidth/append/v0"
-abbrev REMOTE_BANDWIDTH_APPENDS : String := "verity/remote-bandwidth/appends/v0"
-abbrev REMOTE_BANDWIDTH_CHAINED : String := "verity/remote-bandwidth/chained/v0"
-abbrev REMOTE_BANDWIDTH_CODEC : String := "verity/remote-bandwidth/codec/v0"
-abbrev REMOTE_BANDWIDTH_COINS : String := "verity/remote-bandwidth/coins/v1"
-abbrev REMOTE_BANDWIDTH_OPENINGS : String := "verity/remote-bandwidth/openings/v0"
-abbrev REMOTE_BANDWIDTH_P2_REGISTRATION : String := "verity/remote-bandwidth/p2-registration/v0"
-abbrev REMOTE_BANDWIDTH_P2 : String := "verity/remote-bandwidth/p2/v0"
-abbrev REMOTE_BANDWIDTH_PAYLOAD : String := "verity/remote-bandwidth/payload/v0"
-abbrev REMOTE_BANDWIDTH_PLAN : String := "verity/remote-bandwidth/plan/v0"
-abbrev REMOTE_BANDWIDTH_RECEIPT_TREE : String := "verity/remote-bandwidth/receipt-tree/v0"
-abbrev REMOTE_BANDWIDTH_RECEIPT : String := "verity/remote-bandwidth/receipt/v0"
-abbrev REMOTE_BANDWIDTH_REGISTRATION : String := "verity/remote-bandwidth/registration/v0"
-abbrev REMOTE_BANDWIDTH_REGISTRY : String := "verity/remote-bandwidth/registry/v0"
-abbrev REMOTE_BANDWIDTH_SEED : String := "verity/remote-bandwidth/seed/v0"
-abbrev REMOTE_BANDWIDTH_SKETCH_RECEIPT : String := "verity/remote-bandwidth/sketch-receipt/v0"
-abbrev REMOTE_BANDWIDTH_SKETCH_SIGNS : String := "verity/remote-bandwidth/sketch-signs/v0"
-abbrev REMOTE_BANDWIDTH_STUB_TILE : String := "verity/remote-bandwidth/stub-tile/v0"
-abbrev REMOTE_BANDWIDTH_TIMING_JITTER : String := "verity/remote-bandwidth/timing-jitter/v0"
-abbrev REMOTE_BANDWIDTH_PROTOCOL : String := "verity/remote-bandwidth/v0"
-abbrev REMOTE_BANDWIDTH_PERIOD : String := "verity/remote-bandwidth/window/v1"
+abbrev POUB_MONITORING_PERIOD : String := "verity/remote-bandwidth-monitoring-period/v1"
+abbrev POUB_PERIOD_CHALLENGER : String := "verity/remote-bandwidth-period/challenger/v1"
+abbrev POUB_APPEND : String := "verity/remote-bandwidth/append/v0"
+abbrev POUB_APPENDS : String := "verity/remote-bandwidth/appends/v0"
+abbrev POUB_CHAINED : String := "verity/remote-bandwidth/chained/v0"
+abbrev POUB_CODEC : String := "verity/remote-bandwidth/codec/v0"
+abbrev POUB_COINS : String := "verity/remote-bandwidth/coins/v1"
+abbrev POUB_OPENINGS : String := "verity/remote-bandwidth/openings/v0"
+abbrev POUB_P2_REGISTRATION : String := "verity/remote-bandwidth/p2-registration/v0"
+abbrev POUB_P2_CLOSE : String := "verity/remote-bandwidth/p2/close/v0"
+abbrev POUB_P2 : String := "verity/remote-bandwidth/p2/v0"
+abbrev POUB_PAYLOAD : String := "verity/remote-bandwidth/payload/v0"
+abbrev POUB_PLAN : String := "verity/remote-bandwidth/plan/v0"
+abbrev POUB_RECEIPT_TREE : String := "verity/remote-bandwidth/receipt-tree/v0"
+abbrev POUB_RECEIPT : String := "verity/remote-bandwidth/receipt/v0"
+abbrev POUB_REGISTRATION : String := "verity/remote-bandwidth/registration/v0"
+abbrev POUB_REGISTRY : String := "verity/remote-bandwidth/registry/v0"
+abbrev POUB_SEED : String := "verity/remote-bandwidth/seed/v0"
+abbrev POUB_SKETCH_RECEIPT : String := "verity/remote-bandwidth/sketch-receipt/v0"
+abbrev POUB_SKETCH_SIGNS : String := "verity/remote-bandwidth/sketch-signs/v0"
+abbrev POUB_SKETCH_SIGNS_WIDE : String := "verity/remote-bandwidth/sketch-signs/v1"
+abbrev POUB_STUB_TILE : String := "verity/remote-bandwidth/stub-tile/v0"
+abbrev POUB_TIMING_JITTER : String := "verity/remote-bandwidth/timing-jitter/v0"
+abbrev POUB_PROTOCOL : String := "verity/remote-bandwidth/v0"
+abbrev POUB_PERIOD : String := "verity/remote-bandwidth/window/v1"
 abbrev REMOTE_SESSION_PAYLOAD_SALTS : String := "verity/remote-session/payload-salts/v0"
 abbrev STORE_SALT : String := "verity/store/salt/v1"
 
--- Not yet read from here: the network certifier and network accounting
+-- Not yet read from here: the network attester and network accounting
 abbrev CERTIFIER_ADVISED_ADVICE : String := "verity-network-certifier/advised-advice/v2"
 abbrev CERTIFIER_CERTIFICATES : String := "verity-network-certifier/certificates/v3"
 abbrev CERTIFIER_CLOCK : String := "verity-network-certifier/clock/v1"
@@ -200,16 +211,15 @@ abbrev CERTIFIER_PERIOD : String := "verity-network-certifier/period/v0"
 abbrev CERTIFIER_RECORD_SHA512 : String := "verity-network-certifier/record-sha512/v1"
 abbrev CERTIFIER_RECORD_V2 : String := "verity-network-certifier/record/v2"
 abbrev CERTIFIER_RECORDS : String := "verity-network-certifier/records/v2"
-abbrev CERTIFIER_REVEAL_REQUEST : String := "verity-network-certifier/reveal-request/v1"
-abbrev CERTIFIER_REVEAL_RESPONSE : String := "verity-network-certifier/reveal-response/v1"
 abbrev CERTIFIER_ROW_SHA512 : String := "verity-network-certifier/row-sha512/v1"
+abbrev CERTIFIER_SCAN_OK_ROW_SALT : String := "verity-network-certifier/scan-ok-row-salt/v1"
 abbrev CERTIFIER_SERVICE_SPEC : String := "verity-network-certifier/service-spec/v0"
 abbrev CERTIFIER_SESSION : String := "verity-network-certifier/session/v0"
+abbrev CERTIFIER_START : String := "verity-network-certifier/start/v2"
 abbrev CERTIFIER_STATEMENT : String := "verity-network-certifier/statement/v0"
 abbrev CERTIFIER_TRANSFER_REGISTRATION : String := "verity-network-certifier/transfer-registration/v1"
 abbrev CERTIFIER_TRANSFER : String := "verity-network-certifier/transfer/v1"
 abbrev CERTIFIER_VERDICT : String := "verity-network-certifier/verdict/v0"
-abbrev CERTIFIER_WEIGHTS : String := "verity-network-certifier/weights/v1"
 abbrev NETWORK_COIN_LINK_PARAMETERS : String := "verity-network-coin-link/parameters/v1"
 abbrev CERTIFIER_CELLS_DOMAIN : String := "verity-network-warden/cells-domain/v2"
 abbrev CERTIFIER_CELLS : String := "verity-network-warden/cells/v2"
@@ -234,7 +244,7 @@ abbrev PERIOD_CIRCUIT : String := "verity/window-circuit/v1"
 abbrev ONSITE_PROTOCOL : String := "verity/onsite/v0"
 abbrev REMOTE_PROTOCOL : String := "verity/remote/v0"
 
--- Not yet read from here: served periods (`verity.ml.windows`, the bytes say window)
+-- Not yet read from here: served periods (`verity.commitments.periods`, the bytes say window)
 abbrev VLLM_ADVICE_WINDOWS_ADVICE : String := "verity-vllm/advice-windows/advice/v1"
 abbrev VLLM_SERVING_ROWS_ORDER : String := "verity-vllm/serving-rows/order/v0"
 abbrev VLLM_SERVING_ROWS_BLOCKS : String := "verity-vllm/serving-rows/units/v0"

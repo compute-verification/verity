@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # stop_audit.py end to end on a CPU node, on a stop class at small statics (stop_audit_small.py: no engine):
 # flock-circuit, the Flock verifier's Lean binaries and SPOT's Lean verifier built from this tree as
-# two_stage_small.sh builds them, then `two_stage.py first --stop` (the boundary registration, the stop registration
+# two_stage_small.sh builds them, then `two_stage.py first --stop` (the boundary docket, the stop docket
 # and both samples on a local challenger session) and five audits of the stop population:
 #   accept      the class as served: the audit record accepts on Lean's verdict of record, and is not complete
-#   length      a class registered with stop words that are not the rule's: Lean refuses its session
+#   length      a class registered with stop words that are not the rule's: Lean refuses its session, and the
+#               summary's reason is stop_word, which no other run's is
 #   unlogged    a stop record on a boundary record the boundary stream never logged: refused before any session
 #   unaccepted  a boundary stream's outcome that did not accept: the boundary-audit entry refuses the record
 #   incomplete  a boundary stream's outcome that accepted with an entry that did not run: the record accepts, the
@@ -24,8 +25,8 @@ command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/de
 command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
 uv sync --all-packages --extra torch-cpu > "$O/sync.log" 2>&1 || { tail -20 "$O/sync.log"; exit 5; }
 
-{ (cd verity/protocols/proofs/flock/verifier && lake build flock-verify flock-firewall) \
-    && (cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier); } > "$O/build-lean.log" 2>&1 &
+{ (cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-zk-server) \
+    && (cd verity/protocols/proofs/spot/verifier/lean && lake build spot-verifier); } > "$O/build-lean.log" 2>&1 &
 LP=$!
 mkdir -p "$O/m0-build"
 FW=${SMALL_FLOCK_WORK:-$W}
@@ -33,10 +34,10 @@ RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protoco
   || { tail -40 "$O/m0-build/build.log"; exit 6; }
 BIN=$FW/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 "$O/build-lean.log"; exit 7; }
-LEAN=$REPO/verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-verify
+LEAN=$REPO/verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof
 sha256sum "$BIN" "$LEAN" | tee "$O/binaries.sha256"
 
-M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm
+M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch
 export RAYON_NUM_THREADS=$(nproc) PYTHONPATH=$M0PATH
 # a local challenger session's pin is held to main's first-parent line: a run's clone has the shipped tree as its origin,
 # which holds main as its own main or origin/main
@@ -53,7 +54,7 @@ field() { "${PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys
 CHECK=$(field check); STOP=$(field stop); CLASS=$(field class); WRONG=$(field wrong); WRONG_FILES=$(field wrong_files)
 NAME=$(basename "$CLASS")
 
-first() {  # NAME CLASSDIR: the class's boundary and stop registrations and their samples
+first() {  # NAME CLASSDIR: the class's boundary and stop dockets and their samples
   "${PY[@]}" benchmarks/one_stage/two_stage.py first --boundary "$2" --check "$CHECK" --replay "$DESIGN" --k 1 --stop "$STOP" \
     --challenger local --main "$O/main.txt" --out "$W/$1" > "$O/$1.log" 2>&1 || { tail -20 "$O/$1.log"; exit 3; }
   tail -2 "$O/$1.log"

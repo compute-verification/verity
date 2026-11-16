@@ -1,5 +1,5 @@
 """The requirement's two proof blocks (I4): the plan unit, which holds a pass's plan to hold every block the registered
-circuit reads at the pass's step (`Accounting.Requirement`'s `PlanMatches`), and the memory-map unit, which holds the
+circuit reads at the pass's step (`ResourceAccounting.Requirement`'s `PlanMatches`), and the memory-map unit, which holds the
 blocks a step writes to the circuit's values and every free, of a written block or a registered one, to its values' last
 structural reader (`StoreMatches`' L1, L2 and L4), and each re-key to the lifetime cap. The plan unit is PlanMatch, or
 PlanShard for a store past PlanMatch's 16-bit indices. Each is a Boolean Definition, one instance per step (PlanShard's
@@ -20,7 +20,7 @@ one per shard of the store), each returning one ok word: bit 0 the clause's verd
 written ones from N in the order the memory map wrote them (memory-map/v1's fresh indices). A written block holds SLOTS values
 of VW bits, value s at bits [s VW, (s + 1) VW) of its payload (bit t of a byte string is bit t & 7 of byte t >> 3), the bits
 of an empty slot zero. A written value is named by its position in the run's written values (born step, then the circuit's
-value order), and it sits in one block an epoch: epoch 0 from its production step, epoch e from its block's e-th re-key.
+value order), and it sits in one block an epoch: epoch 0 from its born step, epoch e from its block's e-th re-key.
 The layout row ``lam`` holds, for entry x = e V + i (position i's epoch e), its store index (word 2 x) and its slot (word
 2 x + 1), zero for an epoch the value doesn't reach; the plan unit, bound at V E entries, reads it as it is. The map
 row ``phi`` holds, for registered block j, the step that freed it (word j), and for written block b = j - N, the step that
@@ -43,7 +43,7 @@ input names it.
 **The appends.** A step's written blocks are PoUB's append for that step. A payload row's commit string is the
 append leaf's (`hm96-sha512/row/v2` of the same 4,096 bytes under the same salt: the leaf hides ``d_j``), so an append's root
 is a function of its instance's payload rows' ``b || c`` and its public ``first`` and ``count``. The chain over the steps'
-appends is then the record's (remote_bandwidth's `Record.appends`): no dummy append, none out of the map's order, no re-key the
+appends is then the record's (PoUB's `Record.appends`): no dummy append, none out of the map's order, no re-key the
 map doesn't write. That is checked on the commitments, outside the circuit, with no gate. An append's coin ``c_a`` isn't read
 here: it keys the block's encoding, which the opening's decode checks against the same leaf (under zero knowledge, the
 block-decode unit's payload-against-digest check, with ``c_a`` a public input beside the append's root and count).
@@ -81,7 +81,7 @@ bit k, its position ``pos[k]``, its epoch ``ep[k]`` and its last structural read
 `Requirement.last`, a gather that may select it included, or the step of its next re-key), and its committed value is
 ``val[k]``. Its ok is that, for every present k: ``lam``'s entry ``ep[k] V + pos[k]`` puts it in a block the step wrote,
 in a slot below SLOTS, no two in one slot, and that block's payload ``pay[j - first]`` carries ``val[k]`` there (L4,
-Carries); and, for each block the step wrote: ``phi`` records it written at t (each write at its values' production step
+Carries); and, for each block the step wrote: ``phi`` records it written at t (each write at its values' born step
 or their re-key's), it holds at least one value (so no re-key carries a payload the map doesn't), its empty slots are
 zero, and ``phi`` frees it at the last structural reader of its values, the greatest ``last[k]`` among them: an earlier
 free drops a value still to be read (L2), a later one keeps a block no step reads (L1). And each registered block whose
@@ -97,7 +97,7 @@ new one's, and its write step ``phi[N + 2 (o - N)]`` is below the cap. The cap i
 row and ``life`` (L): with W the windows whose last pass is at or before t (so W is the window of the first pass after
 t), it is ``pi[W - L]``, and 0 if W < L or no pass follows t (W = T). A block's append joins the window of the first
 pass after its write step (each writing instance pins the step, and the record's heads pin the append between the passes
-around it: `remote_bandwidth`'s `RequirementLink.mapped`), so a write step below the cap is an age, counted from the
+around it: PoUB's `RequirementLink.mapped`), so a write step below the cap is an age, counted from the
 first root sent after the append, of at least L windows at the first pass after t, and o is below that pass's stale
 bound (the blocks whose appends joined a window at least L before it): the cap is that bound in step form (`rekey_cap`).
 It reads the passes' steps only through ``pi``, which is bound to the record's passes by its commitment.

@@ -110,14 +110,14 @@ theorem SetupTable.ok {C : Composed.CoinedSetup} (h : SetupTable C) :
 that table up (`zk_session_viewHJ`'s tables). -/
 theorem setupTable_planZHJ {mPts n : ℕ} {Reg : Type} (P : Composed.LigProver) (I : Exec.Inputs)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-    (y₀ : ZkHidden.DrawSetupZHJ (Composed.inputsJ I 0) mPts S₀ d₀) (ht : I.tags.typed = false) (S : Finset (Fin n))
+    (y₀ : ZkHidden.SampleSetupZHJ (Composed.inputsJ I 0) mPts S₀ d₀) (ht : I.tags.typed = false) (S : Finset (Fin n))
     (R : Reg) (j : Fin (Composed.nTab I))
-    (y : ZkHidden.DrawSetupZHJ (Composed.inputsJ I j) mPts (Composed.partS I (dj S) S j) (Composed.drawJ I (dj S) j)) :
+    (y : ZkHidden.SampleSetupZHJ (Composed.inputsJ I j) mPts (Composed.partS I (dj S) S j) (Composed.drawJ I (dj S) j)) :
     SetupTable (Composed.coinedOf P ((ZkHidden.planZHJ (Reg := Reg) dj y₀ S R).get
       (Fin.cast (ZkHidden.planZHJ_length dj y₀ S R).symm j)) y.x.st) :=
   ⟨mPts, P, _, y.x.st, y.x.wf.1, y.x.wf.2, by rw [ZkHidden.planZHJ_get_eq dj y₀ S R j y]; rfl,
     ZkHidden.maskSetup_of_setupHidden ((Exec.tagsAt_typed _ _ _).trans ((ZkExec.zkTags_typed I).trans ht)) y.x.h,
-    FailClosed.DrawSetupZHJ.avoidsMask y, Composed.setupHidden_whole y.x.h, rfl⟩
+    FailClosed.SampleSetupZHJ.avoidsMask y, Composed.setupHidden_whole y.x.h, rfl⟩
 
 /-! ## The session's pre-final view, at tables of their own types -/
 

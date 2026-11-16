@@ -57,7 +57,7 @@ words = { "(`inference_only/`)" = "(`lean/`)" }
 # locks as they were on a past tree, which their tests read as such.
 exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "GLOSSARY.md",
            "tests/test_retired_terms.py", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock",
-           "tools/verity/check/tests/test_move_check.py", "tools/verity/lean/tests/fixtures/**"]
+           "tools/check/tests/test_move_check.py", "tools/verity/lean/tests/fixtures/**"]
 
 [keep]
 patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+',

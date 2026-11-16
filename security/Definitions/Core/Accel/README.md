@@ -1,7 +1,7 @@
 # The ACCEL model
 
 ACCEL is the physical model the accounting reads: a machine 𝓜 (`Accel.Machine`) made of a card's table of numbers
-(`Accel.Card`: `Accel.H200`, `Accel.Sm120`) and the card's semantics (`Accel.Open`), which no table states. Programs
+(`Accel.Card`) and the card's semantics (`Accel.Open`), which no table states. Programs
 are lists of the ACCEL ops (`Accel.Op`) and branches. A run fits a time `T` when its code fits the text (G1) and each
 resource's units are at most its rate times `T` (G2), on a schedule fixed before the content (`Machine.Fits`). The
 headline holds at every semantics meeting (P1), integer MMAs exact within the table's range, and (P2), every MMA dot a
@@ -18,22 +18,22 @@ function of its accumulator and its pairs' products. The card assumption says th
 | `text` | code space, instructions (device memory at 16 bytes an instruction) |
 
 Resources: `tensor` (s8 MACs), `issue` (warp instructions), the `alu`, `imad`, `shfl`, `f64` and `sfu` lanes, `smem`
-(bank words), `l2` (words read or written) and `dram` (words). Each table is a SKU's at its firmware's maximum:
+(bank words), `l2` (words read or written) and `dram` (words). A card's table is its SKU's at its firmware's maximum,
+and its numbers are its card file's (`hardware/cards/<sku>.toml`):
 
-| Table | SKU | SM clock | Tensor clock | Device memory |
+| Card file | SKU | SM clock | Tensor clock | Device memory |
 |---|---|---|---|---|
-| `Accel.H200.card` | H200 SXM 141 GB, 132 SMs | 1980 MHz | 1830 MHz | HBM3e at 3201 MHz on 6144 bits, 4.917 TB/s |
-| `Accel.Sm120.card` | RTX PRO 6000 Blackwell Server Edition, 188 SMs | 2430 MHz | 2430 MHz | GDDR7 at 12481 MHz on 512 bits, 1597.6 GB/s |
+| `h200-sxm-141gb.toml` | H200 SXM 141 GB, 132 SMs | 1980 MHz | 1830 MHz | HBM3e at 3201 MHz on 6144 bits, 4.917 TB/s |
+| `rtx-pro-6000-server.toml` | RTX PRO 6000 Blackwell Server Edition, 188 SMs | 2430 MHz | 2430 MHz | GDDR7 at 12481 MHz on 512 bits, 1597.6 GB/s |
 
 Both cards' firmware refuses or clamps every clock above these, and both report SM and memory clock offset ranges of
-[0, 0]. The H200's tensor rate is taken at its tensor clock's ceiling, 1830 MHz (`Accel.H200.tensorClock`), the clock
+[0, 0]. The H200's tensor rate is taken at its tensor clock's ceiling, 1830 MHz (`clock.tensor`), the clock
 its data sheet quotes the tensor peaks at: 9.894 · 10¹⁴ `s8` MACs a second, and 1.0705 · 10¹⁵ on the second reading,
 the 1980 MHz SM clock the driver reports. The card file (`hardware/cards/h200-sxm-141gb.toml`, `clock.tensor`)
-states both readings and names the 1830 MHz reading's falsification test, `benchmarks/tensor_duty/`. The tables are
-generated from the card files (`verity/hardware/lean.py`) and nobody edits them. Every rate is a ceiling, not a clock a
-loaded card holds: under its power limit it holds less. The table also gives the device model's limits (`Card.toDevice`,
-`Accounting.Device`). A run that fits the model stays within them summed over a window (`fits_toDevice`), and no
-per-tick `Accounting.Schedule` is built from a run.
+states both readings and names the 1830 MHz reading's falsification test, `benchmarks/tensor_duty/`. Every rate is a
+ceiling, not a clock a loaded card holds: under its power limit it holds less. The table also gives the device model's
+limits (`Card.toDevice`, `ResourceAccounting.Device`). A run that fits the model stays within them summed over a window
+(`fits_toDevice`), and no per-tick `ResourceAccounting.Schedule` is built from a run.
 
 ## The ACCEL ops (`Accel.Op`, `Card.use`)
 
@@ -63,12 +63,15 @@ and firmware.
 
 ## Proved
 
-- `WorkSoundAt`, `WorkSoundOnCard` and their instances on both tables (`WorkSoundH200`, `WorkSoundSm120`,
-  `WorkSoundOnCardH200`, `WorkSoundOnCardSm120`) follow from Dither's `WorkSound`, with no premise beyond its own
-  and the card assumption (`Proofs/Pouw/DitherInstance.lean`).
-- The assumption holds at the honest instance (`gemm_cardWithinAccel`, `Proofs/Core/Accel/Witness.lean`). The deployed
-  `s8` GEMM, at every `n` with 256 ∣ n ≤ 2048, fits the H200's table in its seconds (`kernel_fits`) and leaves
-  C = A·B in device memory (`kernel_computes`).
+- `WorkSoundAt` and `WorkSoundOnCard`, and their forms over every table (`WorkSoundAtTables`,
+  `WorkSoundOnCardTables`), follow from Dither's `WorkSound`, with no premise beyond its own and the card assumption
+  (`Proofs/Pouw/DitherInstance.lean`).
+- The assumption holds at the honest instance (`gemm_cardWithinAccel`, `Proofs/Core/Accel/Witness.lean`) on every card
+  whose figures meet `GemmFigures`: each rate positive, an `s8` MAC one tensor unit, and code, register, shared-memory
+  and device-memory sizes that hold the kernel at `n = 2048`. The deployed `s8` GEMM, at every `n` with 256 ∣ n ≤ 2048,
+  fits such a card in its seconds (`kernel_fits`) and leaves C = A·B in device memory (`kernel_computes`). The H200's
+  sheet, as a value (`sheetCard`, `Proofs/Core/Accel/Sheet.lean`), meets them (`h200_gemmFigures`), so the assumption
+  holds at a real card (`h200_cardWithinAccel`).
 - The assumption refuses a card that changes memory in no time (`cardWithinAccel_fails`), and one that changes more words
   of shared memory, L2 or device memory in `T` seconds than the table's rate times `T` (`cardWithinAccel_fails_rate`)
   (`Proofs/Core/Accel/Model.lean`).

@@ -1,7 +1,8 @@
 """A served engine class's admission: what a window of the class (`profiles.engine_classes`) refuses while it is served.
 
-`Admission(name).install(engine)` wraps the engine's in-process scheduler's ``add_request`` (`handle.scheduler`, through
-`engine.hooks`): a request whose prompt is over the engine's context limit (the scheduler's ``max_model_len``: the launch's, or the
+`Admission(name).install(engine)` acts at the engine's in-process scheduler's ``add_request`` (`handle.scheduler`), as a part
+of the scheduler's calls at their outermost rank (`scheduler_step`): a request whose prompt is over the engine's context
+limit (the scheduler's ``max_model_len``: the launch's, or the
 length vLLM fitted to the KV pool where the launch left it to vLLM) is refused before the scheduler holds it, since a longer
 prompt has no position for its first output; a long prompt within it the class prefills in chunks, each a launch of
 the class's request Program.  The scheduler counts the prompt it was handed, so the count is the engine's whatever form the prompt
@@ -14,10 +15,12 @@ and close is refused with the same reason, and the window ends there.
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
-from verity_vllm.engine import handle, hooks
+from verity_vllm.engine import handle, scheduler_step
 from verity_vllm.engine.profiles import engine_classes as EC
+from verity_vllm.engine.runner_step import Rank
 from verity_vllm.errors import Refused
 
 
@@ -30,7 +33,7 @@ class Admission:
         self.name, self.limit = name, 0
         self.refused: str | None = None
         self.sched: Any = None
-        self.hooks = hooks.Hooks(tag=f"engine-class:{name}")
+        self._removals: list[scheduler_step.Removal] = []   # one for each install
 
     def _refuse(self, why: str | None = None) -> None:
         self.refused = self.refused or why
@@ -44,17 +47,7 @@ class Admission:
             raise Refused(f"the engine's scheduler states no context limit (its max_model_len is {limit!r})",
                           what=f"engine class {self.name}")
         self.limit = limit
-        me = self
-
-        def add_request(orig):
-            def wrapped(request, *a, **kw):
-                n = int(getattr(request, "num_prompt_tokens", 0) or len(request.prompt_token_ids or ()))
-                me._refuse(f"request {request.request_id}: a prompt of {n} tokens, over the {me.limit} a class-{me.name} window "
-                           f"admits (its engine's max_model_len)" if n > me.limit else None)
-                return orig(request, *a, **kw)
-            return wrapped
-
-        self.hooks.wrap(self.sched, "add_request", add_request)
+        self._removals.append(scheduler_step.add(self.sched, _Admits(self)))
         return self
 
     def close_window(self) -> None:
@@ -66,7 +59,25 @@ class Admission:
                      if held else None)
 
     def uninstall(self) -> None:
-        self.hooks.uninstall()
+        scheduler_step.remove(*self._removals)  # refused with the admission still on, wherever it is on
+        self._removals.clear()
+
+
+class _Admits(scheduler_step.Part):
+    """An admission's part on one scheduler (`scheduler_step`): the refusal comes before the parts of every later rank and
+    before vLLM's ``add_request``."""
+
+    rank = Rank.ADMIT
+
+    def __init__(self, admission: Admission) -> None:
+        self.admission = admission
+
+    def around_add_request(self, call: Callable[..., Any], request: Any, *a: Any, **kw: Any) -> Any:
+        me = self.admission
+        n = int(getattr(request, "num_prompt_tokens", 0) or len(request.prompt_token_ids or ()))
+        me._refuse(f"request {request.request_id}: a prompt of {n} tokens, over the {me.limit} a class-{me.name} window "
+                   f"admits (its engine's max_model_len)" if n > me.limit else None)
+        return call(request, *a, **kw)
 
 
 __all__ = ["Admission"]

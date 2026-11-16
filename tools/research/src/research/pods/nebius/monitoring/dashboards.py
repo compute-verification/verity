@@ -34,7 +34,7 @@ def url(pin: dict[str, Any]) -> str:
 
 
 def fetch(pin: dict[str, Any]) -> bytes:
-    with urllib.request.urlopen(url(pin), timeout=60) as r:
+    with urllib.request.urlopen(url(pin), timeout=60) as r:  # noqa: S310 (url() is https: its scheme is a literal)
         body = r.read()
     got = hashlib.sha256(body).hexdigest()
     if got != pin["sha256"]:

@@ -7,9 +7,9 @@ The query over a derived Program: which of its values a Commit must commit. The 
 - **Provides:** a derived Program as a call graph (`program_view`), the module-body query (`module_body`), the required
   values under the query of record (`required`), and the required-value manifest: its format, its binding to what the
   runtime commits, and the check that a Commit used it (`manifest`).
-- **Loaded by:** the integration's `pipeline`, `acquire`, `check`, `commit`, `program.predict`, `correspondence`,
-  `properties` and `protocols` packages, `circuit-check`, and the benchmarks that read a Program's view.
-- **Loads:** `verity.circuits` and `verity.definitions`, and the integration's `program`, `correspondence` and
+- **Loaded by:** the integration's `pipeline`, `acquire`, `check`, `commit`, `program.predict`, `correspondence`
+  and `protocols` packages, `circuit-check`, and the benchmarks that read a Program's view.
+- **Loads:** `verity.circuits` and `verity_vllm.definitions`, and the integration's `program`, `correspondence` and
   `records`.
 
 What the integration's other packages, the benchmarks and `verity`'s own tests import, module by module; each module
@@ -22,4 +22,4 @@ From `compose`: `compose_global` and `merge_ranks`. From `manifest.bind`: `Binde
 and the functions that load a request's Programs and read a spec's family and statics. From each opt-in policy
 (`norm_scales`, `router_softmax`, `scale_products`, `vocab_range`): its `FAMILY`, `MEMBER` and `POLICY`, and the
 functions that place and size its values. Two private names are imported as well and are in no `__all__`:
-`program_view._read_instance_header`, by `pipeline` and `check`, and `vocab_range._s32`, by `acquire` and `properties`.
+`program_view._read_instance_header`, by `pipeline` and `check`, and `vocab_range._s32`, by `acquire` and the vocab-range tap check in `tests/properties/`.

@@ -29,7 +29,7 @@ import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 `ZkReg.AcceptsZKR` runs `checkRegistered` on every table's statement, and `Registered.check` with the verifier's own
 reads accepts only a statement over a shared-row public file (`ZkReg.check_tables`). At a record that carries a sample,
 each table's statement is sampled from the population the statement check loads (`pubZ I`), and sampling keeps its tables
-(`Layout.drawn_spec`), so `pubZ I` is a shared-row file (`tables_of_acceptsZKR`). The statement check passes a shared-row
+(`Layout.sampled_spec`), so `pubZ I` is a shared-row file (`tables_of_acceptsZKR`). The statement check passes a shared-row
 file only at `hiddenOutputs && registered` and `hm96-sha512/v1` leaves (`Checks.tables`, `ProvedScope.sharedRowsOk`):
 
 * `not_scopeZ_of_acceptsZKR`: no such outcome passes `ScopeZ`, the check without `--registered`;
@@ -62,7 +62,7 @@ theorem tables_of_acceptsZKR {reg : Bool} (hck : Checks (zkTags I) true I reg) (
       have h0 : 0 < sts.size := by rw [hsz]; exact Composed.nTab_pos I
       have hc0 := (setupH_spec ((tagsAt_typed _ _ _).trans hty) (hst 0 h0)).1
       rw [Composed.parse_tagsAt, hck.parse hh'] at hc0
-      obtain ⟨pop, hpop, hdr⟩ := Layout.setupH_drawn (hst 0 h0)
+      obtain ⟨pop, hpop, hdr⟩ := Layout.setupH_sampled (hst 0 h0)
       rw [Composed.loadPublic_tagsAt, ← Except.ok.inj hc0, hck.load hh'] at hpop
       obtain rfl := Except.ok.inj hpop
       exact ⟨_, _, 0, h0, hdr⟩
@@ -90,7 +90,7 @@ theorem tables_of_acceptsZKR {reg : Bool} (hck : Checks (zkTags I) true I reg) (
       exact ⟨{ sts[0].c with outPorts := #[] }, _, 0, h0, hdr _ rfl⟩
   obtain ⟨c', d', i, hi, hdr⟩ := key
   obtain ⟨tb, -, htb, -⟩ := check_tables (checkRegistered_ok (array_forM_ok hreg i hi))
-  obtain ⟨D, -, -, -, hpt, -⟩ := Layout.drawn_spec hdr
+  obtain ⟨D, -, -, -, hpt, -⟩ := Layout.sampled_spec hdr
   rw [htb] at hpt
   cases hp : (pubZ I).tables with
   | none => rw [hp] at hpt; simp at hpt

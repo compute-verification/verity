@@ -5,7 +5,7 @@ the training formalism counts |C|, c and w in.
     python -m training_slowdown.gates --check   # recompute it from the Definitions (needs verity), exit 1 on a difference
 
 Each price is one of the circuits' own Definitions (`verity.circuits.ops.boolean`, and the TF32 step's in
-`verity.definitions.registry.boolean_mhc`), at its whole gate count: AND + XOR + NOT as
+`verity_vllm.definitions.registry.boolean_mhc`), at its whole gate count: AND + XOR + NOT as
 `verity.circuits.evaluation.bits.compile(D).counts` gives them, the AND count being the one its
 `<module>.circuit-check.json` pins (`test_gates` holds both). A counted MAC is one multiply and one accumulate:
 
@@ -51,7 +51,7 @@ DEFINITIONS = {
     "BlackwellE4m3QmmaDot32_v2": ("verity.circuits.ops.boolean.gemm", 9128, 17402, 1025),
     "BlackwellE5m2QmmaDot32_v2": ("verity.circuits.ops.boolean.gemm", 8931, 17231, 1251),
     "BlackwellNvf4OmmaDot64_v2": ("verity.circuits.ops.boolean.gemm", 6864, 13949, 616),
-    "HopperTf32WgmmaDot8_v2": ("verity.definitions.registry.boolean_mhc", 6524, 12120, 439),
+    "HopperTf32WgmmaDot8_v2": ("verity_vllm.definitions.registry.boolean_mhc", 6524, 12120, 439),
     "F32Fma_v4": ("verity.circuits.ops.boolean.elementwise", 4485, 7863, 289),
     "Bf16MulBf16_v2": ("verity.circuits.ops.boolean.elementwise", 799, 1155, 99),
     "Bf16Add_v2": ("verity.circuits.ops.boolean.elementwise", 717, 1061, 116),

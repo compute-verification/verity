@@ -8,7 +8,7 @@
     Executor(transport).graph_v2(check)                -> (its art: id, the graph/v2 document) once labelled, else None
     Executor(transport).settle(graph)                  -> {task id: (pass | fail | pending | blocked, its result or None)}
 
-Two graph schemas.  `tasks/v1` (`verity tasks list --json`, `tools/verity/check/tasks.py`), which `executor = "shadow"`
+Two graph schemas.  `tasks/v1` (`verity tasks list --json`, `tools/check/tasks.py`), which `executor = "shadow"`
 compares with the after-landing run, and graph/v2 (`verity graph`, `tools/verity/graph`), which `executor = "on"` verifies a tip
 by, beside a train.sh run of the steps drive still takes from one (`drive.SLIM_STEPS`).
 
@@ -41,7 +41,7 @@ graph/v2 on a worker, puts it in the store (`verity-graph/v2`) and labels `commi
 (`vocab.VERITY_GRAPH`), and each task's result/v1 document is a `result` label on `task:<key>` (`vocab.TASK_RESULT`; an error is
 never a result, so only pass and fail appear).  A graph/v2 task that reads none has its key in the graph; one that reads others
 has none there, and `settle` computes it by the contract's key rule (`task_key`, held to
-`tools/verity/graph/tests/key_vectors.json`) once each task it reads passed, from their results' `outputs`; it is blocked, never
+`tests/tools/verity/graph/key_vectors.json`) once each task it reads passed, from their results' `outputs`; it is blocked, never
 run, once one of them failed or is blocked.  Drive judges the results (`drive.Driver._follow_tasks`) beside a train.sh run of
 `drive.SLIM_STEPS` alone (lean-agreement and ratchet-gate), whose verdicts on those steps are the only ones it counts."""
 from __future__ import annotations

@@ -6,7 +6,7 @@ as a Boolean circuit. It has three parts:
 
 - `bench`: the result contract (`contract`) and the comparison of two results under it (`judge`), a result's interaction
   time (`interaction`, `latency`), the census as Python (`census`, which reads `benchmarks/census/`), input sets (`generate`,
-  `fixture_sets`, `instances`), one measured cell on its prover and verifier pods (`cell`, `placement`, `drivers`), the
+  `fixture_sets`, `instances`), one benchmark result measured on its prover and verifier pods (`cell`, `placement`, `drivers`), the
   subcircuit catalog and the per-unit-type cost inventory (`unit_costs` and its padding, prover and menu tables).
 - `reference`: the pinned GPU simulator's tensor-core step as integer operations (`hawkeye_close`), an independent reference
   for `verity.circuits.targets.target.FIRST`.
@@ -28,7 +28,7 @@ outside a job that says so. It is no verifier, and no guarantee reads a number i
 
 `verity bench numerical JOB [ARGS]` (`run.py`) starts one of the package's command-line modules with ARGS, as
 `python -m verity_numerical.<module>` does; with no JOB it prints this list. Each module's docstring is its manual. None needs
-a GPU: every job runs on a CPU machine, and `cell` and `placement` reach a cell's pods through `research`.
+a GPU: every job runs on a CPU machine, and `cell` and `placement` reach a benchmark result's pods through `research`.
 
 | JOB | Module | What it does | What it writes |
 | --- | --- | --- | --- |
@@ -42,17 +42,17 @@ a GPU: every job runs on a CPU machine, and `cell` and `placement` reach a cell'
 | `unit_costs_menu` | `bench.unit_costs_menu` | each model's menu of session shapes | `menu.json` and `menu.md` under `--out`, or `Pinned.lean` |
 | `latency` | `bench.latency` | a result's rounds priced as network round trips, per batch | `<out>.md` and `<out>.json` with `--out` |
 | `judge` | `bench.judge` | compares two recorded results: refuses where their identity fields differ, else their ratios and fingerprint deltas | the report on stdout, as JSON with `--json`; no file |
-| `cell` | `bench.cell` | plans, launches, checks and registers one measured cell | `plan`: `cell.json`; `register`: a `bench-result/v1` document |
+| `cell` | `bench.cell` | plans, launches, checks and registers one benchmark result | `plan`: `cell.json`; `register`: a `bench-result/v1` document |
 | `placement` | `bench.placement` | a machine's identity, and whether a run's parties are placed as their roles require | the probe or the gate record on stdout, and in `--out` |
 | `sweep` | `checker.sweep` | the reference checker over `bench-instances/v1` | a report in `--out` or the run directory, with `result.json` under `research run` |
 | `search` | `checker.search` | the search for an accepted wrong output, per gadget and for a group step | the table on stdout; `--json FILE` |
 | `search_v2` | `checker.v2.search` | the same search over the v2 gadgets | the table on stdout; `--json FILE` |
 
-The tests are the suite `tests/` (`uv run tools/verity/check/suites.py`).
+The tests are the suite `tests/` (`uv run tools/check/suites.py`).
 
 The canonical tables, their drill-downs and views are evidence, not code: the evidence store keeps their final render
 (`tables`, `drilldown` and `views`, each as `.md` and `.json`, with the docs site's last entities JSON and the last
-parity report), over the cells of a `dataset-snapshot/v1`. The renderers are in Git history, and so are the archived systems'
+parity report), over the benchmark results of a `dataset-snapshot/v1`. The renderers are in Git history, and so are the archived systems'
 exporter, drivers, explorations and red-team forgeries, deleted with the archive in `2091252fe3`.
 
 ## The subcircuit catalog
@@ -95,7 +95,7 @@ Two columns of the finite-domain step are read here: Python `verity.circuits.sil
 
 Finding: the two columns are one derivation -- the simulator's `group_sum`, ported once into Python and, by the Lean's header,
 transcribed from there. Agreement between them shows transcription fidelity, not an independent confirmation of the hardware
-semantics. The independent evidence for the target is (i) the hardware captures (`verity/circuits/ops/tests/fixtures`, and the
+semantics. The independent evidence for the target is (i) the hardware captures (`tests/verity/circuits/ops/fixtures`, and the
 probe's recorded runs, by stage below), (ii) the compiled pinned simulator itself, driven on the same cases by
 `tests/reference/hawkeye_harness.cpp`, and (iii) the closed-form normalisation of log entry D3, a different formula shown equal
 to the successive shifts by an SMT proof over the whole reachable domain (`tests/reference/test_normalisation_d3.py`).
@@ -121,13 +121,13 @@ tests/reference/exhaustive_pod.sh                    clone at the pin, hash-obje
 ~~~
 
 ~~~sh
-uv run pytest benchmarks/numerical/tests/reference                    # fast; the SMT proof needs z3 (a workspace dependency)
+uv run pytest tests/benchmarks/numerical/reference                    # fast; the SMT proof needs z3 (a workspace dependency)
 uv run research run --on vy-sp1 --project verity --source . --exclusive --stage wp1.exhaustive --require-result \
-  -- bash benchmarks/numerical/tests/reference/exhaustive_pod.sh
+  -- bash tests/benchmarks/numerical/reference/exhaustive_pod.sh
 uv run research run --on vy-sp1 --project verity --source . --exclusive --stage wp1.probe.4090 --require-result \
   -- bash -c 'export PYTHONPATH=.:benchmarks/numerical/python PATH=/usr/local/cuda/bin:$PATH; \
      /root/.local/bin/uv run --no-project --with numpy --python 3.12 python benchmarks/tc_probe/tc_probe.py --arch sm_89 \
-       --out "$RESEARCH_RUN_DIR" --procs 48 --replay-golden verity/circuits/ops/tests/fixtures/golden/ada_bf16_m16n8k16.json --sweep'
+       --out "$RESEARCH_RUN_DIR" --procs 48 --replay-golden tests/verity/circuits/ops/fixtures/golden/ada_bf16_m16n8k16.json --sweep'
 # A100 (sm_80): same, with --on vy-a100 --stage wp1.probe.a100, --arch sm_80, and instead of the (Ada) golden replay
 #   --replay-special PATH, PATH the A100 special-value fixture
 #   (its a100/mma_special.reduced.json.gz path is in artifacts.json)

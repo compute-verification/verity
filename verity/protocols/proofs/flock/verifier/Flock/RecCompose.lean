@@ -1,6 +1,6 @@
 /-
-`flock-verify rec-compose`: a recursive statement's verdict from its V* parts' verdicts. Each part is one
-`flock-verify verify --zk` process at one V* statement (`--rec-part J`), with one session. The compiled verifier the
+`verity-verify-proof rec-compose`: a recursive statement's verdict from its V* parts' verdicts. Each part is one
+`verity-verify-proof verify --zk` process at one V* statement (`--rec-part J`), with one session. The compiled verifier the
 recursion's guarantee reads (`RecDeploy.V`, `Proofs.Flock.Claims.Recursion.Deploy`) runs part `s` at the statement
 `RecDeploy.partRaw … s p`: of what `verify` reads, only the part's Flock statement (its circuit, partition, program and
 registered reads, with its staged public file), its index and the verifier's own bindings of it vary by part, and every
@@ -21,7 +21,7 @@ within one run, `CoinTree.checkFresh`, and this across runs). `Accepts` states i
 **One run** (C10 `OneRun`). The keys alone don't show that the parts' sessions are one run of the compiled verifier: a
 prover could retry a part and hand over only the session that accepted. So `check` also reads the challenger's
 interactive-run record of the run (`verity/rec-run/v1`, `--rec-run`, written by
-`verity.core.protocols.spot.challenger.RunRecord`, read from the challenger's host, never from the prover's
+`verity.protocols.proofs.spot.device.challenger.RunRecord`, read from the challenger's host, never from the prover's
 bundle): the staging of V*'s statements (the rows file's SHA-512 and the shared set), then every session the
 challenger opened for the run's parts, each logged at its `Hello` before the answer that carries its fresh coin key,
 then the close. It accepts only when the staging is the record's first event, at the composition's rows and the shared
@@ -68,7 +68,7 @@ structure Shared where
   registration : Option String
   innerStatement : Option String
   innerTables : Option (List (String × String))
-  innerDraw : Option String
+  innerSample : Option String
   links : Option (String × Nat)
   innerProgram : Option String
   deriving DecidableEq, Repr, Inhabited
@@ -79,11 +79,11 @@ def linksOf (links : Option (ByteArray × Nat)) : Option (String × Nat) := link
 /-- **The shared inputs' digests**, from the bytes `verify` read. -/
 def Shared.ofFiles (recInner innerCircuit innerPublic innerPartition innerCoins innerSession transcript registration :
     Option ByteArray) (innerStatement : Option String)
-    (innerTables : Option (List (String × ByteArray))) (innerDraw : Option ByteArray)
+    (innerTables : Option (List (String × ByteArray))) (innerSample : Option ByteArray)
     (links : Option (ByteArray × Nat)) (innerProgram : Option ByteArray) : Shared :=
   ⟨recInner.map digest, innerCircuit.map digest, innerPublic.map digest, innerPartition.map digest,
     innerCoins.map digest, innerSession.map digest, transcript.map digest, registration.map digest, innerStatement,
-    innerTables.map (·.map fun t => (t.1, digest t.2)), innerDraw.map digest, linksOf links,
+    innerTables.map (·.map fun t => (t.1, digest t.2)), innerSample.map digest, linksOf links,
     innerProgram.map digest⟩
 
 /-- A string or `null`. -/
@@ -110,7 +110,7 @@ def Shared.toJson (s : Shared) : Json :=
     ("inner_tables", match s.innerTables with
       | none => .null
       | some ts => .arr (ts.map fun t => Json.arr #[.str t.1, .str t.2]).toArray),
-    ("inner_draw", optJson s.innerDraw), ("rec_links", linksJson s.links),
+    ("inner_draw", optJson s.innerSample), ("rec_links", linksJson s.links),
     ("inner_program", optJson s.innerProgram)]
 
 /-- Field `k` of `j`: a string, or `null` as `none`; nothing when absent or another value. -/
@@ -153,12 +153,12 @@ def Shared.diff (s t : Shared) : String :=
     one "inner_partition" "the inner statement's partition, --rec-inner-partition" s.innerPartition t.innerPartition <|>
     one "inner_coins" "a record of check 5's coins, --rec-inner-coins" s.innerCoins t.innerCoins <|>
     one "inner_session" "the inner session's record, --rec-inner-session" s.innerSession t.innerSession <|>
-    one "inner_transcript" "the coin server's transcript, --rec-inner-transcript" s.transcript t.transcript <|>
+    one "inner_transcript" "the challenger's live-coin part's transcript, --rec-inner-transcript" s.transcript t.transcript <|>
     one "inner_registration" "the circuit registration, --rec-inner-registration" s.registration t.registration <|>
     one "inner_statement" "how the inner statement is proved, --rec-inner-statement" s.innerStatement t.innerStatement <|>
     one "inner_tables" "the inner statement's lookup tables, --rec-inner-tables"
       (s.innerTables.map toString) (t.innerTables.map toString) <|>
-    one "inner_draw" "the inner statement's draw, --rec-inner-draw" s.innerDraw t.innerDraw <|>
+    one "inner_draw" "the inner statement's draw, --rec-inner-draw" s.innerSample t.innerSample <|>
     one "rec_links" "the inner population's link table, --rec-links" (s.links.map (linksShow ∘ some))
       (t.links.map (linksShow ∘ some)) <|>
     one "inner_program" "the verifier's program of the inner statement, --rec-inner-program" s.innerProgram
@@ -258,7 +258,7 @@ def checkForm (name inner : String) (links : Option (String × Nat)) (s : Shared
     else if s.innerCoins.isSome then
       .error s!"{name}: it read a record of check 5's coins (--rec-inner-coins), which no part of the compiled verifier reads"
     else if s.innerSession.isNone then .error (held name "inner session's record (--rec-inner-session)")
-    else if s.transcript.isNone then .error (held name "coin server's transcript (--rec-inner-transcript)")
+    else if s.transcript.isNone then .error (held name "live-coin part's transcript (--rec-inner-transcript)")
     else if s.innerStatement.isNone then .error (held name "word on how the inner statement is proved (--rec-inner-statement)")
     else if s.innerTables.isNone then .error (held name "inner statement's lookup tables (--rec-inner-statement)")
     else if s.links ≠ links then

@@ -18,14 +18,19 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 #: {test file: the tests of it whose findings warn}
 BOOKKEEPING = {
+    "tests/lint/test_device_figures.py": ("test_no_new_device_figures", "test_the_list_is_current"),
     "tests/lint/test_lean_bar.py": ("test_no_new_findings",),
     "tests/lint/test_repo_ruff.py": ("test_no_new_findings",),
     "tests/lint/test_repo_lane_text.py": ("test_no_new_lane_text", "test_pinned_files_hold_none",
                                           "test_the_list_is_well_formed_and_an_entry_moves_with_its_file"),
     "tests/lint/test_repo_retired_terms.py": ("test_no_new_retired_terms",),
+    "tests/lint/test_repo_python_verdicts.py": ("test_no_listed_function_changed_since_it_was_read",),
     "tests/test_retired_terms.py": ("test_no_retired_term_in_prose", "test_no_retired_term_in_the_maintained_docs",
                                     "test_no_retired_word_in_a_new_lean_name", "test_the_glossary_records_the_retired_terms",
-                                    "test_spot_s_older_name_only_falls"),
+                                    "test_spot_s_older_name_only_falls",
+                                    "test_the_network_attester_s_older_name_stays_only_where_the_glossary_keeps_it",
+                                    "test_the_certifier_scan_leaves_out_only_files_that_hold_the_name",
+                                    "test_the_slowdown_s_older_name_is_gone"),
     "tests/test_doc_paths.py": ("test_every_path_a_document_names_exists", "test_not_paths_are_current"),
     "tests/test_documented_commands.py": ("test_every_documented_command_line_parses",
                                           "test_known_lists_only_lines_that_still_fail"),
@@ -36,6 +41,7 @@ BOOKKEEPING = {
                                       "test_known_reasons_name_their_owner", "test_canonical_entries",
                                       "test_mirrors_name_their_port"),
     "tests/test_module_strings.py": ("test_the_exemptions_are_current",),
+    "tests/test_one_slowdown.py": ("test_allowed_only_shrinks_to_files_that_still_reach_it",),
     "tests/test_cli_conventions.py": ("test_no_new_synonym_flags", "test_known_list_has_no_stale_entries"),
     "tests/test_provider_names.py": ("test_no_provider_name_in_a_security_statement",),
     "tests/test_refusal_remediations.py": ("test_every_command_a_refusal_names_is_remediated_or_known",

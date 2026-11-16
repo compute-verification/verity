@@ -21,7 +21,7 @@ pads message, `PadLayout.len` pads and `K_PAD = 192` padding symbols, rounded up
 * the pads message at `PadLayout.new m kLog k₀` is `396 + 2(m − 6) + 2(kLog − 6) + 4k₀` symbols (`padMsg_eq`), so
   `372 + 2m + 2kLog + 4k₀` from `m, kLog ≥ 6`;
 * so `N = 2^12` when `2(m − 6) + 2(kLog − 6) + 4k₀ ≤ 116` and `N = 2^13` otherwise, while that sum is at most `628`
-  (`padDomain_eq`): at every statement in `--zk` scope (`m ≤ 35`, `kLog ≤ 27`, `k₀ ≤ 6`) `N` is `2^12` or `2^13`, and
+  (`padDomain_eq`): at every statement in `--zk` scope (`m ≤ 35`, `kLog ≤ 27`, `k₀ ≤ 10`) `N` is `2^12` or `2^13`, and
   which one depends on `kLog` as well as `m` (`padDomain_le`, `padDomain_ge`).
 -/
 
@@ -62,13 +62,13 @@ theorem padDomain_eq {m kLog k0 : ℕ} (h : 2 * (m - 6) + 2 * (kLog - 6) + 4 * k
   · rw [nextPowerOfTwo_eq_of (k := 9) (by norm_num; omega) (by norm_num; omega)]; norm_num
 
 /-- In `--zk` scope the pads' domain is at most `2^13`. -/
-theorem padDomain_le {m kLog k0 : ℕ} (hm : m ≤ 35) (hk : kLog ≤ 27) (h0 : k0 ≤ 6) :
+theorem padDomain_le {m kLog k0 : ℕ} (hm : m ≤ 35) (hk : kLog ≤ 27) (h0 : k0 ≤ 10) :
     padDomain (PadLayout.new m kLog k0) ≤ 2 ^ 13 := by
   rw [padDomain_eq (by omega)]
   split_ifs <;> norm_num
 
 /-- The pads' domain is at least `2^12`. -/
-theorem padDomain_ge {m kLog k0 : ℕ} (hm : m ≤ 35) (hk : kLog ≤ 27) (h0 : k0 ≤ 6) :
+theorem padDomain_ge {m kLog k0 : ℕ} (hm : m ≤ 35) (hk : kLog ≤ 27) (h0 : k0 ≤ 10) :
     2 ^ 12 ≤ padDomain (PadLayout.new m kLog k0) := by
   rw [padDomain_eq (by omega)]
   split_ifs <;> norm_num

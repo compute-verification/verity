@@ -321,7 +321,7 @@ theorem phase_le (A : Arith F K) (hA : A.Correct) (sh : SparseShape) (pub : Spar
   rw [sparseError_eq A hA sh]
   unfold sparsePhase
   -- H1: the skip's columns
-  refine value_drawFin_le _ 6 (fun b => vget h b - vget (sparseFold A sh pub τ z) b)
+  refine value_sampleFin_le _ 6 (fun b => vget h b - vget (sparseFold A sh pub τ z) b)
     (exists_vget_ne (by norm_num) hne) _ _ fun ζc hζc => ?_
   rw [sum_range_vget_sub (N := 64) (by norm_num) ζc, sub_ne_zero, fold_sum] at hζc
   -- H2: the skip's rows
@@ -343,7 +343,7 @@ theorem phase_le (A : Arith F K) (hA : A.Correct) (sh : SparseShape) (pub : Spar
   dsimp only
   refine value_bind_le_of_forall _ _ _ _ fun u => ?_
   -- H4: the planes
-  refine value_drawFin_le_or _ (c₂ ≠ lagAt A pub ζr * v₂ ∨ c₄ ≠ uAt pub rs * phiAt sh pub ζc ζr (vget u))
+  refine value_sampleFin_le_or _ (c₂ ≠ lagAt A pub ζr * v₂ ∨ c₄ ≠ uAt pub rs * phiAt sh pub ζc ζr (vget u))
     sh.pLog (fun b => vget u b - vget (fun p : Fin (2 ^ sh.pLog) => slotPlanes sh τ z rk rs p.val) b) ?_ _ _
     fun ζp hζp => ?_
   · by_cases hE : c₂ ≠ lagAt A pub ζr * v₂ ∨ c₄ ≠ uAt pub rs * phiAt sh pub ζc ζr (vget u)
@@ -377,7 +377,7 @@ theorem phase_le (A : Arith F K) (hA : A.Correct) (sh : SparseShape) (pub : Spar
   · -- H4: the type's point
     rw [ite_eq_right h0]
     refine value_bind_le_of_forall _ _ _ _ fun vt => ?_
-    refine value_drawFin_le_or _ ((c₂ ≠ lagAt A pub ζr * v₂ ∨ c₄ ≠ uAt pub rs * phiAt sh pub ζc ζr (vget u)) ∨
+    refine value_sampleFin_le_or _ ((c₂ ≠ lagAt A pub ζr * v₂ ∨ c₄ ≠ uAt pub rs * phiAt sh pub ζc ζr (vget u)) ∨
         ∑ q : Fin (2 ^ sh.pLog), eqAt ζp q.val * u q ≠ ∑ t : Fin (2 ^ sh.tLog), slotWeight sh τ rs t.val * vt t)
       sh.tLog (fun b => vget vt b - vget (fun t : Fin (2 ^ sh.tLog) => typeVal sh z rk ζp t.val) b) ?_ _ _
       fun ρ hρ => ?_

@@ -698,7 +698,7 @@ impl FrameStmt {
         }
         let ret = lay.ret_words > 0;
         if ret == inst.sampling || net.out_groups.is_empty() || ret && (net.out_groups[0].col != lay.ret_col || net.out_groups[0].words != lay.ret_words) {
-            return Err("the returned-output group is not the netlist's first output group".into());
+            return Err("the returned-output group is not the circuit description's first output group".into());
         }
         let cm = cut_map_of(&net, &inst.header, inst.units)?;
         if cm.native != inst.sampling || inst.sampling && cm.words == 0 {
@@ -1152,31 +1152,31 @@ pub fn cut_map_of(net: &IrUnitNet, h: &serde_json::Value, units: usize) -> Resul
         return Err(format!("{units} units, but {n} instances x {upi} units each"));
     }
     if h.get("cut").is_some() {
-        return Err("the instance header carries a cut structure; the cut is the pinned netlist's".into());
+        return Err("the instance header carries a cut structure; the cut is the pinned circuit description's".into());
     }
     let null = serde_json::Value::Null;
     let cut = net.cut.as_ref().unwrap_or(&null);
     let words = cut["words"].as_u64().unwrap_or(0) as usize;
     if g("cut_words").unwrap_or(0) != words {
-        return Err(format!("the header claims {} cut words, the pinned netlist {words}", g("cut_words").unwrap_or(0)));
+        return Err(format!("the header claims {} cut words, the pinned circuit description {words}", g("cut_words").unwrap_or(0)));
     }
     if words == 0 {
         if net.cut.is_some() || net.in_groups.len() != 1 || net.out_groups.len() != 1 {
-            return Err("a netlist with cut groups or a CUT line but no cut words".into());
+            return Err("a circuit description with cut groups or a CUT line but no cut words".into());
         }
         return Ok(CutMap { words: 0, tail: vec![], unit_in: vec![vec![]; upi], unit_out: vec![vec![]; upi], native: false });
     }
     let native = match cut.get("native") {
         None => false,
         Some(v) if v.as_str() == Some(NATIVE_SAMPLING) => true,
-        Some(v) => return Err(format!("the netlist's cut words are native to {v}, which this verifier does not implement")),
+        Some(v) => return Err(format!("the circuit description's cut words are native to {v}, which this verifier does not implement")),
     };
     if net.in_groups.len() != 2 || !(net.out_groups.len() == 2 || native && net.out_groups.len() == 1) {
-        return Err(format!("{words} cut words, but the netlist has no cut port groups"));
+        return Err(format!("{words} cut words, but the circuit description has no cut port groups"));
     }
     let (unit_in, unit_out) = (pairs(&cut["in"])?, pairs(&cut["out"])?);
     if unit_in.len() != upi || unit_out.len() != upi {
-        return Err(format!("{upi} units per instance, but the netlist's cut ports list {}", unit_in.len()));
+        return Err(format!("{upi} units per instance, but the circuit description's cut ports list {}", unit_in.len()));
     }
     let group_cols = |g: &Group, base: usize| -> Result<Vec<usize>, String> {
         if g.bits.iter().any(|&b| b != 32) {
@@ -1188,7 +1188,7 @@ pub fn cut_map_of(net: &IrUnitNet, h: &serde_json::Value, units: usize) -> Resul
     let mut produced = std::collections::BTreeSet::new();
     for u in 0..upi {
         if unit_in[u].iter().map(|p| p.0).collect::<Vec<_>>() != cin || unit_out[u].iter().map(|p| p.0).collect::<Vec<_>>() != cout {
-            return Err(format!("unit {u}'s cut ports are not the netlist's cut groups"));
+            return Err(format!("unit {u}'s cut ports are not the circuit description's cut groups"));
         }
         for &(_, k) in unit_in[u].iter().chain(&unit_out[u]) {
             if k >= words {

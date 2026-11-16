@@ -74,12 +74,12 @@ theorem takes_of_pass {W R : Type} (L : LeanRelease W R) {x : Msg} {w : W} {ρ :
   | ok m =>
     rw [hm] at hp
     simp only at hp
-    show (match _root_.Flock.Firewall.Frame.round (L.cfg x ρ h) { m with stopped := false } ⟨v.toArray⟩
+    show (match _root_.Flock.ZkServer.Frame.round (L.cfg x ρ h) { m with stopped := false } ⟨v.toArray⟩
         (L.coins x h.length) with
       | .ok _ => true
       | .error _ => false) = true
     revert hp
-    cases hc : _root_.Flock.Firewall.Frame.check (L.cfg x ρ h) { m with stopped := false } ⟨v.toArray⟩
+    cases hc : _root_.Flock.ZkServer.Frame.check (L.cfg x ρ h) { m with stopped := false } ⟨v.toArray⟩
         ⟨(L.scheduled x w ρ h (computedOf (L.computed x w ρ h))).toArray⟩ (L.coins x h.length) with
     | error e =>
       intro hp

@@ -40,7 +40,7 @@ def RecursiveZKLoopAnySumDeployed : Prop :=
     (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
     (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
       _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))
-    (s : Flock.Firewall.Schedule) (w : Ωa → Ωp → FirewallAdaptive.Worker) (N r : ℕ)
+    (s : Flock.ZkServer.Schedule) (w : Ωa → Ωp → ZkServerAdaptive.Worker) (N r : ℕ)
     (m : ℕ) (stmt : ℕ → Ωa × (Fin (fwHoles s) → ByteArray) → Claims.Msg)
     (wit : ℕ → OuterZK.WCtx Ωa Ωp (fwHoles s) → Claims.Flock.Wit) (CB : ℕ → Type) [∀ j, Fintype (CB j)]
     [∀ j, Nonempty (CB j)]
@@ -50,17 +50,17 @@ def RecursiveZKLoopAnySumDeployed : Prop :=
     (OuterZK.LoopSessions.atWorker m stmt wit).Honest
       (Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse)
       (fun u : {u : (Ωa × Ωp) × (Fin (fwHoles s + r) → Fin 192 → Fin 256) //
-          FirewallAdaptive.adaptFinished s (w u.1.1 u.1.2) N (saltsOf u.2) = true} =>
+          ZkServerAdaptive.adaptFinished s (w u.1.1 u.1.2) N (saltsOf u.2) = true} =>
         anyCtx s w N r u.1.1.1 u.1.1.2 u.1.2) →
     (OuterZK.LoopSessions.atWorker m stmt wit).Sized (OuterZK.loopSim L₀ src t) CB →
-    ∀ (cut : St → Ωa × (Array Flock.Firewall.Sent × Bool) × List (Claims.Msg × Claims.Out) → W) (s₀ : St),
+    ∀ (cut : St → Ωa × (Array Flock.ZkServer.Sent × Bool) × List (Claims.Msg × Claims.Out) → W) (s₀ : St),
       ReleaseReadsNoStop cut s₀ →
     ∀ (stop : (((Ωa × Ωp) × (Fin (fwHoles s + r) → Fin 192 → Fin 256)) × Claims.Sampling.unitTape.at 0
         ((OuterZK.loopRef L₀ src).swP vs).Nonce ((OuterZK.loopRef L₀ src).swP vs).Rand m) × Ωk → St)
       (E : W → Prop),
       prCoin (fun u => E (cut (stop u) (anyReal vs L₀ src s w N r m stmt wit Vs θ u.1))) ≤
-        (Fintype.card (Fin ((FirewallTemplate.tmpl s s.tables).length + 1) ⊕ St) : ℝ≥0∞) *
-            prCoin (fun c : (Fin ((FirewallTemplate.tmpl s s.tables).length + 1) ⊕ St) ×
+        (Fintype.card (Fin ((ZkServerTemplate.tmpl s s.tables).length + 1) ⊕ St) : ℝ≥0∞) *
+            prCoin (fun c : (Fin ((ZkServerTemplate.tmpl s s.tables).length + 1) ⊕ St) ×
                 ((Ωa × (Fin (fwHoles s) → ZkView.Bits × ZkView.Salt)) × OuterZK.LoopSessions.SimCoins CB m) =>
               E (sumCut s₀ cut c.1 (loopIdeal t L₀ src (fwFilled s) m stmt CB Vs θ c.2))) +
           (OuterZK.LoopSessions.atWorker m stmt wit).err Claims.ZKMal.CoinOpen.shaH OuterZK.loopK

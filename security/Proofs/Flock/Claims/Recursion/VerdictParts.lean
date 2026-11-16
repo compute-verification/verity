@@ -48,9 +48,9 @@ part can own, and one obligation, `hpieces`: wherever the reading holds, the oth
 every piece does, the verdict holds. Those four stay as they are (`VerdictP.base`). `ownP` gives the base checks and
 the pieces their owners, and `decompB_lastSplitP` is `decompB_nextR` at it: the lowering facts are then one per piece.
 
-`staged_rep_drawn` is the coin side of a `rec-residuals` piece: at a staged part whose statement shows coins `c`,
+`staged_rep_sampled` is the coin side of a `rec-residuals` piece: at a staged part whose statement shows coins `c`,
 the rep that check 5 builds (`RecCoins.Inner.rep`, whose `verifierRows` give the `v` it pins) has, at each round `m`,
-the values the coin drew at the one inner round `g + 1` of its stream at round `sp m` (`staged_coinTie_drawn_unique`).
+the values the coin drew at the one inner round `g + 1` of its stream at round `sp m` (`staged_coinTie_sampled_unique`).
 -/
 
 @[expose] public section
@@ -174,7 +174,7 @@ wherever check 5 loads the inner statement from its source and builds rep `r` (`
 `verifierRows` give the `v` a `rec-residuals` part's port must hold), each of the rep's rounds `m` is what the coin
 drew at the inner round `g + 1`, the one round of `R` of rep `r`'s stream at round `sp m`, and the rep's `v` is
 `verifierRows` at those rounds. -/
-theorem staged_rep_drawn {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {c : ℕ → Coin}
+theorem staged_rep_sampled {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {c : ℕ → Coin}
     (hc : showsTr recRead s x xO c) :
     ∃ (i : RecIns) (R : Flock.RecRecord.Record), insO xO = some i ∧
       shownOf recRead x xO = some (R.msgs.map fun mc => (mc.1, mc.2.toArray)) ∧
@@ -188,7 +188,7 @@ theorem staged_rep_drawn {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st
             Drawn (c (g + 1)) rep.rounds[m] ∧
             ∀ g' (hg' : g' < R.rounds.length), R.rounds[g'].stream = R.rounds[g].stream →
               R.rounds[g'].k = R.rounds[g].k → g' = g := by
-  obtain ⟨i, R, hins, hshow, hall⟩ := staged_coinTie_drawn_unique hS hc
+  obtain ⟨i, R, hins, hshow, hall⟩ := staged_coinTie_sampled_unique hS hc
   refine ⟨i, R, hins, hshow, fun f hf unit inn hload sh extras r rep hrep => ?_⟩
   obtain ⟨hr, hv⟩ := rep_ok hrep
   exact ⟨hv, hall f hf unit inn hload r rep.rounds hr⟩

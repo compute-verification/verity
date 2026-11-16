@@ -24,8 +24,8 @@ public import Proofs.Pouw.Lemmas.Dither
 
 namespace Properties.Pouw.Served.SecurityProofs
 
-open Properties.Pouw.Served Properties.Pouw.PeriodJ10R
-open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
+open Properties.Pouw.Served Properties.Pouw.MonitoringPeriodJ10R
+open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
 
 /-- **The per-program price of an exchanged bit gives its period form at the served check**: each window program
 replaced by its exchange-free one. -/

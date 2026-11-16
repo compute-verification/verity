@@ -78,7 +78,7 @@ theorem cols_zk (hs : Hashes Flock.V) {seen : Claims.Seen} {f : Final} {ins : In
     {sts : Array Stmt} {lv : Live} {j : ℕ} {sch : Schedule} {tPad : ℕ} (hf : lastFinal seen = some f)
     (hset : setupOf true f.stmt = some (ins, spec, sts)) (hlv : liveOf spec f.record = .ok lv)
     (hv : Zk.verifyWithM hs spec (tabsOf sts) f.record f.proofs = .ok ()) (hj : j < sts.size)
-    (hsch : Zk.schedule sts[j].m = .ok (sch, tPad)) (hp2 : spec.points = 2) :
+    (hsch : Zk.schedule sts[j].wideLeaf sts[j].m = .ok (sch, tPad)) (hp2 : spec.points = 2) :
     cols true seen j = Claims.Flock.distinctBelow (sch.levels.getD 0 default).d
       (Claims.Flock.zkRepColsOf (ZkExec.shapeZKn (Setup.ofCircuit sts[j]) sch (2 * sts[j].regions.size))
           (lv.streams.getD (2 * j) #[]) (f.proofs.getD (2 * j) ByteArray.empty) ++
@@ -93,16 +93,18 @@ theorem cols_zk (hs : Hashes Flock.V) {seen : Claims.Seen} {f : Final} {ins : In
   rw [hj', hpts] at hex
   have hx : extras.size = 2 * sts[j].regions.size := by
     rw [extraClaims_size (st := sts[j]) hex, ← hpts, hpn, hp2, Nat.mul_comm]
-  have hzs : Claims.Flock.zkSched (Setup.ofCircuit sts[j]).m = (sch, tPad) := by
+  have hzs : Claims.Flock.zkSched (Setup.ofCircuit sts[j]).wideLeaf (Setup.ofCircuit sts[j]).m = (sch, tPad) := by
     simp only [Claims.Flock.zkSched]
-    rw [show (Setup.ofCircuit sts[j]).m = sts[j].m from rfl, hsch]
-  have hsh : Claims.Flock.zkProofShape (Setup.ofCircuit sts[j]).m (Setup.ofCircuit sts[j]).kLog (2 + extras.size)
+    rw [show (Setup.ofCircuit sts[j]).m = sts[j].m from rfl,
+      show (Setup.ofCircuit sts[j]).wideLeaf = sts[j].wideLeaf from rfl, hsch]
+  have hsh : Claims.Flock.zkProofShape (Setup.ofCircuit sts[j]).wideLeaf (Setup.ofCircuit sts[j]).m (Setup.ofCircuit sts[j]).kLog (2 + extras.size)
       (Setup.ofCircuit sts[j]).merkle.digestLen (saltLenOf true (Setup.ofCircuit sts[j])) =
       ZkExec.shapeZKn (Setup.ofCircuit sts[j]) sch (2 * sts[j].regions.size) := by
     simp only [Claims.Flock.zkProofShape, hzs, ZkExec.shapeZKn, saltLenOf, hx, ite_true]
   have hrun : runOf true seen j = some
       { m := (Setup.ofCircuit sts[j]).m, kLog := (Setup.ofCircuit sts[j]).kLog, claims := 2 + extras.size,
         hashLen := (Setup.ofCircuit sts[j]).merkle.digestLen, saltLen := saltLenOf true (Setup.ofCircuit sts[j]),
+        wideLeaf := (Setup.ofCircuit sts[j]).wideLeaf,
         reps := [(lv.streams.getD (2 * j) #[], f.proofs.getD (2 * j) ByteArray.empty),
                  (lv.streams.getD (2 * j + 1) #[], f.proofs.getD (2 * j + 1) ByteArray.empty)] } := by
     unfold runOf
@@ -123,7 +125,7 @@ theorem cols_zk (hs : Hashes Flock.V) {seen : Claims.Seen} {f : Final} {ins : In
     {sts : Array Stmt} {lv : Live} {j : ℕ} {sch : Schedule} {tPad : ℕ} (hf : lastFinal seen = some f)
     (hset : setupOf true f.stmt = some (ins, spec, sts)) (hlv : liveOf spec f.record = .ok lv)
     (hv : Zk.verifyWithM hs spec (tabsOf sts) f.record f.proofs = .ok ()) (hj : j < sts.size)
-    (hsch : Zk.schedule sts[j].m = .ok (sch, tPad)) (hp2 : spec.points = 2) :
+    (hsch : Zk.schedule sts[j].wideLeaf sts[j].m = .ok (sch, tPad)) (hp2 : spec.points = 2) :
     cols true seen j = Claims.Flock.distinctBelow (sch.levels.getD 0 default).d
       (Claims.Flock.zkRepColsOf (ZkExec.shapeZKn (Setup.ofCircuit sts[j]) sch (2 * sts[j].regions.size))
           (lv.streams.getD (2 * j) #[]) (f.proofs.getD (2 * j) ByteArray.empty) ++

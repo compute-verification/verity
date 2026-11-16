@@ -39,7 +39,7 @@ import Proofs.Flock.Claims.KS.Width
 /-!
 # A simulation of the plain runs, and the record's sample
 
-The plain mixture's first bound (`PlainDrawSim`'s `plain_first_of_simD`) reads a simulation of `P`'s deployed runs:
+The plain mixture's first bound (`PlainSampleSim`'s `plain_first_of_simD`) reads a simulation of `P`'s deployed runs:
 
 * `PlainSimRun`, `PlainSim`: coins `Φ (u, r')` of `V false` at the tape `u` and the live coins `r'`, with the sampling design of
   uniform coins, and a prover `P'` of the live session such that wherever `V false` accepts at `Φ (u, r')`, the live
@@ -47,8 +47,8 @@ The plain mixture's first bound (`PlainDrawSim`'s `plain_first_of_simD`) reads a
 * `plainCoins`, `plainSim_of_run`: where each deployed coin takes a live coin's first entries and the rest from the
   tape, the sampling design holds, so `PlainSimRun` gives `PlainSim`.
 
-The record's sample is the statement's only up to key order on accepting runs (`RecordDrawEquiv`, `recordDrawEquiv`),
-and that is all the checks give (`drawEq_ne`), so the chain reads the session set up at the statement's sample.
+The record's sample is the statement's only up to key order on accepting runs (`RecordSampleEquiv`, `recordSampleEquiv`),
+and that is all the checks give (`sampleEq_ne`), so the chain reads the session set up at the statement's sample.
 -/
 
 @[expose] public section
@@ -63,7 +63,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 /-- **`P`'s accepting runs carry the statement's sample up to key order**: on every accepting run of `V false` at `x`
 and `ω`, the last message's record has a sample `JsonEquiv` to the statement's, what `checks` compares. -/
-def RecordDrawEquiv {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) : Prop :=
+def RecordSampleEquiv {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) : Prop :=
   ∀ r : Fin ((V false).k x) → Coin, (Claims.run sha512 P (V false) x ω r).out = .acc →
     ∀ s spec sts link c₁ mids f,
       act false x ((Claims.run sha512 P (V false) x ω r).msgs.map Prod.fst)
@@ -72,20 +72,20 @@ def RecordDrawEquiv {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω
         Option.Rel JsonEquiv (Exec.recordDraw f.record) s.read.draw
 
 /-- **Every prover's accepting runs carry the statement's sample up to key order**: an accepting decision passes
-`checks`, whose sample check is `drawEq` (`checks_draw`). -/
-theorem recordDrawEquiv {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) : RecordDrawEquiv P x ω := by
+`checks`, whose sample check is `sampleEq` (`checks_sample`). -/
+theorem recordSampleEquiv {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) : RecordSampleEquiv P x ω := by
   intro r h s spec sts link c₁ mids f hact
   have hacc := run_acc_next sha512 P (V false) x ω r h
   replace hacc : ((next false x ((Claims.run sha512 P (V false) x ω r).msgs.map Prod.fst)
       ((List.range ((Claims.run sha512 P (V false) x ω r).msgs.map Prod.fst).length).map
         (Claims.coinSeq r))).eval sha512).1 = .acc := hacc
-  exact Claims.Bridge.Custody.checks_draw ((next_decide_sha512 hact).1 hacc).2
+  exact Claims.Bridge.Custody.checks_sample ((next_decide_sha512 hact).1 hacc).2
 
-/-- **`drawEq` passes on different terms**: two objects with the same fields in trees of different shapes are
+/-- **`sampleEq` passes on different terms**: two objects with the same fields in trees of different shapes are
 `JsonEquiv`, so the checks passing does not give the record the statement's sample as the same term. -/
-theorem drawEq_ne : ∃ a b : Json, drawEq (some a) (some b) = true ∧ a ≠ b := by
+theorem sampleEq_ne : ∃ a b : Json, sampleEq (some a) (some b) = true ∧ a ≠ b := by
   refine ⟨.obj ⟨⟨.inner 2 "a" .null .leaf (.inner 1 "b" .null .leaf .leaf)⟩⟩,
-    .obj ⟨⟨.inner 2 "b" .null (.inner 1 "a" .null .leaf .leaf) .leaf⟩⟩, (drawEq_iff _ _).2 (.some rfl), fun h => ?_⟩
+    .obj ⟨⟨.inner 2 "b" .null (.inner 1 "a" .null .leaf .leaf) .leaf⟩⟩, (sampleEq_iff _ _).2 (.some rfl), fun h => ?_⟩
   have e := congrArg (fun j : Json => match j with | .obj ⟨⟨.inner _ k _ _ _⟩⟩ => k | _ => "") h
   exact absurd e (by decide)
 

@@ -28,7 +28,7 @@ import Proofs.Flock.Claims.ZK.Reference
 
 namespace Claims.ZKServer.Relay
 
-open _root_.Flock.Firewall.Session (State Placed planOf)
+open _root_.Flock.ZkServer.Session (State Placed planOf)
 open _root_.Flock (V SessionSpec Stmt)
 
 /-- **The deployed model's last round is two past the setup's plan**: the `Hello`, the link and each of the plan's
@@ -40,7 +40,7 @@ theorem LoopModel.Deployed.last_eq {T : ZKMal.CoinLayer.TableData}
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
     {real : Msg → Claims.Flock.Wit →
       (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
-      Nat → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)}
+      Nat → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray)}
     {s0 : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt} (hD : LoopModel.Deployed M L₀ real s0 spec sts) :
     M.L.last M.x = (planOf spec sts).size + 2 := by
   rw [hD.rel]
@@ -72,7 +72,7 @@ theorem envPre_deployed {M : LoopModel Claims.Flock.Wit
     (hD : LoopModel.Deployed M L₀ (Loop.realOf src) s0 spec sts) (hsrc : M.src = src M.x M.w M.ρ)
     (hS : Loop.Level0Src src M.x M.w) (hlive : ZKMal.Masked.Live M.x) (hOwn : M.Own) {sid : Nat}
     {nonce : ByteArray} (hn : nonce = ⟨(ZKMal.CoinLayer.nb M.ρ.1).toArray⟩)
-    (h0 : M.msgs.headD [] = _root_.Flock.Firewall.Hello.msg spec nonce)
+    (h0 : M.msgs.headD [] = _root_.Flock.ZkServer.Hello.msg spec nonce)
     (hwk : M.wk M.x M.w M.ρ (M.hist 1) 0 = some (M.L.ownMsg M.x M.w M.ρ (M.hist 1), false))
     (hRF : ∀ {stream : String} {n : Nat}, ∀ (seen : List String) (st : State) (pl : Placed) (e : Env) (σ σ' : LoopAt)
       (i r : Nat) (dom : ByteArray) (v : Claims.Msg), slot st pl = some (.round stream n) →
@@ -158,7 +158,7 @@ theorem envPre_withInner
     (hsrc : M.src = src M.x M.w M.ρ) (hfin : M.fin = fin M.x M.w M.ρ) (hS : Loop.Level0Src src M.x M.w)
     (hlive : ZKMal.Masked.Live M.x) (hcp : M.L.CrossPasses) (hOwn : M.Own) {sid : Nat}
     {nonce : ByteArray} (hn : nonce = ⟨(ZKMal.CoinLayer.nb M.ρ.1).toArray⟩)
-    (h0 : M.msgs.headD [] = _root_.Flock.Firewall.Hello.msg spec nonce)
+    (h0 : M.msgs.headD [] = _root_.Flock.ZkServer.Hello.msg spec nonce)
     (hwk : M.wk M.x M.w M.ρ (M.hist 1) 0 = some (M.L.ownMsg M.x M.w M.ρ (M.hist 1), false)) :
     ∀ (es : List Env) (seen : List String) (st : State) (pl : Placed) (ms : List Claims.Msg),
       LoopP M (LoopJ M sid spec sts) sid spec sts nonce seen st pl es ms →

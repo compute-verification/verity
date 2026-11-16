@@ -3,10 +3,10 @@
 //! flock-128-r2 live session. This is `bin/flock-ir-frame.rs` at c53d9148 with the sampling statement's
 //! changes (the session protocol is flock-pure-gpu's). It refuses any file but a `flock-ir-sampling/v1` one.
 //!
-//!   flock-ir-sampling serve    --listen ADDR --out DIR --instances FILE --netlist FILE --pin SHA256 --native-checked SHA256
+//!   flock-ir-sampling serve    --listen ADDR --out DIR --instances FILE --circuit-description FILE --pin SHA256 --native-checked SHA256
 //!                              [--tables DIR] [--sessions N] [--operator LANE]
-//!   flock-ir-sampling prove    --verifier ADDR --instances FILE --netlist FILE [--tables DIR] [--gpu] [--runs N] [--warm W] [--dump DIR]
-//!   flock-ir-sampling selftest --instances FILE --netlist FILE [--tables DIR] [--gpu] [--only CASE]
+//!   flock-ir-sampling prove    --verifier ADDR --instances FILE --circuit-description FILE [--tables DIR] [--gpu] [--runs N] [--warm W] [--dump DIR]
+//!   flock-ir-sampling selftest --instances FILE --circuit-description FILE [--tables DIR] [--gpu] [--only CASE]
 //!
 //! Before anything the verifier checks its own instance file (`verity_flock.ir_sampling.stage`, never a producer's): the unit
 //! circuit description's order, the block table against the plan (IR6: derived, not read), the frame-v3 roots recomputed from its
@@ -533,7 +533,7 @@ fn selftest(st: &Arc<FrameStmt>, inst: &Arc<FrameInstances>, gpu: bool) {
         }
         let v = if gpu && load_case(st, name).is_none() {
             let out = std::process::Command::new(std::env::current_exe().unwrap())
-                .args(["selftest", "--gpu", "--instances", &arg("--instances", ""), "--netlist", &arg("--netlist", ""), "--tables", &arg("--tables", "tables"),
+                .args(["selftest", "--gpu", "--instances", &arg("--instances", ""), "--circuit-description", &arg("--circuit-description", ""), "--tables", &arg("--tables", "tables"),
                        "--only", name])
                 .output()
                 .expect("spawn a case");
@@ -624,16 +624,16 @@ fn main() {
     if cmd == "serve" && inst.sampling && arg("--native-checked", "") != hex(&inst.public_sha256) {
         refuse("serve of a flock-ir-sampling/v1 file needs --native-checked <its public sha256>: verity_flock.ir_sampling.check_native first".into());
     }
-    let net = IrUnitNet::parse(&std::fs::read_to_string(arg("--netlist", "net.txt")).expect("netlist"));
+    let net = IrUnitNet::parse(&std::fs::read_to_string(arg("--circuit-description", "net.txt")).expect("circuit description"));
     let pin = arg("--pin", "");
     if cmd == "serve" && pin.is_empty() {
         refuse("serve needs --pin (the pinned lowering's sha256)".into());
     }
     if !pin.is_empty() && hex(&net.sha256) != pin {
-        refuse(format!("the netlist's sha256 {} is not the pinned lowering {pin}", hex(&net.sha256)));
+        refuse(format!("the circuit description's sha256 {} is not the pinned lowering {pin}", hex(&net.sha256)));
     }
     if inst.unit != net.name || inst.header["unit_sha256"].as_str() != Some(hex(&net.sha256).as_str()) {
-        refuse("the instance file was staged for another unit netlist".into());
+        refuse("the instance file was staged for another unit circuit description".into());
     }
     for c in [check_order(&net), check_blocks(&inst), check_roots(&inst)] {
         if let Err(e) = c {
@@ -679,6 +679,6 @@ fn main() {
                 println!("LIVE\t{v}");
             }
         }
-        _ => eprintln!("usage: flock-ir-sampling serve|prove|selftest --instances FILE --netlist FILE [--pin SHA256 --native-checked SHA256] ..."),
+        _ => eprintln!("usage: flock-ir-sampling serve|prove|selftest --instances FILE --circuit-description FILE [--pin SHA256 --native-checked SHA256] ..."),
     }
 }

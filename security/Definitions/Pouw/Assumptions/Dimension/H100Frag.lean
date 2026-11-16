@@ -60,7 +60,7 @@ def AccFragIn (a K : ℕ) (β : ℚ) (fpSem : ℕ → ℚ → ℚ → ℚ → �
   | [], _ => True
   | o :: P, Rs => o.FragOK a K β S F W Rs ∧ AccFragIn a K β fpSem S F W P (Rs ++ o.outs fpSem Rs)
 
-/-! ## Pinned statements (draft semantics, pending review) -/
+/-! ## Guarantees (draft semantics, pending review) -/
 
 /-- **Computed fragments reduce to lane increments** (draft semantics, pending review): if every multiplicand in `W`
 depends on at most `q` lanes on `S`, a program in the accumulator form with at most `K` multiplicands per register is

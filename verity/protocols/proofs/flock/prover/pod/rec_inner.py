@@ -129,7 +129,7 @@ def stage_window(window: Path, k: int, subcircuit: str, sets: Path, out: Path, z
     ``public_body`` states. ``zk_out``: the same member under the hm96 circuit as well (today's ``--zk`` statement, 85's
     ``stage-zk``)."""
     from verity.protocols.proofs.spot.verifier.one_stage import partition as P
-    from verity.commitments.windows.flock_inputs import flock_input_files
+    from verity.commitments.periods.flock_inputs import flock_input_files
     from verity_flock import subcircuit_templates as TM
 
     win = json.loads((window / "window.json").read_text())
@@ -238,7 +238,7 @@ def window_class(part: str, spec: dict[str, int]) -> str:
 
 
 def release_windows_ms(parts: list[str], spec: str) -> list[int]:
-    """The release schedule's windows (`verity_flock.firewall`, rule 3), one a part, from ``spec``: comma-separated
+    """The release schedule's windows (`verity_flock.zk_server`, rule 3), one a part, from ``spec``: comma-separated
     ``CLASS=SECONDS`` (`window_class`), and ``lead=SECONDS``, added to the first part's: what comes between the inner
     session's connection and the first outer session (the inner proof, icheck, vstage, vcap, oprove's setup)."""
     s = {k: int(v) for k, v in (kv.split("=", 1) for kv in spec.split(",") if kv)}
@@ -285,7 +285,7 @@ def tree_held(challenger: Path, sessions: list[Path]) -> dict:
     """Each rec_live session directory of ``sessions`` held to the release log in ``challenger`` (`rec_live.tree_held_reason`):
     its live-coin part's record (``public.json``) and its coin tree (a stopped session's ``coin_tree.json``, else its session
     record's ``coin_tree``)."""
-    from verity.protocols.proofs.spot.device import remote as R
+    from verity.protocols.proofs.spot.verifier.challenger import remote as R
 
     held = []
     for d in sessions:
@@ -324,7 +324,7 @@ def main(argv=None) -> int:
     fg.add_argument("--level", type=int, default=0)
     fg.add_argument("--record", choices=("session", "prover"), default="session")
     rp = sp.add_parser("release-parts")
-    rp.add_argument("--statements", required=True, help="flock-verify rec-statements' output (its RECVSTAR line)")
+    rp.add_argument("--statements", required=True, help="verity-verify-proof rec-statements' output (its RECVSTAR line)")
     rp.add_argument("--windows-s", required=True, help="CLASS=SECONDS,... (release_windows_ms)")
     rr = sp.add_parser("release-report")
     rr.add_argument("--state", required=True)

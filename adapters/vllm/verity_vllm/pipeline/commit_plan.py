@@ -4,7 +4,7 @@ the GPU is held (`verity-vllm commit-plan`, the row's `plan` stage).
     verity-vllm commit-plan --workload W --required-manifest M --program-digest D (--program-dir P | --programs-root R) --out PLAN
 
 The plan is the form (B) producer facts of a query-path manifest (`oracle_producers_of_record`: the Programs of record read by
-dataflow; 588 s of a Qwen3-4B B32 Commit's 949 s).  The Commit (`--plan PLAN`) takes them from the plan only when the plan's key
+dataflow).  The Commit (`--plan PLAN`) takes them from the plan only when the plan's key
 equals its own (`key`: the Program digest, the sha256 of the required manifest and of the workload, the Programs it reads, the code
 identity over the integration and core, the vLLM version); a plan it cannot read or whose key differs, and it derives the facts
 itself and records `plan_recomputed` with the reason (`use`).  The facts are the same either way: the plan stores them in the

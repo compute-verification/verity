@@ -41,11 +41,12 @@ from collections import deque
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import torch
 
 from verity_vllm.commit import row_tables as RTB
 from verity_vllm.commit import row_tables_device as D
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import row_table_nvcc
+from verity_torch.pouw import row_table_side_stream
 from verity_vllm.engine import int8_exact as E
 
 RESULT_SCHEMA = "research/result/v0.1"
@@ -157,7 +158,7 @@ def run(arm: str, model: Model, graphs: dict, ctx: bytes, key: bytes, first: int
                 end.record(serving)
                 p = D.step_roots(ctx, s, model.outputs(model.kept[s % 2]), key)
                 root = torch.cuda.Event(enable_timing=True)
-                root.record(D.side_stream())
+                root.record(row_table_side_stream(torch))
                 marks.append((end, root))
                 hashed[s] = p.done
                 pending.append(p)
@@ -250,7 +251,7 @@ def main(argv: list[str] | None = None) -> int:
     step_ms = {a: 1e3 * statistics.median(v) for a, v in per_arm.items()}
     ok = all(gate.values())
     nbytes = sum(c.numel() + 4 * s.numel() for c, s in model.arenas[0].values())
-    nvcc_v = subprocess.run([D.nvcc() or "nvcc", "--version"], capture_output=True, text=True).stdout.strip().splitlines()[-1:]
+    nvcc_v = subprocess.run([row_table_nvcc() or "nvcc", "--version"], capture_output=True, text=True).stdout.strip().splitlines()[-1:]
     summary = {
         "gpu": torch.cuda.get_device_name(), "capability": list(torch.cuda.get_device_capability()), "torch": torch.__version__,
         "cuda": torch.version.cuda, "nvcc": nvcc_v, "batch": ns.batch, "layers": ns.layers, "tables": len(model.ops),

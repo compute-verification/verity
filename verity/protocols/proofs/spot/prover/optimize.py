@@ -2,7 +2,7 @@
 the plans on the Pareto frontier of expected cost against certified harm, over every budget.
 
 Nothing trusts it.  A plan is a stratified sampling design, `k_s` proof blocks of each subcircuit, the work sampling design
-`work:1` over a work table carrying the credited work and floors equal to the sizes (`work_law`:
+`work:1` over a work table carrying the credited work and floors equal to the sizes (`work_sampling_design`:
 `one_stage.draw.work_k(1, w, n, W, f)` is `min(n, f)`).  A stream's rule can't state it: a fixed count per stratum falls
 against the stratum as the prover pads it, so a stream registers a rate (`work-rate:NUM/DEN`, every stratum's floor at
 the rate).  Its certificate is recomputed from the sizes alone (`certify`): core's `Stratified.harm_bound` for the
@@ -18,12 +18,12 @@ whose incorrect output can forfeit downstream work (a noise or form proof block 
 **Cost.**  Per touched statement plus per proved proof block, as Flock does: subcircuit `s` cut into statements of `c` proof blocks costs
 `touched_s(k; c) * (a0 + a1 c) + k * (b + replay)`, a statement being touched when the sample meets it.  Everything is
 committed at serve time whatever the sample: every proof block's outputs (`commit_bits`, `commit_rows`),
-and the fixed serve-time commitments of every scale (`TensorCommit`: the Commit's taps, PoUW's work blocks, the remote audit's
+and the fixed serve-time commitments of every scale (`TensorCommit`: the Commit's taps, PoUW's work blocks, PoUB's
 receipts, the bits a work block pins), so a plan's cost is the whole serve-time and proving total.  One tensor committed
 at several scales is counted once per scale, and `overlaps` prices what committing it once would save.  A plan is thus a
 one-stage design (`two_stage_design` prices a two-stage one, below).  A sampled proof block's witness is built by replaying the
 replay block of its `ReplayGrain` it lies in from the values the prover keeps, which commits nothing: a commitment is a
-hash, so unless serving retained intermediates a replay block starts at the external inputs and the registration's
+hash, so unless serving retained intermediates a replay block starts at the external inputs and the docket's
 constants.
 A subcircuit's costs are measured (`TemplateCost`) or derived from the model's rates and its features: ANDs, and the hm96
 rows a proved proof block opens (`row_ands`).
@@ -35,20 +35,22 @@ cost proportional to work, the cheapest plan certifying `C` is `Achievability`'s
 `weigh` chooses the kinds' weights at a target, under the same stratified certificate.
 
 **Modes.**  `CostModel.commit_weight` is the weight w on serving's commitments in a plan's total: at 1 they count as spent,
-and at 0 (`PROVING_ONLY`) the plan prices proving alone, the model of Lean's `GranularityOptimum` (the cheapest law costs
-`c(s) · (F/C) · Λ`).  `Grain` is that model on one uniform partition, with the commitment term beside it: `n · b(s) · h`
-for `n` proof blocks of `b(s)` committed bytes at `h` a hashed byte, paid whether a proof block is sampled or not.
-`grain_costs` prices a ladder of partitions for the free-compute target (`Achievability`'s law, `GranularityOptimum`'s
-cost) or the exfiltration target (`ExfiltrationOptimum`'s law), and `sqrt_grain` is the work target's optimum in closed
-form, `s* = √(w β h C / (o Λ))`, when `c(s) = f + o s` and every proof block commits `β` bytes.
+and at 0 (`PROVING_ONLY`) the plan prices proving alone, the model of Lean's `GranularityOptimum` (the cheapest sampling
+design costs `c(s) · (F/C) · Λ`).  `Grain` is that model on one uniform partition, with the commitment term beside it:
+`n · b(s) · h` for `n` proof blocks of `b(s)` committed bytes at `h` a hashed byte, paid whether a proof block is sampled
+or not.  `grain_costs` prices a ladder of partitions for the free-compute target (`Achievability`'s sampling design,
+`GranularityOptimum`'s cost) or the exfiltration target (`ExfiltrationOptimum`'s sampling design), and `sqrt_grain` is the
+work target's optimum in closed form, `s* = √(w β h C / (o Λ))`, when `c(s) = f + o s` and every proof block commits `β`
+bytes.
 
 **Two-stage.**  A two-stage design (`Claims.Sampling.Design.Two`): serving commits only the replay blocks' boundaries, the
 first stage samples exactly K of a verification phase's n replay blocks, uniformly (the rate q = K/n; the bound holds
 at that rate), the prover commits each sampled one's interior, and the second
 stage samples k_t of the n_t proof blocks of each stratum t in it with fresh coins.  It certifies exfiltration alone
-(compute credit isn't certified with deferred interiors), in `CompiledTwo.Exfil`'s form: Σ over the admissible sets T of
-incorrect proof blocks of 2^{b(T)}, each T charged its own blocks' committed bits.  `two_stage_exfil` bounds that count's
-log2 (a wholly incorrect replay block is charged all its bits, so the bound is near Λ/q of them), `two_stage_price`
+(compute credit isn't certified where interiors are committed after the first stage), in `CompiledTwo.Exfil`'s form: Σ over
+the admissible sets T of incorrect proof blocks of 2^{b(T)}, each T charged its own blocks' committed bits.
+`two_stage_exfil` bounds that count's log2 (a wholly incorrect replay block is charged all its bits, so the bound is near
+Λ/q of them), `two_stage_price`
 prices a sampled replay block's proving, each type's statements its own or its verification phase's
 (`two_stage_statements`), and `two_stage_design` the design with the least bound at a budget, width-stratified
 (the public size classes up to a threshold in one stratum, each wider one in its own; on request also each distinct
@@ -65,7 +67,7 @@ from pathlib import Path
 
 from verity.protocols.proofs.spot.verifier.profile import HARM_MARGIN, IntegrityProfile, Stratified, Stratum, neg_log_escape
 from verity.protocols.proofs.spot.verifier.consumers import entropy_bits, exfiltration_bound
-from verity.circuits.partition_v2 import UNIT_CLASS_MAX, unit_class
+from verity.circuits.partition_v2 import SIZE_CLASS_MAX, size_class
 
 
 def pinned_ands(definition: str, sidecar: str = "lms") -> int:
@@ -97,8 +99,8 @@ def row_ands(nbytes: int) -> int:
 class Candidate:
     """One subcircuit of one way (`cut`, default the subcircuit alone) to cut one op type into proof blocks, derived from the IR,
     never from the prover: `units` instances, each credited `work` (the verifier's work table), with `out_bits` over
-    `out_gates` boundary gates, its committed bits, which fit a public size class (`partition_v2.unit_class`, at
-    most `UNIT_CLASS_MAX`, as the one-stage partition refuses a wider proof block), and `influence`, the credited work a wrong
+    `out_gates` boundary gates, its committed bits, which fit a public size class (`partition_v2.size_class`, at
+    most `SIZE_CLASS_MAX`, as the one-stage partition refuses a wider proof block), and `influence`, the credited work a wrong
     one can forfeit downstream.  A proved proof block costs `ands` plus opening `rows` (bytes each) in circuit; serving commits
     `commit_bits` in `commit_rows` rows per proof block whatever the sampling design; one statement holds at most `cap` proof blocks
     (m = k_log + nbl <= 35); `n_rho` proof blocks of it lie in each replay block of replay grain `grain`; and `kind` is its
@@ -124,10 +126,10 @@ class Candidate:
     def __post_init__(self) -> None:
         if not self.op or not self.template or self.units < 1 or self.cap < 1 or self.out_bits < 0 or self.out_gates < 0 \
                 or min(self.work, self.influence, self.ands, self.commit_bits, self.commit_rows, *self.rows, 0) < 0 \
-                or unit_class(self.out_bits) is None or (bool(self.grain) != (self.n_rho > 0)) \
+                or size_class(self.out_bits) is None or (bool(self.grain) != (self.n_rho > 0)) \
                 or self.n_rho > self.units:
             raise ValueError(f"candidate {self.template!r}: needs units >= 1, cap >= 1, non-negative sizes, outputs in a "
-                             f"size class (<= {UNIT_CLASS_MAX} bits), and n_rho in [1, units] with a replay grain")
+                             f"size class (<= {SIZE_CLASS_MAX} bits), and n_rho in [1, units] with a replay grain")
 
     @property
     def alternative(self) -> str:
@@ -173,7 +175,7 @@ class ReplayGrain:
 class TensorCommit:
     """One tensor committed at serve time by one scale, whatever the sample: `nbytes` hashed over the window, at the model's
     per-byte rate (`CostModel.commit_per_bit`) unless `cost` is measured.  `scale` names who commits it (the Commit's taps,
-    PoUW's A rows or tile leaves, the remote audit's receipts, a work block's pin) and `tensor` what; one tensor under two
+    PoUW's A rows or tile leaves, PoUB's receipts, a work block's pin) and `tensor` what; one tensor under two
     scales is an overlap (`overlaps`).  Decode is latency-bound: a decode step hashes `decode_bytes` of it, and `chain` is
     the dependent compressions its trees put on a step's critical path when its roots gate the step (a seed reads them
     before the next call), which they do when `gates`; a copy that doesn't gate trails the step."""
@@ -197,7 +199,7 @@ class CostModel:
     """Measured subcircuits, and the rates that derive the rest from their features, `ands` being a proof block's ANDs with its
     rows' openings (`row_ands`), as `costfit` measures them: per touched statement `statement_fixed + statement_per_and *
     ands` (the session and the verifier's parse), per staged proof block `staged_per_and * ands + staged_per_unit`, and per
-    proved proof block `per_and * ands`.  When `shared`, a template's statements hold only its sampled proof blocks (`IntegrityPeriod`'s
+    proved proof block `per_and * ands`.  When `shared`, a template's statements hold only its sampled proof blocks (`IntegrityMonitoringPeriod`'s
     hidden window: one session, its k sampled proof blocks split evenly over `ceil(k / cap)` statements), so only they are staged;
     otherwise its proof blocks are cut in order into statements and every touched statement is staged whole.  Serving commits each proof block's outputs at `commit_per_bit` and `commit_per_row`, and
     `serve`, every other serve-time commitment, which every plan pays; `replay` names the replay grains that build
@@ -613,12 +615,12 @@ def certify(sizes: Mapping[str, int], candidates: Sequence[Candidate], objective
     density = dens(objective.harm)
     if not exact:
         return PlanBounds(d, density, density, dens(lambda c: float(c.work + c.influence)), None, False)
-    law = Stratified(tuple(Stratum(c.template, c.units, sizes[c.template]) for c in chosen))
-    harm = law.harm_bound({c.template: objective.harm(c) for c in chosen}, d)
-    work = law.harm_bound({c.template: float(c.work + c.influence) for c in chosen}, d)
+    sampling_design = Stratified(tuple(Stratum(c.template, c.units, sizes[c.template]) for c in chosen))
+    harm = sampling_design.harm_bound({c.template: objective.harm(c) for c in chosen}, d)
+    work = sampling_design.harm_bound({c.template: float(c.work + c.influence) for c in chosen}, d)
     leak = None
     if objective.bits:
-        profile = IntegrityProfile(("unit",), (law.population,), {"unit": law}, d)
+        profile = IntegrityProfile(("unit",), (sampling_design.population,), {"unit": sampling_design}, d)
         leak = exfiltration_bound(profile, {c.template: float(c.out_bits) for c in chosen})
     return PlanBounds(d, harm, density, work, leak)
 
@@ -812,7 +814,7 @@ def weigh(candidates: Sequence[Candidate], costs: CostModel, objective: Objectiv
     on the density: from equal weights, a coordinate search, each kind of the current plan in turn (costliest first) taking
     the factor of `factors` on its weight that makes `for_target` cheapest, for at most `rounds` passes.  The certificate
     is the same stratified one over every subcircuit, so the weights are parameters of the sample, chosen at the target, and
-    never of the guarantee; the plan carries them, and registers by its sizes (`work_law`) as any plan does."""
+    never of the guarantee; the plan carries them, and registers by its sizes (`work_sampling_design`) as any plan does."""
     def at(weights: Mapping[str, float]) -> Plan | None:
         return for_target(candidates, costs, objective, target, by=by, exact=exact, weights=weights, **kw)
 
@@ -938,7 +940,7 @@ def needs_benchmark(candidates: Sequence[Candidate], costs: CostModel, objective
     return sorted({r["what"] for r in rows if not r["same"]})
 
 
-def work_law(plan: Plan, candidates: Sequence[Candidate]) -> dict:
+def work_sampling_design(plan: Plan, candidates: Sequence[Candidate]) -> dict:
     """The plan as a work sampling design: `work:1` over a work table carrying the credited work and floors equal to the plan's
     sizes, which `one_stage.draw.work_k` samples exactly (the ceiling is at most 1 since w n <= W). It is a fixed count
     per stratum, which a stream's rule refuses."""
@@ -1000,14 +1002,14 @@ def leak_count(g: Grain, ell: float) -> int:
 
 
 def work_draws(g: Grain, target: float, delta: float) -> float:
-    """`Achievability`'s law on equal proof blocks for the free-compute target C: each sampled with probability
+    """`Achievability`'s sampling design on equal proof blocks for the free-compute target C: each sampled with probability
     min(1, Λ s / C), so (ns/C) Λ samples, `GranularityOptimum`'s cost over c(s), while s Λ <= C, and every one past it."""
     return g.units * min(1.0, log(1 / delta) * g.work / target)
 
 
 def leak_draws(g: Grain, ell: float, delta: float) -> float:
-    """`ExfiltrationOptimum`'s achieving law for a leak target of `ell` bits: n Λ / (K + 1) samples, at most n, and none once
-    every proof block may be incorrect."""
+    """`ExfiltrationOptimum`'s achieving sampling design for a leak target of `ell` bits: n Λ / (K + 1) samples, at most n, and
+    none once every proof block may be incorrect."""
     k = leak_count(g, ell)
     return 0.0 if k >= g.units else min(float(g.units), g.units * log(1 / delta) / (k + 1))
 
@@ -1300,7 +1302,7 @@ def two_stage_rankin(cells: Iterable[Cell], k: Mapping[int, float], replay_block
 
 def registration_count(q: float, registration: float) -> int:
     """The replay blocks the first stage samples of a verification phase of `registration` of them at the rate q:
-    exactly ⌈q·registration⌉ (`Spot.Rate.count` at one table), so at least one at any positive rate and none at 0."""
+    exactly ⌈q·docket⌉ (`Spot.Rate.count` at one table), so at least one at any positive rate and none at 0."""
     if not 0 <= q <= 1 or not registration >= 1:
         raise ValueError(f"a count needs 0 <= q <= 1 and a verification phase of at least one replay block: "
                          f"{q}, {registration}")
@@ -1404,14 +1406,14 @@ def registration_sample(cells: list[Cell], k: Mapping[int, float], registration:
 
 
 def _size_class(bits: float) -> int:
-    if (w := unit_class(ceil(bits))) is None:
-        raise ValueError(f"a proof block of {bits} bits fits no public size class (<= {UNIT_CLASS_MAX} bits)")
+    if (w := size_class(ceil(bits))) is None:
+        raise ValueError(f"a proof block of {bits} bits fits no public size class (<= {SIZE_CLASS_MAX} bits)")
     return w
 
 
 def two_stage_strata(cells: Iterable[Cell], merged: int | str | None) -> list[Cell]:
     """The cells in the strata of a `two_stage_design` row whose `merged` is this: the public size classes
-    (`unit_class`) up to `merged` in stratum 0 and each wider class in the stratum of its bits; `merged` None, each
+    (`size_class`) up to `merged` in stratum 0 and each wider class in the stratum of its bits; `merged` None, each
     distinct width in a stratum of its own, named by the width's place among the cells' widths in increasing order; or
     `merged` "template", a by-template design's, each cell the stratum of its position."""
     cells = list(cells)
@@ -1431,7 +1433,7 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
                      union: bool = False, registration: float = 0.0, fanout: int = 1,
                      sessions: str = "statements") -> dict | None:
     """The two-stage design with the least `two_stage_exfil` bound at a cost of at most `budget`: width-stratified
-    (`stratify`) or uniform (one stratum).  A width-stratified design merges the public size classes (`unit_class`) up
+    (`stratify`) or uniform (one stratum).  A width-stratified design merges the public size classes (`size_class`) up
     to a threshold into stratum 0 and gives each wider class a stratum of its own, the threshold chosen with κ: at the
     narrowest class every class is its own stratum, and at the widest the design is the uniform one, so it is never
     worse.  A class's stratum is sampled at the rate its widest block asks, so with `widths` the family also holds the
@@ -1602,4 +1604,4 @@ __all__ = ["Candidate", "CostModel", "Grain", "HM96_ANDS", "LN_BITS", "LN_PREC",
            "registration_count", "registration_sample", "SESSIONS", "replay_cost", "row_ands", "sensitivity", "sqrt_grain", "structure", "template_cost",
            "touched", "two_stage_counts", "two_stage_design", "two_stage_exfil", "two_stage_price", "two_stage_rankin",
            "two_stage_statements", "two_stage_strata", "weigh",
-           "work_draws", "work_law"]
+           "work_draws", "work_sampling_design"]

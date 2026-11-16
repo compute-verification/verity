@@ -3,7 +3,7 @@
 A *query* ``Q`` partitions the Calls of a Program ``P`` into *proof blocks*; the values a verifier must be able to
 open are the values that cross a unit boundary, plus what the protocol prescribes beside them::
 
-    Q(P)                      -> a sequence of VerificationUnit (a stable id + a set of Call ids)
+    Q(P)                      -> a sequence of ProofBlock (a stable id + a set of Call ids)
     boundary_values(P, Q)     =  U_{V in Q(P)} ( in(V) u out(V) )
     required_values(P, Q, pi) =  boundary_values(P, Q)  u  pi.prescribed_inputs  u  pi.protocol_required
 
@@ -18,7 +18,7 @@ This module is deliberately small and dependency-free: it knows Calls, ports, re
 Definition instance of some registry), how a Program is stored, which annotation says which module owns a Call, and how
 an identity is spelt for a collector are the integration's concern (``verity_vllm.query``).  The one-unit / two-unit
 example of the design (``x -- Matmul -- u -- Activation -- y``: one unit -> {x, y}; two units -> {x, u, y}) is the
-contract; see ``adapters/vllm/tests/query/test_units.py``.
+contract; see ``tests/adapters/vllm/tests/query/test_units.py``.
 
 The Program is read through the :class:`CallGraph` protocol so an integration can present a decoded ``verity.circuits`` descriptor,
 a streamed instance sequence, or a synthetic graph without converting it: a Program is a sequence of :class:`Call` records
@@ -29,7 +29,7 @@ the Program lists in ``inputs``), exactly as a Program gives ``Input`` gates the
 The canonical partition (``verity.circuits.partition_object``: ``Partition``, ``CallPartition``) cuts inside each Call and commits
 every Call output, read or not.  With every Call a unit (the query of record, ``required.Population``), the boundary here leaves out
 an output nothing reads; the policy requires those a module returns, and a Call it leaves out too is ``unreturned``.
-``adapters/vllm/tests/query/test_units_canonical.py`` holds what serving commits to the canonical object on a served Program.
+``tests/adapters/vllm/tests/query/test_units_canonical.py`` holds what serving commits to the canonical object on a served Program.
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, NamedTuple, Protocol, runtime_checkable
 
-__all__ = ["ValueRef", "Call", "CallGraph", "VerificationUnit", "Query", "Partition", "partition_by", "boundary_values",
+__all__ = ["ValueRef", "Call", "CallGraph", "ProofBlock", "Query", "Partition", "partition_by", "boundary_values",
            "Policy", "RequiredValues", "required_values", "PartitionError"]
 
 
@@ -86,7 +86,7 @@ class CallGraph(Protocol):
 
 
 @dataclass(frozen=True)
-class VerificationUnit:
+class ProofBlock:
     """A set of Call ids under a stable id.  The id is the query's (a module path, a layer index, ...); two queries that
     put the same Calls in a unit under different ids are different queries."""
 
@@ -99,7 +99,7 @@ class VerificationUnit:
 
 
 #: ``Q(P) -> units``.  A ``Query`` is any callable of this shape; :func:`partition_by` builds one from a Call -> unit-id map.
-Query = Callable[[CallGraph], Sequence[VerificationUnit]]
+Query = Callable[[CallGraph], Sequence[ProofBlock]]
 #: A query whose units are a partition of the Program's Calls (every Call in exactly one unit); :func:`boundary` requires this and
 #: checks it (:class:`PartitionError`).
 Partition = Query
@@ -114,12 +114,12 @@ def partition_by(key: Callable[[Call], Any], *, order: Callable[[Any], Any] | No
     key.  Units are returned in first-seen body order unless ``order`` sorts the ids.  The canonical way to write a
     membership-derived query (``key`` = the owning module path, the layer, the Definition family, ...)."""
 
-    def Q(P: CallGraph) -> Sequence[VerificationUnit]:
+    def Q(P: CallGraph) -> Sequence[ProofBlock]:
         groups: dict[Any, set[int]] = {}
         for c in P.calls:
             groups.setdefault(key(c), set()).add(c.id)
         ids: Iterable[Any] = groups if order is None else sorted(groups, key=order)
-        return tuple(VerificationUnit(k, frozenset(groups[k])) for k in ids)
+        return tuple(ProofBlock(k, frozenset(groups[k])) for k in ids)
 
     return Q
 
@@ -135,7 +135,7 @@ def _index(P: CallGraph) -> tuple[dict[int, Call], frozenset[int]]:
     return by_id, inputs
 
 
-def _check_partition(P: CallGraph, units: Sequence[VerificationUnit]) -> dict[int, str]:
+def _check_partition(P: CallGraph, units: Sequence[ProofBlock]) -> dict[int, str]:
     """Call id -> unit id; raises :class:`PartitionError` unless every Call is in exactly one unit."""
     owner: dict[int, str] = {}
     for u in units:
@@ -160,7 +160,7 @@ class Boundary:
     values: frozenset[ValueRef]
     produced_in: Mapping[ValueRef, str | None]
     read_by: Mapping[ValueRef, tuple[str, ...]]
-    units: tuple[VerificationUnit, ...]
+    units: tuple[ProofBlock, ...]
     owner: Mapping[int, str]
 
 

@@ -211,7 +211,7 @@ theorem InnerSoundForkOn.plain {D : Type} {H : List UInt8 → D} {I : Inner}
 units of `P` to prove), then `I.r` rounds in which the prover sends a commitment `c_k : Cm` to its inner message and the
 verifier flips the inner coin `ρ_k` live, and then the outer session `outer R ω t`, `t` the transcript of commitments and
 coins. The output records all four. -/
-def recGame {n : ℕ} (L : Law n) (Reg : Type) (I : Inner) (Cm : Type) {β : Type}
+def recGame {n : ℕ} (L : SamplingDesign n) (Reg : Type) (I : Inner) (Cm : Type) {β : Type}
     (outer : Reg → L.Ω → List (Cm × I.Coin) → Game β) : Game (Reg × L.Ω × List (Cm × I.Coin) × β) :=
   .send Reg fun R => .coin L.Ω fun ω => rounds Cm I.Coin I.r fun t => (outer R ω t).map fun b => (R, ω, t, b)
 
@@ -370,7 +370,7 @@ end Leaves
 
 section Outer
 
-variable {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {β : Type}
+variable {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type} {β : Type}
   {outer : Reg → L.Ω → List (Cm × I.Coin) → Game β}
 
 /-- **The average of a quantity at the outer session's start** over the sample and the round coins: `F ω t s` reads the

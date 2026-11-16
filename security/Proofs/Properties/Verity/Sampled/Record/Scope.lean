@@ -6,7 +6,7 @@ public import Proofs.Flock.Claims.NumbersDeploy
 # A session's setup in Flock's masked scope
 
 `SessionInScope spec sts` reads a session's setup (`sessionAt`'s `(spec, sts)` in one-stage v2, `Ins.setup`'s in
-flock-verify `--zk`): one table, at an `m` the masked verifier serves (`25 ≤ m ≤ 35`), in the statement range the
+verity-verify-proof `--zk`): one table, at an `m` the masked verifier serves (`25 ≤ m ≤ 35`), in the statement range the
 soundness bound covers (`Flock.checkInRange_ok`'s three bounds, `FlockDeploy.acct`'s `InRange`), at at most two link
 points. It reads only Flock's own fields. With the setup's equation it is `FlockDeploy.ZkIn` at one table
 (`zkIn_of_inScope`), the scope `SessionsIn` reads; every record session that sets up is in it (`Record.Inner`).

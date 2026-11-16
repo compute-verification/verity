@@ -1,8 +1,8 @@
-# The NVIDIA B200 SXM 180 GB (HGX B200, 1000 W): the one source of its numbers (verity/hardware/README.md).
+# The NVIDIA B200 SXM 180 GB (HGX B200, 1000 W): the one source of its numbers (hardware/README.md).
 # Each number is { value, unit, mark, source }. mark: "ceiling" (no program on this SKU exceeds it, whatever firmware it
 # runs: what the model's premises need), "measurement" (a measured value, so only a lower bound on the ceiling) or
-# "placeholder" (neither, open). Per-SM rates are a SM-clock's. No Lean card table is held to this file yet: the B200's
-# numbers in Lean are security/Definitions/Accounting/Sheets/B200.lean's. The host the card sits in is its own card.
+# "placeholder" (neither, open). Per-SM rates are a SM-clock's. The B200's numbers in Lean are
+# security/Definitions/Registration/Sheets/B200.lean's, held to this file. The host the card sits in is its own card.
 
 kind = "gpu"
 sku = "b200-sxm-180gb"
@@ -18,9 +18,13 @@ nodes = "a B200 node: one card a VM (art:a597e0beaf00: nvidia-smi -q and the clo
 count = { value = 148, unit = "SM", mark = "ceiling", source = "the SMs the firmware enables, as the device reports them: cudaDeviceProp.multiProcessorCount 148, and each of the DC-100 census's 43 probes ran its 148 blocks on 148 distinct SMs, on this board and vBIOS (art:175d28515b3b); no NVIDIA document read gives the B200's count (Technical Brief V2.1 Table 3 says only '16 Blackwell Die for 8 GPUs')" }
 warps = { value = 64, unit = "warp/SM", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 18.2 Table 28, 'Maximum number of resident warps per SM', CC 10.x: 64 (and 2048 resident threads, 32 a warp); store.reg_extra counts its uniform registers and predicates at this many" }
 
+# The clocks, in MHz. default names the reading of the tensor's clock (verity.device.READINGS: sm or tensor) that
+# every figure of the card is stated at unless it names the other: the higher tensor ceiling (CMP-438), where
+# readings(card) is largest.
 [clock]
+default = "sm"
 sm = { value = 1965, unit = "MHz", mark = "ceiling", source = "art:a597e0beaf00 (nvidia-smi -q: max, application, default application and max customer boost clocks 1965 MHz; NVML GPC and memory clock VF offset ranges [0, 0]; supported graphics clocks top at 1965; every lock, application clock and offset above 1965 MHz clamped or refused); no NVIDIA document states a B200 clock" }
-tensor = { value = 1965, unit = "MHz", mark = "ceiling", source = "clock.sm: the tensor cores run on the SM clock, which bounds them; the data sheets' rates imply 1854 MHz (Accounting.TS.Sheets.B200's impliedMHz), which no document states as a clock, and no lower tensor clock is measured on this card" }
+tensor = { value = 1965, unit = "MHz", mark = "ceiling", source = "clock.sm: the tensor cores run on the SM clock, which bounds them; the data sheets' rates imply 1854 MHz (ResourceAccounting.TS.Sheets.B200's impliedMHz), which no document states as a clock, and no lower tensor clock is measured on this card" }
 memory = { value = 3996, unit = "MHz", mark = "ceiling", source = "art:a597e0beaf00 (max, application and default application memory clock 3996 MHz; supported memory clocks top at 3996; memory VF offset range [0, 0], a +500 MHz offset refused)" }
 
 # The stores. Registers in 32-bit words an SM; the rest in bytes. smem is the pool of L1 and shared memory, and
@@ -35,10 +39,10 @@ l2 = { value = 132120576, unit = "B", mark = "placeholder", source = "126 MiB: B
 dram = { value = 193273528320, unit = "B", mark = "ceiling", source = "Lenovo HGX B200 180GB 1000W GPU Product Guide Table 2: 'GPU Memory 180 GB HBM3e', taken as 180 GiB, above the 183,359 MiB the driver reports (art:a597e0beaf00)" }
 dram_installed = { value = 206158430208, unit = "B", mark = "ceiling", source = "192 GiB, the memory on the board, eight HBM3e stacks (memory.bus) of 24 GB, of which store.dram is what a program gets: NVIDIA Blackwell Architecture Technical Brief, Table 3, a GPU of the HGX B200, 'Up to 192 GB HBM3e' (read in V1.1; memory.bus cites V2.1's table for the same line), taken as 192 GiB; the brief counts no stacks, and no document read says what the 180 GB board holds back" }
 
-# The resources' rates, each a SM-clock (a Lean table's rho would be SMs x this x clock.sm, the tensor's x clock.tensor).
+# The resources' rates, each a SM-clock (the Lean's rho is SMs x this x clock.sm, the tensor's x clock.tensor).
 [rate]
-tensor = { value = 8192, unit = "s8 MAC/SM-clock", mark = "measurement", source = "tcgen05.mma kind::i8 measured at 8195 MACs a SM-clock (benchmarks/pouw/sass_census/unpriced_fp4.cu, art:bf3d67eee74a) and at 8193 in the DC-100 census, UTCIMMA M128 N256 every 511.9 SMSP-cycles (art:175d28515b3b); both rows carry the probe's throttled tag, and the card holds the whole 512 cycles, 8192; the data sheets' 4.5 dense INT8 petaOPS (Lenovo Product Guide Table 2; Technical Brief V2.1 Table 3) over 2 x 148 SMs is 8192 at 1854 MHz, but no document states the clock it is quoted at (Accounting.TS.Sheets.B200's impliedMHz), so the per-clock rate is measured only" }
-issue = { value = 4, unit = "warp instruction/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 18.9.1 (CC 10.x), as section 18.8.1: '4 warp schedulers ... each scheduler issues one instruction for one of its assigned warps'; a uniform instruction takes the slot too (Accounting.TS.Sheets.B200, A2u)" }
+tensor = { value = 8192, unit = "s8 MAC/SM-clock", mark = "measurement", source = "tcgen05.mma kind::i8 measured at 8195 MACs a SM-clock (benchmarks/pouw/sass_census/unpriced_fp4.cu, art:bf3d67eee74a) and at 8193 in the DC-100 census, UTCIMMA M128 N256 every 511.9 SMSP-cycles (art:175d28515b3b); both rows carry the probe's throttled tag, and the card holds the whole 512 cycles, 8192; the data sheets' 4.5 dense INT8 petaOPS (Lenovo Product Guide Table 2; Technical Brief V2.1 Table 3) over 2 x 148 SMs is 8192 at 1854 MHz, but no document states the clock it is quoted at (ResourceAccounting.TS.Sheets.B200's impliedMHz), so the per-clock rate is measured only" }
+issue = { value = 4, unit = "warp instruction/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 18.9.1 (CC 10.x), as section 18.8.1: '4 warp schedulers ... each scheduler issues one instruction for one of its assigned warps'; a uniform instruction takes the slot too (ResourceAccounting.TS.Sheets.B200, A2u)" }
 alu = { value = 64, unit = "lane/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 6.4.1 Table 7, CC 10.0: 32-bit integer add, compare, min, max, logic and shift 64" }
 imad = { value = 64, unit = "lane/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 6.4.1 Table 7, CC 10.0: 32-bit integer multiply, multiply-add and extended-precision multiply-add 64" }
 shfl = { value = 32, unit = "lane/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 6.4.1 Table 7, CC 10.0: warp shuffle 32" }
@@ -68,12 +72,17 @@ nvf4 = { value = 0.5, unit = "tensor unit/MAC", mark = "ceiling", source = "the 
 mxf4 = { value = 0.5, unit = "tensor unit/MAC", mark = "ceiling", source = "as nvf4 (kind::mxf4, measured at the same rate, unpriced_fp4.cu)" }
 f64 = { value = 128, unit = "tensor unit/MAC", mark = "ceiling", source = "the data sheets' FP64 Tensor Core 37 teraFLOPS over 148 SMs at 1965 MHz is 63.6 DMMA MACs a SM-clock; measured 64 (DMMA.8x8x4, benchmarks/pouw/sass_census/unpriced.cu), sharing the tensor pipe's time with the other formats; 8192 / 64" }
 
-# What an operation costs in tensor units (rate.tensor's unit) in a timed loop. A measured price is that loop's, at or
-# above the operation's price at the card's ceilings, which the rates above give.
+# What an operation costs in tensor units (rate.tensor's unit). The unit (CMP-438): each operation is charged in seconds
+# at its own pipe's data-sheet ceiling, so a program's time is at least the sum of its operations over their pipes'
+# ceilings. An FP32 add's price is keyed by its clock reading's name: fp32.sm, both pipes on the one SM clock, the
+# default (clock.default); fp32.tensor is fp32.sm, since the tensor cores run on the SM clock. fp32_loop is a timed
+# loop's price, at or above fp32.sm.
 [price]
+fp32.sm = { value = 64, unit = "tensor unit/add", mark = "measurement", source = "the default reading (clock.default): the tensor and the FP32 pipe both on clock.sm (clock.tensor is clock.sm), so an add is rate.tensor / (32 x rate.issue) = 8192 / 128 = 64 tensor units, a SM-clock each; rate.tensor is measured (art:bf3d67eee74a), so this is too" }
+fp32.tensor = { value = 64, unit = "tensor unit/add", mark = "measurement", source = "fp32.sm: the tensor cores run on the SM clock (clock.tensor), so the card has no second clock reading; rate.tensor is measured (art:bf3d67eee74a)" }
 fp32_loop = { value = 67, unit = "tensor unit/add", mark = "placeholder", source = "no run read times an FP32 add in a loop on this card: this is the loop of 64 adds and 3 loop instructions at the card's rates, rate.tensor / (32 x rate.issue) x 67 / 64, a SM-clock each, and the add alone is 64; a run of that loop on a B200 closes it" }
 
 # The model's own ranges (Accel.Card's exact and text).
 [model]
 exact = { value = 31, unit = "bit", mark = "ceiling", source = "PTX ISA 9.0 tcgen05.mma and mma: integer MMAs accumulate in .s32, so a dot is exact at most while |C| + sum |a*b| < 2^31 (P1, Card.Exact); captured exact within it (silicon.integer.BLACKWELL_SM100_S8_K32, art:1015987ce8db, 0 mismatches)" }
-instruction_bytes = { value = 16, unit = "B/instruction", mark = "ceiling", source = "an instruction is 128 bits from Volta on (CUDA Binary Utilities 12.9), so code fits in store.dram / 16 instructions" }
+instruction_bytes = { value = 16, unit = "B/instruction", mark = "ceiling", source = "an instruction is 128 bits from Volta on (CUDA Binary Utilities 12.9), so code fits in store.dram_installed / 16 instructions" }

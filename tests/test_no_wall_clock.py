@@ -18,6 +18,7 @@ import os
 import re
 import tomllib
 
+from research import suite_layout
 from test_repository import ROOT, _testpaths, _tracked
 
 #: What each module offers that reads a clock or waits on one.
@@ -35,52 +36,51 @@ NOW = {"now", "utcnow", "today"}
 SLEEP_IN_SOURCE = re.compile(r"\bsleep\(")
 
 ALLOWED: dict[str, str] = {
-    "benchmarks/numerical/tests/reference/exhaustive_driver.py": "the WP1 pod driver (a recorded run, not a test) reports its steps' wall time",
-    "benchmarks/pouw/tests/test_pearl_c_vllm.py::timed":
+    "tests/benchmarks/numerical/reference/exhaustive_driver.py": "the WP1 pod driver (a recorded run, not a test) reports its steps' wall time",
+    "tests/benchmarks/pouw/test_pearl_c_vllm.py::timed":
         "reports the version-2 tie's seconds at the run of record's size, the Python's and the Lean's; the tests print them and assert none",
-    "infra/ops/tests/test_agent_watch.py::test_api_get_takes_a_shorter_timeout_but_never_a_longer_one":
+    "tests/infra/ops/test_agent_watch.py::test_api_get_takes_a_shorter_timeout_but_never_a_longer_one":
         "passes timeout values to a stubbed urlopen and asserts them; nothing waits",
-    "adapters/vllm/tests/commit/test_commit_fail_closed.py::_WATCHDOG_PROG":
+    "tests/adapters/vllm/tests/commit/test_commit_fail_closed.py::_WATCHDOG_PROG":
         "drives the native collector's dead-watchdog, a C++ timer with no injectable clock; CUDA only, never in check",
-    "adapters/vllm/tests/engine/int8_decode_split_gpu.py":
+    "tests/adapters/vllm/tests/engine/int8_decode_split_gpu.py":
         "a GPU probe script (not collected) that measures the int8 LM head's share of decode time; no test reads it",
-    "adapters/vllm/tests/engine/int8_attention_tpot_gpu.py::generate":
+    "tests/adapters/vllm/tests/engine/int8_attention_tpot_gpu.py::generate":
         "a GPU timing script (not collected) that measures int8_exact decode TPOT, batched against the reference; no test reads it",
-    "adapters/vllm/tests/program/beyond_gemm.py": "a GPU probe script (not collected) that reports its own wall time",
-    "adapters/vllm/tests/protocols/h1_zy_gpu.py::wall":
+    "tests/adapters/vllm/tests/protocols/h1_zy_gpu.py::wall":
         "the GPU timing script (not collected) records each arm's seconds from launch to every result on the host; no test reads them",
-    "adapters/vllm/tests/protocols/local_gate.py::_now":
+    "tests/adapters/vllm/tests/protocols/local_gate.py::_now":
         "the by-hand local gate (not collected) gives infra's auditor.py the times its signed entries record, as on vy-challenger-1",
-    "adapters/vllm/tests/protocols/pouw_h1_rehearsal.py::_poll_end":
+    "tests/adapters/vllm/tests/protocols/pouw_h1_rehearsal.py::_poll_end":
         "the by-hand live rehearsal (not collected) polls the live gate's status for a session's end entry: it has no wait verb",
-    "adapters/vllm/tests/protocols/pous_gpu.py":
+    "tests/adapters/vllm/tests/protocols/pous_gpu.py":
         "the PoUS option's GPU smoke (not collected) records its load, install, decode and step seconds; nothing reads them",
-    "adapters/vllm/tests/protocols/pouw_h1_gpu.py::run": "the GPU run records its install, serve and compile seconds; nothing reads them",
-    "adapters/vllm/tests/protocols/pouw_h1_gpu.py::compile_from": "the host compile records its seconds; nothing reads them",
-    "adapters/vllm/tests/protocols/pouw_h1_gpu.py::fill": "the GPU run records its serve and step seconds; nothing reads them",
-    "adapters/vllm/tests/protocols/pouw_h1_gpu.py::period_program":
+    "tests/adapters/vllm/tests/protocols/pouw_h1_gpu.py::run": "the GPU run records its install, serve and compile seconds; nothing reads them",
+    "tests/adapters/vllm/tests/protocols/pouw_h1_gpu.py::compile_from": "the host compile records its seconds; nothing reads them",
+    "tests/adapters/vllm/tests/protocols/pouw_h1_gpu.py::fill": "the GPU run records its serve and step seconds; nothing reads them",
+    "tests/adapters/vllm/tests/protocols/pouw_h1_gpu.py::period_program":
         "the GPU run records the period Program's declare and digest seconds; nothing reads them",
-    "adapters/vllm/tests/protocols/pouw_h1_gpu.py::await_end":
+    "tests/adapters/vllm/tests/protocols/pouw_h1_gpu.py::await_end":
         "the live run polls the live gate's status for a window's session end entry before reserving the next: it has no wait verb",
-    "adapters/vllm/tests/protocols/pouw_h1_gpu.py::await_listener":
+    "tests/adapters/vllm/tests/protocols/pouw_h1_gpu.py::await_listener":
         "the live run waits for the challenger's session port to listen (ss -ltn) once a second; a probe connect would take its one client",
-    "adapters/vllm/tests/protocols/pouw_h1_gpu.py::served_measures":
+    "tests/adapters/vllm/tests/protocols/pouw_h1_gpu.py::served_measures":
         "the GPU run records its step seconds and when serving ended; nothing reads them",
-    "adapters/vllm/tests/protocols/pouw_h1_gpu.py::hand_off": "the GPU run records its suspend's seconds; nothing reads them",
-    "adapters/vllm/tests/protocols/pouw_h1_gpu.py::fill_close": "the close stage records its seconds; nothing reads them",
-    "adapters/vllm/tests/protocols/pouw_h1_gpu.py::credit_check": "the credit check records its seconds; nothing reads them",
-    "adapters/vllm/tests/protocols/pouw_h1_ranks_gpu.py::serve":
+    "tests/adapters/vllm/tests/protocols/pouw_h1_gpu.py::hand_off": "the GPU run records its suspend's seconds; nothing reads them",
+    "tests/adapters/vllm/tests/protocols/pouw_h1_gpu.py::fill_close": "the close stage records its seconds; nothing reads them",
+    "tests/adapters/vllm/tests/protocols/pouw_h1_gpu.py::credit_check": "the credit check records its seconds; nothing reads them",
+    "tests/adapters/vllm/tests/protocols/pouw_h1_ranks_gpu.py::serve":
         "the GPU run records its build, serve and release seconds; nothing reads them",
-    "adapters/vllm/tests/protocols/pouw_h1_ranks_gpu.py::commit_window":
+    "tests/adapters/vllm/tests/protocols/pouw_h1_ranks_gpu.py::commit_window":
         "the GPU run records each Commit window's install, serve and release seconds; nothing reads them",
-    "adapters/vllm/tests/protocols/pouw_h1_rehearsal.py::build_program":
+    "tests/adapters/vllm/tests/protocols/pouw_h1_rehearsal.py::build_program":
         "the by-hand rehearsal (not collected) records the declared Program's build and encode seconds; nothing reads them",
-    "adapters/vllm/tests/protocols/pouw_h1_rehearsal.py::serve":
+    "tests/adapters/vllm/tests/protocols/pouw_h1_rehearsal.py::serve":
         "the by-hand rehearsal (not collected) records when each stage exited, how long the GPU lease outlived serving",
-    "adapters/vllm/tests/properties/router_tap_exactness_gpu.py::check_config": "the GPU run records the IR pass's seconds; nothing reads them",
-    "adapters/vllm/tests/properties/router_tap_exactness_gpu.py::check_live": "the GPU run records the IR pass's seconds; nothing reads them",
+    "tests/adapters/vllm/tests/properties/router_tap_exactness_gpu.py::check_config": "the GPU run records the IR pass's seconds; nothing reads them",
+    "tests/adapters/vllm/tests/properties/router_tap_exactness_gpu.py::check_live": "the GPU run records the IR pass's seconds; nothing reads them",
     "tests/test_no_wall_clock.py::test_the_scan_sees_each_form": "the scan's own fixture: source it must flag, held in a string",
-    "tools/verity/circuit_check/tests/fixtures/ambient_builders.py::_clocked":
+    "tests/tools/verity/circuit_check/fixtures/ambient_builders.py::_clocked":
         "a builder that reads a clock so that circuit-check --ambient refuses it; nothing compares or waits on the reading",
 }
 
@@ -171,22 +171,22 @@ def test_only_the_suites_check_runs_after_its_lean_steps_skip_on_lean() -> None:
     runs: a test elsewhere that runs or skips on `lake` or a `.lake/` build output passes or fails with the build order.
     Such tests belong to a suite `check` runs after its Lean steps (`AFTER_LEAN`), and
     that suite declares the build outputs it uses under `[tool.verity.tests] artifacts`, which key its cached pass."""
-    spec = importlib.util.spec_from_file_location("repo_check", ROOT / "tools" / "verity" / "check" / "check.py")
+    spec = importlib.util.spec_from_file_location("repo_check", ROOT / "tools" / "check" / "check.py")
     check = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(check)
     names = {}
+    dirs = suite_layout.member_dirs(lambda d: tomllib.loads((ROOT / d / "pyproject.toml").read_text()))
     for p in _tracked():
         if os.path.basename(p) == "pyproject.toml":
             data = tomllib.loads((ROOT / p).read_text())
             if "pytest" in data.get("tool", {}):
-                name = re.sub(r"[-_.]+", "-", data["project"]["name"]).lower() if "project" in data else os.path.dirname(p)
-                names[name] = (os.path.dirname(p), data)
+                names[suite_layout.suite_name(os.path.dirname(p), data.get("project", {}), dirs)] = (os.path.dirname(p), data)
     after = [names[s][0] + "/" for s in check.AFTER_LEAN]
     offenders = [f"{path}:{line}" for path in _test_sources() if not path.startswith(tuple(after))
                  for line in lean_gates((ROOT / path).read_text(encoding="utf-8"))]
     assert not offenders, "tests that skip on what check's Lean steps build, outside the suites it runs after them:\n" + "\n".join(offenders)
     flock = names["verity-flock"][1]["tool"]["verity"]["tests"]
-    assert "verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-verify" in flock.get("artifacts", []), "verity-flock runs the verifier"
+    assert "verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof" in flock.get("artifacts", []), "verity-flock runs the verifier"
 
 
 def test_the_lean_gate_scan_sees_each_form() -> None:

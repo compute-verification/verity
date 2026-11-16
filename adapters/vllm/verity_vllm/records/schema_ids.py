@@ -51,7 +51,7 @@ REPLAY_SLIM_SCHEMA = "verity-vllm/replay-slim/v1"
 #: a replay bundle's `context.json` and its manifest (`pipeline.replay_bundle.SCHEMA`), which `seal` writes;
 #: `open_bundle` refuses a manifest with any other
 REPLAY_BUNDLE_SCHEMA = "verity-vllm/replay-bundle/v1"
-#: a capture's `spec_tokens.json`, the workload as known before any engine step, which `pipeline.m1_capture`'s `main`
+#: a capture's `spec_tokens.json`, the workload as known before any engine step, which `pipeline.match_capture`'s `main`
 #: writes
 SPEC_TOKENS_SCHEMA = "verity-gen/spec-tokens/v1"
 #: a row's admission plan, the host memory reserved for each part of the row (`pipeline.telemetry.admission.SCHEMA`),
@@ -173,6 +173,11 @@ WEIGHTS_OF_RECORD_SCHEMA = "verity/commit/weights-of-record/v2"
 #: writes it, and a row calls a record that carries it stale
 WEIGHTS_OF_RECORD_PRIOR_SCHEMA = "verity/commit/weights-of-record/v1"
 
+# --- the quarantine admission
+#: the quarantine admission, `quarantine.json`: the difftest report of each definition checked, which gate G4 reads;
+#: the records under `engine/profiles/quarantine/` hold it, and no code of the tree writes one
+QUARANTINE_ADMISSION_SCHEMA = "verity-gen/quarantine/v1"
+
 # --- the TP row (`verity_vllm.pipeline.tp`)
 #: the TP Commit's record of the replays it left for `tp-commit-replay` (`pipeline.tp.c2.SCHEMA`), which `seal` writes
 TP_REPLAY_DEFERRED_SCHEMA = "verity-vllm/tp-replay-deferred/v1"
@@ -183,6 +188,8 @@ TP_FOLD_MATCH_SCHEMA = "verity/tp2/fold-match/v1"
 #: the TP Commit's sampled replay (`pipeline.tp.rank_replay.SCHEMA`), which `in_process` and `defer` write, and
 #: `pipeline.tp.commit`'s `main`
 TP_SAMPLED_REPLAY_SCHEMA = "verity-sweep/tp-sampled-replay/v1"
+#: a TP Commit's serving rows, `tp.json` (`pipeline.tp.serving_rows.SCHEMA`), which `gather` writes
+TP_SERVING_ROWS_SCHEMA = "verity-vllm/tp-serving-rows/v1"
 #: the Build's relabel report (`pipeline.tp.emit_ranks.SCHEMA`), which `finish` and `read_report` write
 BUILD_RELABEL_SCHEMA = "verity-vllm/build-relabel/v1"
 #: the relabel's guard record (`pipeline.tp.relabel_build.SCHEMA`), which `derive` writes
@@ -246,20 +253,20 @@ AOT_COMPARISON_SCHEMA = "verity-vllm/aot-comparison/v1"
 PREDICT_NODE_SCHEMA = "verity-predict/node/v1"
 #: `registration.json`, which `program.predict.node_registration.register` writes
 NODE_REGISTRATION_SCHEMA = "verity-vllm/node-registration/v1"
+#: a compilation's summary (`program.predict.steps.SCHEMA`), which `Compiled.summary` returns and
+#: `tools/advice_compile.py` writes as `compiled.json`; the comparison with the Build traces, which `steps.compare`
+#: returns and the tool writes as `comparison.json`, carries it with `/comparison` after it
+COMPILED_STEPS_SCHEMA = "verity-vllm/compiled-steps/v2"
 
 # --- the workload Program (`verity_vllm.program`)
 #: the workload Program's document, which `program.workload.WorkloadProgram.artifact` returns and
 #: `pipeline.global_program.build` writes as `workload_program.json`
 WORKLOAD_PROGRAM_SCHEMA = "verity/workload-program/v1"
 
-# --- PoUW's H1 (`verity_vllm.protocols.pouw.h1`)
-#: a served window's calls record, `pouw-h1-calls.json` (`protocols.pouw.h1.RECORD`), which `H1Run.finish` writes
-POUW_H1_CALLS_SCHEMA = "verity-vllm/pouw-h1-calls/v2"
-#: a suspended window's hand-off state (`protocols.pouw.h1.handoff.SCHEMA`), which `suspend` writes and `resume` refuses
-#: any other than
-POUW_H1_HANDOFF_SCHEMA = "verity-vllm/pouw-h1-handoff/v1"
-
 # --- the protocol options (`verity_vllm.protocols`)
 #: the record of the options one stage installed (`protocols.RECORD_SCHEMA`), which `Composition.record` builds and
 #: `into_verdict` writes as a Commit's `protocols.json`
 PROTOCOL_COMPOSITION_SCHEMA = "verity-vllm/protocol-composition/v0"
+#: the record of one PoUB session (`remote_session.json`), which the PoUB option's `CommitSession._session` writes, and
+#: `.end` for a session whose thread raised
+REMOTE_SESSION_SCHEMA = "verity-vllm/remote-session/v0"

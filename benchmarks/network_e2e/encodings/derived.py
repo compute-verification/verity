@@ -3,7 +3,7 @@
 The rules are `verity_vllm.pipeline.advice_code.derived` (`Config`, `Prefixes`, the walk `walk_steps`, the no-eviction and
 pool bounds, the tie; its docstring states them and the residual), re-exported here for the modules and tests that load
 this one by path. This module builds advice v0's residual with them: `residual` (the encoder) and `reconstruct` and
-`rebuild` (the compile unit), the same walk, so they can't drift apart. `FIELDS` is the table of every I1 field: its
+`rebuild` (the compile slice's proof block), the same walk, so they can't drift apart. `FIELDS` is the table of every I1 field: its
 verdict, derivation, checker and cost.
 
 `bits_table` measures v0 (I1's own `bits_by_window`) and the residual per certifier window, the residual at its own least
@@ -26,8 +26,8 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import NamedTuple
 
-from verity.protocols.accounting.certifier.verifier import advice as I1
-from verity.protocols.accounting.certifier.verifier.advice import Advice, RequestAdvice, Row, Source, StepAdvice
+from verity.protocols.resource_accounting.network.verifier import advice as I1
+from verity.protocols.resource_accounting.network.verifier.advice import Advice, RequestAdvice, Row, Source, StepAdvice
 from verity_vllm.pipeline.advice_code.derived import (
     CertifiedRequest, Config, Holdings, pool_bound, PREFIX_ROOT as PREFIX_ROOT, Prefixes, Residual,
     stop_rule as stop_rule, tie_fields, TOKEN_BYTES as TOKEN_BYTES, unit_key as unit_key, Walk,
@@ -287,7 +287,7 @@ def residual(advice: Advice, cfg: Config, held: Holdings, *, order: Sequence[int
 
 
 def reconstruct(res: Residual, cfg: Config, held: Holdings) -> Walk:
-    """I1's steps from the residual, the config and the tokens: the compile unit's derivation, which the compiler then
+    """I1's steps from the residual, the config and the tokens: the compile slice's proof block's derivation, which the compiler then
     reads."""
     values = {"hit": iter(res.hits), "n": iter(res.ns), "lag": iter(res.lag or ())}
     resumes = iter(res.resumes or ())
@@ -522,7 +522,7 @@ FIELDS = [
      "cost": "0: the tie addresses the certified request by index, with no id to compare"},
     {"field": "order (new)", "verdict": "derived; a step's sent sparse where the prediction misses",
      "bits": "0 / a count, and w_step + w_req a new request of each step sent (v0: none, the id says it)",
-     "from": "the certified admission order (the warden's public schedule), rows, n",
+     "from": "the certified admission order (the network certifier's public schedule), rows, n",
      "derivation": "FCFS admits a step's new requests from the waiting queue's head: the lowest ingress indices not yet "
      "admitted, in arrival order. I1 numbers them by first row: in scheduling order, arrival order; in batch order, Model "
      "Runner V2's stable sort of the step by scheduled tokens, so by n and, at equal n, by arrival",

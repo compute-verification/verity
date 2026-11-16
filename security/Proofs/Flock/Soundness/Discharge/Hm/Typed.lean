@@ -1,11 +1,3 @@
-/-
-A row's `b ‖ c` in a satisfying witness of a typed template's statement (`row_bc_typed`, and at the statement
-`Stmt.setupH` accepted, `row_bc_setupH_typed`): the commit string of the row and salt its slots read. `row_bc_of_sat`'s
-four copies (`row_copies_of_sat`) are Δ's one copy at each `cv` and `pad` input bit (`inBit_copy`, with `RowRanges.ofT`'s
-filters); the constant bits read the pin (`pin_bitT`) and the root's first slot's forced-zero row (`zero_bitT`, there
-because `HmRow.checkTyped` refuses a root that fills its slot). The rows are `sha512/row/v1`'s because `HmRow.rowPorts`
-refuses a typed statement's bit rows (`ParseFactsT.v1`).
--/
 module
 
 public import Proofs.Flock.Soundness.Discharge.Hm.Delta
@@ -30,6 +22,15 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.Hm.Copy
 import Proofs.Flock.Soundness.Discharge.Hm.Nets
 
+/-!
+A row's `b ‖ c` in a satisfying witness of a typed template's statement (`row_bc_typed`, and at the statement
+`Stmt.setupH` accepted, `row_bc_setupH_typed`): the commit string of the row and salt its slots read. `row_bc_of_sat`'s
+four copies (`row_copies_of_sat`) are Δ's one copy at each `cv` and `pad` input bit (`inBit_copy`, with `RowRanges.ofT`'s
+filters); the constant bits read the pin (`pin_bitT`) and the root's first slot's forced-zero row (`zero_bitT`, there
+because `HmRow.checkTyped` refuses a root that fills its slot). The rows are `sha512/row/v1`'s because `HmRow.rowPorts`
+refuses a typed statement's bit rows (`ParseFactsT.v1`).
+-/
+
 @[expose] public section
 
 open Flock FlockLevel3
@@ -50,8 +51,8 @@ local notation "𝒖" => done.getD unit default
 theorem pin_bitT {u : D} (T : TemplateLayout st tb words done u)
     {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (T.model regs).m}
     (hz : (T.model regs).Satisfies z) (o : Fin (2 ^ (T.model regs).nbl)) :
-    blockBit (T.model regs) z o st.pin = true := by
-  rw [blockBit_of_lt _ z o T.pin_lt]
+    chunkBit (T.model regs) z o st.pin = true := by
+  rw [chunkBit_of_lt _ z o T.pin_lt]
   have hpin : (⟨st.pin, T.pin_lt⟩ : Fin (2 ^ (T.model regs).kLog)) = (T.model regs).pin := Fin.ext rfl
   rw [hpin, hz.2.1 o]
   rfl
@@ -64,7 +65,7 @@ theorem zero_bitT (hd : deriveChecked types ls info words unit = .ok done) (hul 
     (T : TemplateLayout st tb words done 𝒖) (U : UnitShape done 𝒖) (C : CheckFactsT st.c tb) (hg : 0 < st.c.g)
     {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (T.model regs).m}
     (hz : (T.model regs).Satisfies z) (o : Fin (2 ^ (T.model regs).nbl)) :
-    blockBit (T.model regs) z o (zeroCol st.c) = false := by
+    chunkBit (T.model regs) z o (zeroCol st.c) = false := by
   obtain ⟨hm, hk, hc, hsl⟩ := T.range T.unitNet
   obtain ⟨nm, hr⟩ := T.root
   obtain ⟨-, -, -, huse, hcp, -, hcr, -⟩ := Typed.netOfD_ok hr
@@ -119,7 +120,7 @@ theorem zero_bitT (hd : deriveChecked types ls info words unit = .ok done) (hul 
       simp
   have hx : zeroCol st.c < 2 ^ (T.model regs).kLog := hat.lt T.bound hm
   have hZ : ZeroRow (T.model regs) ⟨zeroCol st.c, hx⟩ := ⟨fun j => (hrow j.val).1, fun j => (hrow j.val).2⟩
-  rw [blockBit_of_lt _ z o hx, hZ.block_eq hz o]
+  rw [chunkBit_of_lt _ z o hx, hZ.block_eq hz o]
   rfl
 
 /-- **The four copies into template instance `g`'s row `p`**, in every block of a satisfying witness of a typed
@@ -134,15 +135,15 @@ theorem row_copies_of_sat {tags : Tags} {t : Typed.Template} (hd : deriveChecked
     {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (T.model regs).m}
     (hz : (T.model regs).Satisfies z) (o : Fin (2 ^ (T.model regs).nbl)) {g p : ℕ} (hg : g < st.c.g)
     (hp : p < st.c.ports.size) :
-    (∀ t < 512, blockBit (T.model regs) z o (shaBase st.c g p 0 + shaIn st.c (2 * shaSub st.c p 0) + t) =
+    (∀ t < 512, chunkBit (T.model regs) z o (shaBase st.c g p 0 + shaIn st.c (2 * shaSub st.c p 0) + t) =
       wordsBit (HmRow.midstate st.c.ports[p]!.words) t) ∧
     (∀ k, k + 1 < st.c.ports[p]!.chunks → ∀ t < 512,
-      blockBit (T.model regs) z o (shaBase st.c g p (k + 1) + shaIn st.c (2 * shaSub st.c p (k + 1)) + t) =
-        blockBit (T.model regs) z o (shaBase st.c g p k + shaOut st.c (shaSub st.c p k) + t)) ∧
-    (∀ t < 512, blockBit (T.model regs) z o (st.c.slotCol st.c.hmNet g p + hmIn st.c 0 + t) =
-      blockBit (T.model regs) z o
+      chunkBit (T.model regs) z o (shaBase st.c g p (k + 1) + shaIn st.c (2 * shaSub st.c p (k + 1)) + t) =
+        chunkBit (T.model regs) z o (shaBase st.c g p k + shaOut st.c (shaSub st.c p k) + t)) ∧
+    (∀ t < 512, chunkBit (T.model regs) z o (st.c.slotCol st.c.hmNet g p + hmIn st.c 0 + t) =
+      chunkBit (T.model regs) z o
         (shaBase st.c g p (st.c.ports[p]!.chunks - 1) + shaOut st.c (shaSub st.c p (st.c.ports[p]!.chunks - 1)) + t)) ∧
-    (∀ t < 1024, blockBit (T.model regs) z o (st.c.slotCol st.c.hmNet g p + hmIn st.c 1 + t) =
+    (∀ t < 1024, chunkBit (T.model regs) z o (st.c.slotCol st.c.hmNet g p + hmIn st.c 1 + t) =
       wordsBit (HmRow.padWords st.c.ports[p]!.words) t) := by
   have R := RowRanges.ofT T C P
   have hpos : ∀ q < st.c.ports.size, 0 < st.c.ports[q]!.chunks := fun q hq => (hv1 _ (getElem_mem_toList' hq)).2.2
@@ -162,7 +163,7 @@ theorem row_copies_of_sat {tags : Tags} {t : Typed.Template} (hd : deriveChecked
       rw [hwc]; exact R.cv0_filter hpos hseg hg hp ht
     rw [inBit_copy hd hul T U P C hv1 hda hdb hz o (Or.inl rfl) (R.shaIn_at hg hp h0 ht) (shaNet_ofRows R.rowNets)
       (by rw [shaNet_inRows R.rowNets]; omega) (shaLaid_self (by omega)) hf]
-    exact blockBit_constSrc _ _ hpin hzero
+    exact chunkBit_constSrc _ _ hpin hzero
   · have hs : shaSub st.c p (k + 1) < 3 := (rowSlot_lt hp hk).2
     have hf := R.chain_filter hpos hseg (pin := st.pin) (k := k + 1) hg hp (by omega) hk ht
     rw [chainDst_eq R.rowNets hs, ← hwc] at hf
@@ -185,7 +186,7 @@ theorem row_copies_of_sat {tags : Tags} {t : Typed.Template} (hd : deriveChecked
     rw [hx, ← hwc] at hf
     rw [inBit_copy hd hul T U P C hv1 hda hdb hz o (Or.inr rfl) (R.hmIn_at hg hp (off := 512 + t) (by omega))
       (hmNet_ofRows R.rowNets) (by rw [hmNet_inRows R.rowNets]; omega) (hmLaid_self (by omega)) hf]
-    exact blockBit_constSrc _ _ hpin hzero
+    exact chunkBit_constSrc _ _ hpin hzero
 
 /-- **A row's `b ‖ c`**, in every block of a satisfying witness of a typed template's statement of `sha512/row/v1` rows
 (`hv1`): the commit string of the row prefix and message its `sha512x3` slots read, and the salt its `hm96` slot reads.
@@ -198,10 +199,10 @@ theorem row_bc_typed {tags : Tags} {t : Typed.Template} (hd : deriveChecked type
     {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (T.model regs).m}
     (hz : (T.model regs).Satisfies z) (o : Fin (2 ^ (T.model regs).nbl)) {g p : ℕ} (hg : g < st.c.g)
     (hp : p < st.c.ports.size) :
-    bytesOf (blockBit (T.model regs) z o) 128 (bcCol st.c g p) = Binding.commitString
+    bytesOf (chunkBit (T.model regs) z o) 128 (bcCol st.c g p) = Binding.commitString
       ((HmRow.rowPrefix st.c.ports[p]!.words).data.toList ++
-        bytesOf (blockBit (T.model regs) z o) (2 * st.c.ports[p]!.words) (Typed.msgCol st.c g p))
-      (bytesOf (blockBit (T.model regs) z o) 192 (saltCol st.c g p)) := by
+        bytesOf (chunkBit (T.model regs) z o) (2 * st.c.ports[p]!.words) (Typed.msgCol st.c g p))
+      (bytesOf (chunkBit (T.model regs) z o) 192 (saltCol st.c g p)) := by
   obtain ⟨hcv0, hchain, hcvh, hpad⟩ := row_copies_of_sat hd hul T U P C hv1 hda hdb hz o hg hp
   obtain ⟨hv, -, hn⟩ := hv1 _ (getElem_mem_toList' hp)
   exact row_bc_of_sat hd hul T U P C hz o hg hp (P.v1Segs _ (getElem_mem_toList' hp) hv) hn
@@ -224,11 +225,11 @@ theorem row_bc_setupH_typed (ht : tags.typed = true)
     (hz : ((setupH_templateLayout ht h hr).2.2.model regs).Satisfies z)
     (o : Fin (2 ^ ((setupH_templateLayout ht h hr).2.2.model regs).nbl)) {g p : ℕ} (hg : g < st.c.g)
     (hp : p < st.c.ports.size) :
-    bytesOf (blockBit ((setupH_templateLayout ht h hr).2.2.model regs) z o) 128 (bcCol st.c g p) =
+    bytesOf (chunkBit ((setupH_templateLayout ht h hr).2.2.model regs) z o) 128 (bcCol st.c g p) =
       Binding.commitString ((HmRow.rowPrefix st.c.ports[p]!.words).data.toList ++
-        bytesOf (blockBit ((setupH_templateLayout ht h hr).2.2.model regs) z o) (2 * st.c.ports[p]!.words)
+        bytesOf (chunkBit ((setupH_templateLayout ht h hr).2.2.model regs) z o) (2 * st.c.ports[p]!.words)
           (Typed.msgCol st.c g p))
-      (bytesOf (blockBit ((setupH_templateLayout ht h hr).2.2.model regs) z o) 192 (saltCol st.c g p)) := by
+      (bytesOf (chunkBit ((setupH_templateLayout ht h hr).2.2.model regs) z o) 192 (saltCol st.c g p)) := by
   obtain ⟨-, P, C⟩ := setupH_factsT ht h hr
   obtain ⟨-, -, hda, hdb, -, -⟩ := setupH_spec_typed ht h
   exact row_bc_typed k.hd (unit_lt k.hd) (setupH_templateLayout ht h hr).2.2 (unitShape_of_class k) P C (P.v1 ht)

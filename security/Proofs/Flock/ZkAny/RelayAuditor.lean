@@ -35,8 +35,8 @@ the auditor's answers (`AudReads`):
 
 namespace Claims.ZKServer.Relay
 
-open _root_.Flock.Firewall.Session
-open _root_.Flock.Firewall hiding State
+open _root_.Flock.ZkServer.Session
+open _root_.Flock.ZkServer hiding State
 open _root_.Flock (V SessionSpec Stmt)
 
 /-- **The auditor's view of the model's messages `as`** over the slots `ks`, after the rounds of the streams `seen`:

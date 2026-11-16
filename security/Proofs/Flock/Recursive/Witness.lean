@@ -31,7 +31,7 @@ state. Each check passing is the model's predicate holding, at `toExec I`, the m
 * `tagsOkZHJ_ok`, `tagsOk_ok`: `ZkHidden.TagsOkZHJ`, `ZkOuterR.hTags`, and `DecodeZL.TagsOk`, the public-output one-table
   tags;
 * `scopeOk_ok`: the session's circuit as `ZkOuterR` parses it, and `Layout.scopeOk` of it, `VStmt.hscope`;
-* `fullDraw_ok`: the record's sample is the full `subset` sample of every unit of the population, `RecordCustody`'s;
+* `fullSample_ok`: the record's sample is the full `subset` sample of every unit of the population, `RecordCustody`'s;
 * `acceptsStmt_ok`, `acceptsPublic_ok`: `Recursion.AcceptsStmt`, and `AcceptsPublic` at the verifier's own partition
   object and program;
 * `shapeOf_eq`, `outerStatementsAt_ok`: the printed inner shape is `innerAt`, and `outer_parts` is `outerStatementsAt`;
@@ -162,10 +162,10 @@ theorem scopeOk_ok {I : Flock.Witness.Inputs} {c : Flock.Circuit} (h : Flock.Wit
 
 /-- **The witness's sample check**: the record's sample decodes to the full `subset n` sample over `[0, n)`, every unit and
 no closure. -/
-theorem fullDraw_ok {n : ℕ} {r : String} (h : Flock.Witness.fullDraw n r = .ok ()) :
-    ∃ d D, Exec.recordDraw r = some d ∧ Flock.Draw.UnitDraw.ofJson d = .ok D ∧ D.law = .subset n ∧ D.population = n ∧
+theorem fullSample_ok {n : ℕ} {r : String} (h : Flock.Witness.fullSample n r = .ok ()) :
+    ∃ d D, Exec.recordDraw r = some d ∧ Flock.Draw.UnitSample.ofJson d = .ok D ∧ D.samplingDesign = .subset n ∧ D.population = n ∧
       D.units = Array.range n ∧ D.closure = #[] := by
-  unfold Flock.Witness.fullDraw at h
+  unfold Flock.Witness.fullSample at h
   cases hd : Flock.Witness.recordDraw r with
   | none =>
     rw [hd] at h
@@ -174,7 +174,7 @@ theorem fullDraw_ok {n : ℕ} {r : String} (h : Flock.Witness.fullDraw n r = .ok
     rw [hd] at h
     dsimp only at h
     obtain ⟨D, hD, h⟩ := bind_ok h
-    cases hl : D.law with
+    cases hl : D.samplingDesign with
     | subset k =>
       rw [hl] at h
       dsimp only at h
@@ -200,7 +200,7 @@ accepts its `m`. -/
 theorem acceptsStmt_setup {cf pf : ByteArray} {p : Option Lean.Json} {g : Option ByteArray} {st : Flock.Stmt}
     (h : Flock.Witness.acceptsStmt cf pf p g = .ok st) :
     (∃ spec, Flock.Stmt.setupTables Flock.RecVStar.innerTags cf pf Flock.RecVStar.innerTree 1 (partition := p)
-      (program := g) = .ok (spec, #[st])) ∧ ∃ q, Flock.Zk.schedule st.m = .ok q := by
+      (program := g) = .ok (spec, #[st])) ∧ ∃ q, Flock.Zk.schedule st.wideLeaf st.m = .ok q := by
   unfold Flock.Witness.acceptsStmt Flock.Witness.acceptsStmtAt Flock.Witness.innerSetup at h
   obtain ⟨⟨spec, sts⟩, h1, h⟩ := bind_ok h
   obtain ⟨st', h2, h⟩ := bind_ok h
@@ -256,7 +256,7 @@ accepts (`ZkHidden.hr_planZHJ_23`). The witness's `accepts_zkr` lines print each
 theorem hr_inv_exp {S : ℕ} {Vs : Fin S → VStmt} {Reg' : Type} {A B C D : Type*}
     (zr : A → B → C → D → (j : Fin S) → (Vs j).OuterR Reg') :
     ∀ R ω t R₂ j S₀ (d₀ : Lean.Json)
-      (y₀ : ZkHidden.DrawSetupZHJ (Composed.inputsJ (zr R ω t R₂ j).I 0) (Vs j).mPts S₀ d₀) S' R' i,
+      (y₀ : ZkHidden.SampleSetupZHJ (Composed.inputsJ (zr R ω t R₂ j).I 0) (Vs j).mPts S₀ d₀) S' R' i,
       ZkLink.rateZ (ZkHidden.planZHJ (Reg := Reg') (zr R ω t R₂ j).dj y₀ S' R') i (2 ^ 23) ≤ (Real.exp 1)⁻¹ :=
   fun R ω t R₂ j _ _ y₀ S' R' i =>
     ZkHidden.hr_planZHJ_23 (zr R ω t R₂ j).dj y₀ (by rw [inv_mul_cancel_left₀ (Real.exp_pos 1).ne']; norm_num) S' R' i

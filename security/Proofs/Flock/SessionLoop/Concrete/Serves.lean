@@ -13,6 +13,7 @@ public import Proofs.Flock.SessionLoop.Concrete.Inputs
 public import Proofs.Flock.SessionLoop.Concrete.Stmt
 public import Proofs.Flock.Soundness.Refine.Setup
 public import Proofs.Flock.Soundness.Refine.Seam
+public import Proofs.Flock.Soundness.Refine.WideLeafChecks
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
 import all Init.Data.String.Defs
@@ -25,7 +26,8 @@ concrete statement's setup, one table set up by `Stmt.setupH` under `Concrete.tz
 
 * `Loop.sizesOk_one`: one table's session passes `Session.sizesOk` where the table's link points, regions, rep stream
   domains and frame start are within the frames'; `Loop.sizesOk_setupH`: `Stmt.setupH`'s range check
-  (`checkInRange`) and the `--zk` schedule's at most 6 lanes (`Loop.schedule_k0`) put them there.
+  (`checkInRange`) and the `--zk` schedule's at most 10 lanes (log) at either statement version (`Loop.schedule_k0`)
+  put them there.
 * `Loop.msg_ne_nil`: the setup's `Hello` at the zero nonce `Loop.z32` is JSON (`helloZk_of`, `canon_ok_some`), so
   `Hello.msg` frames it.
 * `Loop.concreteServes`: so `State.sendHello` lets it leave.
@@ -35,7 +37,9 @@ concrete statement's setup, one table set up by `Stmt.setupH` under `Concrete.tz
 
 namespace Claims.ZKServer.Loop
 
-open _root_.Flock.Firewall.Session (sizesOk)
+open _root_.Flock.ZkServer.Session (sizesOk)
+
+variable {wideLeaf : Bool}
 
 private theorem ok_bind {α β : Type} {y : _root_.Flock.V α} {f : α → _root_.Flock.V β} {b : β}
     (h : y >>= f = .ok b) : ∃ a, y = .ok a ∧ f a = .ok b := by
@@ -55,32 +59,44 @@ theorem fast100_k0_le {m : ℕ} {sch : _root_.Flock.Schedule} (h : _root_.Flock.
   · rw [FlockSoundness.Refine.exec_fast100_none m (by omega)] at h
     cases h
 
-/-- The `--zk` schedule keeps `fast100`'s lanes: at most 6 at level 0. -/
-theorem schedule_ok_k0 {m : ℕ} {p : _root_.Flock.Schedule × ℕ} (h : _root_.Flock.Zk.schedule m = .ok p) :
-    p.1.k0 ≤ 6 := by
+/-- Either statement version's schedule puts at most 10 lanes (log) at level 0: 6 on `fast100`, `m − 25` on the
+wide-leaf schedule from `m = 32`. -/
+theorem fast100At_k0_le {m : ℕ} {sch : _root_.Flock.Schedule} (h : _root_.Flock.fast100At wideLeaf m = some sch) :
+    sch.k0 ≤ 10 := by
+  by_cases hm : m < 40
+  · have key : ∀ (w : Bool) (m : Fin 40), ∀ s ∈ _root_.Flock.fast100At w m.val, decide (s.k0 ≤ 10) = true := by
+      decide +kernel
+    exact of_decide_eq_true (key wideLeaf ⟨m, hm⟩ sch h)
+  · have hn := FlockSoundness.Refine.fast100At_isSome (wide := wideLeaf) m
+    rw [h, FlockSoundness.Refine.exec_fast100_none m (by omega)] at hn
+    simp at hn
+
+/-- The `--zk` schedule keeps its statement version's lanes: at most 10 (log) at level 0. -/
+theorem schedule_ok_k0 {m : ℕ} {p : _root_.Flock.Schedule × ℕ} (h : _root_.Flock.Zk.schedule wideLeaf m = .ok p) :
+    p.1.k0 ≤ 10 := by
   unfold _root_.Flock.Zk.schedule at h
   obtain ⟨q0, -, h⟩ := ok_bind h
-  cases hf : _root_.Flock.fast100 m with
+  cases hf : _root_.Flock.fast100At wideLeaf m with
   | none => rw [hf] at h; cases h
   | some sch =>
     rw [hf] at h
     cases h
-    have hk := fast100_k0_le hf
+    have hk := fast100At_k0_le hf
     exact hk
 
 /-- **A rep's frame start leaves its pads and pad row within a `u64`'s count** at a statement with `m` below 68 and
 `k_log` at most 27. -/
 theorem start_len {st : _root_.Flock.Stmt} (hm : st.m < 68) (hk : st.c.kLog ≤ 27) {lay : _root_.Flock.Zk.PadLayout}
     {mask}
-    (h : _root_.Flock.Firewall.Drive.start st = .ok (lay, mask)) :
+    (h : _root_.Flock.ZkServer.Drive.start st = .ok (lay, mask)) :
     lay.len + _root_.Flock.Zk.K_PAD < 2 ^ 64 := by
-  unfold _root_.Flock.Firewall.Drive.start at h
+  unfold _root_.Flock.ZkServer.Drive.start at h
   obtain ⟨⟨sch, q⟩, hs, h⟩ := ok_bind h
   obtain ⟨ms, -, h⟩ := ok_bind h
   have hlay : lay = _root_.Flock.Zk.PadLayout.new st.m st.c.kLog sch.k0 := by
     cases h
     rfl
-  have hk0 : sch.k0 ≤ 6 := schedule_ok_k0 hs
+  have hk0 : sch.k0 ≤ 10 := schedule_ok_k0 hs
   subst hlay
   simp only [_root_.Flock.Zk.PadLayout.len, _root_.Flock.Zk.PadLayout.tw, _root_.Flock.Zk.PadLayout.hab,
     _root_.Flock.Zk.PadLayout.zp, _root_.Flock.Zk.PadLayout.lc, _root_.Flock.Zk.PadLayout.fc,
@@ -91,7 +107,7 @@ theorem start_len {st : _root_.Flock.Stmt} (hm : st.m < 68) (hk : st.c.kLog ≤ 
 frame start are within the frames'. -/
 theorem sizesOk_one {st : _root_.Flock.Stmt} (hm0 : 0 < st.mPts) (hm : st.mPts ≤ 64) (hreg : st.regions.size ≤ 1024)
     (hdom : ∀ r < 2, (st.tags.domain r).toUTF8.size < 2 ^ 64)
-    (hlay : ∀ lay mask, _root_.Flock.Firewall.Drive.start st = .ok (lay, mask) →
+    (hlay : ∀ lay mask, _root_.Flock.ZkServer.Drive.start st = .ok (lay, mask) →
       lay.len + _root_.Flock.Zk.K_PAD < 2 ^ 64) :
     sizesOk st.spec #[st] = true := by
   have hrs : st.spec.repStreams.size = 2 := by
@@ -154,31 +170,31 @@ theorem msg_ne_nil {tags : _root_.Flock.Tags} {cf pf : ByteArray} {cs : _root_.F
     {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : _root_.Flock.Stmt}
     (h : FlockSoundness.Discharge.HiddenExec.setupOne tags cf pf (.tree cs) tables draw partition program = .ok st) :
-    _root_.Flock.Firewall.Hello.msg st.spec z32 ≠ [] := by
+    _root_.Flock.ZkServer.Hello.msg st.spec z32 ≠ [] := by
   obtain ⟨-, -, -, hhello, hct⟩ := FlockComplete.JsonRT.setupOne_stmt h
   obtain ⟨m, kvs, hp, -, -, -, hg⟩ := FlockComplete.JsonRT.helloZk_of hhello
   obtain ⟨s, hs⟩ := FlockComplete.JsonRT.canon_ok_some _ hg
   have hct' : st.spec.coinTree = some cs := hct
   have hp' : _root_.Flock.JsonParse.parse st.spec.hello = .ok (.obj m) := hp
-  have hj : _root_.Flock.Firewall.Hello.json st.spec (_root_.Flock.hexOf z32) = .ok s := by
-    simp only [_root_.Flock.Firewall.Hello.json, hct', hp', Except.toOption, hexOf_z32]
+  have hj : _root_.Flock.ZkServer.Hello.json st.spec (_root_.Flock.hexOf z32) = .ok s := by
+    simp only [_root_.Flock.ZkServer.Hello.json, hct', hp', Except.toOption, hexOf_z32]
     exact hs
-  have hm : _root_.Flock.Firewall.Hello.msg st.spec z32 = _root_.Flock.Firewall.Hello.frame s := by
-    simp only [_root_.Flock.Firewall.Hello.msg, hj]
+  have hm : _root_.Flock.ZkServer.Hello.msg st.spec z32 = _root_.Flock.ZkServer.Hello.frame s := by
+    simp only [_root_.Flock.ZkServer.Hello.msg, hj]
   rw [hm]
-  unfold _root_.Flock.Firewall.Hello.frame
+  unfold _root_.Flock.ZkServer.Hello.frame
   exact List.cons_ne_nil _ _
 
 /-! ## The loop serves the concrete statement -/
 
 /-- **The loop's `Hello` leaves** from a fresh session at a setup passing `sizesOk` whose `Hello` is JSON. -/
 theorem sendHello_ok {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt} {nonce : ByteArray}
-    (hz : sizesOk spec sts = true) (hm : _root_.Flock.Firewall.Hello.msg spec nonce ≠ []) :
-    ∃ r, ({} : _root_.Flock.Firewall.Session.State).sendHello (.ok (spec, sts)) nonce = .ok r := by
-  unfold _root_.Flock.Firewall.Session.State.sendHello
+    (hz : sizesOk spec sts = true) (hm : _root_.Flock.ZkServer.Hello.msg spec nonce ≠ []) :
+    ∃ r, ({} : _root_.Flock.ZkServer.Session.State).sendHello (.ok (spec, sts)) nonce = .ok r := by
+  unfold _root_.Flock.ZkServer.Session.State.sendHello
   try dsimp only
   simp only [hz, Bool.not_true, Bool.false_eq_true, ↓reduceIte]
-  cases hmsg : _root_.Flock.Firewall.Hello.msg spec nonce with
+  cases hmsg : _root_.Flock.ZkServer.Hello.msg spec nonce with
   | nil => exact absurd hmsg hm
   | cons b bs => exact ⟨_, rfl⟩
 
@@ -187,7 +203,7 @@ theorem sendHello_ok {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock
 theorem serves_rC {ls lh : _root_.Flock.HmNets.Laid} {H : ByteArray} {spec : _root_.Flock.SessionSpec}
     {sts : Array _root_.Flock.Stmt}
     (h : (FlockDeploy.Concrete.rC ls lh H).setup = .ok (spec, sts)) :
-    ∃ nonce r, ({} : _root_.Flock.Firewall.Session.State).sendHello (.ok (spec, sts)) nonce = .ok r := by
+    ∃ nonce r, ({} : _root_.Flock.ZkServer.Session.State).sendHello (.ok (spec, sts)) nonce = .ok r := by
   have ht : (FlockDeploy.Concrete.rC ls lh H).tags = FlockDeploy.Concrete.tz := FlockDeploy.Concrete.tags_rC ls lh H
   obtain ⟨cs, hcs⟩ : ∃ cs, (FlockDeploy.Concrete.rC ls lh H).coins = .tree cs := ⟨_, rfl⟩
   unfold _root_.Flock.Readable.Read.setup at h

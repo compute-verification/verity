@@ -50,14 +50,14 @@ the one-table hidden-output piece (`ZkHidden/Defs.lean`, `SoundBind.lean`, `Soun
   statement under `Tags.tableIdentity count j` at the subset sample of part `j`; `setupOf_tableJH` is `setupOf_tableJ`'s
   counterpart.
 * `parseH_tagsAt`, `loadPublicH_tagsAt`: `HmOut.parse` (untyped) and `HmOut.loadPublic` read no identity.
-* `DrawSetupZHJ`, `tableZHJ`, `planZHJ`, `tabZHJ`: `DrawSetupZJ`, `tableZJ`, `planZJ`, `tabZJ` with a `DrawSetupH` at
-  table `j`'s inputs (`inputsJ I j`), and the refused table of the reference setup `y₀ : DrawSetupZHJ` at table 0's
+* `SampleSetupZHJ`, `tableZHJ`, `planZHJ`, `tabZHJ`: `SampleSetupZJ`, `tableZJ`, `planZJ`, `tabZJ` with a `SampleSetupH` at
+  table `j`'s inputs (`inputsJ I j`), and the refused table of the reference setup `y₀ : SampleSetupZHJ` at table 0's
   inputs.
 * `tableShHJ`, `planShHJ`, `tabShHJ`, `sitesShHJ`: the public hidden-output tables (`HiddenExec.TableH`) at the same
   samples, each at the inputs it is set up on (table `j`'s, or table 0's, `y₀`'s, at a refused table), and their sites.
 * `placeZHJ`, `layZHJ`, `rsZHJ`, `rsZHJ_computes`: `keyPlaceH`, `keyLayoutH` and `keyRowsH` at those sites, moved to the
   `--zk` tables (`SoundBind.lean`'s `placeZH`, `layZH`, `rsZH` at `J` tables).
-* `TagsOkZHJ`, `DrawOkZKHJ`, `opnAtZHJ`, `runsZCJH_live`: `TagsOkZJ` with hidden outputs, `DrawOkZKJ` and `opnAtZJ` with
+* `TagsOkZHJ`, `SampleOkZKHJ`, `opnAtZHJ`, `runsZCJH_live`: `TagsOkZJ` with hidden outputs, `SampleOkZKJ` and `opnAtZJ` with
   `setupHidden`, and `runsZCJ_live` under hidden outputs. It holds from the sessions alone (`runsZCJH_liveU`), so
   `runsZCJH_liveSt` and `runsZCJH_liveISt` state it at the statement circuit (`HmOut.parseStmt`).
 -/
@@ -73,7 +73,7 @@ open scoped ENNReal
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
-/-! ## flock-verify's tables at `count > 1` under hidden outputs -/
+/-! ## verity-verify-proof's tables at `count > 1` under hidden outputs -/
 
 section Parts
 
@@ -91,8 +91,8 @@ theorem setupTables_partsH (hh : tags.hiddenOutputs = true) (hc1 : 1 < count)
       .ok (spec, sts)) :
     tags.manyTables.isSome ∧ count ≤ Tags.MAX_TABLES ∧
       ∃ (population : ℕ) (units : Array ℕ),
-        (∀ d, draw = some d → ∃ u, Draw.UnitDraw.ofJson d = .ok u ∧
-          ((∃ k', u.law = .subset k') ∨ ∃ K st, u.law = .stratified K st) ∧
+        (∀ d, draw = some d → ∃ u, Draw.UnitSample.ofJson d = .ok u ∧
+          ((∃ k', u.samplingDesign = .subset k') ∨ ∃ K st, u.samplingDesign = .stratified K st) ∧
           u.population = population ∧ u.units = units) ∧
         (draw = none → units = Array.range population) ∧
         0 < units.size ∧ units.size % count = 0 ∧ sts.size = count ∧
@@ -134,11 +134,11 @@ theorem setupTables_partsH (hh : tags.hiddenOutputs = true) (hc1 : 1 < count)
     obtain ⟨hsz, hall⟩ := range_mapM_ok (by assumption)
     obtain ⟨hpos, hmod⟩ := Tables.splits_ok (by assumption)
   all_goals first
-    | (have hdn : draw = none := Tables.draw_none ‹draw.mapM Draw.UnitDraw.ofJson = .ok none›
+    | (have hdn : draw = none := Tables.sample_none ‹draw.mapM Draw.UnitSample.ofJson = .ok none›
        exact ⟨Option.isSome_iff_exists.2 ⟨_, by assumption⟩, by omega, _, _, fun d hd => by simp [hdn] at hd,
          fun _ => rfl, hpos, hmod, hsz, fun j hj => ok_of_refuse (hall j hj)⟩)
-    | (have hdu : draw.mapM Draw.UnitDraw.ofJson = .ok (some _) := ‹_›
-       obtain ⟨hD1, hD2⟩ := Tables.draw_split hdu
+    | (have hdu : draw.mapM Draw.UnitSample.ofJson = .ok (some _) := ‹_›
+       obtain ⟨hD1, hD2⟩ := Tables.sample_split hdu
          (by first | exact .inl ⟨_, by assumption⟩ | exact .inr ⟨_, _, by assumption⟩) (by assumption)
        exact ⟨Option.isSome_iff_exists.2 ⟨_, by assumption⟩, by omega, _, _, hD1, hD2, hpos, hmod, hsz,
          fun j hj => ok_of_refuse (hall j hj)⟩)
@@ -169,7 +169,7 @@ theorem setupOf_tableJH {I : Inputs} {record : String} {d : Lean.Json} {spec : S
     obtain ⟨-, -, population, units, hD1, -, -, -, hsz, hall⟩ := setupTables_partsH hh' hc1 hs
     obtain ⟨u, hu, -, hpop, hun⟩ := hD1 _ hd
     refine ⟨by simp only [nTab, hc, ite_false]; exact hsz, fun j hj => ?_⟩
-    have hpart : drawJ I d j = Tables.partDraw population units I.count j := by
+    have hpart : drawJ I d j = Tables.partSample population units I.count j := by
       simp only [drawJ, hc, ite_false]
       unfold partJson
       rw [hu]
@@ -205,13 +205,13 @@ variable {n mPts : ℕ} {Reg : Type}
 
 /-! ## The tables -/
 
-/-- **A hidden-output table `verify --zk` sets up**, on table `j`'s inputs `I'` (`inputsJ I j`): `DrawSetupZKH`'s
-fields at a `DrawSetupH` of `I'`, and the statement passes the `--zk` shape check (`Zk.shapeOk`). -/
-structure DrawSetupZHJ (I' : Inputs) (mPts : ℕ) (S : Finset (Fin n)) (d : Lean.Json) where
-  x : DrawSetupH I' mPts S d
+/-- **A hidden-output table `verify --zk` sets up**, on table `j`'s inputs `I'` (`inputsJ I j`): `SampleSetupZKH`'s
+fields at a `SampleSetupH` of `I'`, and the statement passes the `--zk` shape check (`Zk.shapeOk`). -/
+structure SampleSetupZHJ (I' : Inputs) (mPts : ℕ) (S : Finset (Fin n)) (d : Lean.Json) where
+  x : SampleSetupH I' mPts S d
   sch : Flock.Schedule
   tPad : ℕ
-  hz : Zk.schedule x.st.m = .ok (sch, tPad)
+  hz : Zk.schedule x.st.wideLeaf x.st.m = .ok (sch, tPad)
   hshape : 2 ≤ (schedOf sch).levels.length ∧ ((schedOf sch).levels.headD default).lanes = (schedOf sch).k0 ∧
     (schedOf sch).m - 7 = (schedOf sch).k0 + ((schedOf sch).levels.headD default).logCols ∧
     levelsChained (schedOf sch).levels (schedOf sch).ext = true
@@ -224,9 +224,9 @@ structure DrawSetupZHJ (I' : Inputs) (mPts : ℕ) (S : Finset (Fin n)) (d : Lean
       (D.card : ℝ≥0∞) / innerN (layOf x.st sch)
   hzk : Flock.Zk.shapeOk x.st = .ok ()
 
-namespace DrawSetupZHJ
+namespace SampleSetupZHJ
 
-variable {I' : Inputs} {S : Finset (Fin n)} {d : Lean.Json} (y : DrawSetupZHJ I' mPts S d)
+variable {I' : Inputs} {S : Finset (Fin n)} {d : Lean.Json} (y : SampleSetupZHJ I' mPts S d)
 
 theorem innerN_pos : 0 < innerN (layOf y.x.st y.sch) := lt_of_lt_of_le (by simp [Zk.K_PAD]) y.hL
 
@@ -243,7 +243,7 @@ def innerDom : Fin (innerN (layOf y.x.st y.sch)) ↪ 𝔽 :=
     exact Fin.ext (by omega)⟩
 
 /-- **The `--zk` table of a hidden-output table `verify --zk` sets up**, at statement regions `regs`
-(`DrawSetupZKH.tabAt`). -/
+(`SampleSetupZKH.tabAt`). -/
 noncomputable def tabAt (regs : List (Model.Region y.x.st.c.kLog (y.x.st.m - y.x.st.c.kLog)))
     (hregs : ∀ R ∈ regs, R.free.Nodup ∧ R.free.length ≤ PT_LOCAL) : TabZK 𝔽 mPts where
   S := stmtOf y.x.st y.x.wf.1 regs
@@ -281,10 +281,10 @@ noncomputable def table : TabZK 𝔽 mPts := y.tabAt (regionsOf y.x.st) (stmtOf_
 
 /-- A refused table's `--zk` table: the statement with `contra`'s regions, which no witness satisfies. -/
 noncomputable def refused : TabZK 𝔽 mPts :=
-  y.tabAt (regionsOf y.x.st ++ Integrate.DrawSetup.contra y.x.st.c.kLog (y.x.st.m - y.x.st.c.kLog)) y.x.refused_wf
+  y.tabAt (regionsOf y.x.st ++ Integrate.SampleSetup.contra y.x.st.c.kLog (y.x.st.m - y.x.st.c.kLog)) y.x.refused_wf
 
-/-- A table's `--zk` table is the same at every `DrawSetupZHJ` of it. -/
-theorem table_eq (y₁ y₂ : DrawSetupZHJ I' mPts S d) : y₁.table = y₂.table := by
+/-- A table's `--zk` table is the same at every `SampleSetupZHJ` of it. -/
+theorem table_eq (y₁ y₂ : SampleSetupZHJ I' mPts S d) : y₁.table = y₂.table := by
   obtain ⟨⟨st₁, h₁, D₁, hD₁, hS₁, hg₁, hb₁, m₁, k₁, a₁, b₁, r₁, e₁, hs₁, hm₁, hp₁, w₁⟩, sch₁, t₁, hz₁, _, _, _, _, _, _⟩ :=
     y₁
   obtain ⟨⟨st₂, h₂, D₂, hD₂, hS₂, hg₂, hb₂, m₂, k₂, a₂, b₂, r₂, e₂, hs₂, hm₂, hp₂, w₂⟩, sch₂, t₂, hz₂, _, _, _, _, _, _⟩ :=
@@ -299,28 +299,28 @@ theorem table_seam : ZkTabSeam y.table (Setup.ofCircuit y.x.st) y.sch y.tPad :=
 theorem table_lay : ZkTabLay y.table (Setup.ofCircuit y.x.st) y.sch := by
   constructor <;> intros <;> rfl
 
-end DrawSetupZHJ
+end SampleSetupZHJ
 
-/-- A `DrawSetupH` whose statement passes the `--zk` shape check, with `Zk.schedule`'s schedule at its `m`, is a
-`DrawSetupZHJ` (`ZkSchedOK`). -/
-theorem drawSetupZHJ_of {I' : Inputs} {S : Finset (Fin n)} {d : Lean.Json} (x : DrawSetupH I' mPts S d)
+/-- A `SampleSetupH` whose statement passes the `--zk` shape check, with `Zk.schedule`'s schedule at its `m`, is a
+`SampleSetupZHJ` (`ZkSchedOK`). -/
+theorem sampleSetupZHJ_of {I' : Inputs} {S : Finset (Fin n)} {d : Lean.Json} (x : SampleSetupH I' mPts S d)
     (hshape : Flock.Zk.shapeOk x.st = .ok ()) {sch : Flock.Schedule} {tPad : ℕ}
-    (hz : Zk.schedule x.st.m = .ok (sch, tPad)) :
-    ∃ y : DrawSetupZHJ I' mPts S d, y.x = x ∧ y.sch = sch ∧ y.tPad = tPad := by
+    (hz : Zk.schedule x.st.wideLeaf x.st.m = .ok (sch, tPad)) :
+    ∃ y : SampleSetupZHJ I' mPts S d, y.x = x ∧ y.sch = sch ∧ y.tPad = tPad := by
   obtain ⟨h1, h2, h3, h4, h5, h6⟩ := zk_schedOK x.st _ _ x.wf.1 x.wf.2 x.hm hshape hz
   exact ⟨⟨x, sch, tPad, hz, h1, h2, h3, h4, h5, h6 _, hshape⟩, rfl, rfl, rfl⟩
 
 section Shadow
 
 variable {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-  (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
+  (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀)
 
 open Classical in
 /-- **Table `j` at sample `S`, under hidden outputs** (`tableZJ` with `setupHidden`): the table `verify --zk` sets up at
 table `j`'s inputs and sample when it sets one up, and otherwise the reference setup `y₀`'s refused table (a setup at
-table 0's inputs, which every session `verify --zk` accepts at a sample `DrawOkZKHJ` admits has: `setupZHJ_of_acceptsZK`). -/
+table 0's inputs, which every session `verify --zk` accepts at a sample `SampleOkZKHJ` admits has: `setupZHJ_of_acceptsZK`). -/
 noncomputable def tableZHJ (S : Finset (Fin n)) (j : Fin (nTab I)) : TabZK 𝔽 mPts :=
-  if h : Nonempty (DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) then
+  if h : Nonempty (SampleSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) then
     (Classical.choice h).table
   else y₀.refused
 
@@ -342,29 +342,29 @@ theorem tabOfZHJ_eq (S : Finset (Fin n)) (R : Reg) (u : Fin n) :
 /-! ## The public shadow, the sites, the layout and the rows -/
 
 open Classical in
-/-- **The public hidden-output table at table `j`'s sample**, with the inputs it is set up on: its `DrawSetupZHJ`'s
+/-- **The public hidden-output table at table `j`'s sample**, with the inputs it is set up on: its `SampleSetupZHJ`'s
 table at table `j`'s inputs, or `y₀`'s refused one at table 0's inputs. -/
 noncomputable def tableShHJ (S : Finset (Fin n)) (j : Fin (nTab I)) :
     (I' : Inputs) × TableH I' mPts (partS I (dj S) S j) :=
-  if h : Nonempty (DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) then
+  if h : Nonempty (SampleSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) then
     ⟨inputsJ I j, (Classical.choice h).x.table⟩
   else ⟨inputsJ I 0, y₀.x.refused _⟩
 
 theorem tableShHJ_set {S : Finset (Fin n)} {j : Fin (nTab I)}
-    (h : Nonempty (DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j))) :
+    (h : Nonempty (SampleSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j))) :
     tableShHJ dj y₀ S j = ⟨inputsJ I j, (Classical.choice h).x.table⟩ := by
   unfold tableShHJ
   rw [dite_eq_left_of_eq_true (eq_true h)]
 
 theorem tableShHJ_refused {S : Finset (Fin n)} {j : Fin (nTab I)}
-    (h : ¬ Nonempty (DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j))) :
+    (h : ¬ Nonempty (SampleSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j))) :
     tableShHJ dj y₀ S j = ⟨inputsJ I 0, y₀.x.refused _⟩ := by
   unfold tableShHJ
   rw [dite_eq_right_of_eq_false (eq_false h)]
 
 theorem tableZHJ_S (S : Finset (Fin n)) (j : Fin (nTab I)) :
     (tableZHJ dj y₀ S j).S = (tableShHJ dj y₀ S j).2.T.S := by
-  by_cases h : Nonempty (DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j))
+  by_cases h : Nonempty (SampleSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j))
   · rw [tableShHJ_set dj y₀ h]
     unfold tableZHJ
     rw [dite_eq_left_of_eq_true (eq_true h)]
@@ -399,7 +399,7 @@ variable (ht : I.tags.typed = false)
 
 include ht in
 theorem tableShHJ_typed (S : Finset (Fin n)) (j : Fin (nTab I)) : (tableShHJ dj y₀ S j).1.tags.typed = false := by
-  by_cases h : Nonempty (DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j))
+  by_cases h : Nonempty (SampleSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j))
   · rw [tableShHJ_set dj y₀ h]
     exact typedJ ht j
   · rw [tableShHJ_refused dj y₀ h]
@@ -413,7 +413,7 @@ include ht hc in
 theorem tableShHJ_parse (S : Finset (Fin n)) (j : Fin (nTab I)) :
     HmOut.parse (tableShHJ dj y₀ S j).1.tags (tableShHJ dj y₀ S j).1.circuitFile (tableShHJ dj y₀ S j).1.tables =
       .ok c := by
-  by_cases h : Nonempty (DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j))
+  by_cases h : Nonempty (SampleSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j))
   · rw [tableShHJ_set dj y₀ h]
     exact (parseH_tagsAt ((zkTags_typed I).trans ht) _ _ _ _).trans hc
   · rw [tableShHJ_refused dj y₀ h]
@@ -467,7 +467,7 @@ include hU hpub hpt in
 /-- `BcSiteH` at a table set up at table `j`'s inputs (`tableH_bcSite` at `inputsJ I j`). -/
 theorem tableShHJ_bcSite {S' : Finset (Fin n)} (Tb : (I' : Inputs) × TableH I' mPts S')
     (p₁ : Tb.1.tags.typed = false) (p₂ : HmOut.parse Tb.1.tags Tb.1.circuitFile Tb.1.tables = .ok c)
-    (hX : ∃ (j : ℕ) (d : Lean.Json) (x : DrawSetupH (inputsJ I j) mPts S' d), Tb = ⟨inputsJ I j, x.table⟩)
+    (hX : ∃ (j : ℕ) (d : Lean.Json) (x : SampleSetupH (inputsJ I j) mPts S' d), Tb = ⟨inputsJ I j, x.table⟩)
     {u : Fin n} (h : u ∈ S') :
     BcSiteH (Tb.2.acc p₁ p₂ (rowsFit_of_scopeH p₁ p₂ hscope)) pub (Tb.2.o u h) (Tb.2.vu u h) u.val := by
   obtain ⟨j, d, x, rfl⟩ := hX
@@ -485,7 +485,7 @@ theorem sitesShHJ_bcSite :
   intro S R u h M hM
   refine bcSiteH_recast _ (congrArg TabSpec.S (tabOfShHJ_eq dj y₀ S R u)).symm _ _
     (congrArg (fun T : TabSpec mPts => 2 ^ T.S.nbl) (tabOfShHJ_eq dj y₀ S R u)).symm _ _ ?_
-  by_cases hS : Nonempty (DrawSetupZHJ (inputsJ I (partOf I (dj S) u.val)) mPts
+  by_cases hS : Nonempty (SampleSetupZHJ (inputsJ I (partOf I (dj S) u.val)) mPts
     (partS I (dj S) S (partOf I (dj S) u.val)) (drawJ I (dj S) (partOf I (dj S) u.val)))
   · exact tableShHJ_bcSite hscope hU hpub hpt _ _ _
       ⟨_, _, (Classical.choice hS).x, tableShHJ_set dj y₀ hS⟩ (mem_partS h)
@@ -562,12 +562,12 @@ hidden outputs, retained rounds, `hm96-sha512/v1` leaves. -/
 def TagsOkZHJ (I : Inputs) : Prop :=
   I.tags.hiddenOutputs = true ∧ I.tags.retainRounds = true ∧ I.tags.merkleLeaf = "hm96-sha512/v1"
 
-/-- **The challenger's live-coin part's sample at `S`, at `J` hidden-output tables** (`DrawOkZKJ` with `setupHidden` for `setupH`): each
+/-- **The challenger's live-coin part's sample at `S`, at `J` hidden-output tables** (`SampleOkZKJ` with `setupHidden` for `setupH`): each
 table's sample proves the sampled proof blocks it is given (`partS`), and setupHidden sets each table up at it with `mPts` link
 points. -/
-def DrawOkZKHJ (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ) (S : Finset (Fin n)) : Prop :=
+def SampleOkZKHJ (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ) (S : Finset (Fin n)) : Prop :=
   ∀ j : Fin (nTab I),
-    (∀ D, Draw.UnitDraw.ofJson (drawJ I (dj S) j) = .ok D → ∀ u ∈ partS I (dj S) S j, u.val ∈ D.proved) ∧
+    (∀ D, Draw.UnitSample.ofJson (drawJ I (dj S) j) = .ok D → ∀ u ∈ partS I (dj S) S j, u.val ∈ D.proved) ∧
     ∀ st, Stmt.setupHidden (tagsAt (zkTags I) I.count j) I.circuitFile I.publicFile (zkCoins I) I.tables
       (some (drawJ I (dj S) j)) I.partition I.program = .ok st → st.mPts = mPts
 
@@ -578,7 +578,7 @@ noncomputable def opnAtZHJ (planZ : Finset (Fin n) → Reg → List (TabZK 𝔽 
     (j : Fin (planZ S R).length) : OpensZ 𝔽 Dig (List UInt8) :=
   match Stmt.setupHidden (tagsAt (zkTags I) I.count j.val) I.circuitFile I.publicFile (zkCoins I) I.tables
       (some (drawJ I (dj S) j.val)) I.partition I.program with
-  | .ok st => match Zk.schedule st.m with
+  | .ok st => match Zk.schedule st.wideLeaf st.m with
     | .ok (sch, _) => opnZ (Setup.ofCircuit st) sch (nXZJ ((planZ S R).get j))
         #[proofs[2 * j.val]!, proofs[2 * j.val + 1]!]
     | .error _ => default
@@ -591,13 +591,13 @@ noncomputable def opnAtZHJ (planZ : Finset (Fin n) → Reg → List (TabZK 𝔽 
 `HmOut.parse` accepts, with `wr` the challenger's live-coin part's record of the live session and each of the sampling design's samples setting each
 table up at `mPts` link points, `RunsOnZCJ` holds at the tables `planZHJ` under `hm96-sha512/v1`, with the decoder
 `decAtZJ`, the openings `opnAtZHJ`, no tail and table `j`'s cap from `root_B[j]`. `runsZCJH_liveU` is it from the
-sessions alone: each table's sample setup reads only its own session's committed circuit (`drawSetupH_of_setupHiddenU`). -/
+sessions alone: each table's sample setup reads only its own session's committed circuit (`sampleSetupH_of_setupHiddenU`). -/
 theorem runsZCJH_liveU (I : Inputs) (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
+    (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
-    (L : Law n) (hT : TagsOkZHJ I) (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
-    (hDraw : ∀ ω, DrawOkZKHJ I dj mPts (L.draw ω)) :
+    (L : SamplingDesign n) (hT : TagsOkZHJ I) (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
+    (hDraw : ∀ ω, SampleOkZKHJ I dj mPts (L.draw ω)) :
     RunsOnZCJ (K := 𝕂) execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) (decAtZJ (planZHJ dj y₀))
       (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) L := by
   intro ω R o hacc j
@@ -613,15 +613,15 @@ theorem runsZCJH_liveU (I : Inputs) (ht : I.tags.typed = false)
   obtain ⟨-, sess, schs, hdecS, -, -, -, -, hall⟩ := zk_verify_ok _ _ _ _ hv
   obtain ⟨hs0, cap, hz0, hv0, hv1⟩ := hall j.val (by simpa using hj)
   simp only [Array.getElem_map] at hz0 hv0 hv1
-  have hz' : Zk.schedule sts[j.val].m = .ok (schs[j.val].1, schs[j.val].2) := hz0
+  have hz' : Zk.schedule sts[j.val].wideLeaf sts[j.val].m = .ok (schs[j.val].1, schs[j.val].2) := hz0
   obtain ⟨sch₀, hf⟩ := fast100_of_schedule hz'
   have ht' : (inputsJ I j.val).tags.typed = false := typedJ ht j.val
-  obtain ⟨pop, -, hdr⟩ := setupHidden_drawn hst
-  obtain ⟨D, hD, -⟩ := Layout.drawn_spec (c := { sts[j.val].c with outPorts := #[] }) hdr
-  obtain ⟨x, hx⟩ := drawSetupH_of_setupHiddenU (I := inputsJ I j.val)
+  obtain ⟨pop, -, hdr⟩ := setupHidden_sampled hst
+  obtain ⟨D, hD, -⟩ := Layout.sampled_spec (c := { sts[j.val].c with outPorts := #[] }) hdr
+  obtain ⟨x, hx⟩ := sampleSetupH_of_setupHiddenU (I := inputsJ I j.val)
     (S := partS I (dj (L.draw ω)) (L.draw ω) ⟨j.val, hjn⟩) (mPts := mPts) ht' hst hf hD
     ((hDraw ω ⟨j.val, hjn⟩).1 D hD) ((hDraw ω ⟨j.val, hjn⟩).2 _ hst)
-  obtain ⟨y, hyx, hysch, hytp⟩ := drawSetupZHJ_of x (by rw [hx]; exact array_forM_ok hshape j.val hj)
+  obtain ⟨y, hyx, hysch, hytp⟩ := sampleSetupZHJ_of x (by rw [hx]; exact array_forM_ok hshape j.val hj)
     (sch := schs[j.val].1) (tPad := schs[j.val].2) (by rw [hx]; exact hz')
   have hyst : y.x.st = sts[j.val] := by rw [hyx]; exact hx
   have hTy : (planZHJ (Reg := Reg) dj y₀ (L.draw ω) R).get j = y.table := by
@@ -630,7 +630,7 @@ theorem runsZCJH_liveU (I : Inputs) (ht : I.tags.typed = false)
     rw [hget]
     unfold tableZHJ
     rw [dite_eq_left_of_eq_true (eq_true ⟨y⟩)]
-    exact DrawSetupZHJ.table_eq _ _
+    exact SampleSetupZHJ.table_eq _ _
   rw [← hysch, ← hytp, ← hyst] at hv0 hv1
   rw [← hyst] at hst
   obtain ⟨hpts, hrj⟩ := hrec spec sts sess hs hdecS
@@ -721,10 +721,10 @@ set_option linter.unusedVariables false in
 theorem runsZCJH_liveI (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
+    (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
-    (L : Law n) (hT : TagsOkZHJ I) (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
-    (hDraw : ∀ ω, DrawOkZKHJ I dj mPts (L.draw ω)) :
+    (L : SamplingDesign n) (hT : TagsOkZHJ I) (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
+    (hDraw : ∀ ω, SampleOkZKHJ I dj mPts (L.draw ω)) :
     RunsOnZCJ (K := 𝕂) execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) (decAtZJ (planZHJ dj y₀))
       (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) L :=
   runsZCJH_liveU I ht dj y₀ wr L hT hRec hDraw
@@ -734,10 +734,10 @@ set_option linter.unusedVariables false in
 theorem runsZCJH_live (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
+    (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
-    (L : Law n) (hT : TagsOkZHJ I) (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
-    (hDraw : ∀ ω, DrawOkZKHJ I dj mPts (L.draw ω)) :
+    (L : SamplingDesign n) (hT : TagsOkZHJ I) (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
+    (hDraw : ∀ ω, SampleOkZKHJ I dj mPts (L.draw ω)) :
     RunsOnZCJ (K := 𝕂) execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) (decAtZJ (planZHJ dj y₀))
       (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) L :=
   runsZCJH_liveU I ht dj y₀ wr L hT hRec hDraw
@@ -747,10 +747,10 @@ set_option linter.unusedVariables false in
 theorem runsZCJH_liveISt (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
+    (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
-    (L : Law n) (hT : TagsOkZHJ I) (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
-    (hDraw : ∀ ω, DrawOkZKHJ I dj mPts (L.draw ω)) :
+    (L : SamplingDesign n) (hT : TagsOkZHJ I) (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
+    (hDraw : ∀ ω, SampleOkZKHJ I dj mPts (L.draw ω)) :
     RunsOnZCJ (K := 𝕂) execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) (decAtZJ (planZHJ dj y₀))
       (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) L :=
   runsZCJH_liveU I ht dj y₀ wr L hT hRec hDraw
@@ -760,10 +760,10 @@ set_option linter.unusedVariables false in
 theorem runsZCJH_liveSt (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
+    (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
-    (L : Law n) (hT : TagsOkZHJ I) (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
-    (hDraw : ∀ ω, DrawOkZKHJ I dj mPts (L.draw ω)) :
+    (L : SamplingDesign n) (hT : TagsOkZHJ I) (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
+    (hDraw : ∀ ω, SampleOkZKHJ I dj mPts (L.draw ω)) :
     RunsOnZCJ (K := 𝕂) execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) (decAtZJ (planZHJ dj y₀))
       (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) L :=
   runsZCJH_liveU I ht dj y₀ wr L hT hRec hDraw

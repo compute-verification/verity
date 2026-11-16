@@ -1,6 +1,6 @@
 # mempool: vLLM's page pool as a reference machine
 
-`CacheStep_v3`, the network certifier's cache step, checks a window's calls to vLLM's page pool as memory-checked RAM.
+`CacheStep_v3`, the network attester's cache step, checks a window's calls to vLLM's page pool as memory-checked RAM.
 This directory holds a prototype of the reference that step is held to, and what the step costs:
 
 - `pool_ram.py`: the page pool as a machine over word-addressed memories, every read and write one access under offline
@@ -17,9 +17,9 @@ The last four are commands, and each one's docstring has its arguments.
 ## Interface
 
 - **Provides:** the four commands above, and the two fixtures they write for tests elsewhere:
-  `verity/protocols/accounting/certifier/verifier/tests/fixtures/cache_step_v3_vectors.json` (`stream.py --vectors`) and
-  `verity/circuits/tests/fixtures/memcheck_pool.json` (`vectors.py`).
+  `tests/verity/protocols/resource_accounting/network/verifier/fixtures/cache_step_v3_vectors.json` (`stream.py --vectors`) and
+  `tests/verity/circuits/fixtures/memcheck_pool.json` (`vectors.py`).
 - **Loaded by:** nothing. The tests that read the two fixtures load no code from here.
-- **Loads:** the certifier's cache step and compile slices (`verity.protocols.accounting.certifier.prover`),
-  `verity.protocols.accounting.certifier.verifier.head_check`, `verity.circuits.defs`, `verity.commitments.gates`, and the
+- **Loads:** the certifier's cache step and compile slices (`verity.protocols.resource_accounting.network.prover`),
+  `verity.protocols.resource_accounting.network.verifier.head_check`, `verity.circuits.defs`, `verity.commitments.gates`, and the
   scheduler replay with its traces under `benchmarks/network_e2e/encodings`.

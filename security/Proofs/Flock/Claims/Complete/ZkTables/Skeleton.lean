@@ -202,9 +202,9 @@ def LinkFirstZk : Prop :=
 def FinalFitsZk : Prop :=
   ∀ o : Run H rel, o.record.toUTF8.size < 2 ^ 64 ∧ o.proofs.size < 2 ^ 64 ∧ ∀ b ∈ o.proofs, b.size < 2 ^ 64
 
-/-- **The record's sample is the statement's**, whatever its key order (`drawEq`). -/
-def DrawMatchesZk : Prop :=
-  ∀ o : Run H rel, drawEq (FlockSoundness.Discharge.Exec.recordDraw o.record) o.s.read.draw = true
+/-- **The record's sample is the statement's**, whatever its key order (`sampleEq`). -/
+def SampleMatchesZk : Prop :=
+  ∀ o : Run H rel, sampleEq (FlockSoundness.Discharge.Exec.recordDraw o.record) o.s.read.draw = true
 
 /-- **The record's live session reads** (`liveOf`: the record is JSON with its link, points and streams). -/
 def LiveReadsZk : Prop := ∀ o : Run H rel, liveOf o.spec o.record = .ok o.live
@@ -243,7 +243,7 @@ def DecodesZk : Prop := ∀ o : Run H rel, Record.decodeWith o.hs o.spec o.recor
 def PublicsZk : Prop := ∀ o : Run H rel, ∀ q ∈ (o.tabs.zip o.sess.publics).toList, q.1.publics q.2 = .ok ()
 
 /-- **Each table has its `--zk` schedule** (`Zk.schedule`: fast100's, level 0 at `q_0` queries). -/
-def SchedulesZk : Prop := ∀ o : Run H rel, ∀ st ∈ o.tabs.toList, ∃ v, Zk.schedule st.m = .ok v
+def SchedulesZk : Prop := ∀ o : Run H rel, ∀ st ∈ o.tabs.toList, ∃ v, Zk.schedule st.wideLeaf st.m = .ok v
 
 /-- **One proof file per rep stream.** -/
 def ProofCountZk : Prop := ∀ o : Run H rel, (o.proofs.size != o.spec.repStreams.size) = false
@@ -322,7 +322,7 @@ structure Goals : Prop where
   sends : SendCountZk H rel
   linkFirst : LinkFirstZk H rel
   finalFits : FinalFitsZk H rel
-  draw : DrawMatchesZk H rel
+  draw : SampleMatchesZk H rel
   liveReads : LiveReadsZk H rel
   rootB : CustodyRootBZk H rel
   publicsLink : CustodyPublicsZk H rel
@@ -392,7 +392,7 @@ theorem coinTree_goal : CoinTree H rel := fun o => by
   · rw [h] at this; cases this
   · rfl
 
-/-- **A sampled session**: `checks` never reaches `drawLaw zk tags false none`. -/
+/-- **A sampled session**: `checks` never reaches `sampleDesign zk tags false none`. -/
 theorem Case.drawn (c : Case H rel) : c.s.read.draw.isNone = false := by
   have := c.ready_parts.1
   cases h : c.s.read.draw

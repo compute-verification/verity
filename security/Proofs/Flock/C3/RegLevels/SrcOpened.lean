@@ -74,7 +74,7 @@ def ConssAt (sch : Flock.Schedule) (lg : RecAlgebra.LgPts) : Prop :=
 section Copy
 
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
+  {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
 /-- **Copy `j` of unit `u` opens row `r` at position `pos` through the siblings `ss` to the node `top`**: the unit is
 `recOpenLaid`'s at the depth `H`; the copy's own input columns hold the row and the siblings in the layer (how R's map

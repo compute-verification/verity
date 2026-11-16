@@ -9,7 +9,7 @@ import Mathlib.Basic.ENNReal.Real
 
 Under PoUS as an obligation the device's memory holds the weights' P2 encoding while the prover serves, each block under
 the key pair of its tag, its coin flipped by the memory challenger, and a block re-encoded later under a fresh tag
-(`Security/Definitions/Pous/P2/Mutable.lean`). One audit window runs one session against the store's snapshot at
+(`security/Definitions/Pous/P2/Mutable.lean`). One audit window runs one session against the store's snapshot at
 the window's start, so the window is `PeriodHeld`'s period with that snapshot as `C*`. The store's oracle is the ring's
 labeling and a key pair per tag. The window's capacity coins are the snapshot's primitive (`Mutable.snap`) and the
 memory challenger's coins. The key pairs of every other tag (`Mutable.rest`: earlier versions, pages outside the
@@ -47,8 +47,8 @@ def ObligationHeld : Prop :=
   ∀ D Q L : ℕ, Pous.P2.Assumptions.P2RingAuditSecure D Q L →
     ∀ (ι α ΩW ΩQ T : Type) [Fintype ι] [Fintype α] [Fintype T] [DecidableEq T]
       (tag : Fin (2 ^ 19) → T), Function.Injective tag →
-      ∀ (d : Accounting.Device ι)
-        (r : Accounting.Run d α ΩW (ΩQ × Mutable.RestKeys tag 16448 (2 ^ 16448 - 21065))
+      ∀ (d : ResourceAccounting.Device ι)
+        (r : ResourceAccounting.Run d α ΩW (ΩQ × Mutable.RestKeys tag 16448 (2 ^ 16448 - 21065))
           ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
         (P : Audits ΩW (ΩQ × Mutable.RestKeys tag 16448 (2 ^ 16448 - 21065)))
         (τ : Strategy ΩW (ΩQ × Mutable.RestKeys tag 16448 (2 ^ 16448 - 21065))) (round : ℕ) (S : ℝ),

@@ -82,7 +82,7 @@ theorem complete_zk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → R
       sends := sendCountZk_goal H rel
       linkFirst := linkFirstZk_goal H h64 rel
       finalFits := JsonRT.finalFitsZk_goal h64 hS hP hR
-      draw := JsonRT.drawMatchesZk_goal h64 hS hP
+      draw := JsonRT.sampleMatchesZk_goal h64 hS hP
       liveReads := JsonRT.liveReadsZk_goal h64 hS hP
       canonical := JsonRT.canonicalZk_goal h64 hS hP
       rootB := JsonRT.custodyRootBZk_goal h64 hS hP

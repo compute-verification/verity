@@ -76,7 +76,7 @@ PIPES = {
     "fp4-nvf4": Pipe("fp4-nvf4", U.E2M1, (16, 16, 16, 16), 27, -174, False, "BLACKWELL_SM120_NVF4"),
 }
 
-#: sha256 of :func:`netlist` per relation: the lowering version the verifier re-derives and compares.
+#: sha256 of :func:`circuit_description` per relation: the lowering version the verifier re-derives and compares.
 PINS = {
     "bf16-hopper": "da1bbe2cdbf02971f0d7f12f6d5a3caabefb658af95afeeff44d001ff30dddba",
     "fp8-ada": "e66262a08816f03d7dba67860c68b3993adc9ca83f1746d15137b0b757599a7c",
@@ -151,7 +151,7 @@ def _layout(pipe: Pipe):
     return C, rows_a, rows_b, const, outs
 
 
-def netlist(relation: str) -> str:
+def circuit_description(relation: str) -> str:
     """The lowered unit of ``relation`` as ``flock-unit-io/v1`` text."""
     pipe = PIPES[relation]
     _, ra, rb, const, outs = _layout(pipe)
@@ -163,7 +163,7 @@ def netlist(relation: str) -> str:
 
 
 def digest(relation: str) -> str:
-    return hashlib.sha256(netlist(relation).encode()).hexdigest()
+    return hashlib.sha256(circuit_description(relation).encode()).hexdigest()
 
 
 def evaluate(relation: str, x: list[int], w: list[int], c: int, sx: list[int] = (), sw: list[int] = ()) -> tuple[int, int | None, bool]:

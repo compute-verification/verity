@@ -41,7 +41,7 @@ rep `q`'s table's schedule; `0` where `x` does not set up or the schedule fails.
 def repSlot (x : Msg) (q : ℕ) (f : _root_.Flock.Schedule → ℕ) : ℕ :=
   match FlockDeploy.setupOf true x with
   | some (_, spec, sts) =>
-    match _root_.Flock.Zk.schedule sts[q / 2]!.m with
+    match _root_.Flock.Zk.schedule sts[q / 2]!.wideLeaf sts[q / 2]!.m with
     | .ok (sch, _) => FlockComplete.repStartZk spec sts q + FlockComplete.piopRoundsZk spec sts[q / 2]! + f sch
     | .error _ => 0
   | none => 0
@@ -78,7 +78,7 @@ noncomputable def withCoins {P : Composed.LigProver}
   fun x c j => { withOuter cz x c j with beta := fun r => betaAt c j.val r.val, rho := fun r => rhoAt c j.val r.val }
 
 theorem repSlot_eq {x : Msg} {s spec} (hsx : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) {q : ℕ}
-    {sch : _root_.Flock.Schedule} {tPad : ℕ} (hz : _root_.Flock.Zk.schedule (stsOf x)[q / 2]!.m = .ok (sch, tPad))
+    {sch : _root_.Flock.Schedule} {tPad : ℕ} (hz : _root_.Flock.Zk.schedule (stsOf x)[q / 2]!.wideLeaf (stsOf x)[q / 2]!.m = .ok (sch, tPad))
     (f : _root_.Flock.Schedule → ℕ) :
     repSlot x q f =
       FlockComplete.repStartZk spec (stsOf x) q + FlockComplete.piopRoundsZk spec (stsOf x)[q / 2]! + f sch := by
@@ -125,7 +125,7 @@ theorem honestPR_refused (H : Msg → Msg) {x : Msg} (hx : Live x) (w : Claims.F
     rw [show (2 * j + r) / 2 = j by omega]
     exact getElem!_pos (stsOf x) j hj
   obtain ⟨y⟩ := hx.2 j hj
-  have hz : _root_.Flock.Zk.schedule (stsOf x)[(2 * j + r) / 2]!.m = .ok (y.sch, y.tPad) := by
+  have hz : _root_.Flock.Zk.schedule (stsOf x)[(2 * j + r) / 2]!.wideLeaf (stsOf x)[(2 * j + r) / 2]!.m = .ok (y.sch, y.tPad) := by
     rw [hst]
     exact y.hz
   have hk6 : 6 ≤ (stsOf x)[(2 * j + r) / 2]!.c.kLog := by

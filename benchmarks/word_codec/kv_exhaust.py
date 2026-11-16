@@ -51,6 +51,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.py").parent))
 
 import kv as K  # noqa: E402
 import kv_bench as B  # noqa: E402
@@ -474,7 +475,7 @@ def write_result(res: dict, libs, out_dir: Path) -> None:
     run_dir, run_id = os.environ.get("RESEARCH_RUN_DIR"), os.environ.get("RESEARCH_RUN_ID")
     if not run_dir or not run_id:
         return
-    ms = [{"name": "read", "value": res["read"]["gbps"], "unit": "GB/s"}] if "read" in res else []
+    ms = [{"name": "memory-accounting/kv-codec.read", "value": res["read"]["gbps"], "unit": "GB/s"}] if "read" in res else []
     for lib in libs:
         for name, cell in res["libs"][lib.name].get("exhaust", {}).items():
             for form, rows in cell["forms"].items():

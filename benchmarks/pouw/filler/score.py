@@ -119,7 +119,7 @@ def arm_doc(arm: Any) -> dict:
 def build(bdir: Path, out: Path) -> dict:
     log = out / "build.log"
     rec = {"nvcc": subprocess.run([NVCC, "--version"], capture_output=True, text=True).stdout.strip().splitlines()[-1:]}
-    for name, src in (("dcap", HERE / "dcap.cu"), ("dscore", HERE / "dscore.cu")):
+    for name, src in (("dcap", REPO / "verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler" / "dcap.cu"), ("dscore", HERE / "dscore.cu")):
         rc = sh([NVCC, *NVFLAGS, "-o", str(bdir / name), str(src), *LIBS], out=log, err=log)
         if rc:
             raise SystemExit(f"build of {name} failed (rc {rc}); see {log}")

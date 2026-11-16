@@ -83,7 +83,7 @@ def ServedRegistered (u : Fin s.n) : Prop :=
       ∃ q : Fin s.c.ports.size, p = .inl (u, q) ∧ ∃ pt ∈ s.own, pt.name = s.c.ports[q].name) ∧
     ∀ q : Fin s.c.ports.size, (∃ pt ∈ s.own, pt.name = s.c.ports[q].name) →
       (s.rdU u).port (.inl (u, q)) = s.ownPort q ∧
-        ∀ d D dp idx, _root_.Flock.Draw.UnitDraw.ofJson (drawJ s.I d (partOf s.I d u.val)) = .ok D →
+        ∀ d D dp idx, _root_.Flock.Draw.UnitSample.ofJson (drawJ s.I d (partOf s.I d u.val)) = .ok D →
           HmOut.drawn s.c s.pub (drawJ s.I d (partOf s.I d u.val)) = .ok dp →
           _root_.Flock.Registered.unitIndices dp = .ok idx → u.val ∈ D.proved → ∀ pos,
             (s.ownPort q).reads[idx.getD (D.proved.idxOf u.val) 0]? = some (some pos) →
@@ -114,7 +114,7 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 open Classical
 
 /-- **Flock's rows link at served roots.** At a Flock session (`RowsSession`), at every outcome of its live audit
-(sample `S`, registration `R`, the record `wr` writes) that flock-verify `--zk --registered` accepts, a sampled proof block `u`
+(sample `S`, registration `R`, the record `wr` writes) that verity-verify-proof `--zk --registered` accepts, a sampled proof block `u`
 whose served roots are registered (`ServedRegistered`: its opening `rdU u` reads exactly its rows at the ports `own`
 names, as `own` gives them) and whose rows are right at its owned reads (`RowsAt`) has, on each of its wires at a served
 read, the committed tree's row: the value layer's bit (`Xv`) is the registrant's row's. Acceptance names each port of

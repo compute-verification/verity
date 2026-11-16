@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Core.Circuit
-public import Definitions.Accounting.Device
+public import Definitions.Registration.Device
 public import Definitions.Core.Game
 public import Mathlib.Data.Fintype.Pi
 public import Mathlib.Data.Fintype.Prod
@@ -12,10 +12,10 @@ import Mathlib.Basic.ENNReal.Real
 # Server-time blocks and the wipes between them (trusted)
 
 A server's life is cut into server-time blocks, each opened by a certified memory wipe: the device model
-(`Accounting.Device`) extended by one thing, wipes. This module states what a block is, what crosses the boundary into it,
+(`ResourceAccounting.Device`) extended by one thing, wipes. This module states what a block is, what crosses the boundary into it,
 and what the wipe there bounds. It states no guarantee; a joint guarantee over a schedule of blocks reads these.
 
-* **A block** (`Block`) of the declared circuit `C` on the device: the window of ticks it runs, and the gates of `C` it
+* **A block** (`Block`) of the registered circuit `C` on the device: the window of ticks it runs, and the gates of `C` it
   computes there. **A schedule of `B` blocks** (`Blocks`): the blocks in order, no gate computed in two of them. There
   is one wipe per block, the one that opens it: boundary `b` is block `b`'s, so block 0 has one too, which bounds what
   survives from before the schedule.
@@ -30,11 +30,11 @@ and what the wipe there bounds. It states no guarantee; a joint guarantee over a
 * **The wipe** at boundary `b` (`Wipe`), the streamed-label wipe: the memory challenger sends a fresh seed, the device
   fills `fill` bits of its store with labels derived from it, and once the fill ends the challenger reveals spot reads
   one at a time and reads the labels back under a deadline. The wipe's egress, every bit that leaves the device during
-  it, is counted (`egress` bits, `E`, as the network certifier counts them). The state block `b` starts from
+  it, is counted (`egress` bits, `E`, as the network attester counts them). The state block `b` starts from
   (`Wipe.start`) is a function of the device's state at the boundary, the seed and the spot reads.
 * **What block `b` may depend on** (`Wipe.Separates`): of the device's state at the boundary and the seed, only the
   state block `b` starts from; the spot reads are public. What the prover kept off the device (the egress, NVMe, the
-  network) can come back after the wipe over the side channels: `Accounting.Device.cap` limits that per tick, and no
+  network) can come back after the wipe over the side channels: `ResourceAccounting.Device.cap` limits that per tick, and no
   wipe bounds it.
 * **The wipe's survivor bound** (`Wipe.SurvivorBound foreignBits ε`), at the pair the wipe's protocol publishes with an
   accepted verdict: foreign content of at least `foreignBits` bits, plus the state the fill leaves out (`Wipe.unfilled`:
@@ -47,7 +47,7 @@ and what the wipe there bounds. It states no guarantee; a joint guarantee over a
   foreign content past the survivor threshold survives (`Wipe.OfRun.Kept`).
 
 **One GPU, one store**: the device is one GPU, and its one store is the GPU's HBM
-(`Accounting.Device.mem`, M). The model has no host store.
+(`ResourceAccounting.Device.mem`, M). The model has no host store.
 
 **The blocks are private.** The blocks' gate sets split the circuit's gates over time, as a partition does, and like a
 partition's they are private: a statement over a schedule reads `Blocks` as the prover's value, never as a public
@@ -64,8 +64,8 @@ open scoped ENNReal
 variable {ι : Type}
 
 /-- **The device's state**: its on-chip state, `chip` bits (S_chip), and its store, `mem` bits (M), the GPU's HBM. The
-model has no host store. It is written `Device.State d`: `d` is an `Accounting.Device`, so `d.State` doesn't resolve. -/
-structure Device.State (d : Accounting.Device ι) where
+model has no host store. It is written `Device.State d`: `d` is an `ResourceAccounting.Device`, so `d.State` doesn't resolve. -/
+structure Device.State (d : ResourceAccounting.Device ι) where
   /-- the on-chip state: registers, shared memory, caches -/
   chip : Fin d.chip → Bool
   /-- the store: the device memory, the GPU's HBM -/
@@ -75,7 +75,7 @@ structure Device.State (d : Accounting.Device ι) where
 and the gates of `C` it computes there. -/
 structure Block (C : Circuit) where
   /-- the ticks the block runs -/
-  win : Accounting.Window
+  win : ResourceAccounting.Window
   /-- the gates of `C` whose values the block computes -/
   gates : Finset (Fin C.N)
 
@@ -113,7 +113,7 @@ end Blocks
 that opens the block, and the device's state, its store among it. The re-read value is the committed one
 (`s.carriedValue X b`) when the commitment made before the wipe binds it, which a joint guarantee states, not this
 type. -/
-structure Blocks.State {C : Circuit} {B : ℕ} (s : Blocks C B) (d : Accounting.Device ι) (b : Fin B) where
+structure Blocks.State {C : Circuit} {B : ℕ} (s : Blocks C B) (d : ResourceAccounting.Device ι) (b : Fin B) where
   /-- the carried state's value, re-read after the wipe -/
   carried : s.Carried b
   /-- the device's state: its on-chip state and its store -/
@@ -127,12 +127,12 @@ time and reads the labels back under a deadline.
 * `carry σ`: the carried state's value as the device in state `σ` holds it at the boundary. The device commits it before
   the wipe and re-reads it after. The check of what it re-reads against that commitment isn't in `accepts`.
 * `filled σ ω`: the device's state when the fill ends, and the egress: the `egress` bits that left the device during the
-  wipe, as the network certifier counts them. Nothing enters the device during the fill but the seed.
+  wipe, as the network attester counts them. Nothing enters the device during the fill but the seed.
 * `accepts σ ω c`: the memory challenger's verdict.
 * `after σ' ξ c`: the device's state when block `b` starts, from its state `σ'` when the fill ends, the egress `ξ` and
   the spot reads `c`. During the spot reads nothing enters the device but the spot reads and what the outside sends
   back, a function of the egress and the spot reads. -/
-structure Wipe (d : Accounting.Device ι) {C : Circuit} {B : ℕ} (s : Blocks C B) (b : Fin B) (Ω Ch : Type) where
+structure Wipe (d : ResourceAccounting.Device ι) {C : Circuit} {B : ℕ} (s : Blocks C B) (b : Fin B) (Ω Ch : Type) where
   /-- the bits of the device's store the fill covers -/
   fill : ℕ
   fill_le : fill ≤ d.mem
@@ -149,7 +149,7 @@ structure Wipe (d : Accounting.Device ι) {C : Circuit} {B : ℕ} (s : Blocks C 
 
 namespace Wipe
 
-variable {d : Accounting.Device ι} {C : Circuit} {B : ℕ} {s : Blocks C B} {b : Fin B} {Ω Ch : Type}
+variable {d : ResourceAccounting.Device ι} {C : Circuit} {B : ℕ} {s : Blocks C B} {b : Fin B} {Ω Ch : Type}
   (w : Wipe d s b Ω Ch)
 
 /-- **The state block `b` starts from**, when the device's state at the boundary is `σ`, the seed `ω` and the spot reads
@@ -178,7 +178,7 @@ reads, the probability over a uniform `z`, a uniform seed and uniform spot reads
 `keep` gives back `z` is at most `ε S_φ hold keep`. The probability is the value of a sample with no prover move
 (`Game.value` on `Game.draw`). At `foreignBits ≤ f · fill + 2λ` it bounds, with what the block keeps read as the bits
 it gives back, the wipe's acceptance while more than `f · fill + 2λ` bits plus the unfilled state survive
-(`Accounting.SecurityProofs.Live.survives_of_survivorBound`).
+(`ResourceAccounting.SecurityProofs.Live.survives_of_survivorBound`).
 
 `z` is foreign content as in PoUS's games: uniform, and independent of the wipe's coins. `keep` reads all that the state
 block `b` starts from is a function of, besides the carried value, which, once bound to the committed trace, is
@@ -188,7 +188,7 @@ fixed before `z` is sampled. The on-chip state is counted, not assumed wiped: ch
 (the streamed wipe's verdict publishes `foreign_bits = ⌈fill/19⌉ + E`, `E` the egress), not constants of this
 definition. `ε` is a function of the adversary's moves (`S_φ`, `hold`, `keep`), so it can cover the wipe's own error,
 the labels' PRF advantage against the distinguisher those moves make (the standard-model term, as
-`Pous.Guarantees.StreamedWipe` adds `Pous.StreamedWipe.prfAdvantage`), and `δ_net` once the network certifier's count of
+`Pous.Guarantees.StreamedWipe` adds `Pous.StreamedWipe.prfAdvantage`), and `δ_net` once the network attester's count of
 the egress enters. A constant `ε` reads the labels as ideal. `Pous.Guarantees.StreamedWipe` is the streamed game's
 proved bound. The bridge from an accepted verdict to this bound is memory-accounting's, in a package that sees both. -/
 def SurvivorBound [Fintype Ω] [Nonempty Ω] [Fintype Ch] [Nonempty Ch] (foreignBits : ℕ)

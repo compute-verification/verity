@@ -1,7 +1,7 @@
 module
 
-public import Flock.Firewall.Drive
-public import Flock.Firewall.SessionPlan
+public import Flock.ZkServer.Drive
+public import Flock.ZkServer.SessionPlan
 public import Proofs.Flock.Claims.ZK.FrameCount
 
 /-!
@@ -27,8 +27,8 @@ driver for its count, as the squeeze's framed header holds it (`Drive.stepAsks`)
 namespace Claims.ZKServer.Count
 
 open _root_.Flock (V F128 Transcript TMW liftTM)
-open _root_.Flock.Firewall.Drive (Step OpenM stepAsks)
-open _root_.Flock.Firewall.Finish (squeezeP sampleP sampleVecP sampleKP)
+open _root_.Flock.ZkServer.Drive (Step OpenM stepAsks)
+open _root_.Flock.ZkServer.Finish (squeezeP sampleP sampleVecP sampleKP)
 
 /-- **A step program's asks**: it asks for coins at the counts `ns` in order, as far as it asks, and where it ends with
 `a`, `Q a` of the counts left. -/
@@ -160,8 +160,8 @@ theorem ot_forIn_bind {σ β : Type} {n : ℕ} {ms ms' : List ℕ} {R : β → P
 theorem ringSwitchP_ot (coins : Got) (sv : ℕ → Array F128) (claims : Array _root_.Flock.Claim)
     (hc : claims.size < 2 ^ 64) :
     OT (Past coins) ((List.replicate claims.size [7]).flatten ++ sq claims.size) (fun _ => True)
-      (_root_.Flock.Firewall.Finish.ringSwitchP (stepAsks coins true) sv claims) := by
-  unfold _root_.Flock.Firewall.Finish.ringSwitchP
+      (_root_.Flock.ZkServer.Finish.ringSwitchP (stepAsks coins true) sv claims) := by
+  unfold _root_.Flock.ZkServer.Finish.ringSwitchP
   apply ot_eq
   · apply ot_bind (ot_liftTM _); intro _ _
     try dsimp only
@@ -180,7 +180,7 @@ theorem ringSwitchP_ot (coins : Got) (sv : ℕ → Array F128) (claims : Array _
 
 /-! ## Ligerito's prover state -/
 
-open _root_.Flock.Firewall.Finish (LP LigState liftT sendMsg powP challengeP oodIntroP queryP)
+open _root_.Flock.ZkServer.Finish (LP LigState liftT sendMsg powP challengeP oodIntroP queryP)
 
 /-- `OT` over the Ligerito prover's state: from any state. -/
 def OTL {α : Type} (I : Got → Prop) (ns : List ℕ) (Q : α → Prop) (p : LP OpenM α) : Prop :=
@@ -299,7 +299,7 @@ theorem otl_oodIntroP (coins : Got) (nonce : ℕ → ℕ → UInt64) (g : Array 
 def qc (lv : _root_.Flock.Level) : List ℕ := sq lv.q ++ [Nat.log2 (lv.q - 1) + 1]
 
 theorem otl_queryP (coins : Got) (nonce : ℕ → ℕ → UInt64) (ms : _root_.Flock.MerkleScheme) (lv : _root_.Flock.Level)
-    (cm : _root_.Flock.Firewall.Finish.Commit) (hq : lv.q < 2 ^ 63) :
+    (cm : _root_.Flock.ZkServer.Finish.Commit) (hq : lv.q < 2 ^ 63) :
     OTL (Past coins) (qc lv) (fun _ => True) (queryP (stepAsks coins true) nonce ms lv cm) := by
   unfold queryP
   have hl : Nat.log2 (lv.q - 1) + 1 < 2 ^ 64 := by
@@ -346,11 +346,11 @@ theorem otl_forIn_array {τ σ : Type} (l : Array τ) (body : τ → σ → LP O
   rw [← Array.forIn_toList]
   exact otl_forIn_list l.toList body hb u
 
-theorem splitAt_le (s : ℕ) : ∀ i, _root_.Flock.Firewall.Session.splitAt s i ≤ s + 1
-  | 0 => by simp [_root_.Flock.Firewall.Session.splitAt]
+theorem splitAt_le (s : ℕ) : ∀ i, _root_.Flock.ZkServer.Session.splitAt s i ≤ s + 1
+  | 0 => by simp [_root_.Flock.ZkServer.Session.splitAt]
   | i + 1 => by
     have := splitAt_le s i
-    simp only [_root_.Flock.Firewall.Session.splitAt]
+    simp only [_root_.Flock.ZkServer.Session.splitAt]
     omega
 
 theorem k0_flat (K : ℕ) (hK : 1 ≤ K) : ∀ k ≤ K,
@@ -367,9 +367,9 @@ theorem k0_flat (K : ℕ) (hK : 1 ≤ K) : ∀ k ≤ K,
     simp only [h1, ↓reduceIte, List.flatMap_cons, List.flatMap_nil, List.append_nil, beq_iff_eq, List.append_assoc]
 
 theorem qcoins_filter (sch : _root_.Flock.Schedule) (i : ℕ) :
-    (_root_.Flock.Firewall.Session.queryCoins sch i).toList.filter (· != 0) =
+    (_root_.Flock.ZkServer.Session.queryCoins sch i).toList.filter (· != 0) =
       qc (sch.levels.getD i default) ++ [1] := by
-  simp only [_root_.Flock.Firewall.Session.queryCoins, qc, sq]
+  simp only [_root_.Flock.ZkServer.Session.queryCoins, qc, sq]
   split <;> simp_all
 
 theorem filter_cons_ne (a : ℕ) (l : List ℕ) : (a :: l).filter (· != 0) = sq a ++ l.filter (· != 0) := by
@@ -386,20 +386,20 @@ theorem two_bne : ((2 : ℕ) != 0) = true := rfl
 /-- Ligerito's fold `i` after level 0, as `ligeritoCoins` lists it, its zeros dropped. -/
 def ligStep (sch : _root_.Flock.Schedule) : ℕ → List ℕ := fun i =>
   (Array.replicate 4 2 ++ if i + 1 < sch.levels.size - 1 then
-      #[_root_.Flock.Firewall.Session.splitAt (sch.n - sch.k0 + 1) (i + 1), 1,
-        _root_.Flock.Firewall.Session.splitAt (sch.n - sch.k0 + 1) (i + 1), 1] ++
-        _root_.Flock.Firewall.Session.queryCoins sch (i + 1)
-    else _root_.Flock.Firewall.Session.queryCoins sch (sch.levels.size - 1)).toList.filter (· != 0)
+      #[_root_.Flock.ZkServer.Session.splitAt (sch.n - sch.k0 + 1) (i + 1), 1,
+        _root_.Flock.ZkServer.Session.splitAt (sch.n - sch.k0 + 1) (i + 1), 1] ++
+        _root_.Flock.ZkServer.Session.queryCoins sch (i + 1)
+    else _root_.Flock.ZkServer.Session.queryCoins sch (sch.levels.size - 1)).toList.filter (· != 0)
 
 theorem ligeritoPZk_ot (coins : Got) (ms : _root_.Flock.MerkleScheme) (sch : _root_.Flock.Schedule) (T : F128)
-    (cm0 : _root_.Flock.Firewall.Finish.Commit) (t b : Array F128) (lay : _root_.Flock.Zk.PadLayout) (h : Array F128)
+    (cm0 : _root_.Flock.ZkServer.Finish.Commit) (t b : Array F128) (lay : _root_.Flock.Zk.PadLayout) (h : Array F128)
     (rep tPad : ℕ) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
     (hk : 1 ≤ sch.k0) (hn : sch.n < 2 ^ 62) (hq : ∀ i, (sch.levels.getD i default).q < 2 ^ 63) :
-    OT (Past coins) ((_root_.Flock.Firewall.Session.ligeritoCoins sch).toList.filter (· != 0)) (fun _ => True)
-      (_root_.Flock.Firewall.Finish.ligeritoPZk (stepAsks coins true)
-        (fun lv g s => pure (_root_.Flock.Firewall.Finish.commitFw lv g s)) ms sch T cm0 t b lay h rep tPad extra
+    OT (Past coins) ((_root_.Flock.ZkServer.Session.ligeritoCoins sch).toList.filter (· != 0)) (fun _ => True)
+      (_root_.Flock.ZkServer.Finish.ligeritoPZk (stepAsks coins true)
+        (fun lv g s => pure (_root_.Flock.ZkServer.Finish.commitFw lv g s)) ms sch T cm0 t b lay h rep tPad extra
         lanePad salt nonce) := by
-  unfold _root_.Flock.Firewall.Finish.ligeritoPZk
+  unfold _root_.Flock.ZkServer.Finish.ligeritoPZk
   apply ot_eq
   · apply ot_bind (ot_liftTM _); intro _ _
     apply ot_bind (ot_liftTM _); intro _ _
@@ -454,11 +454,11 @@ theorem ligeritoPZk_ot (coins : Got) (ms : _root_.Flock.MerkleScheme) (sch : _ro
         apply otl_bind (otl_liftT (ot_sampleP coins)); intro _ _
         apply otl_bind (otl_modify _); intro _ _
         apply otl_forIn_bind (ligStep sch)
-          (fun i u => i < sch.levels.size - 1 → u.1 = _root_.Flock.Firewall.Session.splitAt (sch.n - sch.k0 + 1) i)
+          (fun i u => i < sch.levels.size - 1 → u.1 = _root_.Flock.ZkServer.Session.splitAt (sch.n - sch.k0 + 1) i)
           (fun _ => rfl)
         · intro i hi u hJ
           obtain ⟨sd, pc, cs, rps, fn⟩ := u
-          have hsd : sd = _root_.Flock.Firewall.Session.splitAt (sch.n - sch.k0 + 1) i := hJ hi
+          have hsd : sd = _root_.Flock.ZkServer.Session.splitAt (sch.n - sch.k0 + 1) i := hJ hi
           subst hsd
           apply otl_eq
           · apply otl_forIn_bind (fun _ => [2]) (fun _ _ => True) trivial
@@ -479,13 +479,13 @@ theorem ligeritoPZk_ot (coins : Got) (ms : _root_.Flock.MerkleScheme) (sch : _ro
               have hs := splitAt_le (sch.n - sch.k0 + 1) (i + 1)
               apply otl_ite
               · intro _
-                simp only [_root_.Flock.Firewall.Session.splitAt] at hs
+                simp only [_root_.Flock.ZkServer.Session.splitAt] at hs
                 apply otl_bind (otl_lift_pure _); intro _ _
                 apply otl_bind (otl_liftT (ot_liftTM _)); intro _ _
                 apply otl_bind (otl_oodIntroP coins nonce _
-                  (_root_.Flock.Firewall.Session.splitAt (sch.n - sch.k0 + 1) i - 4 + 1) (by omega)); intro _ _
+                  (_root_.Flock.ZkServer.Session.splitAt (sch.n - sch.k0 + 1) i - 4 + 1) (by omega)); intro _ _
                 apply otl_bind (otl_oodIntroP coins nonce _
-                  (_root_.Flock.Firewall.Session.splitAt (sch.n - sch.k0 + 1) i - 4 + 1) (by omega)); intro _ _
+                  (_root_.Flock.ZkServer.Session.splitAt (sch.n - sch.k0 + 1) i - 4 + 1) (by omega)); intro _ _
                 apply otl_bind (otl_queryP coins nonce ms _ _ (hq (i + 1))); intro _ _
                 apply otl_bind (otl_sendMsg _); intro _ _
                 apply otl_bind (otl_powP nonce 2); intro _ _
@@ -499,7 +499,7 @@ theorem ligeritoPZk_ot (coins : Got) (ms : _root_.Flock.MerkleScheme) (sch : _ro
                 apply otl_bind (otl_powP nonce 2); intro _ _
                 apply otl_bind (otl_liftT (ot_sampleP coins)); intro _ _
                 exact otl_pure ⟨_, rfl, fun h => by simp at hl; omega⟩
-          · simp only [ligStep, _root_.Flock.Firewall.Session.splitAt, Array.toList_append, List.filter_append,
+          · simp only [ligStep, _root_.Flock.ZkServer.Session.splitAt, Array.toList_append, List.filter_append,
               Array.toList_replicate, List.filter_replicate, two_bne, ↓reduceIte, four_two]
             by_cases hc : i + 1 < sch.levels.size - 1
             · have hne : i + 1 ≠ sch.levels.size - 1 := by omega
@@ -514,7 +514,7 @@ theorem ligeritoPZk_ot (coins : Got) (ms : _root_.Flock.MerkleScheme) (sch : _ro
     · intro _ _
       exact ot_pure trivial
   · unfold ligStep
-    simp only [_root_.Flock.Firewall.Session.ligeritoCoins, Array.toList_append, List.filter_append,
+    simp only [_root_.Flock.ZkServer.Session.ligeritoCoins, Array.toList_append, List.filter_append,
       Array.toList_flatMap, Array.toList_range, List.filter_flatMap, qcoins_filter, Array.toList_replicate,
       List.filter_replicate, two_bne, ↓reduceIte, filter_cons_ne, List.filter_nil, sq_one, sq_two,
       List.append_assoc, List.nil_append, List.append_nil]

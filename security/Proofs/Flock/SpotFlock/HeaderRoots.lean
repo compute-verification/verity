@@ -68,7 +68,7 @@ theorem loadPublic_raw {tags : _root_.Flock.Tags} {c : _root_.Flock.Circuit} {f 
       ‹_root_.Flock.JsonParse.parse _ = .ok _›, Except.toOption]
 
 /-- **A sampled sample keeps the header's `frame_v3`** and sets the population to the loaded file's. -/
-theorem drawn_frame {c : _root_.Flock.Circuit} {pub pub' : _root_.Flock.Public} {d : Json}
+theorem sampled_frame {c : _root_.Flock.Circuit} {pub pub' : _root_.Flock.Public} {d : Json}
     {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) (hp : pub.header = .obj m)
     (h : _root_.Flock.HmRow.drawn c pub d = .ok pub') :
     pub'.header.getObjVal? "frame_v3" = pub.header.getObjVal? "frame_v3" ∧
@@ -107,7 +107,7 @@ theorem wf_of_headerOf {f : ByteArray} {hdr : Json} (h : headerOf f = some hdr) 
 /-- **The statement's public file keeps the loaded file's `frame_v3` and input roots**: it is the loaded file, or the
 sample sampled from it, which keeps the header's `frame_v3`, the tables' counts and starts, and sets the population to
 the loaded file's. -/
-theorem drawn_ties {c : _root_.Flock.Circuit} {pop pub : _root_.Flock.Public} {draw : Option Json}
+theorem sampled_ties {c : _root_.Flock.Circuit} {pop pub : _root_.Flock.Public} {draw : Option Json}
     {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) (hp : pop.header = .obj m) (hpn : pop.population = none)
     (hnone : draw = none → pub = pop)
     (hsome : ∀ d, draw = some d → _root_.Flock.HmOut.drawn c pop d = .ok pub) :
@@ -118,8 +118,8 @@ theorem drawn_ties {c : _root_.Flock.Circuit} {pop pub : _root_.Flock.Public} {d
   | none => rw [hnone rfl]; exact ⟨rfl, fun _ _ => rfl⟩
   | some d =>
     have hd : _root_.Flock.HmRow.drawn { c with outPorts := #[] } pop d = .ok pub := hsome d rfl
-    obtain ⟨hfv, hpop⟩ := drawn_frame hm hp hd
-    obtain ⟨_, -, -, -, htab, -⟩ := FlockSoundness.Discharge.Layout.drawn_spec hd
+    obtain ⟨hfv, hpop⟩ := sampled_frame hm hp hd
+    obtain ⟨_, -, -, -, htab, -⟩ := FlockSoundness.Discharge.Layout.sampled_spec hd
     refine ⟨hfv, fun q dom => ?_⟩
     have hpo : FlockSoundness.Discharge.FailClosed.popOf pub = FlockSoundness.Discharge.FailClosed.popOf pop := by
       simp only [FlockSoundness.Discharge.FailClosed.popOf, hpop, hpn, Option.getD_some, Option.getD_none]
@@ -263,7 +263,7 @@ theorem roots_of_load {tags : _root_.Flock.Tags} {c : _root_.Flock.Circuit} {pf 
     cases hw with
     | obj hmw _ => exact hmw
   have hwf := wf_of_headerOf hH
-  obtain ⟨hfv, hir⟩ := drawn_ties hmw hm hpn hnone hsome
+  obtain ⟨hfv, hir⟩ := sampled_ties hmw hm hpn hnone hsome
   obtain ⟨dom, hdom, hroot⟩ := hin
   have hid : _root_.Flock.PortRoots.idOf c pop q = dom := by
     unfold _root_.Flock.PortRoots.idOf

@@ -13,11 +13,18 @@ Usage:
       [--define VERITY_TAP=1 ...] [--files split,split_align] [--extra-src file.cu ...]
 Writes <build-dir>/build_info.json and <build-dir>/resource_usage.txt.
 """
-import hashlib, json, os, subprocess, sys, time, glob
+import glob
+import hashlib
+import json
+import os
+import subprocess
+import time
 from dataclasses import dataclass
 
 from verity_vllm import settings
 from verity_vllm.config import option
+from verity_vllm.log import write
+
 
 def sha256(path):
     h = hashlib.sha256()
@@ -43,7 +50,7 @@ class Options:
 
 
 def main(args: Options):
-    settings.setdefault('CUDA_HOME', '/usr/local/cuda-12.9')
+    cuda_home = settings.setdefault('CUDA_HOME', '/usr/local/cuda-12.9')
     settings.put('TORCH_CUDA_ARCH_LIST', args.arch)
     settings.setdefault('MAX_JOBS', '32')
     import torch
@@ -90,15 +97,15 @@ def main(args: Options):
     include_dirs = [fa, src, os.path.join(tree, 'common'), os.path.join(tree, 'cutlass', 'include')]
 
     os.makedirs(args.build_dir, exist_ok=True)
-    nvcc = os.path.join(settings.raw('CUDA_HOME'), 'bin', 'nvcc')
+    nvcc = os.path.join(cuda_home, 'bin', 'nvcc')
     nvcc_ver = subprocess.run([nvcc, '--version'], capture_output=True, text=True).stdout.strip().splitlines()[-2:]
-    info = {
+    info: dict[str, object] = {
         'name': args.name, 'tree': tree, 'tree_commit': args.tree_commit,
         'sources': sources, 'source_sha256': {s: sha256(s) for s in sources},
         'header_sha256': {p: sha256(p) for p in sorted(glob.glob(os.path.join(src, '*.h')))},
         'defines': defines, 'cxx_flags': cxx_flags, 'nvcc_flags': nvcc_flags, 'arch': args.arch, 'hdims': hdims,
         'nvcc_version': nvcc_ver, 'torch': torch.__version__, 'torch_cuda': torch.version.cuda,
-        'cuda_home': settings.raw('CUDA_HOME'), 'max_jobs': settings.raw('MAX_JOBS'),
+        'cuda_home': cuda_home, 'max_jobs': settings.raw('MAX_JOBS'),
     }
     t0 = time.time()
     load(name=args.name, sources=sources, extra_cflags=cxx_flags, extra_cuda_cflags=nvcc_flags,
@@ -109,7 +116,7 @@ def main(args: Options):
     info['so'] = so
     info['so_sha256'] = sha256(so) if os.path.exists(so) else None
     info['so_bytes'] = os.path.getsize(so) if os.path.exists(so) else None
-    cuobjdump = os.path.join(settings.raw('CUDA_HOME'), 'bin', 'cuobjdump')
+    cuobjdump = os.path.join(cuda_home, 'bin', 'cuobjdump')
     ru = subprocess.run([cuobjdump, '--dump-resource-usage', so], capture_output=True, text=True)
     with open(os.path.join(args.build_dir, 'resource_usage.txt'), 'w') as f:
         f.write(ru.stdout + ru.stderr)
@@ -117,4 +124,4 @@ def main(args: Options):
     info['ops'] = ops
     with open(os.path.join(args.build_dir, 'build_info.json'), 'w') as f:
         json.dump(info, f, indent=1)
-    print('BUILD-OK', args.name, info['compile_seconds'], 's', so, ops)
+    write(f"BUILD-OK {args.name} {info['compile_seconds']} s {so} {ops}")

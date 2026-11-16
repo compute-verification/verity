@@ -13,20 +13,20 @@ module. Its proof is the theorem `FlockSoundness.Audit.SecurityProofs.G : FlockS
 
 @[expose] public section
 
-namespace FlockSoundness.Audit.Law
+namespace FlockSoundness.Audit.SamplingDesign
 open scoped ENNReal NNReal
 
 /-- **The sizing of record** (`δ = 2^-40`, `ε = 0.1%`): `(1 − 1/1000)^27713 ≤ 2^-40`. -/
-def _root_.FlockSoundness.Audit.Guarantees.Law.RecordSizing : Prop :=
+def _root_.FlockSoundness.Audit.Guarantees.SamplingDesign.RecordSizing : Prop :=
   ((999 : ℝ≥0∞) / 1000) ^ 27713 ≤ ((2 : ℝ≥0∞) ^ 40)⁻¹
 
-end FlockSoundness.Audit.Law
+end FlockSoundness.Audit.SamplingDesign
 
-namespace FlockSoundness.Audit.Law
+namespace FlockSoundness.Audit.SamplingDesign
 open scoped ENNReal NNReal
 
 /-- One sample fewer does not meet it under the work bound: `(1 − 1/1000)^27712 > 2^-40`. -/
-def _root_.FlockSoundness.Audit.Guarantees.Law.RecordSizingOneFewer : Prop :=
+def _root_.FlockSoundness.Audit.Guarantees.SamplingDesign.RecordSizingOneFewer : Prop :=
   ¬ ((999 : ℝ≥0∞) / 1000) ^ 27712 ≤ ((2 : ℝ≥0∞) ^ 40)⁻¹
 
-end FlockSoundness.Audit.Law
+end FlockSoundness.Audit.SamplingDesign

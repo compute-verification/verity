@@ -42,9 +42,9 @@ import Proofs.Flock.Claims.Prob
 
 `Bound.Pr_badO_le_PrFdev` reads `InnerAcceptsCollAt` and `ForksBindAt` at the two samples its link forks. With their
 twins over the samples' evaluations (`InnerAcceptsCollAtV`, `ForksBindAtV`), the link's collision is one among the two
-samples' evaluations (`drawCalls`), which `FdevV`'s output searches:
+samples' evaluations (`sampleCalls`), which `FdevV`'s output searches:
 
-* `Bound.fork_collOV`: `Bound.fork_collO` with the escapes `drawCalls` holds, through `Bound.fork_collO_coreBy` at
+* `Bound.fork_collOV`: `Bound.fork_collO` with the escapes `sampleCalls` holds, through `Bound.fork_collO_coreBy` at
   each sample's `callsAt`;
 * `Bound.PrBAbort_le_PrBinnerV`: `B` at `P_O`'s aborting runs is at most `B_I` over the samples' evaluations;
 * `Bound.linkOutV_collO`, `Bound.Pr_badO_le_linV`, `Bound.Pr_badO_le_PrFdevV`: `P_O`'s bad samples at most
@@ -85,13 +85,13 @@ theorem Bound.fork_collOV (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFlock 
   have hE₁ : EOGives H D (Inner.ofFlock Bd.deploy decI) DO decO P x t.1 t.2.1 t.2.2.2.1 ws := eoGives_of_some hws
   have hE₂ : EOGives H D (Inner.ofFlock Bd.deploy decI) DO decO P x t.1 (fork j t.2.1 t.2.2.1) t.2.2.2.2 ws' :=
     eoGives_of_some hws'
-  have hl₁ := drawCalls_eq hE₁
-  have hl₂ := drawCalls_eq hE₂
+  have hl₁ := sampleCalls_eq hE₁
+  have hl₂ := sampleCalls_eq hE₂
   have hlift : ∀ l : List (Msg × Msg),
-      (∀ p ∈ l, p ∈ drawCalls H D (Inner.ofFlock Bd.deploy decI) DO decO P x t.1 (t.2.1, t.2.2.2.1) ++
-        drawCalls H D (Inner.ofFlock Bd.deploy decI) DO decO P x t.1 (fork j t.2.1 t.2.2.1, t.2.2.2.2)) →
+      (∀ p ∈ l, p ∈ sampleCalls H D (Inner.ofFlock Bd.deploy decI) DO decO P x t.1 (t.2.1, t.2.2.2.1) ++
+        sampleCalls H D (Inner.ofFlock Bd.deploy decI) DO decO P x t.1 (fork j t.2.1 t.2.2.1, t.2.2.2.2)) →
       (findColl l).isSome → forkCollV H D (Inner.ofFlock Bd.deploy decI) DO decO P x j t :=
-    fun l hsub hs => VStar.coll_of_sub (drawCalls_pair_true hT hN0 _ _ _) hsub hs
+    fun l hsub hs => VStar.coll_of_sub (sampleCalls_pair_true hT hN0 _ _ _) hsub hs
   have hlift' : ∀ l : List (Msg × Msg),
       (∀ p ∈ l, p ∈ D.callsAt H x t.2.1 ws ++ D.callsAt H x (fork j t.2.1 t.2.2.1) ws') → (findColl l).isSome →
       forkCollV H D (Inner.ofFlock Bd.deploy decI) DO decO P x j t := fun l hsub hs =>
@@ -238,7 +238,7 @@ theorem Bound.Pr_badO_le_PrFdevV (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.o
 
 /-- **`B` at `P_O`'s aborting runs finds only collisions `B_I` finds over the samples' evaluations**: `PrBAbort_le_by` at
 the calls a finder searches at a sample (`Deploy.callsAt`, `CallsLogCollAt`), which the samples' evaluations hold
-(`drawCalls`). -/
+(`sampleCalls`). -/
 theorem Bound.PrBAbort_le_PrBinnerV (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans c) = c)
     (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO)
     (hL : CallsLogCollAt H D (Inner.ofFlock Bd.deploy decI) DO)
@@ -254,7 +254,7 @@ theorem Bound.PrBAbort_le_PrBinnerV (decC : Msg → Msg → Coin) (hdec : ∀ x 
     unfold Finder.Pr
     refine Pr_mono fun s hs => ?_
     obtain ⟨u, v, huv, -⟩ := hs
-    refine VStar.coll_of_sub (drawCalls_pair_true hT hN0 _ _ _) (fun p hp => ?_) (Option.isSome_iff_exists.2 ⟨_, huv⟩)
+    refine VStar.coll_of_sub (sampleCalls_pair_true hT hN0 _ _ _) (fun p hp => ?_) (Option.isSome_iff_exists.2 ⟨_, huv⟩)
     rcases List.mem_append.1 hp with h | h
     · exact List.mem_append_left _ (List.mem_append_left _ h)
     · exact List.mem_append_right _ (List.mem_append_left _ h)

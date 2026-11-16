@@ -30,7 +30,7 @@ namespace FlockSoundness.Discharge.Recursion
 open Game Audit StrictCR
 open scoped ENNReal
 
-variable {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {β : Type}
+variable {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type} {β : Type}
   {outer : Reg → L.Ω → List (Cm × I.Coin) → Game β}
   {D : Type} {H : List UInt8 → D} {V Pos : Type} (ob : Openings H V)
 

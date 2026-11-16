@@ -41,6 +41,7 @@ from verity_vllm.engine import hooks, moe_align, sparse_mla, topp_pin  # noqa: F
 from verity_vllm.engine import int8_ranks  # noqa: F401  (registers the int8 parts the driver exported, before this rank builds its model)
 from verity_vllm.engine.profiles import layer_classes as LC
 from verity_vllm import settings
+from verity_vllm.log import init_logger
 from verity_vllm.records.schema_ids import (
     CENSUS_RANK_SCHEMA,
     ENGINE_PROFILE_SCHEMA,
@@ -49,6 +50,8 @@ from verity_vllm.records.schema_ids import (
 )
 
 __all__ = ["EXTENSION"]
+
+logger = init_logger(__name__)
 
 
 def repo_modules_loaded() -> dict[str, Any]:
@@ -95,7 +98,8 @@ def _moe_collective_modules() -> list[Any]:
     for name in MOE_COLLECTIVE_MODULES:
         try:
             m = importlib.import_module(name)
-        except Exception:  # noqa: BLE001 -- older/newer vLLM without this module
+        except Exception as e:  # noqa: BLE001 -- older/newer vLLM without this module
+            logger.info("tp collective recorder: %s does not import here (%r): its all-reduce is not wrapped", name, e)
             continue
         if hasattr(m, "tensor_model_parallel_all_reduce"):
             mods.append(m)
@@ -119,6 +123,11 @@ def _listed_for(per_rank: dict | None, rank: int) -> list:
     for this rank; empty for an option the driver left out and for one that lists nothing for this rank."""
     listed = (per_rank or {}).get(str(rank))
     return list(listed if listed else [])
+
+
+def _stated_for(per_rank: dict, rank: int) -> Any:
+    """What a per-rank negative of the driver (`{<rank>: ...}`) states for this rank, which the table names as text or as a number."""
+    return per_rank[str(rank)] if str(rank) in per_rank else per_rank[rank]
 
 
 def _per_request(stated: Any, n_req: int) -> dict[str, int]:
@@ -286,7 +295,7 @@ class TP2CaptureWorkerExtension:
         from verity_vllm.engine import vllm_adapter as va
         from verity_vllm.observe.capture import Capture, ObserverConfig, make_header
         from verity_vllm.observe.events import RunHeader
-        from verity_vllm.pipeline.m1_capture import dump_cos_sin
+        from verity_vllm.pipeline.match_capture import dump_cos_sin
 
         facts = _tp_facts(self)
         rank, world = int(facts["tp"]["rank"]), int(facts["tp"]["world_size"])
@@ -588,7 +597,8 @@ class TP2CaptureWorkerExtension:
         runner = self.model_runner
         model = runner.get_model()
         post_load = register_post_load_tensors(model, _listed_for(post_load_tensors, rank))
-        eng = SimpleNamespace(llm=_LLMShim(self), runner=runner, model=model, cp=cp, kwargs=engine_kwargs, env_flags={}, build_s=0.0, case=case)
+        eng = SimpleNamespace(llm=_LLMShim(self), runner=runner, model=model, cp=cp, kwargs=engine_kwargs, env_flags={}, build_s=0.0, case=case,
+                              vllm_config=self.vllm_config)
         args = SimpleNamespace(arena_mb=arena_mb, chunk=None, hash_threads=None, profile_hooks=False, commit_scheme=commit_scheme)
         com = make_committer(kind, eng, args, f"{run_id}/rank{rank}")
         res: dict[str, Any] = {"rank": rank, "committer": com.name, "post_load_tensors": post_load}
@@ -626,13 +636,13 @@ class TP2CaptureWorkerExtension:
 
             relabel = None
             if isinstance(tp_relabel, dict) and str(rank) in {str(k) for k in tp_relabel}:
-                relabel = int(tp_relabel.get(str(rank), tp_relabel.get(rank)))       # NEGATIVE: this rank tags its partials as another rank's
+                relabel = int(_stated_for(tp_relabel, rank))       # NEGATIVE: this rank tags its partials as another rank's
             omit_site = None
             if isinstance(tp_partials_omit_site, dict) and str(rank) in {str(k) for k in tp_partials_omit_site}:
-                omit_site = str(tp_partials_omit_site.get(str(rank), tp_partials_omit_site.get(rank)))   # NEGATIVE: ONE site's partial dropped
+                omit_site = str(_stated_for(tp_partials_omit_site, rank))   # NEGATIVE: ONE site's partial dropped
             flip_site = None
             if isinstance(tp_partials_flip_site, dict) and str(rank) in {str(k) for k in tp_partials_flip_site}:
-                flip_site = str(tp_partials_flip_site.get(str(rank), tp_partials_flip_site.get(rank)))   # NEGATIVE: the collective's input is not the committed partial
+                flip_site = str(_stated_for(tp_partials_flip_site, rank))   # NEGATIVE: the collective's input is not the committed partial
             tps = TPPartialSource(com, model, rank=rank, world=int(facts["tp"]["world_size"]), relabel_rank=relabel, omit_site=omit_site, flip_site=flip_site)
             com.attach_source(tps)
             res["tp_partial_source"] = {"sites": tps.sites, "extra_step_bytes": tps.extra_step_bytes(envelope, model), "relabel_rank": relabel, "omit_site": omit_site,
@@ -769,7 +779,7 @@ class TP2CaptureWorkerExtension:
             # cannot see it -- the per-(request, engine step) attribution against the Match record (sampled ids) must FAIL naming this rank.
             # `[ra, rb, lo, hi]` = the swap applies ONLY on engine steps lo..hi (decode-only: prefill rows untouched, each swapped
             # row one token) -- the discriminating case: coverage cannot see it, the per-(step, request) attribution must.
-            swap_rule = parse_swap_spec(list(tp_swap_requests.get(str(rank), tp_swap_requests.get(rank))))
+            swap_rule = parse_swap_spec(list(_stated_for(tp_swap_requests, rank)))
             if swap_rule is not None:
                 ka = [k for k, v in rid_map.items() if v == swap_rule["a"]]
                 kb = [k for k, v in rid_map.items() if v == swap_rule["b"]]
@@ -1133,8 +1143,8 @@ class TP2CaptureWorkerExtension:
         """THIS rank's picks for the cross-rank collective-output pass, from the COMMITTED bytes (`pipeline.tp.xrank_dump`),
         each all-reduce on a captured route under the route the engine's all-reduce switches take on this GPU."""
         import torch
-        from verity.definitions.registry.tp_allreduce import device_of, settings_of
 
+        from verity_vllm.definitions.registry.tp_allreduce import device_of, settings_of
         from verity_vllm.engine import env as engine_env
         from verity_vllm.pipeline.tp import xrank_dump as XD
 
@@ -1174,7 +1184,7 @@ class TP2CaptureWorkerExtension:
         """Openings sampled from THIS rank's EXPECTED population (bind's `challenge_identities` over the combined run root +
         this rank's map digest + salt, from the pair's identities coin `source_hex`, sampled after that root: `pipeline.commit_coins`;
         forced late step + one per family), opened against the rank's retained tree and verified
-        with the production core against the CLAIMED root (the driver's commitment-vector entry for this rank).  An identity without a
+        with the serving core against the CLAIMED root (the driver's commitment-vector entry for this rank).  An identity without a
         binding counts as a failed opening (fail-closed)."""
         import time as _t
 
@@ -1204,7 +1214,7 @@ class TP2CaptureWorkerExtension:
 
     def tp2_commit_open(self, *, positions_by_rank: dict, claimed_roots: dict | None = None) -> dict[str, Any]:
         """Open THIS rank's challenged positions (`positions_by_rank[str(rank)]`, sampled by the driver from the COMBINED run root) against
-        the rank's retained tree; verify each opening with the production core against the CLAIMED root for this rank
+        the rank's retained tree; verify each opening with the serving core against the CLAIMED root for this rank
         (`claimed_roots[str(rank)]`: the driver's commitment-vector entry; absent = the worker's own).  A rank without a commitment reports, never raises."""
         import statistics
         import time as _t

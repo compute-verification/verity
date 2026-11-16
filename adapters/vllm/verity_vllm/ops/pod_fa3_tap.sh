@@ -6,7 +6,7 @@
 #   cd <tree>/adapters/vllm && bash verity_vllm/ops/pod_fa3_tap.sh          # ~15-30 min first time (nvcc 12.4, sm_90a)
 #   -> prints  FA3-TAP-OK <sha256> hdims=<mask> <path>   (or FA3-TAP-FAIL <reason>, exit 1)
 #
-# (1) pinned vllm-project/flash-attention @ 506341a1 (+ cutlass) at /workspace/cp/vllm-flash-attn (cloned if absent); (2) copied to
+# (1) pinned vllm-project/flash-attention @ 506341a1 (+ cutlass) at $FA_SRC (default: beside $FA2, /workspace/cp/vllm-flash-attn; cloned if absent); (2) copied to
 # $FA2/trees/fa3tap and patched by fa3_tap_src/apply_fa3_tap.py; (3) built by fa3_tap_src/build_fa3_ext.py into $FA2/build/fa3_matReq;
 # (4) verified: loads, exposes fwd + verity_set_tap_v9 / verity_tap_hdims, mode 3 / src 59 / layout 9, hdims mask covers the request.
 # Exactness is a separate step: tests/properties/fa_tap_exactness_gpu.py (needs the GPU).  Env: VENV (/workspace/venv-cu129), CUDA_HOME
@@ -20,6 +20,7 @@ if [ -z "${CUDA_HOME:-}" ]; then for c in /usr/local/cuda-12.9 /usr/local/cuda; 
 export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda}; export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
 export MAX_JOBS=${MAX_JOBS:-32}
 FA2=${FA2:-/workspace/cp/fa2}; HDIMS=${FA3_TAP_HDIMS:-64,128}
+FA_SRC=${FA_SRC:-$(dirname "$FA2")/vllm-flash-attn}   # the pinned upstream tree, beside $FA2
 PIN=506341a143fcabd4bb79052a7605ada727d6b3f5
 SRC=$REPO/verity_vllm/acquire/fa3_tap_src
 ROW_GUARD=${FA3_TAP_ROW_GUARD:-0}; NAME=verity_fa3_matReq; BUILD=fa3_matReq; DEFS="VERITY_TAP=3,VERITY_MAT_SRC=59"
@@ -30,14 +31,14 @@ log() { echo "[fa3_tap] $(date -u +%FT%TZ) $*"; }
 command -v nvcc >/dev/null || fail "nvcc not found (CUDA_HOME=$CUDA_HOME)"
 $PY -c "import ninja" 2>/dev/null || $PY -m pip install -q ninja || fail "ninja"
 mkdir -p "$FA2/trees" "$FA2/build" "$FA2/logs"
-if [ ! -d /workspace/cp/vllm-flash-attn/.git ]; then
-  git clone -q https://github.com/vllm-project/flash-attention.git /workspace/cp/vllm-flash-attn || fail "clone vllm-flash-attn"
+if [ ! -d "$FA_SRC"/.git ]; then
+  git clone -q https://github.com/vllm-project/flash-attention.git "$FA_SRC" || fail "clone vllm-flash-attn"
 fi
-( cd /workspace/cp/vllm-flash-attn && git checkout -q $PIN && git submodule update --init --depth 1 csrc/cutlass >/dev/null 2>&1 ) || fail "checkout $PIN"
-[ "$(cd /workspace/cp/vllm-flash-attn && git rev-parse HEAD)" = "$PIN" ] || fail "tree is not at $PIN"
+( cd "$FA_SRC" && git checkout -q $PIN && git submodule update --init --depth 1 csrc/cutlass >/dev/null 2>&1 ) || fail "checkout $PIN"
+[ "$(cd "$FA_SRC" && git rev-parse HEAD)" = "$PIN" ] || fail "tree is not at $PIN"
 TREE=$FA2/trees/fa3tap
-if [ ! -d "$TREE" ]; then cp -r /workspace/cp/vllm-flash-attn "$TREE" || fail "copy tree"; fi
-python3 "$SRC/apply_fa3_tap.py" "$TREE/hopper" "$SRC" | tail -4 || fail "apply_fa3_tap"
+if [ ! -d "$TREE" ]; then cp -r "$FA_SRC" "$TREE" || fail "copy tree"; fi
+PYTHONPATH="$REPO${PYTHONPATH:+:$PYTHONPATH}" verity-vllm fa3-tap-apply --hopper "$TREE/hopper" --src-dir "$SRC" | tail -4 || fail "apply_fa3_tap"
 grep -q "Verity_mat_ctx_sm90<kBlockM, kBlockN, kHeadDim>" "$TREE/hopper/mainloop_fwd_sm90_tma_gmma_ws.hpp" || fail "tree not patched"
 [ "${TREE_ONLY:-0}" = "1" ] && { echo "FA3-TAP-TREE-OK $TREE"; exit 0; }
 OUT=$FA2/build/$BUILD

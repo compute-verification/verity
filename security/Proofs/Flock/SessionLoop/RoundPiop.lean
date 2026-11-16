@@ -306,7 +306,7 @@ section RoundFramesPiop
 
 open Claims Claims.ZKMal
 open _root_.Flock (SessionSpec)
-open _root_.Flock.Firewall.Finish (Tab)
+open _root_.Flock.ZkServer.Finish (Tab)
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as in `FrameZK`
@@ -419,7 +419,7 @@ theorem piop_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     (hv : wk x w (ν, t) ((m₀, ρ₀) :: ops) 0 = some (v, false)) (j : Fin (Masked.jOf x)) (r : Fin 2) {jj : ℕ}
     (hn : ops.length = Masked.repBase x (2 * j.val + r.val) + jj) (h0 : jj ≠ 0)
     (hjj : jj < piopNR (Masked.stAt x j).m (Masked.stAt x j).c.kLog) :
-    ∃ (m : _root_.Flock.Firewall.Frame.Masker) (G : List Frame),
+    ∃ (m : _root_.Flock.ZkServer.Frame.Masker) (G : List Frame),
       (ofLoop Masked.dataE L₁ real).answered x (ν, t) ((m₀, ρ₀) :: ops) = .ok m ∧
       m.on = true ∧ m.inner = none ∧
       m.pos = (piopV (Masked.stAt x j).m (Masked.stAt x j).c.kLog ByteArray.empty ByteArray.empty ByteArray.empty
@@ -430,7 +430,7 @@ theorem piop_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
       v = encs G ++ (Frame.sq (piopK jj) (piopN (Masked.stAt x j).m jj)).enc ∧
       (ofLoop Masked.dataE L₁ real).coins x (ops.length + 1) = piopN (Masked.stAt x j).m jj ∧
       (ofLoop Masked.dataE L₁ real).rep x (ops.length + 1) = 2 * j.val + r.val ∧
-      ∃ lay mask, _root_.Flock.Firewall.Drive.start (Masked.stsOf x)[j.val]! = .ok (lay, mask) := by
+      ∃ lay mask, _root_.Flock.ZkServer.Drive.start (Masked.stsOf x)[j.val]! = .ok (lay, mask) := by
   have hj := Masked.lt_of_jOf j
   have hr2 := r.isLt
   obtain ⟨s0, spec, hsx⟩ := Masked.setupOf_of_pos (lt_of_le_of_lt (Nat.zero_le _) hj)
@@ -438,7 +438,7 @@ theorem piop_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
   have hq2 : 2 * j.val + r.val < spec.repStreams.size := by rw [FlockDeploy.repStreams_size, hspec]; omega
   have hjh : (2 * j.val + r.val) / 2 = j.val := by omega
   have hst : (Masked.stsOf x)[(2 * j.val + r.val) / 2]! = Masked.stAt x j := Masked.stsOf_half x j r
-  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
+  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((Masked.zkTab x j).sch, (Masked.zkTab x j).tPad) := by
     rw [hst]
     exact (Masked.zkTab x j).hz
@@ -516,12 +516,12 @@ theorem piop_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     try rfl
   have hcc : ∀ p, p < c'.order.size → c'.order[p]! < c'.h.size := by
     rw [hc']
-    exact Claims.ZKServer.ofDraws_order _ _ _
+    exact Claims.ZKServer.ofSamples_order _ _ _
   have hjjT : a + 1 < piopNR tb.st.m tb.st.fold.kLog := by rw [htm, htk']; exact hjj
   have hjjT' : a < piopNR tb.st.m tb.st.fold.kLog := by omega
-  have hb : (piopV tb.st.m tb.st.fold.kLog tb.st.digest (_root_.Flock.Firewall.Finish.flat tb.cm0.cap) Sched.root0
+  have hb : (piopV tb.st.m tb.st.fold.kLog tb.st.digest (_root_.Flock.ZkServer.Finish.flat tb.cm0.cap) Sched.root0
       (_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0) (fun _ => 0) (a + 1)).length ≤ c'.order.size := by
-    rw [hc', Loop.ofDraws_order, absorbed_size]
+    rw [hc', Loop.ofSamples_order, absorbed_size]
     exact le_trans (piopV_length_le lay (by omega) (by omega) hnM hnL hjjT.le) (by omega)
   have hdg : tb.st.digest.size < 2 ^ 64 := by
     rw [hts']
@@ -552,7 +552,7 @@ theorem piop_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     omega
   have hscheq : (sched'.getD (ZKMal.CoinLayer.locate (roundsOf spec (Masked.stsOf x)) 0 (i + 1)).2
       (.empty, 0)).1.data.toList =
-      encs (piopFr tr.st.m tr.st.fold.kLog tr.st.digest (_root_.Flock.Firewall.Finish.flat tr.cm0.cap) Sched.root0
+      encs (piopFr tr.st.m tr.st.fold.kLog tr.st.digest (_root_.Flock.ZkServer.Finish.flat tr.cm0.cap) Sched.root0
         (_root_.Flock.Zk.PadLayout.new tr.st.m tr.st.kLog tr.sch.k0) (fun _ => 0) (a + 1)) ++
         (Frame.sq (piopK (a + 1)) (piopN tr.st.m (a + 1))).enc := by
     rw [hloc]
@@ -579,7 +579,7 @@ theorem piop_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
   rw [ofLoop_scheduled Masked.dataE L₁ real x w (ν, t) (m₀, ρ₀) ops _ hsx (q := i + 1) (by omega) hre hs' hlt',
     hscheq, hcoins] at hck
   -- the worker's round is the loop's round at some values
-  have hF0 : ∀ f ∈ piopFr tr.st.m tr.st.fold.kLog tr.st.digest (_root_.Flock.Firewall.Finish.flat tr.cm0.cap)
+  have hF0 : ∀ f ∈ piopFr tr.st.m tr.st.fold.kLog tr.st.digest (_root_.Flock.ZkServer.Finish.flat tr.cm0.cap)
       Sched.root0 (_root_.Flock.Zk.PadLayout.new tr.st.m tr.st.kLog tr.sch.k0) (fun _ => 0) (a + 1),
       midFrame f ∧ plainFrame f := by
     intro f hf
@@ -651,22 +651,22 @@ theorem roundFrames_piop (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit L
   have hlay := LeanRelease.lay_ofLoopLink (L₀ := L₀) src real j r hds
   -- the frame's configuration: its order and pads
   have hord : ((ofLoopLink L₀ src real).cfg x (ν, t) ((m₀, ρ₀) :: ops)).order =
-      _root_.Flock.Firewall.Frame.absorbed (Masked.layE x j) := by
-    show _root_.Flock.Firewall.Frame.absorbed ((ofLoopLink L₀ src real).lay x
+      _root_.Flock.ZkServer.Frame.absorbed (Masked.layE x j) := by
+    show _root_.Flock.ZkServer.Frame.absorbed ((ofLoopLink L₀ src real).lay x
       ((ofLoopLink L₀ src real).rep x ((m₀, ρ₀) :: ops).length)) = _
     rw [hrep', hlay]
   have hnP : ((ofLoopLink L₀ src real).cfg x (ν, t) ((m₀, ρ₀) :: ops)).nPiop =
-      (_root_.Flock.Firewall.Frame.absorbed (Masked.layE x j)).size -
-        _root_.Flock.Firewall.Frame.nLig (Masked.layE x j) := by
-    show (_root_.Flock.Firewall.Frame.absorbed ((ofLoopLink L₀ src real).lay x
+      (_root_.Flock.ZkServer.Frame.absorbed (Masked.layE x j)).size -
+        _root_.Flock.ZkServer.Frame.nLig (Masked.layE x j) := by
+    show (_root_.Flock.ZkServer.Frame.absorbed ((ofLoopLink L₀ src real).lay x
       ((ofLoopLink L₀ src real).rep x ((m₀, ρ₀) :: ops).length))).size -
-        _root_.Flock.Firewall.Frame.nLig ((ofLoopLink L₀ src real).lay x
+        _root_.Flock.ZkServer.Frame.nLig ((ofLoopLink L₀ src real).lay x
           ((ofLoopLink L₀ src real).rep x ((m₀, ρ₀) :: ops).length)) = _
     rw [hrep', hlay]
   have hc : ∀ p, p < ((ofLoopLink L₀ src real).cfg x (ν, t) ((m₀, ρ₀) :: ops)).order.size →
       ((ofLoopLink L₀ src real).cfg x (ν, t) ((m₀, ρ₀) :: ops)).order[p]! <
         ((ofLoopLink L₀ src real).cfg x (ν, t) ((m₀, ρ₀) :: ops)).h.size :=
-    Claims.ZKServer.ofDraws_order _ _ _
+    Claims.ZKServer.ofSamples_order _ _ _
   have hNO : ((ofLoopLink L₀ src real).cfg x (ν, t) ((m₀, ρ₀) :: ops)).nPiop ≤
       ((ofLoopLink L₀ src real).cfg x (ν, t) ((m₀, ρ₀) :: ops)).order.size := by
     rw [hnP, hord]
@@ -692,10 +692,10 @@ theorem roundFrames_piop (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit L
   have hrf' := hrf
   rw [← hvG, ← hcoins''] at hrf'
   have hRS : Loop.RepSrc L₀ src x w := (show Loop.Level0Src src x w ∧ Loop.RepSrc L₀ src x w from hS).2
-  have hz := Loop.RepSrc.size hRS (ofLoopLink L₀ src real) (LeanRelease.draws_ofLoopLink src real) ν t j r hlay
-  have hH := (cfg_tapeOfDraws (ofLoopLink L₀ src real) x (ν, t) ((m₀, ρ₀) :: ops) (Masked.UE.tapeZk t) Loop.frepOf
+  have hz := Loop.RepSrc.size hRS (ofLoopLink L₀ src real) (LeanRelease.samples_ofLoopLink src real) ν t j r hlay
+  have hH := (cfg_tapeOfSamples (ofLoopLink L₀ src real) x (ν, t) ((m₀, ρ₀) :: ops) (Masked.UE.tapeZk t) Loop.frepOf
     j.val r.val hrep' hz).1
-  rw [hlay, ← Loop.RepSrc.pads hRS (ofLoopLink L₀ src real) (LeanRelease.draws_ofLoopLink src real) ν t j r hlay
+  rw [hlay, ← Loop.RepSrc.pads hRS (ofLoopLink L₀ src real) (LeanRelease.samples_ofLoopLink src real) ν t j r hlay
     (Masked.UE.tapeZk t)] at hH
   have hhab : (Masked.layE x j).hab = (Masked.layE x j).fa + 3 + 2 * (Masked.layE x j).nLc + 64 +
       (Masked.layE x j).nOod0 + 4 * (Masked.layE x j).k0 + 4 := rfl

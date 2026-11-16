@@ -9,8 +9,8 @@ import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.Combinatorics.SimpleGraph.Init
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import Mathlib.Tactic.Positivity.Finset
-import Proofs.Accounting.Capacity
-import Proofs.Accounting.Prob
+import Proofs.Pous.Accounting.Capacity
+import Proofs.ResourceAccounting.Prob
 import Proofs.Pous.EndToEndAt
 import Proofs.Pous.Obligation
 import Proofs.Pous.Period
@@ -66,7 +66,7 @@ theorem periodHeldAt : PeriodHeldAt := by
     · have hfin : ENNReal.ofReal (Params.δ : ℝ) + Params.εMax ≠ ⊤ :=
         ENNReal.add_ne_top.2 ⟨ENNReal.ofReal_ne_top, εMax_ne_top⟩
       calc Pouw.pr (PassesAt N P.sid (P.W o) A)
-          = (Pous.pr (PassesAt N P.sid (P.W o) A)).toReal := Accounting.pr_eq_toReal _
+          = (Pous.pr (PassesAt N P.sid (P.W o) A)).toReal := ResourceAccounting.pr_eq_toReal _
         _ ≤ (ENNReal.ofReal (Params.δ : ℝ) + Params.εMax).toReal :=
           ENNReal.toReal_mono hfin (Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecureWide p ε₀ D Q L hnum hW N
             h1 h2 _ _ A)
@@ -93,9 +93,9 @@ def nullRing {B w p : ℕ} [NeZero p] (sc : Scheme (ringRO B w p)) (S D Q L : �
 
 /-- **`RingDeviceAt` holds at an honest device**, one whose capacity account exceeds `SAt N` at a tick of the capacity
 window on every coin, at every point and `(D, Q, L)`. -/
-theorem ringDeviceAt_honest (N : ℕ) [NeZero N] (pt : Run.Point) {ι : Type} [Fintype ι] {d : Accounting.Device ι}
+theorem ringDeviceAt_honest (N : ℕ) [NeZero N] (pt : Run.Point) {ι : Type} [Fintype ι] {d : ResourceAccounting.Device ι}
     {α ΩW ΩQ : Type} [Fintype α]
-    (r : Accounting.Run d α ΩW ΩQ ((ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+    (r : ResourceAccounting.Run d α ΩW ΩQ ((ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
     (P : AuditsAt N ΩW ΩQ) (D Q L round : ℕ)
     (hfull : ∀ ω, ∃ t ∈ (r.win .capacity).ticks, SAt N < (r.schedule ω t).mem (r.acct .capacity)) :
     RingDeviceAt N pt r P D Q L round := by
@@ -107,9 +107,9 @@ theorem ringDeviceAt_honest (N : ℕ) [NeZero N] (pt : Run.Point) {ι : Type} [F
   omega
 
 /-- **`periodHeldAt` holds at the honest instance**: its device premise, `ringDeviceAt_honest`. -/
-theorem periodHeldAt_honest (N : ℕ) [NeZero N] (pt : Run.Point) {ι : Type} [Fintype ι] {d : Accounting.Device ι}
+theorem periodHeldAt_honest (N : ℕ) [NeZero N] (pt : Run.Point) {ι : Type} [Fintype ι] {d : ResourceAccounting.Device ι}
     {α ΩW ΩQ : Type} [Fintype α]
-    (r : Accounting.Run d α ΩW ΩQ ((ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+    (r : ResourceAccounting.Run d α ΩW ΩQ ((ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
     (P : AuditsAt N ΩW ΩQ) (D Q L round : ℕ)
     (hfull : ∀ ω, ∃ t ∈ (r.win .capacity).ticks, SAt N < (r.schedule ω t).mem (r.acct .capacity)) :
     RingDeviceAt N pt r P D Q L round :=
@@ -124,9 +124,9 @@ theorem periodHeldAt_nontrivial (N : ℕ) [NeZero N] :
   exact not_le.2 bound_toReal_lt_one
 
 /-- **`periodHeldDemo` holds at the honest instance**: `periodHeldAt_honest` at Demo B's `N`. -/
-theorem periodHeldDemo_honest (N : ℕ) [NeZero N] (pt : Run.Point) {ι : Type} [Fintype ι] {d : Accounting.Device ι}
+theorem periodHeldDemo_honest (N : ℕ) [NeZero N] (pt : Run.Point) {ι : Type} [Fintype ι] {d : ResourceAccounting.Device ι}
     {α ΩW ΩQ : Type} [Fintype α]
-    (r : Accounting.Run d α ΩW ΩQ ((ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+    (r : ResourceAccounting.Run d α ΩW ΩQ ((ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
     (P : AuditsAt N ΩW ΩQ) (D Q L round : ℕ)
     (hfull : ∀ ω, ∃ t ∈ (r.win .capacity).ticks, SAt N < (r.schedule ω t).mem (r.acct .capacity)) :
     RingDeviceAt N pt r P D Q L round :=

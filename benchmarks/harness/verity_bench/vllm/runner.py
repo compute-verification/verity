@@ -13,7 +13,7 @@ import subprocess
 from collections.abc import Mapping
 from typing import Any, Protocol
 
-from verity.protocols.accounting.pouw.verifier.salt import epoch_open_root
+from verity.protocols.resource_accounting.compute.pouw.verifier.salt import epoch_open_root
 
 from verity_bench.vllm import result as result_format
 from verity_bench.vllm.arms import Arm
@@ -202,7 +202,8 @@ def _pearl_c_gate(run: Any) -> dict[str, Any]:
     # The experimental arm's module is the tree's (`benchmarks/`, on a run's path), not this distribution's.
     from benchmarks.pouw.pearl_c_vllm.bench_arm import PearlCArm
 
-    check = PearlCArm()
+    # PearlCArm's __init__ types its fields as None; they take the run's values here
+    check: Any = PearlCArm()
     check.run, check.schedule = run, run.schedule.name
     c = run.commits
     check.coins = ({"source": c["coin_source"], "session": c.get("session"), "pass_index": c["pass_index"],
@@ -229,7 +230,7 @@ def h1_summary(run: Any) -> dict[str, Any]:
            "static": bool(run.details.get("static")), "credit_gate_passed": passed,
            "credit_gate_refusals": sorted({str(v.get("reason")) for v in verdicts if not v.get("credit")})[:3],
            "requests": len(run.requests), "refused_requests": len(run.refused_requests), "request_gaps": len(gaps),
-           "unopened": run.details.get("unopened"), "u": run.details.get("u"), "coin_source": run.coin_source}
+           "unopened": run.details.get("unopened"), "u": run.details.get("u"), "coins": run.coins_from}
     out["ok"] = bool(verdicts and out["static"] and not run.refused and passed == len(verdicts) and not gaps
                      and not run.refused_requests and out["unopened"] is None)
     return out

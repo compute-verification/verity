@@ -14,7 +14,7 @@ module imports no proofs, so the game may read it.
   unchanged, over all `2^|g|` masks of the group, each promoted and followed by the later promotions.
 * **The word's flags** (`wordFlags k a b t`): atom `t` of the word over rows `a` of `A′` and `b` of `B̃`, in groups of
   four atoms (`Params.pi.G`).
-* **The unit's debits** (`unitFlags`, `chainDebit`, `needed`, `neededSet`): the word flags over the unit's words, the
+* **The unit's debits** (`unitFlags`, `chainInertWork`, `needed`, `neededSet`): the word flags over the unit's words, the
   flagged atoms at a credit per atom, and the `A′` elements some word reads in an unflagged atom.
 -/
 
@@ -89,7 +89,7 @@ def unitFlags (Aq : Matrix (Fin m) (Fin k) Code) (Bq : Matrix (Fin n) (Fin k) Co
 
 /-- **The unit's chain debit**: the flagged atoms `t < k/32` over the unit's `m·n` words, each at `c`, the chain's
 credit per atom; `c · Forming.flagCount k flag`. -/
-def chainDebit (k : ℕ) (c : ℚ) (flag : Fin m → Fin n → ℕ → Bool) : ℚ :=
+def chainInertWork (k : ℕ) (c : ℚ) (flag : Fin m → Fin n → ℕ → Bool) : ℚ :=
   c * ∑ i, ∑ j, ((Finset.range (k / 32)).filter fun t => flag i j t = true).card
 
 /-- **Needed**: element `(i, l)` of `A′` is read by atom `l / 32` of some word `(i, j)` that `flag` leaves unflagged;

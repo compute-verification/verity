@@ -1,5 +1,6 @@
 """A class-G request's rows in a Commit window (`steps`): where its history ends and its Program begins (`segment_of`), the
-prefill chunks and launches its Program reads (`launch_of`), and what the window's edges carry (`edge_of`). A request's rows are
+prefill chunks and launches its Program reads (`launch_of`), and what the window's edges carry (`edge_of`); and a batch-invariant
+request's launch context where FA3's tile reads it (`seqlen_q_of`). A request's rows are
 `steps.Rows`, (step, index in the step, advice row) in step order."""
 from __future__ import annotations
 
@@ -47,6 +48,25 @@ def launch_of(i: int, LP: int, T: int, C: int, rows: Sequence[tuple[int, int, An
     return tuple(chunks), tuple(tuple((r.n, r.start) for r in steps[s].rows) for s, _, _ in rows[:k + decodes])
 
 
+def seqlen_q_of(tp: Any, LP: int, T: int, C: int, rows: Sequence[tuple[int, int, Any]], steps: Any) -> tuple[int, ...]:
+    """A batch-invariant request's launch context where FA3's tile reads it (target profile `tp`: FA3, not the accepted kinds): per
+    step of its Program (its prefill, then each decode), the most query rows any one sequence of the advice step it ran in has, the
+    launch's max_seqlen_q (the Build's `--launch-context [n0, n1, …]`, `launch_context.request_launch_context`). () on any other
+    target, where every step's is its own rows (its Program is the one built alone), and where its Program's steps aren't one
+    launch each: a prefill the engine ran in several launches, a recompute, or rows that stop short of its Program."""
+    from verity_vllm.program.frontend import targets as TG
+    if tp.effective_flash_attn_version() != 3 or TG.uses_accepted_kinds(tp):
+        return ()
+    try:
+        chunks, launch = launch_of(-1, LP, T, C, rows, steps)
+    except Unexpressible:
+        return ()
+    if chunks != (LP - C,) or len(launch) != T + 1:
+        return ()
+    q = tuple(max(n for n, _ in step) for step in launch)
+    return () if q == (LP - C, *(1,) * T) else q
+
+
 def edge_groups(net: Any, q: Any) -> tuple[str, ...]:
     """The history groups a window's edges carry of request `q` (its record, the same in every window: `window_advice.follows`):
     each one a row of its whole Program reads (`dsa.Net.edge_groups` at its last row's keys, its prompt and `output_len` - 1
@@ -66,14 +86,14 @@ def edge_of(phi: Any, advice: WA.Advice, units: Sequence[Any], idle: Sequence[in
     def groups(i: int, E: int) -> tuple[tuple[str, int, int], ...]:
         q, carried = advice.requests[i], edge_groups(net, advice.requests[i])
         return (*((g, t.leaves, t.homogeneous_width()) for g, t in net.prefix_params(E) if g in carried),
-                *((("last_token", 1, 32),) if E >= q.prompt_len else ()))
+                *((("last_token", 1, 32),) if q.prompt_len <= E else ()))
 
     ins = {i: groups(i, c.computed) for i, c in enumerate(advice.carried) if c.kept < advice.requests[i].output_len and c.computed}
     outs = []
     for c in WA.close(advice):
         if not (c.must and c.state.computed) or (u := units[c.request]) is None and c.request not in idle:
             continue
-        if u is not None and u.LP + u.T != c.state.computed:
+        if u is not None and c.state.computed != u.LP + u.T:
             raise Unexpressible(f"request {c.request}: the window leaves it to continue at {c.state.computed}, and its Program here "
                                 f"reaches {u.LP + u.T}")
         outs.append((c.request, groups(c.request, c.state.computed)))

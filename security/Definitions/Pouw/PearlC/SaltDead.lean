@@ -5,7 +5,7 @@ public import Definitions.Pouw.PearlC.Defs
 /-!
 # Pearl-C's salt-dead elements (definitions only)
 
-P3's per-element predicate for the named protocol's forming debit (`PearlCSem.unitDebit`): element `l` of a committed
+P3's per-element predicate for the named protocol's forming debit (`PearlCSem.unitInertWork`): element `l` of a committed
 activation row `x` is *salt-dead* when the value of its `A′` code is the same at every noise pair of the support, under
 §5's atom-mix (`FormChain.atomMix`) at the row's scale `α` and noise scale `β`. That it is `Forming.saltDead` at Π, that
 its support has `Forming.FlatPairs`, and that ρ_D = 1/64 bounds it are proved in `Pouw.PearlC.Forming` and

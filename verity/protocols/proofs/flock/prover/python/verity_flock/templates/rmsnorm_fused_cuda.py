@@ -41,10 +41,10 @@ def frame_lowering(subcircuit):
 def supports(subcircuit, scheme):
     n = int(subcircuit.params["N"])
     if width(n) is None:
-        return f"C-Flock lowers RMSNormFusedCuda_v2 when its warps are identical units (min(N, 1024) threads dividing N), not N = {n}"
+        return f"Flock lowers RMSNormFusedCuda_v2 when its warps are identical units (min(N, 1024) threads dividing N), not N = {n}"
     if scheme in FRAME_SCHEMES:
         return None
-    return (f"C-Flock proves {subcircuit.id} under {', '.join(FRAME_SCHEMES)} (verity/flock-ir-frame/v3: unit {UNIT}, the row tail "
+    return (f"Flock proves {subcircuit.id} under {', '.join(FRAME_SCHEMES)} (verity/flock-ir-frame/v3: unit {UNIT}, the row tail "
             f"evaluated by the verifier); binding its rows under {scheme} is not wired yet")
 
 

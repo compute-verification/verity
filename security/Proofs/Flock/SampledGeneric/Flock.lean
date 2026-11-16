@@ -71,7 +71,7 @@ noncomputable def extractor (k : ℕ)
 /-- **Flock's link trials** at commit string `c`: a sample that reads `c`, a fresh session and `k` waits of at most `Rw`
 reruns each (`trialGZC`), reading the values the extraction opens `c` to (`rdTZC`), at `t'` SHA-512 calls a run
 (`cTZC`). `ρ` bounds the waits' rate, and the slack `k/(eR_w)` is what the waits that give up lose. -/
-noncomputable def trials (L : Law n) (k Rw : ℕ) (t' ρ : ℝ) :
+noncomputable def trials (L : SamplingDesign n) (k Rw : ℕ) (t' ρ : ℝ) :
     SampledGeneric.Trials L (proofSystem A Hs planZ) (binding A P planZ tab vb) where
   Out := TrialOutZC F L D Sl
   Read c := Nonempty (ΩcZ A P planZ tab vb L c)
@@ -98,22 +98,22 @@ theorem extractor_covers {k : ℕ} (hr : ∀ S R j, rateZ (planZ S R) j k < 1)
   intro S R τ u Xv hS hu
   have h := (analysisZCRegC (L := { Ω := Unit, draw := fun _ => ∅ }) A Hs P planZ tab vb canon
     (fun _ _ => XlayerZC A P planZ tab vb Xv) k hr hlow hown hcan a hj).cover S R τ u
-    (R, XlayerZC A P planZ tab vb Xv) hS ((mem_wrongRegZc A P planZ tab vb canon).2 hu)
+    (R, XlayerZC A P planZ tab vb Xv) hS ((mem_incorrectRegZc A P planZ tab vb canon).2 hu)
   simp only [analysisZCRegC, ↓reduceIte] at h
   exact h
 
-theorem trials_opens (L : Law n) (k Rw : ℕ) (t' ρ : ℝ) : (trials A Hs P planZ tab vb L k Rw t' ρ).Opens :=
+theorem trials_opens (L : SamplingDesign n) (k Rw : ℕ) (t' ρ : ℝ) : (trials A Hs P planZ tab vb L k Rw t' ρ).Opens :=
   fun R τ _ _ _ hv => opOfVZC_spec A Hs P planZ tab vb R τ hv
 
 omit [Fintype K] in
-theorem trials_wellFormed (L : Law n) (k Rw : ℕ) {t' ρ : ℝ} (ht : 0 ≤ t') (hρ : ρ < 1) :
+theorem trials_wellFormed (L : SamplingDesign n) (k Rw : ℕ) {t' ρ : ℝ} (ht : 0 ≤ t') (hρ : ρ < 1) :
     (trials A Hs P planZ tab vb L k Rw t' ρ).WellFormed :=
   ⟨fun R _ e => cT_nonnegZC planZ R ht e, fun _ => div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _), hρ,
     div_nonneg (Nat.cast_nonneg _) (mul_nonneg (Real.exp_pos 1).le (Nat.cast_nonneg _))⟩
 
 omit [Fintype K] in
 /-- The trials' binding error is the compiled analysis's (`errZC`). -/
-theorem errOf_trials (L : Law n) (k Rw : ℕ) (t' ρ : ℝ) (R : Reg) (τ : Cont L Reg (batchedSessionZC A Hs planZ) R)
+theorem errOf_trials (L : SamplingDesign n) (k Rw : ℕ) (t' ρ : ℝ) (R : Reg) (τ : Cont L Reg (batchedSessionZC A Hs planZ) R)
     (c : vb.Pos) (x : vb.Val) :
     (trials A Hs P planZ tab vb L k Rw t' ρ).errOf R τ c x = errZC A Hs P planZ tab vb R τ c k Rw x := by
   unfold SampledGeneric.Trials.errOf errZC
@@ -128,7 +128,7 @@ value layer of a fixed trace. -/
 theorem trials_transfers (hlow : LoweringSoundZK A P planZ tab decode) {k Rw : ℕ} (hRw : 1 ≤ Rw) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
     {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ}
-    (hj : JointZC A Hs planZ k a) (L : Law n) (t' : ℝ) :
+    (hj : JointZC A Hs planZ k a) (L : SamplingDesign n) (t' : ℝ) :
     (trials A Hs P planZ tab vb L k Rw t' ρ).Transfers (extractor A Hs P planZ tab vb k a) := by
   intro R τ tgt Xv
   refine le_of_le_of_eq (zk_linkSoundC_at A Hs P planZ tab vb hlow hRw hρ hr hj (fun _ _ => Xv) R τ tgt) ?_
@@ -137,7 +137,7 @@ theorem trials_transfers (hlow : LoweringSoundZK A P planZ tab decode) {k Rw : �
   rw [errOf_trials]
   rfl
 
-theorem trials_plurality (L : Law n) (k Rw : ℕ) (t' ρ : ℝ) :
+theorem trials_plurality (L : SamplingDesign n) (k Rw : ℕ) (t' ρ : ℝ) :
     (trials A Hs P planZ tab vb L k Rw t' ρ).Plurality fun R τ => XvalZC A Hs P planZ tab vb R τ k Rw := by
   intro R τ c h v
   have : Nonempty (ΩcZ A P planZ tab vb L c) := h
@@ -145,19 +145,19 @@ theorem trials_plurality (L : Law n) (k Rw : ℕ) (t' ρ : ℝ) :
 
 omit [Fintype K] in
 /-- **Flock's A2 at the link finders is the generic `Trials.CR`.** -/
-theorem trials_cR {L : Law n} {k Rw M : ℕ} {t' ρ : ℝ} {R : Reg} {τ : Cont L Reg (batchedSessionZC A Hs planZ) R}
+theorem trials_cR {L : SamplingDesign n} {k Rw M : ℕ} {t' ρ : ℝ} {R : Reg} {τ : Cont L Reg (batchedSessionZC A Hs planZ) R}
     (h : LinkCRZC A Hs P planZ tab vb R τ k Rw M t') : (trials A Hs P planZ tab vb L k Rw t' ρ).CR R τ M :=
   fun c hc => h c hc
 
 omit [Fintype K] in
 /-- **The committed trace's incorrect set is Flock's**: the units wrong on the registration with canonical openings at
 the plurality's value layer (`XplurZC`). -/
-theorem incorrect_eq {L : Law n} (R : Reg) (τ : Cont L Reg (batchedSessionZC A Hs planZ) R) (k Rw : ℕ) :
+theorem incorrect_eq {L : SamplingDesign n} (R : Reg) (τ : Cont L Reg (batchedSessionZC A Hs planZ) R) (k Rw : ℕ) :
     SampledGeneric.incorrect (binding A P planZ tab vb) (correct A P planZ tab vb canon) R
         (XvalZC A Hs P planZ tab vb R τ k Rw) =
-      wrongRegZc A P planZ tab vb canon R (XplurZC A Hs P planZ tab vb R τ k Rw) := by
+      incorrectRegZc A P planZ tab vb canon R (XplurZC A Hs P planZ tab vb R τ k Rw) := by
   ext u
-  rw [SampledGeneric.mem_incorrect, mem_wrongRegZc]
+  rw [SampledGeneric.mem_incorrect, mem_incorrectRegZc]
   rfl
 
 /-! ## No worse than Flock's bound -/
@@ -165,7 +165,7 @@ theorem incorrect_eq {L : Law n} (R : Reg) (τ : Cont L Reg (batchedSessionZC A 
 omit [Fintype K] in
 /-- **The generic knowledge term is at most Flock's** (`ksAvgZC`): the largest over the sample's proof blocks is at most
 the largest over their tables. -/
-theorem ksAvg_le (L : Law n) (k : ℕ)
+theorem ksAvg_le (L : SamplingDesign n) (k : ℕ)
     (a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ)
     (R : Reg) (τ : Cont L Reg (batchedSessionZC A Hs planZ) R) :
     (extractor A Hs P planZ tab vb k a).ksAvg L R τ ≤ ksAvgZC A Hs planZ k a R τ := by
@@ -176,7 +176,7 @@ theorem ksAvg_le (L : Law n) (k : ℕ)
 
 /-- **The generic binding term is at most Flock's link bound** (`linkBoundZC`): a trial costs at most `t'(1 + k)`
 SHA-512 calls in expectation (`expect_cT_leZC`). -/
-theorem bindErr_le {L : Law n} {k Rw M : ℕ} {t' ρ : ℝ} {R : Reg} {τ : Cont L Reg (batchedSessionZC A Hs planZ) R}
+theorem bindErr_le {L : SamplingDesign n} {k Rw M : ℕ} {t' ρ : ℝ} {R : Reg} {τ : Cont L Reg (batchedSessionZC A Hs planZ) R}
     (ht : 0 ≤ t') (hρ : ρ < 1) (h : LinkCRZC A Hs P planZ tab vb R τ k Rw M t') :
     (trials A Hs P planZ tab vb L k Rw t' ρ).bindErr R τ M ≤ linkBoundZC A Hs P planZ tab vb k Rw M ρ t' R τ := by
   unfold linkBoundZC
@@ -207,10 +207,10 @@ theorem countC_regC_generic (hlow : LoweringSoundZK A P planZ tab decode) (hown 
     (hcan : OpeningsCanon A P planZ tab vb canon) {k Rw M : ℕ}
     (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
     {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ}
-    (hj : JointZC A Hs planZ k a) {t' : ℝ} (ht : 0 ≤ t') (K : ℕ) {L : Law n}
+    (hj : JointZC A Hs planZ k a) {t' : ℝ} (ht : 0 ≤ t') (K : ℕ) {L : SamplingDesign n}
     (σ : Strategy (audit L Reg (batchedSessionZC A Hs planZ))) :
     prob (fun o => o.1 = true ∧
-        K ≤ (wrongRegZc A P planZ tab vb canon (reg σ) (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw)).card)
+        K ≤ (incorrectRegZc A P planZ tab vb canon (reg σ) (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw)).card)
         (audit L Reg (batchedSessionZC A Hs planZ)) σ ≤
       L.miss K + ksAvgZC A Hs planZ k a (reg σ) (cont σ) +
         linkBoundZC A Hs P planZ tab vb k Rw M ρ t' (reg σ) (cont σ) := by
@@ -229,19 +229,19 @@ theorem countC_regC_generic (hlow : LoweringSoundZK A P planZ tab decode) (hown 
     rw [ite_eq_right hCR, add_top]
     exact le_top
 
-/-- **The compiled `--zk` escape bound at a set of proof blocks, through the generic theorem**:
-`Pr[accept ∧ W ⊆ wrong] ≤ escape W + ksAvgZC + linkBoundZC`, from `Flock.Guarantees.GenericSampledKSEscape` at Flock's
+/-- **The compiled `--zk` missProb bound at a set of proof blocks, through the generic theorem**:
+`Pr[accept ∧ W ⊆ wrong] ≤ missProb W + ksAvgZC + linkBoundZC`, from `Flock.Guarantees.GenericSampledKSEscape` at Flock's
 instance. -/
 theorem escapeC_regC_generic (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u)
     (hcan : OpeningsCanon A P planZ tab vb canon) {k Rw M : ℕ}
     (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
     {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ}
-    (hj : JointZC A Hs planZ k a) {t' : ℝ} (ht : 0 ≤ t') (W : Finset (Fin n)) {L : Law n}
+    (hj : JointZC A Hs planZ k a) {t' : ℝ} (ht : 0 ≤ t') (W : Finset (Fin n)) {L : SamplingDesign n}
     (σ : Strategy (audit L Reg (batchedSessionZC A Hs planZ))) :
     prob (fun o => o.1 = true ∧
-        W ⊆ wrongRegZc A P planZ tab vb canon (reg σ) (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw))
+        W ⊆ incorrectRegZc A P planZ tab vb canon (reg σ) (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw))
         (audit L Reg (batchedSessionZC A Hs planZ)) σ ≤
-      L.escape W + ksAvgZC A Hs planZ k a (reg σ) (cont σ) +
+      L.missProb W + ksAvgZC A Hs planZ k a (reg σ) (cont σ) +
         linkBoundZC A Hs P planZ tab vb k Rw M ρ t' (reg σ) (cont σ) := by
   by_cases hCR : LinkCRZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw M t'
   · rw [← incorrect_eq A Hs P planZ tab vb canon]

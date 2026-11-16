@@ -7,7 +7,7 @@ public import Identity.Tagged
 # The identity difftest: `Identity`'s functions behind `Difftest.serve`
 
 `identity-difftest` serves `table` to the core difftest harness (`verity/core/difftest`), whose Python half
-(`tests/test_identity_difftest.py`) holds each function to `verity.ml.commitments.identity` and `hashlib`:
+(`tests/test_identity_difftest.py`) holds each function to `verity.commitments.identity` and `hashlib`:
 
 * `sha512`: `Sha512.State` absorbing the payload in the given pieces, then finalized (`hashlib.sha512`);
 * `tagged`: `taggedSha512` (`tagged_sha512`), the empty tag refused;

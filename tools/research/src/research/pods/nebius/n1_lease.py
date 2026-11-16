@@ -64,7 +64,7 @@ import stat
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 DIR = Path(os.environ.get("GPU_LEASE_DIR", "/run/gpu-lease"))
@@ -91,23 +91,26 @@ FENCE_CMD = "n1-lease-fence"
 
 
 def iso(t: float) -> str:
-    return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.fromtimestamp(t, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def epoch(s: str | None) -> float | None:
+    if not s:
+        return None
     try:
-        return datetime.strptime(s or "", "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp()
-    except ValueError:
+        return datetime.strptime(s, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC).timestamp()
+    except ValueError as e:
+        print(f"n1_lease: {s[:40]!r} is not a time, read as none ({e})", file=sys.stderr, flush=True)
         return None
 
 
-def gpu_count(field: str, v, cap: int) -> int:
-    """A policy's `max` or `borrow`: a whole number of GPUs from 0 to `cap`, as an int or a string of digits; ValueError for
+def gpu_count(field: str, v, most: int) -> int:
+    """A policy's `max` or `borrow`: a whole number of GPUs from 0 to `most`, as an int or a string of digits; ValueError for
     anything else (-1, 1.5, Infinity, "8x")."""
     if isinstance(v, str) and v.isascii() and v.isdigit():
         v = int(v)
-    if type(v) is not int or not 0 <= v <= cap:
-        raise ValueError(f"{field} {v!r} isn't a whole number of GPUs from 0 to {cap}")
+    if type(v) is not int or not 0 <= v <= most:
+        raise ValueError(f"{field} {v!r} isn't a whole number of GPUs from 0 to {most}")
     return v
 
 
@@ -123,10 +126,7 @@ def policy_output(cmd: str) -> str:
         try:
             out, err = communicate(p, POLICY_TIMEOUT_S)
         except subprocess.TimeoutExpired:
-            try:
-                os.killpg(p.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
+            signalled(p.pid, signal.SIGKILL)
             raise
     if p.returncode:
         raise subprocess.CalledProcessError(p.returncode, cmd, out, err)
@@ -154,9 +154,12 @@ def owner_fields(line: str) -> dict[str, str]:
 
 def foreign_on(i: int) -> list[dict[str, str]]:
     """What gpu-lease last found holding GPU i's memory under no lease (`$GPU_LEASE_DIR/<i>.foreign`), its processes still alive."""
+    if not (DIR / f"{i}.foreign").exists():
+        return []
     try:
         lines = (DIR / f"{i}.foreign").read_text().splitlines()
-    except OSError:
+    except OSError as e:
+        print(f"n1_lease: GPU {i}'s foreign file unread, so it shows none ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return []
     found = [owner_fields(line) for line in lines if line.strip()]
     return [f for f in found if f.get("pid", "").isdigit() and Path(f"/proc/{f['pid']}").exists()]
@@ -201,25 +204,57 @@ def locked(path: Path) -> bool:
     except OSError:
         return False
     try:
-        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        return False
-    except BlockingIOError:
-        return True
+        return not granted(fd)
     finally:
         os.close(fd)
+
+
+def granted(fd: int) -> bool:
+    """Whether an exclusive flock on `fd` is granted at once: False exactly while another descriptor holds the file."""
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return True
+    except BlockingIOError:
+        return False
+
+
+def signalled(pgid: int, sig: int) -> bool:
+    """Whether `sig` reached process group `pgid`: False once the group is gone, or when it isn't this user's to signal."""
+    try:
+        os.killpg(pgid, sig)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError as e:
+        print(f"n1_lease: group {pgid} not signalled, it isn't this user's ({e})", file=sys.stderr, flush=True)
+        return False
+
+
+def reaped(pid: int) -> bool:
+    """Whether `pid` was this process's child, now reaped: False for another process's (an earlier n1_lease's fence)."""
+    try:
+        os.waitpid(pid, 0)
+        return True
+    except ChildProcessError:
+        return False
 
 
 def cmdline(pid: int) -> list[str]:
     try:
         return Path(f"/proc/{pid}/cmdline").read_bytes().decode(errors="replace").split("\0")
-    except OSError:
+    except OSError as e:
+        if Path(f"/proc/{pid}").exists():
+            print(f"n1_lease: pid {pid}'s command line unread ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return []
 
 
 def pod_uid_of(pid: int) -> str | None:
     try:
         m = re.search(r"pod([0-9a-f_-]{36})", Path(f"/proc/{pid}/cgroup").read_text())
-    except OSError:
+    except OSError as e:
+        if Path(f"/proc/{pid}").exists():
+            print(f"n1_lease: pid {pid}'s cgroup unread, so its pod is unknown ({type(e).__name__}: {e})", file=sys.stderr,
+                  flush=True)
         return None
     return m.group(1).replace("_", "-") if m else None
 
@@ -242,19 +277,11 @@ def fence(i: int, t: float) -> int | None:
 def unfence(pids: list[int]) -> None:
     """Stop each fence and wait (up to 2 s) until its whole process group is gone, so its GPU's lock is free on return."""
     for pid in pids:
-        try:
-            os.killpg(pid, signal.SIGTERM)
-        except OSError:
-            pass
+        signalled(pid, signal.SIGTERM)
     for pid in pids:
-        try:
-            os.waitpid(pid, 0)
-        except ChildProcessError:
-            pass
+        reaped(pid)
         for _ in range(200):
-            try:
-                os.killpg(pid, 0)
-            except OSError:
+            if not signalled(pid, 0):
                 break
             time.sleep(0.01)
 
@@ -310,7 +337,8 @@ def waiters() -> list[dict]:
             if not locked(f):
                 continue
             w = owner_fields(f.read_text().strip())
-        except (OSError, ValueError):
+        except (OSError, ValueError) as e:
+            print(f"n1_lease: {f.name} skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         out.append({"file": f.name, **w, "n": int(w.get("n", 1))})
     return out
@@ -431,8 +459,8 @@ class Controller:
                         first = kubectl("logs", pod).strip().splitlines()
                         if first and first[0].startswith("GPU-"):
                             self.uuid_of_pod[pod] = first[0].strip()
-                    except subprocess.CalledProcessError:
-                        pass
+                    except subprocess.CalledProcessError as e:
+                        print(f"n1_lease: kubectl logs {pod} exited {e.returncode}, so its GPU is not known yet", file=sys.stderr, flush=True)
                 i = self.table.get(self.uuid_of_pod.get(pod, ""))
                 if i is not None:
                     pool[i] = name
@@ -466,8 +494,9 @@ class Controller:
             gpus.append(g)
         want = waiters()
         try:
-            blocked = (DIR / "blocked").read_text().strip() or "blocked"
-        except OSError:
+            blocked = ((DIR / "blocked").read_text().strip() or "blocked") if (DIR / "blocked").exists() else None
+        except OSError as e:
+            print(f"n1_lease: {DIR / 'blocked'} unread, so leasing is not blocked ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             blocked = None
         brain = self.ask_brain(t, gpus, want, pending) if BRAIN and not blocked else None
         for g in gpus:
@@ -514,10 +543,10 @@ class Controller:
         if target is None:
             target = len(pool) - len(free) + wanted
         self.stopping = {p: s for p, s in self.stopping.items() if Path(f"/proc/{p}").exists()}
-        cap = unborrowed(obs, {j["metadata"]["name"] for j in obs["jobs"]})
+        room = unborrowed(obs, {j["metadata"]["name"] for j in obs["jobs"]})
         borrow = lim["borrow"] if want and all(w.get("preempt") == "1" for w in want) and \
             t < (epoch(lim["borrow-until"]) or float("inf")) else 0
-        limit = min(lim["max"], cap + borrow) if cap is not None else len(pool) + len(pending)
+        limit = min(lim["max"], room + borrow) if room is not None else len(pool) + len(pending)
         target = max(0, min(limit, int(target)))
         if blocked:
             target = len(pool) + len(pending)

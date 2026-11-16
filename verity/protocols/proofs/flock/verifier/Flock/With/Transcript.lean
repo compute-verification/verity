@@ -1,12 +1,13 @@
-/-
-`Flock.Record`, `Flock.Transcript` over the hash oracle (`Flock.With.Hashes`): the replay transcript's squeeze checks a round's digest through the oracle,
-and the session record's digests are the oracle's. A transcript action that hashes nothing is the compiled verifier's own,
-lifted (`liftTM`).
--/
 module
 
 public import Flock.With.Hashes
 public import Flock.Record
+
+/-!
+`Flock.Record`, `Flock.Transcript` over the hash oracle (`Flock.With.Hashes`): the replay transcript's squeeze checks a round's digest through the oracle,
+and the session record's digests are the oracle's. A transcript action that hashes nothing is the compiled verifier's own,
+lifted (`liftTM`).
+-/
 
 @[expose] public section
 
@@ -89,11 +90,11 @@ def decodeJWith (hs : Hashes M) (spec : SessionSpec) (j : Json) : M RunRecord :=
   -- S4
   check ((← str l "sigma") == hexOf spec.sigma) "S4: the record's Σ is not the statement's"
   -- U1–U3 (`Flock.Draw`): a null sample is no sample
-  let recDraw := match j.getObjVal? "unit_draw" with
+  let recSample := match j.getObjVal? "unit_draw" with
     | .ok Json.null => none
     | .ok d => some d
     | .error _ => none
-  Draw.check recDraw spec.unitDraw spec.instances
+  Draw.check recSample spec.unitSample spec.instances
   let dk := spec.dk
   -- S5 (keys of other tables are ignored)
   let rootB ← spec.tables.mapM fun t => do

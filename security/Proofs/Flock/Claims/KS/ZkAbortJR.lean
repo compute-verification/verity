@@ -109,9 +109,9 @@ theorem oneWaitDJ (D : Flock.Deploy Coin Col T) (N : Msg → ℕ → ℕ) (x : M
   classical
   set Xt : List Dr → Prop := fun bs =>
     (∀ b ∈ bs, AccD tr b) → Extracts D x (bs.map fun d => (tr d).seen) with hXt
-  have hXb : ∀ bs, ¬ Xt bs → expect (ind (AccD tr)) (drawGame Dr) (drawS Dr) ≤
+  have hXb : ∀ bs, ¬ Xt bs → expect (ind (AccD tr)) (sampleGame Dr) (drawS Dr) ≤
       εc + expect (ind fun d => AccD tr d ∧
-        ∃ p, Off (opDJ D N x tr) (firstTable (opDJ D N x tr) (fun _ => 0) bs) d p) (drawGame Dr) (drawS Dr) := by
+        ∃ p, Off (opDJ D N x tr) (firstTable (opDJ D N x tr) (fun _ => 0) bs) d p) (sampleGame Dr) (drawS Dr) := by
     intro bs hnX
     simp only [hXt, Classical.not_imp] at hnX
     obtain ⟨hall, hnot⟩ := hnX
@@ -135,7 +135,7 @@ theorem oneWaitDJ (D : Flock.Deploy Coin Col T) (N : Msg → ℕ → ℕ) (x : M
         rw [List.flatMap_map] at hl
         obtain ⟨b, hb', hu⟩ := lookCol_flatMap_some (fun d => D.cols (tr d).seen j) p.val u bs hl
         exact hok b j p.val u (hall b hb') hjn p.isLt hu
-    rw [← accPrD_eq, expect_drawGame, ← Claims.Bridge.Pr_eq_Ex]
+    rw [← accPrD_eq, expect_sampleGame, ← Claims.Bridge.Pr_eq_Ex]
     refine (hb j hjn _ hOk hgood).trans (add_le_add le_rfl (Pr_mono fun d ⟨ha, p, u, hu, hne⟩ => ?_))
     have e : opDJ D N x tr d ⟨⟨j, hjn⟩, p⟩ = some u := by
       unfold opDJ
@@ -145,10 +145,10 @@ theorem oneWaitDJ (D : Flock.Deploy Coin Col T) (N : Msg → ℕ → ℕ) (x : M
     show (opDJ D N x tr d ⟨⟨j, hjn⟩, p⟩).isSome ∧ opDJ D N x tr d ⟨⟨j, hjn⟩, p⟩ ≠ some _
     rw [e]
     exact ⟨rfl, fun h => hne (Option.some_injective _ h)⟩
-  have hj := joint_acc_le (opDJ D N x tr) (fun _ => 0) (drawGame Dr) (drawS Dr) (AccD tr) Xt εc hεc hXb k hk
+  have hj := joint_acc_le (opDJ D N x tr) (fun _ => 0) (sampleGame Dr) (drawS Dr) (AccD tr) Xt εc hεc hXb k hk
   have hlhs : accPrD tr * (accFailD tr k (Extracts D x) / accPrD tr ^ k) =
-      expect (ind (AccD tr)) (drawGame Dr) (drawS Dr) *
-        expectAcc (drawGame Dr) (drawS Dr) (AccD tr) k (ind fun bs => ¬ Xt bs) := by
+      expect (ind (AccD tr)) (sampleGame Dr) (drawS Dr) *
+        expectAcc (sampleGame Dr) (drawS Dr) (AccD tr) k (ind fun bs => ¬ Xt bs) := by
     rw [oneWaitD_lhs_eq]
     congr 1
     unfold expectAcc
@@ -165,9 +165,9 @@ theorem oneWaitDJ (D : Flock.Deploy Coin Col T) (N : Msg → ℕ → ℕ) (x : M
       split_ifs with h1 h2 h2 <;> first | rfl | (exfalso; tauto)
     · rw [ite_eq_right hall, zero_mul, zero_mul]
   have hE₂ : expect₂ (fun a a' => ind (fun y : Dr × Dr => ∃ p, ConflictAt (opDJ D N x tr) y p) (a, a'))
-      (drawGame Dr) (drawS Dr) = Pr fun s : Dr × Dr => ∃ p, ConflictAt (opDJ D N x tr) s p := by
+      (sampleGame Dr) (drawS Dr) = Pr fun s : Dr × Dr => ∃ p, ConflictAt (opDJ D N x tr) s p := by
     unfold expect₂
-    simp only [expect_drawGame]
+    simp only [expect_sampleGame]
     rw [Claims.Bridge.Pr_eq_Ex, Claims.Bridge.Ex_prod]
   rw [hE₂, ← accPrD_eq] at hj
   rw [hlhs, ← accPrD_eq]
@@ -231,9 +231,9 @@ theorem oneWaitAbort_of_tableBoundJR (H : Msg → Msg) (D : Flock.Deploy Coin Co
   set ev : Ω → (Fin (D.V.k x) → Coin) × A → (Fin (D.V.k x) → Coin) × A → Prop :=
     fun ω d d' => ∃ p, ConflictAt (opDJ D N x (abortRun H P D.V x keep ω)) (d, d') p with hev
   have tied : ∀ ω d d', ev ω d d' → TiedColl H ((abortRun H P D.V x keep ω d).vLog ++
-      (abortRun H P D.V x keep ω (forkDraw j₀ d d')).vLog) := by
+      (abortRun H P D.V x keep ω (forkSample j₀ d d')).vLog) := by
     intro ω d d' ⟨p, h1, h2, h3⟩
-    have hfd : forkDraw j₀ d d' = d' := by
+    have hfd : forkSample j₀ d d' = d' := by
       show (forkCoins j₀ d.1 d'.1, d'.2) = d'
       rw [Claims.Bridge.forkCoins_zero j₀ rfl]
     rw [hfd]

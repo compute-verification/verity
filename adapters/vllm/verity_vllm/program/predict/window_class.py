@@ -1,4 +1,4 @@
-"""The window class a window circuit is of (`window_circuit`): its public caps and its slots' timing (`WindowClass`, N1's
+"""The window class a window circuit is of (`window_circuit`): its public bounds and its slots' timing (`WindowClass`, N1's
 scan class, and `CLASS_OF_RECORD`), the windows its slots take (`takes`), and the layout of PoUW's tables of a window that
 its circuit reads, a parameter of the circuit with two instances on one fixed load (`FixedLoad`): H1's (`Tables`), which
 the circuit reads where the model makes them, and Pearl+'s (`PearlTables`), for a circuit cut at its linears.
@@ -36,10 +36,14 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from verity.protocols.accounting.pouw.prover.schemes import SCHEMES
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+    a_value,
+    b_value,
+    NCP_SCHEMES as SCHEMES,
+    PEARL_C_ROW_ALIGN as ROW_ALIGN,
+    y_value,
+)
 
-from verity_vllm.protocols.pouw.pearl_c import ROW_ALIGN
-from verity_vllm.protocols.pouw.pearl_c import window as PWR
 
 from . import scan_state as SS
 from .build import Unexpressible
@@ -50,12 +54,12 @@ GREEDY = {"kind": "greedy"}
 
 @dataclass(frozen=True)
 class WindowClass:
-    """A window class's public caps (N1's scan `Class`: its slots, its prompt ids and its KO) and its slots' timing (fixed
+    """A window class's public bounds (N1's scan `Class`: its slots, its prompt ids and its KO) and its slots' timing (fixed
     slots a network timestep): ``slots`` class Programs a window, each of at most ``prompt`` prompt ids and
     ``outputs`` outputs, ``lanes`` of them anchored at each boundary, one every ``every`` scan buckets from the window's
     start (lanes 0: every slot at the window's one boundary). Slots are lane-major: slot ``nb · j + b`` is boundary b's lane j
     (nb = slots / lanes boundaries), anchored at bucket ``every · b``, and the window is ``buckets`` = every · nb buckets. Its
-    `scan` is the network certifier's scan class its slots are."""
+    `scan` is the network attester's scan class its slots are."""
     slots: int
     prompt: int
     outputs: int
@@ -94,11 +98,11 @@ class WindowClass:
 
     @property
     def scan(self) -> Any:
-        """The network certifier's scan class at its lanes, outputs, timestep and prompt ids (`scan_state.scan_class`)."""
+        """The network attester's scan class at its lanes, outputs, timestep and prompt ids (`scan_state.scan_class`)."""
         return SS.scan_class(self.lanes, self.outputs, self.every, self.prompt)
 
 
-#: the class of record, the network certifier's envelope at these fixed slots:
+#: the class of record, the network attester's envelope at these fixed slots:
 #: 8 slots a 32-bucket window, 4 at each of buckets 0 and 16 (EVERY 16, D 2.7 s), each of at most 1,024 prompt ids and 64
 #: outputs
 CLASS_OF_RECORD = WindowClass(8, 1024, 64, lanes=4, every=16)
@@ -174,17 +178,17 @@ class PearlTables(FixedLoad):
     @staticmethod
     def a(s: int, c: int) -> str:
         """Round ``s``'s call ``c``'s A rows, by the name Pearl+'s window record registers them under."""
-        return PWR.a_value(s, c)
+        return a_value(s, c)
 
     @staticmethod
     def y(s: int, c: int) -> str:
         """Round ``s``'s call ``c``'s y, by the name Pearl+'s window record registers it under."""
-        return PWR.y_value(s, c)
+        return y_value(s, c)
 
     @staticmethod
     def b(w: int) -> str:
         """Weight ``w``'s B rows, by the name Pearl+'s window record registers them under."""
-        return PWR.b_value(w)
+        return b_value(w)
 
     @staticmethod
     def rows(cls: WindowClass, s: int) -> int:

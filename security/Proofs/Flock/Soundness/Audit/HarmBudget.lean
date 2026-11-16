@@ -5,7 +5,7 @@ public import Mathlib.Analysis.SpecialFunctions.Log.Basic
 import Mathlib.Algebra.BigOperators.Field
 import Mathlib.Algebra.Order.Algebra
 import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
-import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Audit.SamplingDesign
 import Proofs.Flock.Soundness.Game
 
 /-!
@@ -16,17 +16,17 @@ commits `X_t`, whose incorrect proof blocks `B_t` are fixed before the round's f
 sample `D_t`. Every sampled proof block must get an accepting proof, and a failure rejects the session with no
 resample.
 
-**The design condition** (`Law.Design L π`): `Pr[D ∩ B = ∅] ≤ exp(−Σ_{u ∈ B} π_u)` for every `B`
+**The design condition** (`SamplingDesign.Design L π`): `Pr[D ∩ B = ∅] ≤ exp(−Σ_{u ∈ B} π_u)` for every `B`
 fixed before the coins. The Bernoulli (`bernoulli_design`, exact at rate `bernRate`:
 `bernoulli_design_exact`), uniform-subset (`subset_design`), stratified (`stratified_design`) and
-work (`work_design`) laws meet it.
+work (`work_design`) sampling designs meet it.
 
 **The model** (`Adaptive.Play`) is the run tree of one prover strategy, its own choices resolved: a
-`round L B k` node is a round whose incorrect proof blocks `B` and law `L` are fixed by the history before its
+`round L B k` node is a round whose incorrect proof blocks `B` and sampling design `L` are fixed by the history before its
 coin, `coin` nodes are the session's other coins, and `stop acc` ends the session. `Play n N` has at
 most `N` rounds, and the prover may stop after any of them. `Drawn err` is the per-round drawn-unit
-bound, `Pr[D_t ∩ B_t ≠ ∅ ∧ round t passes] ≤ err_t`, which `audit_drawn` gives with
-`err_t = ε_ks,t + δ_link,t` (`HarmBudgetLife`).
+bound, `Pr[D_t ∩ B_t ≠ ∅ ∧ round t passes] ≤ err_t`, which `audit_sampled` gives with
+`err_t = ε_ks,t + ε_bind,t` (`HarmBudgetLife`).
 
 **The theorem** (`harm_budget`): for harms `h ≥ 0` and any `λ ≥ 0` with `λ h_u ≤ π_u`, in
 particular `λ = min_{h_u > 0} π_u / h_u` (`harmRate`, `harm_budget_rate`),
@@ -35,7 +35,7 @@ The proof is the supermartingale `exp(λ (Σ_{s<t} h(B_s) − H))` plus the erro
 at `T`, by induction on the tree: in each round the design condition pays for the harm the sample
 missed, and `Drawn` for the harm it hit (`prEv_le_exp`). Markov is the base case.
 
-**The count corollary** (`harm_count`, `harm_count_kstar`): under a Bernoulli law of rate `q`, the
+**The count corollary** (`harm_count`, `harm_count_kstar`): under a Bernoulli sampling design of rate `q`, the
 number of wrong steps reaches `K` with probability at most `(1 − q)^K + Σ err`, and
 `k*(p) = ln(1/(1−p)) / (−ln(1−q))` wrong steps with at most `1 − p + Σ err`. It is tight: one round
 that accepts exactly when its sample misses `B` meets `(1 − q)^{|B|}` (`harm_count_tight`).
@@ -48,22 +48,22 @@ namespace FlockSoundness.Audit
 open Game Finset
 open scoped ENNReal
 
-namespace Law
+namespace SamplingDesign
 
 variable {n : ℕ}
 
 /-- **The design condition** with unit weights `π`: every set `B` fixed before the coins escapes
 with probability at most `exp(−Σ_{u ∈ B} π_u)`. -/
-def Design (L : Law n) (π : Fin n → ℝ) : Prop :=
-  ∀ B : Finset (Fin n), L.escape B ≤ ENNReal.ofReal (Real.exp (-∑ u ∈ B, π u))
+def Design (L : SamplingDesign n) (π : Fin n → ℝ) : Prop :=
+  ∀ B : Finset (Fin n), L.missProb B ≤ ENNReal.ofReal (Real.exp (-∑ u ∈ B, π u))
 
 /-- The design condition pays for `exp(λ h(B))` when `λ h ≤ π`. -/
-theorem Design.escape_mul_le {L : Law n} {π h : Fin n → ℝ} {lam : ℝ} (hL : L.Design π)
+theorem Design.escape_mul_le {L : SamplingDesign n} {π h : Fin n → ℝ} {lam : ℝ} (hL : L.Design π)
     (hlam : ∀ u, lam * h u ≤ π u) (B : Finset (Fin n)) :
-    L.escape B * ENNReal.ofReal (Real.exp (lam * ∑ u ∈ B, h u)) ≤ 1 := by
+    L.missProb B * ENNReal.ofReal (Real.exp (lam * ∑ u ∈ B, h u)) ≤ 1 := by
   have hsum : lam * ∑ u ∈ B, h u ≤ ∑ u ∈ B, π u := by
     rw [Finset.mul_sum]; exact Finset.sum_le_sum fun u _ => hlam u
-  calc L.escape B * ENNReal.ofReal (Real.exp (lam * ∑ u ∈ B, h u))
+  calc L.missProb B * ENNReal.ofReal (Real.exp (lam * ∑ u ∈ B, h u))
       ≤ ENNReal.ofReal (Real.exp (-∑ u ∈ B, π u)) * ENNReal.ofReal (Real.exp (lam * ∑ u ∈ B, h u)) :=
         mul_le_mul_left (hL B) _
     _ = ENNReal.ofReal (Real.exp (-∑ u ∈ B, π u + lam * ∑ u ∈ B, h u)) := by
@@ -89,8 +89,8 @@ theorem bernoulli_design {num den : ℕ} [NeZero den] (h : num ≤ den) :
     (bernoulli n num den).Design fun _ => (num : ℝ) / den := by
   intro B
   have hden : 0 < den := Nat.pos_of_ne_zero (NeZero.ne den)
-  show (bernoulli n num den).escape B ≤ ENNReal.ofReal (Real.exp (-∑ u ∈ B, (num : ℝ) / den))
-  calc (bernoulli n num den).escape B = (((den - num : ℕ) : ℝ≥0∞) / den) ^ B.card := by
+  show (bernoulli n num den).missProb B ≤ ENNReal.ofReal (Real.exp (-∑ u ∈ B, (num : ℝ) / den))
+  calc (bernoulli n num den).missProb B = (((den - num : ℕ) : ℝ≥0∞) / den) ^ B.card := by
         rw [bernoulli_escape h, bernFactor_zero_div]
     _ ≤ ENNReal.ofReal (Real.exp (-((num : ℝ) / den))) ^ B.card :=
         pow_le_pow_left₀ zero_le (natFrac_le_exp h hden) _
@@ -101,8 +101,8 @@ theorem bernoulli_design {num den : ℕ} [NeZero den] (h : num ≤ den) :
 /-- A uniform `k`-subset of `n` meets the design condition with `π_u = k/n`. -/
 theorem subset_design {k : ℕ} (hk : k ≤ n) (hn : 0 < n) : (subset n k hk).Design fun _ => (k : ℝ) / n := by
   intro B
-  show (subset n k hk).escape B ≤ ENNReal.ofReal (Real.exp (-∑ u ∈ B, (k : ℝ) / n))
-  calc (subset n k hk).escape B = ((n - B.card).choose k : ℝ≥0∞) / (n.choose k : ℝ≥0∞) := subset_escape hk B
+  show (subset n k hk).missProb B ≤ ENNReal.ofReal (Real.exp (-∑ u ∈ B, (k : ℝ) / n))
+  calc (subset n k hk).missProb B = ((n - B.card).choose k : ℝ≥0∞) / (n.choose k : ℝ≥0∞) := subset_escape hk B
     _ ≤ (((n - B.card : ℕ) : ℝ≥0∞) / (n : ℝ≥0∞)) ^ k := choose_div_le_pow' hk hn
     _ ≤ ENNReal.ofReal (Real.exp (-((B.card : ℝ) / n))) ^ k :=
         pow_le_pow_left₀ zero_le (natFrac_le_exp (by simpa using Finset.card_le_univ B) hn) _
@@ -114,7 +114,7 @@ theorem subset_design {k : ℕ} (hk : k ≤ n) (hn : 0 < n) : (subset n k hk).De
 theorem stratified_design {m : ℕ} (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) :
     (stratified σ k hk).Design fun u => (k (σ u) : ℝ) / (stratum σ (σ u)).card := by
   intro B
-  show (stratified σ k hk).escape B ≤
+  show (stratified σ k hk).missProb B ≤
     ENNReal.ofReal (Real.exp (-∑ u ∈ B, (k (σ u) : ℝ) / (stratum σ (σ u)).card))
   have hfac : ∀ s, (((stratum σ s).card - (B.filter (σ · = s)).card).choose (k s) : ℝ≥0∞) /
       ((stratum σ s).card.choose (k s) : ℝ≥0∞) ≤
@@ -146,19 +146,19 @@ theorem stratified_design {m : ℕ} (σ : Fin n → Fin m) (k : Fin m → ℕ) (
 theorem work_design {m : ℕ} (σ : Fin n → Fin m) (w f : Fin m → ℕ) (K : ℕ) (hf : ∀ s, 1 ≤ f s)
     (hW : 0 < totalWork σ w) : (work σ w f K).Design fun u => (K : ℝ) * w (σ u) / totalWork σ w := by
   intro B
-  show (work σ w f K).escape B ≤ ENNReal.ofReal (Real.exp (-∑ u ∈ B, (K : ℝ) * w (σ u) / totalWork σ w))
+  show (work σ w f K).missProb B ≤ ENNReal.ofReal (Real.exp (-∑ u ∈ B, (K : ℝ) * w (σ u) / totalWork σ w))
   have hB : workOf σ w B ≤ totalWork σ w := Finset.sum_le_sum_of_subset (subset_univ B)
   have hsum : ∑ u ∈ B, (K : ℝ) * w (σ u) / totalWork σ w = K * ((workOf σ w B : ℝ) / totalWork σ w) := by
     rw [workOf, Nat.cast_sum, Finset.sum_div, Finset.mul_sum]
     exact Finset.sum_congr rfl fun u _ => mul_div_assoc _ _ _
-  calc (work σ w f K).escape B
+  calc (work σ w f K).missProb B
       ≤ (((totalWork σ w - workOf σ w B : ℕ) : ℝ≥0∞) / (totalWork σ w : ℝ≥0∞)) ^ K :=
         work_escape_le σ w f K hf hW B
     _ ≤ ENNReal.ofReal (Real.exp (-((workOf σ w B : ℝ) / totalWork σ w))) ^ K :=
         pow_le_pow_left₀ zero_le (natFrac_le_exp hB hW) _
     _ = _ := by rw [← ENNReal.ofReal_pow (Real.exp_pos _).le, ← Real.exp_nat_mul, hsum, mul_neg]
 
-/-- The Bernoulli escape rate per unit, `−ln(1 − q)` for `q = num/den`. -/
+/-- The Bernoulli missProb rate per unit, `−ln(1 − q)` for `q = num/den`. -/
 noncomputable def bernRate (num den : ℕ) : ℝ := -Real.log (((den - num : ℕ) : ℝ) / den)
 
 theorem bernRate_nonneg {num den : ℕ} (h : num < den) : 0 ≤ bernRate num den := by
@@ -186,11 +186,11 @@ theorem ofReal_exp_bernRate {num den : ℕ} (h : num < den) (k : ℕ) :
 theorem bernoulli_design_exact {num den : ℕ} [NeZero den] (h : num < den) :
     (bernoulli n num den).Design fun _ => bernRate num den := by
   intro B
-  show (bernoulli n num den).escape B ≤ ENNReal.ofReal (Real.exp (-∑ u ∈ B, bernRate num den))
+  show (bernoulli n num den).missProb B ≤ ENNReal.ofReal (Real.exp (-∑ u ∈ B, bernRate num den))
   refine le_of_eq ?_
   rw [bernoulli_escape h.le, Finset.sum_const, nsmul_eq_mul, ofReal_exp_bernRate h]
 
-end Law
+end SamplingDesign
 
 namespace Adaptive
 
@@ -200,7 +200,7 @@ verifier coin; `stop acc` ends the session, accepting when `acc`. -/
 inductive Play (n : ℕ) : ℕ → Type 1 where
   | stop {N : ℕ} (acc : Bool) : Play n N
   | coin {N : ℕ} (C : Type) [Fintype C] [Nonempty C] (k : C → Play n N) : Play n N
-  | round {N : ℕ} (L : Law n) (B : Finset (Fin n)) (k : L.Ω → Play n N) : Play n (N + 1)
+  | round {N : ℕ} (L : SamplingDesign n) (B : Finset (Fin n)) (k : L.Ω → Play n N) : Play n (N + 1)
 
 namespace Play
 
@@ -220,11 +220,11 @@ noncomputable def pass : {N : ℕ} → Play n N → ℝ≥0∞
   | _, @Play.coin _ _ _ _ _ k => avg fun c => pass (k c)
   | _, .round _ _ _ => 1
 
-/-- Every round's law satisfies `S`. -/
-def Laws (S : Law n → Prop) : {N : ℕ} → Play n N → Prop
+/-- Every round's sampling design satisfies `S`. -/
+def SamplingDesigns (S : SamplingDesign n → Prop) : {N : ℕ} → Play n N → Prop
   | _, .stop _ => True
-  | _, @Play.coin _ _ _ _ _ k => ∀ c, Laws S (k c)
-  | _, .round L _ k => S L ∧ ∀ ω, Laws S (k ω)
+  | _, @Play.coin _ _ _ _ _ k => ∀ c, SamplingDesigns S (k c)
+  | _, .round L _ k => S L ∧ ∀ ω, SamplingDesigns S (k ω)
 
 /-- **The drawn-unit bound** of every round: its sample hits its incorrect proof blocks and the round passes
 with probability at most `err` of the number of rounds left after it. -/
@@ -241,7 +241,7 @@ theorem prEv_stop (h : Fin n → ℝ) (Ev : Bool → ℝ → Prop) {N : ℕ} (ac
 theorem prEv_coin (h : Fin n → ℝ) (Ev : Bool → ℝ → Prop) {N : ℕ} (C : Type) [Fintype C] [Nonempty C]
     (k : C → Play n N) (a : ℝ) : (Play.coin C k).prEv h Ev a = avg fun c => (k c).prEv h Ev a := rfl
 
-theorem prEv_round (h : Fin n → ℝ) (Ev : Bool → ℝ → Prop) {N : ℕ} (L : Law n) (B : Finset (Fin n))
+theorem prEv_round (h : Fin n → ℝ) (Ev : Bool → ℝ → Prop) {N : ℕ} (L : SamplingDesign n) (B : Finset (Fin n))
     (k : L.Ω → Play n N) (a : ℝ) :
     (Play.round L B k).prEv h Ev a = avg fun ω => (k ω).prEv h Ev (a + ∑ u ∈ B, h u) := rfl
 
@@ -250,14 +250,14 @@ theorem pass_stop {N : ℕ} (acc : Bool) : (Play.stop acc : Play n N).pass = if 
 theorem pass_coin {N : ℕ} (C : Type) [Fintype C] [Nonempty C] (k : C → Play n N) :
     (Play.coin C k).pass = avg fun c => (k c).pass := rfl
 
-theorem pass_round {N : ℕ} (L : Law n) (B : Finset (Fin n)) (k : L.Ω → Play n N) :
+theorem pass_round {N : ℕ} (L : SamplingDesign n) (B : Finset (Fin n)) (k : L.Ω → Play n N) :
     (Play.round L B k : Play n (N + 1)).pass = 1 := rfl
 
-theorem Laws.mono {S S' : Law n → Prop} (hS : ∀ L, S L → S' L) :
-    ∀ {N : ℕ} (P : Play n N), P.Laws S → P.Laws S'
+theorem SamplingDesigns.mono {S S' : SamplingDesign n → Prop} (hS : ∀ L, S L → S' L) :
+    ∀ {N : ℕ} (P : Play n N), P.SamplingDesigns S → P.SamplingDesigns S'
   | _, .stop _, _ => trivial
-  | _, @Play.coin _ _ _ _ _ k, hP => fun c => Laws.mono hS (k c) (hP c)
-  | _, .round L _ k, hP => ⟨hS L hP.1, fun ω => Laws.mono hS (k ω) (hP.2 ω)⟩
+  | _, @Play.coin _ _ _ _ _ k, hP => fun c => SamplingDesigns.mono hS (k c) (hP c)
+  | _, .round L _ k, hP => ⟨hS L hP.1, fun ω => SamplingDesigns.mono hS (k ω) (hP.2 ω)⟩
 
 theorem prEv_le_one (h : Fin n → ℝ) (Ev : Bool → ℝ → Prop) :
     ∀ {N : ℕ} (P : Play n N) (a : ℝ), P.prEv h Ev a ≤ 1
@@ -305,7 +305,7 @@ variable {n : ℕ}
 at least `H` with probability at most `exp(λ (a − H))` plus the error of the rounds left. -/
 theorem prEv_le_exp {π h : Fin n → ℝ} {lam : ℝ} {err : ℕ → ℝ≥0∞} (H : ℝ) (hlam0 : 0 ≤ lam)
     (hlam : ∀ u, lam * h u ≤ π u) :
-    ∀ {N : ℕ} (P : Play n N) (a : ℝ), P.Laws (fun L => L.Design π) → P.Drawn err →
+    ∀ {N : ℕ} (P : Play n N) (a : ℝ), P.SamplingDesigns (fun L => L.Design π) → P.Drawn err →
       P.prEv h (fun acc x => acc = true ∧ H ≤ x) a ≤
         ENNReal.ofReal (Real.exp (lam * (a - H))) + ∑ m ∈ range N, err m
   | _, .stop acc, a, _, _ => by
@@ -345,16 +345,16 @@ theorem prEv_le_exp {π h : Fin n → ℝ} {lam : ℝ} {err : ℕ → ℝ≥0∞
         _ ≤ ENNReal.ofReal (Real.exp (lam * (a - H))) + err N + ∑ m ∈ range N, err m := by
             refine add_le_add (add_le_add ?_ hDd) le_rfl
             rw [mul_left_comm]
-            exact mul_le_of_le_one_right' (Law.Design.escape_mul_le hLd hlam B)
+            exact mul_le_of_le_one_right' (SamplingDesign.Design.escape_mul_le hLd hlam B)
         _ = ENNReal.ofReal (Real.exp (lam * (a - H))) + (∑ m ∈ range N, err m + err N) := by
             rw [add_assoc, add_comm (err N)]
 
-/-- **The cumulative harm budget.** Over at most `N` adaptive rounds whose laws meet the design
+/-- **The cumulative harm budget.** Over at most `N` adaptive rounds whose sampling designs meet the design
 condition with weights `π` and whose sampled proof blocks fail with at most `err`, for harms with
 `λ h ≤ π` and `λ ≥ 0`, the session accepts with total harm at least `H` with probability at most
 `e^{−λH} + Σ_t err_t`. -/
 theorem harm_budget {π h : Fin n → ℝ} {lam : ℝ} {err : ℕ → ℝ≥0∞} (hlam0 : 0 ≤ lam)
-    (hlam : ∀ u, lam * h u ≤ π u) (H : ℝ) {N : ℕ} (P : Play n N) (hL : P.Laws fun L => L.Design π)
+    (hlam : ∀ u, lam * h u ≤ π u) (H : ℝ) {N : ℕ} (P : Play n N) (hL : P.SamplingDesigns fun L => L.Design π)
     (hD : P.Drawn err) :
     P.prEv h (fun acc x => acc = true ∧ H ≤ x) 0 ≤
       ENNReal.ofReal (Real.exp (-(lam * H))) + ∑ m ∈ range N, err m := by
@@ -388,7 +388,7 @@ theorem harmRate_mul_le {π h : Fin n → ℝ} (hπ : ∀ u, 0 ≤ π u) (hh : �
 
 /-- **The cumulative harm budget at `λ = min_{h_u > 0} π_u / h_u`.** -/
 theorem harm_budget_rate {π h : Fin n → ℝ} {err : ℕ → ℝ≥0∞} (hπ : ∀ u, 0 ≤ π u) (hh : ∀ u, 0 ≤ h u)
-    (H : ℝ) {N : ℕ} (P : Play n N) (hL : P.Laws fun L => L.Design π) (hD : P.Drawn err) :
+    (H : ℝ) {N : ℕ} (P : Play n N) (hL : P.SamplingDesigns fun L => L.Design π) (hD : P.Drawn err) :
     P.prEv h (fun acc x => acc = true ∧ H ≤ x) 0 ≤
       ENNReal.ofReal (Real.exp (-(harmRate π h * H))) + ∑ m ∈ range N, err m :=
   harm_budget (harmRate_nonneg hπ hh) (fun u => harmRate_mul_le hπ hh u) H P hL hD
@@ -397,56 +397,56 @@ theorem harm_budget_rate {π h : Fin n → ℝ} {err : ℕ → ℝ≥0∞} (hπ 
 rate `q = num/den`, the session accepts with at least `K` wrong steps in total with probability at
 most `(1 − q)^K + Σ_t err_t`. -/
 theorem harm_count {num den : ℕ} [NeZero den] (hq : num < den) {err : ℕ → ℝ≥0∞} (K : ℕ) {N : ℕ}
-    (P : Play n N) (hL : P.Laws fun L => L = Law.bernoulli n num den) (hD : P.Drawn err) :
+    (P : Play n N) (hL : P.SamplingDesigns fun L => L = SamplingDesign.bernoulli n num den) (hD : P.Drawn err) :
     P.prEv (fun _ => 1) (fun acc x => acc = true ∧ (K : ℝ) ≤ x) 0 ≤
-      Law.bernFactor num den 0 ^ K + ∑ m ∈ range N, err m := by
-  have key := harm_budget (π := fun _ => Law.bernRate num den) (h := fun _ => (1 : ℝ))
-    (Law.bernRate_nonneg hq) (fun _ => (mul_one _).le) (K : ℝ) P
-    (Play.Laws.mono (fun L (hL : L = Law.bernoulli n num den) => by
-      subst hL; exact Law.bernoulli_design_exact hq) P hL) hD
-  rwa [mul_comm (Law.bernRate num den) (K : ℝ), Law.ofReal_exp_bernRate hq] at key
+      SamplingDesign.bernFactor num den 0 ^ K + ∑ m ∈ range N, err m := by
+  have key := harm_budget (π := fun _ => SamplingDesign.bernRate num den) (h := fun _ => (1 : ℝ))
+    (SamplingDesign.bernRate_nonneg hq) (fun _ => (mul_one _).le) (K : ℝ) P
+    (Play.SamplingDesigns.mono (fun L (hL : L = SamplingDesign.bernoulli n num den) => by
+      subst hL; exact SamplingDesign.bernoulli_design_exact hq) P hL) hD
+  rwa [mul_comm (SamplingDesign.bernRate num den) (K : ℝ), SamplingDesign.ofReal_exp_bernRate hq] at key
 
 /-- `k*(p) = ln(1/(1−p)) / (−ln(1−q))`: the number of wrong steps that a session accepted with
 probability above `1 − p` (less the drawn-unit error) stays under. -/
-noncomputable def kStar (num den : ℕ) (p : ℝ) : ℝ := Real.log (1 / (1 - p)) / Law.bernRate num den
+noncomputable def kStar (num den : ℕ) (p : ℝ) : ℝ := Real.log (1 / (1 - p)) / SamplingDesign.bernRate num den
 
 /-- **The count corollary.** Under Bernoulli samples of rate `q > 0`, the session accepts with at least
 `k*(p)` wrong steps with probability at most `1 − p + Σ_t err_t`. -/
 theorem harm_count_kstar {num den : ℕ} [NeZero den] (h0 : 0 < num) (hq : num < den) {p : ℝ} (hp : p < 1)
     {err : ℕ → ℝ≥0∞} {H : ℝ} (hH : kStar num den p ≤ H) {N : ℕ} (P : Play n N)
-    (hL : P.Laws fun L => L = Law.bernoulli n num den) (hD : P.Drawn err) :
+    (hL : P.SamplingDesigns fun L => L = SamplingDesign.bernoulli n num den) (hD : P.Drawn err) :
     P.prEv (fun _ => 1) (fun acc x => acc = true ∧ H ≤ x) 0 ≤
       ENNReal.ofReal (1 - p) + ∑ m ∈ range N, err m := by
-  have hr := Law.bernRate_pos h0 hq
-  have key := harm_budget (π := fun _ => Law.bernRate num den) (h := fun _ => (1 : ℝ)) hr.le
+  have hr := SamplingDesign.bernRate_pos h0 hq
+  have key := harm_budget (π := fun _ => SamplingDesign.bernRate num den) (h := fun _ => (1 : ℝ)) hr.le
     (fun _ => (mul_one _).le) H P
-    (Play.Laws.mono (fun L (hL : L = Law.bernoulli n num den) => by
-      subst hL; exact Law.bernoulli_design_exact hq) P hL) hD
+    (Play.SamplingDesigns.mono (fun L (hL : L = SamplingDesign.bernoulli n num den) => by
+      subst hL; exact SamplingDesign.bernoulli_design_exact hq) P hL) hD
   refine key.trans (add_le_add (ENNReal.ofReal_le_ofReal ?_) le_rfl)
   have h1p : 0 < 1 - p := sub_pos.2 hp
-  calc Real.exp (-(Law.bernRate num den * H)) ≤ Real.exp (-Real.log (1 / (1 - p))) := by
+  calc Real.exp (-(SamplingDesign.bernRate num den * H)) ≤ Real.exp (-Real.log (1 / (1 - p))) := by
         refine Real.exp_le_exp.2 (neg_le_neg ?_)
         rw [kStar, div_le_iff₀ hr, mul_comm] at hH
         exact hH
     _ = 1 - p := by rw [one_div, Real.log_inv, neg_neg, Real.exp_log h1p]
 
 /-- One round over `B` that accepts exactly when its sample misses `B`. -/
-def oneShot (L : Law n) (B : Finset (Fin n)) : Play n 1 :=
+def oneShot (L : SamplingDesign n) (B : Finset (Fin n)) : Play n 1 :=
   .round L B fun ω => .stop (decide (Disjoint (L.draw ω) B))
 
-theorem oneShot_laws {S : Law n → Prop} {L : Law n} (hS : S L) (B : Finset (Fin n)) :
-    (oneShot L B).Laws S :=
+theorem oneShot_samplingDesigns {S : SamplingDesign n → Prop} {L : SamplingDesign n} (hS : S L) (B : Finset (Fin n)) :
+    (oneShot L B).SamplingDesigns S :=
   ⟨hS, fun _ => trivial⟩
 
-theorem oneShot_drawn (L : Law n) (B : Finset (Fin n)) : (oneShot L B).Drawn (fun _ => 0) := by
+theorem oneShot_sampled (L : SamplingDesign n) (B : Finset (Fin n)) : (oneShot L B).Drawn (fun _ => 0) := by
   refine ⟨le_of_eq ?_, fun _ => trivial⟩
   refine Eq.trans ?_ (avg_const (C := L.Ω) (0 : ℝ≥0∞))
   refine congrArg avg (funext fun ω => ?_)
   by_cases hd : Disjoint (L.draw ω) B <;> simp [hd, pass_stop]
 
-theorem oneShot_prEv (L : Law n) (B : Finset (Fin n)) :
-    (oneShot L B).prEv (fun _ => 1) (fun acc x => acc = true ∧ (B.card : ℝ) ≤ x) 0 = L.escape B := by
-  rw [oneShot, prEv_round, Verity.Law.escape, ← avg_ite_eq_prCoin]
+theorem oneShot_prEv (L : SamplingDesign n) (B : Finset (Fin n)) :
+    (oneShot L B).prEv (fun _ => 1) (fun acc x => acc = true ∧ (B.card : ℝ) ≤ x) 0 = L.missProb B := by
+  rw [oneShot, prEv_round, Verity.SamplingDesign.missProb, ← avg_ite_eq_prCoin]
   refine congrArg avg (funext fun ω => ?_)
   by_cases hd : Disjoint (L.draw ω) B
   · have hE : decide (Disjoint (L.draw ω) B) = true ∧ (B.card : ℝ) ≤ 0 + ∑ u ∈ B, (1 : ℝ) :=
@@ -459,10 +459,10 @@ theorem oneShot_prEv (L : Law n) (B : Finset (Fin n)) :
 /-- **The count budget is tight**: a single Bernoulli round over `B` with no drawn-unit error
 accepts with `|B|` wrong steps with probability exactly `(1 − q)^{|B|}`. -/
 theorem harm_count_tight {num den : ℕ} [NeZero den] (h : num ≤ den) (B : Finset (Fin n)) :
-    (oneShot (Law.bernoulli n num den) B).prEv (fun _ => 1)
+    (oneShot (SamplingDesign.bernoulli n num den) B).prEv (fun _ => 1)
         (fun acc x => acc = true ∧ (B.card : ℝ) ≤ x) 0 =
-      Law.bernFactor num den 0 ^ B.card := by
-  rw [oneShot_prEv, Law.bernoulli_escape h]
+      SamplingDesign.bernFactor num den 0 ^ B.card := by
+  rw [oneShot_prEv, SamplingDesign.bernoulli_escape h]
 
 end Adaptive
 

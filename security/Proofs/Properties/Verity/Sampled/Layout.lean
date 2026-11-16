@@ -4,10 +4,10 @@ public import Proofs.Properties.Verity.Sampled.Decoders
 public import Proofs.Properties.Verity.Sampled.DigestTie
 
 /-!
-# Sampled proofs' coupling: the session's layout of its rounds
+# SPOT's coupling: the session's layout of its rounds
 
 The readings and the decoders read the session's rounds at a layout (`Slot`): the link's opening, and each round of
-each table's two rep streams. At the session v2 sets up (`SetsUp`), `flock-verify --zk` sets up one table, the
+each table's two rep streams. At the session v2 sets up (`SetsUp`), `verity-verify-proof --zk` sets up one table, the
 statement's, for any record, so the session alone fixes the layout, before any play.
 
 * **The session `--zk` sets up** (`Live.tables`, `SetsUp.spec_tables`, `SetsUp.setup_one`): for any record, its tables
@@ -31,7 +31,7 @@ namespace Verity.Sampled
 
 open FlockSoundness.Discharge
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-! ## The session `--zk` sets up -/
 

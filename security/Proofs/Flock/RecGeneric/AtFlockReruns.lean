@@ -12,10 +12,10 @@ read) each definition of a rerun's view agrees with its counterpart over `Claims
 
 * the inner view `E_O`'s witnesses give is the record's (`dec_ofRec`, from `RecAt.runs`), so a rerun is accepted in
   `innerModel` exactly where `accAtI` holds (`innerModel_acc_iff`);
-* an accepted rerun has witnesses (`wits_of_acc`), and its searched evaluations are `Deploy.callsAt` at `drawWits`
-  (`innerModel_log_of_acc`); at every rerun `innerModel`'s and `verModel`'s are among the sample's `drawCalls`
+* an accepted rerun has witnesses (`wits_of_acc`), and its searched evaluations are `Deploy.callsAt` at `sampleWits`
+  (`innerModel_log_of_acc`); at every rerun `innerModel`'s and `verModel`'s are among the sample's `sampleCalls`
   (`rerunCalls_sub`, `verModel_log_sub`), which are true where the calls at given witnesses and those of no witnesses
-  are (`drawCalls_true_at`);
+  are (`sampleCalls_true_at`);
 * a run finder's coins map uniformly onto `BinCoins` (`binEquiv`) and `ConflictCoinsI` (`conflictEquiv`), and onto
   `CapCoinsI` by `Fin.consEquiv`, the fresh runs read through `slotRuns` (`slotRuns_le`).
 -/
@@ -121,65 +121,65 @@ theorem wits_of_acc {ω : Ω} {u : (Fin ((D.record IV).V.k x) → Coin) × (EO (
     simp [Comp.dec] at h
   · exact ⟨ws, rfl⟩
 
-theorem drawWits_of_wits {ω : Ω} {u : (Fin ((D.record IV).V.k x) → Coin) × (EO (D.record IV) I DO decO).C x}
+theorem sampleWits_of_wits {ω : Ω} {u : (Fin ((D.record IV).V.k x) → Coin) × (EO (D.record IV) I DO decO).C x}
     {ws : List Claims.Flock.Wit} (hw : (Comp.ofRec D IV I DO decO).wits H P x ω u = some ws) :
-    drawWits H (D.record IV) I DO decO P x ω u = ws := by
+    sampleWits H (D.record IV) I DO decO P x ω u = ws := by
   have h' : ((EO (D.record IV) I DO decO).eval H P x ω u.1 u.2).1 = some ws := hw
-  unfold drawWits
+  unfold sampleWits
   rw [h', Option.getD_some]
 
-/-- **An accepted rerun searches its sample's recorded and inner calls** (`Deploy.callsAt` at `drawWits`). -/
+/-- **An accepted rerun searches its sample's recorded and inner calls** (`Deploy.callsAt` at `sampleWits`). -/
 theorem innerModel_log_of_acc {ω : Ω}
     {u : (Fin ((D.record IV).V.k x) → Coin) × (EO (D.record IV) I DO decO).C x}
     (h : ((Comp.ofRec D IV I DO decO).innerModel IV H P x).acc ω u) :
     ((Comp.ofRec D IV I DO decO).innerModel IV H P x).log ω u =
-      (D.record IV).callsAt H x u.1 (drawWits H (D.record IV) I DO decO P x ω u) := by
+      (D.record IV).callsAt H x u.1 (sampleWits H (D.record IV) I DO decO P x ω u) := by
   obtain ⟨ws, hw⟩ := wits_of_acc D IV I DO decO h
-  rw [drawWits_of_wits D IV I DO decO hw]
+  rw [sampleWits_of_wits D IV I DO decO hw]
   exact Comp.rerunCalls_some hw
 
-/-- **A rerun's searched evaluations are among its sample's** (`drawCalls`). -/
+/-- **A rerun's searched evaluations are among its sample's** (`sampleCalls`). -/
 theorem rerunCalls_sub {ω : Ω} {u : (Fin ((D.record IV).V.k x) → Coin) × (EO (D.record IV) I DO decO).C x}
     {e : Msg × Msg} (he : e ∈ (Comp.ofRec D IV I DO decO).rerunCalls H P x ω u) :
-    e ∈ drawCalls H (D.record IV) I DO decO P x ω u := by
+    e ∈ sampleCalls H (D.record IV) I DO decO P x ω u := by
   rcases hw : (Comp.ofRec D IV I DO decO).wits H P x ω u with _ | ws
   · unfold Comp.rerunCalls at he
     rw [hw] at he
     simp at he
   · rw [Comp.rerunCalls_some hw] at he
-    unfold drawCalls
-    rw [drawWits_of_wits D IV I DO decO hw]
+    unfold sampleCalls
+    rw [sampleWits_of_wits D IV I DO decO hw]
     exact List.mem_append_left _ he
 
 /-- **`verModel`'s evaluations at a rerun are among its sample's**: the searched ones, then the compiled verifier's own
-at the run's staged statements, which are `drawCalls`' second half. -/
+at the run's staged statements, which are `sampleCalls`' second half. -/
 theorem verModel_log_sub {ω : Ω} {u : (Fin ((D.record IV).V.k x) → Coin) × (EO (D.record IV) I DO decO).C x}
     {e : Msg × Msg} (he : e ∈ ((Comp.ofRec D IV I DO decO).verModel IV H P x).log ω u) :
-    e ∈ drawCalls H (D.record IV) I DO decO P x ω u := by
+    e ∈ sampleCalls H (D.record IV) I DO decO P x ω u := by
   rcases List.mem_append.1 he with he | he
   · exact rerunCalls_sub D IV I DO decO he
-  · unfold drawCalls
+  · unfold sampleCalls
     exact List.mem_append_right _ he
 
 /-- **A sample's evaluations are true** at a statement where those the compiled record's witnesses record are
 (`CallsTrue` at `x`) and those of no witnesses are: `E_O` gives witnesses only on accepted runs (`EO_some_acc`), and
 every other evaluation is `(u, H u)`. -/
-theorem drawCalls_true_at (hT : (Comp.ofRec D IV I DO decO).CallsTrue H x)
+theorem sampleCalls_true_at (hT : (Comp.ofRec D IV I DO decO).CallsTrue H x)
     (hN : ∀ e ∈ (D.record IV).calls x [], H e.1 = e.2) (ω : Ω)
     (d : (Fin ((D.record IV).V.k x) → Coin) × (EO (D.record IV) I DO decO).C x) :
-    ∀ e ∈ drawCalls H (D.record IV) I DO decO P x ω d, H e.1 = e.2 := by
+    ∀ e ∈ sampleCalls H (D.record IV) I DO decO P x ω d, H e.1 = e.2 := by
   intro e he
-  unfold drawCalls Deploy.callsAt at he
+  unfold sampleCalls Deploy.callsAt at he
   rcases List.mem_append.1 he with he | he
   · rcases List.mem_append.1 he with he | he
     · rcases hw : ((EO (D.record IV) I DO decO).eval H P x ω d.1 d.2).1 with _ | ws
-      · have h0 : drawWits H (D.record IV) I DO decO P x ω d = [] := by
-          unfold drawWits
+      · have h0 : sampleWits H (D.record IV) I DO decO P x ω d = [] := by
+          unfold sampleWits
           rw [hw, Option.getD_none]
         rw [h0] at he
         exact hN e he
-      · have h0 : drawWits H (D.record IV) I DO decO P x ω d = ws := by
-          unfold drawWits
+      · have h0 : sampleWits H (D.record IV) I DO decO P x ω d = ws := by
+          unfold sampleWits
           rw [hw, Option.getD_some]
         rw [h0] at he
         exact hT Ω P ω d.1 d.2 ws ⟨EO_some_acc H (D.record IV) I DO decO P x ω d.1 d.2 hw, hw⟩ e

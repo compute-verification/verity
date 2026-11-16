@@ -24,7 +24,7 @@ import Proofs.Flock.Soundness.Refine.Setup
 import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
-# flock-verify's acceptance under either tag
+# verity-verify-proof's acceptance under either tag
 
 `setupTables_okH` and `setupTables_retainH` are `Exec.setupTables_ok` and `Exec.setupTables_retain` under hidden outputs
 (`hh : tags.hiddenOutputs = true`), by the same walk with `Stmt.setupHidden` for `Stmt.setupH`; `setupTables_okAny` and
@@ -330,7 +330,7 @@ theorem setupOne_tagsAt_leaf {j : ℕ} {st : Flock.Stmt}
     exact Or.inr ⟨hl, setupHidden_plain ((tagsAt_merkleLeaf tags count j).trans hl)
       ((setupOne_hidden hh').symm.trans h)⟩
 
-/-- **flock-verify's acceptance makes each table's verdict accept, at the model's leaf of the tags' leaf scheme**
+/-- **verity-verify-proof's acceptance makes each table's verdict accept, at the model's leaf of the tags' leaf scheme**
 (`leafOfId`): `accepts_verdict_hm96Any` under `hm96-sha512/v1` leaves, and under hidden outputs with plain SHA-512
 leaves the verdict at `leafPlain` (`table_verdict_leaf`). -/
 theorem accepts_verdict_leafAny {I : Exec.Inputs} {t : Exec.Transcript}

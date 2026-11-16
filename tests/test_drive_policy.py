@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_policy_toml_parses_and_takes_only_declared_jobs_off_the_gate():
     handles = {h["handle"] for h in json.loads((ROOT / REGISTRY).read_text())["handles"]}
     pol = policy.parse((ROOT / policy.PATH).read_text(), policy.PATH, handles)
-    jobs = tomllib.loads((ROOT / "tools/verity/check/ci.toml").read_text())["job"]
+    jobs = tomllib.loads((ROOT / "tools/check/ci.toml").read_text())["job"]
     names, off = {t["name"] for t in jobs}, {t["name"] for t in jobs if t.get("gate") is False}
     assert set(pol.off_gate) <= names, f"{policy.PATH}'s off_gate names jobs ci.toml doesn't declare: {set(pol.off_gate) - names}"
     assert off <= set(pol.off_gate), f"ci.toml marks {off - set(pol.off_gate)} `gate = false`; list them in {policy.PATH}'s off_gate"

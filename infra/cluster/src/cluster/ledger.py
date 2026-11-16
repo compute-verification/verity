@@ -26,7 +26,7 @@ import hashlib
 import json
 import os
 from dataclasses import dataclass, field, replace
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -201,7 +201,7 @@ def write_state(path: str | Path, s: State) -> None:
 
 def epoch(stamp: str) -> int:
     """`2026-09-30T18:00:00Z` as epoch seconds, the form `gpu-lease` writes its times in."""
-    return int(datetime.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp())
+    return int(datetime.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC).timestamp())
 
 
 def end_fields(rec: dict[str, Any]) -> dict[str, Any]:

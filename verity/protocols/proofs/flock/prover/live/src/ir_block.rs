@@ -484,7 +484,7 @@ impl IrUnitNet {
         let sha256: [u8; 32] = Sha256::digest(text.as_bytes()).into();
         let mut lines = text.lines();
         let h: Vec<&str> = lines.next().expect("header").split_whitespace().collect();
-        assert_eq!(h[0], "flock-ir-unit/v2", "not a flock-ir-unit/v2 netlist");
+        assert_eq!(h[0], "flock-ir-unit/v2", "not a flock-ir-unit/v2 circuit description");
         let n = |i: usize| -> usize { h[i].parse().unwrap() };
         let (useful, const_pos) = (n(2), n(3));
         let mut at = 4;
@@ -520,7 +520,7 @@ impl IrUnitNet {
         let leaves = tagged("LEAVES ");
         let cut = tagged("CUT ");
         let order: Option<Vec<usize>> = tagged("ORDER ").map(|v| serde_json::from_value(v).expect("the ORDER line is not a list of columns"));
-        assert!(rest.next().is_none(), "netlist text after the rows that is not its LEAVES, CUT and ORDER lines, in that order");
+        assert!(rest.next().is_none(), "circuit description text after the rows that is not its LEAVES, CUT and ORDER lines, in that order");
         if let Some(o) = &order {
             let first = in_words * WORD;
             let mut seen = vec![false; useful];
@@ -546,7 +546,7 @@ impl IrUnitNet {
     }
 
     pub fn load(path: &str) -> Self {
-        Self::parse(&std::fs::read_to_string(path).expect("netlist"))
+        Self::parse(&std::fs::read_to_string(path).expect("circuit description"))
     }
 
     /// The unit's slot type as the lincheck reads it: its rows over its `2^unit_log` columns, read in place.
@@ -1219,17 +1219,17 @@ pub fn cut_map_of(net: &IrUnitNet, h: &serde_json::Value, units: usize) -> Resul
         return Err(format!("{units} units, but {n} instances x {upi} units each"));
     }
     if h.get("cut").is_some() {
-        return Err("the instance header carries a cut structure; the cut is the pinned netlist's".into());
+        return Err("the instance header carries a cut structure; the cut is the pinned circuit description's".into());
     }
     let null = serde_json::Value::Null;
     let cut = net.cut.as_ref().unwrap_or(&null);
     let words = cut["words"].as_u64().unwrap_or(0) as usize;
     if g("cut_words").unwrap_or(0) != words {
-        return Err(format!("the header claims {} cut words, the pinned netlist {words}", g("cut_words").unwrap_or(0)));
+        return Err(format!("the header claims {} cut words, the pinned circuit description {words}", g("cut_words").unwrap_or(0)));
     }
     if words == 0 {
         if net.cut.is_some() || net.in_groups.len() != 1 || net.out_groups.len() != 1 {
-            return Err("a netlist with cut groups or a CUT line but no cut words".into());
+            return Err("a circuit description with cut groups or a CUT line but no cut words".into());
         }
         return Ok(CutMap { words: 0, tail: vec![], unit_in: vec![vec![]; upi], unit_out: vec![vec![]; upi], in_bits: vec![], out_bits: vec![],
                            public: vec![], outputs: vec![] });
@@ -1240,11 +1240,11 @@ pub fn cut_map_of(net: &IrUnitNet, h: &serde_json::Value, units: usize) -> Resul
     // units that return output leaves have a returned-output group before their cut group; tail-output units only a cut group
     let want_out = if outputs.is_empty() { 2 } else { 1 };
     if net.in_groups.len() != 2 || net.out_groups.len() != want_out {
-        return Err(format!("{words} cut words, but the netlist's port groups are not a leaf and a cut input group and {want_out} output group(s)"));
+        return Err(format!("{words} cut words, but the circuit description's port groups are not a leaf and a cut input group and {want_out} output group(s)"));
     }
     let (unit_in, unit_out) = (pairs(&cut["in"])?, pairs(&cut["out"])?);
     if unit_in.len() != upi || unit_out.len() != upi {
-        return Err(format!("{upi} units per instance, but the netlist's cut ports list {}", unit_in.len()));
+        return Err(format!("{upi} units per instance, but the circuit description's cut ports list {}", unit_in.len()));
     }
     let group_cols = |g: &Group, base: usize| -> Result<Vec<usize>, String> {
         if g.bits.iter().any(|&b| b != 16 && b != 32) {
@@ -1263,7 +1263,7 @@ pub fn cut_map_of(net: &IrUnitNet, h: &serde_json::Value, units: usize) -> Resul
     }
     for u in 0..upi {
         if unit_in[u].iter().map(|p| p.0).collect::<Vec<_>>() != cin || unit_out[u].iter().map(|p| p.0).collect::<Vec<_>>() != cout {
-            return Err(format!("unit {u}'s cut ports are not the netlist's cut groups"));
+            return Err(format!("unit {u}'s cut ports are not the circuit description's cut groups"));
         }
         for &(_, k) in unit_in[u].iter().chain(&unit_out[u]) {
             if k >= words {

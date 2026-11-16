@@ -50,6 +50,10 @@ is defaulted.  The package imports nothing else from `verity_vllm`, so every sta
   module paths with their class MRO names, its named buffers and the runner's facts, as the acquisition plan and its
   reader of where a Call lives at runtime read it; it has no `of`: `from_json` reads a field the document leaves out as empty
   and refuses another schema. It alone is not frozen: the meta path states the runner's facts on a tree it has built.
+* `property_record` -- a property's record (``<run>/properties/<name>.json``, one schema a property, each named in its
+  `REGISTRY`): the harness's evidence, `ok` and the sha256 `digest` of every other field, as a property harness seals it
+  (`seal`) and the verdict cites a run's (`citations`); it has no `of`: `PropertyRecord.load` reads a file it cannot read
+  as an empty document, so the citation names the record's problems. It alone loads a module of core (`verity.circuits.codec`).
 
 Beside the records: `fields`, the field readers they share, and `schema_ids`, the schema ids of the records that have no
 type here yet.

@@ -1,12 +1,13 @@
-/-
-`Flock.Verify`, `Flock.Piop`, `Flock.Opening`, `Flock.Ligerito`, `Flock.Merkle` over the hash oracle (`Flock.With.Hashes`): `verifyWithM` is `Flock.verify` with every hash call the oracle's,
-in a verdict monad `M`, and `verifyWith h` runs it in `V` with SHA-512 replaced by `h`. The copies keep the originals' text;
-what hashes nothing is the compiled verifier's own, lifted (`liftTM`, `liftLM`).
--/
 module
 
 public import Flock.With.Transcript
 public import Flock.Verify
+
+/-!
+`Flock.Verify`, `Flock.Piop`, `Flock.Opening`, `Flock.Ligerito`, `Flock.Merkle` over the hash oracle (`Flock.With.Hashes`): `verifyWithM` is `Flock.verify` with every hash call the oracle's,
+in a verdict monad `M`, and `verifyWith h` runs it in `V` with SHA-512 replaced by `h`. The copies keep the originals' text;
+what hashes nothing is the compiled verifier's own, lifted (`liftTM`, `liftLM`).
+-/
 
 @[expose] public section
 

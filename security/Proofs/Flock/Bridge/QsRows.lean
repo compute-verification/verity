@@ -17,7 +17,7 @@ sampled proof block's wires sit at its `c.ports.size` rows and at the zero's and
 * `card_div_le_of_prCoin_le`: a share of the coins as a real number.
 * `qs_vbOf_execOS_le`: at the live subset sample on a uniform byte source (A3) holding the first read's
   `2 · k_d · width n + 64` bytes, `Q_s ≤ k_d · n_p + 2 + k_d · 2⁻⁶⁴ · n · n_p`: the sample holds `k_d` proof blocks
-  unless it runs out of bytes, which it does with probability at most `k_d · 2⁻⁶⁴` (`Law.runOS_subset_none_le`), and
+  unless it runs out of bytes, which it does with probability at most `k_d · 2⁻⁶⁴` (`SamplingDesign.runOS_subset_none_le`), and
   then it holds every proof block.
 -/
 
@@ -48,7 +48,7 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Disc
   FlockSoundness.Discharge.ZkBind FlockSoundness.Discharge FlockSoundness.Discharge.Composed
 
 variable {n mPts : ℕ} {Reg : Type} {I : Inputs} {dj : Finset (Fin n) → Lean.Json} {S₀ : Finset (Fin n)}
-  {d₀ : Lean.Json} {y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀} {ht : I.tags.typed = false} {c : Flock.Circuit}
+  {d₀ : Lean.Json} {y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀} {ht : I.tags.typed = false} {c : Flock.Circuit}
   {hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c} {hscope : Discharge.Layout.scopeOkH c = true}
   {hU : Built c.unit} {pub : Flock.Public} {hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub}
   {hpt : pub.tables = none}
@@ -56,7 +56,7 @@ variable {n mPts : ℕ} {Reg : Type} {I : Inputs} {dj : Finset (Fin n) → Lean.
 /-- **`Q_s ≤ k_d · n_p + 2 + (|bad|/|Ω|) · n · n_p` at the session's value binding**, `n_p = c.ports.size` the rows
 of a proof block: a sample outside `bad` holds at most `k_d` proof blocks, each of whose wires sits at one of its
 `n_p` rows or at the zero's or the constant's gate (`vbOf_pos_io`); a sample in `bad` holds at most all `n`. -/
-theorem qs_vbOf_le_split (L : FlockSoundness.Audit.Law n) (kd : ℕ) (bad : Finset L.Ω)
+theorem qs_vbOf_le_split (L : FlockSoundness.Audit.SamplingDesign n) (kd : ℕ) (bad : Finset L.Ω)
     (hgood : ∀ ω, ω ∉ bad → (L.draw ω).card ≤ kd) :
     ∑ p : (vbOf dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).Pos,
         (Fintype.card (ΩcZ execArith ((keyProg c hU n).partition (Discharge.Layout.outsOf c hU n))
@@ -82,24 +82,24 @@ theorem qs_vbOf_le_split (L : FlockSoundness.Audit.Law n) (kd : ℕ) (bad : Fins
 
 /-- **`Q_s ≤ k_d · n_p + 2 + k_d · 2⁻⁶⁴ · n · n_p` at the live subset sample**, on a uniform byte source (A3) that
 holds the first read's `2 · k_d · width n + 64` bytes: the sample holds `k_d` proof blocks unless it runs out of bytes
-(`Law.execOS_subset_draw_card_le`), with probability at most `k_d · 2⁻⁶⁴` (`Law.runOS_subset_none_le`). -/
+(`SamplingDesign.execOS_subset_sample_card_le`), with probability at most `k_d · 2⁻⁶⁴` (`SamplingDesign.runOS_subset_none_le`). -/
 theorem qs_vbOf_execOS_le {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : FlockSoundness.Assumptions.UniformRandomBytes Lb src)
     (kd : ℕ) (hkd : kd ≤ n) (hLb : 2 * kd * Flock.Draw.width n + 64 ≤ Lb 0) :
     ∑ p : (vbOf dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).Pos,
         (Fintype.card (ΩcZ execArith ((keyProg c hU n).partition (Discharge.Layout.outsOf c hU n))
           (planZHJ dj y₀) (tabZHJ dj y₀) (vbOf dj y₀ ht hc hscope hU hpub hpt (Reg := Reg))
-          (Law.execOS (n := n) src (.subset kd) n) p) : ℝ) /
-          Fintype.card (Law.execOS (n := n) src (.subset kd) n).Ω ≤
+          (SamplingDesign.execOS (n := n) src (.subset kd) n) p) : ℝ) /
+          Fintype.card (SamplingDesign.execOS (n := n) src (.subset kd) n).Ω ≤
       ((kd : ℝ) * c.ports.size + 2) + (kd : ℝ) * (2 ^ 64 : ℝ)⁻¹ * ((n : ℝ) * c.ports.size) := by
   classical
-  have hbad : ((Finset.univ.filter fun ω : Ω => Law.runOS (src ω) (.subset kd) n = none).card : ℝ) /
+  have hbad : ((Finset.univ.filter fun ω : Ω => SamplingDesign.runOS (src ω) (.subset kd) n = none).card : ℝ) /
       Fintype.card Ω ≤ (kd : ℝ) * (2 ^ 64 : ℝ)⁻¹ :=
-    card_div_le_of_prCoin_le _ kd (Law.runOS_subset_none_le n kd hkd Lb src hA3 hLb)
+    card_div_le_of_prCoin_le _ kd (SamplingDesign.runOS_subset_none_le n kd hkd Lb src hA3 hLb)
   have h := qs_vbOf_le_split (dj := dj) (y₀ := y₀) (ht := ht) (hc := hc) (hscope := hscope) (hU := hU) (hpub := hpub)
-    (hpt := hpt) (Reg := Reg) (Law.execOS (n := n) src (.subset kd) n) kd
-    (Finset.univ.filter fun ω : Ω => Law.runOS (src ω) (.subset kd) n = none)
-    (fun ω hω => Law.execOS_subset_draw_card_le src kd ω fun h0 =>
+    (hpt := hpt) (Reg := Reg) (SamplingDesign.execOS (n := n) src (.subset kd) n) kd
+    (Finset.univ.filter fun ω : Ω => SamplingDesign.runOS (src ω) (.subset kd) n = none)
+    (fun ω hω => SamplingDesign.execOS_subset_sample_card_le src kd ω fun h0 =>
       hω (Finset.mem_filter.2 ⟨Finset.mem_univ _, h0⟩))
   exact h.trans (add_le_add le_rfl (mul_le_mul_of_nonneg_right hbad (by positivity)))
 

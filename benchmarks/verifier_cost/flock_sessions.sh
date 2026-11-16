@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # The Lean verifier's seconds on a served block type's sessions, on one core, by the statement's blocks.
-#   1. hidden_zk/job.sh's builds (flock-circuit's proving build on CPUs, the Lean flock-verify, a venv), and flock-read
+#   1. hidden_zk/job.sh's builds (flock-circuit's proving build on CPUs, the Lean verity-verify-proof, a venv), and flock-read
 #      (flock_read/Main.lean) in a scratch Lake package against a copy of the built verifier
 #   2. flock_sessions.py stage: the block type's flat statement at `full`, as served_units/stage.py stages a census type,
 #      and from the same lowering the statement's first N blocks for each N given
 #   3. per N: one loopback --zk session of the CPU prover sampling all N blocks (job.sh's `session`), then
-#      `flock-verify verify --zk` on it FS_REPS times, as the proof server's verdict pool calls it (the statement and
+#      `verity-verify-proof verify --zk` on it FS_REPS times, as the proof server's verdict pool calls it (the statement and
 #      the public file by their archive keys), pinned to one core under /usr/bin/time -v; for the first N, a second
 #      session of the same statement and one `verify` handed both, a call of two sessions
 #   4. sessions.tar, where it is sent: a proof server's saved sessions of the full statement (one directory a session),
@@ -34,7 +34,7 @@ export HZ_CONFIGS=sessions HZ_MEM_GB=${FS_MEM_GB:?set it to the --mem-gb of the 
 # shellcheck source=../pouw/hidden_zk/job.sh
 source benchmarks/pouw/hidden_zk/job.sh
 command -v lake > /dev/null || export PATH="$HOME/.elan/bin:$PATH"
-export FC_FIREWALL=0
+export FC_ZK_SERVER=0
 unset FC_HOST_WITNESS
 I=$RESEARCH_RUN_DIR/inputs
 V=benchmarks/verifier_cost
@@ -50,9 +50,14 @@ staging=$!
 setup
 
 READ=$W/read/.lake/build/bin/flock-read
-cp -a "$(cd "$(dirname "$LEAN")/../../.." && pwd)" "$W/verifier" && mkdir -p "$W/read" && cp "$V/flock_read/Main.lean" "$W/verifier/lean-toolchain" "$W/read/" \
+# job.sh's build is the verifier beside the packages it requires by path (lean_copy), its .lake a link into the verifier's
+# own directory there: all of it is copied, and flock-read requires the verifier at its place in the copy
+BUILT=$(cd "$(dirname "$LEAN")/../../.." && pwd -P)
+PKG=$(cd -P "$(dirname "$LEAN")/../../.." && pwd)
+PKG=$W/verifier${PKG#"$BUILT"}
+cp -a "$BUILT" "$W/verifier" && mkdir -p "$W/read" && cp "$V/flock_read/Main.lean" "$PKG/lean-toolchain" "$W/read/" \
   && printf 'name = "flock_read"\ndefaultTargets = ["flock-read"]\n\n[[require]]\nname = "flock_verifier"\npath = "%s"\n\n[[lean_exe]]\nname = "flock-read"\nroot = "Main"\n' \
-    "$W/verifier" > "$W/read/lakefile.toml" && (cd "$W/read" && lake build flock-read) > "$OUT/build-read.log" 2>&1
+    "$PKG" > "$W/read/lakefile.toml" && (cd "$W/read" && lake build flock-read) > "$OUT/build-read.log" 2>&1
 [ -x "$READ" ] || { log "flock-read did not build: $(tail -3 "$OUT/build-read.log" 2> /dev/null | tr '\n' '|' | cut -c1-300)"; READ=; }
 
 wait $staging

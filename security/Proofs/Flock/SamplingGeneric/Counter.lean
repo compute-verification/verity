@@ -156,7 +156,7 @@ def L₀ (n oc : ℕ) : Compiled Unit A₀ where
   scopeCheck _ := true
   partition _ := some P₀
   commit := Cm₀
-  stage2 _ := Finset.univ
+  secondStage _ := Finset.univ
   checked _ _ := List.replicate n 0
   sh _ _ := ()
   rounds _ _ := Finset.univ
@@ -174,11 +174,11 @@ def L₀ (n oc : ℕ) : Compiled Unit A₀ where
 
 /-! ## It meets the contract -/
 
-theorem unitClass₀ : unitClass s₀.prog [0] = some 16 := by
+theorem sizeClass₀ : sizeClass s₀.prog [0] = some 16 := by
   obtain ⟨t, ht⟩ : ∃ t, sizeClasses = 16 :: t := by
     rw [sizeClasses, List.range_succ_eq_map, List.map_cons]
     exact ⟨_, rfl⟩
-  rw [unitClass, ht]
+  rw [sizeClass, ht]
   rfl
 
 theorem inScope₀ : InScope P₀ s₀ := by
@@ -198,7 +198,7 @@ theorem inScope₀ : InScope P₀ s₀ := by
     simp [hu]
   · simp [Partition.blocks, P₀] at hu
     subst hu
-    exact ⟨16, unitClass₀, by decide⟩
+    exact ⟨16, sizeClass₀, by decide⟩
   · simp [s₀, P₀] at hp
     subst hp
     exact trivial
@@ -220,7 +220,7 @@ theorem draws₀ {n : ℕ} (hn : 0 < n) (oc : ℕ) : ∀ x s P, (L₀ n oc).pars
     (L₀ n oc).partition s = some P → InScope P s → ∀ B ⊆ Finset.range P.blocks.length,
       ∃ esc : (Fin ((L₀ n oc).V.k x) → Unit) → ℝ, (∀ r, 0 ≤ esc r) ∧
         (∀ r, Pr (fun d : Fin ((L₀ n oc).V.k x) → Unit =>
-          ∀ u ∈ (L₀ n oc).checked x (forkOn ((L₀ n oc).stage2 x) r d), u ∉ B) ≤ esc r) ∧
+          ∀ u ∈ (L₀ n oc).checked x (forkOn ((L₀ n oc).secondStage x) r d), u ∉ B) ≤ esc r) ∧
         Ex esc ≤ s.design.Pa P B := by
   intro x s P hs hP _ B hB
   obtain rfl : s₀ = s := Option.some.inj hs

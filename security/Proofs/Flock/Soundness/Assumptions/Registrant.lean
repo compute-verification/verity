@@ -42,7 +42,7 @@ a registered read of the session's record `rd`, at every unit: the prover holds 
 registered there. The record is the prover's, honest or not; the registered roots and positions are the verifier's own
 (`own`, `--registered`). A prover that registers a hash it can't open is outside the guarantee. -/
 def RegistrantCovers {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
-    {hscope : Layout.scopeOk c = true} {Lv : Law nv} (x : ZkOuterR mPts nv J Reg' c hU hscope Lv) : Prop :=
+    {hscope : Layout.scopeOk c = true} {Lv : SamplingDesign nv} (x : ZkOuterR mPts nv J Reg' c hU hscope Lv) : Prop :=
   ∀ ht S₀ d₀ y₀ hc hpub (u : Fin nv) (q : Fin c.ports.size), (∃ pt ∈ x.own, pt.name = c.ports[q].name) →
     (x.rd ht S₀ d₀ y₀ hc hpub).isRead (.inl (u, q))
 

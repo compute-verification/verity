@@ -1,23 +1,32 @@
 """x₁ and γ for p512 at k = 2 from this directory's squaring rates, by `benchmarks/rate_redteam/node_gamma.py`'s formula
 (at 6fdc2a021): γ = μ_chip + μ_sample + d/(k·x₁,adv), x₁,adv = x₁/(s·(1 + h)), with
-x₁ = 175 at the lanes' 5.13e10 squarings/s (2,092 MHz, ÷ 1.16 for the max clock), s a GPU's squaring rate over 5.13e10
-at the same clock, and h the host CPUs' squaring rate over the eight GPUs' 8 × 5.13e10 × 1.16.
+x₁ = 175 at the lanes' 5.13e10 squarings/s (2,092 MHz, scaled to the GPU card's `clock.sm` for the max clock), s a GPU's
+squaring rate over 5.13e10 at the same clock, and h the host CPUs' squaring rate over the node's GPUs' (the node file's
+`device.count`) at the max clock.
 
 The honest encode squares with the same kernels, so x₁ honest is x₁/s at the best measured form. A rate in cycles is a
-warp-squaring a sub-partition: 4 sub-partitions × 188 SMs × 32 lanes a clock. Prints one table a row.
+warp-squaring a sub-partition: 4 sub-partitions × the GPU card's `sm.count` × 32 lanes a clock. Prints one table a row.
 """
 
 from __future__ import annotations
+
+from verity.device import load_card, load_node, number
+
+NODE = load_node("rtx-pro-6000-server-x8")
+GPU_CARD = load_card(NODE["device"]["sku"])
+HOST_CARD = load_card(NODE["host"]["sku"])
 
 MU = 0.28 + 0.10  # μ_chip + μ_sample, the tracker's
 K = 2
 X1 = 175.0
 REF, REF_MHZ = 5.13e10, 2092.0
 MHZ = 2100.0  # the SM clock of this directory's runs (nvidia-smi before and after)
-GPUS = 8
-GPU_MAX = REF * 1.16
+GPUS = int(number(NODE["device"]["count"]))
+GPU_MAX = REF * round(float(number(GPU_CARD["clock"]["sm"])) / REF_MHZ, 2)  # clock.sm over REF_MHZ, to two places
 D = (1.27, 1.81)
-LANES_A_CLOCK = 4 * 188 * 32
+LANES_A_CLOCK = 4 * int(number(GPU_CARD["sm"]["count"])) * 32
+HOST_CORES = int(number(HOST_CARD["cpu"]["sockets"])) * int(number(HOST_CARD["cpu"]["cores"]))
+TURBO_HZ = float(number(HOST_CARD["clock"]["turbo"]) * 10 ** 9)
 
 
 def rate_of_cycles(cycles: float) -> float:
@@ -38,8 +47,10 @@ GPU = {
     "Karatsuba, multiply pipe only (124 x 4.02)": s_of(rate_of_cycles(124 * 4.02)),
 }
 # Squarings/s a physical core (ifma.sh: G = 1, both threads of 24 cores), and the IFMA-only port
-# bound (130 IFMA per 8 words on two ports at 3.9 GHz); the node's 2 × Xeon 6776P have 128 cores, its VM shows 96.
-HOST = {"none": 0.0, "IFMA measured, 128 cores": 128 * 2.84e8, "IFMA-only bound, 128 cores": 128 * 8 * 2 * 3.9e9 / 130}
+# bound (130 IFMA per 8 words on two ports at the host card's `clock.turbo`), over the host card's `cpu.sockets` ×
+# `cpu.cores` cores; the node's VM shows fewer.
+HOST = {"none": 0.0, f"IFMA measured, {HOST_CORES} cores": HOST_CORES * 2.84e8,
+        f"IFMA-only bound, {HOST_CORES} cores": HOST_CORES * 8 * 2 * TURBO_HZ / 130}
 
 
 def gamma(x: float, k: int) -> tuple[float, ...]:

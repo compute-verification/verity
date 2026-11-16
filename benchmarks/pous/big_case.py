@@ -4,7 +4,7 @@
 
 The case is an honest period at the smallest width, `(w, c0) = (64, 189)`, so its bytes are mostly the memory
 challenger's table and `C*` (about 304 bytes a block, both hex twice over): setup of a zero store encoded in `N`
-processes (`period.setup_store`), then the memory challenger's session over it under a test signer
+processes (`period_prover.setup_store`), then the memory challenger's session over it under a test signer
 (`tests/pous_test_signer.py`, whose runs only `--test` accepts). The case line, `period.case`'s canonical JSON, is
 written to OUT a piece at a time, so the generator holds `C*` and its table but never the line. A test signer's case
 is synthetic, so nothing in it is evidence of a real run. Prints the line's size and the times taken as JSON.
@@ -21,9 +21,10 @@ from pathlib import Path
 
 from verity.commitments.identity import canonical_json_bytes
 from verity.commitments.randomness import derive
-from verity.protocols.accounting.pous.device import memory_challenger as mc
-from verity.protocols.accounting.pous.verifier import period
-from verity.protocols.accounting.pous.verifier import run as R
+from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.verifier import period
+from verity.protocols.resource_accounting.memory.pous.prover import period_prover
+from verity.protocols.resource_accounting.memory.pous.verifier import run as R
 
 ROOT = Path(__file__).resolve().parents[2]
 W, C0 = 64, 189
@@ -34,7 +35,7 @@ CHUNK = 1 << 24
 
 def _signer_module():
     spec = importlib.util.spec_from_file_location(
-        "pous_test_signer", ROOT / "verity/protocols/accounting/pous/verifier/tests/pous_test_signer.py")
+        "pous_test_signer", ROOT / "tests/verity/protocols/resource_accounting/memory/pous/verifier/pous_test_signer.py")
     m = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
     return m
@@ -54,7 +55,7 @@ def write_case(out_path: Path, size: int, workers: int) -> dict:
     point = period.point_for((size // PER_BLOCK) * ((W - 16) // 8), W, C0)
     q = point.params
     coins = b"big-case coins"
-    held = period.setup_store(b"", coins, point, workers=workers)
+    held = period_prover.setup_store(b"", coins, point, workers=workers)
     times["setup_s"] = time.perf_counter() - t
 
     t = time.perf_counter()
@@ -64,7 +65,7 @@ def write_case(out_path: Path, size: int, workers: int) -> dict:
         tree = mc.CoinTree.draw(coins, sid, q.blocks, point.k)
         c = mc.MemoryChallenger(tree, signer, log=ts.session_log(d), limit_ns=point.limit_ns, block_bytes=q.block_bytes,
                                 binding=held.published.root)
-        session = R.ChallengePhaseRecord(c.run(period.honest(held.blocks)), c.commitment, c.openings())
+        session = R.ChallengePhaseRecord(c.run(period_prover.honest(held.blocks)), c.commitment, c.openings())
         key = signer.public_key
     times["session_s"] = time.perf_counter() - t
 

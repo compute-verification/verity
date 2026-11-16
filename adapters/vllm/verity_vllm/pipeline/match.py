@@ -6,23 +6,18 @@
         [--log LOG --snapshots DIR] [--control-tokens PATH] [--other-log LOG] [--cards-dir out/gen/cards] [--k 3] [--seed S]
 
 GPU phase (the pod's torch venv, Python 3.11):
-    capture         bench.m1_capture --snapshot-steps 0,1,2,3 (contiguous from 0: replay of step N finds every earlier
+    capture         bench.match_capture --snapshot-steps 0,1,2,3 (contiguous from 0: replay of step N finds every earlier
                     KV producer) -> RUN_DIR/capture/{log.jsonl.gz, tokens.json, snapshots.json, values/, stats.json,
                     versions.json, cos_sin_cache.npy}
-    control         bench.m1_capture --no-observer -> RUN_DIR/control/tokens.json  — THE token reference of every gate
-    census          census --workload --out RUN_DIR/census (torch.profiler kernel census)
-    nonint          noninterference (a observer / b hooks / c bare) -> RUN_DIR/nonint, `--case` so expected_layers resolves,
-                    `--accepted-ctl RUN_DIR/control/tokens.json` (the control run, never a workload-authored list)
+    control         bench.match_capture --no-observer -> RUN_DIR/control/tokens.json  — THE token reference of every gate
+    census, nonint  no command (see root_policy below)
     -> RUN_DIR/gpu_done.json with timings
 CPU phase (Python 3.12, torch-free; pod or laptop):
     resolve           bench.resolve_log -> RUN_DIR/resolution.json
-    census_reconcile  census --reconcile -> RUN_DIR/census_reconcile.json
-    nonint_compare    noninterference --compare -> RUN_DIR/nonint/noninterference.json
     compare           verity_vllm.check.fold_compare -> RUN_DIR/compare.json (tokens, boundary, subcircuits, structure)
     fold, fold_2      this module's fold worker in two separate processes -> RUN_DIR/fold_summary.json, fold_summary_2.json
     fold_other        (with --other-log) a second capture's digest -> RUN_DIR/fold_summary_other.json (G6 detail only)
-    golden            verity_vllm.properties.golden --check -> RUN_DIR/golden.json
-    root_policy, wiring, replay_a, replay_chain
+    root_policy, wiring, replay_a, replay_chain, census_reconcile, nonint_compare, golden (and census, nonint above)
                       no command: stage names a `--skip` still gives (the row's does), recorded as skipped; unskipped they run nothing
     gates             in-process: gates.evaluate_gates -> RUN_DIR/gates.json; card -> RUN_DIR/card.json, RUN_DIR/CARD.md,
                       <cards-dir>/<config_id>.json
@@ -40,7 +35,6 @@ and writes the `gates.FOLD_SUMMARY_SCHEMA` summary.
 
 from __future__ import annotations
 
-import hashlib
 import importlib
 import json
 import shlex
@@ -53,15 +47,10 @@ from typing import Any
 from verity_vllm import settings
 from verity_vllm.check import gates as G
 from verity_vllm.config import RowEngine, UsageError, option, workload_arg
-from verity_vllm.engine.served import (
-    ENFORCE_EAGER as ENFORCE_EAGER,  # read through this module
-)
 from verity_vllm.log import init_logger
 from verity_vllm.pipeline import experiment as EXP
 from verity_vllm.pipeline import gpu_lease as GL
-from verity_vllm.pipeline.match_fold import (
-    INSTANCES_FORM_ENV as INSTANCES_FORM_ENV,  # read through this module
-)
+from verity_vllm.pipeline.cli import write
 from verity_vllm.pipeline.match_fold import (
     _jsonable,
     fold_summary_result,
@@ -76,9 +65,6 @@ from verity_vllm.pipeline.match_workload import (
     _workload_expected_steps,
     fold_construction_args,
 )
-from verity_vllm.pipeline.match_workload import (
-    _workload_moe_construction as _workload_moe_construction,  # read through this module
-)
 from verity_vllm.records.schema_ids import MATCH_RUN_SCHEMA, MATCH_STAGES_SCHEMA
 
 __all__ = ["Options", "fold_construction_args", "main"]
@@ -91,7 +77,7 @@ DEFAULT_K = 10                         # tier a: instances per (specialization, 
 DEFAULT_CHAINS = 3                     # tier chain: connected slices replayed with computed intermediate values
 DEFAULT_PARALLEL_REPLAY = 4            # run.json's `parallel_replay` (1 with --laptop)
 DEFAULT_CHECKPOINTS = "manifests/checkpoints.json"
-SNAPSHOT_CAP_FLOOR = 32 << 20          # m1_capture's fixed per-tensor snapshot cap, the floor of the derived one
+SNAPSHOT_CAP_FLOOR = 32 << 20          # match_capture's fixed per-tensor snapshot cap, the floor of the derived one
 SNAPSHOT_ROW_BYTES_FALLBACK = 64 << 10  # per-token activation row bound when no HF config is readable: 2 x I x bf16 for I <= 16384
 LAPTOP_MAX_RSS_GB = 1.5
 LAPTOP_STAGE_TIMEOUT_S = 180.0
@@ -138,8 +124,6 @@ class Plan:
         self.log = Path(a.log).resolve() if a.log else self.capture_dir / "log.jsonl.gz"
         self.snapshots = Path(a.snapshots).resolve() if a.snapshots else (self.log.parent if a.log else self.capture_dir)
         self.control_dir = self.run / "control"
-        self.census_dir = self.run / "census"
-        self.nonint_dir = self.run / "nonint"
         self.skip = self._skip_set(a.skip)
         self.laptop = bool(a.laptop)
         self.checkpoint_dir = a.checkpoint_dir
@@ -208,19 +192,8 @@ class Plan:
                    (["--snapshot-max-bytes-op", str(a.snapshot_max_bytes_op)] if a.snapshot_max_bytes_op is not None else [])
         if stage == "control":
             return [self.py_gpu, "-m", "verity_vllm.pipeline.cli", "m1-capture", *common_gpu, "--out", str(self.control_dir), "--no-observer"]
-        if stage == "census":
-            return [self.py_gpu, "-m", "verity_vllm.pipeline.cli", "census", *common_gpu, "--out", str(self.census_dir)] + ([] if a.keep_traces else ["--no-traces"])
-        if stage == "nonint":
-            return [self.py_gpu, "-m", "verity_vllm.pipeline.cli", "noninterference", *common_gpu, "--out", str(self.nonint_dir), "--python", self.py_gpu,
-                    "--accepted-ctl", str(self.control_tokens_path())]
         if stage == "resolve":
             return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "resolve-log", str(self.log), "--profile", profile, "--out", str(run / "resolution"), "--quiet"]
-        if stage == "census_reconcile":
-            return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "census", "--reconcile", str(self.census_dir / "census.json"), "--log", str(self.log),
-                    "--profile", profile, "--report", str(run / "census_reconcile")]
-        if stage == "nonint_compare":
-            return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "noninterference", "--compare", "--out", str(self.nonint_dir), "--workload", workload,
-                    "--case", case, "--accepted-ctl", str(self.control_tokens_path())]
         if stage == "compare":
             c = [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "fold-compare", "--log", str(self.log), "--snapshots", str(self.snapshots), "--profile", profile,
                  "--out", str(self.p("compare"))]
@@ -236,16 +209,15 @@ class Plan:
             if not a.other_log:
                 return None
             return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "match", "--worker", "fold", "--log", a.other_log, "--profile", profile, "--out", str(self.p("fold_summary_other"))] + MC
-        if stage == "golden":
-            return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "golden", "--check", "--out", str(self.p("golden"))]
         return None
 
     def stage_list(self, phase: str) -> list[str]:
         gpu = list(GPU_STAGES) if phase in ("gpu", "all") else []
         cpu: list[str] = []
         if phase in ("cpu", "all"):
-            # root_policy, wiring, replay_a and replay_chain have no command: they stay so that a `--skip` naming them
-            # records the skip it always has in stages.json (the row's does)
+            # root_policy, wiring, replay_a, replay_chain, census_reconcile, nonint_compare and golden (and the GPU phase's
+            # census and nonint) have no command: they stay so that a `--skip` naming them records the skip it always has in
+            # stages.json (the row's does)
             cpu = ["resolve", "census_reconcile", "nonint_compare", "compare", "fold", "fold_2"]
             if self.a.other_log:
                 cpu.append("fold_other")
@@ -272,13 +244,6 @@ def profile_config(name: str) -> dict | None:
 # ---------------------------------------------------------------------------------------------------------
 # running
 # ---------------------------------------------------------------------------------------------------------
-
-
-def _sha256_file(p: Path) -> str | None:
-    try:
-        return hashlib.sha256(p.read_bytes()).hexdigest()
-    except OSError:
-        return None
 
 
 def _hf_config_of(a: Options, C: dict | None) -> dict | None:
@@ -486,8 +451,8 @@ def gates_stage(plan: Plan, a: Options) -> dict:
     (run / "CARD.md").write_text(CARD.summarize_md(card))
     dest = Path(a.cards_dir) / f"{a.config_id}.json"
     CARD.write_card(card, dest)
-    print(CARD.top_section(card))
-    print(G.gates_markdown(results))
+    write(CARD.top_section(card))
+    write(G.gates_markdown(results))
     return {"stage": "gates", "status": "ok", "returncode": 0, "seconds": round(time.time() - t0, 3), "log": None, "cmd": "in-process",
             "reason": None, "verdict": card.verdict, "card": str(dest)}
 
@@ -513,7 +478,7 @@ class Options:
     max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
     engine_arg: list[str] = option("--engine-arg", action="append", default=[], help="LLM(**kw) override key=value (JSON value) for every GPU stage, repeatable; e.g. max_num_batched_tokens=64, enable_prefix_caching=true")
     max_tokens: int | None = option("--max-tokens", type=int, default=None, help="override the workload's max_tokens (passed to the GPU stages)")
-    snapshot_max_bytes: int | None = option("--snapshot-max-bytes", type=int, default=None, help="(capture) per-tensor snapshot cap in bytes (m1_capture default 32 MiB; a prefill MLP row block above the cap has no snapshot evidence -- raise it for long / batched prefills, the run.json records the value)")
+    snapshot_max_bytes: int | None = option("--snapshot-max-bytes", type=int, default=None, help="(capture) per-tensor snapshot cap in bytes (match_capture default 32 MiB; a prefill MLP row block above the cap has no snapshot evidence -- raise it for long / batched prefills, the run.json records the value)")
     #: how `main` derived the cap (run.json's snapshot_cap_derivation); None under a --snapshot-max-bytes given; no flag sets it
     snapshot_cap_derivation: dict | None = field(default=None, init=False)
     snapshot_max_bytes_op: int | None = option("--snapshot-max-bytes-op", type=int, default=None, help="(capture) lower per-tensor cap at dispatcher-call events; Triton launch events keep --snapshot-max-bytes, so a large launch output is copied once (cov-moe: the fused-MoE intermediates of a 2048-token prefill otherwise exceed the pod's pinned host memory; the run.json records the value)")
@@ -530,7 +495,7 @@ class Options:
     stage_timeout: float | None = option("--stage-timeout", type=float, default=None, help="kill a stage above this wall time in s (default 180 with --laptop)")
     dry_run: bool = option("--dry-run", default=False, action="store_true", help="print the exact command lines, run nothing")
     skip: str = option("--skip", default="", help="comma list of stages/groups to skip")
-    keep_traces: bool = option("--keep-traces", default=False, action="store_true", help="census: keep the per-step Chrome traces")
+    keep_traces: bool = option("--keep-traces", default=False, action="store_true", help="no stage reads it: the census stage has no command")
     cards_dir: str = option("--cards-dir", default="out/gen/cards")
     tree: str = option("--tree", default=".", help="the tree that runs, whose version experiment.json records: its EXPORT.json, else its git head (default: the working directory)")
     k: int = option("--k", type=int, default=DEFAULT_K, help="run.json's sampling.k (no stage reads it)")
@@ -560,7 +525,7 @@ def main(a: Options) -> int:
     for req in ("config_id", "profile", "workload", "case", "out"):
         required(a, req)
     # no explicit --snapshot-max-bytes: derive the cap from the workload's largest forward and the checkpoint's widths
-    # (snapshot_cap_bytes) instead of m1_capture's fixed 32 MiB, which leaves the prefill MLP rows of every 1024-class workload without
+    # (snapshot_cap_bytes) instead of match_capture's fixed 32 MiB, which leaves the prefill MLP rows of every 1024-class workload without
     # snapshot evidence.  An explicit value still wins; the run.json records the derivation either way.
     if a.snapshot_max_bytes is None:
         C0 = profile_config(required(a, "profile"))
@@ -576,21 +541,21 @@ def main(a: Options) -> int:
     timeout = a.stage_timeout if a.stage_timeout is not None else (LAPTOP_STAGE_TIMEOUT_S if plan.laptop else None)
 
     if a.dry_run:
-        print(f"# run_config --dry-run  RUN_DIR={plan.run}  phase={a.phase}  snapshot_steps={plan.steps}  laptop={plan.laptop}")
+        write(f"# run_config --dry-run  RUN_DIR={plan.run}  phase={a.phase}  snapshot_steps={plan.steps}  laptop={plan.laptop}")
         for st in stages:
             if plan.skipped(st):
-                print(f"[{st}] SKIP (--skip)")
+                write(f"[{st}] SKIP (--skip)")
                 continue
             if st == "gates":
-                print(f"[gates] in-process: gates.evaluate_gates({plan.run}) -> {plan.p('gates')}; card -> {plan.p('card')}, {plan.run / 'CARD.md'}, "
+                write(f"[gates] in-process: gates.evaluate_gates({plan.run}) -> {plan.p('gates')}; card -> {plan.p('card')}, {plan.run / 'CARD.md'}, "
                       f"{Path(a.cards_dir) / (required(a, 'config_id') + '.json')}")
                 continue
             cmd = plan.cmd(st)
             if cmd is None:
                 continue
-            print(f"[{st}] {shlex.join(cmd)}")
+            write(f"[{st}] {shlex.join(cmd)}")
         if a.phase in ("gpu", "all"):
-            print(f"[gpu_done] write {plan.p('gpu_done')} with per-stage timings")
+            write(f"[gpu_done] write {plan.p('gpu_done')} with per-stage timings")
         return 0
 
     man = write_manifest(plan, a)

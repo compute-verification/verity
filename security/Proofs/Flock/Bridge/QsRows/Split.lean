@@ -37,15 +37,15 @@ variable {K : Type} [Field K] (A : Arith F K) {C : Verity.Boolean.Circuit} {n : 
 /-- **The commit strings the samples read, counted**: `Σ_c |Ω_c| ≤ |Ω|·(k_d·r + |E|) + |bad|·n·r`. Each wire of proof
 block `u` sits at a commit string of `T u` (at most `r`) or of `E`, a set shared by all proof blocks; a sample outside
 `bad` holds at most `k_d` proof blocks, and one in `bad` at most all `n`. -/
-theorem qs_card_le_split (L : Law n) (T : Fin n → Finset vb.Pos) (E : Finset vb.Pos) (kd r : ℕ)
+theorem qs_card_le_split (L : SamplingDesign n) (T : Fin n → Finset vb.Pos) (E : Finset vb.Pos) (kd r : ℕ)
     (hT : ∀ u, (T u).card ≤ r) (hpos : ∀ u, ∀ g ∈ P.io u, vb.pos g ∈ T u ∨ vb.pos g ∈ E)
     (bad : Finset L.Ω) (hgood : ∀ ω, ω ∉ bad → (L.draw ω).card ≤ kd) :
     ∑ c : vb.Pos, Fintype.card (ΩcZ A P planZ tab vb L c) ≤
       Fintype.card L.Ω * (kd * r + E.card) + bad.card * (n * r) := by
   classical
-  have hω : ∀ ω, (Finset.univ.filter fun c => ReadsDrawZ A P planZ tab vb c ω).card ≤
+  have hω : ∀ ω, (Finset.univ.filter fun c => ReadsSampleZ A P planZ tab vb c ω).card ≤
       (kd * r + E.card) + (if ω ∈ bad then n * r else 0) := fun ω => by
-    have hsub : (Finset.univ.filter fun c => ReadsDrawZ A P planZ tab vb c ω) ⊆ (L.draw ω).biUnion T ∪ E := by
+    have hsub : (Finset.univ.filter fun c => ReadsSampleZ A P planZ tab vb c ω) ⊆ (L.draw ω).biUnion T ∪ E := by
       intro c hc
       obtain ⟨u, hu, g, hg, rfl⟩ := (Finset.mem_filter.1 hc).2
       rcases hpos u g hg with h | h
@@ -63,16 +63,16 @@ theorem qs_card_le_split (L : Law n) (T : Fin n → Finset vb.Pos) (E : Finset v
         exact (Nat.mul_le_mul_right r hn).trans (Nat.le_add_left _ _)
       · rw [ite_eq_right hb, Nat.add_zero]
         exact Nat.mul_le_mul_right r (hgood ω hb)
-    calc (Finset.univ.filter fun c => ReadsDrawZ A P planZ tab vb c ω).card
+    calc (Finset.univ.filter fun c => ReadsSampleZ A P planZ tab vb c ω).card
         ≤ ((L.draw ω).biUnion T ∪ E).card := Finset.card_le_card hsub
       _ ≤ ((L.draw ω).biUnion T).card + E.card := Finset.card_union_le _ _
       _ ≤ (L.draw ω).card * r + E.card := Nat.add_le_add_right hbi _
       _ ≤ (kd * r + (if ω ∈ bad then n * r else 0)) + E.card := Nat.add_le_add_right hd _
       _ = (kd * r + E.card) + (if ω ∈ bad then n * r else 0) := Nat.add_right_comm _ _ _
   calc ∑ c : vb.Pos, Fintype.card (ΩcZ A P planZ tab vb L c)
-      = ∑ c : vb.Pos, (Finset.univ.filter fun ω => ReadsDrawZ A P planZ tab vb c ω).card :=
+      = ∑ c : vb.Pos, (Finset.univ.filter fun ω => ReadsSampleZ A P planZ tab vb c ω).card :=
         Finset.sum_congr rfl fun c _ => Fintype.card_of_subtype _ fun ω => by simp
-    _ = ∑ ω : L.Ω, (Finset.univ.filter fun c => ReadsDrawZ A P planZ tab vb c ω).card := by
+    _ = ∑ ω : L.Ω, (Finset.univ.filter fun c => ReadsSampleZ A P planZ tab vb c ω).card := by
         simp only [Finset.card_filter]
         exact Finset.sum_comm
     _ ≤ ∑ ω : L.Ω, ((kd * r + E.card) + (if ω ∈ bad then n * r else 0)) := Finset.sum_le_sum fun ω _ => hω ω
@@ -83,7 +83,7 @@ theorem qs_card_le_split (L : Law n) (T : Fin n → Finset vb.Pos) (E : Finset v
 /-- **`Q_s ≤ (k_d·r + |E|) + (|bad|/|Ω|)·n·r`**: `qs_card_le_split` as the average `Q_s = Σ_c |Ω_c|/|Ω|`. The first
 term is the samples of at most `k_d` proof blocks, each reading at most `r` commit strings of its own and the `|E|`
 shared ones; the second is the samples of `bad`, which may hold every proof block. -/
-theorem qs_le_split (L : Law n) (T : Fin n → Finset vb.Pos) (E : Finset vb.Pos) (kd r : ℕ)
+theorem qs_le_split (L : SamplingDesign n) (T : Fin n → Finset vb.Pos) (E : Finset vb.Pos) (kd r : ℕ)
     (hT : ∀ u, (T u).card ≤ r) (hpos : ∀ u, ∀ g ∈ P.io u, vb.pos g ∈ T u ∨ vb.pos g ∈ E)
     (bad : Finset L.Ω) (hgood : ∀ ω, ω ∉ bad → (L.draw ω).card ≤ kd) :
     ∑ c : vb.Pos, (Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω ≤
@@ -103,7 +103,7 @@ theorem qs_le_split (L : Law n) (T : Fin n → Finset vb.Pos) (E : Finset vb.Pos
   exact hcast
 
 /-- **`Q_s ≤ k_d·r + |E|`** at samples of at most `k_d` proof blocks: `qs_le_split` with no sample in `bad`. -/
-theorem qs_le_common (L : Law n) (T : Fin n → Finset vb.Pos) (E : Finset vb.Pos) (kd r : ℕ)
+theorem qs_le_common (L : SamplingDesign n) (T : Fin n → Finset vb.Pos) (E : Finset vb.Pos) (kd r : ℕ)
     (hT : ∀ u, (T u).card ≤ r) (hpos : ∀ u, ∀ g ∈ P.io u, vb.pos g ∈ T u ∨ vb.pos g ∈ E)
     (hd : ∀ ω, (L.draw ω).card ≤ kd) :
     ∑ c : vb.Pos, (Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω ≤ (kd : ℝ) * r + E.card := by

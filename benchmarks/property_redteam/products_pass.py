@@ -1,11 +1,11 @@
 """Data products on property/v1's pass: the gate model's nonlinear units read on Programs, and the honest int8
 Definitions' census with them.
 
-The gate model (`security/Definitions/Accounting/Gates/Model.lean`, `dataProducts`, `nonlinear`) frees only linear maps
+The gate model (`security/Definitions/ResourceAccounting/Gates/Model.lean`, `dataProducts`, `nonlinear`) frees only linear maps
 whose coefficients are fixed before the run's coins: constants, registered values (the pre-committed weights),
 additions and wiring. Every s8-family lane whose two multiplicands both depend on a run input is a *data product*, one
 unit whatever their width or range: an exact product of two data values is a universal gate (an AND of two bits is one,
-and a bitwise codec computes any function with them for free otherwise, `Accounting.SecurityProofs.Gates.
+and a bitwise codec computes any function with them for free otherwise, `ResourceAccounting.SecurityProofs.Gates.
 EncodeChainRefuted`, `bitwise_codec.py`). Every other nonlinear op is a budgeted unit, as property/v1 counts it.
 `Property` bounds the data products per certified byte read, beside the budgeted classes.
 
@@ -96,7 +96,7 @@ def census(fn: Any, dyn: Sequence[bool], ranges: Sequence[P.Range] | None = None
 
 def int8_census(shapes: Sequence[tuple[str, dict, tuple[bool, ...]]] = SHAPES) -> dict[str, dict]:
     """`census` of each exact-int8 Definition at its shape, with property/v1's own class counts beside it (`stacking.count`)."""
-    from verity.definitions.registry import int8_exact as I8
+    from verity_vllm.definitions.registry import int8_exact as I8
 
     out = {}
     for name, statics, dyn in shapes:

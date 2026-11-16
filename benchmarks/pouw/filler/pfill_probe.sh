@@ -5,13 +5,13 @@
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
-D=benchmarks/pouw/filler
+D=benchmarks/pouw/filler K=verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler
 export B; B=$(mktemp -d /tmp/pfprobe.XXXXXX); trap 'rm -rf "$B"' EXIT
 export PF_ALONE=${PF_ALONE:-"8:4 8:1 8:5 8:3 8:6 8:7 8:8"} PF_NCU=${PF_NCU:-"8:5 8:3"} PF_S=${PF_S:-256}
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 export DFILL_COINS; DFILL_COINS=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
 echo "$DFILL_COINS" > "$O/coins.txt"
-nvcc -O3 -std=c++17 ${PF_NVCC:-} -gencode arch=compute_120a,code=sm_120a -Xptxas -v -o "$B/dcap" $D/dcap.cu \
+nvcc -O3 -std=c++17 ${PF_NVCC:-} -gencode arch=compute_120a,code=sm_120a -Xptxas -v -o "$B/dcap" $K/dcap.cu \
   -lcublasLt -lnvidia-ml -ldl > "$O/build.log" 2>&1 || { grep -E "error" "$O/build.log" | head -40; exit 4; }
 cuobjdump -sass "$B/dcap" | awk '/Function : /{p = /dfill_k/} p' > "$O/sass-dfill.txt" 2>&1
 # shellcheck disable=SC2016

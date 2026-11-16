@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.KS.PlainLock
-public import Proofs.Flock.Claims.KS.PlainDraw
+public import Proofs.Flock.Claims.KS.PlainSample
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -617,12 +617,12 @@ files wherever `verify` accepts it (`recordsLiveAtD_wrPD`), and `verify` refuses
 theorem not_plainVerdictAt_nil (I : Discharge.Exec.Inputs) (d : Lean.Json) {N mPts : ℕ} (C : Fin N → List 𝔽)
     (rootB₀ : Array ByteArray) {o : LiveOutJ 1 mPts} (h : o.proofs = #[]) : ¬ plainVerdictAt I d C rootB₀ o := by
   rintro ⟨hA, -, -⟩
-  have hp := (Claims.Bridge.PlainDraw.recordsLiveAtD_wrPD I d o hA).1
+  have hp := (Claims.Bridge.PlainSample.recordsLiveAtD_wrPD I d o hA).1
   rw [h] at hp
-  generalize Claims.Bridge.PlainDraw.wrPD I d o = t at hA hp
+  generalize Claims.Bridge.PlainSample.wrPD I d o = t at hA hp
   rcases t with ⟨record, proofs⟩
   subst hp
-  exact Claims.Bridge.PlainDraw.not_acceptsAtD_nil I (some d) record hA
+  exact Claims.Bridge.PlainSample.not_acceptsAtD_nil I (some d) record hA
 
 /-- **Where `P`'s run at `plainΦ`'s coins is rejected, the simulator's live outcome has no proof files**: its last
 message is empty. -/

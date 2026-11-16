@@ -46,7 +46,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 * Uniform averages: a bijection keeps `Pr` (`Pr_equiv`), a product's `Pr` is the average of the sections in either order
   (`Pr_prod_left`, `Pr_prod_right`), independent coordinates multiply (`Pr_and_prod`), and averages of pointwise close
   functions are close (`Ex_abs_sub_le`).
-* The union bound (`Pr_exists_le`), and one of `n` independent samples has one sample's law (`Pr_coord`), so an event
+* The union bound (`Pr_exists_le`), and one of `n` independent samples has one sample's sampling design (`Pr_coord`), so an event
   of the first sample and one of `n` others is at most `n` times one of two samples (`Pr_exists_coord_le`).
 * `Pr_hybrid`: `N` independent samples of `A` and of `B`, each within `δ` on every event, are within `N·δ` on every
   event.

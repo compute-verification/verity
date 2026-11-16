@@ -6,7 +6,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Game
 
 /-!
-# The link theorem: `δ_link` under expected-time collision resistance (DESIGN.md §3)
+# The link theorem: `ε_bind` under expected-time collision resistance (DESIGN.md §3)
 
 The batched audit's binding error (`analysisBE`) is discharged here for the plurality value layer,
 under expected-time collision resistance of SHA-512 for an explicit finder
@@ -106,7 +106,7 @@ structure ValueBinding (decode : DecoderB (C := C) (Reg := Reg) plan tab) {Dh : 
 attribute [instance] ValueBinding.finPos ValueBinding.decPos ValueBinding.finVal
   ValueBinding.decVal ValueBinding.inhVal ValueBinding.inhOp
 
-variable {L : Law n} {decode : DecoderB (C := C) (Reg := Reg) plan tab} {Dh : Type}
+variable {L : SamplingDesign n} {decode : DecoderB (C := C) (Reg := Reg) plan tab} {Dh : Type}
   {Hc : List UInt8 → Dh} (vb : P.ValueBinding plan tab decode Hc)
   (R : Reg) (τ : Cont L Reg (batchedSession H E plan) R)
 
@@ -139,7 +139,7 @@ noncomputable def cand (ω : L.Ω) (u : Fin n) (bs : List (List (OutC 𝔽 D))) 
 def Reads (u : Fin n) (c : vb.Pos) : Prop := ∃ g ∈ P.io u, vb.pos g = c
 
 /-- A sample reads commit string `c`. -/
-def ReadsDraw (c : vb.Pos) (ω : L.Ω) : Prop := ∃ u ∈ L.draw ω, P.Reads plan tab vb u c
+def ReadsSample (c : vb.Pos) (ω : L.Ω) : Prop := ∃ u ∈ L.draw ω, P.Reads plan tab vb u c
 
 /-- An extraction opens `c` to value `v`, with the opening `o`: a sampled proof block that reads `c` opens it
 so from the message its table settles on. -/
@@ -154,14 +154,14 @@ noncomputable def readsAt (ω : L.Ω) (bs : List (List (OutC 𝔽 D))) (c : vb.P
   Finset.univ.filter fun v => ∃ o, P.OpensAt H E plan tab vb R τ ω bs c v o
 
 /-- The samples that read `c`. -/
-abbrev Ωc (L : Law n) (c : vb.Pos) : Type := {ω : L.Ω // P.ReadsDraw plan tab vb c ω}
+abbrev Ωc (L : SamplingDesign n) (c : vb.Pos) : Type := {ω : L.Ω // P.ReadsSample plan tab vb c ω}
 
 open Classical in
-noncomputable instance instFintypeΩc (L : Law n) (c : vb.Pos) : Fintype (P.Ωc plan tab vb L c) :=
+noncomputable instance instFintypeΩc (L : SamplingDesign n) (c : vb.Pos) : Fintype (P.Ωc plan tab vb L c) :=
   Subtype.fintype _
 
 /-- A trial's outcome: the sample, the fresh run, and the waits' runs. -/
-abbrev TrialOut (L : Law n) (D : Type) := L.Ω × List (OutC 𝔽 D) × List (List (List (OutC 𝔽 D)))
+abbrev TrialOut (L : SamplingDesign n) (D : Type) := L.Ω × List (OutC 𝔽 D) × List (List (List (OutC 𝔽 D)))
 
 /-- **The trial for commit string `c`**: a sample that reads `c`, a fresh session, and `k` waits of at
 most `Rw` reruns each. -/
@@ -172,7 +172,7 @@ noncomputable def trialG (c : vb.Pos) [Nonempty (P.Ωc plan tab vb L c)] (k Rw :
 /-- The prover's session strategy in every run. -/
 noncomputable def trialStrat (c : vb.Pos) [Nonempty (P.Ωc plan tab vb L c)] (k Rw : ℕ) :
     Strategy (P.trialG H E plan tab vb R τ c k Rw) :=
-  Strategy.bind _ _ (drawStrat _) fun w => Strategy.bind _ _ (stratω H E plan R τ w.1).2 fun _ =>
+  Strategy.bind _ _ (sampleStrat _) fun w => Strategy.bind _ _ (stratω H E plan R τ w.1).2 fun _ =>
     Strategy.map _ _ (runsStrat _ (runsStrat _ (stratω H E plan R τ w.1).2 Rw) k)
 
 open Classical in
@@ -277,7 +277,7 @@ theorem expect_trial (c : vb.Pos) [Nonempty (P.Ωc plan tab vb L c)] (k Rw : ℕ
           (gameω H E plan R τ w.1) (stratω H E plan R τ w.1).2) /
         Fintype.card (P.Ωc plan tab vb L c) := by
   unfold trialG trialStrat
-  rw [expect_bind, Verity.Game.expect_draw]
+  rw [expect_bind, Verity.Game.expect_sample]
   congr 1
   refine Finset.sum_congr rfl fun w _ => ?_
   rw [expect_bind]
@@ -451,7 +451,7 @@ theorem Xval_max (k Rw : ℕ) (c : vb.Pos) [hne : Nonempty (P.Ωc plan tab vb L 
   exact (Classical.choose_spec (Finset.exists_max_image Finset.univ _ Finset.univ_nonempty)).2 v
     (Finset.mem_univ v)
 
-theorem readsAt_eq_empty {c : vb.Pos} {ω : L.Ω} (h : ¬ P.ReadsDraw plan tab vb c ω)
+theorem readsAt_eq_empty {c : vb.Pos} {ω : L.Ω} (h : ¬ P.ReadsSample plan tab vb c ω)
     (bs : List (List (OutC 𝔽 D))) : P.readsAt H E plan tab vb R τ ω bs c = ∅ := by
   classical
   unfold readsAt
@@ -516,13 +516,13 @@ theorem ideal_mass_le (k Rw M : ℕ) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {t' : ℝ} 
   have hB : 0 ≤ 2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) +
       k / (Real.exp 1 * Rw) := by positivity
   -- off the samples that read `c`, the trace vanishes
-  have hoff : ∀ ω, ¬ P.ReadsDraw plan tab vb c ω → f ω = 0 := by
+  have hoff : ∀ ω, ¬ P.ReadsSample plan tab vb c ω → f ω = 0 := by
     intro ω hω
     have hpsi : P.psi H E plan tab vb R τ k Rw c ω = fun _ => 0 := funext fun bs => by
       simp [psi, P.readsAt_eq_empty H E plan tab vb R τ hω bs]
     simp only [hf, hpsi, expectAcc_zero, mul_zero]
   have hsum : ∑ ω : L.Ω, f ω = ∑ w : P.Ωc plan tab vb L c, f w.1 := by
-    rw [← Finset.sum_filter_of_ne (p := fun ω => P.ReadsDraw plan tab vb c ω)
+    rw [← Finset.sum_filter_of_ne (p := fun ω => P.ReadsSample plan tab vb c ω)
       (fun ω _ hne => by by_contra h; exact hne (hoff ω h))]
     exact Finset.sum_subtype _ (fun ω => by simp) f
   rw [hsum, div_le_iff₀ hΩ]
@@ -647,7 +647,7 @@ noncomputable def linkBoundCR (k Rw M : ℕ) (ρ t' : ℝ) (R : Reg) (τ : Cont 
       (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
   else ⊤
 
-/-- **The link theorem: `δ_link` under expected-time collision resistance, prover by prover.** For the batched audit
+/-- **The link theorem: `ε_bind` under expected-time collision resistance, prover by prover.** For the batched audit
 with the expected-time extractor (`analysisBE`) and the plurality value layer (`Xplur`), given the binding of wires to
 commit strings (`ValueBinding`): at every prover whose explicit finder of each commit string satisfies A2 (`LinkCR`),
 $$\delta_{\rm link}\le\frac{Q_s}{1-\rho}\Big(\frac{2t'(1+k)}{2^{256}}+\frac{1}{eM}+\frac{k}{eR_w}\Big),$$

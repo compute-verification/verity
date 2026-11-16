@@ -1,4 +1,4 @@
-"""The served compare: a tied Pearl+ serve dir held to the row of record, on the CPU, once Pearl+'s piece wrote W.
+"""The served compare: a tied Pearl+ serve dir held to the workload of record, on the CPU, once Pearl+'s piece wrote W.
 
     served_compare.py --serve D --row ROW --class S,P,O --pearl-tables SCHEME --pred PRED --of-record PROGRAM:MANIFEST
         --window-record W --out DIR [--revision REV]
@@ -162,7 +162,7 @@ def cut(w: Path, params: Mapping[str, int], calls: Sequence[Sequence[int]], sche
     for a call's (K, N), every call's (K, N) has a weight, and no (K, N) has more weights than calls. At version 1 W
     registers no weight. A weight's rows that aren't a call's, or past its calls' count, and a call's (K, N) with no
     weight are among `differ`."""
-    from verity_vllm.protocols.pouw.pearl_c import window as PWR
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
 
     rec = read_json(w)
     version = PWR.version_of(rec)
@@ -215,7 +215,7 @@ def said(name: str, v: Mapping[str, Any], a: argparse.Namespace) -> str:
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--serve", type=Path, required=True, help="the serve dir, holding its serve.json")
-    ap.add_argument("--row", required=True, help="the row of record's id (its workload file's name)")
+    ap.add_argument("--row", required=True, help="the workload of record's id (its workload file's name)")
     ap.add_argument("--class", dest="cls", required=True, help="the window class, SLOTS,PROMPT,OUTPUTS")
     ap.add_argument("--pearl-tables", required=True, help="Pearl+'s scheme, whose tables the circuit is cut at")
     ap.add_argument("--pred", type=Path, required=True, help="predict row's Build: its predicted.json and its copy of the checkpoint config")

@@ -1,8 +1,8 @@
-"""vLLM's benchmark client's shim to the network certifier (`serve_tax`'s ``tick-certifier`` arm).
+"""vLLM's benchmark client's shim to the network attester (`serve_tax`'s ``tick-certifier`` arm).
 
 vLLM's client (``vllm bench serve``) speaks HTTP: a streamed ``POST /v1/completions`` whose prompt is text or token ids.
-The network certifier (the module this one imports `cells` from) speaks fixed-size cells, one request a connection, and
-in its id egress form takes a canonical token-id request (`active.id_request`) and answers one id event a ``DATA``
+The network attester (the module this one imports `cells` from) speaks fixed-size cells, one request a connection, and
+in its id egress form takes a canonical token-id request (`id_form.id_request`) and answers one id event a ``DATA``
 cell (`io_tie.id_event`), then an ``END`` that holds `io_tie.TRAILER`. `HttpShim` listens between them on the client's
 side of the certifier, the client's thin shim (that module's `cells` and `Shim`) with an HTTP face:
 
@@ -27,6 +27,8 @@ whole, its client having closed first. No prompt and no token id is kept.
 
     python cell_shim.py --deployment CERTIFIER_OUT/deployment.json --tokenizer CHECKPOINT --log shim.jsonl
         [--listen 127.0.0.1:0]
+
+The certifier's listener is read from ``endpoints.json`` beside ``--deployment``, which its serve command writes there.
 """
 from __future__ import annotations
 
@@ -43,13 +45,15 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(ROOT))
-from verity.protocols.accounting.certifier.verifier import io_tie as IT  # noqa: E402 (the tree's, put on sys.path above)
-from verity.protocols.accounting.certifier.verifier.active import id_request  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.warden import (DATA, END, FAIL, KIND_NAMES, PAD, REFUSED, cells,  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier import io_tie as IT  # noqa: E402 (the tree's, put on sys.path above)
+from verity.protocols.resource_accounting.network.verifier.id_form import id_request  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier.network_attester import (DATA, END, FAIL, KIND_NAMES, PAD, REFUSED, cells,  # noqa: E402
                                                         read_cell)
 
 #: the longest request body taken
 BODY_BYTES = 1 << 24
+#: the file beside the certifier's ``deployment.json`` that names its listener (`network_attester_serve.ENDPOINTS`)
+ENDPOINTS = "endpoints.json"
 #: what an id request holds for the sampling fields a greedy body doesn't name: neither changes a greedy answer
 SENT = {"top_p": 1.0, "seed": 0}
 #: the fields taken and not sent: how the answer is framed (the shim streams, and counts the usage itself), and
@@ -73,7 +77,7 @@ class Refused(Exception):
 
 
 def id_fields(body: Any, request_id: str | None, encode: Callable[[str], list[int]]) -> dict[str, Any]:
-    """`active.id_request`'s keywords (but its frame) for a completion's body, or `Refused` (400) for a body the id
+    """`id_form.id_request`'s keywords (but its frame) for a completion's body, or `Refused` (400) for a body the id
     request can't carry as it is: one that isn't a streamed greedy completion of one prompt to its ``max_tokens``
     (``ignore_eos``), or that names a field that changes its answer and that the id request has no place for. A greedy
     body is one whose ``temperature`` is 0: a body that names none leaves it to the server's default, which the id
@@ -133,7 +137,7 @@ def _error(status: int, why: str) -> bytes:
 
 
 class HttpShim:
-    """The listener (the module docstring). ``connect`` opens a connection to the network certifier, ``encode`` is the
+    """The listener (the module docstring). ``connect`` opens a connection to the network attester, ``encode`` is the
     served model's tokenizer on a text, ``log`` takes each connection's record, and ``clock`` reads the time the
     records' arrivals are in, ``origin`` the certifier's on that clock."""
 
@@ -301,7 +305,8 @@ def address(text: str) -> tuple[str, int]:
 
 async def serve(a: argparse.Namespace) -> None:
     dep = json.loads(Path(a.deployment).read_text())
-    certifier, cell_bytes = tuple(dep["listen"]), dep["params"]["cell_bytes"]
+    certifier = tuple(json.loads((Path(a.deployment).parent / ENDPOINTS).read_text())["listen"])
+    cell_bytes = dep["params"]["cell_bytes"]
     with open(a.log, "a", buffering=1) as fh:
         shim = HttpShim(lambda: asyncio.open_connection(*certifier), cell_bytes, tokenizer(a.tokenizer),
                         lambda record: fh.write(json.dumps(record) + "\n"), origin=dep["origin_unix"])

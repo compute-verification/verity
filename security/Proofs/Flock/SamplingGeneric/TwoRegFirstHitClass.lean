@@ -63,7 +63,7 @@ have a proof block needing the representative `q` extracted (`callsBy`).
 namespace Claims.SamplingGeneric
 
 open Claims Finset
-open Claims.Sampling (AuditStatement Partition InScopeTwo ownLog forkOn wrongAllAt wrongAllAt_subset gateBlock flatMapRP)
+open Claims.Sampling (AuditStatement Partition InScopeTwo ownLog forkOn incorrectAllAt incorrectAllAt_subset gateBlock flatMapRP)
 
 /-- Filtering what a weaker filter keeps by a stronger one is filtering by the stronger one. -/
 theorem filter_filter_of_imp {β : Type} (k1 k2 : β → Bool) (h : ∀ b, k1 b = true → k2 b = true) (l : List β) :
@@ -342,17 +342,17 @@ noncomputable def finderICls (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Ty
   Verity.FirstHit.classFinderAt cls
     (fun (t : Ω × (Fin (L.V.k x) → Coin)) => L.iopTable H P x t.1 Pρ t.2)
     (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)) =>
-      decide (∃ u ∈ L.checked x (forkOn (L.stage2 x) t.2 ec.1), g.val ∈ needs u))
+      decide (∃ u ∈ L.checked x (forkOn (L.secondStage x) t.2 ec.1), g.val ∈ needs u))
     (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x) =>
-      L.callsAt H P x s t.1 (forkOn (L.stage2 x) t.2 ec.1) ec.2)
+      L.callsAt H P x s t.1 (forkOn (L.secondStage x) t.2 ec.1) ec.2)
     (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x) (q : Fin (L.nG x)) =>
-      L.toCompiled.callsBy H P x s needs q.val t.1 (forkOn (L.stage2 x) t.2 ec.1) ec.2) K
+      L.toCompiled.callsBy H P x s needs q.val t.1 (forkOn (L.secondStage x) t.2 ec.1) ec.2) K
     fun q : (Ω × (Fin (L.V.k x) → Coin)) × (((Fin (L.V.k x) → Coin) × L.SlotEC x) ×
         (Fin K → (Fin (L.V.k x) → Coin) × L.SlotEC x)) =>
       Verity.FirstHit.outOfAt (L.iopTable H P x q.1.1 Pρ q.1.2)
         (fun (ec ec' : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)) =>
-          L.toCompiled.collBy H P x s needs (q.1.1, (forkOn (L.stage2 x) q.1.2 ec.1, ec.2))
-            (q.1.1, (forkOn (L.stage2 x) q.1.2 ec'.1, ec'.2)) g.val) K q.2.1 q.2.2
+          L.toCompiled.collBy H P x s needs (q.1.1, (forkOn (L.secondStage x) q.1.2 ec.1, ec.2))
+            (q.1.1, (forkOn (L.secondStage x) q.1.2 ec'.1, ec'.2)) g.val) K q.2.1 q.2.2
 
 /-- **The mass off the committed interiors, by class, at one cap**:
 `2·E[c + Σ_{q ∈ classes of the sample} c_q]/2^256 + N/(K + 1)`, under `ExpectedCR` at the by-class finder of the cap
@@ -380,27 +380,27 @@ theorem pr_offIreg_le_cls_cap {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind 
     (vstar := fun (t : Ω × (Fin (L.V.k x) → Coin)) (g : Fin (L.nG x)) => L.iplur H P x t.1 Pρ t.2 g)
     (fun t => L.isPlurality_iplur H P x t.1 Pρ t.2)
     (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)) =>
-      decide (∃ u ∈ L.checked x (forkOn (L.stage2 x) t.2 ec.1), g.val ∈ needs u))
+      decide (∃ u ∈ L.checked x (forkOn (L.secondStage x) t.2 ec.1), g.val ∈ needs u))
     (fun t ec g hg => decide_eq_true (L.iop_isSome_needs H P x t.1 hs Pρ needs hpos t.2 ec g hg))
     (fun t ec g g' hgg hg => hallI t ec g g' hgg hg)
     (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x) =>
-      L.callsAt H P x s t.1 (forkOn (L.stage2 x) t.2 ec.1) ec.2)
+      L.callsAt H P x s t.1 (forkOn (L.secondStage x) t.2 ec.1) ec.2)
     (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x) (q : Fin (L.nG x)) =>
-      L.toCompiled.callsBy H P x s needs q.val t.1 (forkOn (L.stage2 x) t.2 ec.1) ec.2) K
+      L.toCompiled.callsBy H P x s needs q.val t.1 (forkOn (L.secondStage x) t.2 ec.1) ec.2) K
     (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec ec' : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)) =>
-      L.toCompiled.collBy H P x s needs (t.1, (forkOn (L.stage2 x) t.2 ec.1, ec.2))
-        (t.1, (forkOn (L.stage2 x) t.2 ec'.1, ec'.2)) g.val)
+      L.toCompiled.collBy H P x s needs (t.1, (forkOn (L.secondStage x) t.2 ec.1, ec.2))
+        (t.1, (forkOn (L.secondStage x) t.2 ec'.1, ec'.2)) g.val)
     (fun t ec ec' g hg => icollBy_of_conflictAt hbind hS hs Pρ P needs hpos t.1 t.2 ec ec' g hg)
     (fun t ec ec' g u v huv => L.toCompiled.collBy_collision H P x s needs _ _ g.val huv) hCR
   rw [Fintype.card_fin] at h
-  have hP := Pr_keep_forkOn (L.stage2 x)
+  have hP := Pr_keep_forkOn (L.secondStage x)
     (fun (ω : Ω) (R : Fin (L.V.k x) → Coin) (c : L.SlotEC x) => L.OffIreg H P x ω Pρ R c)
-  have hE := Ex_keep_forkOn (L.stage2 x) (fun (ω : Ω) (R : Fin (L.V.k x) → Coin) (c : L.SlotEC x) =>
+  have hE := Ex_keep_forkOn (L.secondStage x) (fun (ω : Ω) (R : Fin (L.V.k x) → Coin) (c : L.SlotEC x) =>
     ((L.callsAt H P x s ω R c +
       ∑ q ∈ (univ.filter (fun g : Fin (L.nG x) => decide (∃ u ∈ L.checked x R, g.val ∈ needs u))).image cls,
         L.toCompiled.callsBy H P x s needs q.val ω R c : ℕ) : ℝ))
   have hoff : Pr (fun q : (Ω × (Fin (L.V.k x) → Coin)) × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
-      L.OffIreg H P x q.1.1 Pρ (forkOn (L.stage2 x) q.1.2 q.2.1) q.2.2) ≤
+      L.OffIreg H P x q.1.1 Pρ (forkOn (L.secondStage x) q.1.2 q.2.1) q.2.2) ≤
       Pr (fun q : (Ω × (Fin (L.V.k x) → Coin)) × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => ∃ g : Fin (L.nG x),
         FlockSoundness.Rewinding.Off (L.iopTable H P x q.1.1 Pρ q.1.2)
           (fun g : Fin (L.nG x) => L.iplur H P x q.1.1 Pρ q.1.2 g) q.2 g) :=
@@ -517,7 +517,7 @@ theorem iopTable_isSome_cls (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Typ
     {s : AuditStatement} (hs : L.parse x = some s) (Pρ : Partition) (cls : Fin (L.nG x) → Fin (L.nG x))
     (hblock : ∀ g g' : Fin (L.nG x), cls g = cls g' → gateBlock Pρ g.val = gateBlock Pρ g'.val)
     (r : Fin (L.V.k x) → Coin) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x)
-    (hkept : L.toCompiled.ClassWhole H x cls (L.kept H P x s ω (forkOn (L.stage2 x) r ec.1) ec.2))
+    (hkept : L.toCompiled.ClassWhole H x cls (L.kept H P x s ω (forkOn (L.secondStage x) r ec.1) ec.2))
     (g g' : Fin (L.nG x)) (hgg : cls g = cls g') (hg : (L.iopTable H P x ω Pρ r ec g).isSome) :
     (L.iopTable H P x ω Pρ r ec g').isSome := by
   obtain ⟨b, hb⟩ := Option.isSome_iff_exists.1 hg
@@ -525,8 +525,8 @@ theorem iopTable_isSome_cls (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Typ
   obtain ⟨ρ, hρ, hb'⟩ := Option.bind_eq_some_iff.1 hb
   obtain ⟨q, hq, h1, h2, -, hok⟩ := iopensAt_some hs hb'
   obtain ⟨q', hq', h1', h2', hok'⟩ := hkept q hq hok g g' h2 hgg
-  have hr : q'.1 = L.iroots x (run H P L.V x ω (forkOn (L.stage2 x) r ec.1)).seen ρ := h1'.trans h1
-  have hsome : (L.iopensAt H P x ω (forkOn (L.stage2 x) r ec.1) ec.2 ρ q'.2.pos).isSome := by
+  have hr : q'.1 = L.iroots x (run H P L.V x ω (forkOn (L.secondStage x) r ec.1)).seen ρ := h1'.trans h1
+  have hsome : (L.iopensAt H P x ω (forkOn (L.secondStage x) r ec.1) ec.2 ρ q'.2.pos).isSome := by
     simp only [iopensAt, hs, Option.isSome_map]
     exact List.find?_isSome.2 ⟨q', hq', by rw [← hr]; simp [hok']⟩
   rw [h2'] at hsome

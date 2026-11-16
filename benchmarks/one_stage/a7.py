@@ -1,13 +1,13 @@
-"""One-stage audit, run A7: the requirement's two proof blocks (I4), sampled in one audit and wired to the remote bandwidth
-audit's ledger as its requirement link. `PlanMatch_v1` (each pass's plan is exactly the blocks its step reads, which gives
+"""One-stage audit, run A7: the requirement's two proof blocks (I4), sampled in one audit and wired to PoUB's
+ledger as its requirement link. `PlanMatch_v1` (each pass's plan is exactly the blocks its step reads, which gives
 `PlanMatches`) and
 `MemoryMapStep_v3` (the blocks a step writes carry its values, written at their step and freed at their last structural
 reader, each registered block freed at its values' last structural reader, and each re-key's old block written below
 the cap the committed pass row and the public lifetime cap give), one instance of each per step
 (`verity.circuits.requirement_units`), the layout row at two epochs a value.
 
-    PYTHONPATH=<tree>:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm:<tree>/tools/verity/circuit_check/src \\
-      python benchmarks/one_stage/a7.py --bin flock-circuit --lean flock-verify --out DIR [--k K] [--steps 32] [--delta 2^-20]
+    PYTHONPATH=<tree>:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm:<tree>/adapters/torch:<tree>/tools/verity/circuit_check/src \\
+      python benchmarks/one_stage/a7.py --bin flock-circuit --lean verity-verify-proof --out DIR [--k K] [--steps 32] [--delta 2^-20]
 
 * **Stand-in.** A decoder's requirement built directly (`requirement.Requirement`): 8 weight blocks, every step reading
   them but the last, an expert's, which only the first half of the steps reads, a
@@ -26,7 +26,7 @@ the cap the committed pass row and the public lifetime cap give), one instance o
   requirement names (`bindings`).
 * **Statements and sample.** One circuit per template, staged by Flock's `UnitStager` bound to the partition
   (`Q_template_instances` over `TemplatePopulations`, one unit per step each), sampled by the verifier's Lean
-  (`flock-verify draw --stratified K`, K every unit by default, so no unit is uncertified), each member's sample served
+  (`verity-verify-proof draw --stratified K`, K every unit by default, so no unit is uncertified), each member's sample served
   `--zk` and held by Lean `verify --zk --partition --program`. For every sampled proof block the prover opens its public row (the
   verifier's own copy of the step's public data) and its ok row (1): the units the proofs cover are the steps whose
   clauses hold.
@@ -48,16 +48,16 @@ the cap the committed pass row and the public lifetime cap give), one instance o
   credits each pass the bits its step reads from complete blocks, less a block for each planned block it credits no
   receipt of (`audit.linked_bits` on `RequirementLink`, `UnitsLink`), the session 1 − ε of their sum, ε the share of
   it the incorrect proof blocks the sample allows can carry (`uncertified`), its δ added to the ledger's error.
-* **Check 3.** The session samples ``--samples`` receipts a window, and nothing is opened: each sample goes through the
-  remote audit's opening unit (`remote_bandwidth.opening`, `verity.protocols.accounting.poub.verifier.commitments.gates.block_check`, §8's checks 1-3
+* **Check 3.** The session samples ``--samples`` receipts a window, and nothing is opened: each sample goes through
+  PoUB's opening unit (`poub.opening`, `verity.protocols.resource_accounting.memory.poub.verifier.commitments.gates.block_check`, §8's checks 1-3
   and 5 as one unit): the receipt leaf on its path to the pass's receipt root and the step's plan row holding the block
   at the sampled position, the block decoding to its payload under b_j(c_a), the payload on its path to its append's root (the
-  registration's payload root for a registered block) and to the canonical payload commitment at the row the memory-map
+  docket's payload root for a registered block) and to the canonical payload commitment at the row the memory-map
   unit binds the block's payload row to, and the block's sketch receipt the leaf's entry. The units are proved as a
   second statement (`check3_audit`: every unit sampled, --zk, Lean). The verifier sees the units' roots, its own public
   rows (the codec seed, the block, the coin, the pass's prefix and signs, the roots with their domains, ranks and depths)
   and each unit's verdict, and holds the one other row, the plan row, to the canonical plan row by ``b || c``. The
-  negatives' sessions decide check 3 by the unit's reference (`opening.reference`).
+  negatives' sessions decide check 3 by the unit's reference (`opening_prover.reference`).
 """
 from __future__ import annotations
 
@@ -80,14 +80,16 @@ sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
 import r2_population as R2  # noqa: E402
-from verity.protocols.accounting.poub.verifier import audit, codec, coins, memory_map as MM, opening as C3, receipts  # noqa: E402
-from verity.protocols.accounting.poub.verifier import schedule as SC  # noqa: E402
-from verity.protocols.accounting.poub.verifier.receipts import Plan  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.prover import audit_prover  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.prover import opening_prover  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, coins, memory_map as MM, opening as C3, receipts  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier import schedule as SC  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier.receipts import Plan  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V  # noqa: E402
 from verity.circuits import requirement as RQ, requirement_units as RU  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
-from verity.protocols.accounting.poub.verifier.commitments.gates import block_check as BC  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier.commitments.gates import block_check as BC  # noqa: E402
 from verity.commitments.identity import identity_digest_sha512  # noqa: E402
 from verity.commitments.indexed import RangeIndexedDomain  # noqa: E402
 from verity.commitments.merkle import CommitmentDomain, MerkleTree  # noqa: E402
@@ -290,7 +292,7 @@ def _runs(blocks) -> tuple[tuple[int, int], ...]:
 def check3_inputs(canons: dict, sp, sm, samples: int = SAMPLES) -> SimpleNamespace:
     """What check 3 reads of the canonical commitments: each step's certified plan row (its words, salt and ``b || c``) and
     the canonical payload commitment (`opening.Values`, written block j at row j - NR, the row `bound_row` binds its
-    ``pay`` row to); the unit's codec, P and depths (a receipt tree of a plan of P + 1 blocks, the registration's payload
+    ``pay`` row to); the unit's codec, P and depths (a receipt tree of a plan of P + 1 blocks, the docket's payload
     tree or an append of up to 2 C blocks, the payload commitment); and the samples a window it proves (``samples``), which
     every session of the run draws."""
     c, pay = canons["plan"], canons["payload"]
@@ -314,7 +316,7 @@ def remote_session(req, layout, store, plans: dict[int, list[int]], salts: dict[
     the later plans and its free naming that index), ``drop`` (the last step that writes: its append never sent, and its
     blocks in no later plan and no release). Each window samples ``c3.samples`` receipts, and check 3 decides them
     (``c3``, `check3_inputs`) in place of their openings: by its unit's reference on the prover's witness
-    (`opening.reference`), or, ``defer``, not yet: the caller proves them (`check3_audit`) and decides each window.
+    (`opening_prover.reference`), or, ``defer``, not yet: the caller proves them (`check3_audit`) and decides each window.
     Returns the session, the prover's store and passes, its record and the verifier's v0 view: each pass's plan and step,
     its (window, step) in order, each appended index's write step and each block's release step."""
     steps = req.steps
@@ -322,13 +324,13 @@ def remote_session(req, layout, store, plans: dict[int, list[int]], salts: dict[
     payloads = [store.payload.get(j, 0).to_bytes(RQ.BLOCK_BITS // 8, "little") for j in range(NR)]
     ys = [Entropy(b"a7 payload salts %d" % j)(receipts.SALT_BYTES) for j in range(NR)]
     root = audit.payload_tree(NODE, payloads, ys).commitment.root
-    rs = audit.Store(audit.register(SOURCE, NODE, NR, root, P512, nonce=bytes(32)), payloads, ys)
+    rs = audit_prover.Store(audit.register(SOURCE, NODE, NR, root, P512, nonce=bytes(32)), payloads, ys)
     p = audit.Params(blocks=NR, deadline_ns=10**6, windows=WINDOWS, samples=c3.samples, delta=1e-6, window_ns=10, codec=P512,
                      lifetime=LIFE, schedule_cap=SCHEDULE_CAP)
     clock = Clock()
     s = audit.AuditRun(p, rs.registration, None, coins.local(rs.registration.digest, 0, p.windows, Entropy(b"a7 coins")),
                        not_before_ns=0, clock=clock)
-    prover = audit.Prover(rs, None, entropy=Entropy(b"a7 receipt salts"))
+    prover = audit_prover.Prover(rs, None, entropy=Entropy(b"a7 receipt salts"))
     head = MM.Header(rs.registration.digest, NR)
     replay = MM.Replay(head, rs.registration)
     slot_of, free_slots, nxt_slot, record, index = {}, [], NR, [], {}
@@ -430,7 +432,7 @@ def remote_session(req, layout, store, plans: dict[int, list[int]], salts: dict[
                 break
     by_check3 = None
     if out is None and not defer:
-        verdicts = C3.reference(s, rs, passes, c3)
+        verdicts = opening_prover.reference(s, rs, passes, c3)
         out = by_check3 = next((v for v in verdicts if not v.accepted), None)
     accepted = out is None and len(verdicts) == WINDOWS and all(v.accepted for v in verdicts)
     return SimpleNamespace(session=s, store=rs, passes=passes, verdicts=verdicts, refused=out, by_check3=by_check3,
@@ -651,7 +653,7 @@ def statement_checks(m: dict, rec: dict, want: dict) -> dict:
 # --- check 3 ----------------------------------------------------------------------------------------------------------------
 
 def check3_audit(a, out: Path, rs, c3, port: int) -> dict:
-    """The remote session's check 3 by proofs: each sample's opening unit (`opening.witness`), one member a receipt-leaf
+    """The remote session's check 3 by proofs: each sample's opening unit (`opening_prover.witness`), one member a receipt-leaf
     size, its plan row under the canonical plan's salt of the sample's step and every other row under a fresh salt,
     registered, every unit sampled by the verifier's Lean and each member proved --zk and held by Lean `verify --zk
     --partition --program`. The verifier opens each sampled proof block's public rows to its own copy (`opening.public`) and its
@@ -662,7 +664,7 @@ def check3_audit(a, out: Path, rs, c3, port: int) -> dict:
     draws = [d for t in range(len(sess.windows)) for d in sess.drawn(t)]
     seed = st_.registration.codec_seed
     Ss = [C3.statics(c3.codec, d.leaf_size, c3.P, c3.DR, c3.DP, c3.DV) for d in draws]
-    wits = [C3.witness(d, rs.passes[d.window, d.index], st_, c3.plan_rows[d.step], S, c3.values) for d, S in zip(draws, Ss)]
+    wits = [opening_prover.witness(d, rs.passes[d.window, d.index], st_, c3.plan_rows[d.step], S, c3.values) for d, S in zip(draws, Ss)]
     prover = [C3.check(d, w, seed, S, c3.values, c3.plan_salts[d.step], c3.plan_bcs[d.step]) for d, w, S in zip(draws, wits, Ss)]
     if any(prover):
         raise SystemExit(f"the honest prover's check-3 units are refused by their reference: {prover}")
@@ -678,7 +680,7 @@ def check3_audit(a, out: Path, rs, c3, port: int) -> dict:
     n_all, ranges = P.units(program, query), P.ranges(program, query)
     (out / "partition.json").write_text(json.dumps(part, sort_keys=True))
     (out / "program.json").write_bytes(canonical_json(encode_program(program)))
-    law = D.parse_design(f"stratified:{n_all}")
+    sampling_design = D.parse_design(f"stratified:{n_all}")
     bound = {"partition": P.digest(part), "program": part["program"]}
     members = []
     for s, (tid, base, cnt) in zip(specs, ranges, strict=True):
@@ -707,9 +709,9 @@ def check3_audit(a, out: Path, rs, c3, port: int) -> dict:
     window = {"kind": "stand-in", "of": "check 3 of the remote session's drawn receipts (a7.py, check3_audit), on the stand-in's store",
               "members": {m["name"]: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + m["n"]]} for m in members},
               "link": "opening.plan_link: the plan row by its b || c; every other witness row inside the unit"}
-    rec = R.record(program, query, law, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
+    rec = R.record(program, query, sampling_design, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
-    checks = {"registration": V.check(rec, program, query, law, a0.SCHEME, want, leaf_layer=leaf_layer).to_json()}
+    checks = {"registration": V.check(rec, program, query, sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer).to_json()}
     for m in members:
         checks[f"statement/{m['name']}"] = statement_checks(m, rec, want)
     receipt = R.receipt(rec, "one-stage-e2e verifier (a7.py, check 3)")
@@ -737,7 +739,7 @@ def check3_audit(a, out: Path, rs, c3, port: int) -> dict:
             sdir.mkdir(parents=True, exist_ok=True)
             (sdir / "draw.json").write_text(json.dumps({"law": "subset", "population": m["n"], "k": len(local), "units": local}, sort_keys=True))
             t = time.time()
-            record, live = a0.session(a.bin, m, m["n"], f"subset:{len(local)}", port + j, sdir, draw_file=sdir / "draw.json", zk=True)
+            record, live = a0.session(a.bin, m, m["n"], f"subset:{len(local)}", port + j, sdir, sample_file=sdir / "draw.json", zk=True)
             draw_t = (record or {}).get("unit_draw") or {}
             v = V.check_draw(draw_t, {"population": m["n"]}, {"law": "subset", "k": len(local)})
             served += [m["base"] + u for u in draw_t.get("units", [])]
@@ -748,7 +750,7 @@ def check3_audit(a, out: Path, rs, c3, port: int) -> dict:
                                                     and (live or {}).get("roots") == m["header"]["frame_v3"]["roots"] and v.ok,
                                                     "why": ((record or {}).get("verdict") or {}).get("why"), "draw_check": v.to_json()}
             verdicts[f"lean-verify/{m['name']}"] = {**a0.lean_verify(a.lean, m, m["n"], sdir, zk=True),
-                                                    "tool": "flock-verify verify --zk --archive --partition --program"}
+                                                    "tool": "verity-verify-proof verify --zk --archive --partition --program"}
             statement[m["name"]] = {"session_s": round(time.time() - t, 1),
                                     **{x: (live or {}).get(x) for x in ("circuit_sha512", "statement_digest", "sigma")},
                                     "timing": {x: (live or {}).get(x) for x in ("e2e_s", "witness_s", "prove_total_s", "k_log", "units", "proof_bytes")},
@@ -931,7 +933,7 @@ def main() -> int:
     (out / "program.json").write_bytes(canonical_json(encode_program(program)))
     a.k = n_all if a.k is None else a.k
     summary["k"] = a.k
-    law = D.parse_design(f"stratified:{a.k}")
+    sampling_design = D.parse_design(f"stratified:{a.k}")
     bound = {"partition": pd, "program": part["program"]}
 
     # serving commits: each template's one member, bound to the partition
@@ -948,7 +950,7 @@ def main() -> int:
                            "unit_nnz": m["unit_nnz"], "k_log": m["meta"]["k_log"], "pin": m["pin"], "class": m["class"],
                            "oks": sum(m["oks"]), "stage_s": m["seconds"]} for m in members]
 
-    # one registration, before the sample: the statements' ports and the canonical commitments
+    # one docket, before the sample: the statements' ports and the canonical commitments
     want, roots, publics = {}, [], {}
     for m in members:
         fv = m["header"]["frame_v3"]
@@ -965,9 +967,9 @@ def main() -> int:
     window = {"kind": "stand-in", "of": WINDOW_OF,
               "members": {m["name"]: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + m["n"]]} for m in members},
               "link": "none: no served run; vllm's Store backend and its served values replace these"}
-    rec = R.record(program, query, law, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
+    rec = R.record(program, query, sampling_design, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
-    checks = {"registration": V.check(rec, program, query, law, a0.SCHEME, want, leaf_layer=leaf_layer).to_json()}
+    checks = {"registration": V.check(rec, program, query, sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer).to_json()}
     for c in canons.values():
         bcs = [bytes(x) for x in np.frombuffer((out / f"canon-{c['kind']}.bc").read_bytes(), dtype=np.uint8).reshape(-1, 128)]
         checks[f"canon/{c['kind']}"] = {"ok": canon_root(c, bcs) == c["root"], "codes": [], "detail": {}}
@@ -987,7 +989,7 @@ def main() -> int:
 
     # the verifier's stratified sample, by its own Lean on a development challenger's coins; each member serves its
     # stratum, --zk
-    p = a0.challenger_draw(a.lean, ["--program", str(out / "program.json"), "--partition", str(out / "partition.json"),
+    p = a0.challenger_sample(a.lean, ["--program", str(out / "program.json"), "--partition", str(out / "partition.json"),
                                     "--stratified", str(a.k)], rec["law"], n_all, R.digest(rec), out / "draw.log")
     lean_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     (out / "draw.json").write_text(json.dumps(lean_draw, sort_keys=True))
@@ -1002,7 +1004,7 @@ def main() -> int:
         sdir.mkdir(parents=True, exist_ok=True)
         (sdir / "draw.json").write_text(json.dumps({"law": "subset", "population": m["n"], "k": len(local), "units": local}, sort_keys=True))
         t = time.time()
-        record, live = a0.session(a.bin, m, m["n"], f"subset:{len(local)}", a.port + j, sdir, draw_file=sdir / "draw.json", zk=True)
+        record, live = a0.session(a.bin, m, m["n"], f"subset:{len(local)}", a.port + j, sdir, sample_file=sdir / "draw.json", zk=True)
         session_s = round(time.time() - t, 1)
         draw_t = (record or {}).get("unit_draw") or {}
         v = V.check_draw(draw_t, {"population": m["n"]}, {"law": "subset", "k": len(local)})
@@ -1010,14 +1012,14 @@ def main() -> int:
         session_roots.update({f"{m['name']}/{port}": r for port, r in ((live or {}).get("roots") or {}).items()})
         proved += a0.proved_units(m["header"], live or {})
         n_inst += (live or {}).get("instances", 0)
-        lean_u = a0.lean_draw_test(a.lean, [{"record": draw_t or None, "statement": (live or {}).get("unit_draw"),
+        lean_u = a0.lean_sample_test(a.lean, [{"record": draw_t or None, "statement": (live or {}).get("unit_draw"),
                                              "instances": (live or {}).get("instances", 0)}], sdir, "u1-u3")
         verdicts[f"m0-verifier/{m['name']}"] = {"accepted": ((record or {}).get("verdict") or {}).get("accepted") is True
                                                 and (live or {}).get("roots") == m["header"]["frame_v3"]["roots"] and v.ok,
                                                 "why": ((record or {}).get("verdict") or {}).get("why"), "draw_check": v.to_json()}
         verdicts[f"lean-draw/{m['name']}"] = {"accepted": bool(lean_u) and all(c["ok"] for c in lean_u), "detail": lean_u}
         verdicts[f"lean-verify/{m['name']}"] = {**a0.lean_verify(a.lean, m, m["n"], sdir, zk=True),
-                                                "tool": "flock-verify verify --zk --archive --partition --program"}
+                                                "tool": "verity-verify-proof verify --zk --archive --partition --program"}
         opened[m["name"]] = openings(m, local, m["args"], m["rows"])
         verdicts[f"openings/{m['name']}"] = {"accepted": opened[m["name"]]["ok"], "detail": opened[m["name"]]["detail"]}
         statement[m["name"]] = {"session_s": session_s, **{x: (live or {}).get(x) for x in ("circuit_sha512", "statement_digest", "sigma")},
@@ -1098,7 +1100,7 @@ def main() -> int:
                                        "credited_bytes": round((1 - v["terms"]["timing"]) * whole)} for k, v in ledgers.items()}}
     (out / "ledger.json").write_text(json.dumps(ledgers, indent=1, sort_keys=True, default=str))
 
-    neg = negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, plans, sp, sm, req, lean_draw, law,
+    neg = negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, plans, sp, sm, req, lean_draw, sampling_design,
                     program, query, want, leaf_layer, publics, session_roots, served, n_all, common, salts, link, rrec, c3, rs)
     neg.update(check3_negatives(check3, rs, c3))
     (out / "negatives.json").write_text(json.dumps(neg, indent=1, sort_keys=True, default=str))
@@ -1261,13 +1263,13 @@ def rekey_negatives(members: list[dict], sd, layout, req, sm, canons: dict, rs) 
     return out
 
 
-def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, plans, sp, sm, req, lean_draw, law, program, query,
+def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, plans, sp, sm, req, lean_draw, sampling_design, program, query,
               want, leaf_layer, publics, session_roots, served, n_all, common, salts, link, rrec, c3, rs0) -> dict[str, dict]:
     """Each re-decides one input altered. The clause negatives are a cheating prover consistent everywhere (its canonical
     commitments and its session agree with the altered witness), so only the unit can refuse it: its ok row commits 0.
-    The appends negatives are a session the remote audit accepts whose appends aren't the map units' writes: the
+    The appends negatives are a session PoUB accepts whose appends aren't the map units' writes: the
     record's chain or a pass's head isn't the units' (`mapped`), and the ledger refuses the link. Their sessions' check 3
-    is decided by its unit's reference (`opening.reference`), the run's own (``rs0``) by proofs. The stale negatives
+    is decided by its unit's reference (`opening_prover.reference`), the run's own (``rs0``) by proofs. The stale negatives
     are map units whose lifetime cap isn't the record's (`mapped`, and the opening of their public rows) and a re-key the
     unit holds to the cap its committed pass row gives (`rekey_negatives`)."""
     neg: dict[str, dict] = {}
@@ -1371,7 +1373,7 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
     neg["written-block-without-a-value (dummy append or re-key)"] = {
         "refused": f["ok_output"] == 0 and not f["opens_to_1"], "step": tz, "unit": f}
 
-    # the appends: sessions the remote audit accepts whose appends aren't the map units' writes
+    # the appends: sessions PoUB accepts whose appends aren't the map units' writes
     def unmapped(name: str, **kw) -> None:
         rs = remote_session(req, layout, store, plans, salts, c3=c3, **kw)
         if not rs.accepted:
@@ -1476,19 +1478,19 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
 
         def check(r, ll):
             layer = hashlib.sha512(canonical_json({**publics, last["name"]: ll})).hexdigest()
-            return V.check(dict(r, leaf_layer=layer), program, query, law, a0.SCHEME, want, leaf_layer=layer)
+            return V.check(dict(r, leaf_layer=layer), program, query, sampling_design, a0.SCHEME, want, leaf_layer=layer)
 
         neg["public-file-altered-after-the-proof (Lean roots)"] = {**a0.altered_public(
             a.lean, last, last["n"], sdir, out / "neg-altered-public", dict(rec, leaf_layer=leaf_layer), check, zk=True),
             "member": last["name"], "row": f"instance {last['n'] - 1}, port {last['ports'][-1].name}"}
-    # the sampled-proofs registration and sample, as A6 checks them
+    # the sampled-proofs docket and sample, as A6 checks them
     fewer = R2.program([(plan_m["defn"], plan_m["n"]), (map_m["defn"], map_m["n"])], mixed=True)
-    v = V.check(rec, fewer, query, law, a0.SCHEME, want, leaf_layer=leaf_layer)
+    v = V.check(rec, fewer, query, sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer)
     neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
     v = V.check(rec, program, query, D.parse_design(f"stratified:{a.k // 2 if a.k > 1 else a.k + 1}"), a0.SCHEME, want,
                 leaf_layer=leaf_layer)
     neg["registration-law-another-k (R1)"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = V.check(rec, program, query, law, a0.SCHEME, {k_: w for k_, w in want.items() if not k_.startswith("canon/")}, leaf_layer=leaf_layer)
+    v = V.check(rec, program, query, sampling_design, a0.SCHEME, {k_: w for k_, w in want.items() if not k_.startswith("canon/")}, leaf_layer=leaf_layer)
     neg["registration-without-the-canonical-commitments (R3)"] = {"refused": not v.ok, "codes": list(v.codes)}
     v = V.check_draw({**lean_draw, "units": lean_draw["units"][:-1] + [n_all]}, rec, rec["law"])
     neg["draw-outside-the-partition"] = {"refused": not v.ok, "codes": list(v.codes)}

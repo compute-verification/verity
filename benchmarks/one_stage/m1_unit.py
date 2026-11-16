@@ -30,9 +30,9 @@ population Program of its one Definition at ``--n`` instances and that Program's
 as `verifier_cost/flock_served.py` binds a served kind), which Lean's verify reads (``--program``, ``--partition``); without a
 Program it refuses every session once its checks pass.
 
-    PYTHONPATH=<tree>:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm \\
+    PYTHONPATH=<tree>:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm:<tree>/adapters/torch \\
       python benchmarks/one_stage/m1_unit.py --spec 'RMSNormFusedCudaVector8_v3{N=6144,EPS=...,BLOCK=256}' --out DIR \\
-      [--structural iv/hybrid/4 [--tmpl-unit-bin flock-tmpl-unit] | --reads slots] [--bin flock-circuit --lean flock-verify] [--n 1]
+      [--structural iv/hybrid/4 [--tmpl-unit-bin flock-tmpl-unit] | --reads slots] [--bin flock-circuit --lean verity-verify-proof] [--n 1]
 
 Prints ``M1U {json}`` per phase: the build's seconds and peak RSS, the unit's ANDs and rows, unit_cells (the cells its layout
 takes of its slot of 2^unit_log: a template's with its copies aligned), k_log, block_bits (where its block's last range ends,
@@ -91,8 +91,8 @@ def split_call(tp, n_call: int, rng: np.random.Generator) -> dict:
     from verity.circuits.codec import descriptor_id
     from verity.circuits.evaluation import evaluate_batch
     from verity_vllm.pipeline import serving_rows as SRW
-    from verity.definitions.numerics import deepgemm_twins as DT
-    from verity.definitions.numerics import fp8_moe_rows as FR
+    from verity_vllm.definitions.numerics import deepgemm_twins as DT
+    from verity_vllm.definitions.numerics import fp8_moe_rows as FR
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     S = {**SRW.COORDS[spec_base(tp.word)], **spec_statics(tp.word)}
@@ -158,9 +158,9 @@ def cols_call(tp, w_call: int, rng: np.random.Generator) -> dict:
     from verity.circuits.codec import descriptor_id
     from verity.circuits.evaluation import evaluate_batch
     from verity_vllm.pipeline import serving_rows as SRW
-    from verity.definitions.numerics import rows as KR
-    from verity.definitions.registry import tp_allreduce as TA
-    from verity.definitions.registry import tp_allreduce_check as TAC
+    from verity_vllm.definitions.numerics import rows as KR
+    from verity_vllm.definitions.registry import tp_allreduce as TA
+    from verity_vllm.definitions.registry import tp_allreduce_check as TAC
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     axis, S = SRW.COLS[spec_base(tp.word)], spec_statics(tp.word)
@@ -204,9 +204,9 @@ def parts_call(tp, row: str, rng: np.random.Generator) -> dict:
     template's word on every unit's rows."""
     from verity.circuits.codec import descriptor_id
     from verity_vllm.pipeline import serving_rows as SRW
-    from verity.definitions.numerics import deepgemm_twins as DT
-    from verity.definitions.registry import tp_allreduce_check as TAC
-    from verity.definitions.registry.fp8 import FP8_BLOCK
+    from verity_vllm.definitions.numerics import deepgemm_twins as DT
+    from verity_vllm.definitions.registry import tp_allreduce_check as TAC
+    from verity_vllm.definitions.registry.fp8 import FP8_BLOCK
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     S, p = spec_statics(row), SRW.part(tp.word, row)
@@ -276,8 +276,8 @@ def slice_call(tp, row: str, rng: np.random.Generator) -> dict:
     from verity.circuits.evaluation import evaluate_batch
     from verity_vllm.pipeline import serving_rows as SRW
     from verity_vllm.pipeline import slice_rows as SL
-    from verity.definitions.numerics import cublas_gemm_rows as CGR
-    from verity.definitions.numerics import glm53_rows as GR
+    from verity_vllm.definitions.numerics import cublas_gemm_rows as CGR
+    from verity_vllm.definitions.numerics import glm53_rows as GR
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     fn, S = SRW._bind(row), spec_statics(row)
@@ -353,8 +353,8 @@ def chunk_call(tp, k_call: int, rng: np.random.Generator) -> dict:
     from verity.circuits.defs import bind
     from verity.circuits.evaluation import evaluate_batch
     from verity_vllm.pipeline import serving_rows as SRW
-    from verity.definitions.numerics import fp8_moe_rows as FR
-    from verity.definitions.registry import fp8_moe_experts as X
+    from verity_vllm.definitions.numerics import fp8_moe_rows as FR
+    from verity_vllm.definitions.registry import fp8_moe_experts as X
     from verity_vllm.query.program_view import spec_statics
 
     S = spec_statics(tp.word)
@@ -389,7 +389,7 @@ def vchunk_call(tp, v_call: int, rng: np.random.Generator) -> dict:
     `TokenSelect_v1{V}`, which is the first of the two largest words."""
     from verity.circuits.defs import bind
     from verity.circuits.evaluation import evaluate_batch
-    from verity.definitions.registry import b1
+    from verity_vllm.definitions.registry import b1
     from verity_vllm.query.program_view import spec_statics
 
     def ev(fn, *xs):
@@ -419,7 +419,7 @@ def main() -> int:
                     help="with --reads slots: at most N ANDs a net, the caps whose statement takes the smallest block, then "
                          "whose nets take the fewest cells (auto), or no cap (read_slots.split's stage_ands)")
     ap.add_argument("--bin", default=None, help="M0's flock-circuit: prove one round")
-    ap.add_argument("--lean", default=None, help="the Lean verifier of record (flock-verify)")
+    ap.add_argument("--lean", default=None, help="the Lean verifier (verity-verify-proof)")
     ap.add_argument("--tmpl-unit-bin", default=None, help="with --structural and --bin: flock-tmpl-unit, which places the unit's rows")
     ap.add_argument("--n", type=int, default=1)
     ap.add_argument("--port", type=int, default=7611)

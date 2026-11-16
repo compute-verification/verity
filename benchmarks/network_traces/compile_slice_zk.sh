@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # The compile slice (CompileSlice_v7) in zero knowledge, or plain (compile_slice_zk.py) on a CPU machine, on hidden_zk's
-# builds (its job.sh, sourced: Flock's flock-circuit and the Lean flock-verify) with the ZK server's Lean frame and the
-# sampled-proofs verifier built in the tree. From a clone, in one of the network pool's pinned slots, as a job of at
+# builds (its job.sh, sourced: Flock's flock-circuit and the Lean verity-verify-proof) with the ZK server's Lean frame and the
+# SPOT verifier built in the tree. From a clone, in one of the network pool's pinned slots, as a job of at
 # most 180 minutes:
-#   env CS_MEM_GB=64 CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py \
+#   env CS_MEM_GB=64 CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/check/slot.py \
 #     --by LANE -- bash benchmarks/network_traces/compile_slice_zk.sh
 #   (the slot's mem= reserves the run's memory, so the job reserves none beside it), or, while the pool is full,
 #   `bash benchmarks/network_traces/compile_slice_zk.sh` alone as a job of 16 CPUs and 64 GB.
@@ -26,18 +26,18 @@ export PYTHONPATH=$SRC:$SRC/verity/protocols/proofs/flock/prover/python:$SRC/ada
 setup
 # the encodings' traces and the certifier's vectors that compile_slice_zk.py reads are fetched fixtures (artifacts.json)
 PYTHONPATH=$SRC/tools/research/src "$PY" -m research data fetch-fixtures --repo "$SRC" \
-  benchmarks/network_e2e/encodings/tests/fixtures verity/protocols/accounting/certifier/verifier/tests/fixtures > "$OUT/fetch-fixtures.log" 2>&1 \
+  tests/benchmarks/network_e2e/encodings/fixtures tests/verity/protocols/resource_accounting/network/verifier/fixtures > "$OUT/fetch-fixtures.log" 2>&1 \
   || { tail -20 "$OUT/fetch-fixtures.log"; exit 7; }
-(cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
+(cd verity/protocols/proofs/spot/verifier/lean && lake build spot-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
 if [ -n "${CS_PLAIN:-}" ]; then
   mode=cszk-plain points=${CS_POINTS:-}
 else
   mode=cszk points=${CS_POINTS:-1}
-  export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
-  (exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_FIREWALL_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-firewall)) \
-    > "$OUT/build-firewall.log" 2>&1
-  [ -x "$FC_FIREWALL_LEAN" ] || { tail -20 "$OUT/build-firewall.log"; log "cszk: no firewall frame"; exit 7; }
+  export FC_ZK_SERVER_LEAN=${LEAN%/*}/flock-zk-server
+  (exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_ZK_SERVER_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-zk-server)) \
+    > "$OUT/build-zk-server.log" 2>&1
+  [ -x "$FC_ZK_SERVER_LEAN" ] || { tail -20 "$OUT/build-zk-server.log"; log "cszk: no ZK server frame"; exit 7; }
 fi
 
 rc=0

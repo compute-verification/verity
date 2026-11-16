@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# The ZK server's send check (FC_FIREWALL=1, the Lean flock-firewall's session loop) against the host's witness alone, per proved
+# The ZK server's send check (FC_ZK_SERVER=1, the Lean flock-zk-server's session loop) against the host's witness alone, per proved
 # witness bit. Per SC_PLAN entry ROLE:K:N (job.sh's staging, N instances, all sampled), SC_REPS rounds of one loopback --zk CPU
 # session per arm, the arms' order rotated each round:
 #   nofw  FC_HOST_WITNESS=1
-#   fw    + FC_FIREWALL=1 through this tree's flock-firewall (beside job.sh's flock-verify, built if missing)
-#   fw-b  the same through SC_FIREWALL_B, another build of flock-firewall, when it is set
+#   fw    + FC_ZK_SERVER=1 through this tree's flock-zk-server (beside job.sh's verity-verify-proof, built if missing)
+#   fw-b  the same through SC_ZK_SERVER_B, another build of flock-zk-server, when it is set
 # Each ZK server process runs under bash's `time` in a subshell that outlives the prover's kill of its child, so its own CPU
 # seconds and wall are recorded. Run from the source tree's root (`research run --cwd source`, 16 CPUs, 48 GB):
 #   SC_PLAN="hidden:256:1 hidden:256:128 hidden:256:256" SC_REPS=3 bash benchmarks/pouw/hidden_zk/send_check.sh
@@ -20,17 +20,17 @@ export HZ_CONFIGS=x HZ_MEM_GB=${HZ_MEM_GB:-48} HZ_CACHE=${HZ_CACHE:-/workspace/r
 # shellcheck source=job.sh
 source "$SRC/benchmarks/pouw/hidden_zk/job.sh"
 setup
-FW=${LEAN%/flock-verify}/flock-firewall
+FW=${LEAN%/verity-verify-proof}/flock-zk-server
 if [ ! -x "$FW" ]; then
   command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
-  (flock 8; [ -x "$FW" ] || (cd "${LEAN%/.lake/*}" && lake build flock-firewall)) 8> "${LEAN%/.lake/*}.firewall.lock" \
-    > "$OUT/build-firewall.log" 2>&1
+  (flock 8; [ -x "$FW" ] || (cd "${LEAN%/.lake/*}" && lake build flock-zk-server)) 8> "${LEAN%/.lake/*}.firewall.lock" \
+    > "$OUT/build-zk-server.log" 2>&1
 fi
 [ -x "$FW" ] || { log "missing: $FW"; exit 1; }
 declare -A REAL=([fw]=$FW)
 ARMS=(nofw fw)
-if [ -n "${SC_FIREWALL_B:-}" ]; then
-  cp "$SC_FIREWALL_B" "$W/fw-b" && REAL[fw-b]=$W/fw-b && ARMS+=(fw-b)
+if [ -n "${SC_ZK_SERVER_B:-}" ]; then
+  cp "$SC_ZK_SERVER_B" "$W/fw-b" && REAL[fw-b]=$W/fw-b && ARMS+=(fw-b)
 fi
 sha256sum "${REAL[@]}" | tee -a "$OUT/job.log"
 cat > "$W/fwtime.sh" <<'WRAP'
@@ -62,7 +62,7 @@ for p in $PLAN; do
       until grep -q '^SERVING ' "$O/serve-$arm-$rep.log" 2>/dev/null; do kill -0 $srv 2>/dev/null || break; sleep 1; done
       T=$O/fwt-$arm-$rep; mkdir -p "$T"
       env=(FC_HOST_WITNESS=1)
-      [ "$arm" = nofw ] || env+=(FC_FIREWALL=1 FC_FIREWALL_LEAN=$W/fwtime.sh FWT_DIR=$T FWT_REAL=${REAL[$arm]})
+      [ "$arm" = nofw ] || env+=(FC_ZK_SERVER=1 FC_ZK_SERVER_LEAN=$W/fwtime.sh FWT_DIR=$T FWT_REAL=${REAL[$arm]})
       { time env "${env[@]}" "$BIN" prove --zk --verifier 127.0.0.1:$port --instances "$D/inst.bin" \
           --circuit "$D/circuit.txt" --runs 1 --warm 0 > "$O/prove-$arm-$rep.out" 2> "$O/prove-$arm-$rep.err" ; } \
         2> "$O/prove-$arm-$rep.time"

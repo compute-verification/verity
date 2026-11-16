@@ -182,16 +182,16 @@ theorem zkReadD_eq_padWit (i : ZkIdx) (M : ZkMessage 𝔽 (zkWidth i) (zkCols i)
   rw [padWit_zkRowsOf (e := 0)]
   rfl
 
-theorem zkLevel_rate : ∀ i : ZkIdx, (zkLevel0 i.m).rate = 1 := by
+theorem zkLevel_rate : ∀ i : ZkIdx, (zkLevel0 i.wideLeaf i.m).rate = 1 := by
   decide +kernel
 
 /-- **The deployed masked `θ` is the old `padRadius`** at the deployed padding. -/
-theorem radius_zk (M : ZkTrace) : zkThetaD M = (levelOf (zkLevel0 M.1.m)).padRadius (zkPad M.1) := by
+theorem radius_zk (M : ZkTrace) : zkThetaD M = (levelOf (zkLevel0 M.1.wideLeaf M.1.m)).padRadius (zkPad M.1) := by
   obtain ⟨i, M⟩ := M
   have hd : zkLen i = zkCols i + 1 := (zkShape_table i).2.2.2.1
   unfold zkThetaD Level.padRadius Level.padRate eta
-  have hl : (levelOf (zkLevel0 i.m)).logLen = zkLen i := by
-    show (zkLevel0 i.m).cols + (zkLevel0 i.m).rate = zkLen i
+  have hl : (levelOf (zkLevel0 i.wideLeaf i.m)).logLen = zkLen i := by
+    show (zkLevel0 i.wideLeaf i.m).cols + (zkLevel0 i.wideLeaf i.m).rate = zkLen i
     rw [zkLevel_rate i, hd]
     rfl
   rw [hl]
@@ -220,11 +220,11 @@ theorem zkRowsOf_zkOfRows {F : Type} [Field F] (c₀ : F) {s cols t : ℕ} (R : 
 
 /-- The masked schedule's level 0 is the deployed one, and its `k0` the witness lanes. -/
 theorem zkLevel_table : ∀ i : ZkIdx,
-    (schedOf (zkSched i.m).1).level₀ = levelOf (zkLevel0 i.m) ∧ (schedOf (zkSched i.m).1).k0 = zkLanes i := by
+    (schedOf (zkSched i.wideLeaf i.m).1).level₀ = levelOf (zkLevel0 i.wideLeaf i.m) ∧ (schedOf (zkSched i.wideLeaf i.m).1).k0 = zkLanes i := by
   decide +kernel
 
-theorem logLen_zk (i : ZkIdx) : (levelOf (zkLevel0 i.m)).logLen = zkLen i := by
-  show (zkLevel0 i.m).cols + (zkLevel0 i.m).rate = zkLen i
+theorem logLen_zk (i : ZkIdx) : (levelOf (zkLevel0 i.wideLeaf i.m)).logLen = zkLen i := by
+  show (zkLevel0 i.wideLeaf i.m).cols + (zkLevel0 i.wideLeaf i.m).rate = zkLen i
   rw [zkLevel_rate i, (zkShape_table i).2.2.2.1]
   rfl
 
@@ -365,9 +365,9 @@ theorem good_of_committed_zk (rel : Readable.Parsed → Readable.Relation)
     (hwit : ∀ P : Message 𝔽 (zkLanes i) (zkCols i),
       S.Satisfies (witnessOf execArith S.m (zkLanes i) (zkCols i) P) →
         Claims.Flock.RelS s (readTrace execArith i.m (zkLanes i) (zkCols i) P))
-    (hc : CommittedPad execArith S (schedOf (zkSched i.m).1) (zkPad i) padC (oracleOf C)) :
+    (hc : CommittedPad execArith S (schedOf (zkSched i.wideLeaf i.m).1) (zkPad i) padC (oracleOf C)) :
     GoodTable (deployZk rel) (wordLen true) x C := by
-  have key : ∀ (k0 : ℕ) (l : FlockSoundness.Accounting.Level), k0 = zkLanes i → l = levelOf (zkLevel0 i.m) →
+  have key : ∀ (k0 : ℕ) (l : FlockSoundness.Accounting.Level), k0 = zkLanes i → l = levelOf (zkLevel0 i.wideLeaf i.m) →
       ∀ R ∈ padList execArith l (zkPad i) k0 0 0 (oracleOf C),
         S.Satisfies (witnessOf execArith S.m k0 l.logCols (padWit padC R)) →
       GoodTable (deployZk rel) (wordLen true) x C := by
@@ -385,15 +385,15 @@ theorem good_of_committed_zk (rel : Readable.Parsed → Readable.Relation)
 
 /-- **At table 0's index**, masked: the word is `2^d` long and a column has the `2^lanes` witness lanes. -/
 theorem zk_at {x : Claims.Msg} {spec : SessionSpec} {st : _root_.Flock.Stmt}
-    (h : (tables true x).head? = some (spec, st)) {i : ZkIdx} (hi : i.m = st.m) :
+    (h : (tables true x).head? = some (spec, st)) {i : ZkIdx} (hi : i.At st.wideLeaf st.m) :
     wordLen true x = 2 ^ zkLen i ∧ ∀ u, wide true x u ↔ u.length = 2 ^ zkLanes i := by
   refine ⟨?_, fun u => ?_⟩
   · unfold wordLen
     rw [h]
-    simp [zkLen, hi]
+    simp [zkLen, hi.level0]
   · unfold wide zeroCol
     rw [h]
-    simp [zkLanes, hi]
+    simp [zkLanes, hi.level0]
 
 /-- **An uncommitted old table**, at the masked record: a table of witness-lane columns that does not extract has an
 oracle that is not `CommittedPad` at the deployed masked schedule, for an old statement whose satisfying witnesses read
@@ -401,13 +401,13 @@ as witnesses of table 0's statement. -/
 theorem not_committed_zk (rel : Readable.Parsed → Readable.Relation)
     (x : Claims.Msg) (s : Claims.Flock.Stmt) (hs : (deployZk rel).table x 0 = some s) {spec : SessionSpec}
     {st : _root_.Flock.Stmt}
-    (hst : (tables true x).head? = some (spec, st)) (i : ZkIdx) (hi : i.m = st.m)
+    (hst : (tables true x).head? = some (spec, st)) (i : ZkIdx) (hi : i.At st.wideLeaf st.m)
     (C : Fin (wordLen true x) → List 𝔽) (hw : ∀ q, wide true x (C q)) (S : Statement)
     (hwit : ∀ P : Message 𝔽 (zkLanes i) (zkCols i),
       S.Satisfies (witnessOf execArith S.m (zkLanes i) (zkCols i) P) →
         Claims.Flock.RelS s (readTrace execArith i.m (zkLanes i) (zkCols i) P))
     (hg : ¬ GoodTable (deployZk rel) (wordLen true) x C) :
-    ¬ CommittedPad execArith S (schedOf (zkSched i.m).1) (zkPad i) padC (oracleOf C) := fun hc =>
+    ¬ CommittedPad execArith S (schedOf (zkSched i.wideLeaf i.m).1) (zkPad i) padC (oracleOf C) := fun hc =>
   hg (good_of_committed_zk rel x s hs i (zk_at hst hi).1 C (fun q => ((zk_at hst hi).2 _).1 (hw q)) S hwit hc)
 
 end FlockDeploy.KS

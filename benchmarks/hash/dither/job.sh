@@ -5,7 +5,7 @@
 #            h1u variants in $VARIANTS (NAME=FLAGS, e.g. pd4=-DH1U_PF=1,-DH1U_PD=4 builds h1u_pd4.so), their SASS and
 #            resource usage, and BUILD.txt: the commit and arch, and per library the sha256 of the repository files
 #            nvcc -M names (a bench refuses a library whose sources differ at its own commit)
-#   partials h1u.so and every h1u_*.so shipped: benchmarks/pouw/tests/test_partials.py and test_lane_refs.py with
+#   partials h1u.so and every h1u_*.so shipped: tests/benchmarks/pouw/test_partials.py and test_lane_refs.py with
 #            PARTIALS_LIB each (option A's partials: kh_seeds_at and kh_lanes byte for byte served_h1/partials.py's cpu
 #            backend and SERVE-REG's gated lane rows)
 #
@@ -16,7 +16,7 @@
 # NVCC_EXTRA (nvcc flags every build adds, e.g. --no-compress for the SASS gate), JOBS (builds at once, default 8),
 # HB_WHO (the lease owner, default dither/ and the run's id), LEASE (gpu-lease flags, default
 # "--max-min 14"), LIBS (the shipped libraries, default $RESEARCH_RUN_DIR/inputs), VERITY_BENCH_VENV (default
-# benchmarks/harness/env.sh's), NVCC (default CUDA 13.0's; a library is compiled through benchmarks/torch_gpu/job_nvcc.sh
+# benchmarks/harness/env.sh's), NVCC (default CUDA 13.0's; a library is compiled through benchmarks/kernels/job_nvcc.sh
 # with its toolkit, so its cubin doesn't follow where the tree or this directory sits).
 # Exit: the bench's, 2 a build failed or the shipped libraries are missing or another commit's.
 set -uo pipefail
@@ -28,6 +28,7 @@ NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
 LIBS=${LIBS:-${RESEARCH_RUN_DIR:-.}/inputs}
 SHA=${RESEARCH_SOURCE_SHA:-$(git -C "$HERE" rev-parse HEAD 2>/dev/null || echo unknown)}
 ROOT=$(pwd -P)
+KERNELS=$(dirname "$ROOT/verity/protocols/experimental/dither/prover/kernels/h1u.cu")    # FILE.cu's directory, named through a kernel so a move map follows it
 mkdir -p "$OUT/env"
 srchash() { (cd "$ROOT" && cat "$@" | sha256sum | cut -c1-16); }
 
@@ -41,10 +42,10 @@ if [ "$BENCH" = build ]; then
     file=${file:-$src}
     [ -n "$def" ] && flags+=(${def//,/ })
     [ -n "${NVCC_EXTRA:-}" ] && flags+=($NVCC_EXTRA)
-    CUDA=$(dirname "$(dirname "$NVCC")") "$ROOT/benchmarks/torch_gpu/job_nvcc.sh" "${flags[@]}" "$HERE/$file.cu" -o "$dir/$src.so" 2> "$dir/build-$src.log" || { echo "build $arch $src failed:"; cat "$dir/build-$src.log"; return 2; }
+    CUDA=$(dirname "$(dirname "$NVCC")") "$ROOT/benchmarks/kernels/job_nvcc.sh" "${flags[@]}" "$KERNELS/$file.cu" -o "$dir/$src.so" 2> "$dir/build-$src.log" || { echo "build $arch $src failed:"; cat "$dir/build-$src.log"; return 2; }
     "$(dirname "$NVCC")/cuobjdump" --dump-resource-usage "$dir/$src.so" > "$dir/$src.res.txt" 2>&1
     "$(dirname "$NVCC")/cuobjdump" -sass "$dir/$src.so" | gzip > "$dir/$src.sass.gz"
-    "$NVCC" -M -std=c++17 "${flags[@]:6:2}" "$HERE/$file.cu" > "$dir/$src.deps" 2>&1 || { cat "$dir/$src.deps"; return 2; }
+    "$NVCC" -M -std=c++17 "${flags[@]:6:2}" "$KERNELS/$file.cu" > "$dir/$src.deps" 2>&1 || { cat "$dir/$src.deps"; return 2; }
     deps=$(tr ' \\' '\n\n' < "$dir/$src.deps" | grep -v ':$' | grep . | xargs -r realpath -m | while read -r f; do [ -f "$f" ] && echo "$f"; done | grep "^$ROOT/" | sed "s#^$ROOT/##" | sort -u)
     echo "src $src $(srchash $deps) $(echo $deps)" > "$dir/$src.line"
   }
@@ -94,7 +95,7 @@ for b in ${BENCH//,/ }; do
       for f in "$LIBS"/h1u.so "$LIBS"/h1u_*.so; do
         [ -f "$f" ] || continue
         v=$(basename "$f" .so); NEED+=("$v")
-        CMDS+=("env PARTIALS_LIB=$f $PY -m pytest -q -rA -p no:cacheprovider $ROOT/benchmarks/pouw/tests/test_partials.py $ROOT/benchmarks/pouw/tests/test_lane_refs.py")
+        CMDS+=("env PARTIALS_LIB=$f $PY -m pytest -q -rA -p no:cacheprovider $ROOT/tests/benchmarks/pouw/test_partials.py $ROOT/tests/benchmarks/pouw/test_lane_refs.py")
       done
       [ -f "$LIBS/h1u.so" ] || { echo "job.sh: partials needs $LIBS/h1u.so" >&2; exit 2; } ;;
     *) echo "job.sh: no bench $b" >&2; exit 2 ;;

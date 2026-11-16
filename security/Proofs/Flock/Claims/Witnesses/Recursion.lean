@@ -108,8 +108,8 @@ def recStmt : Recursion.CompiledStatement where
 `recStmt`. -/
 def compR (Coin : Type) : Recursion.Deploy Coin := { ksR Coin with V := rejV Coin, parse := fun _ => some recStmt }
 
-/-- The numbers of an outer session of one wait over `K = 2` samples, at `N₀ = e/4`, so `k = 1`. -/
-noncomputable def nums1 : Nums := ⟨0, Real.exp 1 / 4, 0, 0, 1, 2, 0, 0⟩
+/-- The numbers of an outer session of one wait over `K = 2` samples, at `N₀ = 1/2`, so `k = ⌈2/e⌉ = 1`. -/
+noncomputable def nums1 : Nums := ⟨0, 1 / 2, 0, 0, 1, 2, 0, 0⟩
 
 /-- The toy record of `Efficient`: the run always accepts, and its one V* session's view never does. -/
 noncomputable def effR (Coin : Type) : Recursion.Deploy Coin :=
@@ -529,9 +529,8 @@ theorem reruns_E_ge {W : Type} (H : Msg → Msg) (D : Deploy Coin) (I : Recursio
   exact Nat.le_add_right_of_le (Nat.le_add_right _ _)
 
 theorem nums1_k : nums1.k = 1 := by
-  have h : 4 * (Real.exp 1 / 4) / Real.exp 1 = ((1 : ℕ) : ℝ) := by
-    rw [div_eq_iff (Real.exp_pos 1).ne']; push_cast; ring
-  simp only [Nums.k, nums1, h, Nat.ceil_natCast]
+  show kOf (1 / 2) = 1
+  decide +kernel
 
 /-- At `effR`, the outer extractor reruns `3` times: the judged run, which accepts, then both samples of its one V*
 session's wait, whose views are rejected. -/

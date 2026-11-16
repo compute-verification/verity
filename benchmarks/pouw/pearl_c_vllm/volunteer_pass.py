@@ -6,22 +6,22 @@ replayed word by word from the pass's own files, the rows that leave a tile or a
                                                          [--device DEBIT_CUBIN [--cross-check N]]
 
 - **When it runs.** Exactly while the verdict rejects a run on a sampled tile whose credited debit, or a credited row's, is
-  over its cap, its over-cap rule ``reject`` (`served_passes.over_cap_rule`): the pipelines ask ``served_passes.py
+  over its cap, its over-cap rule ``reject`` (`served_passes.over_inert_bound_rule`): the pipelines ask ``served_passes.py
   volunteer-needed`` before they serve and refuse to skip the give-up then.  Under ``uncredited``, where the verdict
   credits such a row nothing instead, the give-up is off the prover's path, and this module stays for whoever runs it by
   hand.
-- **Why after the pass.** A row's debit is its words' (`pearl_c_debit`): it reads the tile's A′ and B̃ codes, which the
+- **Why after the pass.** A row's debit is its words' (`pearl_c_inert_work`): it reads the tile's A′ and B̃ codes, which the
   salt's noise forms, so the screen's per-row rules on the activations can't decide it.  The prover knows the salt when it
   forms and commits, and replays every tile as the verifier will, before the challenger opens the sampling coin.
-- **What changes** is the records alone: each call's ``voluntary_a`` and each weight's ``voluntary_b`` (V-EX's ⌈m/64⌉ and
+- **What changes** is the records alone: each call's ``voluntary_a`` and each fixed operand's ``voluntary_b`` (V-EX's ⌈m/64⌉ and
   ⌈n/64⌉, `clear_work.check_records`) and the ``records_root`` over them.  The transcript (the tile leaves and tree, A's
   roots, every committed byte) is the pass's.  A pass already given up is left as it is.
 - **The replay** runs on `fast_tile`'s batch forms over J processes: each tile opened from the pass's files
   (`verify_run.Opened`), encoded under the epoch's salt as `clear_work.check_drawn` encodes it, and its words' counts taken
-  (`fast_tile.word_debits`).
+  (`fast_tile.words_inert_work`).
 - **On the device** (``--device``, an H100 or H200 and pearl_c_sm90's debit_sm90.cubin): each call's A′ (its real rows) and
-  each weight's B̃ formed once on the J processes, as `encode` forms them (the scheme's `_side`, on fast_tile's `form_v1`;
-  B̃ kept across the passes of one salt), every word's counts taken by `debit.Debit` and cut into the tiles in
+  each fixed operand's B̃ formed once on the J processes, as `encode` forms them (the scheme's `_side`, on fast_tile's `form_v1`;
+  B̃ kept across the passes of one salt), every word's counts taken by `debit.InertWork` and cut into the tiles in
   `scheme.tiles`' order, filler rows zero.  A tile with a word the device marks non-finite is replayed (the reference
   decides it), and so is every Nth tile (``--cross-check``, default `CROSS_CHECK`): any difference from the device's
   counts stops the step.
@@ -45,22 +45,22 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "clear"))
+sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "clear"))
 import fast_tile as FT  # noqa: E402
 import verify_run as VR  # noqa: E402
 import clear_work as CW  # noqa: E402
-from verity.protocols.accounting.pouw.verifier.audit import opened_value  # noqa: E402
-from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment  # noqa: E402
-from verity.protocols.accounting.pouw.verifier.protocol import Context  # noqa: E402
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C  # noqa: E402
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as PW  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import opened_value  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.verifier.coins import CoinCommitment  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Context  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_work as PW  # noqa: E402
 
 #: the device's counts are held to the CPU replay's on every Nth tile id
 CROSS_CHECK = 1024
 #: the rows a forming job takes
 FORM_ROWS = 64
 _JOB: dict = {}
-#: B̃ by (salt, the weight's root): a weight's codes are the same in every pass of one salt
+#: B̃ by (salt, the fixed operand's root): a fixed operand's codes are the same in every pass of one salt
 _B_CODES: dict[tuple[bytes, bytes], np.ndarray] = {}
 _DEBIT: dict[str, object] = {}
 
@@ -79,7 +79,7 @@ def _words(tid: int) -> tuple[int, np.ndarray, np.ndarray]:
     atoms, zeros = (np.zeros((len(ref.tile.rows), len(ref.tile.cols)), np.uint16) for _ in range(2))
     if real:
         # filler rows earn no credit, so their words' counts stay zero
-        got = FT.word_debits([ops.a.codes[x] for x in real], ops.b.codes, p.scheme.device)
+        got = FT.words_inert_work([ops.a.codes[x] for x in real], ops.b.codes, p.scheme.device)
         atoms[real], zeros[real] = got
     return tid, atoms, zeros
 
@@ -122,7 +122,7 @@ def _ctx(p: VR.Pass, pos: int) -> Context:
 
 
 def _form(job: tuple[str, int, int, int]) -> tuple[tuple[str, int, int, int], np.ndarray]:
-    """Rows lo..hi of A′ (side "a", record position `at`) or of B̃ (side "b", the weight of record position `at`) of the pass
+    """Rows lo..hi of A′ (side "a", record position `at`) or of B̃ (side "b", the fixed operand of record position `at`) of the pass
     in `_JOB`, formed as `encode` forms a tile's: (job, codes)."""
     side, at, lo, hi = job
     p = _JOB["pass"]
@@ -140,14 +140,14 @@ def _form(job: tuple[str, int, int, int]) -> tuple[tuple[str, int, int, int], np
     return job, np.asarray(formed.codes, np.uint8).reshape(len(idx), k)
 
 
-def _debit(cubin: Path):
-    """The device's `debit.Debit` on `cubin`, one a process."""
+def _inert_work(cubin: Path):
+    """The device's `debit.InertWork` on `cubin`, one a process."""
     key = str(Path(cubin).resolve())
     if key not in _DEBIT:
         sys.path.insert(0, str(HERE.parent / "pearl_c_sm90"))
         import debit
 
-        _DEBIT[key] = debit.Debit(Path(cubin).read_bytes())
+        _DEBIT[key] = debit.InertWork(Path(cubin).read_bytes())
     return _DEBIT[key]
 
 
@@ -183,7 +183,7 @@ def words_device(p: VR.Pass, jobs: int, cubin: Path, cross_check: int = CROSS_CH
         for w, pos in weight_at.items():
             _B_CODES.setdefault(b_key[w], codes.pop(("b", pos), None))
         t1 = time.perf_counter()
-        debit, counts, bad = _debit(cubin), {}, set()
+        debit, counts, bad = _inert_work(cubin), {}, set()
         first = _first(p)
         for pos, u in enumerate(matmuls):
             atoms, zeros, off = (np.zeros((u.shape.m, u.shape.n), np.uint16) for _ in range(3))

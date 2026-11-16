@@ -1,13 +1,13 @@
 module
 
 public import Proofs.Flock.Soundness.Audit.Partitioning.Model
-import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Audit.SamplingDesign
 
 /-!
 # Exfiltration: the witnesses' facts
 
 The statements of `Partitioning.Witness.exfiltration` and `Partitioning.Witness.refinement`, proved here so that the
-witness file can cite them. `Law.subset n n` samples every unit, so only the empty set escapes, and it certifies any
+witness file can cite them. `SamplingDesign.subset n n` samples every unit, so only the empty set escapes, and it certifies any
 `ℓ ≥ 0` with the harm bound `0` and the count `0` (`certifies_full`). The rest is arithmetic: `locBits 4 1 = log₂ 5`,
 `locBits 4 2 = log₂ 11`, `(1/2)^{1/2} > 7/10`, and `1/2 ≤ ln 2 ≤ 1`.
 -/
@@ -21,12 +21,12 @@ open scoped ENNReal
 
 /-- **Sampling every unit certifies any `ℓ ≥ 0`**, with the harm bound `0` and the count `0`. -/
 theorem certifies_full (n : ℕ) (b : Fin n → ℕ) {δ ℓ : ℝ} (hδ : 0 < δ) (hℓ : 0 ≤ ℓ) :
-    CertifiesLeak (Law.subset n n le_rfl) b δ ℓ := by
-  have hzero : ∀ B : Finset (Fin n), B.Nonempty → (Law.subset n n le_rfl).escape B = 0 := by
+    CertifiesLeak (SamplingDesign.subset n n le_rfl) b δ ℓ := by
+  have hzero : ∀ B : Finset (Fin n), B.Nonempty → (SamplingDesign.subset n n le_rfl).missProb B = 0 := by
     intro B hB
     have h1 := hB.card_pos
     have h2 : B.card ≤ n := by simpa using Finset.card_le_univ B
-    rw [Law.subset_escape, Nat.choose_eq_zero_of_lt (n := n - B.card) (k := n) (by omega), Nat.cast_zero,
+    rw [SamplingDesign.subset_escape, Nat.choose_eq_zero_of_lt (n := n - B.card) (k := n) (by omega), Nat.cast_zero,
       ENNReal.zero_div]
   have hδ' : (0 : ℝ≥0∞) < ENNReal.ofReal δ := ENNReal.ofReal_pos.2 hδ
   unfold CertifiesLeak
@@ -71,7 +71,7 @@ theorem log_two_le_one : Real.log 2 ≤ 1 := by
 /-- `Partitioning.Witness.exfiltration`'s statement. -/
 theorem witness_exfiltration :
     (1 : ℝ) * 1 + locBits 4 1 ≤ 4 ∧ (4 : ℝ) < 1 * (1 + 1) + locBits 4 (1 + 1) ∧
-    CertifiesLeak (Law.subset 4 4 le_rfl) (fun _ => 1) (1 / 2) 4 ∧
+    CertifiesLeak (SamplingDesign.subset 4 4 le_rfl) (fun _ => 1) (1 / 2) 4 ∧
     0 < ((4 : ℝ) - 1) * (1 - (1 / 2 : ℝ) ^ ((1 + 1 : ℝ)⁻¹)) ∧
     ((4 : ℝ) - 1) * (1 - (1 / 2 : ℝ) ^ ((1 + 1 : ℝ)⁻¹)) < 4 * Real.log (1 / 2 : ℝ)⁻¹ / (1 + 1) := by
   have he : ((1 + 1 : ℝ))⁻¹ = ((2 : ℕ) : ℝ)⁻¹ := by norm_num
@@ -91,7 +91,7 @@ theorem witness_exfiltration :
 theorem witness_refinement :
     2 * (1 + 1) ≤ 4 ∧ (16 : ℝ) * 1 + locBits 4 1 ≤ 20 ∧ (20 : ℝ) < 16 * (1 + 1) + locBits 4 (1 + 1) ∧
     (16 : ℝ) + Real.logb 2 (1 + 2) / (1 + 1) ≤ 16 + Real.logb 2 2 ∧
-    CertifiesLeak (Law.subset (2 * 4) (2 * 4) le_rfl) (fun _ => 16) (1 / 2) 20 ∧
+    CertifiesLeak (SamplingDesign.subset (2 * 4) (2 * 4) le_rfl) (fun _ => 16) (1 / 2) 20 ∧
     0 < (1 - 1 / 4) * (1 - Real.log (1 / 2 : ℝ)⁻¹ / (2 * (1 + 1))) *
       (unitCost 0 1 1 * (4 * Real.log (1 / 2 : ℝ)⁻¹ / (1 + 1))) := by
   have hlog : Real.log (1 / 2 : ℝ)⁻¹ = Real.log 2 := by norm_num

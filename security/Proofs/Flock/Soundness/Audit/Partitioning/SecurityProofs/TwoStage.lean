@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Audit.Partitioning.Guarantees
-import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Audit.SamplingDesign
 import Proofs.Flock.Soundness.Game
 
 /-!
@@ -195,28 +195,28 @@ theorem prCoin_prod {C D : Type} [Fintype C] [Fintype D] (p : C × D → Prop) :
   unfold prCoin
   exact avg_prod_eq _
 
-/-- **The nested law's escape, in `ℝ≥0∞`.** Each replay unit `i` contributes its Bernoulli factor (`Law.bernFactor`)
-at the escape, under the uniform `k`-subset, of its own wrong proof blocks: its two coins are independent of the
-other replay units'. -/
+/-- **The nested sampling design's missProb, in `ℝ≥0∞`.** Each replay block `i` contributes its Bernoulli factor (`SamplingDesign.bernFactor`)
+at the missProb, under the uniform `k`-subset, of its own wrong proof blocks: its two coins are independent of the
+other replay blocks'. -/
 theorem nested_escape (R N k a b : ℕ) [NeZero b] (hk : k ≤ N) (hab : a ≤ b) (B : Finset (Fin (R * N))) :
-    (nested R N k a b hk).escape B =
-      ∏ i, Law.bernFactor a b
-        ((Law.subset N k hk).escape (univ.filter fun j : Fin N => finProdFinEquiv (i, j) ∈ B)) := by
+    (nested R N k a b hk).missProb B =
+      ∏ i, SamplingDesign.bernFactor a b
+        ((SamplingDesign.subset N k hk).missProb (univ.filter fun j : Fin N => finProdFinEquiv (i, j) ∈ B)) := by
   classical
   set Bi : Fin R → Finset (Fin N) := fun i => univ.filter fun j : Fin N => finProdFinEquiv (i, j) ∈ B
-  set E : Fin R → ℝ≥0∞ := fun i => (Law.subset N k hk).escape (Bi i)
-  have hdisj : ∀ ω : (Fin R → Fin b) × (Fin R → (Law.subset N k hk).Ω),
+  set E : Fin R → ℝ≥0∞ := fun i => (SamplingDesign.subset N k hk).missProb (Bi i)
+  have hdisj : ∀ ω : (Fin R → Fin b) × (Fin R → (SamplingDesign.subset N k hk).Ω),
       Disjoint ((nested R N k a b hk).draw ω) B ↔
         ∀ i ∈ (univ : Finset (Fin R)), (ω.1 i).val < a → Disjoint (ω.2 i).1 (Bi i) := by
     intro ω
-    simp only [Finset.disjoint_left, nested, Law.subset, Law.bernoulli, mem_filter, mem_univ, true_and, Bi]
+    simp only [Finset.disjoint_left, nested, SamplingDesign.subset, SamplingDesign.bernoulli, mem_filter, mem_univ, true_and, Bi]
     constructor
     · intro h i _ hi j hj hjB
       exact h (a := finProdFinEquiv (i, j)) (by simpa using And.intro hi hj) hjB
     · rintro h v ⟨hv1, hv2⟩ hvB
       exact h _ trivial hv1 hv2 (by rw [Prod.mk.eta, Equiv.apply_symm_apply]; exact hvB)
   have hstage : ∀ (c : Fin R → Fin b) (i : Fin R),
-      prCoin (fun S : (Law.subset N k hk).Ω => (c i).val < a → Disjoint S.1 (Bi i)) =
+      prCoin (fun S : (SamplingDesign.subset N k hk).Ω => (c i).val < a → Disjoint S.1 (Bi i)) =
         if (c i).val < a then E i else 1 := by
     intro c i
     by_cases h : (c i).val < a
@@ -227,43 +227,43 @@ theorem nested_escape (R N k a b : ℕ) [NeZero b] (hk : k ≤ N) (hab : a ≤ b
       simp only [ite_true]
       exact avg_const 1
   have hin : ∀ c : Fin R → Fin b,
-      (prCoin fun d : Fin R → (Law.subset N k hk).Ω =>
+      (prCoin fun d : Fin R → (SamplingDesign.subset N k hk).Ω =>
         ∀ i ∈ (univ : Finset (Fin R)), (c i).val < a → Disjoint (d i).1 (Bi i)) =
       ∏ i, if (c i).val < a then E i else 1 := fun c =>
-    (prCoin_pi_forall (Ω := fun _ : Fin R => (Law.subset N k hk).Ω) univ
-      (fun i (S : (Law.subset N k hk).Ω) => (c i).val < a → Disjoint S.1 (Bi i))).trans
+    (prCoin_pi_forall (Ω := fun _ : Fin R => (SamplingDesign.subset N k hk).Ω) univ
+      (fun i (S : (SamplingDesign.subset N k hk).Ω) => (c i).val < a → Disjoint S.1 (Bi i))).trans
       (Finset.prod_congr rfl fun i _ => hstage c i)
-  change prCoin (fun ω : (Fin R → Fin b) × (Fin R → (Law.subset N k hk).Ω) =>
+  change prCoin (fun ω : (Fin R → Fin b) × (Fin R → (SamplingDesign.subset N k hk).Ω) =>
     Disjoint ((nested R N k a b hk).draw ω) B) = _
   simp_rw [hdisj]
   rw [prCoin_prod]
   simp only [hin]
   rw [avg_pi_prod (Ω := fun _ : Fin R => Fin b) (fun i (x : Fin b) => if x.val < a then E i else 1)]
-  exact Finset.prod_congr rfl fun i _ => Law.avg_bern hab _
+  exact Finset.prod_congr rfl fun i _ => SamplingDesign.avg_bern hab _
 
 theorem NestedEscape : Guarantees.NestedEscape := by
   intro R N k a b _ hk hab B
   classical
   have hb : (0 : ℝ) < b := by exact_mod_cast NeZero.pos b
   have hT : (0 : ℝ) < N.choose k := by exact_mod_cast Nat.choose_pos hk
-  have hfac : ∀ i, (Law.bernFactor a b
-      ((Law.subset N k hk).escape (univ.filter fun j : Fin N => finProdFinEquiv (i, j) ∈ B))).toReal =
-      1 - (a / b : ℝ) + (a / b : ℝ) * ((N - wrongIn B i).choose k : ℝ) / (N.choose k : ℝ) := by
+  have hfac : ∀ i, (SamplingDesign.bernFactor a b
+      ((SamplingDesign.subset N k hk).missProb (univ.filter fun j : Fin N => finProdFinEquiv (i, j) ∈ B))).toReal =
+      1 - (a / b : ℝ) + (a / b : ℝ) * ((N - incorrectIn B i).choose k : ℝ) / (N.choose k : ℝ) := by
     intro i
-    rw [Law.subset_escape]
+    rw [SamplingDesign.subset_escape]
     have hE : (((N - (univ.filter fun j : Fin N => finProdFinEquiv (i, j) ∈ B).card).choose k : ℕ) : ℝ≥0∞) /
         ((N.choose k : ℕ) : ℝ≥0∞) ≠ ⊤ :=
       ENNReal.div_ne_top (ENNReal.natCast_ne_top _) (by exact_mod_cast (Nat.choose_pos hk).ne')
-    unfold Law.bernFactor
+    unfold SamplingDesign.bernFactor
     rw [ENNReal.toReal_div, ENNReal.toReal_add (ENNReal.mul_ne_top (ENNReal.natCast_ne_top _) hE)
       (ENNReal.natCast_ne_top _), ENNReal.toReal_mul, ENNReal.toReal_div]
     simp only [ENNReal.toReal_natCast]
     rw [Nat.cast_sub hab]
-    unfold wrongIn
+    unfold incorrectIn
     field_simp
     ring
-  have hprod : ((nested R N k a b hk).escape B).toReal =
-      ∏ i, (1 - (a / b : ℝ) + (a / b : ℝ) * ((N - wrongIn B i).choose k : ℝ) / (N.choose k : ℝ)) := by
+  have hprod : ((nested R N k a b hk).missProb B).toReal =
+      ∏ i, (1 - (a / b : ℝ) + (a / b : ℝ) * ((N - incorrectIn B i).choose k : ℝ) / (N.choose k : ℝ)) := by
     rw [nested_escape R N k a b hk hab B, ENNReal.toReal_prod]
     exact Finset.prod_congr rfl fun i _ => hfac i
   refine ⟨hprod, fun hlt => ?_⟩
@@ -272,7 +272,7 @@ theorem NestedEscape : Guarantees.NestedEscape := by
   rw [Real.exp_sum]
   refine Finset.prod_congr rfl fun i _ => (Real.exp_log ?_).symm
   have hp : (a : ℝ) / b < 1 := (div_lt_one hb).2 (by exact_mod_cast hlt)
-  have : 0 ≤ (a / b : ℝ) * ((N - wrongIn B i).choose k : ℝ) / (N.choose k : ℝ) := by positivity
+  have : 0 ≤ (a / b : ℝ) * ((N - incorrectIn B i).choose k : ℝ) / (N.choose k : ℝ) := by positivity
   linarith
 
 end Nested

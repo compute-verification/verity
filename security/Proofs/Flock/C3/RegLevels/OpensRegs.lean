@@ -58,7 +58,7 @@ open FlockVBridge.Decode (RegBit)
 section Copy
 
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
+  {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
 open Classical in
 /-- Copy `j`'s input column `col` of unit `u` at the registrant, where it is a registered bit (`RegBit`). -/
@@ -591,7 +591,7 @@ theorem acc_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables : List
 section Keyed
 
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
+  {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
 /-- **An accepted opening's input columns are registered bits where its rows are registered reads**
 (`srcKey_opening`): at a unit the verifier accepted as `rec-open/l<L>-h<H>` or `rec-open-stacked/l<L>-h<H>`, copy `j`'s
