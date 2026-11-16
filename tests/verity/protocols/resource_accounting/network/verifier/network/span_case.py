@@ -23,7 +23,7 @@ A change to the registered hardware takes its forms in turn by the seed (`SITE_F
 the messages of what runs between them (a wipe's start and end messages) in place of sampled ones, and with `alone` the
 registered host has the link as its one link.
 
-This is test-side Python (it imports `verity_difftest`, which network certification's package may not), so it lives
+This is test-side Python (it imports `verity_difftest`, which network attestation's package may not), so it lives
 beside the count's difftest (`test_network_span_protocol.py`)."""
 
 from __future__ import annotations

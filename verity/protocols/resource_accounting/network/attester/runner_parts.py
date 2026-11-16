@@ -40,7 +40,7 @@ def _class(text: str) -> tuple[int, ...]:
 def flags(q: argparse.ArgumentParser) -> None:
     """The connection rows as `q`'s flags, beside its schedule's."""
     q.add_argument("--lengths", type=int, choices=LENGTHS_FORMS, default=None,
-                   help="the lengths rows' form (network certification's \"The lengths rows\"): the network "
+                   help="the lengths rows' form (network attestation's \"The lengths rows\"): the network "
                         "attester hands each execution phase's releases, and the publisher commits and signs their "
                         "tables; under 2 every execution phase of the run ends, the last included, in its head or in "
                         "the network attester's signed word that it has none (default: none)")
@@ -60,7 +60,7 @@ def head_flags(q: argparse.ArgumentParser) -> None:
     """The head's tick as `q`'s two flags, which a schedule sets together."""
     q.add_argument("--head-offset", type=int, default=None, metavar="N",
                    help="with --lengths and --head-wait: each execution phase's line of rows.jsonl leaves at a tick "
-                        "of the schedule, N buckets after the close that hands it (network certification's "
+                        "of the schedule, N buckets after the close that hands it (network attestation's "
                         "\"The head's tick\"), written by the network attester's tick, which notes the tick it left "
                         "at in its own log alone (default: none, the publisher writes it when it has signed)")
     q.add_argument("--head-wait", type=int, default=None, metavar="W",

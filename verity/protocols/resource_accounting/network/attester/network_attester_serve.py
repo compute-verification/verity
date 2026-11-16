@@ -1172,12 +1172,12 @@ def schedule_flags(q: argparse.ArgumentParser, egress: str | None) -> None:
     for name in INTEGER_FIELDS:
         q.add_argument(f"--{name.replace('_', '-')}", type=int, default=SCHEDULE[name])
     q.add_argument("--egress", choices=EGRESS_FORMS, default=egress,
-                   help="the egress form (network certification's \"The egress form\"): id, the egress record's, "
+                   help="the egress form (network attestation's \"The egress form\"): id, the egress record's, "
                         "which the period check takes, or bytes, any server's bytes, a rehearsal's relay of another "
                         "form (default: "
                         + (egress or "id with --ids, else bytes") + ")")
     q.add_argument("--max-tokens-cap", type=int, default=None,
-                   help="the response cap (network certification's \"The response cap\"), in the id form: a "
+                   help="the response cap (network attestation's \"The response cap\"), in the id form: a "
                         "request whose max_tokens exceeds it, or doesn't parse, is refused (cap) and every response "
                         "is held to its request's (default: none)")
 

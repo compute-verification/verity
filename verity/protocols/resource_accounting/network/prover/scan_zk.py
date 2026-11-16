@@ -19,7 +19,7 @@ the honest round on the challenger's coins (``--challenger``), a `service.Stream
   egress at `CLASS.egress` (16 cells in lanes of 4, 4 request slots of 64 17-bit ids), the network attester at
   `PARAMS`, 32-bucket execution phases; ``w63k4`` (`W63K4`), w63's class at KO 4 and KI 32, a window circuit's of 8
   slots, 32 prompt ids and 4 outputs a request (egress 4 request slots of 4 ids), its certifier w63's at egress_cells 5
-  (KO + 1); ``test`` (`TEST`), network certification's tests' class (B 512, r 2, 2 lanes, C 4, EVERY 2, WITHIN 3, D 5,
+  (KO + 1); ``test`` (`TEST`), network attestation's tests' class (B 512, r 2, 2 lanes, C 4, EVERY 2, WITHIN 3, D 5,
   KO 8, KI 100) and 16-bucket execution phases, whose units a CPU proves in minutes; and ``test2`` (`TEST2`), test's over two
   execution phases, with a fourth request admitted in the first and anchored at the second's first boundary.
 * **The run** (`scan_traffic.serve`: the network attester's own `_ingress` and `_egress`, ticked as `NetworkAttester._tick`
@@ -828,7 +828,7 @@ def _v3c_refused(window: Path, why: str) -> SystemExit:
 
 
 def v3c_state(window: Path, rec: dict, states: list[list[int]]) -> Held:
-    """V3c's `SCAN_STATE` (network certification's `blocks.SCAN_STATE`): its entry in its registration's window
+    """V3c's `SCAN_STATE` (network attestation's `blocks.SCAN_STATE`): its entry in its registration's window
     activations (the ``window`` provenance window-commit writes: ``activations.values``), its rows and salts the prover's
     `SCAN_STATE_FILE`, under the domain that provenance gives (the window circuit's program and the window's run root,
     `registered.domain`), held to the entry's root and domain and to the scan's ``states``."""
@@ -2263,7 +2263,7 @@ def main(argv=None) -> int:
     p.add_argument("--dry", action="store_true", help="the run and the host's read of every round: nothing proved")
     p.add_argument("--class", dest="setup", choices=sorted(SETUPS), default=W63.name,
                    help="the class and the network attester's schedule (default w63's, PARAMS; w63k4: w63's at KO 4 "
-                        "and KI 32, its certifier's at egress cells 5; test: network certification's tests', a CPU "
+                        "and KI 32, its certifier's at egress cells 5; test: network attestation's tests', a CPU "
                         "window; "
                         "test2: test's over two execution phases, a request anchored at the second's first boundary)")
     p.add_argument("--group", type=int, default=1,

@@ -104,7 +104,7 @@ as above.
 `case(kind, seed)` is a small period aimed at a verdict, or at a decoding failure (`KINDS`), and `cases(seed)` one of
 each with its answer, as a composition's difftest takes a real component's cases.
 
-This is test-side Python (it imports `verity_difftest` and PoUW's `core_check`, which network certification's package
+This is test-side Python (it imports `verity_difftest` and PoUW's `core_check`, which network attestation's package
 may not), so it lives beside the period's difftest (`test_network_period_protocol.py`), and other suites load it by
 path."""
 

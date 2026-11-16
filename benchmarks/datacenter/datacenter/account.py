@@ -380,7 +380,7 @@ class Accounts:
         """The share of the registered weights, `registered_bits`, that could have left over the epochs: each
         epoch's covert budget, its export where it is charged, and σ (`sigma`) from each of its servers over its real
         duration. Weight custody over a horizon needs this share well below 1. The covert budget's inbound channels
-        (inputs, ingress timing) count too, and network certification's free fields don't, since no record here has
+        (inputs, ingress timing) count too, and network attestation's free fields don't, since no record here has
         any."""
         return Custody(registered_bits, self.covert_bits, sum(a.export_bits for a in self.epochs if a.export_charged),
                        float(sigma) * sum(a.seconds * a.servers for a in self.epochs), sigma,

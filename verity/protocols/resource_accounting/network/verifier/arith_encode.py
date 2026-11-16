@@ -14,7 +14,7 @@ segment.
     coder = (low[32], high[32], open, x, used, ok)
     KTContext_v1{C, NW}            (counts[C], en, ctx, bit) -> (ok, f0, f1, counts')
 
-Under advice v1 (network certification's PROTOCOL, "Advice v1") each certifier window is one terminated segment of the
+Under advice v1 (network attestation's PROTOCOL, "Advice v1") each certifier window is one terminated segment of the
 32-bit Witten–Neal–Cleary arithmetic coder (`verity_vllm.pipeline.advice_code.arith`, `ArithEncoder`), as its window
 coder (`window_code`) codes it: the window's counts, then its values (the replay's decisions, each a bit at the
 registered book's KT estimate for its context, and the arrival order's deviations, integers). The compile

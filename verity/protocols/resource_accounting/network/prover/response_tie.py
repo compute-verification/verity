@@ -124,7 +124,7 @@ STATICS = ("O",)
 #: an id's and a count's bits, and an end row's
 ID_BITS, END_BITS = 8 * CT.U32_BYTES, 8 * CT.END_BYTES
 #: the stop word: n in its low `COUNT_BITS` bits and the finish in the `FINISH_BITS` above. `COUNT_BITS` is the stop
-#: rule's `N_BITS`, which this unit may not import: network certification's suite holds the two equal
+#: rule's `N_BITS`, which this unit may not import: network attestation's suite holds the two equal
 STOP_BITS, COUNT_BITS = 16, 13
 FINISH_BITS = STOP_BITS - COUNT_BITS
 #: an end row's `at`: the count a no-stop class's form reads, and a stop class's of a connection that failed

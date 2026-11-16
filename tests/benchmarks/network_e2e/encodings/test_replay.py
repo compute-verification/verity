@@ -640,7 +640,7 @@ def test_refuses_the_drafts_it_does_not_model():
 
 
 def test_an_engine_without_a_draft_is_the_engine_class_it_was():
-    """Network certification's engine class is `Engine`'s fields: a draft's settings are `DraftEngine`'s, so they join
+    """Network attestation's engine class is `Engine`'s fields: a draft's settings are `DraftEngine`'s, so they join
     none of them."""
     e = R.Engine(max_num_seqs=4, max_num_batched_tokens=64, max_model_len=256, num_gpu_blocks=64)
     assert sorted(dataclasses.asdict(e)) == sorted([

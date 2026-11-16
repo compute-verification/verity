@@ -6,7 +6,7 @@
 #     --by LANE -- bash benchmarks/network_traces/scan_zk.sh
 # env: SC_MEM_GB (what job.sh's stages may take, within the slot's)  SC_CACHE (the build cache, kept across runs where
 #      writable; hidden_zk's by default)  SC_DRY=1 (the run and the host's read of every round only)
-#      SC_CLASS=w63|w63k4|test|test2 (`prove --class`: test is network certification's tests' class, a CPU window;
+#      SC_CLASS=w63|w63k4|test|test2 (`prove --class`: test is network attestation's tests' class, a CPU window;
 #      test2 its two execution phases)  SC_GROUP=G (`prove --group G`: execution phases 0 … G − 1, each a registration of its
 #      own, started from the record before it)
 #      SC_WARDEN_RUN=DIR (a network_attester_serve run's directory, `prove --warden-run`)  SC_REHEARSE=1 (first a rehearsal,
