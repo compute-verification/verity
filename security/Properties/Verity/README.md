@@ -1,5 +1,20 @@
 # Protocol soundness: start here
 
+This directory holds the Lean statements of Verity's protocol soundness, in `Soundness.lean`, with the modules they
+read; their proofs are in `security/Proofs/Properties/Verity/`. The rest of this page says what the statements say,
+what they read and what they rest on.
+
+## Try it
+
+~~~sh
+git grep -n "^def .* : Prop" -- security/Properties/Verity/Soundness.lean
+~~~
+
+This lists the four statements, `SoundnessOf`, `Soundness`, `RemoteSoundness` and `PlainSoundness`, each with its line.
+It needs only the checkout.
+
+## What it says
+
 One theorem says what an accepted run of Verity guarantees, at each composite's compiled verifier: the verifier accepts
 while one of its subprotocols' claims fails with probability at most the sum of their errors. A composite is the list of
 its subprotocols' ids (`Verity.Registration.Composite`, `security/Definitions/Core/Site.lean`), so the theorem holds at
