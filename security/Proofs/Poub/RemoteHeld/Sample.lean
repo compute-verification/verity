@@ -236,7 +236,6 @@ theorem mul_le_width (N : ℕ) : N * 2 ^ 64 ≤ 2 ^ width N := by
     _ = 2 ^ (Nat.size N + 64) := by rw [pow_add]
     _ ≤ 2 ^ width N := Nat.pow_le_pow_right (by norm_num) h2
 
-theorem bitsVal_lt {L : ℕ} (b : Pous.Bits L) : Pous.bitsVal b < 2 ^ L := (Pous.bitsEquiv L b).isLt
 
 theorem bitsVal_symm {w : ℕ} (x : Fin (2 ^ w)) : Pous.bitsVal ((Pous.bitsEquiv w).symm x) = x := by
   simp [Pous.bitsVal]
@@ -388,11 +387,6 @@ theorem findSome?_range_some {β : Type} (f : ℕ → Option β) :
       refine ⟨c, by omega, fun i hi => List.findSome?_eq_none_iff.1 hc i (List.mem_range.2 hi), ?_⟩
       simpa using h
 
-theorem pick_eq_none {N : ℕ} {b : Pous.Bits 512} :
-    pick N b = none ↔ ∀ j, j < 512 / width N → Actual.wordIndex N (wordAt N j b) = none := by
-  unfold pick
-  rw [List.findSome?_eq_none_iff]
-  simp [List.mem_range]
 
 /-- `(a − a²)⁴ ≤ a⁴ − a⁸` at `a = 2^-64`. -/
 theorem quartic_le : (1 / 2 ^ 64 - 1 / 2 ^ 128 : ℝ) ^ 4 ≤ 1 / 2 ^ 256 - 1 / 2 ^ 512 := by
@@ -896,18 +890,6 @@ theorem prod_le_of_pooled_lt {n : ℕ} (U g d : Fin n → ℕ) {δ : ℝ} (hδ :
 
 /-! ## Pairs -/
 
-/-- A probability over a pair is the average over the first coordinate of its fibers' probabilities. -/
-theorem pr_eq_sum_div₁ {X Y : Type} [Fintype X] [Fintype Y] (Q : X × Y → Prop) :
-    pr Q = (∑ x, pr fun y => Q (x, y)) / Fintype.card X := by
-  classical
-  simp only [Pous.pr_eq_card]
-  have e : (univ.filter Q).card = ∑ x, (univ.filter fun y => Q (x, y)).card := by
-    rw [card_filter, Fintype.sum_prod_type]
-    simp only [card_filter]
-  rw [e, Nat.cast_sum, Fintype.card_prod, Nat.cast_mul, ← ENNReal.sum_div]
-  simp only [ENNReal.div_eq_inv_mul]
-  rw [ENNReal.mul_inv (Or.inr (ENNReal.natCast_ne_top _)) (Or.inl (ENNReal.natCast_ne_top _))]
-  ring
 
 /-- A bound that holds at every value of the first coordinate, up to `e`, holds for the pair. -/
 theorem pr_le_add_of_fiber {X Y Z : Type} [Fintype X] [Fintype Y] [Fintype Z] (P : X × Y → Prop)

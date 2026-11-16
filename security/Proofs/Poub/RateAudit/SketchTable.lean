@@ -62,28 +62,6 @@ def readBits : (a d : ℕ) → (Bits d → LayoutChip N ρ h X Dg α) → Layout
   | _, 0, k => k fun i => Fin.elim0 i
   | a, d + 1, k => .read a fun b => readBits (a + 1) d fun v => k (Fin.cons b v)
 
-theorem readBits_eq (O : Oracle N ρ h X Dg) (M : ℕ → Bool) (R : Fin ρ → X) (a d : ℕ)
-    (k : Bits d → LayoutChip N ρ h X Dg α) :
-    (readBits a d k).run O M R = (k fun i => M (a + i)).run O M R ∧
-    (readBits a d k).queries O M R = (k fun i => M (a + i)).queries O M R ∧
-    (readBits a d k).reads O M R = (k fun i => M (a + i)).reads O M R + d ∧
-    (readBits a d k).linkSteps O M R = (k fun i => M (a + i)).linkSteps O M R := by
-  induction d generalizing a with
-  | zero =>
-    have hv : (fun i : Fin 0 => Fin.elim0 i : Bits 0) = fun i : Fin 0 => M (a + (i : ℕ)) := funext fun i => Fin.elim0 i
-    simp [readBits, hv]
-  | succ d ih =>
-    obtain ⟨h1, h2, h3, h4⟩ := ih (a + 1) (fun v => k (Fin.cons (M a) v))
-    have hv : (Fin.cons (M a) (fun i : Fin d => M (a + 1 + (i : ℕ))) : Bits (d + 1)) = fun i : Fin (d + 1) => M (a + (i : ℕ)) := by
-      funext i
-      refine Fin.cases ?_ (fun j => ?_) i
-      · simp
-      · simp only [Fin.cons_succ, Fin.val_succ]
-        congr 1
-        omega
-    simp only [readBits, LayoutChip.run, LayoutChip.queries, LayoutChip.reads, LayoutChip.linkSteps]
-    rw [h1, h2, h3, h4, hv]
-    exact ⟨rfl, rfl, by omega, rfl⟩
 
 /-- Take the listed sectors of the certified stream in over the link into `acc`, then continue with it. -/
 def linkAll : List (Fin ρ) → (Fin ρ → X) → ((Fin ρ → X) → LayoutChip N ρ h X Dg α) → LayoutChip N ρ h X Dg α

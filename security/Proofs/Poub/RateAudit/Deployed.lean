@@ -206,7 +206,6 @@ noncomputable def simWorld (w : IWorld N b h ρ) : IWorld N b h ρ :=
 @[simp] theorem simWorld_oracle (w : IWorld N b h ρ) : (simWorld w).oracle = w.oracle := rfl
 @[simp] theorem simWorld_mem (w : IWorld N b h ρ) : (simWorld w).mem = w.mem := rfl
 @[simp] theorem simWorld_stream (w : IWorld N b h ρ) : (simWorld w).stream = w.stream := rfl
-@[simp] theorem simWorld_store (w : IWorld N b h ρ) : (simWorld w).store = w.store := rfl
 
 theorem simWorld_side_even (w : IWorld N b h ρ) (v : List Bool) (a : ℕ) :
     (simWorld w).side v (2 * a) = w.side v a := by
@@ -315,8 +314,6 @@ noncomputable def toInteractive (A : PIDevice N b h ρ S L q) (X : ℕ) : Intera
   chip st := PIChip.sim (fun _ _ => false) (L + X) q (A.chip st)
   bounded st w := PIChip.sim_bounded _ w (A.chip st) (L + X) q []
 
-theorem toInteractive_world (A : PIDevice N b h ρ S L q) (X : ℕ) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
-    (A.toInteractive X).world E R O = PIChip.simWorld (A.world E R O) := rfl
 
 theorem toInteractive_side (A : PIDevice N b h ρ S L q) (X : ℕ) (hA : ∀ E R O O', A.side E R O = A.side E R O') :
     ∀ E R O O', (A.toInteractive X).side E R O = (A.toInteractive X).side E R O' := fun E R O O' => by
@@ -582,16 +579,6 @@ theorem pr_samples_le_map {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
   (pr_mono (fun _ ⟨hall, h⟩ => h.imp (fun hK => ⟨hall, hK⟩) (fun hw => ⟨hall, hw⟩))).trans
     ((pr_or_le _ _).trans (add_le_add (pr_samples_pooled_le_map store A K) (pr_samples_window_le_map store A Kw)))
 
-/-- **A session's pooled samples**: every window's openings land on correct receipts while the session holds at most
-`K` in all or some window at most `K_w`. -/
-theorem pr_samples_le (A : DeployedRun n P N b h ρ S L q r s d G) (K Kw : ℕ) :
-    pr (fun x : Store N b × (Fin n → WindowCoins P N b h ρ r s d) =>
-        (∀ w t, (x.2 w).2 t ∈ (A.win w x.2).correctAll x.1 (x.2 w).1) ∧
-          (∑ w, ((A.win w x.2).correctAll x.1 (x.2 w).1).card ≤ K ∨
-            ∃ w, ((A.win w x.2).correctAll x.1 (x.2 w).1).card ≤ Kw))
-      ≤ ((K : ℝ≥0∞) / (n * P * N)) ^ (d * n) +
-        ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) :=
-  pr_samples_le_map id A K Kw
 
 /-- A session's unpaid words from a per-window bound: the probability that some window's reads and `P` slacks fall
 short of its correct receipts' words is at most `n·ε`. -/
@@ -731,13 +718,6 @@ theorem count_lt {R t g c Nn b sl : ℝ} (hb : 0 < b) (hg : g * (Nn * b) = sl)
   have := mul_lt_mul_of_pos_right (Nat.lt_floor_add_one ((1 - t) * (c * Nn))) hb
   linarith
 
-/-- `e^(−x) ≤ 2^-40` once `x ≥ 40·0.6931471808 > 40·log 2`. -/
-theorem exp_neg_le (x : ℝ) (hx : 40 * 0.6931471808 ≤ x) : Real.exp (-x) ≤ 1 / 2 ^ 40 := by
-  have h2 := Real.log_two_lt_d9
-  have e : Real.exp (40 * Real.log 2) = 2 ^ 40 := by
-    rw [show (40 : ℝ) = ((40 : ℕ) : ℝ) by norm_num, Real.exp_nat_mul, Real.exp_log two_pos]
-  rw [one_div, ← e, ← Real.exp_neg]
-  exact Real.exp_le_exp.2 (by linarith)
 
 /-- `(1 − u)^m ≤ e^(−u·m)`. -/
 theorem one_sub_pow_le (u : ℝ) (m : ℕ) (hu : u ≤ 1) : (1 - u) ^ m ≤ Real.exp (-(u * m)) := by

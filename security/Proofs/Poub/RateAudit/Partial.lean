@@ -134,26 +134,6 @@ noncomputable def named (A : PartialDevice N b h ρ S L q) (O : Oracle N b h ρ)
     (code : Bits S × Bits r × Finset ℕ) : Finset (Fin N) :=
   Finset.univ.filter (fun j => ∃ p ∈ code.2.2, ∃ y, (A.decoded O r code)[p]? = some y ∧ y.2.1 = j)
 
-/-- A code that names a word fixes the stream, and the words it names. -/
-theorem card_fib (A : PartialDevice N b h ρ S L q) (O : Oracle N b h ρ) (r : ℕ) (code : Bits S × Bits r × Finset ℕ)
-    (hn : 0 < (A.named O r code).card) :
-    (A.fib O r code).card ≤ (2 ^ b) ^ (N - (A.named O r code).card) := by
-  classical
-  obtain ⟨j₀, hj₀⟩ := Finset.card_pos.1 hn
-  simp only [named, Finset.mem_filter, Finset.mem_univ, true_and] at hj₀
-  obtain ⟨p₀, hp₀, y₀, hy₀, -⟩ := hj₀
-  calc (A.fib O r code).card ≤ (Finset.univ : Finset (↥(A.named O r code)ᶜ → Bits b)).card := by
-        refine Finset.card_le_card_of_injOn (fun x j => x.1 j) (fun _ _ => Finset.mem_univ _) ?_
-        intro x₁ h₁ x₂ h₂ he
-        simp only [fib, Finset.coe_filter, Finset.mem_univ, true_and, Set.mem_ofPred_eq] at h₁ h₂
-        refine Prod.ext (funext fun j => ?_) ((h₁ p₀ hp₀ y₀ hy₀).1.symm.trans (h₂ p₀ hp₀ y₀ hy₀).1)
-        by_cases hj : j ∈ A.named O r code
-        · simp only [named, Finset.mem_filter, Finset.mem_univ, true_and] at hj
-          obtain ⟨p, hp, y, hy, rfl⟩ := hj
-          rw [(h₁ p hp y hy).2, (h₂ p hp y hy).2]
-        · exact congrFun he ⟨j, by simpa using hj⟩
-    _ = (2 ^ b) ^ (N - (A.named O r code).card) := by
-        simp
 
 theorem card_compress_le (A : PartialDevice N b h ρ S L q) (O : Oracle N b h ρ) (k lam : ℕ) (hk : 0 < k)
     [DecidablePred (fun x : Store N b × Bits ρ =>

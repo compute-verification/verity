@@ -323,32 +323,6 @@ namespace SketchDeployedRun
 
 variable {n P N m ρ h S L q ks G d : ℕ}
 
-/-- Sequencing over windows. -/
-theorem pr_window_le (A : SketchDeployedRun n P N m ρ h S L q ks G d) (w : Fin n)
-    (Q : SketchDeployedWindow P N m ρ h S L q ks G →
-      SketchStore N m × SketchWindowCoins P N m ρ h ks G d → Prop) (ε : ℝ≥0∞)
-    (hQ : ∀ η, pr (Q (A.window w η)) ≤ ε) :
-    pr (fun x : SketchStore N m × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
-      Q (A.win w x.2) (x.1, x.2 w)) ≤ ε := by
-  classical
-  let e : SketchStore N m × (Fin n → SketchWindowCoins P N m ρ h ks G d) ≃
-      (SketchStore N m × SketchWindowCoins P N m ρ h ks G d) ×
-        ({v : Fin n // v ≠ w} → SketchWindowCoins P N m ρ h ks G d) :=
-    ((Equiv.refl _).prodCongr (Equiv.funSplitAt w _)).trans (Equiv.prodAssoc _ _ _).symm
-  rw [Rate.pr_equiv e]
-  refine Rate.pr_le_of_fiber _ _ (fun ω' => ?_)
-  let η : {v : Fin n // v < w} → SketchWindowCoins P N m ρ h ks G d := fun v => ω' ⟨v.1, v.2.ne⟩
-  refine (pr_mono (fun y hy => ?_)).trans (hQ η)
-  have hω : ((Equiv.funSplitAt w (SketchWindowCoins P N m ρ h ks G d)).symm (y.2, ω')) w = y.2 := by simp
-  have hη : (fun v : {v : Fin n // v < w} =>
-      ((Equiv.funSplitAt w (SketchWindowCoins P N m ρ h ks G d)).symm (y.2, ω')) v.1) = η := by
-    funext v
-    simp [η, v.2.ne]
-  have hc : A.win w ((Equiv.funSplitAt w (SketchWindowCoins P N m ρ h ks G d)).symm (y.2, ω')) =
-      A.window w η := by
-    simp only [SketchDeployedRun.win]
-    rw [hη]
-  simpa [e, hω, hc] using hy
 
 /-- A session's pooled samples as a causal family over the monitoring period, on any store `store ω` sampled before the
 session's coins. -/
@@ -491,34 +465,6 @@ theorem pr_samples_le_map {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N
     ((pr_or_le _ _).trans (add_le_add (pr_samples_pooled_le_map store A K)
       (pr_samples_window_le_map store A Kw)))
 
-/-- Both pooled-sample readings. -/
-theorem pr_samples_le (A : SketchDeployedRun n P N m ρ h S L q ks G d) (K Kw : ℕ) :
-    pr (fun x : SketchStore N m × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
-      (∀ w t, (x.2 w).2.2 t ∈ (A.win w x.2).correctAll x.1 (x.2 w).1 (x.2 w).2.1) ∧
-        (∑ w, ((A.win w x.2).correctAll x.1 (x.2 w).1 (x.2 w).2.1).card ≤ K ∨
-          ∃ w, ((A.win w x.2).correctAll x.1 (x.2 w).1 (x.2 w).2.1).card ≤ Kw))
-      ≤ ((K : ℝ≥0∞) / (n * P * N)) ^ (d * n) +
-        ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) :=
-  pr_samples_le_map id A K Kw
-
-/-- A session's unpaid windows from a per-window bound. -/
-theorem pr_unpaid_le (A : SketchDeployedRun n P N m ρ h S L q ks G d) (slack : ℕ) (ε : ℝ≥0∞)
-    (hε : ∀ w η, pr (fun y : SketchStore N m × SketchWindowCoins P N m ρ h ks G d =>
-      (A.window w η).reads y.1 y.2.1 y.2.2.1 + P * slack <
-        ((A.window w η).correctAll y.1 y.2.1 y.2.2.1).card * (m * 256)) ≤ ε) :
-    pr (fun x : SketchStore N m × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
-      ∃ w, (A.win w x.2).reads x.1 (x.2 w).1 (x.2 w).2.1 + P * slack <
-        ((A.win w x.2).correctAll x.1 (x.2 w).1 (x.2 w).2.1).card * (m * 256))
-      ≤ (n : ℝ≥0∞) * ε := by
-  calc
-    _ ≤ ∑ w, pr (fun x : SketchStore N m × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
-        (A.win w x.2).reads x.1 (x.2 w).1 (x.2 w).2.1 + P * slack <
-          ((A.win w x.2).correctAll x.1 (x.2 w).1 (x.2 w).2.1).card * (m * 256)) := pr_exists_le _
-    _ ≤ ∑ _w : Fin n, ε := Finset.sum_le_sum fun w _ =>
-      pr_window_le A w (fun C y => C.reads y.1 y.2.1 y.2.2.1 + P * slack <
-        (C.correctAll y.1 y.2.1 y.2.2.1).card * (m * 256)) ε (hε w)
-    _ = (n : ℝ≥0∞) * ε := by
-      simp [Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
 
 /-- Session conservation in counts, from the pooled samples and an unpaid bound `ε_u` on some window's unpaid words, on
 any store `store ω` sampled before the session's coins. -/

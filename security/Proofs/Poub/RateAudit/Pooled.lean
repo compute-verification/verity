@@ -140,10 +140,6 @@ theorem step_le (M g K' a c : ℕ) (hM : 0 < M) :
 
 /-! ## Probability -/
 
-theorem pr_le_one {Ω : Type} [Fintype Ω] (P : Ω → Prop) : pr P ≤ 1 := by
-  classical
-  simp only [Pous.pr_eq_card]
-  exact ENNReal.div_le_of_le_mul (by rw [one_mul]; exact_mod_cast Finset.card_le_univ _)
 
 theorem pr_false {Ω : Type} [Fintype Ω] : pr (fun _ : Ω => False) = 0 := by
   classical

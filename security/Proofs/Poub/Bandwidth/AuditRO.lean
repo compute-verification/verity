@@ -119,21 +119,6 @@ noncomputable def named (A : Device N b h S c G q) (O : Oracle N b h) (r : ℕ) 
     Finset (Fin N) :=
   Finset.univ.filter (fun j => ∃ p ∈ code.2.2, ∃ x, (decoded A O r code)[p]? = some x ∧ x.1 = j)
 
-theorem card_fib (A : Device N b h S c G q) (O : Oracle N b h) (r : ℕ) (code : Bits S × Bits r × Finset ℕ) :
-    (fib A O r code).card ≤ (2 ^ b) ^ (N - (named A O r code).card) := by
-  classical
-  calc (fib A O r code).card ≤ (Finset.univ : Finset (↥(named A O r code)ᶜ → Bits b)).card := by
-        refine Finset.card_le_card_of_injOn (fun E j => E j) (fun _ _ => Finset.mem_univ _) ?_
-        intro E₁ h₁ E₂ h₂ he
-        simp only [fib, Finset.coe_filter, Finset.mem_univ, true_and, Set.mem_ofPred_eq] at h₁ h₂
-        funext j
-        by_cases hj : j ∈ named A O r code
-        · simp only [named, Finset.mem_filter, Finset.mem_univ, true_and] at hj
-          obtain ⟨p, hp, x, hx, rfl⟩ := hj
-          rw [h₁ p hp x hx, h₂ p hp x hx]
-        · exact congrFun he ⟨j, by simpa using hj⟩
-    _ = (2 ^ b) ^ (N - (named A O r code).card) := by
-        simp
 
 theorem card_compress_le (A : Device N b h S c G q) (O : Oracle N b h) (k lam : ℕ)
     [DecidablePred (fun E : Store N b => k ≤ (queried A E O).card ∧ A.ingress E O + S + c + G * b + lam < k * b)] :

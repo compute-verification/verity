@@ -659,28 +659,6 @@ theorem pr_conservation_of_unpaid {Ω : Type} [Fintype Ω] (store : Ω → Sketc
     · rw [show ((n : ℝ≥0∞) * P * N) = (n : ℝ≥0∞) * ((P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
       exact Rate.Deployed.window_le dw n (P * N) (d * n) hn (by positivity) hdw
 
-/-- `pr_conservation_of_unpaid` at the deployed receipt parameters (`RemoteRunConservationSketchDeployed`'s): the
-samples' terms are at most `2·2^-40`. -/
-theorem pr_deployed_of_unpaid {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N 128)
-    (A : SketchDeployedRun n P N 128 ρ 512 S L q 16 G 2773) (X : ℕ) (hn : 7 ≤ n) (hP : 0 < P) (hN : 0 < N)
-    (εu : ℝ≥0∞) (hu : pr (fun x : Ω × (Fin n → SketchWindowCoins P N 128 ρ 512 16 G 2773) =>
-      ∃ w, (A.win w x.2).reads (store x.1) (x.2 w).1 (x.2 w).2.1 + P * (S + (L - ρ * 256) + X) <
-        ((A.win w x.2).correctAll (store x.1) (x.2 w).1 (x.2 w).2.1).card * (128 * 256)) ≤ εu) :
-    pr (fun x : Ω × (Fin n → SketchWindowCoins P N 128 ρ 512 16 G 2773) =>
-      (∀ w t, (x.2 w).2.2 t ∈ (A.win w x.2).correctAll (store x.1) (x.2 w).1 (x.2 w).2.1) ∧
-        ((((∑ w, (A.win w x.2).reads (store x.1) (x.2 w).1 (x.2 w).2.1 : ℕ)) : ℝ) <
-            (1 - (0.0015 + gammaSketch N 128 ρ S L X)) * (n * P * N * 32768) ∨
-          ∃ w, (((A.win w x.2).reads (store x.1) (x.2 w).1 (x.2 w).2.1 : ℕ) : ℝ) <
-            (1 - (0.01 + gammaSketch N 128 ρ S L X)) * (P * N * 32768)))
-      ≤ 2 / 2 ^ 40 + εu := by
-  have h := pr_conservation_of_unpaid store A X 0.0015 0.01 (by omega) hP hN (by norm_num) (by norm_num) εu hu
-  refine (le_of_eq ?_).trans (h.trans ?_)
-  · norm_num [mul_assoc]
-  rw [show (2 : ℝ≥0∞) / 2 ^ 40 = 1 / 2 ^ 40 + 1 / 2 ^ 40 by
-    rw [ENNReal.div_add_div_same]; norm_num]
-  gcongr
-  · exact Rate.Deployed.pooled_deployed n hn
-  · exact Rate.Deployed.window_deployed n (by omega)
 
 end SketchDeployedRun
 

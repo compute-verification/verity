@@ -55,11 +55,6 @@ theorem bitLength_bounds {n : ℕ} (h : n ≠ 0) :
   rw [ite_eq_right h, Nat.add_sub_cancel]
   exact ⟨Nat.le_add_left _ _, Nat.log2_self_le h, Nat.lt_log2_self⟩
 
-theorem bitLength_le {n m : ℕ} (h : n ≠ 0) (hn : n < 2 ^ m) : bitLength n ≤ m := by
-  obtain ⟨h1, h2, -⟩ := bitLength_bounds h
-  have : 2 ^ (bitLength n - 1) < 2 ^ m := lt_of_le_of_lt h2 hn
-  have := (Nat.pow_lt_pow_iff_right (by norm_num)).1 this
-  omega
 
 theorem bitLength_mul_pow {n : ℕ} (h : n ≠ 0) (r : ℕ) : bitLength (n * 2 ^ r) = bitLength n + r := by
   obtain ⟨h1, h2, h3⟩ := bitLength_bounds h
@@ -87,15 +82,6 @@ theorem intTerm_fields {z : ℤ} (h0 : z ≠ 0) (hz : z.natAbs < 2 ^ 24) :
           Nat.mul_lt_mul_of_pos_right h3 (by positivity)
       _ = 2 ^ 24 := by rw [← pow_add]; congr 1; omega
 
-theorem intTerm_mag_eq_zero {z : ℤ} : (intTerm z).mag = 0 ↔ z = 0 := by
-  constructor
-  · intro h
-    by_contra h0
-    simp only [intTerm, ite_eq_right h0] at h
-    have : z.natAbs ≠ 0 := Int.natAbs_ne_zero.2 h0
-    simp_all
-  · rintro rfl
-    rfl
 
 /-- `intTerm z` is `z`. -/
 theorem intTerm_value {z : ℤ} (hz : z.natAbs < 2 ^ 24) : (intTerm z).value = z := by
