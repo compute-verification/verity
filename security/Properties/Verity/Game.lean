@@ -993,7 +993,9 @@ noncomputable def error (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray)
 /-- **Subprotocol `a`'s published error is below 1 at the parameters `θ`**: at some count `t` of SHA-512 calls and
 some collision probability `p`, its `δ`, plus `ε_forge` at the forger's budget at `t` calls, plus its loss at `p` (the
 bound `error` states wherever its premises hold) is below 1. A bound of 1 or more on a probability holds of every
-prover, so a witness bounded by `error` shows something of a cheating prover only where this holds. -/
+prover, so a witness bounded by `error` shows something of a cheating prover only where this holds. Wherever the error
+does not decrease in `t`, "at some `t`" amounts to "below 1 at zero calls", so a lemma concluding this shows only that
+the bound is not vacuous, and is no bound at the deployed call budget. -/
 def ErrorBelowOne (θ : ByteArray) (a : Subprotocol) : Prop :=
   ∃ (t : ℕ) (p : ℝ≥0∞), p ≤ 1 ∧
     V.delta θ a t + ENNReal.ofReal (V.epsForge θ (V.callsMul θ a * t + V.callsAdd θ a) (V.signatures θ)) +
