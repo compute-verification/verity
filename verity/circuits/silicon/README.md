@@ -15,7 +15,7 @@ The semantics import nothing but the standard library. The package's docstring l
   GF(2) circuits over `verity.circuits.boolean.forms`.
 
 The models are held to the hardware: [`captures/`](captures/README.md) holds replicas of evidence measured on silicon
-elsewhere, [`../ops/tests/fixtures/`](../ops/tests/fixtures/README.md) the captures the tests replay, `hawkeye/PIN.json`
+elsewhere, [`../../../tests/verity/circuits/ops/fixtures/`](../../../tests/verity/circuits/ops/fixtures/README.md) the captures the tests replay, `hawkeye/PIN.json`
 the pinned source-close reference, and `discrepancy_log.json` each place where the paper, the pinned simulator, the
 reference and the hardware disagree, open until its resolution names its evidence. `benchmarks/tc_probe/` and
 `benchmarks/tc_probe_fp4/` capture the hardware.

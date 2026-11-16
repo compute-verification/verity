@@ -251,7 +251,7 @@ def hawkeye_step(c: int, a: Sequence[int], b: Sequence[int], silicon_word: int) 
 # --- seeds ----------------------------------------------------------------------------------------------------------------------
 
 EXPERIMENT_ID = "B1-b3eba618b1b5-20260907T1731Z"
-REPO_FIXTURE_DIR = "verity/circuits/ops/tests/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z"
+REPO_FIXTURE_DIR = "tests/verity/circuits/ops/fixtures/gemm-B1-b3eba618b1b5-20260907T1731Z"
 SEED_FAMILIES = ("qkv_proj", "o_proj", "gate_up_proj", "lm_head")
 PHASES = ("decode", "prefill")
 #: Seed order: id 0 of ``vu-k1536`` is ``qkv_proj_decode_0`` (the target's K=1536 conformance vector).
