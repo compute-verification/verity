@@ -33373,13 +33373,13 @@
    }
   },
   "Definitions.Core.FirstHit": {
-   "digest": "d14b7555b48c9aa09755e4830267fa0c4593d11b976cd20d70e42bf9707618c7",
+   "digest": "c12ed4083a7101e6f2a3f2ec20ec961d62908eeddb39c39419b78a948c152397",
    "definitions": {
     "Verity.FirstHit.classFinderAt": "1149e6634be571e3d8d44bfb6b2e650b3bcfb09787d7b992afbf75fcbc9f6509",
     "Verity.FirstHit.clsOf": "e39003c3518f494f20a99e2e140f0ce770f549d62c045ed2afec925b8e7d4021",
     "Verity.FirstHit.firstIdx": "a89db9e9a7b0472e8461ac411da0e08adfefbda659451d619a11ce1f659e706a",
     "Verity.FirstHit.loopCostAt": "8d34714c937c040d3929f3066d6c368bdc0fa9a46fbc7e6185afdf0a34459939",
-    "Verity.FirstHit.outOfAt": "a14671265dba96094fada0207a57d21ad168607ff7dfe11a5e9acf5243a5b051",
+    "Verity.FirstHit.outOfAt": "380656b070cf2cfe2005a2202b30a7c3083ebdb0ebe05868056c8400b1678603",
     "Verity.FirstHit.sampleFinderAt": "a62db64dd0111de912f16b0f40557c2839893e1d5ccc561d492785dc9f572941"
    }
   },
@@ -36162,11 +36162,10 @@
    }
   },
   "Definitions.Poub.Remote.Fork": {
-   "digest": "fcc4b498f9aa37aa1ddc66e9df3e137390756da0d60308cf81581da94dfa14ad",
+   "digest": "9d670526af4d6cdb6ed772127cb50f49e7b5d468c14941a4048df553d751bbee",
    "definitions": {
-    "ResourceAccounting.Remote.Sample.Receipts.Finds": "d0ca092b242861882befca55f92babeeb3acdebf1920943525b6659eff72f48f",
     "ResourceAccounting.Remote.Sample.Receipts.Split": "a3e079e310db3dca89f2c6c3105c8fe341196b2b9392e7f4f7c998b7571c381d",
-    "ResourceAccounting.Remote.Sample.Receipts.finder": "21b6454234fcd1a22008ac63b23b7223b59dcc542977bacd8efce98b26d8be8c",
+    "ResourceAccounting.Remote.Sample.Receipts.finder": "34df8366b62205dfd98b433a520861d344498c8a5cc5c101ace5c7e3224cc0ed",
     "ResourceAccounting.Remote.Sample.Receipts.split": "294f8fd77148c9eccf9177b9bcb42789db163e2cb038e7116f6992f6195f9e00"
    }
   },
@@ -40816,7 +40815,7 @@
    }
   },
   "Definitions.ResourceAccounting.ReadUnit": {
-   "digest": "f46b7512d237b8bf7e27b400c5e08b6d9cb75f5a902173c912f79c6c053ed348",
+   "digest": "f5e89ef75ecf8e23e096e01793fe60834a62b6220ad663155dfec088cd3c9621",
    "definitions": {
     "ResourceAccounting.ReadUnit.Ports": "13779a135c9ba6b1e18a3dcd8c3658740a8bf5d5aecbdabc6721d44a4d068527",
     "ResourceAccounting.ReadUnit.Ports.count": "82afda5df601ff8b3b34e85a47192f1151685622057a429670870d48877e2c71",
@@ -40841,7 +40840,7 @@
     "ResourceAccounting.ReadUnit.Reads": "25b74efd8b1ab629a4c50f79c25901ff15917ecaf86ee06f646f4552164fda90",
     "ResourceAccounting.ReadUnit.Reads.Committed": "db9ebd35dcea3be9a93f097d55aaae94ad60362417512a9ff8ecd10c5eda7362",
     "ResourceAccounting.ReadUnit.Reads.domain": "b9a0f997ef7e4d485ed51e869568d5721b4b91cf78ea797b6743a1edca51cb0a",
-    "ResourceAccounting.ReadUnit.Reads.finder": "535b9ea3570a58bfffdbbcaa6147e545f184d069f9a29dade184242881954f1c",
+    "ResourceAccounting.ReadUnit.Reads.finder": "3e877fe8898ddbdc1b09acff07842b969cba86e15b4ef8d9940e41320dd99149",
     "ResourceAccounting.ReadUnit.Reads.hashedAt": "b33e1db759276af658c77ef3b626955e5dca7841d6232da75c385a4f323ba5d4",
     "ResourceAccounting.ReadUnit.Reads.index": "96097eec824525ccba2697d33605256e64040236f753f2c419bea98a63707269",
     "ResourceAccounting.ReadUnit.Reads.port": "b380acb7e5b54aa1692870aa3082291368a0ad89203a56a055a27a4e9c8b8bae",
@@ -53707,10 +53706,10 @@
    }
   },
   "Proofs.Flock.SamplingGeneric.TwoRegFirstHitClass": {
-   "digest": "11c8a595157638cb213ad574e4656c6ebe28a6fe54f37ad2eb261cbca1faad4f",
+   "digest": "afb854e4615d263d51a7513c92de900117b65b8fe7fdf30a351ffc3aa641e448",
    "definitions": {
-    "Claims.SamplingGeneric.Compiled.finderXCls": "0fb93c441b2aae01b940b2fa7ee4cbd30bd713f6428939e72824e23255b90a12",
-    "Claims.SamplingGeneric.CompiledTwo.finderICls": "a49ab8c654d29fd74a4cd1811e9bb6d2402d403aedd2f00400e0bfba716fdb40"
+    "Claims.SamplingGeneric.Compiled.finderXCls": "c6c3592e44aea39e80093ccae49b47f466a556e7d1a3558fbfa91242aaa81d8b",
+    "Claims.SamplingGeneric.CompiledTwo.finderICls": "9f6d645a2e68adc72885c2a1652ccb4faebdafac6d390f900aebabbeea59e9e2"
    }
   },
   "Proofs.Flock.SessionLoop.Concrete.Delta": {
