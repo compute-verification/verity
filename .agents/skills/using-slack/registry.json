@@ -1078,6 +1078,18 @@
         "Does the theorem cover the code that actually runs, or a model of it?"
       ],
       "usergroup": "S0CBTDSL95M"
+    },
+    {
+      "handle": "goals",
+      "remit": "Writes Daniel's Goals page: every goal change goes through it. Leads tell it what changed; it checks and writes.",
+      "charter": "Daniel, 2026-11-15 (via dashboard-goals, COMM-113)",
+      "linear": "CON",
+      "linear_label": "lane:goals",
+      "examples": [
+        "Mark circuits/masked-keyblock done; it landed in #10439.",
+        "Move proofs/spot-figures to Tue 17 Nov; the figures wait on a rerun.",
+        "Add a subgoal under proofs/zero-knowledge for the ZK server's live path, owned by proofs."
+      ]
     }
   ]
 }
