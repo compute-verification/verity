@@ -22,7 +22,7 @@ case.
 
 namespace Verity
 
-open Accounting
+open ResourceAccounting
 
 namespace Vocab
 
