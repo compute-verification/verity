@@ -521,10 +521,10 @@ def definition(args) -> None:
                     o.copy_(guess)
                     canon.run("cooperative_topk", x, o, K, 1, sl, rows=rows, ncols=WIDTH, ls0=x.stride(0),
                               ls1=x.stride(1))
-            before = canon.stats(DEV).clone()
+            before = canon.stats(x.device).clone()
             eager, graph = _wrong_rows(o, fn, want)
             rec[mode] = {"eager_wrong_rows": eager, "graph_wrong_rows": graph,
-                         "three_runs": dict(zip(dsa_topk.STATS, (canon.stats(DEV) - before).tolist()))}
+                         "three_runs": dict(zip(dsa_topk.STATS, (canon.stats(x.device) - before).tolist()))}
         rec["ok"] = rec["canonical_ok_first_row"] and not any(
             rec[m]["eager_wrong_rows"] or rec[m]["graph_wrong_rows"] for m in passes)
         shapes.append(rec)
@@ -559,9 +559,11 @@ def definition(args) -> None:
     (out / "definition.json").write_text(json.dumps({"device": torch.cuda.get_device_name(), "torch": torch.__version__,
                                                      "definition": str(REGISTRY), "paths": paths, "shapes": shapes},
                                                     indent=1) + "\n")
+    idle = [m for m in passes if not paths[m]["rows_bisected"] + paths[m]["rows_refined"]]
     detail = (f"{len(shapes) - len(failed)} of {len(shapes)} shapes: every row of {', '.join(passes)}, eager and "
               f"replayed from a CUDA graph, is sorted(topk_set) of the registry's Definition; paths "
-              f"{json.dumps(paths)}")
+              f"{json.dumps(paths)}" + (f"; no failed candidate reached {', '.join(idle)}'s fallback" if idle else ""))
+    failed += idle
     run = Path(os.environ.get("RESEARCH_RUN_DIR") or out)
     f = run / "result.json"
     doc = json.loads(f.read_text()) if f.is_file() else {
