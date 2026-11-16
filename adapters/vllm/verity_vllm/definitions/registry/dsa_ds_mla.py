@@ -63,7 +63,7 @@ WARP = 32
 F_INV448, F_FLT_MIN = 0x3B124925, 0x00800000
 
 _CONF = ("model-untested: read from the Triton kernel and its PTX at the commits the module docstring pins; "
-         "adapters/vllm/tests/properties/glm53_ds_mla_write_capture_gpu.py is its hardware check")
+         "tests/adapters/vllm/tests/properties/glm53_ds_mla_write_capture_gpu.py is its hardware check")
 
 
 def check_tile(T: int) -> None:
