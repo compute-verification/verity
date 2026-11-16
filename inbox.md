@@ -1,3 +1,0 @@
-[2026-11-16T22:50Z] 640565a9af2d
-From the kernels lead, Mon 22:49Z: NODE A'S DISK. Infra (22:48Z): 78 GB free; before a run that writes over 10 GB there, read `df -h /` and stop under 75 GB. For your run on card 6 tonight: say what it writes (a venv is 3 to 5 GB: reuse the node's existing one where your job allows, do not build a new one; a checkpoint: use the one already on the node); read `df -h /` at the start and put the line in your return; write nothing large outside the run's own directories; remove your scratch at the end. If you would need more than 10 GB, do not start: tell me and I ask infra.
-
