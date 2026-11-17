@@ -102,17 +102,6 @@ theorem holds_and {δ₁ δ₂ : ℝ} {P Q : Ω → Prop} (h₁ : r.Holds δ₁ 
 theorem holds_of_forall {P : Ω → Prop} (h : ∀ ω, r.accepts ω → P ω) : r.Holds 0 P :=
   (pr_eq_zero fun ω ⟨ha, hn⟩ => hn (h ω ha)).le
 
-/-- The rebuild's fit at `W_r = 0` is the Compute row alone. -/
-theorem fit_zero (h : ∀ ω, r.rebuildWork ω ≤ N.rebuild * a.T) : r.Fit 0 0 :=
-  holds_of_forall fun ω _ => by
-    have : (r.rebuildWork ω : ℝ) ≤ N.rebuild * a.T := by exact_mod_cast h ω
-    linarith
-
-/-- The rebuild's fit beside `W_r`, from W at π_r and PoUW's certificate of `W_r`. -/
-theorem fit_of_certified {Wr δ : ℝ} (hw : Assumptions.ComputeAdditive r) (hc : r.Certified Wr δ) : r.Fit Wr δ :=
-  holds_mono (fun ω _ h => by
-    have : (r.rebuildWork ω : ℝ) + r.pouwWork ω ≤ N.rebuild * a.T := by exact_mod_cast hw ω
-    linarith) hc
 
 end Holds
 
