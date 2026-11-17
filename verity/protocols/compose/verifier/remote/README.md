@@ -52,9 +52,9 @@ names, `Session*` means a run of a subprotocol.
 | Subprotocol | What it establishes | Lean check | id |
 |---|---|---|---|
 | SPOT ([README](../../../proofs/spot/verifier/README.md)) | the committed values satisfy the registered circuit outside the blocks the sample misses | `VStar.Recursive.Sampled.protocol` (`verity/protocols/proofs/spot_flock/verifier/lean`), one-stage, recursive or two-stage by its `form` | `verity/sampled-proofs/v1` |
-| PoUW ([README](../../../resource_accounting/compute/pouw/verifier/README.md)) | a run's credited MACs at Pearl's assumption, at δ over a work-weighted sample | `PouwCheck.PearlPlus.Protocol.protocol` (`verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus`) | `verity/pouw/pearl-plus/v1` |
-| PoUW, v0 | the period's credited work, execution phases all or nothing | `PouwCheck.Period.protocol` (`verity/protocols/resource_accounting/compute/pouw/verifier/lean/check`) | `verity/pouw/period/v1` |
-| The inference-only policy ([README](../../../workload_classification/training_detection/inference_only/verifier/README.md)) | the registered circuit divides into inference blocks within their gate and fresh-input budgets; θ is registered | `InferenceOnlyCheck.Protocol.protocol` (`verity/protocols/workload_classification/training_detection/inference_only/verifier/lean`) | `verity/inference-only/v0` |
+| PoUW ([README](../../../resource_accounting/compute/pouw/verifier/README.md)) | a run's credited MACs at Pearl's assumption, at δ over a work-weighted sample | `PouwVerifier.PearlPlus.Protocol.protocol` (`verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus`) | `verity/pouw/pearl-plus/v1` |
+| PoUW, v0 | the period's credited work, execution phases all or nothing | `PouwVerifier.Period.protocol` (`verity/protocols/resource_accounting/compute/pouw/verifier/lean/check`) | `verity/pouw/period/v1` |
+| The inference-only policy ([README](../../../workload_classification/training_detection/inference_only/verifier/README.md)) | the registered circuit divides into inference blocks within their gate and fresh-input budgets; θ is registered | `InferenceOnlyVerifier.Protocol.protocol` (`verity/protocols/workload_classification/training_detection/inference_only/verifier/lean`) | `verity/inference-only/v0` |
 
 The code is `CoreRemote.lean`: `V1.protocol = tiedSameB "verity/remote/v1" tied ties components`
 (`ties = [run, executionPhase]`; the executable `remote-v1`, `RemoteV1Main.lean`), which
@@ -87,7 +87,7 @@ rule and its difftest are the composition's ([README](../lean/README.md),
       inference-only policy's check.
    2. Only then does the challenger flip the coins that select the sample, so the partition is fixed before any coin.
    3. The developer proves each sampled proof block with Flock `--zk` behind the ZK server, and the Lean verifier
-      `verity-verify-proof` checks each proof. PoUW's check (`pouw-check`) reads each PoUW period's commitment, proofs and
+      `verity-verify-proof` checks each proof. PoUW's check (`pouw-verifier`) reads each PoUW period's commitment, proofs and
       receipts, and credits the phase's work. No proof is retried, and a failed proof is a visible failure.
    4. The composition accepts only if every subprotocol accepts and the commitments match (the verdict, below), and
       accounting adds the phase's share (Accounting, below).
@@ -225,7 +225,7 @@ The time credit adds the data sheet's rates.
 - SPOT: `Properties.Spot.AcceptMeans`, **proved**, covers `OneStage.check`, where remote's one-stage
   form (v2) ends, on its own run's verdicts.
 - PoUW's period credit: `Properties.Pouw.MonitoringPeriodJ10R.H1J10RCheckedCreditMonitoringPeriod`, `CheckedCreditMonitoringPeriod`'s conclusion
-  at `PouwCheck.Credit.executionPhase`'s verdict over J10-R's tile stratum, the guarantee `PouwCheck.Period.protocol` names
+  at `PouwVerifier.Credit.executionPhase`'s verdict over J10-R's tile stratum, the guarantee `PouwVerifier.Period.protocol` names
   (`GUARANTEE`) and refuses every other form of an execution phase for, **proved** under the premises above.
 - The time credit: `ResourceAccounting.Guarantees.Compose.CircuitCredit`, **proved**, reading the data sheet.
 - The proofs behind PoUW's credit, `ResourceAccounting.Guarantees.TS.SessionSoundAt`: **proved**, under `AcceptedLive` (no
@@ -244,7 +244,7 @@ expansion meets it at Γ·W gates and k = ⌊α_f·Γ·W⌋. `SlowdownThreaded` 
 **How it is checked.**
 
 - *By whom.* By remote's verifier, whose subprotocol it is (Subprotocols, above), and on its own as
-  `inference-only-check` (`InferenceOnlyCheck.Theta.check`, `verity/protocols/workload_classification/training_detection/inference_only/verifier/lean`).
+  `inference-only-verifier` (`InferenceOnlyVerifier.Theta.check`, `verity/protocols/workload_classification/training_detection/inference_only/verifier/lean`).
 - *On what.* The registered circuit's description, its inference partition and θ's provenance, against the registration
   log. No hardware at the site is involved.
 - *From which coins.* None. The check is deterministic, so it adds no failure probability of its own. The run's record
@@ -269,12 +269,12 @@ part 6's premises say why that shape trains little.
    remote's soundness carries its clause, `Properties.Remote.PolicyHeld`, proved by `Vocab.inferenceOnlySound`. That
    the case's circuit is the committed files' is **open** (`Vocab.WiresSound`, `GateARow`: the open gap).
 2. *The policy's check accepts ⇒ `Theta.evaluate` complies ⇒ `Desc.evaluate` complies.*
-   `InferenceOnlyCheck.Properties.ProtocolAccepts`, **proved**: where the policy's check accepts, `Theta.evaluate`
+   `InferenceOnlyVerifier.Properties.ProtocolAccepts`, **proved**: where the policy's check accepts, `Theta.evaluate`
    accepts with `complies` true, and `Desc.evaluate` gives that verdict too. θ's provenance:
-   `InferenceOnlyCheck.Properties.SecurityProofs.ThetaProvenance`, **proved**.
+   `InferenceOnlyVerifier.Properties.SecurityProofs.ThetaProvenance`, **proved**.
 3. *A compliance verdict of `Desc.evaluate` ⇒ `InferenceOnly.CompliesRate Γ α_f` of the laid-out `Verity.RegisteredCircuit`, on every
    expansion:*
-   `InferenceOnlyCheck.Properties.SecurityProofs.DescWitnesses` (its `Witnessed`), **proved**, with `DescReports` (the verdict
+   `InferenceOnlyVerifier.Properties.SecurityProofs.DescWitnesses` (its `Witnessed`), **proved**, with `DescReports` (the verdict
    is the definition's), **proved**; `refines` bounds the unrolled check's blocks by (Γ, α_f·Γ). `SlowdownThreaded`
    takes `CompliesRate Γ α_f d`, what this verdict gives, and `PolicyHeld` holds it of the case's circuit
    (`Properties.Remote.PolicyMet`).
@@ -286,7 +286,7 @@ part 6's premises say why that shape trains little.
    statement bounds either per inference block yet: **open**.
 6. *The displayed bound reading the result instead of assuming `CompliesRate`:* **open** (part 6).
 7. *The count's verdict `InferenceOnly.CompliesAtMost c k n` ⇒ the day's bound:* `Slowdown.Cut.Guarantees.CountHE`, **proved** under
-   (H) and (E), the verdict its only premise on the circuit; `InferenceOnlyCheck.Properties.DescCountsCK`, from a published
+   (H) and (E), the verdict its only premise on the circuit; `InferenceOnlyVerifier.Properties.DescCountsCK`, from a published
    `complies` to the verdict, and the tie of the deployment's days to the registered circuits the count checked are **open**.
 
 ### 5. The monitoring period
@@ -527,8 +527,8 @@ run runs both halves on one served run, PoUW's as a development run:
   `verity/pouw/period/v1` case, so no run of record of the remote verdict has passed: its run is moved, at proof level none,
   and no remote guarantee exists for its verdicts to reach (the open gap, above).
 
-What of PoUW's own check runs is its Lean check, through its difftest against the Python (`lake exe pouw-check`, the
-suite `verity-pouw-check-difftest`; `verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/README.md`), and the composite's difftest
+What of PoUW's own check runs is its Lean check, through its difftest against the Python (`lake exe pouw-verifier`, the
+suite `verity-pouw-verifier-difftest`; `verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/README.md`), and the composite's difftest
 (`tests/verity/protocols/compose/verifier/lean`).
 
 ## Read next

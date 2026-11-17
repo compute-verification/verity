@@ -70,13 +70,13 @@ subprotocol accepts its own case, and the commitment is `bind` of the subprotoco
 
 | subprotocol | onsite | remote | `Core.Protocol` | id |
 | --- | --- | --- | --- | --- |
-| network attestation (over the period: its execution phases of transfer blocks certified and proved, and the bound `K` on what left the site) | yes | | `NetworkCheck.Period.protocol` (`network_check`, `../../../resource_accounting/network/verifier/lean`) | `verity/certifier/v0` |
-| PoUW (its period credit: the period's windows credited all or nothing) | yes | yes | `PouwCheck.Period.protocol` (`pouw_check`, `../../../resource_accounting/compute/pouw/verifier/lean/check`) | `verity/pouw/period/v1` |
+| network attestation (over the period: its execution phases of transfer blocks certified and proved, and the bound `K` on what left the site) | yes | | `NetworkVerifier.Period.protocol` (`network_verifier`, `../../../resource_accounting/network/verifier/lean`) | `verity/certifier/v0` |
+| PoUW (its period credit: the period's windows credited all or nothing) | yes | yes | `PouwVerifier.Period.protocol` (`pouw_verifier`, `../../../resource_accounting/compute/pouw/verifier/lean/check`) | `verity/pouw/period/v1` |
 | SPOT (the audit on the proofs themselves, one-stage v2's, which it reads as blobs; one-stage v1 and the recursive audit, which its soundness doesn't cover, refused, and the two-stage audit read, checked and refused last while its switch is off) | yes | yes | `VStar.Recursive.Sampled.protocol` (`core_vstar_recursive`, `../../../proofs/spot_flock/verifier/lean`) | `verity/sampled-proofs/v1` |
-| the inference-only policy (its check: the registered circuit's division into inference blocks within their gate and fresh-input budgets, and the provenance of the registered information) | yes | yes | `InferenceOnlyCheck.Protocol.protocol` (`inference_only_check`, `../../../workload_classification/training_detection/inference_only/verifier/lean`) | `verity/inference-only/v0` |
-| PoUS (its check of a run) | yes | | `PousCheck.RunProtocol.protocol` (`pous_check`, `../../../resource_accounting/memory/pous/verifier/check`) | `verity/pous/p2/v4/run` |
+| the inference-only policy (its check: the registered circuit's division into inference blocks within their gate and fresh-input budgets, and the provenance of the registered information) | yes | yes | `InferenceOnlyVerifier.Protocol.protocol` (`inference_only_verifier`, `../../../workload_classification/training_detection/inference_only/verifier/lean`) | `verity/inference-only/v0` |
+| PoUS (its check of a run) | yes | | `PousVerifier.RunProtocol.protocol` (`pous_verifier`, `../../../resource_accounting/memory/pous/verifier/check`) | `verity/pous/p2/v4/run` |
 | PoUB-P2 (its session over PoUS's store) | yes | | `Poub.P2Protocol.protocol` (`poub`, `../../../resource_accounting/memory/poub/verifier/lean`) | `verity/remote-bandwidth/p2/v0` |
-| the wipe (the memory attester's streamed-label wipe of the period) | yes | | `MemoryChallenger.WipeProtocol.protocol` (`core_memory_challenger`, `../../../resource_accounting/memory/pous/attester/lean`) | `verity/wipe/v0` |
+| the wipe (the memory attester's streamed-label wipe of the period) | yes | | `MemoryAttester.WipeProtocol.protocol` (`core_memory_attester`, `../../../resource_accounting/memory/pous/attester/lean`) | `verity/wipe/v0` |
 
 Every subprotocol of both products is ported to its own `Core.Protocol`.
 
@@ -91,7 +91,7 @@ The inference-only policy has no rounds and reads no coins. Its case is the regi
 the registration log before the run (params), the run's own registration record (commitment: its digest is the one
 SPOT's audit commits to) and the division with θ and θ's provenance (evidence). It accepts exactly
 when the record names the registered circuit (its `program` is the circuit's SHA-512, as SPOT's audit asks of its
-own record) and the policy's check (`InferenceOnlyCheck.Theta.evaluate`) finds that the division complies. Each product ties
+own record) and the policy's check (`InferenceOnlyVerifier.Theta.evaluate`) finds that the division complies. Each product ties
 the policy's record to SPOT's (one record, below), so the circuit the policy checked is the one SPOT
 audited.
 
@@ -138,7 +138,7 @@ of `C*` PoUS's setup published (its commitment's `root`) and the root PoUB-P2's 
 root is its own salted tree's, is not a subprotocol. Once the log exists, both read the store's hardware entry.
 Remote's one tie, `Core.Remote.windows`, puts every window of PoUW's period on the policy's record: the digest of the
 record the policy's commitment is, and the digest of each window's Commit record as the period's credit reads it
-(`PouwCheck.Credit.commitOf?`). The period's own commitment is the auditor's ledger, so it can't join `same`.
+(`PouwVerifier.Credit.commitOf?`). The period's own commitment is the auditor's ledger, so it can't join `same`.
 
 ## The difftest
 
