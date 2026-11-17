@@ -49,6 +49,7 @@ from pathlib import Path
 from typing import Any, NamedTuple
 
 from verity import config as K
+from verity.commitments.crypto import lms
 from verity.config import Component, Workload
 from verity.protocol import Channel, Manifest, ProtocolDef, Role, Starter
 from verity.protocols.resource_accounting.network.verifier import parties as NC
@@ -540,6 +541,12 @@ def _first_parent(state: Path) -> list[str]:
     return p.stdout.split()
 
 
+def _deployed_local(root: Path, main: list[str]) -> LC.Local:
+    """SPOT's loopback host's session, its key at `lms.DEPLOYED`, the only parameters SPOT's v2 reads a sample's coins
+    under (`OneStageZk.KEY_PARAMS`), made over this machine's cores."""
+    return LC.Local(root, main, params=(lms.DEPLOYED.W, lms.DEPLOYED.H), workers=len(os.sched_getaffinity(0)))
+
+
 def _serve_challenger(cfg: Mapping[str, Any], state: Path) -> None:
     """The challenger where `verity run` starts it, on this machine: SPOT's loopback host (`challenger_party.Host`)
     and Pearl+'s gate (`PEARLPLUS_GATE`), each under a key made for the run in ``STATE/parties/challenger/``, flipping
@@ -556,7 +563,7 @@ def _serve_challenger(cfg: Mapping[str, Any], state: Path) -> None:
     gate = json.loads(p.stdout.strip().splitlines()[-1])
     if gate["pin"] != main[0]:
         raise Refused("challenger", f"Pearl+'s gate pins {gate['pin']}, not the run's commit {main[0]}")
-    host = _HOSTS[state] = CP.Host(mine / "sampled-proofs", main, LC.Local)
+    host = _HOSTS[state] = CP.Host(mine / "sampled-proofs", main, _deployed_local)
     spot = host.start()
     written = {"sampled-proofs": {"loopback": spot["address"], "main-file": str(line)},
                "pearl-plus": {"gate": gate["gate"], "peer": gate["peer"], "lane": gate["lane"],
@@ -568,16 +575,21 @@ def _serve_challenger(cfg: Mapping[str, Any], state: Path) -> None:
 
 def _stop_challenger(cfg: Mapping[str, Any], state: Path) -> None:
     """Both hosts stopped, and Pearl+'s gate's public files (its ledger, pins log, public key and sessions' public
-    files) copied under ``STATE/public/challenger/pearl-plus/``, which `verity run` transcribes."""
+    files) copied under ``STATE/public/challenger/pearl-plus/``, which `verity run` transcribes. Refused by name
+    (``challenger``) where the gate's stop fails, so the party's exit is not 0."""
     if (host := _HOSTS.pop(state, None)) is not None:
         host.stop()
     if (root := state / "parties" / CHALLENGER / "pearl-plus").is_dir():
-        subprocess.run([sys.executable, str(ROOT / PEARLPLUS_GATE), "stop", "--root", str(root), "--out",
-                        str(state / "public" / CHALLENGER / "pearl-plus")], cwd=ROOT, check=False)
+        p = subprocess.run([sys.executable, str(ROOT / PEARLPLUS_GATE), "stop", "--root", str(root), "--out",
+                            str(state / "public" / CHALLENGER / "pearl-plus")], cwd=ROOT, capture_output=True,
+                           text=True, check=False)
+        if p.returncode:
+            raise Refused("challenger", f"{PEARLPLUS_GATE} stop exited {p.returncode}, so Pearl+'s gate's public "
+                                        f"files are not all in the run's record: {p.stderr.strip()[-800:]}")
 
 
 #: the challenger, whose coins SPOT's sample and Pearl+'s salt and sample read; its Lean coins' verifier is built when
-#: missing, so it waits long
+#: missing and SPOT's key is made at the deployed parameters, so it waits long
 STARTS[CHALLENGER] = Start(writes={"sampled-proofs": ("loopback", "main-file"),
                                    "pearl-plus": ("gate", "peer", "lane", "key-sha512", "main-file")},
                            serve=_serve_challenger, stop=_stop_challenger, within=1800)

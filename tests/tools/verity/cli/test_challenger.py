@@ -40,7 +40,7 @@ class Host:
 def stand_ins(tmp_path, monkeypatch):
     """The run's state with its run.json, the git line, Pearl+'s gate (``init`` answers ``pin``, or exits ``rc``) and
     SPOT's host, each a stand-in; the calls they got."""
-    state, calls, gate = tmp_path / "state", [], {"rc": 0, "pin": LINE[0]}
+    state, calls, gate = tmp_path / "state", [], {"rc": 0, "pin": LINE[0], "stop": 0}
     state.mkdir()
     (state / "run.json").write_text(json.dumps({"run": "r-test", "program": LINE[0], "periods": 1}))
     Host.made.clear()
@@ -54,6 +54,8 @@ def stand_ins(tmp_path, monkeypatch):
             doc = {"gate": f"{sys.executable} {T.PEARLPLUS_GATE} gate --root {argv[4]}", "peer": "local",
                    "lane": "vllm", "pin": gate["pin"], "key_sha512": KEY}
             return subprocess.CompletedProcess(argv, gate["rc"], f"[coins] built\n{json.dumps(doc)}\n", "no lake")
+        if argv[2] == "stop":
+            return subprocess.CompletedProcess(argv, gate["stop"], "", "no ledger to copy")
         return subprocess.CompletedProcess(argv, 0, "", "")
 
     monkeypatch.setattr(T.subprocess, "run", run)
@@ -79,7 +81,7 @@ def test_its_hosts_run_under_keys_made_for_the_run_pinned_on_the_runs_commit_and
                    "pearl-plus": {"gate": f"{sys.executable} {T.PEARLPLUS_GATE} gate --root {mine / 'pearl-plus'}",
                                   "peer": "local", "lane": "vllm", "key-sha512": KEY, "main-file": line}}
     assert (public / "main.txt").read_text().split() == LINE
-    assert [(h.root, h.main, h.local) for h in Host.made] == [(mine / "sampled-proofs", LINE, T.LC.Local)]
+    assert [(h.root, h.main, h.local) for h in Host.made] == [(mine / "sampled-proofs", LINE, T._deployed_local)]
     assert calls[0] == ["git", "rev-list", "--first-parent", LINE[0]]
     assert calls[1] == [sys.executable, str(ROOT / T.PEARLPLUS_GATE), "init", "--root", str(mine / "pearl-plus")]
     assert not (public / f".{T.BINDINGS}").exists()
@@ -98,6 +100,26 @@ def test_a_gate_not_made_or_pinned_off_the_runs_commit_is_refused_and_writes_no_
         T.STARTS[T.CHALLENGER].serve(R.load(CONFIG, REG), state)
     assert e.value.name == "challenger"
     assert not (state / "public" / T.CHALLENGER / T.BINDINGS).exists() and not Host.made
+
+
+def test_spots_loopback_host_makes_its_key_at_the_deployed_parameters_v2_reads_coins_under(monkeypatch, tmp_path):
+    made = []
+    monkeypatch.setattr(T.LC, "Local", lambda root, main, **kw: made.append((root, main, kw)))
+    T._deployed_local(tmp_path, LINE)
+    assert made == [(tmp_path, LINE, {"params": (1, 20), "workers": len(T.os.sched_getaffinity(0))})]
+    assert (T.lms.DEPLOYED.W, T.lms.DEPLOYED.H) == (1, 20)
+
+
+def test_a_failed_stop_of_pearl_plus_gate_fails_the_challenger_and_the_run(stand_ins, capsys):
+    state, _, gate = stand_ins
+    gate["stop"] = 1
+    cfg = R.load(CONFIG, REG)
+    runner = R.InProcess(cfg, REG, state, True)
+    assert R.execute(cfg, REG, state, [T.CHALLENGER], runner, [], ["gate-host"], [T.CHALLENGER]) == 2
+    assert capsys.readouterr().out.splitlines()[-1] == 'PARTY {"exit": 1, "party": "challenger"}'
+    error = (state / "logs" / f"{T.CHALLENGER}.error").read_text()
+    assert error.startswith("Refused") and "stop exited 1" in error and "no ledger to copy" in error
+    assert Host.made[0].stopped
 
 
 def test_spots_piece_hands_the_runner_the_loopback_host_in_a_development_run_and_a_gate_before_it():
