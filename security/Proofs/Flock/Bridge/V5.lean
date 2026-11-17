@@ -10,8 +10,8 @@ public import Proofs.Flock.Bridge.V5.Honest
 public import Proofs.Flock.Bridge.V5.Refused
 public import Proofs.Flock.Bridge.V5.Accepted
 public import Proofs.Flock.Bridge.V5.Session
-public import Proofs.Flock.Bridge.V5.QsRows
-public import Proofs.Flock.Bridge.V5.Rows
+public import Proofs.Flock.Bridge.QsRows.FirstReads
+public import Proofs.Flock.Soundness.Discharge.FailClosed.ZkHiddenM1
 
 /-! `Statement`: `Flock.Guarantees.SampledKSLiveV5`, V2 at the verifier's public inputs with or without shared rows, and
 the targets its assembly takes (stated). `EndToEndHidden`: `endToEndHiddenV5_of`, from `OpeningsCanonTargetV5`.

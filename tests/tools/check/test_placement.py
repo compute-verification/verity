@@ -486,6 +486,7 @@ def test_the_payload_reads_both_files_from_stdin_where_neither_script_is_on_disk
     assert unread != payload               # the slice read raising, as where /proc/self/cgroup can't be read: an error, and a skip
     gone = json.loads(subprocess.run([sys.executable, "-"], input=unread, cwd=tmp_path, env=env, capture_output=True, check=True).stdout)
     assert gone["slice_gib"]["error"].startswith("FileNotFoundError: ")
+    gone["deadline_in_s"] = None
     with pytest.raises(ValueError, match=r"its slice can't be read \(FileNotFoundError: .*\), and this shard asks 390 GiB"):
         CHECK.placement(gone, True, None, 390)
     r = subprocess.run([sys.executable, "-"], input=payload, cwd=tmp_path, env=env, capture_output=True, check=True)
