@@ -23,7 +23,7 @@ Each run's capacity verdict is its audit's decision outside a break.
 
 namespace Pous.Period
 
-open Pous.EndToEnd PousCheck PousCheck.Properties
+open Pous.EndToEnd PousVerifier PousVerifier.Properties
 
 set_option exponentiation.threshold 20000
 
@@ -80,8 +80,8 @@ def DEMO_FULL : ℕ := 1038 * 2 ^ 16 * 16448
 def demoDevice : ResourceAccounting.Device Unit := ⟨2 ^ 30, DEMO_FULL, fun _ => 0, 0, fun _ => 437248000⟩
 
 /-- Demo B's point: its codec's parameters at `1038` segments, the deployed rounds and limit. -/
-def demoPoint : PousCheck.Run.Point :=
-  ⟨⟨PousCheck.P2.Params.deployed.w, 21065, 2 ^ 16, 1038⟩, PousCheck.Run.DEPLOYED.k, PousCheck.Run.DEPLOYED.limitNs⟩
+def demoPoint : PousVerifier.Run.Point :=
+  ⟨⟨PousVerifier.P2.Params.deployed.w, 21065, 2 ^ 16, 1038⟩, PousVerifier.Run.DEPLOYED.k, PousVerifier.Run.DEPLOYED.limitNs⟩
 
 /-- A period at Demo B's store whose capacity account holds the whole store at every tick, its capacity verdict
 `sidAuditAt`'s decision at `demoPoint` outside a break. -/

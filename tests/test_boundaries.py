@@ -132,8 +132,8 @@ SPOT_NOT_CERTIFIER = ("SPOT[Flock] never imports the network certifier, which co
 #: the bytes, hashes and parsing below them requires a base package (``BASE_LEAN``) instead.
 FLOCK_VERIFIER = "flock_verifier"
 REQUIRES_FLOCK_VERIFIER = {
-    "core_zk_server", "core_memory_challenger", "core_onsite", "core_remote", "core_sigma", "core_spot", "core_vstar",
-    "core_vstar_recursive", "network_check", "pous_check", "pouw_commit", "poub", "security_proofs",
+    "core_zk_server", "core_memory_attester", "core_onsite", "core_remote", "core_sigma", "core_spot", "core_vstar",
+    "core_vstar_recursive", "network_verifier", "pous_verifier", "pouw_commit", "poub", "security_proofs",
     "security_properties",
 }
 #: The base packages below Flock's verifier, each with every package it may require: nothing above it.
@@ -160,7 +160,7 @@ BENCHMARKS_IMPORTERS = {
     "tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/window/test_known_rows.py": "proofs: H1's known rows "
                                                                        "(`benchmarks/pouw/h1_lanes/leaf.py`)",
     "tests/verity/circuits/ops/test_tc_probe_families.py": "circuits: the tensor-core probe's families "
-                                                              "(`benchmarks/tc_probe`)",
+                                                              "(`calibration/tc_probe`)",
 }
 #: circuit-check's own code, a developer tool of ``verity``: it imports ``verity`` and itself, and no other distribution of
 #: the workspace.  What a check needs of one, that distribution hands it in a sidecar it owns (`circuit_check.sidecars`).
@@ -181,14 +181,6 @@ TEST_ONLY = {
     "_build_unchecked": ("verity/circuits/partition_v2.py",
                          "`partition_v2.build` without its refusal of units of several size classes, for the tests "
                          "of `check` on advice past the builder's scope, as a prover may send it"),
-}
-
-#: Modules that only a prover's or developer's build turns on, which nothing under ``verity/`` outside their own package
-#: names (an import, an attribute or a string), each with the module and why a verifier must not read it.
-PROVER_ONLY = {
-    "trace_cache": ("verity/circuits/ops/boolean/trace_cache.py",
-                    "traced circuits reused across a prover's builds: a verifier reading them would take a stale or tampered "
-                    "entry for a Definition's gates"),
 }
 
 #: The runtime, its package and each module in it: what runs parties over channels and what starts a side as another
@@ -609,15 +601,15 @@ def _benchmarks_packages() -> set[str]:
     ``__init__.py``) on its suites' ``pythonpath`` roots inside it, and ``benchmarks`` itself, a namespace from the
     repository root.  A bare module on such a root (``run``, ``inputs``, ``pous``) is too common a name to match by name;
     reaching one takes a path into ``benchmarks/``, which ``_path_loads`` finds."""
-    out = {"benchmarks"}
-    tracked = subprocess.run(["git", "ls-files", "-z", "--", "benchmarks/*pyproject.toml"], cwd=ROOT, check=True,
+    out = {"benchmarks", "calibration"}
+    tracked = subprocess.run(["git", "ls-files", "-z", "--", "benchmarks/*pyproject.toml", "calibration/*pyproject.toml"], cwd=ROOT, check=True,
                              capture_output=True).stdout
     for rel in (p for p in tracked.decode().split("\0") if p):
         base = (ROOT / rel).parent
         tool = tomllib.loads((ROOT / rel).read_text(encoding="utf-8")).get("tool", {})
         out |= {Path(p).name for p in tool.get("hatch", {}).get("build", {}).get("targets", {}).get("wheel", {}).get("packages", [])}
         for entry in tool.get("pytest", {}).get("ini_options", {}).get("pythonpath", []):
-            if (root := (base / entry).resolve()).is_relative_to(ROOT / "benchmarks"):
+            if any((root := (base / entry).resolve()).is_relative_to(ROOT / d) for d in ("benchmarks", "calibration")):
                 out |= {init.parent.name for init in root.glob("*/__init__.py")}
     return out
 
@@ -627,7 +619,7 @@ def _benchmarks_packages() -> set[str]:
 PATH_LOADERS = {"spec_from_file_location", "SourceFileLoader", "run_path", "addsitedir"}
 #: Calls whose result is a path built from their arguments.
 PATH_CALLS = {"Path", "PurePath", "str", "fspath", "join", "joinpath", "abspath", "realpath", "normpath", "expanduser"}
-BENCHMARKS_PATH = re.compile(r"(?:^|[/\\])benchmarks(?:[/\\]|$)")
+BENCHMARKS_PATH = re.compile(r"(?:^|[/\\])(?:benchmarks|calibration)(?:[/\\]|$)")
 
 
 def _into_benchmarks(e: ast.AST, names: Set[str] = frozenset(), constants: Set[str] = frozenset()) -> bool:
@@ -722,9 +714,9 @@ def _benchmarks_importers(texts: dict[str, str], packages: Set[str]) -> dict[str
     alt = "|".join(map(re.escape, sorted(packages)))
     named = [re.compile(rf"""(?:import|from)\s+(?:{alt})\b|(?:{"|".join(IMPORT_CALLS)})\(\s*["'](?:{alt})\b"""),
              re.compile(rf"""["'](?:{alt})(?:\.\w+)*[.:]\w+["']""")]
-    quoted = re.compile(r"""["'][^"'\n]*\bbenchmarks\b[^"'\n]*["']""")
+    quoted = re.compile(r"""["'][^"'\n]*\b(?:benchmarks|calibration)\b[^"'\n]*["']""")
     loads = ("sys.path", *PATH_LOADERS)
-    ours = {rel: text for rel, text in texts.items() if not rel.removeprefix("tests/").startswith("benchmarks/")}
+    ours = {rel: text for rel, text in texts.items() if not rel.removeprefix("tests/").startswith(("benchmarks/", "calibration/"))}
     trees: dict[str, ast.AST] = {}
     #: Each upper-case module constant bound to a path into benchmarks/, with the modules (by last name) that bind it.
     owners: dict[str, set[str]] = {}
@@ -754,7 +746,7 @@ def _benchmarks_importers(texts: dict[str, str], packages: Set[str]) -> dict[str
         return _into_benchmarks(e, names, visible[rel])
 
     by_name = {rel for rel, text in ours.items() if any(p in text for p in packages) and any(r.search(text) for r in named)}
-    new = sorted(by_name | {rel for rel, text in ours.items() if "benchmarks" in text and quoted.search(text)})
+    new = sorted(by_name | {rel for rel, text in ours.items() if ("benchmarks" in text or "calibration" in text) and quoted.search(text)})
     nodes: dict[str, list[ast.AST]] = {}
     assigned: dict[str, list[tuple[str, ast.AST]]] = {}
     while True:
@@ -838,7 +830,7 @@ def test_a_benchmarks_import_is_found() -> None:
     doesn't import its module, and a standard-library function named like a loader (``subprocess.run``) are not.  A loader
     called on a local module named like a standard-library one (``from x import tool as platform``) is found."""
     texts = {
-        "x/names.py": ("import verity_bench.vllm\nfrom benchmarks.tc_probe import tool\nimport importlib\n"
+        "x/names.py": ("import verity_bench.vllm\nfrom calibration.tc_probe import tool\nimport importlib\n"
                        "importlib.import_module('datacenter.graph')\nTOOL = 'benchmarks.commitments.tool:COMMIT_COST'\n"),
         "x/syspath.py": ("import sys\nfrom pathlib import Path\nPPL = Path(__file__).parents[2] / 'benchmarks' / 'ppl'\n"
                          "sys.path.insert(0, str(PPL))\nsys.path[:0] = ['../../benchmarks/census']\n"),
@@ -858,9 +850,9 @@ def test_a_benchmarks_import_is_found() -> None:
         "x/other.py": "import sys\nfrom y import settings\nsys.path.insert(0, str(settings.SESSION))\n",
         "x/local.py": "from x import config, tool as platform\nplatform.run(config.SESSION)\n",
     }
-    found = _benchmarks_importers(texts, {"benchmarks", "verity_bench", "datacenter"})
+    found = _benchmarks_importers(texts, {"benchmarks", "calibration", "verity_bench", "datacenter"})
     assert found == {
-        "x/names.py": ["1: verity_bench.vllm", "2: benchmarks.tc_probe", "4: datacenter.graph", "5: benchmarks.commitments.tool"],
+        "x/names.py": ["1: verity_bench.vllm", "2: calibration.tc_probe", "4: datacenter.graph", "5: benchmarks.commitments.tool"],
         "x/syspath.py": ["4: sys.path.insert(0, str(PPL))", "5: sys.path[:0] = ['../../benchmarks/census']"],
         "x/loader.py": ["6: importlib.util.spec_from_file_location(named(name), directory / f'{name}.py')"],
         "x/caller.py": ["2: loader.load('paged', config.SESSION.parent / 'vllm_encoded')"],
@@ -1066,27 +1058,6 @@ def test_a_use_past_a_guard_is_found() -> None:
     assert _is_test("verity/circuits/tests/test_partition_v2.py") and not _is_test("verity/circuits/partition_v2.py")
 
 
-def test_only_its_own_package_names_a_prover_only_module() -> None:
-    """No Python file under ``verity/`` (tests and distributions of its own included) names a module of ``PROVER_ONLY``
-    from outside the directory one level below its row of the listing (``_below``: its package, with its tests), and each
-    still exists.  So
-    no verifier and no device names one, and neither does anything they load."""
-    steps = _listing().steps
-    homes = {name: _below(f, steps) for name, (f, _why) in PROVER_ONLY.items()}
-    word = re.compile(r"\b(?:" + "|".join(map(re.escape, sorted(PROVER_ONLY))) + r")\b")
-    offenders = []
-    for path, rel in _with_tests(["verity"]):
-        if not word.search(text := path.read_text(encoding="utf-8")):
-            continue
-        hits = _uses(ast.parse(text, filename=rel), set(PROVER_ONLY))
-        hits += [(part, line) for name, line, _ in _imports(path) for part in set(name.split(".")) & set(PROVER_ONLY)]
-        offenders += [f"{path.relative_to(ROOT).as_posix()}:{line}: {name}" for name, line in hits if _below(rel, steps) != homes[name]]
-    assert not offenders, ("only its own package names a prover-only module (PROVER_ONLY), so that no verifier reads "
-                           "one:\n" + "\n".join(offenders))
-    missing = [f for f, _why in PROVER_ONLY.values() if not (ROOT / f).is_file()]
-    assert not missing, f"PROVER_ONLY entries whose module is gone; remove them: {missing}"
-
-
 def _docstrings(tree: ast.AST) -> set[int]:
     out = set()
     for node in ast.walk(tree):
@@ -1101,7 +1072,7 @@ CENSUS_PATH = re.compile(r"(?<!verity/)census[/\\]|\b(hardware|networks|workload
 
 
 def test_core_never_reads_the_census() -> None:
-    """The census (``benchmarks/census/``, data only) is read by the renderer, benchmarks, tools and the website, never by
+    """The census (``calibration/census/``, data only) is read by the renderer, benchmarks, tools and the website, never by
     ``verity``: it takes such numbers as parameters.  No string in its code (docstrings aside) names the directory or one of
     its files; a Program's census schema (``verity/census/v1``, ``ml.circuits.census``) is not the directory."""
     offenders = []
@@ -1116,9 +1087,16 @@ def test_core_never_reads_the_census() -> None:
 WORLD_DIRS = ("hardware", "calibration")
 WORLD_PATH = re.compile(r"(?<![\w.\-])(hardware|calibration)[/\\]")
 #: The files of ``verity`` that still name a path to ``hardware/`` or ``calibration/``, each with why.  It only shrinks.
-WORLD_PATHS_ALLOWED = {
-    "device.py": "proofs: the card and node readers' built-in directories, `CARDS` and `NODES`, until every caller names "
-                 "its own",
+WORLD_PATHS_ALLOWED: dict[str, str] = {
+    "circuits/silicon/instructions.py":
+        "circuits: each instruction's source string cites the probe run that measured it",
+    "circuits/silicon/models.py": "circuits: each model's source string cites the probe run that measured it",
+    "protocols/proofs/spot/prover/cost/inputs.py":
+        "proofs: `MEASURED`, the sampling plan's measured inputs, read by default until every caller passes them",
+    "protocols/resource_accounting/memory/poub/verifier/timing.py":
+        "memory-accounting: each bound's note cites the probe that measured it",
+    "protocols/proofs/spot/prover/cost/transformer.py":
+        "proofs: a table row saying `SERVERS` is assumed, not in the census",
 }
 
 

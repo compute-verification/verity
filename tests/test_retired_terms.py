@@ -38,7 +38,7 @@ The maintained docs (every tracked Markdown file but a CHANGELOG) retire more (`
 their names, and "leg", the dampener, NCI, C-Flock, the netlist, M0, IR and the verifier of record are retired). Their code
 keeps the old words until its owners rename it, so this scan skips code spans and fences, where a path (`legs/`) or a
 record key stays, and a term written as a quoted mention ("leg"); the table's rows name them too. A retired command
-(`verity example`) keeps no path or key, so it is found in code spans and fences as well.
+(`verity example`, `verity demo`) keeps no path or key, so it is found in code spans and fences as well.
 """
 from __future__ import annotations
 
@@ -80,7 +80,7 @@ DOC_TERMS = {
     "isolation unit, IU": "inference block",
     "replay unit": "replay block",
     "draw, drawn, redraw": "the sample, sampled proof block (verb: sample; coins are flipped)",
-    "verity example": "verity demo",
+    "verity example, verity demo": "verity run NAME",
     "components, the composite's product": "subprotocols, composition",
     "firewall": "ZK server",
     "warden, network warden": "the network attester (what keeps the older name, a format's value or a name a caller "
@@ -145,7 +145,7 @@ DOC_TERMS = {
     "physical block": "server block",
     "thread block": "CTA",
     "KV block": "KV page",
-    "the accelerator model, the machine model": "the ACCEL model (`benchmarks/machine_model/` and its `machine-model` "
+    "the accelerator model, the machine model": "the ACCEL model (`calibration/machine_model/` and its `machine-model` "
                                                 "command keep the name)",
     "coverage premise, coverage table": "the card assumption, the opcode table",
     "envelope ISA, envelope op": "the ACCEL ops",
@@ -211,7 +211,7 @@ _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}u
                        rf"|novel{_SPACE}communication{_SPACE}intensity)\b)|\bIUs?\b|\bNCI\b"
                        rf"|(?i:\bC-Flock\b|\bnetlists?\b|\bverifiers?{_SPACE}of{_SPACE}record\b)|\bM0\b|\bIRs?\b"
                        rf"|\bcommit{_SPACE}periods?\b")
-_DOC_COMMAND = re.compile(r"\bverity[ \t]+(?:bench\|)?example\b")
+_DOC_COMMAND = re.compile(r"\bverity[ \t]+(?:(?:bench\|)?example|demo)\b")
 #: The commitments' own docs, where hm96 rows keep their name.
 HM96_HOME = "verity/commitments/"
 _CODE = re.compile(r"^[ \t]*(`{3,}|~{3,}).*?^[ \t]*\1[^\n]*$|(`+)[\s\S]*?(?<!`)\2(?!`)", re.M | re.S)
@@ -239,9 +239,9 @@ ALLOWED: dict[str, str] = {
     "no faulty proof block, every one being drawn": "`benchmarks/network_traces/leak_bounds.py`'s docstring: a queued PR on "
                                                     "next rewrites the line beside it; renamed after it lands",
     "a tied audit no faulty term (its wrong units' outputs are the egress's)": "the network period check's refusal in "
-        "`period_case.py`, which mirrors `NetworkCheck.Period`'s Lean message word for word; renamed with the Lean",
+        "`period_case.py`, which mirrors `NetworkVerifier.Period`'s Lean message word for word; renamed with the Lean",
     "K charges a tied audit no faulty term": "the refusal `test_network_period_protocol.py` expects from Lean "
-                                             "(`NetworkCheck.Period`); renamed with the Lean",
+                                             "(`NetworkVerifier.Period`); renamed with the Lean",
     "an *active warden* in network steganography's sense": "network steganography's own term, which `GLOSSARY.md` "
                                                            "names to say it is not the network certifier's name",
     "where a passive warden only watches": "network steganography's own term, beside the one above",
@@ -483,8 +483,8 @@ def test_spot_s_older_name_only_falls():
 
 
 #: Where "rho" and ρ only ever named the slowdown (GLOSSARY.md, Older names), so no file there says either.
-SLOWDOWN_HOME = ("benchmarks/slowdown/", "benchmarks/circuit_properties/", "benchmarks/inference_only/",
-                 "benchmarks/training_slowdown/", "security/README.md", "verity/protocols/compose/verifier/remote/README.md")
+SLOWDOWN_HOME = ("benchmarks/slowdown/", "calibration/circuit_properties/", "benchmarks/inference_only/",
+                 "calibration/training/", "security/README.md", "verity/protocols/compose/verifier/remote/README.md")
 #: the word alone or as one part of a name (`rho_worst`, `RHO_MODEL`, `Overhead.rho`, `rhos`), and the symbol
 _RHO = re.compile(r"(?<![A-Za-z])(?:rho|Rho|RHO)s?(?![A-Za-z])|ρ")
 #: What stays under SLOWDOWN_HOME, each spelling with its reason; an entry that matches nothing fails too.
@@ -788,7 +788,7 @@ def test_the_doc_scan_reads_each_form():
         ("a.md", 1, "wrong unit"), ("a.md", 1, "Isolation-Units"), ("a.md", 1, "replay unit"), ("a.md", 2, "IU"),
         ("a.md", 2, "IUs"), ("a.md", 2, "KV block"), ("a.md", 3, "legs"), ("a.md", 3, "leg"), ("a.md", 3, "leg"),
         ("b.md", 8, "thread block"), ("b.md", 9, "verity example"), ("b.md", 9, "verity bench|example"),
-        ("b.md", 11, "verity example")]
+        ("b.md", 9, "verity demo"), ("b.md", 11, "verity example")]
 
 
 def test_the_doc_scan_reads_the_party_terms():

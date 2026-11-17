@@ -67,7 +67,7 @@ CODE_SUFFIXES = SOURCE_SUFFIXES | {".lean", ".cuh", ".cpp", ".md"}
 #: to 64 KiB, so none can grow past that and nothing joins them silently. A test fixture over BLOB_LIMIT is registered in
 #: artifacts.json instead and fetched (`research data fetch-fixtures`).
 ALLOWLIST = {
-    "benchmarks/census/workloads.json": 384 * 1024,
+    "calibration/census/workloads.json": 384 * 1024,
     "tests/adapters/vllm/tests/lint/allowlists/mypy.json": 448 * 1024,  # shrink-only: the integration's mypy errors
     "adapters/vllm/manifests/checkpoints.json": 320 * 1024,
     "tests/lint/allowlists/repo_retired_terms.json": 512 * 1024,
@@ -78,7 +78,7 @@ ALLOWLIST = {
     "verity/circuits/ops/tables/mufu_tanh_sm89.xzblocks": 448 * 1024,
     # GLM-5.3's block card and its sparse-attention partition card: each key block's values units and key rows' writers
     # are a type a column block
-    "benchmarks/sampling_plan/glm53_blocks.json": 448 * 1024,
+    "calibration/sampling_plan/glm53_blocks.json": 448 * 1024,
     "benchmarks/spot_figures/cards/partition.glm-5.3.64864861b277.json": 320 * 1024,
 }
 AUDIT_RECORD = "lean-audit.json"

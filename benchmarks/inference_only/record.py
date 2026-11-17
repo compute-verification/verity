@@ -51,7 +51,7 @@ CHECK = _declared()
 #: the check's script that writes a case from a run's files
 SCRIPT = B.PACKAGE / "scripts" / "served_record_case.py"
 #: each line the check prints, its rule, and the Lean function that gives its public form beside its `checkDetail`
-PUBLIC = {"check": ("the rate rule", "InferenceOnlyCheck.Record.check"), "count": ("the count", "InferenceOnlyCheck.RecordCount.check")}
+PUBLIC = {"check": ("the rate rule", "InferenceOnlyVerifier.Record.check"), "count": ("the count", "InferenceOnlyVerifier.RecordCount.check")}
 LINE = re.compile(r"\[(\d+) s\] (read the case|check: |count: )(.*)")
 #: the files of the run's `out/` read, as each is named there
 OUT_FILES = {"verdicts": "record/verdicts.json", "policy": "inference-only-policy.json",
