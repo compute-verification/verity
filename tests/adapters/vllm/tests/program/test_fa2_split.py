@@ -4,8 +4,6 @@ Definition word for word on random rows, empty splits (more splits than blocks) 
 `AttentionHead_v5`; the split head is softmax attention within bf16 rounding; the Boolean versions agree with their word views."""
 from __future__ import annotations
 
-__models__ = ("unsloth/Llama-3.2-1B", "Qwen/Qwen3-8B")
-
 import numpy as np
 import pytest
 from verity.circuits import evaluation as E

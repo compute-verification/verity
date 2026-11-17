@@ -1,7 +1,7 @@
 """a5's case for the audit on the proofs themselves, `Spot.OneStageZk`'s: v1's case with the evidence's verdicts
 replaced by the proofs' files named by SHA-512, the params naming the auditor's circuit and public files' digests, and
 blobs the paths of those files and the pinned tables; and the audits v2 can't verify say why. A window of several
-members has its case in v2's per-member form beside those, in a file of its own."""
+members has its case in v2's per-member form in their place."""
 
 from __future__ import annotations
 
@@ -268,16 +268,14 @@ def test_an_audit_on_the_challengers_coins_with_no_window_root_has_no_v2_case(tm
 @pytest.mark.parametrize("trees", [False, True])
 def test_the_per_member_case_names_the_challenger_only_where_its_sessions_ran_on_the_windows_session(tmp_path, monkeypatch,
                                                                                                      zk, trees):
-    """The one statement's case names the challenger its sample's coins are from wherever the audit has their evidence.
-    The per-member case reads its sessions' trees from that challenger's session too, so it names the challenger only
-    where they ran there."""
+    """The per-member case reads its sessions' trees from the challenger's session its sample's coins are from, so it
+    names the challenger only where they ran there."""
     pm = {**zk, "params": {"proofs": {"members": []}}}
     monkeypatch.setattr(a5, "case_members", lambda case, **k: pm)
-    write(tmp_path, {}, per_member={}, coins=COINS, window_root=WINDOW_ROOT, family=a5.AC.FAMILY, member_trees=trees,
+    write(tmp_path, None, per_member={}, coins=COINS, window_root=WINDOW_ROOT, family=a5.AC.FAMILY, member_trees=trees,
           challenger_key=KEY)
     named = {"challenger": {"key": KEY, "label": a5.AC.FAMILY}, "window_root": WINDOW_ROOT}
-    assert json.loads((tmp_path / "case-v2.json").read_text())["params"] == {**zk["params"], **named}
-    assert json.loads((tmp_path / "case-v2-members.json").read_text())["params"] == {**pm["params"], **(named if trees else {})}
+    assert json.loads((tmp_path / "case-v2.json").read_text())["params"] == {**pm["params"], **(named if trees else {})}
 
 
 @pytest.mark.parametrize("params,evidence", [({"challenger": {}}, {}), ({}, {"coins": {}})])
@@ -489,22 +487,21 @@ def test_case_members_refuses_sessions_out_of_the_members_order(tmp_path, RP):
         a5.case_members(case, **proof)
 
 
-def test_the_per_member_case_is_written_beside_the_others_and_changes_none(tmp_path, monkeypatch, stub_case):
-    """A window of several members that sampled two still has no case in the one statement's form, v2's or the one
-    onsite and remote read; its per-member case is a file of its own, or its error is."""
-    monkeypatch.setattr(a5, "case_members", lambda case, **k: {"params": {"proofs": {"members": k["members"]}}})
+def test_the_per_member_case_is_the_v2_case_and_its_one_stage_form(tmp_path, monkeypatch, stub_case):
+    pm = {"blobs": [], "commitment": "ab", "evidence": stub_case.DT.canonical({"proofs": {}}).encode().hex(),
+          "params": {"proofs": {"members": {}}}}
+    monkeypatch.setattr(a5, "case_members", lambda case, **k: pm)
     a5.write_case(tmp_path, None, {}, {}, {}, None, 0.01, None, {"format": "f"}, {}, instances=0, sessions=[],
-                  session_roots={}, served=[], v2=a5.v2_proof([{}, {}], zk=True), per_member={"members": {}, "tables": []})
-    assert json.loads((tmp_path / "case-v2-members.json").read_text()) == {"params": {"proofs": {"members": {}}}}
-    assert (tmp_path / "case-v2-error.txt").read_text().startswith("ValueError: v2 verifies one table's session")
-    assert not (tmp_path / "case-v2.json").exists() and not (tmp_path / "case-sampled.json").exists()
-    assert not (tmp_path / "case-v2-members-error.txt").exists()
+                  session_roots={}, served=[], v2="not read", per_member={"members": {}, "tables": []})
+    assert json.loads((tmp_path / "case-v2.json").read_text()) == pm
+    assert json.loads((tmp_path / "case-sampled.json").read_text()) == a5.case_with_form(pm)
+    assert not (tmp_path / "case-v2-error.txt").exists()
     other = tmp_path / "plain"
     other.mkdir()
     a5.write_case(other, None, {}, {}, {}, None, 0.01, None, {"format": "f"}, {}, instances=0, sessions=[],
                   session_roots={}, served=[], per_member="v2 verifies --zk sessions; this audit's are plain")
-    assert (other / "case-v2-members-error.txt").read_text().startswith("ValueError: v2 verifies --zk")
-    assert sorted(f.name for f in other.iterdir()) == ["case-python.json", "case-v2-members-error.txt", "case.json"]
+    assert (other / "case-v2-error.txt").read_text().startswith("ValueError: v2 verifies --zk")
+    assert sorted(f.name for f in other.iterdir()) == ["case-python.json", "case-v2-error.txt", "case.json"]
 
 
 def test_the_audit_record_says_whether_the_case_for_the_compiled_check_was_written(tmp_path, monkeypatch, stub_case):

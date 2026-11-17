@@ -64,7 +64,7 @@ def _dead_input():
                                     body, register=False))
 
 
-#: popread's small set (expert gathers, FP8 block scales, a router's top-k, a fused norm, a separable body), registry Definitions
+#: a small set (expert gathers, FP8 block scales, a router's top-k, a fused norm, a separable body), registry Definitions
 #: over every branch of the graph and its check (wiring and constants, a wide gate, a value computed twice in one unit, attention,
 #: the ordered router, the MoE expert FP8 GEMMs over two K tiles and a partial weight block, two Boolean Definitions), and two that
 #: fail the invariant (a value computed in two units; a parameter committed and read by no unit)
