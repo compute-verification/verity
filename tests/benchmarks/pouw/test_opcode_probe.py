@@ -21,7 +21,7 @@ from verity_machine_model import model
 
 POUW = (Path(__file__).resolve().parents[3] / "calibration" / "pouw")
 FIX = Path(__file__).resolve().parent / "fixtures" / "gpu_kit"
-MACHINE_MODEL = Path(__file__).resolve().parents[3] / "benchmarks" / "machine_model"
+MACHINE_MODEL = Path(__file__).resolve().parents[3] / "calibration" / "machine_model"
 
 rows, G = probe.rows, probe.G
 RUN = "r20261016-183617-3914"

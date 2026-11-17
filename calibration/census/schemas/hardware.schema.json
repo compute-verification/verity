@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "benchmarks/census/schemas/hardware.schema.json",
+  "$id": "calibration/census/schemas/hardware.schema.json",
   "title": "Census hardware lines: a device running one operand dtype, with its dense tensor-core peak",
   "type": "array",
   "items": {
@@ -37,7 +37,7 @@
       "dtype": {
         "type": "string",
         "pattern": "^[a-z0-9]+$",
-        "description": "a benchmarks/census/datatypes.json id (bf16, e4m3, e2m1)"
+        "description": "a calibration/census/datatypes.json id (bf16, e4m3, e2m1)"
       },
       "rate": {
         "type": "string",
