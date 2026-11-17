@@ -23,7 +23,7 @@ of the registration given, `LineRegistered`) and the W's cover of the session's 
 
 The window (`verifyWindow`):
 
-* `AcceptChecksOpenings`: an accepted window sampled its receipts from its openings coin, has one opening a sample, and
+* `AcceptChecksOpenings`: an accepted window drew its receipts from its openings coin, has one opening a sample, and
   each sampled opening passes `checkOpening` under the receipter of its pass's seed;
 * `AcceptOpensSamples`: the same, with `checkOpening`'s five checks spelled out (`OpeningPasses`): the opening is the
   sampled receipt's, its leaf is under its pass's root in the domain of the pass's seed and plan, its block decodes to a
@@ -79,7 +79,7 @@ seed. -/
 def receipterOf (reg : Registration) (w : WindowRecord) (i : Nat) : Receipter :=
   receipter reg.receipt (w.seedOf i) reg.rows
 
-/-- An accepted window sampled `sampled` from its openings coin over its passes' plans, has exactly one opening a sample, and
+/-- An accepted window drew `sampled` from its openings coin over its passes' plans, has exactly one opening a sample, and
 each sampled receipt's opening passes `checkOpening` under the receipter of its pass's seed. -/
 def AcceptChecksOpenings : Prop :=
   ∀ (reg : Registration) (appends : Array Append) (w : WindowRecord) (coin : ByteArray) (samples : Nat)
@@ -129,7 +129,7 @@ def OpeningPasses (reg : Registration) (appends : Array Append) (w : WindowRecor
             j (hidden payload o.payloadSalt) SCHEMA o.payloadPath = true)) ∧
       (receipterOf reg w i).receipt j o.block = y
 
-/-- An accepted window sampled `sampled` from its openings coin, has exactly one opening a sample, and each sampled receipt's
+/-- An accepted window drew `sampled` from its openings coin, has exactly one opening a sample, and each sampled receipt's
 opening passes checks 1–5 (`OpeningPasses`). -/
 def AcceptOpensSamples : Prop :=
   ∀ (reg : Registration) (appends : Array Append) (w : WindowRecord) (coin : ByteArray) (samples : Nat)

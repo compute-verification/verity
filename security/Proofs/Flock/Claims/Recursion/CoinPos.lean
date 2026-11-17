@@ -233,7 +233,7 @@ theorem staged_coinTie_unique {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPa
   obtain ⟨g, hg, h1, h2, h3⟩ := hall m (by simpa using hm)
   exact ⟨g, hg, h1, h2, by simpa using h3, fun g' hg' hs hk => huniq g g' hg hg' h1 (hs.trans h1) hk⟩
 
-/-- **`staged_coinTie_sampled`, with each round unique**: the inner round `g + 1` whose coin sampled rep `r`'s round `m`'s
+/-- **`staged_coinTie_sampled`, with each round unique**: the inner round `g + 1` whose coin drew rep `r`'s round `m`'s
 coins is the only round of `R` of its stream at its round number. -/
 theorem staged_coinTie_sampled_unique {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {c : ℕ → Coin}
     (hc : showsTr recRead s x xO c) :

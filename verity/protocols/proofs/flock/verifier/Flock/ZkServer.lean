@@ -627,7 +627,7 @@ def run (s : Schedule) (reqs : List ByteArray) (salts : List ByteArray) : Array 
     | .error _ => stopped := true
   return (st.sent, st.finished && !stopped)
 
-/-! ## The challenger's live-coin part's record (`rec_live.LiveCoinPart.record`, without the coins it sampled) -/
+/-! ## The challenger's live-coin part's record (`rec_live.LiveCoinPart.record`, without the coins it drew) -/
 
 def hexs (l : List ByteArray) : Json := .arr (l.map (Json.str ∘ hexOf)).toArray
 
@@ -744,7 +744,7 @@ def sentJson : Sent → Json
   | .finish ok => Json.mkObj [("finish", .bool ok)]
 
 /-- One request of a live session at the state `st`, its salts those `st` holds unsampled then `fresh`: what it sends, the
-salts it sampled in order and the state after it, holding the salts it didn't sample, or the refusal that stops the session.
+salts it drew in order and the state after it, holding the salts it didn't sample, or the refusal that stops the session.
 On a session's requests in turn from `{ salts := [] }`, each with the fresh salts read for it, this is `run`'s loop at
 those salts in order (`ZkServerLive.run_live`). -/
 def liveStep (s : Schedule) (st : State) (b : ByteArray) (fresh : List ByteArray) :
@@ -757,7 +757,7 @@ def liveStep (s : Schedule) (st : State) (b : ByteArray) (fresh : List ByteArray
 /-- `flock-zk-server live` at the byte source `get`: one session. Its first line is `{"schedule": …}`, with `"coin_tree":
 spec` for a session on the challenger's coin tree (each request then read through `treeHello`), answered
 `{"ok": true}`; each later line is one request in hex, answered with what the ZK server sends the challenger's live-coin part for it and
-the salts it sampled for them, `{"sent": [sentJson…], "salts": [hex…]}`, or with the refusal that stops the session,
+the salts it drew for them, `{"sent": [sentJson…], "salts": [hex…]}`, or with the refusal that stops the session,
 `{"stop": why}`, which every later line is answered with too. Every line is a request, an empty one an empty frame. A
 request's fresh salts are read from `get` before it runs, as many as it could sample (a salted row reads at least one node
 of 64 request bytes, a round's message row aside), and those it doesn't sample are the next request's first: the salts

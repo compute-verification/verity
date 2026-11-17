@@ -47,7 +47,7 @@ proof files. `sessionCut` runs the schedules, level 0's commitments, the link, t
 guarantee, each at a `Finish` `FinishIs` reads (`Loop.FinCtx`):
 
 * **(a) `Loop.FinCommits`**: the schedules return, level 0's commitments from the views' leaves send nothing and carry the
-  roots the loop sampled (`Loop.rootsOf`), and each rep's pads commitment sends nothing.
+  roots the loop drew (`Loop.rootsOf`), and each rep's pads commitment sends nothing.
 * **(b) `Loop.FinPoints`**: the link points at the opened coins are the ones the auditor saw (`Loop.pointsOf`), and each
   table's extra claims at them return.
 * **(c) `Loop.FinRepProofs`**: rep stream `k`'s run from the views (`Loop.viewRep`) returns a proof whose file
@@ -143,7 +143,7 @@ variable (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
   (wk : (LeanRelease.ofLoopLink L₀ src real).toSrv.Worker) (x : Msg) (w : Flock.Wit)
 
 /-- **(a) The commitments**: at a `Finish` `FinishIs` reads, the schedules return; level 0's commitments from the views'
-leaves send nothing, and their roots are the ones the loop sampled (`rootsOf`, as its `Commit` carries them); and each rep
+leaves send nothing, and their roots are the ones the loop drew (`rootsOf`, as its `Commit` carries them); and each rep
 stream's pads commitment from the views' leaves sends nothing. -/
 def FinCommits : Prop :=
   ∀ ν t κ m₀ ρ₀ ops, FinCtx (LeanRelease.ofLoopLink L₀ src real) wk x w ν t κ m₀ ρ₀ ops →

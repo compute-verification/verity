@@ -12,12 +12,12 @@ public import Init.Internal.Order.While
 The sample's piece of `CouplingTarget`. In a play of the period's game whose parameters name SPOT's one-stage
 form (`ParamsAt`), where SPOT's case (`VStar.Recursive.Sampled.protocol`, whose one-stage form is v2,
 `Spot.OneStageZk`) accepts in what the prover sent, and the device's log as the sampled check read it is the
-play's (`Vocab.Logged`), the units v2 sampled are the live audit's sample at any sample whose bytes start with the play's
+play's (`Vocab.Logged`), the units v2 drew are the live audit's sample at any sample whose bytes start with the play's
 coins of the sample's family released after the registration's digest.
 
 * **v2's acceptance** (`case_drew`, `drew_of`): SPOT's case in what the prover sent decodes (`V2Case`), in
   the one-stage form the composite's parameters name, since the components' ids are distinct (`params_of_case`); v2
-  read its coins `ξ` under the challenger its parameters name and accepted at them (`V2Accepts`), so it sampled the
+  read its coins `ξ` under the challenger its parameters name and accepted at them (`V2Accepts`), so it drew the
   evidence's units from
   `ξ` (`Drew`): under the sampling design and population its parameters and record name (`SamplingDesignOf`), `Draw.sampleUnits` on `ξ` ends
   with those units (`checkBlobsAt_checkAt`, `checkAt_drew`, `coinsReason_none`, `sampledFrom_ok`).
@@ -510,7 +510,7 @@ theorem case_drew {k : Verity.Registration.Composite} {s : Verity.Sent} (hS : Ve
       exact ⟨_, _, _, p₀, c, ev, ξ, dr, hcase, hp, hc, hev, hξ, hdr, pub, prof, hck⟩
   · simp [VStar.Recursive.Sampled.checkBlobs] at hck
 
-/-- **v2 sampled `units` from the coins `ξ`** in what the prover sent composite `k`: its case there accepts at `ξ`, read
+/-- **v2 drew `units` from the coins `ξ`** in what the prover sent composite `k`: its case there accepts at `ξ`, read
 under the challenger `dr`, and under the sampling design `L` over `n` units its parameters and record name (`SamplingDesignOf`),
 `Draw.sampleUnits` on `ξ` ends with the evidence's units. -/
 def Drew (k : Verity.Registration.Composite) (s : Verity.Sent) (dr : Draws) (L : Flock.Draw.SamplingDesign) (n : ℕ)
@@ -589,7 +589,7 @@ theorem verdict_case {V : Vocab d α} {k : Verity.Registration.Composite} {o : V
   exact hc
 
 /-- **The sample in a play**: where the play's parameters name SPOT's one-stage form, the sampled verdict
-accepts and the sampled check's read of the device's log is the play's, v2 sampled `units` from coins `ξ` read under `dr`
+accepts and the sampled check's read of the device's log is the play's, v2 drew `units` from coins `ξ` read under `dr`
 whose bits start the play's coins of `dr`'s family released after `dr`'s digest. -/
 theorem logged_sample {V : Vocab d α} {k : Verity.Registration.Composite} (hR : SampleRead k (V.coinsRead .sampled))
     {o : Verity.Exchange} {p₀ : _root_.Spot.OneStageZk.Params} (hθ : ParamsAt o.params p₀)
@@ -613,8 +613,8 @@ theorem sample_eq (A : Live) (ω : A.Ω) {units : Array ℕ} {read : ℕ}
 /-- The session widened by a projection's coins samples as the session does at the sample's first part. -/
 theorem extend_sample (A : Live) (S : Widening) (ω : A.Ω × S.T) : (A.extend S).L.draw ω = A.L.draw ω.1 := rfl
 
-/-- **v2's units are the session's sample** at a sample whose bytes start with the coins v2 sampled them from, at a session
-whose sampling design and population are the ones v2 sampled under. -/
+/-- **v2's units are the session's sample** at a sample whose bytes start with the coins v2 drew them from, at a session
+whose sampling design and population are the ones v2 drew under. -/
 theorem sample_of_drew {k : Verity.Registration.Composite} {s : Verity.Sent} {dr : Draws} {L : Flock.Draw.SamplingDesign} {n : ℕ}
     {ξ : ByteArray} {units : Array ℕ} (h : Drew k s dr L n ξ units) (A : Live) (ω : A.Ω) (hL : A.design = L)
     (hn : A.n = n) (hξ : bitsOf ξ <+: bitsOf (_root_.Properties.Spot.bytesOf (A.src ω 0))) :
@@ -626,7 +626,7 @@ theorem sample_of_drew {k : Verity.Registration.Composite} {s : Verity.Sent} {dr
   exact sampleUnits_append L n ξ t units read hdu
 
 /-- **The sample's piece of `CouplingTarget`**: in a play whose parameters name SPOT's one-stage form, where
-the sampled verdict accepts and the sampled check's read of the device's log is the play's, v2 sampled `units` under the
+the sampled verdict accepts and the sampled check's read of the device's log is the play's, v2 drew `units` under the
 sampling design `L` over `n` units from coins read under `dr`; at a session with that sampling design and population, widened by a projection's
 coins, every sample whose bytes start with the play's coins of `dr`'s family released after `dr`'s digest samples exactly
 `units`. -/
