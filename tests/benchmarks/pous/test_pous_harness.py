@@ -659,7 +659,7 @@ def test_pod_sh_asks_nvidia_smi_about_the_runs_gpu_and_refuses_to_guess_one(tmp_
 
 
 def test_pod_sh_prepare_builds_the_lean_verdicts_and_touches_no_gpu(tmp_path):
-    """PREPARE=1, run before the GPU lease: for p2-v3-mc-gpu, `lake build memory-challenger-verdict` in its Lean package
+    """PREPARE=1, run before the GPU lease: for p2-v3-mc-gpu, `lake build memory-attester-verdict` in its Lean package
     (lake from the user's elan here, /opt/elan's on the pod image) and exit, with no nvidia-smi query; for p2-v3-gpu,
     `lake build pous-timed-audit` in pous_check where its lakefile declares one; for another IMPL, nothing; a failed build
     exits 3."""
@@ -671,7 +671,7 @@ def test_pod_sh_prepare_builds_the_lean_verdicts_and_touches_no_gpu(tmp_path):
     rc, calls, _ = _pod_sh(tmp_path, "mc", "GPU-a GPU-b", "PREPARE=1", "IMPL=p2-v3-mc-gpu", HOME=str(home))
     assert rc.returncode == 0 and calls == []
     package = ROOT / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "attester" / "lean"
-    assert (tmp_path / "lake-args").read_text() == f"{package} build memory-challenger-verdict\n"
+    assert (tmp_path / "lake-args").read_text() == f"{package} build memory-attester-verdict\n"
     rc, calls, _ = _pod_sh(tmp_path, "band", "GPU-a GPU-b", "PREPARE=1", HOME=str(home))
     assert rc.returncode == 0 and calls == [] and (tmp_path / "lake-args").read_text().count("\n") == 1
     check = ROOT / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier" / "check"

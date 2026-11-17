@@ -1,10 +1,10 @@
 """No executable of this package serves the wipe's counted check but the difftest's own (`wipe-count-test`).
 
-`MemoryChallenger.WipeProtocol.checkCounted` certifies at the count the evidence states, and nothing holds that count to
+`MemoryAttester.WipeProtocol.checkCounted` certifies at the count the evidence states, and nothing holds that count to
 the network attester's count over the span until a composition ties `named` to it. So an executable that reaches the
-check (`checkCounted`, or a definition of `MemoryChallenger.WipeCount` built on it: `mkCounted`, `countedTest`) other than
+check (`checkCounted`, or a definition of `MemoryAttester.WipeCount` built on it: `mkCounted`, `countedTest`) other than
 the ones `ALLOWED` names fails here: each `lean_exe` of `lakefile.toml`, its root module and every module of this package
-its `import` lines reach, read with comments left out. `named` alone, which `memory-challenger-difftest` reads, is the
+its `import` lines reach, read with comments left out. `named` alone, which `memory-attester-difftest` reads, is the
 tie's half and serves nothing. The Python mirror's callers are held in the repository's suite
 (`tests/test_wipe_counted_callers.py`). Reads files only: no build, no clock."""
 
@@ -15,7 +15,7 @@ import tomllib
 from pathlib import Path
 
 PACKAGE = (Path(__file__).resolve().parents[8] / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "attester" / "lean")
-WIPE_COUNT = "MemoryChallenger.WipeCount"
+WIPE_COUNT = "MemoryAttester.WipeCount"
 #: The definition every counted one is built on.
 SEED = "checkCounted"
 #: The executables that may reach the counted check, each with why.
