@@ -1200,13 +1200,13 @@ def test_a_composite_that_doesnt_parse_gives_no_answer_and_a_directory_without_o
     """A composite.json that doesn't parse gives no Lean answer, saying so, rather than being passed over for another
     composite; a directory holding none (the run's other output) is no composite at all."""
     c = tmp_path / "composite"
-    _composite(c, "remote", "verity/remote/v0", "accept")
+    _composite(c, "remote-v1", "verity/remote/v1", "accept")
     (c / "logs").mkdir()
     assert S.composite_answer(c, "remote", WINDOW_DIGEST)[0]["verdict"] == "accept"
-    (c / "remote-v1").mkdir()
-    (c / "remote-v1" / "composite.json").write_text("{")
+    (c / "remote").mkdir()
+    (c / "remote" / "composite.json").write_text("{")
     answer, why = S.composite_answer(c, "remote", WINDOW_DIGEST)
-    assert answer is None and why.startswith("remote-v1/composite.json doesn't parse"), why
+    assert answer is None and why.startswith("remote/composite.json doesn't parse"), why
 
 
 def test_the_window_record_is_the_one_spots_audit_sampled_against(tmp_path):
@@ -1215,6 +1215,10 @@ def test_the_window_record_is_the_one_spots_audit_sampled_against(tmp_path):
     assert S.window_digest(_window_case(tmp_path / "audit"))[0] == WINDOW_DIGEST
     digest, why = S.window_digest(tmp_path / "none")
     assert digest is None and why.startswith(f"SPOT's audit {tmp_path / 'none'} names no window record"), why
+
+
+DEVELOPMENT_COMPOSITE = ("not of record: development composite: remote/composite.json (verity/remote/v0), not the remote "
+                         "check of record (verity/remote/v1)")
 
 
 #: a composite's cases where PoUW's commitment didn't decode, so its answer names no digest
@@ -1259,23 +1263,23 @@ def test_a_composite_of_another_window_is_refused_whatever_its_lean_said(tmp_pat
 
 
 @pytest.mark.parametrize("composites, pouw, composed, rc, lean", [
-    ({}, "accept", "pending", 2, "0 composites of the remote check (verity/remote/v0, verity/remote/v1) in {c}, not one"),
-    ({"remote": ("verity/remote/v0", "accept")}, "accept", "accept", 0,
-     "verity/remote/v0's Lean check, compiled, in remote/composite.json"),
+    ({}, "accept", "pending", 2, "0 composites of the remote check (verity/remote/v1) in {c}, not one"),
+    ({"remote": ("verity/remote/v0", "accept")}, "accept", "pending", 2, DEVELOPMENT_COMPOSITE),
+    ({"remote": ("verity/remote/v0", "reject")}, "accept", "pending", 2, DEVELOPMENT_COMPOSITE),
     ({"remote-v1": ("verity/remote/v1", "accept")}, "accept", "accept", 0,
      "verity/remote/v1's Lean check, compiled, in remote-v1/composite.json"),
-    ({"remote": ("verity/remote/v0", "reject")}, "accept", "reject", 1,
-     "verity/remote/v0's Lean check, compiled, in remote/composite.json"),
-    ({"remote": ("verity/remote/v0", "undecided")}, "accept", "pending", 2,
-     "verity/remote/v0's Lean check, compiled, in remote/composite.json"),
-    ({"remote": ("verity/remote/v0", None)}, "accept", "pending", 2, "remote/composite.json: its Lean gave no answer"),
-    ({"remote": ("verity/remote/v0", "accept", {"development": "composed on the served node"})}, "accept", "pending", 2,
-     "remote/composite.json is a development check, which claims no record: composed on the served node"),
-    ({"remote": ("verity/remote/v0", "accept"), "remote-v1": ("verity/remote/v1", "accept")}, "accept", "pending", 2,
-     "2 composites of the remote check"),
+    ({"remote-v1": ("verity/remote/v1", "reject")}, "accept", "reject", 1,
+     "verity/remote/v1's Lean check, compiled, in remote-v1/composite.json"),
+    ({"remote-v1": ("verity/remote/v1", "undecided")}, "accept", "pending", 2,
+     "verity/remote/v1's Lean check, compiled, in remote-v1/composite.json"),
+    ({"remote-v1": ("verity/remote/v1", None)}, "accept", "pending", 2, "remote-v1/composite.json: its Lean gave no answer"),
+    ({"remote-v1": ("verity/remote/v1", "accept", {"development": "composed on the served node"})}, "accept", "pending",
+     2, "remote-v1/composite.json is a development check, which claims no record: composed on the served node"),
+    ({"remote-v1": ("verity/remote/v1", "accept"), "remote-v1-again": ("verity/remote/v1", "accept")}, "accept",
+     "pending", 2, "2 composites of the remote check"),
     ({"onsite": ("verity/onsite/v0", "accept")}, "accept", "pending", 2, "0 composites of the remote check"),
-    ({"remote": ("verity/remote/v0", "accept")}, "reject", "reject", 1, "verity/remote/v0's Lean check"),
-    ({"remote": ("verity/remote/v0", "reject")}, None, "reject", 1, "verity/remote/v0's Lean check"),
+    ({"remote-v1": ("verity/remote/v1", "accept")}, "reject", "reject", 1, "verity/remote/v1's Lean check"),
+    ({"remote-v1": ("verity/remote/v1", "reject")}, None, "reject", 1, "verity/remote/v1's Lean check"),
     ({"remote-v1": ("verity/remote/v1", "accept", {"window": REG.digest({**WINDOW_RECORD, "window": 2})})}, "accept",
      "pending", 1, "remote-v1/composite.json is refused, not this window's composite: its verity/sampled-proofs/v1 case"),
 ])
@@ -3810,8 +3814,10 @@ def test_v3c_runs_no_audit_without_a_line_of_main_for_its_session_to_pin_on(tmp_
 LOCAL_COINS = "a local development challenger session on vy-dc-h200, the served node, not an auditor's (PP_CHALLENGER local)"
 V3C_COINS = f" V3c's audit: {V3C_DEV};"
 LIVE = "gate:research@auditor"
-LIVE_COINS = f"the challenger {LIVE} (peer vy-dc-h200)"
-V3C_LIVE = f"the challenger {LIVE} (peer vy-dc-h200), the window's run root's one session, the sampled-proofs audit of record"
+LIVE_SAID = "gate:research"
+LIVE_COINS = f"the challenger {LIVE_SAID} (peer vy-dc-h200)"
+V3C_LIVE = (f"the challenger {LIVE_SAID} (peer vy-dc-h200), the window's run root's one session, the sampled-proofs audit "
+            "of record")
 STEP3_LOCAL = ("a local development challenger session on vy-dc-h200, the served node, for step 3, a development check, since "
                "V3c's audit's live session takes the window's run root, which the gate opens once, ever")
 NO_V3C = {"V3C_CLASS": "", "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None}
@@ -3919,9 +3925,9 @@ def _not_development(challenger: str) -> str:
     ({"DEVELOPMENT": "yes"}, "PREFLIGHT: DEVELOPMENT is 1, a development run, or unset, not yes"),
     ({"V3C_CHALLENGER": "gate:auditor"}, "PREFLIGHT: V3C_CHALLENGER (default PP_CHALLENGER) is local, loopback:HOST:PORT or "
                                          "gate:USER@HOST, not gate:auditor"),
-    ({"PP_CHALLENGER": LIVE}, f"PREFLIGHT: V3c's audit's session on {LIVE} listens on its peer's 127.0.0.1, and V3C_PEER "
+    ({"PP_CHALLENGER": LIVE}, f"PREFLIGHT: V3c's audit's session on {LIVE_SAID} listens on its peer's 127.0.0.1, and V3C_PEER "
                               "(default PP_PEER), this node's name in the gate's /etc/vy/peers, is unset"),
-    ({"PP_CHALLENGER": LIVE, "PP_PEER": "vy-dc-h200"}, f"PREFLIGHT: V3c's audit's session on {LIVE} is held to the "
+    ({"PP_CHALLENGER": LIVE, "PP_PEER": "vy-dc-h200"}, f"PREFLIGHT: V3c's audit's session on {LIVE_SAID} is held to the "
                                                        "challenger key record PP_CHALLENGER_KEY, which is unset and not a "
                                                        "readable file"),
 ])
@@ -4765,10 +4771,10 @@ FAKE_SERVED_COMPOSITE = '''echo composite >> "$ORDER"
 printf "%s\\n" "$SERVED_NODE" "$@" > "$ORDER.composite"
 printf "%s" "${COMPOSE_DEVELOPMENT:-}" > "$ORDER.development"
 if [ -n "${LEAN:-}" ]; then
-  mkdir -p "$2/composite/remote"
+  mkdir -p "$2/composite/remote-v1"
   dev=${COMPOSE_DEVELOPMENT:+", \\"development\\": \\"$COMPOSE_DEVELOPMENT\\""}
-  echo "{\\"product\\": \\"verity/remote/v0\\", \\"verdict\\": {\\"id\\": \\"verity/remote/v0\\", \\"verdict\\": \\"$LEAN\\"}$dev}" \\
-    > "$2/composite/remote/composite.json"
+  echo "{\\"product\\": \\"verity/remote/v1\\", \\"verdict\\": {\\"id\\": \\"verity/remote/v1\\", \\"verdict\\": \\"$LEAN\\"}$dev}" \\
+    > "$2/composite/remote-v1/composite.json"
 fi
 echo "COMPOSITE: composed on $(hostname -s)" >> "$2/verdicts.txt"'''
 
@@ -4911,7 +4917,7 @@ def test_the_follow_on_holds_the_copy_to_the_served_nodes_sums_then_audits_and_c
     assert (tmp_path / "order.development").read_text().startswith(
         "composed by a deferral's follow-on on cpu-6, a prover node, which the prover controls: a development check")
     if lean:
-        assert json.loads((out / "composite" / "remote" / "composite.json").read_text())["development"].startswith(
+        assert json.loads((out / "composite" / "remote-v1" / "composite.json").read_text())["development"].startswith(
             "composed by a deferral's follow-on on cpu-6")
     assert _audited(tmp_path) == {"--sampling-design": TIED_RULE, "--tie": str(d / "h1" / "w7" / "registration.json"),
                                   "--tie-prefix": "h1/", "--ports": "3"}
@@ -5113,7 +5119,7 @@ def test_a_follow_on_of_a_deferral_of_record_samples_on_the_challenger_it_record
         "V3C_CHALLENGER": LIVE, "DEVELOPMENT": "", "SERVED_PEER": "vy-dc-h200"}
     assert rc == 2 and order == ["gate-ledger", "gate-pins", "audit", "period"], (lines, order)
     assert lines[-1].startswith("HANDOFF"), lines
-    assert lines[0] == (f"COINS V3c's audit: the challenger {LIVE} (peer cpu-6), the window's run root's one session, the "
+    assert lines[0] == (f"COINS V3c's audit: the challenger {LIVE_SAID} (peer cpu-6), the window's run root's one session, the "
                         "sampled-proofs audit of record")
     assert sum(x.startswith("V3C-GATE ready: lane vllm's open period None; root ") for x in lines) == 1, lines
     assert _audited(tmp_path, COIN_FLAGS) == {
@@ -5125,7 +5131,7 @@ def test_a_follow_on_of_a_deferral_of_record_samples_on_the_challenger_it_record
     ({"V3C_PEER": "vy-dc-h200"}, "PREFLIGHT: V3C_PEER (default PP_PEER) is vy-dc-h200, the served node's (SERVED_PEER), "
      "which deferred the audit: its session would listen on that node's 127.0.0.1, not this one's; name this node as the "
      "gate's /etc/vy/peers does"),
-    ({"V3C_PEER": None}, f"PREFLIGHT: V3c's audit's session on {LIVE} listens on its peer's 127.0.0.1, and V3C_PEER "
+    ({"V3C_PEER": None}, f"PREFLIGHT: V3c's audit's session on {LIVE_SAID} listens on its peer's 127.0.0.1, and V3C_PEER "
      "(default PP_PEER), this node's name in the gate's /etc/vy/peers, is unset"),
     ({"DEVELOPMENT": "1"}, f"{CLASH} DEVELOPMENT: unset it"),
     ({"V3C_CHALLENGER": "local"}, f"{CLASH} V3C_CHALLENGER: unset it"),
@@ -5274,7 +5280,7 @@ def _handed(tmp_path: Path, blobs: tuple[str, ...] = BLOBS, verdict: bool = True
                           env=env, check=False, capture_output=True, text=True)
 
 
-COMPOSES = "K PRODUCT COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_DIR COMPOSE_NODE COMPOSE_TREE AUDITED_ON SAMPLED_AUDIT STEPS"
+COMPOSES = "K PRODUCT POUW COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_DIR COMPOSE_NODE COMPOSE_TREE AUDITED_ON SAMPLED_AUDIT STEPS"
 
 
 def test_the_served_nodes_compose_hand_off_lists_and_hashes_the_verifier_side_files_alone(tmp_path):
@@ -5289,7 +5295,7 @@ def test_the_served_nodes_compose_hand_off_lists_and_hashes_the_verifier_side_fi
     assert run.returncode == 0, run.stderr
     d, dc, out = tmp_path / "serve", tmp_path / "serve" / "private" / "compose", tmp_path / "served-out"
     assert _env_of(dc / "compose.env", COMPOSES) == {
-        "K": "7", "PRODUCT": "remote", "COMPOSITE": "1", "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200",
+        "K": "7", "PRODUCT": "remote", "POUW": "h1", "COMPOSITE": "1", "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200",
         "SERVED_DIR": str(d), "COMPOSE_NODE": "vy-auditor-2", "COMPOSE_TREE": SHA, "AUDITED_ON": "",
         "SAMPLED_AUDIT": "sampled-proofs-served", "STEPS": "0,3"}
     listed = (dc / "inputs.txt").read_text().splitlines()
@@ -5432,7 +5438,7 @@ def test_the_preflight_refuses_an_onsite_composite_off_the_node_whose_cases_only
     assert line or lines[0].startswith("PREFLIGHT passed")
 
 
-FAKE_COMPOSE_COMPOSITE = FAKE_SERVED_COMPOSITE.replace('"$SERVED_NODE" "$@"', '"$SERVED_NODE" "$COMPOSE_HANDOFF" "$@"')
+FAKE_COMPOSE_COMPOSITE = FAKE_SERVED_COMPOSITE.replace('"$SERVED_NODE" "$@"', '"$SERVED_NODE" "$COMPOSE_HANDOFF" "$POUW" "$@"')
 
 
 def _compose(tmp_path: Path, keep: tuple[str, ...] = (), link: tuple[str, Path] | None = None,
@@ -5501,7 +5507,7 @@ def test_the_compose_follow_on_holds_the_hand_off_to_its_sums_and_composes_the_r
     assert (argv[17], len(argv[18]), argv[19:]) == ("--key-sha512", 128, ["--lane", "vllm", "--off-node", "--sampled-lean",
                                                                          "--tree", SHA, "--composite",
                                                                          str(out / "composite")])
-    assert (tmp_path / "order.composite").read_text().split() == ["vy-dc-h200", "1", str(d), str(out)]
+    assert (tmp_path / "order.composite").read_text().split() == ["vy-dc-h200", "1", "h1", str(d), str(out)]
     assert (tmp_path / "order.development").read_text() == ""
     assert json.loads((out / "record" / "inference-only.json").read_text()) == {"verdict": "accept"}
     assert not (d / "requests.jsonl").exists() and not _window_data(out, 7)
@@ -5547,7 +5553,7 @@ def test_a_compose_follow_on_refuses_the_served_node_a_witness_a_changed_copy_an
 
 
 #: `served_verdicts.sh`'s COMPOSES, every setting a hand-off may carry
-HAND_OFF_NAMES = ("K PRODUCT PEARLPLUS_TIE COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_DIR COMPOSE_NODE COMPOSE_TREE "
+HAND_OFF_NAMES = ("K PRODUCT POUW PEARLPLUS_TIE COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_DIR COMPOSE_NODE COMPOSE_TREE "
                   "AUDITED_ON SAMPLED_AUDIT STEPS")
 SETTINGS_REFUSED = ("PREFLIGHT: the compose follow-on reads the hand-off's settings (the serve dir's "
                     "private/compose/compose.env) as data, and refuses them, none set: its line {n} ")
@@ -5609,7 +5615,7 @@ def test_a_hand_off_whose_setting_the_compose_node_would_refuse_is_refused_on_th
     run = _handed(tmp_path, COMPOSE_NODE="vy-auditor-2 x")
     assert run.returncode == 1
     assert (tmp_path / "served-out" / "verdicts.txt").read_text().splitlines() == [
-        "HANDOFF refused: COMPOSE_NODE reads its settings (private/compose/compose.env) as data, and its line 9 sets "
+        "HANDOFF refused: COMPOSE_NODE reads its settings (private/compose/compose.env) as data, and its line 10 sets "
         "COMPOSE_NODE to a value of other characters than A-Za-z0-9._/:+@=,-"]
     assert not (tmp_path / "serve" / "private" / "compose" / "inputs.sha256").exists()
 
@@ -5642,6 +5648,32 @@ def test_a_compose_follow_on_refuses_a_setting_that_would_point_its_reads_outsid
     lines = (tmp_path / "serve" / env).read_text().splitlines()
     _forged(tmp_path, env, "".join(f"{setting}={value}\n" if x.startswith(f"{setting}=") else f"{x}\n" for x in lines))
     assert _compose(tmp_path) == (3, [line], [])
+
+
+TIED_NOT_PEARLPLUS = ("PREFLIGHT: the hand-off's window is tied to Pearl+'s W (PEARLPLUS_TIE), whose record composes under "
+                      "remote/v1 with POUW=pearlplus, and its POUW is h1")
+
+
+@pytest.mark.parametrize("handed, forged, composed", [
+    ({}, {}, "h1"),
+    ({"POUW": "pearlplus"}, {}, "pearlplus"),
+    ({}, {"PEARLPLUS_TIE": "1"}, None),
+    ({}, {"POUW": None, "PEARLPLUS_TIE": "1"}, None),
+])
+def test_the_compose_follow_on_composes_at_the_hand_offs_pouw_and_refuses_a_tied_one_under_another(tmp_path, handed,
+                                                                                                 forged, composed):
+    assert _handed(tmp_path, **handed).returncode == 0
+    env = "private/compose/compose.env"
+    got = dict(x.split("=", 1) for x in (tmp_path / "serve" / env).read_text().splitlines())
+    assert got["POUW"] == handed.get("POUW", "h1")
+    got = {k: v for k, v in {**got, **forged}.items() if v is not None}
+    _forged(tmp_path, env, "".join(f"{k}={v}\n" for k, v in got.items()))
+    rc, lines, order = _compose(tmp_path)
+    if composed is None:
+        assert (rc, lines, order) == (3, [TIED_NOT_PEARLPLUS], [])
+    else:
+        assert order == ["composite", "record"], lines
+        assert (tmp_path / "order.composite").read_text().split()[2] == composed
 
 
 @pytest.mark.parametrize("blob, why", [
@@ -5694,7 +5726,7 @@ def test_a_follow_on_under_compose_off_node_audits_then_hands_off_and_composes_n
     assert lines[-1] == HANDOFF_LINE.replace("{d}", str(d))
     v3c = f"v3c-w7-{VTAG}/audit"
     assert _env_of(dc / "compose.env", COMPOSES) == {
-        "K": "7", "PRODUCT": "remote", "COMPOSITE": "1", "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200",
+        "K": "7", "PRODUCT": "remote", "POUW": "h1", "COMPOSITE": "1", "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200",
         "SERVED_DIR": str(d), "COMPOSE_NODE": "vy-auditor-2", "COMPOSE_TREE": SHA, "AUDITED_ON": "cpu-6",
         "SAMPLED_AUDIT": v3c, "STEPS": "0,3"}
     listed = (dc / "inputs.txt").read_text().splitlines()
@@ -5802,7 +5834,7 @@ def test_handoff_host_writes_a_deferrals_hand_off_again_at_its_settings_naming_w
     assert not dc.exists()
     assert handoff("out", "cpu-6") == (0, [HANDOFF_LINE.replace("{d}", str(d))])
     assert _env_of(dc / "compose.env", COMPOSES) == {
-        "K": "7", "PRODUCT": "remote", "COMPOSITE": "1", "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200",
+        "K": "7", "PRODUCT": "remote", "POUW": "h1", "COMPOSITE": "1", "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200",
         "SERVED_DIR": str(d), "COMPOSE_NODE": "vy-auditor-2", "COMPOSE_TREE": SHA, "AUDITED_ON": "cpu-6",
         "SAMPLED_AUDIT": STEP3, "STEPS": "0,3"}
     listed = (dc / "inputs.txt").read_text().splitlines()
@@ -5862,7 +5894,7 @@ def test_gate_compose_sends_a_deferrals_hand_off_at_its_settings_naming_where_v3
         HANDOFF_LINE.replace("{d}", str(d)), f"GATE-COMPOSE at the compose gate's tree {'c0' * 6} (on remote): exit 0, "
         f"the record accept, 1 files of its $OUT in {tmp_path / 'out' / 'compose'}"])
     assert _env_of(dc / "compose.env", COMPOSES) == {
-        "K": "7", "PRODUCT": "remote", "COMPOSITE": "1", "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200",
+        "K": "7", "PRODUCT": "remote", "POUW": "h1", "COMPOSITE": "1", "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200",
         "SERVED_DIR": str(d), "COMPOSE_NODE": "vy-auditor-2", "COMPOSE_TREE": SHA, "AUDITED_ON": "cpu-6",
         "SAMPLED_AUDIT": STEP3, "STEPS": "0,3"}
     sent, listed = json.loads(seen.read_text()), (dc / "inputs.txt").read_text().splitlines()
@@ -6473,6 +6505,52 @@ def test_served_composite_builds_each_product_in_a_lake_package_of_this_tree():
     assert not gone, f"served_composite.sh's `package` names {gone}: no Lake package of this tree"
 
 
+PRODUCT_COMPOSITE = '''import sys
+from pathlib import Path
+COMPONENTS = {"remote": (), "remote-v1": ()}
+if __name__ == "__main__":
+    a = sys.argv[1:]
+    for o in ("--private-out", "--public-out"):
+        Path(a[a.index(o) + 1]).mkdir(parents=True)
+    print(f"VERDICT {a[0]} accept")
+'''
+NO_V1 = ("COMPOSITE: not run, POUW=pearlplus composes remote/v1, and this tree has no "
+         "verity/protocols/compose/verifier/remote/RemoteV1Main.lean")
+
+
+@pytest.mark.parametrize("pouw, v1, composed", [
+    (None, True, "remote"),
+    ("h1", True, "remote"),
+    ("pearlplus", True, "remote-v1"),
+    ("pearlplus", False, None),
+    ("h1", False, "remote"),
+])
+def test_a_remote_composite_is_v1_under_pearl_plus_and_none_where_the_tree_lacks_it(tmp_path, pouw, v1, composed):
+    tree, bin_, d, out = tmp_path / "tree", tmp_path / "bin", tmp_path / "serve", tmp_path / "out"
+    out.mkdir()
+    (d / "private").mkdir(parents=True)
+    _script(bin_ / "lake", f'mkdir -p .lake/build/bin && touch ".lake/build/bin/$2" && echo "$2" >> {tmp_path}/built')
+    _script(bin_ / "systemd-run", "exit 1")
+    remote = tree / "verity" / "protocols" / "compose" / "verifier" / "remote"
+    remote.mkdir(parents=True)
+    if v1:
+        (remote / "RemoteV1Main.lean").write_text("")
+    (tree / "benchmarks" / "one_stage").mkdir(parents=True)
+    (tree / "benchmarks" / "one_stage" / "composite.py").write_text(PRODUCT_COMPOSITE)
+    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable,
+           "PRODUCT": "remote", "SERVED_NODE": "vy-elsewhere", "COMPOSE_HANDOFF": "1", **({"POUW": pouw} if pouw else {})}
+    r = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_composite.sh"), str(d), str(out)],
+                       cwd=tree, env=env, check=False, capture_output=True, text=True)
+    said = (out / "verdicts.txt").read_text().splitlines()
+    if composed is None:
+        assert (r.returncode, said, (tmp_path / "built").exists()) == (1, [NO_V1], False)
+    else:
+        assert r.returncode == 0, r.stderr
+        assert said[0] == f"COMPOSITE {composed}: VERDICT {composed} accept"
+        assert (tmp_path / "built").read_text().split() == [composed]
+        assert [x.name for x in (out / "composite").iterdir()] == [composed]
+
+
 def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_lean_verdict(tmp_path):
     """served_composite.sh with a stand-in lake, served_cases.py and composite.py: PoUS's case, which its piece wrote
     under the serve dir's private dir beside its Lean's answer, is composed as written, with no card asked for and no
@@ -6658,9 +6736,8 @@ print(json.dumps({"protocol": f"verity/{Path(sys.argv[0]).name}/v0", "reason": "
                   "verdict": "reject"}))
 sys.exit(1)
 '''
-#: What composite.py's provenance leaves unshown after a product's Lean runs in a toy tree, which is no git checkout,
-#: and for onsite, whose CITES names no guarantee
-UNSHOWN = {"remote": ["COMPOSITE remote: NOT_ESTABLISHED the tree is no git checkout"],
+#: What composite.py's provenance leaves unshown after remote's v0 or onsite's Lean runs, neither of which CITES names
+UNSHOWN = {"remote": ["COMPOSITE remote: NOT_ESTABLISHED the product cites no listed guarantee"],
            "onsite": ["COMPOSITE onsite: NOT_ESTABLISHED the product cites no listed guarantee"]}
 
 
