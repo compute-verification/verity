@@ -419,17 +419,21 @@ def slot_run(spec: ResolvedSpec | SteadySpec, root: Path, node: str, *, campaign
 
 
 def direct_command(plan: Plan, source: str | Path, item: PlannedPoint, root: Path, node: str, *,
-                   end: float | None = None, now: Callable[[], float] = time.time) -> list[str]:
+                   card: int | None = None, cores: str | None = None, end: float | None = None,
+                   now: Callable[[], float] = time.time) -> list[str]:
     """The point as a `research run --on NODE` through one of the node's GPU slots (`slot_run`, by `end` where given),
-    its GPUs from the node's gpu-lease: the queued point's tool, identity and environment."""
+    its GPUs from the node's gpu-lease, of the booked `card` alone and on the booked slot's `cores` where given: the
+    queued point's tool, identity and environment."""
 
     spec = vllm_spec(plan)
     minutes = direct_minutes(spec, node)
     # Without --max-min a lease has no end, which gpu-lease refuses while a booked period lies ahead; a guest's GPU job is
     # preemptible, as the queued point's is.
-    lease = ["gpu-lease", str(spec.preset.gpu_count), "--wait", "--max-min", f"{minutes:g}", "--preemptible", "--"]
+    lease = ["gpu-lease", str(spec.preset.gpu_count), "--wait", *(["--on", str(card)] if card is not None else []),
+             *(["--cores", cores] if cores else []), "--max-min", f"{minutes:g}", "--preemptible", "--"]
     return slot_run(spec, root, node, campaign="vllm-bench", tool="verity_bench.tool:VLLM_BENCH_POINT",
-                    env=_env_flags(spec), job=[*lease, *_point_command(source, item, root)], end=end, now=now)
+                    env=_env_flags(spec), job=[*lease, *_point_command(source, item, root)], cores=cores, end=end,
+                    now=now)
 
 
 def _execute(command: Sequence[str], root: Path) -> int:
