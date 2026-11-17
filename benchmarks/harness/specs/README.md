@@ -39,6 +39,7 @@ its checkpoint pin, and that every spec and sweep here has its line below.
   in both.
 - `llama32-1b-bf16-rtx-served-arm`: the same on Llama-3.2-1B in BF16.
 - `llama32-1b-bf16-h200-served-arm`: `llama32-1b-bf16-rtx-served-arm` on one H200.
+- `llama32-1b-bf16-h100-served-arm`: the same on one H100.
 - `qwen3-8b-bf16-rtx-served-arm`: the compiled served arm on Qwen3-8B in BF16.
 - `qwen3-8b-bf16-rtx-served-arm-eager`: the eager served arm on Qwen3-8B, in a run of its own: four Qwen3-8B engines
   don't fit one GPU beside the Commit's buffers.
@@ -53,6 +54,7 @@ its checkpoint pin, and that every spec and sweep here has its line below.
 - `llama32-1b-1gpu-pouw-protocol-served-h200`: Pearl+ (`pouw:pearl-c-h100-v1-h3`, `pearl_c_sm90`'s kernel from its setup)
   on Llama-3.2-1B's BF16 checkpoint on one H200, against eager and compiled stock FP8 at batch 32, 8,192 tokens a step
   (`served_pearlplus.sh`'s step).
+- `llama32-1b-1gpu-pouw-protocol-served-h100`: the same on one H100.
 
 ## PoUS's bandwidth audit
 
