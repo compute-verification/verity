@@ -306,7 +306,7 @@ def partition(args) -> int:
     return 0
 
 
-#: name -> (its script here, its arguments at a size one CPU slot runs in minutes, the environment it adds)
+#: name -> (its script here, its arguments at a size one CPU slot runs in minutes, the environment it adds to those)
 SCALING: dict[str, tuple[str, tuple[str, ...], dict[str, str]]] = {
     "registration": ("registration.sh", ("1024", "4096"), {}),
     "population": ("population.sh", ("20", "50", "10000"), {}),
@@ -329,8 +329,10 @@ def scaling(args) -> int:
         print(f"no scaling benchmark {args.name!r}: one of {', '.join(SCALING)}", file=sys.stderr)
         return 2
     script, sizes, env = SCALING[args.name]
-    return subprocess.run(["bash", str(HERE / script), *(args.args or sizes)], cwd=ROOT,
-                          env=os.environ | {k: os.environ.get(k, v) for k, v in env.items()}).returncode
+    if args.args:
+        return subprocess.run(["bash", str(HERE / script), *args.args], cwd=ROOT).returncode
+    return subprocess.run(["env", *(f"{k}={v}" for k, v in env.items()), "bash", str(HERE / script), *sizes],
+                          cwd=ROOT).returncode
 
 
 def store(args) -> int:
