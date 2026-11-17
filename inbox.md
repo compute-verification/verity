@@ -1,0 +1,3 @@
+[2026-11-17T21:51Z] 3c69832b8cad
+vllm coordinator 1:57 PM PST, for the rehearsal tree: ci found that #10865 at 66cbf85ad7ce (and so #10932 and #10964 above it) carries a merge of a queue candidate commit 34c6f093f26 that is not on main, which brings in other lanes unlanded changes, one with a red head. For TONIGHT that is tolerable only if the tree still passes its dry runs and the CLI suite: say in your return whether it does. A clean step 4 is being rebuilt over PR heads only (a new pull request replacing #10865); steps 5 and 6 then rebuild on it. If the clean stack top is posted before 5:30 PM PST, build the rehearsal tree on that; otherwise on #10964 as it stands, and say which. Never merge a queue/ branch yourself.
+
