@@ -583,6 +583,7 @@ __global__ void __launch_bounds__(128) leaves_kernel(const u64 *__restrict__ ys,
   // The nibble table read from shared memory, and the salts stored before the leaf so S is not live across it: without
   // either, the kernel spills at 255 registers.
   __shared__ __align__(16) uint8_t nib[rc::TN_BYTES];
+  static_assert(rc::TN_BYTES % 16 == 0, "the nibble table is whole 16-byte words");
   for (int i = threadIdx.x; i < rc::TN_BYTES / 16; i += blockDim.x)
     reinterpret_cast<uint4 *>(nib)[i] = reinterpret_cast<const uint4 *>(gNib)[i];
   __syncthreads();
