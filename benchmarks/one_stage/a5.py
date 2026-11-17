@@ -306,7 +306,7 @@ def tie(a: argparse.Namespace) -> dict[str, Any]:
     return dict(getattr(a, "tie", None) or {})
 
 
-def checked(a: argparse.Namespace) -> dict[str, Any]:
+def verifying(a: argparse.Namespace) -> dict[str, Any]:
     """`tie` with the window's open root where it registers a value afresh, no earlier record's output: that value's
     domain binds the root (`docket.unwindowed`)."""
     t = tie(a)
@@ -952,7 +952,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     hist = history(publics) if history is not None else None
     checks["registration"] = V.check(rec, program, query, sampling_design, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table,
                                      history=hist, members=link_members(members) if per_member(members, not plain(a)) else (),
-                                     **checked(a), **declared(a)).to_json()
+                                     **verifying(a), **declared(a)).to_json()
     if mine.row_tables:
         bad = TB.check_row_tables(mine, publics, {r["port"]: r["root"] for r in rec["roots"]}, step_roots)
         checks["row_tables"] = {"ok": not bad, "codes": sorted(bad), "detail": bad}
@@ -1288,7 +1288,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         write_case(out, program, query, sampling_design, want, leaf_layer, a.delta, table, rec,
                    {"draw": union_sample, "proved_units": given["proved_units"], "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
-                   served=given["served"], v2=v2_proof(done, not plain(a)), partition=part, tied=checked(a),
+                   served=given["served"], v2=v2_proof(done, not plain(a)), partition=part, tied=verifying(a),
                    per_member=members_proof(members, done, not plain(a)),
                    coins=AC.evidence(a.coins.evidence(), segment), window_root=a.window_root,
                    family=stream.family(draw), member_trees=relay is not None, challenger_key=a.coins.held()["key"])
@@ -1317,12 +1317,12 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         taken = program_values(program)
 
         def registration(name: str, program_: Program, ports: dict, layer: str | None, **day: Any) -> dict[str, dict]:
-            v = V.check(rec, program_, query, sampling_design, CS.SCHEME, ports, leaf_layer=layer, work_table=table, **checked(a), **day)
+            v = V.check(rec, program_, query, sampling_design, CS.SCHEME, ports, leaf_layer=layer, work_table=table, **verifying(a), **day)
             return {name: a0.negative(v)}
 
         def history_root(name: str, wrong: dict) -> dict[str, dict]:
             v = V.check(rec, program, query, sampling_design, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table, history=wrong,
-                        **checked(a))
+                        **verifying(a))
             return {name: a0.negative(v)}
 
         parts: list[dict[str, dict] | Negative] = []
@@ -1355,7 +1355,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             parts.append({"proved-set-short-of-the-draw": a0.negative(v)})
         parts.append(workers.submit("transfer gates", functools.partial(
             transfer_gate_negatives, getattr(a, "transfer_gate", ()), rec, mine, want, leaf_layer, union_sample, sampled_design, proved,
-            checked(a))))
+            verifying(a))))
         parts.append(workers.submit("audit record", functools.partial(
             a0.audit_negatives, result, sampled_design, a.delta, session_roots, served=sorted(served_units))))
         parts += coin_neg
