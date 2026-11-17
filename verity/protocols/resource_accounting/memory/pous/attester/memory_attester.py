@@ -1,13 +1,13 @@
-"""The memory challenger: PoUS's timed rounds, run by an auditor-trusted device beside the network attester, which signs
+"""The memory attester: PoUS's timed rounds, run by an auditor-trusted device beside the network attester, which signs
 its rounds.  It is the auditor's hardware, on a machine the developer doesn't control at the developer's site (the auditor's
 own VM or box, under the auditor's account), never a process on the developer's node.  On the deployed path it replaces
 `audit.UnsignedRounds`, the same rounds unsigned.
 
 A session has four steps:
 
-1. **Sample.** The session id is the auditor's, designated for one audit, and the memory challenger runs at most one
+1. **Sample.** The session id is the auditor's, designated for one audit, and the memory attester runs at most one
    session under it: its `SessionLog` refuses an id already used and records the new one, fsynced, before the
-   session's first challenge.  Before the session the memory challenger samples its `k` indices from its own secret
+   session's first challenge.  Before the session the memory attester samples its `k` indices from its own secret
    (`verity.commitments.randomness`, `COIN_DOMAIN`) and commits to them in a coin tree, which it keeps: nothing that commits to
    a coin not yet revealed leaves the device before the session's last answer is in.
 2. **Rounds.** Round `j` reveals index `j` (`challenge`), receives the whole answer block (`receive`), reads its clock
@@ -18,7 +18,7 @@ A session has four steps:
    the commitment's fields and how the session ended, and the records digest is the `sha512/row/v2` digest of the round
    records as one stream.  The records are witness: the prover proves things about them, and they never reach the auditor in the
    clear.
-4. **Release.** Once the session is signed the memory challenger releases its commitment (`commitment`: the coin
+4. **Release.** Once the session is signed the memory attester releases its commitment (`commitment`: the coin
    tree's root and hm96 key, the session's id and parameters, and the root the setup published for the `C*` it audits,
    `SessionCommitment`) and opens every coin it revealed (`openings`).  Both refuse before the signature.
 
@@ -57,11 +57,11 @@ P's block a constant midstate, and is taken after the receipt time.
 **Signatures.** A `Signer` signs a session's record (`message`, 64 bytes) under its session id; `SCHEMES` maps an
 accepted scheme to its `verify(public_key, session, record, signature)`.  The one accepted scheme is S1's, `LMS`:
 LMS/LM-OTS over SHA-512 at `lms.DEPLOYED` (`verity.commitments.crypto.lms`, claim `euf-cma/lms-sha512-n64`), which signs
-the memory challenger role's digest `lms.memory_challenger_message(I, session, record)`; `LmsSigner` is its signer.  A
+the memory attester role's digest `lms.memory_attester_message(I, session, record)`; `LmsSigner` is its signer.  A
 test signer's scheme starts with `TEST_PREFIX`; `register` never adds one, so a test-signed record is refused outside
 tests, as is an unsigned one.
 
-**Setup record.** With the key and under the session id it signs a session's record with, the memory challenger's
+**Setup record.** With the key and under the session id it signs a session's record with, the memory attester's
 device signs the setup's published outputs it was given (`sign_setup_record`): a `SetupRecord`, the blocks, commitment,
 salt and root the session's answers are checked against, never that setup's check passed (the device sees no store and
 runs no check at setup), as raw bytes under `SETUP_RECORD_TAG` (`SetupRecord.value`), never 64 bytes long, so never a
@@ -123,7 +123,7 @@ COIN_SCHEMA = "pous/coin/hm96-sha512/v1"
 RECORD_BYTES = 92
 TEST_PREFIX = "test/"
 CLOCK_RESOLUTION_NS = 1_000
-"""The coarsest clock the memory challenger runs on: a microsecond (the certifier's 100 ms buckets are far too coarse)."""
+"""The coarsest clock the memory attester runs on: a microsecond (the network attester's 100 ms buckets are far too coarse)."""
 COMPLETE, LATE = "complete", "late"
 HM96 = hm96.SHA512
 LIMITS = VerificationLimits()
@@ -227,7 +227,7 @@ def verify_coin(commitment: SessionCommitment, opening: CoinOpening) -> bool:
 
 @dataclass(frozen=True, slots=True)
 class SessionCommitment:
-    """What the memory challenger releases once the session is signed, never before its last answer: the session id,
+    """What the memory attester releases once the session is signed, never before its last answer: the session id,
     the coin tree (root and hm96 key), the number of blocks and rounds, the limit `Δ + RTT`, the answer's size, and
     `binding`, the root the setup published for the `C*` the session audits (`verifier.VerifierKey.root`, the setup
     protocol's `root`).  Every field is in the signed header."""
@@ -318,19 +318,19 @@ LMS = "lms-sha512/n64-w1-h20/v0"
 
 
 def lms_verify(params: lms.Params) -> Verify:
-    """S1's verification at `params`, of the memory challenger role's digest of `(session, record)`."""
+    """S1's verification at `params`, of the memory attester role's digest of `(session, record)`."""
 
     def verify(public_key: bytes, session: bytes, record: bytes, signature: bytes) -> bool:
         if len(public_key) != 16 + params.N:
             return False
         sig = lms.Signature.decode(params, signature)
-        return lms.verify(params, public_key, lms.memory_challenger_message(public_key[:16], session, record), sig)
+        return lms.verify(params, public_key, lms.memory_attester_message(public_key[:16], session, record), sig)
 
     return verify
 
 
 class LmsSigner:
-    """A memory challenger's S1 key (`lms.PrivateKey`) and the path of its leaf state (`lms.LeafState`), which refuses a
+    """A memory attester's S1 key (`lms.PrivateKey`) and the path of its leaf state (`lms.LeafState`), which refuses a
     used or missing leaf; `scheme` is `LMS` at `lms.DEPLOYED`, else a test's own id for other parameters. Each `sign`
     opens the state only to sign, waiting on its lock while another signer of the key holds it, so concurrent sessions on
     one key take turns, each signature at a leaf of its own reserved on disk before it is made."""
@@ -342,7 +342,7 @@ class LmsSigner:
 
     def sign(self, session: bytes, record: bytes) -> bytes:
         with lms.LeafState(self.state, self.public_key, self.key.params.H, wait=True) as state:
-            return lms.sign(self.key, state, lms.memory_challenger_message(self.key.I, session, record)).encode()
+            return lms.sign(self.key, state, lms.memory_attester_message(self.key.I, session, record)).encode()
 
 
 SEED_BYTES = lms.DEPLOYED.N
@@ -456,7 +456,7 @@ def _field(b: bytes) -> bytes:
 
 @dataclass(frozen=True, slots=True)
 class SetupRecord:
-    """What the memory challenger's device signs at setup: the setup's published outputs it was given, its blocks,
+    """What the memory attester's device signs at setup: the setup's published outputs it was given, its blocks,
     commitment to `W`, salt and root.  `value()` is the record's bytes, never a digest:
     `SETUP_RECORD_TAG ‖ u64 blocks ‖ [commitment] ‖ [salt] ‖ [root]`, each `[·]` a u64 big-endian length then the
     bytes.  It is at least 78 bytes long, so never a session's record or the wipe's, which are 64-byte digests."""
@@ -473,8 +473,8 @@ class SetupRecord:
 
 def setup_record_message(ident: bytes, session: bytes, record: SetupRecord) -> bytes:
     """The role's message the setup record is signed as under the key whose identifier is `ident`:
-    `lms.memory_challenger_message(ident, session, record.value())`."""
-    return lms.memory_challenger_message(ident, session, record.value())
+    `lms.memory_attester_message(ident, session, record.value())`."""
+    return lms.memory_attester_message(ident, session, record.value())
 
 
 _SETUP_KEYS = frozenset({"blocks", "commitment", "public_key", "root", "salt", "scheme", "signature"})
@@ -557,14 +557,14 @@ _SESSION_ID = re.compile(rb"[0-9a-f]{64}")
 
 
 class SessionLog:
-    """The session ids a memory challenger has used, in a file of its own (never in its signer's key directory) that
+    """The session ids a memory attester has used, in a file of its own (never in its signer's key directory) that
     fails closed.  The file is `SESSION_LOG`'s line, then one used id a line in lowercase hex.  Opening refuses a log that
     is missing or unreadable: a first line that is not `SESSION_LOG`, a line that is not an id, an id twice, or a last
     line cut short.  `claim` takes the file's lock, reads it again, refuses an id already in it and appends the id,
     fsynced, before it returns.  Nothing here rewrites or truncates the file, and `create` refuses one that exists.
 
     One session an id rests on the host keeping this file as written: it is never restored from a snapshot, a backup or
-    another older copy, and the memory challenger is never restarted onto host-held state older than the sessions it
+    another older copy, and the memory attester is never restarted onto host-held state older than the sessions it
     has run.  A file can see neither.  The claim that the host does neither is `trusted-device`
     (Lean's `Verity.Assumptions.TrustedDevice` states its part about one run): its host never restores an earlier copy
     of the state the device keeps there."""
@@ -596,7 +596,7 @@ class SessionLog:
 
         def refuse() -> str | None:
             if session in self._read():
-                return f"session {session.hex()} is in {self.path}: the memory challenger runs one session under an id"
+                return f"session {session.hex()} is in {self.path}: the memory attester runs one session under an id"
             return None
 
         _append(self.path, session.hex().encode() + b"\n", refuse)
@@ -607,7 +607,7 @@ _SALT_ENTRY = re.compile(rb"([0-9a-f]{128}) ([0-9a-f]{128}) ([0-9a-f]{%d})" % (2
 
 
 class SaltLog:
-    """The setup salts a memory challenger has sampled, one an audit, in a file of its own beside its `SessionLog` that
+    """The setup salts a memory attester has sampled, one an audit, in a file of its own beside its `SessionLog` that
     fails closed as that log does. The file is `SALT_LOG`'s line, then one entry a line: the audit's 64-byte binding, the
     64-byte commitment to `W` the salt was sampled after, and the salt, each in lowercase hex. `record` takes the file's
     lock, reads it again, refuses an audit already in it and appends the entry, fsynced, before it returns, so an audit
@@ -645,7 +645,7 @@ class SaltLog:
 
         def refuse() -> str | None:
             if audit in self._read():
-                return (f"audit {audit.hex()} has its salt in {self.path}: the memory challenger draws one salt an audit, "
+                return (f"audit {audit.hex()} has its salt in {self.path}: the memory attester draws one salt an audit, "
                         "and a retry never redraws it")
             return None
 
@@ -713,7 +713,7 @@ def resolution_of(clock: Callable[[], int]) -> float:
 
 
 class MemoryChallenger:
-    """One session of the memory challenger over `coins`, judged against `limit_ns`, signed by `signer`, bound to
+    """One session of the memory attester over `coins`, judged against `limit_ns`, signed by `signer`, bound to
     `binding`, the setup's root of the `C*` it audits (module docstring).  The session's id, `coins.session`, goes into
     `log` (`SessionLog.claim`) before anything else can happen: a used id is refused.  `challenge()` reveals the next
     index and reads the send time; `receive(block)` reads the receipt time first, then hashes the block.  A late round
@@ -753,7 +753,7 @@ class MemoryChallenger:
     def challenge(self) -> int:
         """Reveal round `j`'s index and read its send time; refused with a round open or the session ended."""
         if self.ended is not None:
-            raise RuntimeError(f"the session has ended ({self.ended}): no round is retried and no index redrawn")
+            raise RuntimeError(f"the session has ended ({self.ended}): no round is retried and no index resampled")
         if self._open is not None:
             raise RuntimeError("the previous round is unanswered")
         j = len(self.rounds)
@@ -836,7 +836,7 @@ def verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequ
             expected: Callable[[int], bytes], *, trusted: frozenset[bytes] | set[bytes],
             schemes: Mapping[str, Verify] = SCHEMES) -> Verdict:
     """The check of a signed session against the commitment released with it (module docstring): `expected(i)` is
-    `block_digest` of block `i` of `C`, `trusted` the memory challengers' public keys, `schemes` the accepted signature schemes
+    `block_digest` of block `i` of `C`, `trusted` the memory attesters' public keys, `schemes` the accepted signature schemes
     (S1's; a test's own mapping in tests).  It fails closed: an unknown scheme, an untrusted key or a bad signature
     rejects, whatever the rounds."""
     reasons: list[str] = []

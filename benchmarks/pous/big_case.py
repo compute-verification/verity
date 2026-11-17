@@ -3,8 +3,8 @@
     big_case.py SIZE OUT [--workers N]
 
 The case is an honest period at the smallest width, `(w, c0) = (64, 189)`, so its bytes are mostly the memory
-challenger's table and `C*` (about 304 bytes a block, both hex twice over): setup of a zero store encoded in `N`
-processes (`period_prover.setup_store`), then the memory challenger's session over it under a test signer
+attester's table and `C*` (about 304 bytes a block, both hex twice over): setup of a zero store encoded in `N`
+processes (`period_prover.setup_store`), then the memory attester's session over it under a test signer
 (`tests/pous_test_signer.py`, whose runs only `--test` accepts). The case line, `period.case`'s canonical JSON, is
 written to OUT a piece at a time, so the generator holds `C*` and its table but never the line. A test signer's case
 is synthetic, so nothing in it is evidence of a real run. Prints the line's size and the times taken as JSON.
@@ -21,7 +21,7 @@ from pathlib import Path
 
 from verity.commitments.identity import canonical_json_bytes
 from verity.commitments.randomness import derive
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier import period
 from verity.protocols.resource_accounting.memory.pous.prover import period_prover
 from verity.protocols.resource_accounting.memory.pous.verifier import run as R

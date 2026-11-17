@@ -23,7 +23,7 @@ ALLOWED: dict[str, str] = {
     "wipe-count-test": "the difftest's port of the counted check, under the test signers' schemes alone",
 }
 REMEDY = ("the counted check certifies on a count nobody holds until a composition ties `named` to the network "
-          "certifier's count: only that composition may serve it, and this test's `ALLOWED` names its executable then")
+          "attester's count: only that composition may serve it, and this test's `ALLOWED` names its executable then")
 
 COMMENT = re.compile(r"/-.*?-/|--[^\n]*", re.S)
 IMPORT = re.compile(r"^(?:(?:public|private|meta)\s+)*import\s+(?:all\s+)?([\w.]+)", re.M)

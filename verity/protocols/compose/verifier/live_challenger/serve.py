@@ -7,7 +7,7 @@ log signed when the session ends.
         [--root HEX] [--secret-file FILE] [--sign-lock FILE] [--withhold]
 
 - **The key** is the challenger's LMS key over SHA-512, on its host in `--key DIR` (default
-  `~/.local/state/live-challenger/key`), in the memory challenger's layout (`benchmarks/pous/memory_challenger/live.py`):
+  `~/.local/state/live-challenger/key`), in the memory attester's layout (`benchmarks/pous/memory_attester/live.py`):
   `seed` (secret, 0600), `public` (`I || T[1]`), `tree.bin` (the key's tree, a cache checked against `public` and
   `tree.sha512`) and `state.json` (`lms.LeafState`, which refuses a used leaf across runs).  A missing key is made there
   first, at `lms.DEPLOYED` (about 1.1G SHA-512 hashes over `--keygen-workers`) or at `--params W,H` (tests).  A key inside

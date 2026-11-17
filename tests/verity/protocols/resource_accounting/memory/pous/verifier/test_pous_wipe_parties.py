@@ -1,4 +1,4 @@
-"""The wipe's memory challenger and prover as parties of the deployment layer (`wipe_challenger`, `wipe_prover`, over
+"""The wipe's memory attester and prover as parties of the deployment layer (`wipe_challenger`, `wipe_prover`, over
 `wipe_parties`'s messages). On the coins, clock readings and key `wipe_challenger.serve` is given, the ported challenger
 signs the same bytes, whatever its fill frames' size;
 an honest prover keeping the fill in host memory (`wipe_store.StoreProver`) is accepted by `verity/wipe/v0`'s verdict, one
@@ -22,7 +22,7 @@ from verity.runtime import sources as S
 from verity.protocol import ProtocolDef
 from verity.party import Finish
 from verity.runtime.runner import run
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.attester import wipe_challenger as WC
 from verity.protocols.resource_accounting.memory.pous.prover import wipe_prover as WR
 from verity.protocols.resource_accounting.memory.pous.prover import wipe_run

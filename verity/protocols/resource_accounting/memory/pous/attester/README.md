@@ -23,7 +23,7 @@ What code outside this directory may use. Everything else here is internal.
 | The Lean package `lean/` (`core_memory_challenger`) | The verdicts on what the device signed, as executables, Lean modules and two Python callers. `lean/README.md` states its interface. |
 
 From Python there are eight modules, each imported by its path.
-`memory_challenger` is the timed rounds' device and its records: the device and its coin tree (`MemoryChallenger`,
+`memory_attester` is the timed rounds' device and its records: the device and its coin tree (`MemoryChallenger`,
 `CoinTree`, `CoinOpening`, `verify_coin`), what it publishes and signs (`SessionCommitment`, `SignedSession`, `Round`,
 `records_digest`, `message`), the check of a signed run (`verdict`, `Verdict`), its two logs (`SessionLog`, `SaltLog`), its
 signature schemes (`Signer`, `Verify`, `LmsSigner`, `SCHEMES`, `LMS`, `TEST_PREFIX`) and a block's digest
@@ -86,7 +86,7 @@ The proofs of the properties are in `security/Proofs/Properties/Pous/` (`MemoryC
 
 ## Where to look
 
-- `memory_challenger.py`: the timed rounds' device (`MemoryChallenger`, `CoinTree`, `SessionLog`, `LmsSigner`,
+- `memory_attester.py`: the timed rounds' device (`MemoryChallenger`, `CoinTree`, `SessionLog`, `LmsSigner`,
   `verdict`); its module docstring is the record formats' spec.
 - `challenger_session.py` and `challenger_party.py`: a run of timed rounds, from the node's side and as the memory attester's
   party on its own host.

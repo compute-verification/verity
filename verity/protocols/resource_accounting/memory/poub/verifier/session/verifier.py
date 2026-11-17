@@ -1739,7 +1739,7 @@ def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: 
     a.out.mkdir(parents=True, exist_ok=True)
     if a.challenger == "gate" and a.port in challengers.GATE_PORTS:
         ap.error(f"--port {a.port} is one of the gate's session ports ({challengers.GATE_PORTS.start}.."
-                 f"{challengers.GATE_PORTS.stop - 1}), which this machine's certifier coin link binds")
+                 f"{challengers.GATE_PORTS.stop - 1}), which this machine's network attester's coin link binds")
     try:
         challenger = challengers.of(a.challenger, a.out / "challenger", a.challenger_key, a.challenger_params,
                                     verify=verify, served_verify=served_verify, serve=serve, ssh=a.challenger_ssh,

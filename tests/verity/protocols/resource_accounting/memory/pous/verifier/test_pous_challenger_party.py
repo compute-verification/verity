@@ -1,4 +1,4 @@
-"""`challenger_party` and `challenger_prover`: the memory challenger's side and the prover's over a socket pair, each
+"""`challenger_party` and `challenger_prover`: the memory attester's side and the prover's over a socket pair, each
 in its own thread, the challenger on an injected clock. Given the period's coins, the challenger's side designates
 the id `period_prover.run` does in one process and challenges the same indices. The run's check accepts its session against
 the honest prover and refuses it against one that answers zeros. The warm-ups before round 0 are on a public index,
@@ -30,7 +30,7 @@ from verity.runtime.stream import Side
 from verity.channel import Message
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_party as CP
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.prover import challenger_prover as CR
 from verity.protocols.resource_accounting.memory.pous.verifier import period, run
 from verity.protocols.resource_accounting.memory.pous.verifier import setup as pous_setup
@@ -292,7 +292,7 @@ def test_an_audits_session_runs_under_the_id_its_salt_fixes(tmp_path) -> None:
     assert refused["reason"] == "the session does not run under the id the auditor designated"
 
 
-def test_a_second_session_for_an_audit_is_refused_never_redrawn(tmp_path) -> None:
+def test_a_second_session_for_an_audit_is_refused_never_resampled(tmp_path) -> None:
     """Once an audit's session has run, the challenger refuses another for it, before any frame: no retry flips the
     coins again, and the session log holds the one id."""
     _, point, published, blocks, _ = _in_process()
@@ -300,8 +300,8 @@ def test_a_second_session_for_an_audit_is_refused_never_redrawn(tmp_path) -> Non
     CP.give_salt(salts, {"audit": AUDIT.hex(), "commitment": published.commitment.hex()}, entropy=lambda n: COINS)
     sid, _ = _audit_session(point, published, lambda i: blocks[i], ts.TestSigner(b"once", 2), salts, log)
     request = CS.request_of("n0", point, published.root, audit=AUDIT, published=published)
-    assert _refused(request, salts, log) == ("a session has run for the request's `audit`: the memory challenger runs one "
-                                             "an audit, and a retry is refused, never redrawn")
+    assert _refused(request, salts, log) == ("a session has run for the request's `audit`: the memory attester runs one "
+                                             "an audit, and a retry is refused, never resampled")
     assert log.path.read_text().splitlines()[1:] == [sid.hex()]
 
 
@@ -315,15 +315,15 @@ def test_a_second_salt_for_an_audit_is_refused_and_the_first_kept(tmp_path) -> N
 
 
 def test_a_session_whose_setup_salt_is_not_the_challengers_is_refused(tmp_path) -> None:
-    """Setup's published outputs must carry the salt the challenger logged for the audit and the commitment it drew it
+    """Setup's published outputs must carry the salt the challenger logged for the audit and the commitment it sampled it
     after, and the session must audit their root; an audit with no salt logged has no session."""
     _, point, published, _, _ = _in_process()
     salts, log = _salt_log(tmp_path), ts.session_log(tmp_path)
     request = CS.request_of("n0", point, published.root, audit=AUDIT, published=published)
-    assert _refused(request, salts, log).startswith("the memory challenger drew no salt for the request's `audit`")
+    assert _refused(request, salts, log).startswith("the memory attester sampled no salt for the request's `audit`")
     CP.give_salt(salts, {"audit": AUDIT.hex(), "commitment": published.commitment.hex()})
     assert _refused(request, salts, log) == ("setup's published outputs (`published`) do not carry the commitment and salt "
-                                             "the memory challenger logged for the request's `audit`")
+                                             "the memory attester logged for the request's `audit`")
     logged = run.Setup(published.blocks, published.commitment, published.root, salts.get(AUDIT)[1])
     elsewhere = CS.request_of("n0", point, b"\x01" * 64, audit=AUDIT, published=logged)
     assert _refused(elsewhere, salts, log).startswith("the session does not audit the C* setup published")
@@ -361,7 +361,7 @@ def test_the_side_serves_a_salt_request_and_refuses_before_it_listens(tmp_path) 
     source = CS.salt(side, AUDIT, commitment)
     assert len(source) == CP.SOURCE_BYTES
     assert mc.SaltLog(device / "salts").get(AUDIT) == (commitment, pous_setup.sample_salt(source, commitment))
-    with pytest.raises(RuntimeError, match="the memory challenger on auditor-host drew no salt: the request's `audit` has its"):
+    with pytest.raises(RuntimeError, match="the memory attester on auditor-host sampled no salt: the request's `audit` has its"):
         CS.salt(side, AUDIT, commitment)
     point = period.point_for(len(STORE), period.W, period.C0)
     wrong = run.Setup(point.params.blocks, commitment, b"\x02" * 64, bytes(24))
@@ -386,9 +386,9 @@ def test_the_party_follows_period_json(tmp_path) -> None:
              "configuration": conf, "committed": frozenset({conf})}
     assert CS.placement("n0", "n0", key, **under)["kind"] == "prover-node"
     assert CS.placement("n0", "auditor-host", key, **under) == {
-        "parties": {"memory_challenger": "auditor-host", "prover": "n0", "verifier": "n0"}, "kind": "own-host",
+        "parties": {"memory_attester": "auditor-host", "prover": "n0", "verifier": "n0"}, "kind": "own-host",
         CS.PREMISE: f"holds: the session is signed under the key configuration {conf} pins for memory-challenger's "
-                    "pous sessions; the memory challenger ran on auditor-host, not the prover's n0",
+                    "pous sessions; the memory attester ran on auditor-host, not the prover's n0",
         "setup": CS.SETUP}
     assert CS.SETUP == "setup checked by the developer, not the auditor"
     assert not mc.holds(CS.placement("n0", "auditor-host", "ef" * 64, **under))

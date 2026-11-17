@@ -66,7 +66,7 @@ lowrisk_per_tick = 20
 # Lean, its locks and Lake files, the trusted hashes, the verifiers and the trusted places of tests/import_order.toml with
 # their tests, and the soundness-path Python (AGENTS.md's soundness path); the data sheets the Site and the accounting
 # read (hardware/: a changed figure changes a device's assumed capacity bound); the auditor's devices (every `attester/` and compose's `verifier/`: the
-# network attester, the memory challenger, the challenger service and the verifier's auditor device) and what both auditor
+# network attester, the memory attester, the challenger service and the verifier's auditor device) and what both auditor
 # devices pin beside them and run or read as `auditor`: the challenger's (benchmarks/network_traces/, the network attester's
 # rehearsals; the checkpoint manifest its model registry reads) and the verifier's (benchmarks/one_stage/, which its compose
 # gate's `served_verdicts.sh compose` runs with that directory on sys.path; the fixture registration `bw_party --fixture`

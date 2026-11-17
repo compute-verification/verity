@@ -22,7 +22,7 @@ import mc_cases as M
 import verity_difftest as D
 from hypothesis import strategies as st
 
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.prover import wipe_store as WS
 from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
 from verity.protocols.resource_accounting.memory.pous.attester import wipe_challenger as WC
@@ -301,7 +301,7 @@ def _v1(j: dict, x: int) -> dict:
 
 
 def _slewed_clock(j: dict, x: int) -> dict:
-    """The record with `CLOCK_MONOTONIC ns`, the memory challenger's clock, named in both commitments where a wipe's
+    """The record with `CLOCK_MONOTONIC ns`, the memory attester's clock, named in both commitments where a wipe's
     header names the raw clock."""
     slewed = {"clock": "CLOCK_MONOTONIC ns"}
     return j | {"commitment": j["commitment"] | slewed,

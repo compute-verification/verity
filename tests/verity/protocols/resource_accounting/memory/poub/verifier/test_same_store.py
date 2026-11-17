@@ -19,7 +19,7 @@ from verity.protocols.resource_accounting.memory.poub.prover import p2_prover
 from verity.protocols.resource_accounting.memory.poub.prover import period_prover as PP
 from verity.protocols.resource_accounting.memory.poub.verifier import p2, p2_case, p2_parties
 from verity.protocols.resource_accounting.memory.poub.verifier import period as P
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier import period as pous
 from verity.protocols.resource_accounting.memory.pous.prover import period_prover
 from verity.protocols.resource_accounting.memory.pous.verifier import run as R
@@ -99,7 +99,7 @@ def cases(tmp_path_factory) -> dict[str, dict]:
     """PoUS's audit of the committed `C*` and its honest run on another store (a test signer's), PoUB-P2's case on the
     committed `C*`, and the generic PoUB's honest session on its own store."""
     tmp, S = tmp_path_factory.mktemp("same-store"), _signer()
-    kw = {"signer": S.TestSigner(b"the memory challenger", directory=tmp), "log": S.session_log(tmp),
+    kw = {"signer": S.TestSigner(b"the memory attester", directory=tmp), "log": S.session_log(tmp),
           "schemes": S.SCHEMES, "protocol": mc.TEST_PREFIX + pous.PROTOCOL, "clock": lambda: 10 ** 9}
     store = _committed()
     reg, q = store.registration, store.registration.params

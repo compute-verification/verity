@@ -1,4 +1,4 @@
-"""The memory challenger (`memory_challenger`): the coin tree, released with its openings only once the session is
+"""The memory attester (`memory_attester`): the coin tree, released with its openings only once the session is
 signed, the signed session record, the
 verdict that fails closed, the whole block hashed under `sha512/row/v2`, a late round that ends the session with no retry,
 no garbage collection inside the rounds, and the session log that refuses a used id.  Every clock is injected."""
@@ -17,7 +17,7 @@ from pous_fakes import Clock
 from verity.commitments import rowleaf
 from verity.commitments.crypto import lms
 from verity.commitments.randomness import derive
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier import schemes
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2
 

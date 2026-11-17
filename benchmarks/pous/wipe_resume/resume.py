@@ -7,7 +7,7 @@ prover keeps the five 200-byte post-absorb states (1,000 bytes of a 64 KiB block
 481 sequential Keccak-f, with no `Π₂` call, inside the 1.449 ms read deadline that `(D, Q) = (5, 2^20)` was converted
 to.
 
-**The streamed wipe.** `L_i = SHA-512(LABEL_TAG ‖ K ‖ u64 i)` under the memory challenger's key `K`, which the prover
+**The streamed wipe.** `L_i = SHA-512(LABEL_TAG ‖ K ‖ u64 i)` under the memory attester's key `K`, which the prover
 never holds. The only state short of a label from which labels resume is the challenger's: SHA-512's state after
 the 67 bytes of `LABEL_TAG ‖ K` (rounds 0–7 in `wipe_stream.c`), which is `K`'s worth. Each prover below runs whole
 sessions of `wipe_challenger.WipeMemoryChallenger` (sequential reads, batch size 1), signed by a test signer and judged by
@@ -23,7 +23,7 @@ sessions of `wipe_challenger.WipeMemoryChallenger` (sequential reads, batch size
   Expect reject.
 - `resume-untimed`: the same under a 10-minute deadline with `UNTIMED_TRIES` keys searched at the first read.
   Expect reject: the deadline isn't what stops it.
-- `key-leak` (a premise broken): the prover is handed `K`, as a memory challenger on the developer's own machine can
+- `key-leak` (a premise broken): the prover is handed `K`, as a memory attester on the developer's own machine can
   leak it. It keeps SHA-512's state after `LABEL_TAG ‖ K` and prior content in the whole store, and answers a read
   with one compression. Expect accept: the attack's mechanism, once the resume state is the prover's.
 - `untiered` (a premise broken): every label kept in memory the commitment doesn't declare, prior content in the

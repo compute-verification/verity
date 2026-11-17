@@ -1,4 +1,4 @@
-"""PoUS's memory challenger as a party of its own, so it runs on a host the developer doesn't control (the challenger host,
+"""PoUS's memory attester as a party of its own, so it runs on a host the developer doesn't control (the challenger host,
 `trusted-device`) while the prover stays on its node.
 
 The challenger listens and the prover connects. Each round is one frame each way: the challenger sends `u64be index`
@@ -17,7 +17,7 @@ are the challenger's, the setup's salt and the session's:
 - **The salt.** Before setup encodes `C*`, the prover's side sends `{"salt": {"audit", "commitment"}}`: the audit's
   64-byte binding and the commitment to `W` that setup will publish. The challenger samples the salt's source from its
   host's OS after it (`give_salt`), logs the audit, the commitment and the salt (`setup.sample_salt` of that source) in its
-  salt log (`memory_challenger.SaltLog`, which holds one salt an audit), and prints `{"source": HEX}`, which setup takes
+  salt log (`memory_attester.SaltLog`, which holds one salt an audit), and prints `{"source": HEX}`, which setup takes
   as its salt source (`challenger_session.salt`).
 - **The session.** A request naming its audit (`audit`, and `published`, setup's published outputs) runs under
   `session_id(audit, commitment, salt)`, derived from what the challenger logged and never sampled. The challenger
@@ -65,7 +65,7 @@ from typing import Any, BinaryIO
 from verity.protocol import ProtocolDef, Start
 from verity.party import Finish, Identity, Received, Send
 from verity.channel import Message, Phase, Refused
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.attester import onsite
 from verity.protocols.resource_accounting.memory.pous.attester.challenger_session import (
     CHALLENGER,
@@ -120,7 +120,7 @@ def give_salt(salts: mc.SaltLog, request: Mapping[str, Any], entropy: Callable[[
     commitment, its salt (`setup.sample_salt`) logged under the audit in `salts` before the source is returned. Refused
     (`Refusal`) when the audit has a salt already."""
     audit, commitment = field_bytes(request, "audit", 64), field_bytes(request, "commitment", 64)
-    once = "the memory challenger draws one salt an audit, and a retry never redraws it"
+    once = "the memory attester draws one salt an audit, and a retry never redraws it"
     if salts.get(audit) is not None:
         raise Refusal(f"the request's `audit` has its salt: {once}")
     source = entropy(SOURCE_BYTES)
@@ -143,27 +143,27 @@ def designate(request: Mapping[str, Any], salts: mc.SaltLog, sessions: mc.Sessio
                       "bytes in hex") from None
     logged = salts.get(audit)
     if logged is None:
-        raise Refusal("the memory challenger drew no salt for the request's `audit`: a session runs on a setup salted by "
+        raise Refusal("the memory attester sampled no salt for the request's `audit`: a session runs on a setup salted by "
                       "it")
     if (published.commitment, published.salt) != logged:
-        raise Refusal("setup's published outputs (`published`) do not carry the commitment and salt the memory challenger "
+        raise Refusal("setup's published outputs (`published`) do not carry the commitment and salt the memory attester "
                       "logged for the request's `audit`")
     if published.root.hex() != request.get("binding") or published.blocks != request.get("blocks"):
         raise Refusal("the session does not audit the C* setup published: its `binding` and `blocks` are the published "
                       "root's and count")
     sid = session_id(audit, *logged)
     if sid in sessions:
-        raise Refusal("a session has run for the request's `audit`: the memory challenger runs one an audit, and a retry "
-                      "is refused, never redrawn")
+        raise Refusal("a session has run for the request's `audit`: the memory attester runs one an audit, and a retry "
+                      "is refused, never resampled")
     return sid
 
 
 class Challenger:
-    """The memory challenger: one session of `request_of`'s parameters on its clock and coins (module docstring), under
+    """The memory attester: one session of `request_of`'s parameters on its clock and coins (module docstring), under
     its audit's id (`designate`, from `capabilities["salts"]`, its salt log) when the request names one, else the id
     designated from its coins under `domain` (`period.SESSION_DOMAIN`). Its machine gives it `signing-key`
-    (`capabilities["signer"]`, a `memory_challenger.Signer`, with `capabilities["log"]`, its session log);
-    `resolution_ns` is how finely its clock ticks (`memory_challenger.resolution_of`). It finishes with the session and
+    (`capabilities["signer"]`, a `memory_attester.Signer`, with `capabilities["log"]`, its session log);
+    `resolution_ns` is how finely its clock ticks (`memory_attester.resolution_of`). It finishes with the session and
     its id (private: what it signs is witness), or refused: with `designate`'s reason before any frame, or by name when
     the prover leaves (`closed`), sends a frame the wire refuses, or one out of phase."""
 
@@ -183,7 +183,7 @@ class Challenger:
         if "audit" in self.request:
             try:
                 if held.get("salts") is None:
-                    raise Refusal("the memory challenger keeps no salt log, so it runs no audit's session")
+                    raise Refusal("the memory attester keeps no salt log, so it runs no audit's session")
                 self.sid = designate(self.request, held["salts"], self.log)
             except (Refusal, mc.SessionLogError) as e:
                 return [Finish(None, str(e), kind="private")]
@@ -191,9 +191,9 @@ class Challenger:
         return [Send("coins", Message("CoinsDraw", {"n": COIN_BYTES}))]
 
     def _clock(self) -> int:
-        """The reading the challenger asked its clock for, used once: `memory_challenger.MemoryChallenger` reads it here."""
+        """The reading the challenger asked its clock for, used once: `memory_attester.MemoryChallenger` reads it here."""
         if self._reading is None:
-            raise RuntimeError("the memory challenger read its clock without a fresh reading")
+            raise RuntimeError("the memory attester read its clock without a fresh reading")
         out, self._reading = self._reading, None
         return out
 
@@ -281,7 +281,7 @@ def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc
     """The challenger's side of one session over the connection `f`: `Challenger` on `coins` and `clock`, under its
     audit's id from `salts` when `request` names one, else the id designated under `domain`, its coin tree's hiding key
     and salts from `entropy`, `warmups` untimed exchanges first, the session signed by `signer`, with the collector paused
-    (`memory_challenger.collector_paused`); its id and record. `Refusal` when the party refuses the session."""
+    (`memory_attester.collector_paused`); its id and record. `Refusal` when the party refuses the session."""
     party, given = Challenger(domain, warmups, mc.resolution_of(clock)), [coins]
     with mc.collector_paused():
         done, _ = run(party, request,

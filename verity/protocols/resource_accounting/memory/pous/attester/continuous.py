@@ -1,14 +1,14 @@
-"""The continuous audit's memory challenger: `n` challenges over time, each answered in turn, accepted when at most `max_misses`
+"""The continuous audit's memory attester: `n` challenges over time, each answered in turn, accepted when at most `max_misses`
 of them miss.
 
-Its model is the memory challenger of `security/Definitions/Pous/Model/Continuous.lean`, with the
-guarantee `Pous.SecurityProofs.ContinuousAudit`.  That memory challenger sends `n` uniform, independent indices and
+Its model is the memory attester of `security/Definitions/Pous/Model/Continuous.lean`, with the
+guarantee `Pous.SecurityProofs.ContinuousAudit`.  That memory attester sends `n` uniform, independent indices and
 counts a miss for every round that is not a hit: wrong, late or rejected.  Three requirements are theorems about it
 (`security/Proofs/Pous/Continuous/Verifier.lean`), and `ContinuousMemoryChallenger` enforces each one on a single
 `audit.UnsignedRounds` over the whole stream, with its clock and its index samples:
 
 1. **No pipelining.** Challenge `j + 1` is revealed only once answer `j` is in or its hard deadline has passed
-   (`UnsignedRounds.challenge`), and each deadline runs from the memory challenger's own clock reading when it reveals
+   (`UnsignedRounds.challenge`), and each deadline runs from the memory attester's own clock reading when it reveals
    the index, never from a time the responder reports.  An answer names the challenge it answers; one for any other
    challenge than the open one (an earlier, closed one, or one not yet revealed) is refused.
 2. **A hard deadline.** An answer past `Δ_late + RTT`, or none by then, is rejected and its block is never checked;
@@ -29,10 +29,10 @@ holds in the ideal-permutation model only.  `ContinuousAudit` is sound in that m
 Feistel-SHAKE256 `Π₂` a prover holding 1.53% of `C` answers every challenge in 481 Keccak-f, about 24 µs, so the
 storage conclusion fails there (the red team's state attack, `primitives.pi2_keccak_f`).
 
-`n` is fixed before the stream (the realized number of arrivals, from the memory challenger's own randomness), so the
+`n` is fixed before the stream (the realized number of arrivals, from the memory attester's own randomness), so the
 stream is never stopped or extended on misses, though it may reject early once they pass `max_misses` (`exceeded`).
 When each challenge arrives is the caller's (`run_continuous`'s `wait`): the arrival times must be the memory
-challenger's own randomness, independent of the setup, the indices and the answers.
+attester's own randomness, independent of the setup, the indices and the answers.
 """
 
 from __future__ import annotations
@@ -54,7 +54,7 @@ from verity.protocols.resource_accounting.memory.pous.verifier.verifier import V
 
 @dataclass(frozen=True, slots=True)
 class Reply:
-    """An answer off the wire: the challenge `j` it names, its block, a root-only memory challenger's `path`, and the responder's
+    """An answer off the wire: the challenge `j` it names, its block, a root-only memory attester's `path`, and the responder's
     own `report`."""
 
     j: int
@@ -75,7 +75,7 @@ class ContinuousMemoryChallenger:
     and never retried with fresh challenges.  `Pous.SecurityProofs.BackgroundRebuildExcluded` requires that cap of a
     graded audit's window.  A stream whose arrivals are spread out runs without it:
     `Pous.SecurityProofs.ContinuousAudit` measures the memory at each send time and needs no cap, and its model's
-    memory challenger has none.
+    memory attester has none.
 
     The continuous audit runs only on this class, never on a bare `UnsignedRounds` with a hard deadline.  That one's
     `respond(block)` names no challenge, so once a challenge expires, an answer to it still in flight is credited to
@@ -120,13 +120,13 @@ class ContinuousMemoryChallenger:
 
     @property
     def ends_at(self) -> int | None:
-        """The first challenge's send time plus `audit_cap` calls: on the memory challenger's clock past it, the stream
+        """The first challenge's send time plus `audit_cap` calls: on the memory attester's clock past it, the stream
         is aborted.  None without a cap, or before the first challenge."""
         return self.timed.ends_at
 
     @property
     def closes_at(self) -> int | None:
-        """The open challenge's send time plus `Δ_late + RTT`, or `ends_at` if sooner: on the memory challenger's clock
+        """The open challenge's send time plus `Δ_late + RTT`, or `ends_at` if sooner: on the memory attester's clock
         past it, the challenge is rejected.  None with no challenge open."""
         sent = self.timed.sent_ns
         if sent is None:
@@ -136,7 +136,7 @@ class ContinuousMemoryChallenger:
 
     @property
     def overdue(self) -> bool:
-        """The memory challenger's clock is past `closes_at`, so `expire()` closes the open challenge."""
+        """The memory attester's clock is past `closes_at`, so `expire()` closes the open challenge."""
         return self.closes_at is not None and self.timed.clock() > self.closes_at
 
     @property
@@ -185,9 +185,9 @@ class ContinuousMemoryChallenger:
 def run_continuous(challenger: ContinuousMemoryChallenger, send: Callable[[int, int], None],
                    receive: Callable[[int], Reply | None], wait: Callable[[int], None] | None = None) -> AuditResult:
     """Drive `challenger` through all `n` challenges over a transport.  `wait(j)` returns at challenge `j`'s arrival
-    time on the memory challenger's own schedule; without it each challenge is sent once the last one closes.
+    time on the memory attester's own schedule; without it each challenge is sent once the last one closes.
     `send(j, index)` sends challenge `j`.  `receive(until)` returns the next `Reply` in, or None once the memory
-    challenger's clock is past `until`, the open challenge's `closes_at`, with none.
+    attester's clock is past `until`, the open challenge's `closes_at`, with none.
 
     A reply naming the open challenge answers it; any other is dropped, its own challenge closed and counted already
     or not yet revealed.  Once the hard deadline has passed the driver closes the open challenge with `expire()`, the

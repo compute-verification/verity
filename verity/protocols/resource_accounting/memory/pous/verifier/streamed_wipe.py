@@ -1,9 +1,9 @@
-"""The streamed-label wipe (experimental): a proof of secure erasure for a memory wipe, run by the memory challenger.
+"""The streamed-label wipe (experimental): a proof of secure erasure for a memory wipe, run by the memory attester.
 `PROTOCOL.md` ("The streamed-label wipe") is its specification and states the guarantee. This module holds the records,
 the derivations and the verdict; the challenger that runs a session is the device's `WipeMemoryChallenger`
 (`pous/attester/wipe_challenger.py`).
 
-The memory challenger, the auditor's device on a machine the developer doesn't control, fills every memory tier of one
+The memory attester, the auditor's device on a machine the developer doesn't control, fills every memory tier of one
 server with labels it derives itself, then reveals `k` indices sampled on live coins after the fill and checks each answer
 against its own derivation, under a deadline per batch.  The labels are the auditor's randomness: the answers are
 checked in the clear, and nothing of the prover's is opened.
@@ -29,7 +29,7 @@ session has five steps:
    is the raw monotonic clock (`raw_clock_ns`), which the header names (`CLOCK`).
 4. **Challenge.** Once the fill is complete the challenger flips its coins, then reveals them a batch at a time
    (`challenge`), reads the receipt time before it hashes anything (`receive`), and checks every 64-byte answer against
-   `L_{c_j}`.  The first late or wrong batch ends the session: no batch is retried, and no index is redrawn.
+   `L_{c_j}`.  The first late or wrong batch ends the session: no batch is retried, and no index is resampled.
 5. **Sign.** One signature over `SHA-512(SESSION_TAG ‖ u64 len ‖ header ‖ records root)`, where the header is the
    commitment, how the session ended, the start mark and the fill's times (`close`), and the records root is the
    frame-v3-sha512 root of the batch records.  `end_message(signed)` is the end message, what the challenger hands the
@@ -69,7 +69,7 @@ from verity.commitments.merkle import CommitmentDomain, tree_levels
 from verity.commitments.scheme import DIGEST_BYTES
 from verity.commitments.randomness import derive
 
-from verity.protocols.resource_accounting.memory.pous.attester.memory_challenger import SCHEMES, Verify
+from verity.protocols.resource_accounting.memory.pous.attester.memory_attester import SCHEMES, Verify
 
 PROTOCOL = "verity-pous/streamed-wipe/v2"
 KEY_DOMAIN = "verity/pous/streamed-wipe-labels/v1"

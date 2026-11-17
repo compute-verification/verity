@@ -215,7 +215,7 @@ are about Lean's `H`, so they do not certify the code's (`DISCREPANCIES.md` P3 i
    about 1.5% of honest 132-answer audits fail on the host clock (POUS `docs/p3-gpu-measurements.md`). The network
    allowance defaults to 0 until the memory attester's RTT is measured.
 
-   On the deployed path the memory attester (`memory_challenger`, its party and `challenger_session`) runs the
+   On the deployed path the memory attester (`memory_attester`, its party and `challenger_session`) runs the
    session in this order. Nothing that commits to a coin no round has revealed leaves the device before the last answer
    is in: the server's commitment, `W` and `C*` under the setup's published root, is in before the first round, and the
    coin root comes after the last.
@@ -490,7 +490,7 @@ neither is assumed (SHA-512 as PRF: not priced, not assumed).
 | fill | memory attester, server | `L_0 … L_{N−1}` in index order, a chunk at a time; the memory attester reads its clock at the first and last chunk |
 | challenge | memory attester, server | once the fill is complete, the coins are flipped, then batch `t`'s indices, `c_{tB} … c_{tB+B−1}`; the send time is read |
 | answer | server, memory attester | 64 bytes an index, in order; the receipt time is read before anything is hashed, then each answer is compared with `L_{c_j}` |
-| sign | memory attester | one LMS signature (`memory_challenger.SCHEMES`, n = 64) over `SHA-512("verity-pous/streamed-wipe/session/v2\0" ‖ u64 len ‖ header ‖ records root)`: the header is the commitment, how the session ended, the start mark, the fill's times and the batch count; the records root is the frame-v3-sha512 root of the batch records, each `u32 b ‖ u32 first ‖ u32 count ‖ u64 send_ns ‖ u64 receipt_ns ‖ u32 wrong ‖ SHA-512(indices ‖ answers)` |
+| sign | memory attester | one LMS signature (`memory_attester.SCHEMES`, n = 64) over `SHA-512("verity-pous/streamed-wipe/session/v2\0" ‖ u64 len ‖ header ‖ records root)`: the header is the commitment, how the session ended, the start mark, the fill's times and the batch count; the records root is the frame-v3-sha512 root of the batch records, each `u32 b ‖ u32 first ‖ u32 count ‖ u64 send_ns ‖ u64 receipt_ns ‖ u32 wrong ‖ SHA-512(indices ‖ answers)` |
 | end | memory attester's host, network attester | the end message (below), of the signed message and its signature. `end_message` computes it; nothing in `streamed_wipe` sends it |
 | egress | network attester, the wipe's check | the bits that crossed the boundary over the session (C6), as the network attester counts them between the two marks. The count exists only after the end mark, so after the signature: the memory attester never holds it and signs none. The check takes it as evidence beside the signed session, in whole MiB |
 
@@ -542,7 +542,7 @@ the two differ on in any field rejected as a disagreement) or `python` (no Lean)
 
 **Where it ran.** A wipe's record (`wipe_party.placement`) states `trusted-device` for the memory attester, as `holds`
 only under a committed configuration (`tools/verity/cli/verity_cli/configurations.toml`) when the session was signed under a key its
-`[[pin]]` entries give the memory attester for the wipe (`memory_challenger.trusted_device`). Under any other
+`[[pin]]` entries give the memory attester for the wipe (`memory_attester.trusted_device`). Under any other
 configuration it reads `rehearsal, no bound: the configuration is not a committed one`, and under any other key, a key
 the run pinned for itself included, `rehearsal: key not the auditor's pinned key, no bound`; either way
 the key's custody is among what the bound doesn't cover. The hosts' names give `kind` (`own-host`, `simulated`,
@@ -553,7 +553,7 @@ field past its width), JSON the Lean must refuse, and named negative controls.
 
 **Batches and deadlines.** A batch's deadline runs from its send to its receipt on the memory attester's raw monotonic
 clock (`CLOCK_MONOTONIC_RAW`, read by `streamed_wipe.raw_clock_ns`), at a resolution of at most
-`memory_challenger.CLOCK_RESOLUTION_NS`. The header names that clock. Time synchronisation slews `CLOCK_MONOTONIC`, so
+`memory_attester.CLOCK_RESOLUTION_NS`. The header names that clock. Time synchronisation slews `CLOCK_MONOTONIC`, so
 an interval on that clock states no rate; the raw clock is never adjusted. The session signs no rate for its clock,
 and the verdict compares the readings as they are signed. The deadline is to be set below the memory attester's round trip
 to the server plus the fastest fetch from outside the boundary, so that an answer fetched from a store outside, counted or
@@ -723,10 +723,10 @@ which was not measured. The node's load average was about 930 during the run, wh
 | `setup` | `commit` (streamed over segments), `sample_salt`; `verifier_setup(params, prims, commitment, salt, encoded=C*, w=None, public_encoder=PUBLIC_ENCODER)`, which picks `verifier_key_from_encoding(params, prims, commitment, salt, C*, codec=params.codec)` (public encoder, the default) or `verifier_key(params, prims, W or its segments, commitment, salt, encoded=None, codec=params.codec)` (the verifier encodes); `server_root`, `check_server_root` |
 | `verifier` | `VerifierKey` (`root` and leaf digests; `build`, `from_leaves`, `from_segments`, `from_row_digests`), `leaf_hash` (whole or chunked blocks), `row_leaf` (from a block's row digest), `segment_leaves`, `MerkleTree` (audit paths), `verify_path` |
 | `audit` | `challenge_key`, `UnsignedRounds` and `run_timed` (wall clock; `respond` may return `(block, report)`, kept in `ChallengeReply.report`), `simulate` (oracle rounds); `k` and the adversary's call time default to the parameters' own (band and dense: 111 and 241.5 µs); `UnsignedRounds` refuses a band deadline past the cliff |
-| `memory_challenger` | the memory attester, which signs its rounds and on the deployed path replaces `audit.UnsignedRounds`: `CoinTree` (its `k` indices from its own secret, committed on the device before the session and released after it; `CoinOpening`, `verify_coin`), `MemoryChallenger(coins, signer, log=, limit_ns=, block_bytes=, binding=)` with its `SessionCommitment` (`commitment`, released once the session is signed; `binding` the setup's 64-byte root of `C*`, required; `session` the auditor's id for the audit, which `log`, a `SessionLog`, records as used before the first challenge and refuses again), `challenge()`, `receive(block)` (one `Round` each: index, send and receipt times, `H(block)`; the first late round ends the session), `close()` (one signature, `SignedSession`) and `openings()`; `LmsSigner`, `register`; `verdict` (what the prover will prove of a signed session, checked in the clear; its public output is `Verdict.public`); `covering_certificate` |
+| `memory_attester` | the memory attester, which signs its rounds and on the deployed path replaces `audit.UnsignedRounds`: `CoinTree` (its `k` indices from its own secret, committed on the device before the session and released after it; `CoinOpening`, `verify_coin`), `MemoryChallenger(coins, signer, log=, limit_ns=, block_bytes=, binding=)` with its `SessionCommitment` (`commitment`, released once the session is signed; `binding` the setup's 64-byte root of `C*`, required; `session` the auditor's id for the audit, which `log`, a `SessionLog`, records as used before the first challenge and refuses again), `challenge()`, `receive(block)` (one `Round` each: index, send and receipt times, `H(block)`; the first late round ends the session), `close()` (one signature, `SignedSession`) and `openings()`; `LmsSigner`, `register`; `verdict` (what the prover will prove of a signed session, checked in the clear; its public output is `Verdict.public`); `covering_certificate` |
 | `pous/device/wipe_challenger` | the streamed wipe's memory attester: `WipeMemoryChallenger(secret, server, session, params, signer, log=, mark_source=)` with `fill(chunk)`, `challenge()`, `receive(answers)`, `run`, `close()` (one signature, `SignedWipe`) and `coins()`; `serve`, one session over a socket, and `report`; the honest server is the prover's `wipe_store.Prover` |
 | `streamed_wipe` | the streamed-label wipe (experimental): `wipe_key`, `label`, `labels`, `sample_indices`; `WipeParams(labels, k, batch, limit_ns, tiers)` (`covered`: batch 1, the only size `verdict` accepts), `WipeCommitment`, `SignedWipe` (which holds no egress count); `start_message(commitment)` and `end_message(signed)`, the two marks' messages, and `mark_of`, which reads a start mark's hex; `verdict` (its public output `Verdict.public`: the verdict alone), the reference of the Lean verdict that decides it (`MemoryChallenger.StreamedWipe`, `wipe_verdict.judge`), with `to_json` on the records it reads; `egress_units`, the unit the wipe's check takes its egress in; the bound, `log2_error`, `retained_bits`, `challenges_for` |
-| `run` | the composed check of a recorded run: `check(trusted, setup, digests, session, session_id)` over the verifier's list of memory-attester keys (never the run's record), the setup's public outputs (`Setup`), the memory attester's table of `C*`'s row digests, its record of one session (`ChallengePhaseRecord`: signed session, commitment, openings) and the id the auditor designated for the session, at P2's deployed point (`DEPLOYED`) under `memory_challenger.SCHEMES`, raising `Refused` with the first reason; `check_at` at another `Point`; `PousCheck.Run.check` (`pous-run`) in Lean |
+| `run` | the composed check of a recorded run: `check(trusted, setup, digests, session, session_id)` over the verifier's list of memory-attester keys (never the run's record), the setup's public outputs (`Setup`), the memory attester's table of `C*`'s row digests, its record of one session (`ChallengePhaseRecord`: signed session, commitment, openings) and the id the auditor designated for the session, at P2's deployed point (`DEPLOYED`) under `memory_attester.SCHEMES`, raising `Refused` with the first reason; `check_at` at another `Point`; `PousCheck.Run.check` (`pous-run`) in Lean |
 | `adversary` | holdings (Lean `ColState`), `schedule`, `answer_prog`, strategies, `measure`; `col_round` is Lean's `colRound` |
 | `protocol` | the generic protocol: `Scheme` (abstract), `CapacityBound`, `TimedAudit` (refuses what none of its certificates covers), `StorageProfile`, `PRIVATE`/`PUBLIC`, `verifier_key`, `commit`, `sample_salt`, `encode`, `decode`, `decode_tensor`, `challenge_key` |
 | `schemes` | `band.Band`, `dense.Dense`, `p3.P3`, `p2.P2` (experimental; one module each) as `protocol.Scheme`s with their certificates; `REGISTRY`, `DEFAULT` (`band-chain/d12/v1`), `get(name, segments, params)` |
@@ -1095,7 +1095,7 @@ Two gaps stood between these statements and the deployed verifier:
 - G-1, one session per audit: the check's half is fixed in code; one session per id is the memory attester's
   `SessionLog` under its host presumption, which `trusted-device` covers. Every session names its setup: a `SessionCommitment`'s
   `binding` has no default, the `MemoryChallenger` refuses one that is not a 64-byte root, and the harness's memory
-  attester (`benchmarks/pous/memory_challenger/live.py`) binds every session to the root the setup publishes for the
+  attester (`benchmarks/pous/memory_attester/live.py`) binds every session to the root the setup publishes for the
   `C*` its digests describe (`VerifierKey.from_row_digests`). Every session is also its audit's: its id (`session`, in
   the signed header) is the auditor's, designated for one audit, and the device runs at most one session under an id.
   Its `SessionLog` is a file of its own, never in the signer's key directory (`live.py --session-log`, `bench.py
@@ -1107,13 +1107,13 @@ Two gaps stood between these statements and the deployed verifier:
   runs its stated code, timing included, on a host the developer doesn't control, with its CPU isolated from other
   tenants and a monotonic clock; the host never restores its earlier state". This log is part of that state, as is the LMS leaf state. A run's record
   says `trusted-device` holds only under a committed configuration, for a session signed under a key its `[[pin]]`
-  entries give the memory attester (`memory_challenger.trusted_device`), never from the host names, which are the
+  entries give the memory attester (`memory_attester.trusted_device`), never from the host names, which are the
   run's own: a session under any other key, a pin the run passes itself among them, is a rehearsal's, with no bound.
   Under one secret a reused id would also replay the coins, which `CoinTree.draw` derives from the secret and the id.
   The composed check accepts a session only under the id the auditor designated (`run.check`'s `session_id`), so an
   audit has at most one session it can accept. On the served piece (`benchmarks/pous/served_piece.py`) the id is
   derived, not sampled: the memory attester samples the setup's salt after the commitment to `W` and logs it under the
-  window's binding (`memory_challenger.SaltLog`, one salt an audit), derives the id from the binding, the commitment
+  window's binding (`memory_attester.SaltLog`, one salt an audit), derives the id from the binding, the commitment
   and the salt (`challenger_session.session_id`), and refuses a session whose setup doesn't publish exactly that
   commitment and salt. The verifier computes the same id from the binding and what setup published, never from the
   report. The salt is in the id because the signed header binds only the root of `C*`. The Lean states the check's side (`RunCheckAccepts`: an accepted session

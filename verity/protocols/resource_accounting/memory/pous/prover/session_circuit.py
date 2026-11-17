@@ -1,6 +1,6 @@
-"""PoUS's session checked inside proofs: the unit that accepts the memory challenger's signature, the unit that computes
+"""PoUS's session checked inside proofs: the unit that accepts the memory attester's signature, the unit that computes
 the digest it signs, and the unit that accepts one round's answer, so that the auditor never reads the record the memory
-challenger signed.
+attester signed.
 
     PousSessionSig_v1{N, W, H}          (key: B<16 + N>, m: B<64>, sig: B<S>) -> Array<1>
                                         S = 4 + N(1 + P + H), the signature's bytes (`lms.Params.signature_bytes`)
@@ -13,14 +13,14 @@ are in byte order, bit t being bit t mod 8 of byte ⌊t/8⌋ (a ``sha512/row/v2`
 `verity.commitments.rowleaf.bit_row`); an integer (j, i) is its bytes little-endian, so its bits least significant first.
 Flock stages a Definition as one ``hm96-sha512/row/v2`` row per parameter and one per output
 (`verity.commitments.periods.interface.unit_rows`), whole u16 words of one element width, so each parameter here is one
-row, holding the bytes as the memory challenger writes them.
+row, holding the bytes as the memory attester writes them.
 
 **The signature's unit.** `PousSessionSig_v1{N, W, H}` is 1 iff ``sig`` is an LMS signature (`lms.Signature.encode`:
 ``u32be(q) ‖ C ‖ y ‖ path``) of the 64-byte message ``m`` under the public key ``key`` (``I ‖ root``, `lms.public_key`)
 with q below 2^H, as `lms.verify` decides: ``LmsVerify_v1{N, W, H}`` over q's low H bits, and q's top 32 − H bits zero
 (``PousEqual_v1{32 − H}`` against zeros, ANDed in).  A q at or past 2^H is no leaf of the key's tree, and `lms.verify`
-refuses it; `LmsVerify_v1` reads q's low H bits only.  ``m`` is ``lms.memory_challenger_message(I, session, record)``,
-the digest the memory challenger's signature signs (`memory_challenger.LmsSigner`); the registered row ``m`` is its 64
+refuses it; `LmsVerify_v1` reads q's low H bits only.  ``m`` is ``lms.memory_attester_message(I, session, record)``,
+the digest the memory attester's signature signs (`memory_attester.LmsSigner`); the registered row ``m`` is its 64
 bytes in byte order, which is how the unit that computes ``m`` must output it.  The bytes are rewired into
 `gates.lms`' words (each word's bytes big-endian, its bits least significant first) without a gate.  At the deployed
 scheme, ``lms-sha512/n64-w1-h20/v0`` (`lms.DEPLOYED`), it is ``PousSessionSig_v1{64,1,20}``: rows of 640, 512 and
@@ -28,20 +28,20 @@ scheme, ``lms-sha512/n64-w1-h20/v0`` (`lms.DEPLOYED`), it is ``PousSessionSig_v1
 
 **The round's unit.** The records are registered two a row, ⌈k/2⌉ rows of 184 bytes (92 u16 words): record j is bytes
 92(j mod 2) to 92(j mod 2) + 91 of row ⌊j/2⌋, the last row zero past the last record when k is odd.  A record is
-`memory_challenger.Round.value`'s 92 bytes, ``u32 j ‖ u64 index ‖ u64 send_ns ‖ u64 receipt_ns ‖ H(block)``, integers
+`memory_attester.Round.value`'s 92 bytes, ``u32 j ‖ u64 index ‖ u64 send_ns ‖ u64 receipt_ns ‖ H(block)``, integers
 big-endian, ``H(block)`` the answer's ``sha512/row/v2`` digest.  `PousRound_v1{N, SLOT}` reads the store's N-byte row
 ``row``, the records row ``records`` holding record j at slot SLOT = j mod 2, and the public j and i (the round and the
-index the memory challenger drew for it, a u32 and a u64), and is 1 iff record j's j is ``j``, its index is ``i`` and its
+index the memory attester sampled for it, a u32 and a u64), and is 1 iff record j's j is ``j``, its index is ``i`` and its
 ``H(block)`` is ``row``'s ``sha512/row/v2`` digest (``PousRowDigest_v1{N}``): one ``PousEqual_v1{608}`` over the digest,
-j and i against the record's fields.  These are the per-round checks of `memory_challenger.verdict` but the time: the
+j and i against the record's fields.  These are the per-round checks of `memory_attester.verdict` but the time: the
 record names round j, its index is round j's coin, and its digest is that of the block at the index.  R_even and R_odd
 are ``PousRound_v1{2056, 0}`` and ``PousRound_v1{2056, 1}``, two Programs.
 
 **The signed digest's unit.** `PousSessionDigest_v1{K, HEAD, LIMIT}` reads the signed header (``head``, HEAD bytes and a
-zero byte when HEAD is odd), the signed context (``ctx``, `signed_context`: what `lms.memory_challenger_message` hashes
+zero byte when HEAD is odd), the signed context (``ctx``, `signed_context`: what `lms.memory_attester_message` hashes
 before the record) and the K records in their rows. It outputs m, ``SHA-512(ctx ‖ u64be(64) ‖ record)`` of the record
 ``SHA-512(SESSION_TAG ‖ u64be(HEAD) ‖ head ‖ records)``, records the ``sha512/row/v2`` digest of the K records as one
-stream (`memory_challenger.records_digest`, ``PousRowDigest_v1{92K}``), so m is the digest the signature's unit verifies;
+stream (`memory_attester.records_digest`, ``PousRowDigest_v1{92K}``), so m is the digest the signature's unit verifies;
 ok, 1 iff every
 record names its round, its receipt is not before its send and receipt − send ≤ LIMIT (``PousVerdict_v1{K, 0, LIMIT}``
 against the records' own digests); and the records rows as read. The signature's unit reads m and round j's unit its
@@ -71,10 +71,10 @@ __all__ = ["CTX_BYTES", "RECORD_BYTES", "RECORDS_PER_ROW", "SESSION_BYTES", "SES
            "PousSessionMessage", "PousSessionSig", "head_bytes", "octets", "records_rows", "round_ok", "session_digest",
            "session_sig_ok", "signed_context"]
 
-#: a round record's bytes (`memory_challenger.Round.value`), and the records a registered row holds
+#: a round record's bytes (`memory_attester.Round.value`), and the records a registered row holds
 RECORD_BYTES, RECORDS_PER_ROW = 92, 2
 _J, _INDEX, _DIGEST = (0, 4), (4, 12), (28, 92)
-#: `memory_challenger.SESSION_TAG`, which this place can't import
+#: `memory_attester.SESSION_TAG`, which this place can't import
 SESSION_TAG = b"verity-pous/memory-challenger/session/v1\0"
 #: a session id's bytes, and the known row ``ctx``'s (`signed_context`)
 _ROLE = R.ROLES["memory-challenger-record"].encode()
@@ -144,12 +144,12 @@ def _round_body(B, S, row, records, j, i):
 
 PousRound = CompositeDefinition(
     "PousRound", 1, ("N", "SLOT"), _round_sig, _round_body, conformance="exact-model-tested",
-    doc="1 iff record SLOT of the records row (two 92-byte memory_challenger.Round.value records) names round j and index i "
+    doc="1 iff record SLOT of the records row (two 92-byte memory_attester.Round.value records) names round j and index i "
         "and holds the N-byte row's sha512/row/v2 digest: R_even at SLOT 0, R_odd at SLOT 1")
 
 
 def signed_context(I: bytes, session: bytes) -> bytes:
-    """The known row ``ctx``: what `lms.memory_challenger_message` hashes before the record, ``u64be(len tag) ‖ tag ‖ I ‖
+    """The known row ``ctx``: what `lms.memory_attester_message` hashes before the record, ``u64be(len tag) ‖ tag ‖ I ‖
     u64be(40) ‖ u64be(32) ‖ session`` (its context is the session id's field, framed again)."""
     if len(I) != 16 or len(session) != SESSION_BYTES:
         raise ValueError(f"an LMS identifier is 16 bytes and a session id {SESSION_BYTES}")
@@ -180,7 +180,7 @@ def _message_build(C, S, *e):
 
 PousSessionMessage = _part(
     "PousSessionMessage", ("HEAD",), _message_sig, _message_build,
-    "lms.memory_challenger_message's digest SHA-512(ctx || u64be(64) || record), 64 bytes in byte order, of the record "
+    "lms.memory_attester_message's digest SHA-512(ctx || u64be(64) || record), 64 bytes in byte order, of the record "
     "SHA-512(SESSION_TAG || u64be(HEAD) || head || records), the session's signed record over its HEAD-byte header and "
     "its records digest", calls=True)
 
@@ -251,7 +251,7 @@ def round_ok(N: int, SLOT: int, row: bytes, records: bytes, j: int, i: int) -> i
 def session_digest(K: int, HEAD: int, LIMIT: int, head: bytes, ctx: bytes, rows: Sequence[bytes]
                    ) -> tuple[int, bytes, tuple[bytes, ...]]:
     """`PousSessionDigest_v1{K, HEAD, LIMIT}`'s outputs on its rows, ``head`` the header row (`head_bytes`): whether every
-    record is on time, `lms.memory_challenger_message`'s digest under ``ctx`` of `memory_challenger.message`'s record over
+    record is on time, `lms.memory_attester_message`'s digest under ``ctx`` of `memory_attester.message`'s record over
     the header and the K records the rows hold, and the rows."""
     row = RECORD_BYTES * RECORDS_PER_ROW
     if (K < 1 or HEAD < 1 or len(head) != head_bytes(HEAD) or len(ctx) != CTX_BYTES

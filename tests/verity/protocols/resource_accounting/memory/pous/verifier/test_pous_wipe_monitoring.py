@@ -18,7 +18,7 @@ import pytest
 
 import pous_test_signer as ts
 from verity import protocol
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.prover import wipe_run
 from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_monitoring as WM
@@ -137,7 +137,7 @@ def test_except_names_the_labels_and_the_coins_prf_advantage_not_priced_and_not_
     assert WM.EXCEPT.startswith(f"each wipe's labels' PRF advantage and its coins' PRF advantage {CLOSING}, δ_net (")
     assert "named assumption" not in WM.EXCEPT and "assum" not in WM.EXCEPT.replace(CLOSING, "")
     assert WM.EXCEPT.endswith(
-        ", δ_net (the network certifier's error in the egress count) and the egress count's premises (every link leaving "
+        ", δ_net (the network attester's error in the egress count) and the egress count's premises (every link leaving "
         "the node counted, its window the wipe's session), with the guarantee's own (every tier declared, no side "
         "channel), over the period's wipes")
     said = " ".join(WM.__doc__.split())
@@ -186,7 +186,7 @@ def test_an_uncounted_wipe_stays_vacuous_and_a_covered_egress_record_is_refused(
     said = str(refusal.value)
     assert said == WM.REFUSED and said.startswith(f"the {WM.EGRESS} record is refused")
     assert "its raw monotonic clock (CLOCK_MONOTONIC_RAW ns" in said and "(t0_unix_ns, t1_unix_ns) is real time (Unix ns)" in said
-    assert "until what the memory challenger signs ties its session to the span the record counts" in said
+    assert "until what the memory attester signs ties its session to the span the record counts" in said
     assert "no --egress" in said
     for accepted in (uncounted, counted):
         with pytest.raises(ValueError, match="nothing signed says the record covers this wipe's session"):
@@ -202,7 +202,7 @@ def test_the_evidence_writers_count_stays_vacuous(written):
 
 
 def test_a_record_over_the_sessions_own_real_time_window_is_refused_too(uncounted):
-    """Nothing the memory challenger signs ties a record's span to the session: it signs the session's times on its
+    """Nothing the memory attester signs ties a record's span to the session: it signs the session's times on its
     monotonic clock, and a record's window is real time. So a record over exactly the session's own real-time window is
     refused as any other is: holding its `t0_unix_ns` and `t1_unix_ns` against the signed times would compare two
     clocks."""

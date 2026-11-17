@@ -1,6 +1,6 @@
 """`pous-run` (`PousCheck.Run`) against `run.check_at`, through the core difftest harness: the outcome, its reason word for
 word, on runs sampled at reduced points (the verifier's list of memory-challenger keys, a setup's public outputs, the table of
-`C*`'s row digests, one session the memory challenger signed bound to the setup's root, the id the auditor designated),
+`C*`'s row digests, one session the memory attester signed bound to the setup's root, the id the auditor designated),
 honest and under one edit of the verifier's list, the setup, the table, the point, the session or the designated id, the
 session edits among them every one of `mc_cases.MUTATIONS`, and runs whose JSON is not exactly what it decodes to, a
 session that carries keys of its own among them. Then `pous-run TRUSTED.json SETUP.json DIGESTS.bin SESSION.json
@@ -25,7 +25,7 @@ import pytest
 import verity_difftest as D
 from hypothesis import strategies as st
 
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier import period, run
 from verity.protocols.resource_accounting.memory.pous.verifier import setup as pous_setup
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2 as P2
@@ -88,7 +88,7 @@ def rows_of(q: P2.P2Params, tag: int) -> tuple[bytes, ...]:
 
 @st.composite
 def runs(sample, signer: M.AtLeaf | None = None, stores: st.SearchStrategy | None = None) -> Run:
-    """An honest run: a setup at a sampled reduced point, the memory challenger's session over its `C*` (some rounds late, some
+    """An honest run: a setup at a sampled reduced point, the memory attester's session over its `C*` (some rounds late, some
     answers tampered) at the point's `k`, a limit within the point's, bound to the setup's root, under the designated id.
     With `stores`, a strategy of honest setups `(q, W, salt, C*)`, the setup is one it samples and `C*` its encoding, which
     the setup protocol accepts (the run's `setup_of`); else `C*` is labels of no setup."""
@@ -197,7 +197,7 @@ RUN_MUTATIONS = [
     lambda r, x: dataclasses.replace(r, session=dataclasses.replace(
         r.session, trusted=(M.test_signer(M.STRANGER, 1, 0).public_key,))),
 ]
-#: The memory challenger's session edits, each reason printable (`test_verdict.records`).
+#: The memory attester's session edits, each reason printable (`test_verdict.records`).
 SESSION_MUTATIONS = [M._printable_scheme if m is M._scheme else m for m in M.MUTATIONS]
 
 

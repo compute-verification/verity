@@ -19,7 +19,7 @@ import wipe_cases as W
 import wipe_verdict as V
 from hypothesis import strategies as st
 
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -96,7 +96,7 @@ def _params(batch: int = 1, k: int = 3, labels: int = 8) -> sw.WipeParams:
     return sw.WipeParams(labels, k, batch, LIMIT, (("gpu", 3 * sw.LABEL_BYTES), ("host-dram", (labels - 3) * sw.LABEL_BYTES)))
 
 
-CERTIFICATE = b"a start certificate, as the network certifier returned it"
+CERTIFICATE = b"a start certificate, as the network attester returned it"
 
 
 def _honest(batch: int = 1, spends=(1, 1, 1), tampered=frozenset(),

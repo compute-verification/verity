@@ -1,4 +1,4 @@
-"""The memory challenger's record formats and crypto in Lean (`memory-challenger-difftest`) against `memory_challenger.py`,
+"""The memory attester's record formats and crypto in Lean (`memory-challenger-difftest`) against `memory_attester.py`,
 `streamed_wipe.py` and `verity.commitments.crypto.lms`: the coins and their tree, the round records' digest, the header and the
 signed message, the label digest, LMS signing at a leaf and verification, the setup record's bytes, message and check,
 and the streamed wipe's signed message, start and end messages and an egress count's unit, each on sampled inputs that
@@ -18,7 +18,7 @@ import wipe_cases as W
 from hypothesis import strategies as st
 
 from verity.commitments.crypto import lms
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -192,7 +192,7 @@ def test_block_digest(server):
 
 
 def mc_message(v) -> str:
-    return lms.memory_challenger_message(M.hex_(v, "I"), M.hex_(v, "session"), M.hex_(v, "record")).hex()
+    return lms.memory_attester_message(M.hex_(v, "I"), M.hex_(v, "session"), M.hex_(v, "record")).hex()
 
 
 def test_mc_message(server):
@@ -208,7 +208,7 @@ def sign_at(v) -> dict:
     if height not in M.ts.HEIGHTS:
         raise D.Reject(f"a test signer's height is in {M.ts.HEIGHTS}, not {height}")
     key = M.test_key(M.hex_(v, "secret"), height)
-    sig = lms.sign_at(key, M.nat(v, "q"), lms.memory_challenger_message(key.I, M.hex_(v, "session"), M.hex_(v, "record")))
+    sig = lms.sign_at(key, M.nat(v, "q"), lms.memory_attester_message(key.I, M.hex_(v, "session"), M.hex_(v, "record")))
     return {"public_key": lms.public_key(key).hex(), "signature": sig.encode().hex()}
 
 

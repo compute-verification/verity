@@ -13,7 +13,7 @@
   under the lane's own gate key, over ssh (`ssh_gate`). Each session is reserved for this machine (`--peer`), inside
   the audit's period, and opened at its window root R (`coins.window`; the ledger opens one session a root, ever); the
   host serves it from its pinned tree and reaches this machine's 127.0.0.1 at the open's port through this machine's
-  certifier coin link (the auditor's coins' path); the
+  network attester's coin link (the auditor's coins' path); the
   hello carries the open's secret, and a challenger whose coin commitment isn't the open's is refused before its first
   coin. The read is the ledger's (`audit.AuditRun.trusted_reason`): the one session it opens for R inside the period,
   ended and closed, its files the ones the end sealed, under the key whose public key's SHA-512 the run pins, and run
@@ -53,8 +53,8 @@ from verity.protocols.proofs.spot.verifier.challenger import remote
 ROOT = Path(__file__).resolve().parents[7]
 KINDS = ("local", "serve", "gate")
 GATE_PORTS = range(7811, 7900)
-"""The ports the gate gives its sessions (`auditor.PORTS`), each bound on this machine's 127.0.0.1 by its certifier
-coin link to the host: the verifier's own port is none of them."""
+"""The ports the gate gives its sessions (`auditor.PORTS`), each bound on this machine's 127.0.0.1 by its network
+attester's coin link to the host: the verifier's own port is none of them."""
 
 
 def session_id(registration: bytes, k: int, run: str) -> str:

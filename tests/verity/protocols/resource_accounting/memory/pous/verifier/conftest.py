@@ -1,6 +1,6 @@
-"""Every memory challenger in this suite runs on an injected clock (AGENTS.md "Tests"). `tests/test_no_wall_clock.py`
+"""Every memory attester in this suite runs on an injected clock (AGENTS.md "Tests"). `tests/test_no_wall_clock.py`
 scans for clock reads in test source, and cannot see an `audit.UnsignedRounds`, `ContinuousMemoryChallenger` or
-`memory_challenger.MemoryChallenger` left on its default `time.perf_counter_ns`, or a `wipe_challenger.WipeMemoryChallenger`
+`memory_attester.MemoryChallenger` left on its default `time.perf_counter_ns`, or a `wipe_challenger.WipeMemoryChallenger`
 left on its default `streamed_wipe.raw_clock_ns`; such a test passes or fails with the load on `check`'s slot. Here each
 one's default clock, whichever it is, is replaced by one that fails the test that reads it, every time. The test signer's
 leaf states and session logs go under the suite's basetemp (`pous_test_signer.DIR`)."""
@@ -13,7 +13,7 @@ import shutil
 import pous_test_signer
 import pytest
 
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester
 from verity.protocols.resource_accounting.memory.pous.verifier import audit
 from verity.protocols.resource_accounting.memory.pous.attester import wipe_challenger
 from verity.protocols.resource_accounting.memory.pous.attester import wipe_stream
@@ -21,12 +21,12 @@ from verity.protocols.resource_accounting.memory.pous.attester.continuous import
 
 
 def _wall_clock() -> int:
-    raise AssertionError("a memory challenger read its default wall clock: pass clock=, e.g. pous_fakes.Clock(step=1_000)")
+    raise AssertionError("a memory attester read its default wall clock: pass clock=, e.g. pous_fakes.Clock(step=1_000)")
 
 
 @pytest.fixture(autouse=True)
 def _no_default_clock(monkeypatch):
-    for cls in (audit.UnsignedRounds, ContinuousMemoryChallenger, memory_challenger.MemoryChallenger,
+    for cls in (audit.UnsignedRounds, ContinuousMemoryChallenger, memory_attester.MemoryChallenger,
                 wipe_challenger.WipeMemoryChallenger):
         init = cls.__init__
         if inspect.signature(init).parameters["clock"].kind is inspect.Parameter.KEYWORD_ONLY:
@@ -41,9 +41,9 @@ def _no_default_clock(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _nothing_committed(monkeypatch):
-    """No configuration is committed unless a test hands in its own set (`memory_challenger.committed`): the committed
+    """No configuration is committed unless a test hands in its own set (`memory_attester.committed`): the committed
     hashes are the `verity` command's file, which only the table's tests under `tests/tools/verity/cli/` read."""
-    monkeypatch.setattr(memory_challenger, "committed", lambda: frozenset())
+    monkeypatch.setattr(memory_attester, "committed", lambda: frozenset())
 
 
 @pytest.fixture(scope="session")

@@ -7,7 +7,7 @@ accepts (`wipe_period.uncounted`), since no network attester signs its evidence'
 pools nothing until the check that composes the wipe with the network attester publishes `certify` at a count.
 
 A deployment of `machines` machines, each wiped every `cadence_s` seconds (`CADENCE_S`, a day, by default) as this one
-was, has T = machines·⌊period/cadence_s⌋ wipes in a period, each on the memory challenger's own live coins, against one
+was, has T = machines·⌊period/cadence_s⌋ wipes in a period, each on the memory attester's own live coins, against one
 adaptive prover. A period's row covers those T wipes, so its error is their `eps` summed, T·`eps` (`protocol.summed`);
 where that is 1 or more the row prints `protocol.NO_BOUND` with the sum and neither statement below
 (`protocol.no_bound`). Under 1 it prints both:
@@ -28,7 +28,7 @@ by it, in the same closing words (`UNPRICED`).
 (`verity.protocol`'s `MONITORING_PERIODS` and `DELTAS`), and T is its `block_count`.
 
 An uncounted wipe, one whose check was given no egress count, stays vacuous: `counted` refuses every `wipe-egress/v1`
-record (`REFUSED`), because the memory challenger signs its session's times on its raw monotonic clock and a record's
+record (`REFUSED`), because the memory attester signs its session's times on its raw monotonic clock and a record's
 window (`t0_unix_ns`, `t1_unix_ns`) is real time handed to the record's writer, so nothing signed says a record covers
 the wipe's session.
 
@@ -61,14 +61,14 @@ UNPRICED = "(SHA-512 as PRF: not priced, not assumed)"
 """The words that close every mention of a PRF's advantage that a number of the table leaves out."""
 PRF_TERMS = f"labels' and coins' PRF advantage {UNPRICED}"
 """The two terms a wipe's `eps` is short by, as the table writes them beside a number."""
-EXCEPT = (f"each wipe's labels' PRF advantage and its coins' PRF advantage {UNPRICED}, δ_net (the network certifier's "
+EXCEPT = (f"each wipe's labels' PRF advantage and its coins' PRF advantage {UNPRICED}, δ_net (the network attester's "
           "error in the egress count) and the egress count's premises (every link leaving the node counted, its window "
           "the wipe's session), with the guarantee's own (every tier declared, no side channel), over the period's wipes")
-REFUSED = (f"the {EGRESS} record is refused. The memory challenger signs its session's times on its raw monotonic "
+REFUSED = (f"the {EGRESS} record is refused. The memory attester signs its session's times on its raw monotonic "
            "clock (CLOCK_MONOTONIC_RAW ns, from an unspecified start). The record's window (t0_unix_ns, t1_unix_ns) is real time "
            "(Unix ns), handed to the record's writer. So nothing signed says the record covers this wipe's session, and "
            "comparing the two would compare two clocks. A wipe whose check was given no egress count stays uncounted "
-           "until what the memory challenger signs ties its session to the span the record counts: until then give no "
+           "until what the memory attester signs ties its session to the span the record counts: until then give no "
            "record (no --egress, egress=None), and the table is the wipe's as its check answered")
 
 

@@ -1,4 +1,4 @@
-"""The verdict on a record (`memory-challenger-verdict`, `MemoryChallenger.Judge`) against `memory_challenger.verdict`: the
+"""The verdict on a record (`memory-challenger-verdict`, `MemoryChallenger.Judge`) against `memory_attester.verdict`: the
 whole `Verdict`, its reasons word for word, on records as `verdict.py` writes them from honest sessions, sessions under one
 adversarial edit (`mc_cases.MUTATIONS`), records under one JSON edit, and each accepted-schemes mapping a caller passes;
 then the named negative controls, through `verdict.verdict`, the call a call site switches to."""
@@ -14,7 +14,7 @@ import verdict as V
 import verity_difftest as D
 from hypothesis import strategies as st
 
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -33,7 +33,7 @@ def record(s: M.Session, schemes=M.ts.SCHEMES) -> dict:
 
 
 def reference(j) -> dict:
-    """`MemoryChallenger.Judge.verdictFn` in Python: decode as the Lean decodes, then `memory_challenger.verdict`."""
+    """`MemoryChallenger.Judge.verdictFn` in Python: decode as the Lean decodes, then `memory_attester.verdict`."""
     signed = M.signed_of(M._get(j, "signed"))
     commitment = M.commitment_of(M._get(j, "commitment"))
     openings = [M.opening_of(o) for o in M.list_(j, "openings")]

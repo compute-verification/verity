@@ -1,4 +1,4 @@
-"""The prover's side of one PoUS period on one node: the setup, the session with the memory challenger and the period's
+"""The prover's side of one PoUS period on one node: the setup, the session with the memory attester and the period's
 subprotocol, each ending in the verifier's check (`verity.protocols.resource_accounting.memory.pous.verifier.period`).
 
 `run(node, store, coins, signer=..., log=...)` plays every party in one process, in the protocol's order (`setup_store`
@@ -8,7 +8,7 @@ is steps 1 to 3, `audit` steps 4 and 5, so a node's store can be set up once and
 2. the verifier samples the salt after the commitment, from its live `coins` (`setup.sample_salt`);
 3. the prover encodes `C*` (`P2.encode_segment`), and the verifier decodes it and checks `Dec(C*)` against the commitment
    (`setup.verifier_key_from_encoding`, the public-encoder setup; in Lean `verity/pous/p2/v4/setup`), publishing its root;
-4. the memory challenger takes its table of `C*` (each block's `memory_challenger.block_digest`), samples its `k` indices
+4. the memory attester takes its table of `C*` (each block's `memory_attester.block_digest`), samples its `k` indices
    from `coins` under a session id the auditor designates from them, and runs its timed session against the prover's
    answers (`prover`, by default the honest one that holds `C*`), signed under `signer`;
 5. the verifier judges the run, setup's acceptance of `C*` publishing exactly the run's commitment (`tie`) and then
@@ -22,8 +22,8 @@ a block). An audit is cheap: about 1.7 s at `2^19` blocks, mostly the table's ro
 
 `subprotocol(period_dir, node, out, side_of=...)` is `benchmarks/all_protocols`' subprotocol for space: by default it sets the node's
 store up once at `point_for`'s certified point and audits it every period, the coins fresh from the OS. The memory
-challenger is a party of its own (`challenger_party`) on `period.json`'s `challenger_host`, with its own coins and a key
-at S1's deployed parameters (`memory_challenger.LMS`) that `onsite.device_key` makes once on that host; the
+attester is a party of its own (`challenger_party`) on `period.json`'s `challenger_host`, with its own coins and a key
+at S1's deployed parameters (`memory_attester.LMS`) that `onsite.device_key` makes once on that host; the
 prover and the verifier run on the node. `records` is the store it sets up: the period's files, the auditor's ledger in
 them cut to the entries their window cites (`cite`).
 """
@@ -42,7 +42,7 @@ from pathlib import Path
 from typing import Any
 
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier import run as R
 from verity.protocols.resource_accounting.memory.pous.verifier import setup
 from verity.protocols.resource_accounting.memory.pous.verifier.period import (
@@ -70,7 +70,7 @@ type Prover = Callable[[Sequence[bytes]], Callable[[int], bytes]]
 """The prover's side of the session: from the blocks of `C*` it was sent, its answer to each index."""
 
 type Session = Callable[[challenger_session.Side, Mapping[str, Any], Callable[[int], bytes]], dict[str, Any]]
-"""The prover's end of one session with a memory challenger of its own (`challenger_prover.session`): the challenger's
+"""The prover's end of one session with a memory attester of its own (`challenger_prover.session`): the challenger's
 side, the request and the prover's answer to each index; the side's report."""
 
 
@@ -81,7 +81,7 @@ def honest(blocks: Sequence[bytes]) -> Callable[[int], bytes]:
 
 @dataclass(frozen=True)
 class EncodedStore:
-    """What a node's setup leaves: the point, what setup published, `C*` (which the prover keeps), the memory challenger's
+    """What a node's setup leaves: the point, what setup published, `C*` (which the prover keeps), the memory attester's
     table of it, and the setup protocol's case."""
 
     point: R.Point
@@ -152,9 +152,9 @@ def audit(node: str, held: EncodedStore, coins: bytes, *, signer: mc.Signer | No
           trusted: Collection[bytes] | None = None, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
           protocol: str = PROTOCOL, prover: Prover = honest, clock: Callable[[], int] = time.perf_counter_ns,
           party: challenger_session.Side | None = None, session: Session | None = None) -> Run:
-    """One period's audit of the store `held` on `node` (module docstring, steps 4 and 5): the memory challenger's
+    """One period's audit of the store `held` on `node` (module docstring, steps 4 and 5): the memory attester's
     session under the id the auditor designates from `coins` and the setup's root, then the run's check and answer, the
-    tie on the setup case `held` keeps, which the run's case carries. With `party`, the memory challenger is a party of
+    tie on the setup case `held` keeps, which the run's case carries. With `party`, the memory attester is a party of
     its own (`challenger_party`): its side runs where `party` (a `challenger_session.Side`) starts it, with its own
     coins, key and session log, and the prover answers it over a socket in `session` (`challenger_prover.session`, which
     the caller hands in); `signer`, `log` and `clock` are unused, and the verifier's list is by default the key the side
@@ -170,7 +170,7 @@ def audit(node: str, held: EncodedStore, coins: bytes, *, signer: mc.Signer | No
         session, key = R.ChallengePhaseRecord(signed, challenger.commitment, challenger.openings()), signer.public_key
     else:
         if session is None:
-            raise ValueError("a memory challenger of its own takes the prover's session (`challenger_prover.session`)")
+            raise ValueError("a memory attester of its own takes the prover's session (`challenger_prover.session`)")
         got = session(party, challenger_session.request_of(node, point, published.root), prover(held.blocks))
         session_id, key = bytes.fromhex(got["session_id"]), bytes.fromhex(got["public_key"])
         session = R.ChallengePhaseRecord.from_json(got["session"])
@@ -186,7 +186,7 @@ def run(node: str, store: bytes, coins: bytes, *, signer: mc.Signer | None = Non
         clock: Callable[[], int] = time.perf_counter_ns, workers: int = 1,
         party: challenger_session.Side | None = None, session: Session | None = None) -> Run:
     """The period's PoUS on `node`, setup and audit (module docstring): `store` is what the node keeps, `coins` the
-    verifier's and the memory challenger's live secret for the period, `signer` the memory challenger's key and `log` its
+    verifier's and the memory attester's live secret for the period, `signer` the memory attester's key and `log` its
     session log. `trusted` is the verifier's list of memory-challenger keys (by default the signer's), `schemes` the
     signature schemes it accepts and `protocol` the id it answers under (a test signer's: `TEST_PREFIX` and
     `pous_test_signer.SCHEMES`); `party` and `session` as for `audit`. A setup the verifier refuses raises `ValueError`,
@@ -332,7 +332,7 @@ def subprotocol(period_dir: Path, node: str, out: Path, *, side_of: Callable[...
     to `SETUP_WORKERS` processes and kept beside the periods (`pous-store`), and every period audits it with fresh
     coins, so an accepted period certifies `s_bits > 0` at the certificate's `eps`. With `{"pous": {"point": "small"}}`
     in `period.json`, each period sets the period's own records up at the small point instead, certifying nothing. The
-    memory challenger is a party of its own on `period.json`'s `challenger_host` (`side_of(period, node, key, local)`,
+    memory attester is a party of its own on `period.json`'s `challenger_host` (`side_of(period, node, key, local)`,
     which the caller that starts the run hands in, the runtime's `Side.of`; on this node by default, a process whose key
     and session log are beside the periods) and the prover is here, answering it in `session`
     (`challenger_prover.session`, which the caller hands in too). With `pous-run-protocol` and `pous-setup` among the

@@ -1,5 +1,5 @@
-"""`verdict` as a core protocol (`MemoryChallenger.Protocol`): `memory-challenger-test serve` against `memory_challenger.verdict`
-under `pous_test_signer.SCHEMES`, and `memory-challenger serve` against it under `memory_challenger.SCHEMES`, on honest
+"""`verdict` as a core protocol (`MemoryChallenger.Protocol`): `memory-challenger-test serve` against `memory_attester.verdict`
+under `pous_test_signer.SCHEMES`, and `memory-challenger serve` against it under `memory_attester.SCHEMES`, on honest
 sessions, sessions under one adversarial edit (a late round, a wrong label digest, an index that isn't its opening's, a
 tampered header, a bad signature, a wrong key, a replayed leaf, and more: `mc_cases.MUTATIONS`) and malformed cases."""
 
@@ -14,7 +14,7 @@ import pytest
 import verity_difftest as D
 from hypothesis import strategies as st
 
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 

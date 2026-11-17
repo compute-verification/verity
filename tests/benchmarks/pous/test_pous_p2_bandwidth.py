@@ -29,7 +29,7 @@ sys.path.insert(0, str((ROOT / "verity/protocols/resource_accounting/memory/poub
 import bandwidth as B  # noqa: E402
 from p2_v1 import bandwidth_toy as BT  # noqa: E402
 
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier import verifier as V
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import P2Params
 from verity.protocols.resource_accounting.memory.poub.verifier import p2, p2_case, p2_parties, receipts
@@ -212,7 +212,7 @@ def test_a_party_the_gate_starts_says_its_port_and_its_own_record_of_the_answer(
     directory; CMD's stdout says the port and then the verifier's record of the answer, which the verdict line holds
     to the session's, and which the device's answers.jsonl keeps. Each session's core case, whose digest alone (the
     chain its signed close signs) the device's private case-digests.txt keeps, goes with its answer to `--case-dir` (0700, its files 0600), naming the
-    toy's store, its log closed by the memory challenger's key (`p2_party_at_leaf`) under the session id the party was
+    toy's store, its log closed by the memory attester's key (`p2_party_at_leaf`) under the session id the party was
     given, and `session.json` holds only its digest, store and verdict."""
     reg = BT.toy(tmp_path / "toy")
     (tmp_path / "challenger").mkdir()

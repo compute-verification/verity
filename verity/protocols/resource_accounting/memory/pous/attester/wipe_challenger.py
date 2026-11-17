@@ -1,4 +1,4 @@
-"""The streamed wipe's memory challenger, on the challenger host: its side of one wipe (`WipeMemoryChallenger`, the
+"""The streamed wipe's memory attester, on the challenger host: its side of one wipe (`WipeMemoryChallenger`, the
 steps `streamed_wipe`'s docstring states), that side as a process of its own over `wipe_party`'s wire (`serve`, `report`,
 `main`), and as a party of the deployment layer (`verity.runtime`), `MemoryChallengerParty`, over the messages
 `verity.protocols.resource_accounting.memory.pous.verifier.wipe_parties` declares.
@@ -20,7 +20,7 @@ coin and unsigned, a clock source that reads another real clock (`Identity.clock
 `RealClock(streamed_wipe.raw_clock_ns, streamed_wipe.CLOCK)` instead. Virtual time (a simulated or seeded run) and a
 replay name no clock, and it signs their readings under the header's name, as `WipeMemoryChallenger` signs
 a clock a test injects. Its machine gives it `signing-key` (`capabilities["signer"]`, a
-`memory_challenger.Signer`, with `capabilities["log"]`, its session log) and the reads it times
+`memory_attester.Signer`, with `capabilities["log"]`, its session log) and the reads it times
 (`capabilities["reads"]`, `wipe_party.READS` when none, as `wipe_party`'s `--reads`). The run's parameters are
 `wipe_party.request_of`'s request, which names no reads: the memory attester chooses them, never the prover. The memory attester
 finishes with `report` (private: what it signs is witness), refused by name, and unsigned, when the prover
@@ -49,10 +49,10 @@ from typing import Any, BinaryIO
 from verity.party import Finish, Identity, Received, LogEntry, Send, Timer
 from verity.protocol import ProtocolDef, Start
 from verity.channel import Message, Phase, Refused
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.attester import onsite
 from verity.protocols.resource_accounting.memory.pous.attester import wipe_stream
-from verity.protocols.resource_accounting.memory.pous.attester.memory_challenger import CLOCK_RESOLUTION_NS, SessionLog, Signer
+from verity.protocols.resource_accounting.memory.pous.attester.memory_attester import CLOCK_RESOLUTION_NS, SessionLog, Signer
 from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
 from verity.protocols.resource_accounting.memory.pous.verifier.streamed_wipe import (
     COMPLETE,
@@ -88,7 +88,7 @@ logger = logging.getLogger(__name__)
 
 
 class WipeMemoryChallenger:
-    """The memory challenger's side of one streamed-label wipe of `server` under `session`, signed by `signer` (module
+    """The memory attester's side of one streamed-label wipe of `server` under `session`, signed by `signer` (module
     docstring).  The session id goes into `log` before anything else.  `coin_secret` is sampled from the OS when the fill
     completes unless a test gives it.  `mark_source` takes the start message and returns the network attester's start certificate for it, as bytes;
     with none the session's start mark is empty.  `clock` is `raw_clock_ns` unless given.  The header names `CLOCK`
@@ -166,7 +166,7 @@ class WipeMemoryChallenger:
         if self.fill_end_ns is None:
             raise RuntimeError("the challenges start once the fill is complete")
         if self.ended is not None:
-            raise RuntimeError(f"the session has ended ({self.ended}): no batch is retried and no index redrawn")
+            raise RuntimeError(f"the session has ended ({self.ended}): no batch is retried and no index resampled")
         if self._open is not None:
             raise RuntimeError("the previous batch is unanswered")
         if self.indices is None:
@@ -275,7 +275,7 @@ def _read() -> Send:
 
 
 class MemoryChallengerParty:
-    """The memory challenger: one wipe, on its clock and coins (module docstring). `chunk` labels a fill frame."""
+    """The memory attester: one wipe, on its clock and coins (module docstring). `chunk` labels a fill frame."""
 
     def __init__(self, chunk: int = WP.CHUNK) -> None:
         self.chunk = chunk

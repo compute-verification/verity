@@ -44,11 +44,11 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   against the sha256 and bytes `verifier.json` recorded for it, and replays them through both verifiers
   (`verity/protocols/resource_accounting/memory/poub/verifier/lean/replay.py transcript --record verifier.json`), or the record
   alone when the run left no transcript, into `runs/<run>/replay/`; a transcript that isn't the recorded one fails it.
-- **The memory challenger's parties**: `wipe_party [--reads K] [--native [--threads T]]` and `challenger_party`
+- **The memory attester's parties**: `wipe_party [--reads K] [--native [--threads T]]` and `challenger_party`
   run PoUS's streamed-wipe challenger (`verity/protocols/resource_accounting/memory/pous/verifier/wipe_party.py`, port 47611) and its block challenger
   (`challenger_party.py`, port 47610), and `bw_party (--pous-session SID | --fixture) [--session SID] [--minutes M]` PoUB's
   P2 party (`verity/protocols/resource_accounting/memory/poub/verifier/p2_parties.py`, port 47612, with the registration the host
-  names; with `--session SID`, the session id the auditor gives the memory challenger, it signs the session's close with
+  names; with `--session SID`, the session id the auditor gives the memory attester, it signs the session's close with
   the block challenger's key and claims SID in its session log, `<root>/parties/pous/`, and keeps the session's case), as
   `auditor` from the pinned tree, one session per ssh connection: the request line on the gate's stdin, `{"listening"}`
   and the signed report on its stdout, as a lane's `--challenger-command` expects
@@ -151,7 +151,7 @@ PARTIES = {"wipe_party": ("wipe", "verity.protocols.resource_accounting.memory.p
 PARTY_CODE = {"bw_party": "import sys; from verity.protocols.resource_accounting.memory.pous.attester import onsite; "
                           "from verity.protocols.resource_accounting.memory.poub.verifier import p2_parties; "
                           "sys.exit(p2_parties.main(sys.argv[1:], device_key=onsite.device_key))"}
-"""A party run as code rather than its module: PoUB's verifier handed the memory challenger's key loader of PoUS's
+"""A party run as code rather than its module: PoUB's verifier handed the memory attester's key loader of PoUS's
 device, which the verifier's own code may not load."""
 PARTY_FIXED = {"bw_party": ["--registration", "verity/protocols/resource_accounting/memory/poub/verifier/bandwidth-mem69-v2.json"]}
 """Arguments the host adds to a party's command, never a caller's: the fixture store's registration in the pinned tree,
@@ -615,7 +615,7 @@ def party_argv(verb: str, rest: list[str], host: Host) -> list[str]:
         elif verb == "bw_party" and flag == "--session" and args and "--session" not in extra:
             sid = args.pop(0)
             if not SESSION_ID.fullmatch(sid):
-                raise Refused(f"bw_party --session takes the session id the auditor gives the memory challenger, 64 "
+                raise Refused(f"bw_party --session takes the session id the auditor gives the memory attester, 64 "
                               f"lowercase hex digits; got {sid!r}")
             extra += ["--challenger", str(host.parties / PARTIES["challenger_party"][0]), "--session", sid]
         elif verb == "wipe_party" and flag == "--native" and "--streamer" not in extra:

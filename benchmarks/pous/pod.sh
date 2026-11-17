@@ -8,10 +8,10 @@
 #   ... -- bash benchmarks/pous/pod.sh IMPL=p2-v3-gpu [WS=...] [NVME_DIR=...]       # p2-16448/v4 (builds p2_store's libp2v1.so with CGBN),
 #                                                                               audited by protocol.TimedAudit
 #   ... -- bash benchmarks/pous/pod.sh IMPL=p2-v3-gpu P2FAST='-DP2_FAST -DP2_KEYS4 -DP2SQ_KARA' TOKENS=1,8,32,2048,4096  # v4 keys
-#   ... -- bash benchmarks/pous/pod.sh IMPL=p2-v3-mc-gpu [WS=...] [NVME_DIR=...]    # the same, audited by the memory challenger,
+#   ... -- bash benchmarks/pous/pod.sh IMPL=p2-v3-mc-gpu [WS=...] [NVME_DIR=...]    # the same, audited by the memory attester,
 #                                                                               signed with S1's key in $W/pous-mc-lms (MC_SIGNER=test: the test signer),
 #                                                                               its session ids in $W/pous-mc-session-log (a key that predates
-#                                                                               the log: memory_challenger.SessionLog.create once)
+#                                                                               the log: memory_attester.SessionLog.create once)
 #   ... -- bash benchmarks/pous/pod.sh IMPL=side-by-side [WS=...] [NVME_DIR=...]    # band-gpu then P2_ARM (p2-v3-gpu), and the table
 #   ... -- bash benchmarks/pous/pod.sh IMPL=side-by-side GATES_ONLY=1 MAX_SEGMENTS=2  # build check: kernels built, gates run
 #   ... -- bash benchmarks/pous/pod.sh IMPL=band-gpu BAND_D=6 [WS=...]   # the band at in-degree d (>= 5; side-by-side's band arm too)
@@ -68,12 +68,12 @@ set -uxo pipefail
 REPO=$(pwd); I=$RESEARCH_RUN_DIR/inputs; O=$RESEARCH_RUN_DIR; W=${WORK:-/workspace}/pous-bench; POUS_BUILD=${POUS_BUILD:-$W/pous_build}
 IMPL=${IMPL:-vllm-gpu}; WS=${WS:-qwen2.5-0.5b/linears+head}
 # lake: the pod image's /opt/elan, else the user's elan (node 2's research user); verity_difftest serves the memory
-# challenger's Lean verdict (its Server and build need only the stdlib)
+# attester's Lean verdict (its Server and build need only the stdlib)
 export PATH=$HOME/.local/bin:/opt/elan/bin:$HOME/.elan/bin:$PATH
 # Every entry must exist: importlib.metadata opens a missing one as a zip, and the suite guard counts that open as a read.
 export PYTHONPATH=$REPO:$REPO/tools/research/src:$REPO/tools/difftest/python
 # PREPARE=1 builds the Lean verdict a timed run serves, which it must not compile under its lease, and exits: for
-# p2-v3-mc-gpu the memory challenger's (memory-challenger-verdict, live.py's judge), for p2-v3-gpu pous_check's
+# p2-v3-mc-gpu the memory attester's (memory-challenger-verdict, live.py's judge), for p2-v3-gpu pous_check's
 # (pous-timed-audit, timed_audit.py's judge, which p2_v1/harness.py builds again, a no-op after this) where its lakefile
 # declares one. Run it from a clone (--cwd clone: the build writes
 # the package's .lake) before the lease, in the same job:
