@@ -58,6 +58,16 @@ def test_a_pass_whose_output_is_wrong_fails(tmp_path):
     assert not ok and "at 12 x 40000: not reference_rows'" in doc["validation"]["detail"]
 
 
+def test_counters_that_count_no_long_row_fail(tmp_path):
+    def timer(v, r, n, how):
+        t = stub()(v, r, n, how)
+        for p in ("present", "cut"):
+            t[p]["per_call" if how is None else "one_call"] = {"rows_long": 0, "rows_bisected": int(how is not None)}
+        return t
+    ok, doc = run(tmp_path, "decode", units.lines("decode", timer))
+    assert not ok and "its counters count no row longer than k" in doc["validation"]["detail"]
+
+
 def test_priced_refuses_lines_with_no_failed_time(tmp_path):
     ok, doc = run(tmp_path, "decode", [r for r in units.lines("decode", stub()) if "forced" not in r])
     assert not ok and "times with and without a failed row" in doc["validation"]["detail"]

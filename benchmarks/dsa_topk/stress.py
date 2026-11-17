@@ -559,9 +559,9 @@ def units(args) -> None:
             def fn(canon=canon) -> None:
                 alone()
                 run(canon, o)
-            before = canon.stats(DEV).clone()
+            before = canon.stats(c["x"].device).clone()
             fn()
-            one = dict(zip(dsa_topk.STATS, (canon.stats(DEV) - before).tolist()))
+            one = dict(zip(dsa_topk.STATS, (canon.stats(c["x"].device) - before).tolist()))
             ok = bool(torch.equal(o, c["ref"]))
             us = device_us(fn, iters)
             line[p] = ({"ok": ok, "us": us, "added_us": us - under, "per_call": one} if how is None else

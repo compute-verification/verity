@@ -42,7 +42,8 @@ def lines(shapes: str, timer: Timer) -> list[dict]:
 
 def problems(path: Path, shapes: str) -> list[str]:
     """What keeps `path` from pricing every shape of `shapes`, by `priced.units` itself; a pass whose output is not
-    `reference_rows`', and a forced line whose pass reached no fallback, are each one."""
+    `reference_rows`', whose counters count no row longer than k (every row timed is) and a forced line whose pass
+    reached no fallback are each one."""
     spec = importlib.util.spec_from_file_location("priced", PRICED)
     priced = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(priced)
@@ -60,6 +61,8 @@ def problems(path: Path, shapes: str) -> list[str]:
         for p in PASSES.values():
             if not r[p]["ok"]:
                 out.append(f"{p} {what}: not reference_rows'")
+            if not r[p].get("per_call", r[p].get("one_call", {})).get("rows_long"):
+                out.append(f"{p} {what}: its counters count no row longer than k")
             if "forced" in r and not (r[p]["one_call"].get("rows_bisected") or r[p]["one_call"].get("rows_refined")):
                 out.append(f"{p} {what}: no row reached the fallback")
     return out
