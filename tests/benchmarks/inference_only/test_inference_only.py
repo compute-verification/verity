@@ -168,22 +168,25 @@ def made(wired: bool) -> dict:
 
 
 def _counts(doc: dict, k: int) -> tuple[dict, dict, dict]:
-    row = IO.session_row(doc, None, None)
+    row = IO.wired_row(doc, None, None)
     lean = reference(IO.count_instance(doc, row["table"], row["gates"], k, row["slots"]))["verdict"]
     return row, IO.record_count(doc, row["slots"], None, None), lean
 
 
 def test_with_no_wire_and_no_table_the_lean_verifier_and_the_records_count_agree_at_the_real_k() -> None:
     row, counted, lean = _counts(made(wired=False), 19_968)
-    assert lean["blocks"][0][2] == row["fresh"] == counted["fresh"] == 19_968 and lean["complies"]
+    assert [x for _, _, x, _ in lean["blocks"]] == [row["fresh"]] == [counted["fresh"]] == [19_968] and lean["complies"]
     _, _, under = _counts(made(wired=False), 19_967)
     assert (under["complies"], under["failure"]) == (False, [0, "fresh"])
 
 
-def test_on_a_made_circuit_the_records_count_subtracts_a_wired_row_and_the_lean_verifiers_count_on_the_session_program_does_not() -> None:
-    row, counted, lean = _counts(made(wired=True), 19_840)
-    assert (row["fresh"], counted["fresh"], counted["wired"]) == (19_840, 19_840, 8 * 16)
-    assert lean["blocks"][0][2] == 19_968 and (lean["complies"], lean["failure"]) == (False, [0, "fresh"])
+def test_on_a_made_circuit_the_wired_programs_count_subtracts_a_wired_row_in_the_slot_that_reads_it() -> None:
+    """The wire fills slot 0's rotary rows from its own product: on the wired Program grouped by slot that slot's block
+    counts 128 fewer fresh bits, and slot 1's, which reads no wire, none fewer, so k is slot 1's; the record's count
+    states the wired rows a block on average."""
+    row, counted, lean = _counts(made(wired=True), 19_968)
+    assert sorted(x for _, _, x, _ in lean["blocks"]) == [19_840, 19_968] and lean["complies"]
+    assert (row["fresh"], counted["fresh"], counted["wired"]) == (19_968, 19_840, 8 * 16)
 
 
 @pytest.mark.parametrize(("value", "word"), [(1000, "within target"), (999.999, "misses"), (1, "misses")])
