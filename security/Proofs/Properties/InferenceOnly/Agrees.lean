@@ -33,7 +33,7 @@ node) from `BodiesOk.rootSet` (`readsExact_of_set`, `Proofs.Properties.Inference
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.Fresh
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.Fresh
 
 /-- **`DescAgrees`, from `ReadsExact`.** -/
 theorem descAgrees_of_readsExact (hR : ReadsExact) : Properties.DescAgrees :=
@@ -43,12 +43,12 @@ theorem descAgrees_of_readsExact (hR : ReadsExact) : Properties.DescAgrees :=
 theorem readsExact : ReadsExact :=
   BodiesOk.readsExact_of_set BodiesOk.rootSet
 
-end InferenceOnlyCheck.Properties.SecurityProofs.Fresh
+end InferenceOnlyVerifier.Properties.SecurityProofs.Fresh
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.SecurityProofs
 
 /-- **The check at the size of the description agrees with the check gate by gate.** -/
 theorem DescAgrees : Properties.DescAgrees :=
   Fresh.descAgrees_of_readsExact Fresh.readsExact
 
-end InferenceOnlyCheck.Properties.SecurityProofs
+end InferenceOnlyVerifier.Properties.SecurityProofs

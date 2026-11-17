@@ -191,7 +191,7 @@ def rowsId : String := "verity/inference-only/rows/v1"
 /-- **What the rows check does, until a compiled check carries its id**: nothing here says (`opaque`), so no statement
 about the rows check holds by computing it, and its target at a composite that lists it is proved only from the compiled
 check that replaces this. -/
-opaque rowsUnbuilt : BlobProtocol := InferenceOnlyCheck.Protocol.protocol
+opaque rowsUnbuilt : BlobProtocol := InferenceOnlyVerifier.Protocol.protocol
 
 /-- **The rows check**: `rowsUnbuilt` under the rows check's id. -/
 def rowsCheck : BlobProtocol := { rowsUnbuilt with id := rowsId }
@@ -202,13 +202,13 @@ and v0 elsewhere; every other subprotocol's is one check, the same in every comp
 def Subprotocol.protocolAt : Subprotocol → Verity.Registration.Composite → BlobProtocol
   | .sampled, _ => VStar.Recursive.Sampled.protocol
   | .pouw, k =>
-    if PouwCheck.PearlPlus.Protocol.protocolId ∈ k then PouwCheck.PearlPlus.Protocol.protocol
-    else PouwCheck.Period.protocol
-  | .inferenceOnly, k => if rowsId ∈ k then rowsCheck else InferenceOnlyCheck.Protocol.protocol
-  | .pous, _ => PousCheck.RunProtocol.protocol
+    if PouwVerifier.PearlPlus.Protocol.protocolId ∈ k then PouwVerifier.PearlPlus.Protocol.protocol
+    else PouwVerifier.Period.protocol
+  | .inferenceOnly, k => if rowsId ∈ k then rowsCheck else InferenceOnlyVerifier.Protocol.protocol
+  | .pous, _ => PousVerifier.RunProtocol.protocol
   | .poub, _ => Poub.P2Protocol.protocol
-  | .network, _ => NetworkCheck.Period.protocol
-  | .wipe, _ => MemoryChallenger.WipeProtocol.protocol
+  | .network, _ => NetworkVerifier.Period.protocol
+  | .wipe, _ => MemoryAttester.WipeProtocol.protocol
 
 /-- **Subprotocol `a`'s protocol id in composite `k`**, its compiled check's there, which `k` lists it by. -/
 def Subprotocol.idAt (a : Subprotocol) (k : Verity.Registration.Composite) : String := (a.protocolAt k).id
@@ -224,7 +224,7 @@ def componentsOf (k : Verity.Registration.Composite) : List BlobProtocol :=
 /-- The subprotocols of composite `k` that must commit to one record: the inference-only policy and SPOT,
 each where `k` lists it. -/
 def tied (k : Verity.Registration.Composite) : List String :=
-  [InferenceOnlyCheck.Protocol.protocolId, VStar.Recursive.Sampled.protocol.id].filter (· ∈ k)
+  [InferenceOnlyVerifier.Protocol.protocolId, VStar.Recursive.Sampled.protocol.id].filter (· ∈ k)
 
 /-- **The ties between subprotocols**: every window of PoUW's period on the policy's record (`Core.Remote.executionPhases`),
 PoUS and PoUB-P2 on one store (`Core.Onsite.store`), Pearl+'s run on the policy's record (`Core.Remote.V1.run`), and
@@ -295,12 +295,12 @@ under the composition's formats, one of the subprotocols' cases is the policy's 
 reads no blobs, as one of `k`'s subprotocols), and under the parameters `k` names for it that case decodes to the
 policy's parameters `p`, its record `c` and its evidence `e`. It is `CaseAccepts k InferenceOnlyCheck.Protocol.protocol s`
 without the check's acceptance. -/
-def PolicyCase (k : Verity.Registration.Composite) (s : Sent) (p : InferenceOnlyCheck.Protocol.Params)
-    (c : InferenceOnlyCheck.Protocol.Commitment) (e : InferenceOnlyCheck.Protocol.Evidence) : Prop :=
+def PolicyCase (k : Verity.Registration.Composite) (s : Sent) (p : InferenceOnlyVerifier.Protocol.Params)
+    (c : InferenceOnlyVerifier.Protocol.Commitment) (e : InferenceOnlyVerifier.Protocol.Evidence) : Prop :=
   ∃ ps cm ev, Decoded s ps cm ev ∧
-    ∃ x ∈ Properties.Composition.triples (s.components k) ps ev, x.1 = InferenceOnlyCheck.Protocol.protocol ∧
-      (canonicalJson x.2.1.params.toUTF8 >>= InferenceOnlyCheck.Protocol.paramsOf) = .ok p ∧
-      InferenceOnlyCheck.Protocol.commitmentOf x.2.2.commitment = .ok c ∧ InferenceOnlyCheck.Protocol.evidenceOf x.2.2.evidence = .ok e
+    ∃ x ∈ Properties.Composition.triples (s.components k) ps ev, x.1 = InferenceOnlyVerifier.Protocol.protocol ∧
+      (canonicalJson x.2.1.params.toUTF8 >>= InferenceOnlyVerifier.Protocol.paramsOf) = .ok p ∧
+      InferenceOnlyVerifier.Protocol.commitmentOf x.2.2.commitment = .ok c ∧ InferenceOnlyVerifier.Protocol.evidenceOf x.2.2.evidence = .ok e
 
 /-- **The inference-only policy's clause where v0 doesn't decide it in composite `k`**: `k` lists no v0 (remote's plain
 sibling, which lists the rows check) or lists the rows check, whose verdict decides there (`Subprotocol.protocolAt`).
@@ -316,13 +316,13 @@ def ComponentAccepts (k : Verity.Registration.Composite) (a : Subprotocol) (s : 
 /-- **The credit Pearl+'s check publishes in what the prover sent composite `k`**: the three byte strings decode,
 Pearl+'s case decodes under the parameters `k` names for it, and Pearl+'s check on the blobs sent accepts it with the
 credit `w` (`PouwCheck.PearlPlus.Protocol.checkBlobs`), whose `macs`, `rho` and `epsilon` its answer publishes. -/
-def PearlPlusCredits (k : Verity.Registration.Composite) (s : Sent) (w : PouwCheck.PearlPlus.Credit) : Prop :=
+def PearlPlusCredits (k : Verity.Registration.Composite) (s : Sent) (w : PouwVerifier.PearlPlus.Credit) : Prop :=
   ∃ ps c ev, Decoded s ps c ev ∧ ∃ x ∈ Properties.Composition.triples (s.components k) ps ev,
-    x.2.2.id = PouwCheck.PearlPlus.Protocol.protocolId ∧ ∃ p cm e prof,
-      (canonicalJson x.2.1.params.toUTF8 >>= PouwCheck.PearlPlus.Protocol.paramsOf) = .ok p ∧
-      PouwCheck.PearlPlus.Protocol.commitmentOf x.2.2.commitment = .ok cm ∧
-      PouwCheck.PearlPlus.Protocol.evidenceOf x.2.2.evidence = .ok e ∧
-      PouwCheck.PearlPlus.Protocol.checkBlobs p cm e (Blobs.ofArray s.blobs) = .accept w prof
+    x.2.2.id = PouwVerifier.PearlPlus.Protocol.protocolId ∧ ∃ p cm e prof,
+      (canonicalJson x.2.1.params.toUTF8 >>= PouwVerifier.PearlPlus.Protocol.paramsOf) = .ok p ∧
+      PouwVerifier.PearlPlus.Protocol.commitmentOf x.2.2.commitment = .ok cm ∧
+      PouwVerifier.PearlPlus.Protocol.evidenceOf x.2.2.evidence = .ok e ∧
+      PouwVerifier.PearlPlus.Protocol.checkBlobs p cm e (Blobs.ofArray s.blobs) = .accept w prof
 
 /-- **Composite `k` accepted what the prover sent as a `same` composition**: the three byte strings decode to an
 accepted composition of `k`'s subprotocols on the blobs sent, whose record subprotocols (`tied k`) committed to one
@@ -915,14 +915,14 @@ def Holds (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteAr
     Subprotocol → Exchange → Prop
   | .sampled, o => (V.live k θ F c).Holds (V.certOf θ) σ .sampled o
   | .pouw, o =>
-    if PouwCheck.PearlPlus.Protocol.protocolId ∈ k then
+    if PouwVerifier.PearlPlus.Protocol.protocolId ∈ k then
       ∃ w, PearlPlusCredits k o.sent w ∧ (1 - (w.rho : ℝ)) * (1 - (w.epsilon : ℝ)) * w.macs ≤ V.macs θ F c σ o
     else (V.live k θ F c).Holds (V.certOf θ) σ .pouw o
   | .pous, o => (V.live k θ F c).Holds (V.certOf θ) σ .pous o
   | .poub, o => (V.live k θ F c).Holds (V.certOf θ) σ .poub o
   | .network, o => (V.live k θ F c).Holds (V.certOf θ) σ .network o
   | .inferenceOnly, o =>
-    if InferenceOnlyCheck.Protocol.protocolId ∈ k ∧ rowsId ∉ k then
+    if InferenceOnlyVerifier.Protocol.protocolId ∈ k ∧ rowsId ∉ k then
       ∀ p r e, PolicyCase k o.sent p r e → Properties.Remote.PolicyHeld p r e
     else rowsHeld k o.sent
   | .wipe, o => ¬ (V.wipeRun θ F c σ).Kept (V.foreignBits θ) o

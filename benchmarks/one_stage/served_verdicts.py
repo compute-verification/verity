@@ -52,7 +52,9 @@ V3C-AUDIT line's account of whose coins its audit's were and its coin trees (`co
 ``window``: the sealed window to audit, from a serve-openai run's ``seals.jsonl``, ``windows.jsonl`` and ``requests.jsonl``
 (`pick`): sealed without error, its Commit passed, each of its requests checked and in no other window (V3b's window
 circuit refuses a request carried across windows), at most ``--slots`` of them (its class's); the most requests, then the
-earliest. ``--window K`` holds K to the same rules. Prints the pick (`pick`): ``{window, requests, users, steps,
+earliest. ``--window K`` holds K to the same rules. ``--of-load FILE`` (a fixed load's lines, `serve_load.py`'s
+``--out``) takes the one window whose requests are that load's and no other, and ``--attested`` the one whose requests
+are all the network attester's: neither a count nor a setting chooses it, and either refuses unless one window fits. Prints the pick (`pick`): ``{window, requests, users, steps,
 refused}``, which the run keeps in the serve dir's ``private/window.json``.
 
 ``pieces``: each subprotocol after SPOT (`PIECES`: PoUW, PoUS, the bandwidth audit, the network attester) runs
@@ -268,6 +270,14 @@ INFERENCE_ONLY_ROW = "inference-only"
 UNDECIDED = "undecided: "
 INFERENCE_ONLY_UNREAD = ("not read by the combined verdict: the composite combines verity/inference-only/v0's own "
                          "case, not this (c, k, n) verdict")
+#: the network attester's request users, as the endpoint records them (`serve_commit.REQUEST_USERS`)
+ATTESTER_USER = re.compile(r"user-[0-9]+")
+#: under the serve dir's private/: the window the network attester's row is taken from, where it is its front's group's
+#: and not the window of record (a tied run's fixed load, which the network attester does not carry)
+FRONT_WINDOW = "front-window"
+FRONT_GROUP = ("the network attester's verdict is over its front's group, a window of its own, and not over the tied "
+               "load's requests: it stands as its own protocol's verdict, its case left out of the composite, and no "
+               "certificate of it reaches the block record")
 #: a piece's limit unless ``<COMPONENT>_TIMEOUT`` or ``PIECE_TIMEOUT`` sets one, as `timeout` reads it
 PIECE_TIMEOUT = "60m"
 #: what `pieces` leaves beside a piece it ran: the node it ran on, its exit and its limit
@@ -327,7 +337,7 @@ def pearlplus_why(challenger: str) -> str:
     """Why the Pearl+ piece's verdict (`pearlplus`) credits nothing, its epoch's salt coin a live session's on
     `challenger` (`challenger_of`)."""
     return (f"{_PEARLPLUS_UNTIED}; its epoch's salt coin is a live session's on {challenger}; and an ACCEPT is the "
-            "reference replay's (verify_run.py), not PouwCheck's ZK proof")
+            "reference replay's (verify_run.py), not PouwVerifier's ZK proof")
 
 
 def pearlplus_coins_from(challenger: str) -> dict[str, str]:
@@ -395,14 +405,15 @@ MEMBERS_COVER = ("each sampled proof block proved in its own kind's statement ag
                  "misses members; the wires between members are not held; the circuit files' digests are fixed before "
                  "the coins in the parameters but not signed in the docket")
 #: ... PoUW's where Pearl+'s piece is its verdict of record (`pearlplus_of_record`)
-PEARLPLUS_FROM = (f"{AS_WRITTEN} (its piece files in pouw/): Pearl+'s Lean verdict of record (PouwCheck.PearlPlus), "
+PEARLPLUS_FROM = (f"{AS_WRITTEN} (its piece files in pouw/): Pearl+'s Lean verdict of record (PouwVerifier.PearlPlus), "
                   "the prover side's, run on the served node over the retained passes; no auditor device re-checks it, since "
                   "its case (the passes' manifests with their salt key, and the opened tiles' rows) is witness")
 #: what the composed verdict's reason (`said`) says of that row's accept
 PEARLPLUS_SAID = "Pearl+'s Lean verdict of record, the prover side's, which no auditor device re-checks"
 WEAKER_TIE = ("a weaker tie, not the tied guarantee: the window's records audit tied to W sampled {design}, not a stratified "
-              "rate, so its accept shows only that the tables its sampled proof blocks read hold the served model's own "
-              "values at W's roots, not that every table W registers does")
+              "rate over a cut whose tables' readers are templates of their own, so its accept shows only that the tables "
+              "its sampled proof blocks read hold the served model's own values at W's roots, not that every table W "
+              "registers does")
 #: ... the files the served node wrote that a row's answer is otherwise read from, by runner name (a piece's: its dir)
 WRITTEN = {"integrity": "the records audit's summary.json and window/audit.json"}
 #: A served run's witness, by a path's part (`witness`): what a compose hand-off never carries, each with why
@@ -474,8 +485,11 @@ def _refusal(k: int, seal: Mapping[str, Any], line: Mapping[str, Any] | None, mi
     return None
 
 
-def pick(serve_dir: Path, slots: int, want: int | None = None) -> dict[str, Any]:
-    """The window to audit (module docstring); ValueError when none qualifies, or ``want`` doesn't."""
+def pick(serve_dir: Path, slots: int, want: int | None = None, users: Sequence[str] | None = None,
+         attested: bool = False) -> dict[str, Any]:
+    """The window to audit (module docstring); ValueError when none qualifies, or ``want`` doesn't. ``users``: the one
+    window whose requests are exactly those users', and ``attested`` the one whose requests are all the network
+    attester's (`ATTESTER_USER`); either refuses unless exactly one window qualifies."""
     seals = {int(s["window"]): s for s in _lines(serve_dir / "seals.jsonl")}
     lines = {int(w["window"]): w for w in _lines(serve_dir / "windows.jsonl")}
     reqs = _lines(serve_dir / "requests.jsonl")
@@ -494,6 +508,15 @@ def pick(serve_dir: Path, slots: int, want: int | None = None) -> dict[str, Any]
         if want in refused:
             raise ValueError(f"window {want}: {refused[want]}")
         ok = [x for x in ok if x[0] == want]
+    if users is not None or attested:
+        what = "the fixed load's requests and no other" if users is not None else "the network attester's requests alone"
+        fit = [(k, mine) for k, mine in ok
+               if (sorted(r.get("user") or "" for r in mine) == sorted(users) if users is not None
+                   else mine and all(ATTESTER_USER.fullmatch(r.get("user") or "") for r in mine))]
+        if len(fit) != 1:
+            raise ValueError(f"{len(fit)} sealed windows hold {what} ({[k for k, _ in fit]}), and the run names one: "
+                             f"{json.dumps(refused, sort_keys=True)}")
+        ok = fit
     if not ok:
         raise ValueError(f"no sealed window to audit: {json.dumps(refused, sort_keys=True)}")
     k, mine = max(ok, key=lambda x: (len(x[1]), -x[0]))
@@ -1981,7 +2004,9 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
        and the verdict is over the coin published at its sample (`pearlplus_coin`).
        Pearl+'s verdict (`PEARLPLUS_ANSWER`) held its passes to a window record W (``verify --tie W``), the
        window's docket R under `spot` is chained right after W, and its records audit is tied to W
-       (``records_audit --tie W``) and accepted (its summary's ``audit.accepted``), so the window SPOT audited reads the roots Pearl+ credits. The period's
+       (``records_audit --tie W``) and accepted (its summary's ``audit.accepted``), so the window SPOT audited reads the roots Pearl+ credits. The rule that audit's
+       summary states is the sampling design R commits (its kind, and its K unless stratified), and only a stratified
+       rate's leaves the answer without a weaker tie. The period's
        open (in the signed ledger) committed the SHA-512 of the window-circuit record V3c held R's circuit to
        (`CIRCUIT_RECORD` beside R), so the period holds the salt session to the circuit of the window served.
     4. **Lean.** The Lean `PouwCheck.PearlPlus` verdict (`PEARLPLUS_LEAN`) accepts the same run commitment on the same
@@ -1992,6 +2017,7 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     verdict. Nothing here decides anew: each condition reads what a check or a verifier answered."""
     from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
     from verity.protocols.proofs.spot.verifier.challenger import remote
+    from verity.protocols.proofs.spot.verifier.one_stage import draw as D
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
 
     if doc.get("coin_source") != LIVE_SOURCE:
@@ -2060,6 +2086,14 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     if (accepted := (summary.get("audit") or {}).get("accepted")) is not True:
         return None, (f"the window's records audit tied to W didn't accept ({AUDIT_SUMMARY}'s audit.accepted is "
                       f"{accepted!r}), so nothing shows the window SPOT audited reads the roots Pearl+ credits")
+    design, committed, n = summary.get("sampling_design"), reg.get("law"), reg.get("population")
+    rate, strata = D.parse_rate(design), D.parse_strata_rate(design)
+    kind = "subset" if rate else None if strata is None else "work" if strata[0] else "stratified"
+    k = (None if kind in (None, "stratified") else -1 if type(n) is not int else D.rate_count(*rate, n) if rate
+         else D.rate_count(strata[1], strata[2], 1, n))
+    if not (isinstance(committed, Mapping) and kind and committed.get("law") == kind and k in (None, committed.get("k"))):
+        return None, (f"the window's records audit states the rule {design!r}, not the one its registration R commits "
+                      f"({committed!r} over {n!r} proof blocks): what Pearl+'s tie covers is read from R's rule")
     try:
         held = hashlib.sha512((spot / CIRCUIT_RECORD).read_bytes()).hexdigest()
     except OSError as e:
@@ -2073,10 +2107,10 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     try:
         lean = json.loads((piece_dir / PEARLPLUS_LEAN).read_text())
     except (OSError, ValueError) as e:
-        return None, f"no Lean PouwCheck.PearlPlus verdict ({PEARLPLUS_LEAN}: {type(e).__name__}: {e})"
+        return None, f"no Lean PouwVerifier.PearlPlus verdict ({PEARLPLUS_LEAN}: {type(e).__name__}: {e})"
     if not isinstance(lean, dict) or lean.get("verdict") != "accept":
         v = lean.get("verdict") if isinstance(lean, dict) else None
-        return None, f"the Lean PouwCheck.PearlPlus verdict is {v}: {lean.get('reason') if isinstance(lean, dict) else lean}"
+        return None, f"the Lean PouwVerifier.PearlPlus verdict is {v}: {lean.get('reason') if isinstance(lean, dict) else lean}"
     source = (answer["profile"] or {}).get("source")
     if (lean.get("commitment"), lean.get("source")) != (answer["commitment"], source):
         return None, (f"the Lean verdict is on run {str(lean.get('commitment'))[:16]}... at source "
@@ -2090,8 +2124,7 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     eps = _rational(work.get("epsilon"))
     if eps is None or eps != _rational(ref.get("epsilon")):
         return None, f"the Lean verdict's ε {work.get('epsilon')!r} is not the reference's {ref.get('epsilon')!r}"
-    design = summary.get("sampling_design")
-    weaker = {} if str(design).startswith("stratified-rate:") else {"weaker_tie": WEAKER_TIE.format(design=design)}
+    weaker = {} if kind == "stratified" else {"weaker_tie": WEAKER_TIE.format(design=design)}
     return {**answer, "public": {**answer["public"], "work": {k: work.get(k) for k in
                                                               ("credited", "credited_tiles", "macs", "rho", "epsilon")}
                                  | ({"give_up": work["give_up"]} if "give_up" in work else {})},
@@ -2437,7 +2470,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
            deferred: str | None = None, off_node: bool = False, tree: Mapping[str, str] | None = None,
            served_compare: str | None = None, answer: Mapping[str, Any] | None = None,
            lean: str = "no composite was read", inference_only: Mapping[str, Any] | None = None,
-           ) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
+           front_group: bool = False) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
     """The window report over ``rows`` (by runner name), its block record (None when a subprotocol about this node
     rejected, erred or was undecided), and the ``RECORD`` line's summary, composed for ``product``: each subprotocol it
     drops is its `dropped_row`, about no server. ``servers``: each piece's `piece_server`, by runner name; SPOT's
@@ -2450,7 +2483,9 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     none, which the report and the line carry; a rejection by it rejects whatever the rows say. ``inference_only``: the
     inference-only verifier's verdict, which the report carries as its ``inference-only`` row and the line under
     ``not_combined``, and which neither the combined verdict nor the block record reads: ``reject`` only where the Lean
-    verifier gave a verdict, ``error`` where it gave none (`UNDECIDED`)."""
+    verifier gave a verdict, ``error`` where it gave none (`UNDECIDED`). ``front_group``: the network attester's row is
+    over its front's group (`FRONT_GROUP`), which its row and the line's ``not_covered`` say, and the block record
+    doesn't read."""
     from verity_e2e_demo import block_record as BR
 
     host = socket.gethostname()
@@ -2462,6 +2497,9 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     at = ({k: (None, "real") for k in rows} | dict(servers or {}) | {"integrity": (node, "real")}
           | {k: (None, "real") for k in drops})
     rows = {k: dropped_row(k, product) if k in drops else dict(r) for k, r in rows.items()}
+    apart = {"communication"} & set(rows) - set(drops) if front_group else set()
+    for k in apart:
+        rows[k]["requests"] = FRONT_GROUP
     for k, r in rows.items():
         if k not in drops and "answer_from" not in r and (r.get("verdict") != "missing" or "development" in r):
             r["answer_from"] = f"{AS_WRITTEN} ({WRITTEN.get(k) or f'its piece files in {PIECES.get(k, WIPE)[1]}/'})"
@@ -2490,7 +2528,8 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     named = {"product": product, "verdicts": verdicts, "missing": missing, "elsewhere": elsewhere, "composed_on": where,
              "answers": answers, "lean": lean, **left,
              **({"dropped": {NAMES[k]: rows[k]["why"] for k in drops}} if drops else {}),
-             **({"unserved": unserved} if unserved else {}), **dev}
+             **({"unserved": unserved} if unserved else {}), **dev,
+             **({"not_covered": {NAMES[k]: FRONT_GROUP for k in apart}} if apart else {})}
     io = {} if inference_only is None else {INFERENCE_ONLY_ROW: inference_only_row(inference_only)}
     if io:
         named["not_combined"] = {"the inference-only verifier": io[INFERENCE_ONLY_ROW]["verdict"]}
@@ -2506,7 +2545,8 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
         report["protocols"] = {**rows, **io}
         return report, None, line
     extra = {subprotocols[k]: {"row": r, "server": at[k][0], "runs": r.get("runs") or [run], "source": at[k][1]}
-             for k, r in rows.items() if k != "integrity" and r.get("verdict") == "accept" and at[k][0] is not None}
+             for k, r in rows.items()
+             if k != "integrity" and k not in apart and r.get("verdict") == "accept" and at[k][0] is not None}
     composing = {**report, "protocols": {k: r if k == "integrity" else {"verdict": "missing"} for k, r in rows.items()}}
     rec = BR.from_period(composing, steps=steps, deployment=BR.REFERENCE, answer=answer, extra=extra, product=product)
     verdict = WINDOW_VERDICT.get(rec["composed"]["verdict"], rec["composed"]["verdict"])
@@ -2527,6 +2567,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     w.add_argument("serve_dir", type=Path)
     w.add_argument("--slots", type=int, default=8)
     w.add_argument("--window", type=int)
+    w.add_argument("--of-load", type=Path, help="the fixed load's lines (serve_load.py --out): the window of its requests")
+    w.add_argument("--attested", action="store_true", help="the window of the network attester's requests alone")
     g = sub.add_parser("gate")
     g.add_argument("--gate", default=os.environ.get("H1_GATE"))
     g.add_argument("--lane", default="vllm")
@@ -2722,8 +2764,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     if a.cmd == "window":
         try:
-            print(json.dumps(pick(a.serve_dir, a.slots, a.window), sort_keys=True))
-        except ValueError as e:
+            users = None if a.of_load is None else [r["user"] for r in _lines(a.of_load)]
+            if users == []:
+                raise ValueError(f"{a.of_load} names no request of the fixed load")
+            print(json.dumps(pick(a.serve_dir, a.slots, a.window, users=users, attested=a.attested), sort_keys=True))
+        except (ValueError, KeyError) as e:
             print(f"served_verdicts.py window: {e}", file=sys.stderr)
             return 1
         return 0
@@ -2871,7 +2916,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                                off_node=a.off_node, tree={"tree": a.tree, **({"tree_on": a.tree_on} if a.tree_on else {})}
                                if a.tree else None,
                                served_compare=None if a.served_compare is None else served_compare_line(a.served_compare),
-                               answer=answer, lean=lean, inference_only=io)
+                               answer=answer, lean=lean, inference_only=io,
+                               front_group=(a.serve_run / "private" / FRONT_WINDOW).is_file())
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "verdicts.json").write_text(json.dumps(report, indent=1, sort_keys=True, default=str) + "\n")
     if rec is not None:

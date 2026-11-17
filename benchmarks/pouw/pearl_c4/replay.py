@@ -77,7 +77,7 @@ SHORTCUTS = (
     ("the transcript tree over the tile leaves and the records (row_passes and R1 per row) are computed on the host after "
      "timing"),
     ("verify opens the sampled tiles' rows and words and recomputes them in the clear: its ACCEPT is replay-verified "
-     "(development shortcut; the protocol's check is a ZK proof, PouwCheck)"),
+     "(development shortcut; the protocol's check is a ZK proof, PouwVerifier)"),
 )
 
 

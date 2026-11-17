@@ -25,10 +25,10 @@ inside a slot (`Record.sameSlot`); the row's writer is that wire's, at the row's
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
-open InferenceOnlyCheck.Record (Case Front read finish sameSlot openingHeld Kind kindOf)
-open InferenceOnlyCheck.Record.SecurityProofs (read_front finish_text slotOf OneGrid slotIn_eq gridsOf_lookup sameSlot_sound
+open InferenceOnlyVerifier.Record (Case Front read finish sameSlot openingHeld Kind kindOf)
+open InferenceOnlyVerifier.Record.SecurityProofs (read_front finish_text slotOf OneGrid slotIn_eq gridsOf_lookup sameSlot_sound
   text_digits)
 open Spot.RecordText (Row Decl Fill Inputs fillAt)
 open Lean (Json)
@@ -253,4 +253,4 @@ theorem inside_writer {j tr : Json} {c : Case} (h : read j tr = .ok c) (r : Row)
       simp only [kindOf] at hk
       cases hk
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs

@@ -105,7 +105,7 @@ def test_the_configuration_is_the_tables_byte_for_byte():
 
 @pytest.mark.parametrize("demo", sorted(set(T.DEMOS) - {"onsite_full"}))
 def test_each_smaller_demo_is_the_tables_byte_for_byte_and_its_own_composite(demo):
-    """Each other demo file is the table's configuration of its subprotocols, at onsite_full's commit, whose composite
+    """Each other application's file is the table's configuration of its subprotocols, at onsite_full's commit, whose composite
     (or onsite's smaller set) is its own id; only the subprotocols it lists have parameters and pins."""
     path = ROOT / "applications" / f"{demo}.toml"
     cfg = T.configuration(K.parse(CONFIG.read_text())["program"]["commit"], demo)
@@ -709,7 +709,7 @@ def test_the_onsite_check_is_the_records_composed_verdict(tmp_path, capsys, monk
 
 
 def test_a_smaller_demos_check_reads_no_onsite_composite(tmp_path, monkeypatch):
-    """A demo whose product isn't onsite's hands the record no composite: onsite's Lean answer is not its product's."""
+    """An application whose product isn't onsite's hands the record no composite: onsite's Lean answer is not its product's."""
     monkeypatch.setattr(T, "VERDICTS_SCRIPT", stand_in(tmp_path, "record.py", RECORD % json.dumps(ALL_ROWS)))
     cfg = T.configuration(R.load(CONFIG, REG)["program"]["commit"], "onsite_compute")
     (tmp_path / "out").mkdir()
@@ -718,3 +718,21 @@ def test_a_smaller_demos_check_reads_no_onsite_composite(tmp_path, monkeypatch):
     got = T.onsite_check(cfg, tmp_path)
     assert "--composite" not in json.loads((tmp_path / "record" / "argv.json").read_text())
     assert got["product"] != T.ONSITE and got["verdict"] == "undecided" and got["reason"] == "no composite was read"
+
+
+def test_pouws_piece_hands_the_runner_the_main_file_its_challenger_writes():
+    cfg, piece = R.load(CONFIG, REG), T.PARTIES["pouw"][T.WORKERS]
+    gate = BINDINGS["challenger"]["pouw"]
+    assert "MAIN_FILE" not in piece.variables(cfg, BINDINGS)
+    assert piece.variables(cfg, {"challenger": {"pouw": {**gate, "main-file": "/run/public/challenger/main.txt"}}}
+                           )["MAIN_FILE"] == "/run/public/challenger/main.txt"
+
+
+def test_a_dry_run_counts_what_a_challenger_started_first_writes_as_bound(capsys):
+    start = R.Start({"pouw": ("gate", "peer", "key-sha512", "main-file")}, lambda c, s: None, lambda c, s: None)
+    rc, got, err = dry(capsys, reg=dataclasses.replace(REG, starts={T.CHALLENGER: start}))
+    assert rc == 0, err
+    assert {x["party"]: x.get("writes") for x in got["plan"]}[T.CHALLENGER] == {
+        "pouw": ["gate", "peer", "key-sha512", "main-file"]}
+    assert got["dry"][0]["unbound"] == sorted(set(UNBOUND) - {f"challenger.pouw.{k}" for k in ("gate", "peer",
+                                                                                              "key-sha512")})
