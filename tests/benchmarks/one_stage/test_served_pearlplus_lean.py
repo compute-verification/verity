@@ -98,7 +98,7 @@ def test_the_lean_step_writes_the_real_lean_answer_on_the_served_run_and_the_com
     piece = pieces / "pouw"
     (piece / S.PEARLPLUS_ANSWER).write_text(json.dumps(answer))
     (audit / S.WINDOW_REGISTRATION).write_text(json.dumps({"format": REG.FORMAT_V2, "previous": w, "registered": []}))
-    (audit / S.AUDIT_SUMMARY).write_text(json.dumps({"tie": {"record": w}}))
+    (audit / S.AUDIT_SUMMARY).write_text(json.dumps({"tie": {"record": w}, "audit": {"accepted": True}}))
 
     def row() -> dict:
         return S.piece_row("work", pieces, spot=audit, key_sha512=pin, lane=lane)

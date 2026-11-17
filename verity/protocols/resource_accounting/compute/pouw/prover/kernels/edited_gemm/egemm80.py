@@ -32,7 +32,7 @@ INSN = re.compile(r"/\*([0-9a-f]{4,})\*/\s+(?:@!?U?P[T0-9]+\s+)?([A-Z][A-Z0-9_.]
 
 
 def cls(op: str) -> str:
-    """The census class of a SASS opcode on sm_80 (sm_80's census: data/devices/sm_80). ALU holds every integer and
+    """The census class of a SASS opcode on sm_80. ALU holds every integer and
     logic op that isn't IMAD (on A, as the ALU pipe's measured IADD3 and LOP3); IMAD every IMAD form (IMAD.WIDE counted
     twice by `weight`); NOROW everything with no pipe row (issue only: the loads by cp.async, barriers, branches, uniform
     datapath, stores, special registers)."""

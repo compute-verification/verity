@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# sq.cu on one GPU (cwd = the source tree): squarings mod 2^$BITS - $C (default 2^512 - 569) for every (FOLD, ILP) in
+# sq.cu on one GPU (cwd = the source tree), built for ARCH (90a, 120a; where it isn't given, the node's first card's
+# name tells it): squarings mod 2^$BITS - $C (default 2^512 - 569) for every (FOLD, ILP) in
 # $FORMS, each gated against Python's pow (512 words at K = 1, 777 and 1,000) before it is timed, with the SASS opcode
 # mix of every kernel, ncu's pipe and issue counts and its stall reasons; then each pipe probe in $PROBES (P:W:A; set
 # it empty for none), its digests checked against the host's before it is timed. Timed and profiled in blocks of $TPB
@@ -14,7 +15,14 @@ export B; B=$(mktemp -d /tmp/rate-squaring.XXXXXX); trap 'rm -rf "$B"' EXIT
 export FORMS=${FORMS:-"0:1 0:2 1:1 1:2 1:4 2:1 2:2 2:4 3:1 3:2 4:1 4:2"}
 export PROBES=${PROBES-"0:16:0 0:16:16 0:16:32 1:16:0 1:16:16"}
 BITS=${BITS:-512}; C=${C:-569}; export TPB=${TPB:-128}
-nvcc -O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xptxas -v -DSQ_BITS="$BITS" -DSQ_C="$C" -o "$B/sq" $D/sq.cu \
+if [ -z "${ARCH:-}" ]; then
+  case $(nvidia-smi --query-gpu=name --format=csv,noheader -i 0 2> /dev/null || true) in
+    *H200* | *H100*) ARCH=90a ;;
+    *"RTX PRO 6000"*) ARCH=120a ;;
+    *) echo "sq: ARCH (90a, 120a) is not given and the card's name does not tell it" >&2; exit 3 ;;
+  esac
+fi
+nvcc -O3 -gencode "arch=compute_$ARCH,code=sm_$ARCH" -std=c++17 -Xptxas -v -DSQ_BITS="$BITS" -DSQ_C="$C" -o "$B/sq" $D/sq.cu \
   > "$O/build.log" 2>&1 \
   || { tail -40 "$O/build.log"; exit 4; }
 nvcc --version > "$O/nvcc.txt"

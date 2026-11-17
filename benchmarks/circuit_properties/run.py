@@ -8,7 +8,8 @@ a_out, a_in and |𝒥| per position: the slowdown calculator's `fanout`, `fanin`
 benchmarks/slowdown/data/models.toml when it has a row, and as `derived_fanout` / `derived_fanin` derive them from the
 config's own matrices (q, k, v, o, gate, up, down) otherwise and always. Each circuit's products are also checked
 whole-in-block (`measure.whole`) under two partitions: one block per root activation, and the gates cut in half. Writes
-DIR/properties.json (DIR defaults to $OUT) and prints one line per circuit.
+DIR/properties.json (DIR defaults to $OUT) and prints one line per circuit; with DIR, a run of every configuration or of
+one writes the metric (`write_metric`) and prints its line.
 """
 
 from __future__ import annotations
@@ -98,6 +99,8 @@ def main() -> int:
         (Path(a.out) / "properties.json").write_text(json.dumps(rows, indent=1, default=str) + "\n")
         if a.models == ",".join(names):
             write_metric(a.out, rows)
+        elif a.models in names:
+            write_metric(a.out, rows, configs[a.models][0]["model"])
     return 0
 
 
@@ -105,17 +108,21 @@ def main() -> int:
 METRIC = "training/smallest-product-subcircuit"
 
 
-def write_metric(out: str, rows: list[dict]) -> None:
+def write_metric(out: str, rows: list[dict], model: str | None = None) -> None:
     """s_×, the least over the circuits of `rows` (the Boolean GEMM and each configuration's layer), written into the
-    run's result under `METRIC` in its row's unit: measured, an exact count on the circuits it builds. Written only for
-    a run of every configuration."""
+    run's result under `METRIC` in its row's unit, an exact count on the circuits it builds, and printed as one line:
+    measured for a run of every configuration; for a run of one, partial, with that configuration's `model`."""
     import tomllib
 
     from verity_bench import kit
 
     rows_of = tomllib.loads(Path(__file__).with_name("metrics.toml").read_text())["metric"]
     unit = next(m["unit"] for m in rows_of if m["id"] == METRIC)
-    kit.writer(out).measurement(METRIC, min(r["s_x"] for r in rows), unit, mark="measured")
+    m = kit.writer(out).measurement(METRIC, min(r["s_x"] for r in rows), unit,
+                                    mark="measured" if model is None else "partial",
+                                    extra=None if model is None else {"model": model})
+    print(json.dumps({k: m[k] for k in ("name", "value", "unit", "mark", "model") if k in m}
+                     | {"card": m["host"].get("card")}), flush=True)
 
 
 if __name__ == "__main__":

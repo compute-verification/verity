@@ -40,4 +40,4 @@ verity bench overhead run --record RUN                        label RUN a run of
 verity bench overhead table [--json]                          γ per scheme, point and card, from runs of record alone
 ```
 
-A step runs as a `research run` on one GPU of its node through the node's `gpu-lease`; the H200's node is `vy-dc-h200`.
+A step runs as a `research run` on one GPU of its node through the node's `gpu-lease`; the H200's node is `vy-spot-glm53`.

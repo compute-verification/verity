@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# What a Commit run publishes, sourced by commit.sh and benchmarks/one_stage/a5_llama1b_h200.sh. `research run` publishes
+# What a Commit run publishes, sourced by benchmarks/one_stage/a5_llama1b_h200.sh. `research run` publishes
 # every file a script leaves under $OUT, so a script puts a file there only when PUBLISHED lists it, with the reason it
 # holds nothing of a request: no prompt, token id, seed, salt or key, no digest of one that a guess could confirm, and
 # none of the requests' lengths, limits or step rows. A file with no entry stays on the node, and the run names it.

@@ -28,6 +28,8 @@ Beside `PouwCheck.Difftest`'s, behind the same `pouw-check-difftest` (`PouwCheck
   and `period` (`key`, `ledger`, `pins`, `main`, `name`, `windows`, as `credit._period_outcomes` takes them, each execution phase's evidence
   `window`'s): `{"credited": …}`; or
   `{"refused": [code, why]}`.
+* `period-roots` (`key`, `ledger`, `name`, `roots`, as `credit.period` takes them): `Credit.period`, null, or
+  `{"refused": [code, why]}`.
 * `weights` (`window`, `layout`, `entries`, `requests`, `session`, `program`, `prefix`, as `credit._weights` takes them,
   `Credit.Internal.weights`): `{"weights": hex}`, or `{"refused": [code, why]}`.
 * `registered-file` (`descriptor` in hex, `call`, `roots` `{value: [root, ...]}`, `window`, the execution phase's open root,
@@ -80,6 +82,10 @@ def periodOf (j : Json) : Except String Json := do
   let f := PouwCheck.Difftest.get j
   PouwCheck.Difftest.refusal (fun out => Json.mkObj [("credited", out.toJson)])
     (Credit.periodCredit (← f "key") (← f "ledger") (← f "pins") (← f "main") (← f "name") (← f "windows"))
+
+def periodRootsOf (j : Json) : Except String Json := do
+  let f := PouwCheck.Difftest.get j
+  PouwCheck.Difftest.refusal (fun _ => Json.null) (Credit.period (← f "key") (← f "ledger") (← f "name") (← f "roots"))
 
 def aLinkOf (j : Json) : Except String Json := do
   PouwCheck.Difftest.refusal (fun _ => Json.null)
@@ -141,7 +147,7 @@ def commitParsersOf (j : Json) : Except String Json := do
 
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("commit-parsers", commitParsersOf), ("credit", creditOf), ("drawn", drawnOf), ("window-drawn", executionPhaseDrawnOf), ("outcome", outcomeOf),
-  ("window", executionPhaseOf), ("period", periodOf), ("a-link", aLinkOf), ("weights", weightsOf), ("registered-file", registeredFileOf), ("leaf-words", leafWordsOf),
+  ("window", executionPhaseOf), ("period", periodOf), ("period-roots", periodRootsOf), ("a-link", aLinkOf), ("weights", weightsOf), ("registered-file", registeredFileOf), ("leaf-words", leafWordsOf),
   ("passes-distinct", passesDistinctOf)]
 
 /-- `pouw-check-difftest`'s functions: `PouwCheck.Difftest.table`'s, then these. -/
