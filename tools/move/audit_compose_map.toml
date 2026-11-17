@@ -2,7 +2,7 @@
 # moves and rewrites. The composites' verdict on a served run's cases (`composite.py`, `served_composite.sh`) and the
 # cases it reads (`served_cases.py`, with `inference_only_lean.py`, which it loads by name) assemble several protocols'
 # cases, so they are compose's prover side; R2's other partition is SPOT's audit, and takes a name that is no run id.
-# Each test goes with its file. Nothing is split, edited or deleted. The format is `layout_map.toml`'s.
+# Each test goes with its file, but `test_served_cases.py`, which also reads `v1_case.py`, a script that stays. Nothing is split, edited or deleted. The format is `layout_map.toml`'s.
 
 [roots]
 old = { verity = "verity", verity_cli = "tools/verity/cli/verity_cli", research = "tools/research/src/research" }
@@ -15,7 +15,6 @@ new = { verity = "verity", verity_cli = "tools/verity/cli/verity_cli", research 
 "benchmarks/one_stage/inference_only_lean.py" = "verity/protocols/compose/prover/inference_only_lean.py"
 "benchmarks/one_stage/r2_population.py" = "verity/protocols/proofs/spot/prover/audit/other_population.py"
 "tests/benchmarks/one_stage/test_composite.py" = "tests/verity/protocols/compose/prover/test_composite.py"
-"tests/benchmarks/one_stage/test_served_cases.py" = "tests/verity/protocols/compose/prover/test_served_cases.py"
 "tests/benchmarks/one_stage/test_r2_population.py" = "tests/verity/protocols/proofs/spot/prover/test_other_population.py"
 
 [retired]
@@ -40,4 +39,3 @@ include = []
 "benchmarks.one_stage.served_cases" = "verity.protocols.compose.prover.served_cases"
 "tests.benchmarks.one_stage.test_composite" = "tests.verity.protocols.compose.prover.test_composite"
 "tests.benchmarks.one_stage.test_r2_population" = "tests.verity.protocols.proofs.spot.prover.test_other_population"
-"tests.benchmarks.one_stage.test_served_cases" = "tests.verity.protocols.compose.prover.test_served_cases"
