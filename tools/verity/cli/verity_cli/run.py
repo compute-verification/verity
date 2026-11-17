@@ -36,8 +36,9 @@ this process when all of them are here, else meeting the rest over TCP at the co
 ``listen``. Each prints a ``PARTY`` line as it finishes, with its exit code or the name it was refused by.
 
 When the verifier runs here, each period's verdict is its own: the composite of the listed subprotocols (remote or
-onsite, its id the line's ``product``), or for one of onsite's smaller sets ``undecided`` under that set's id, since no
-composite takes it, printed as a line and written to ``STATE/record/verdicts.jsonl``:
+onsite, its id the line's ``product``), or for one of onsite's smaller sets, under that set's id, ``undecided``, since no
+composite takes it, unless the table's line says who combined its verdict (``combined_by``, printed beside it), printed
+as a line and written to ``STATE/record/verdicts.jsonl``:
 
     VERDICT {"block": I, "coins": C, "components": {NAME: accept|reject|undecided|error|absent}, "product": ID,
              "reason": R, "registration": DIGEST, "run": RUN, "simulated": [...], "verdict": V}
@@ -408,10 +409,14 @@ def execute(cfg: Mapping[str, Any], reg: Registry, state: Path, chosen: Sequence
     lines = [{**x, "run": run["run"], "simulated": list(premises)}
              for x in (r.outcomes[VERIFIER]["outcome"] or {}).get("verdicts", [])]
     if (cid := K.composite(cfg["protocols"], reg.components)) in K.UNACCEPTED:
-        lines = [{**x, "product": cid, "verdict": "undecided", "reason": x.get("reason") or f"no composite takes {cid}"}
+        lines = [{**x, "product": cid} if x.get("combined_by") else
+                 {**x, "product": cid, "verdict": "undecided", "reason": x.get("reason") or f"no composite takes {cid}"}
                  for x in lines]
     for line in lines:
         say("VERDICT", line)
+        if line.get("combined_by"):
+            print(f"verity run: block {line['block']}'s verdict {line['verdict']} is combined by "
+                  f"{line['combined_by']}; no composite takes {line['product']}", file=sys.stderr)
     (state / "record").mkdir(parents=True, exist_ok=True)
     (state / "record" / "verdicts.jsonl").write_text("".join(json.dumps(x, sort_keys=True) + "\n" for x in lines))
     verdicts = {x["verdict"] for x in lines}

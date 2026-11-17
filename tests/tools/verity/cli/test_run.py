@@ -520,6 +520,20 @@ def test_a_smaller_sets_record_never_carries_onsites_id(tmp_path, capsys, cid):
     assert "verity/onsite/v0" not in out
 
 
+@pytest.mark.parametrize("verdict, rc", [("accept", 0), ("reject", 1)])
+@pytest.mark.parametrize("cid", sorted(K.UNACCEPTED))
+def test_a_smaller_sets_verdict_the_table_combined_is_passed_through_with_who_combined_it(tmp_path, capsys, cid,
+                                                                                          verdict, rc):
+    cfg = config(K.UNACCEPTED[cid])
+    by = f"python: no Lean verifier takes {cid}"
+    line = {**accepting(cfg, "verity/onsite/v0"), "verdict": verdict, "combined_by": by}
+    got, lines = run(tmp_path, verifier_says(line), cfg=cfg)
+    captured = capsys.readouterr()
+    assert got == rc and [(x["product"], x["verdict"], x["combined_by"]) for x in lines] == [(cid, verdict, by)]
+    assert f"verity run: block 0's verdict {verdict} is combined by {by}; no composite takes {cid}" in captured.err
+    assert said(captured.out, "VERDICT") == lines and "verity/onsite/v0" not in captured.out
+
+
 def test_verity_run_refuses_a_configuration_that_is_no_composite(tmp_path, capsys):
     cfg = config(REMOTE)
     cfg["protocols"] = ["sampled-proofs"]

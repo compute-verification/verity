@@ -1,7 +1,8 @@
 # The served window under the network certifier, SPOT and the memory wipe (verity/onsite-network/v0, a
 # deployment of its own, never onsite), each party on its machine, and the key the auditor pinned for
 # its memory challenger.
-# `verity run` records each period's verdict under that id, undecided: no composite takes it.
+# `verity run` records each period's verdict under that id, undecided unless the line says who
+# combined it: no composite takes it.
 format = "verity/config/v0"
 protocols = ["sampled-proofs", "certifier", "wipe"]
 
