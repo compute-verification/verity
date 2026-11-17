@@ -11,7 +11,7 @@ link of `S`. `RegisteredLinkRated` states what its acceptance says of that link'
 `RegisteredLinkRatedNontrivial` are its witnesses.
 
 What these do not say: anything of another link of `S`, which may state no rate. The registration's check on a Site
-(`Core.Site.Entry.Kinds`) accepts a link with no rate wherever the link carries `unmediated`, a certifier's own among
+(`Core.Site.Entry.Kinds`) accepts a link with no rate wherever the link carries `unmediated`, a network attester's own among
 them, so a registered Site is not rated on every link. Nor that the rate is positive, which `registered` does not hold
 for a Site the registration did not accept, nor that it is the link's true line rate.
 -/
@@ -25,7 +25,7 @@ open NetworkCheck (Registered)
 /-- **The named link states a rate.** For every Site `S`, registered or not, and every `head`, `link` and `key`: where
 `registered` reads `link` off `S`, `S` has a link under that id (the first, where `S` gives an id twice), it joins a
 network attester and a host, and it states a rate (`β` some), the one `registered` returns. So a link with no rate is
-never read as one: `registered` refuses it by name. This is of the named link only; `S`'s other links, a certifier's
+never read as one: `registered` refuses it by name. This is of the named link only; `S`'s other links, a network attester's
 other half to the outside and the links of another certifier among them, may state none. -/
 def RegisteredLinkRated : Prop :=
   ∀ (S : Core.Site) (head link key : String) (r : Registered),

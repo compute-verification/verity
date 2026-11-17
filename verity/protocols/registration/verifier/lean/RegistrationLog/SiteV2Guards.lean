@@ -79,7 +79,7 @@ private def withDisk : Registration.Auditor :=
   { auditor with memory := ("disk0", ⟨"node0", 28, 1 <<< 40⟩) :: auditor.memory }
 #guard decide (Entry.Rates withDisk empty (entry [dram (some 6554), disk (some 28)]))
 #guard !decide (Entry.Rates withDisk empty (entry [dram (some 6554), disk none]))
--- a host, a device, a certifier or a link's end states no rate
+-- a host, a device, a network attester or a link's end states no rate
 #guard !decide (Entry.Rates auditor empty { locs := [root, { host with bw := some 1 }] })
 -- the refusal an entry gets is `figures`' own
 #guard decide (Entry.Rates auditor empty { locs := [root] })
@@ -194,7 +194,7 @@ private def keyed : Registration.Auditor := keyedAt root2
 #guard (bare (some "a stand-in")).toJson.compress ==
   "{\"beta\":1000000000,\"ends\":[\"node0\",\"outside\"],\"id\":\"eth0\",\"latency\":0," ++
   "\"unmediated\":\"a stand-in\"}"
--- an auditor's device: at the site, the auditor's own, with its key; a certifier or a challenger may be in it; it is
+-- an auditor's device: at the site, the auditor's own, with its key; a network attester or a challenger may be in it; it is
 -- under no host of the prover's, holds no device and no memory leaf, and no link ends at it
 private def vm (parent : String := "site0") : Loc :=
   { id := "vm0", kind := .auditorHost, parent := some parent, owner := .auditor, key := "k1", scheme := root2,

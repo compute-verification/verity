@@ -147,7 +147,7 @@ and `LayerCommitted`, the service committing each value it writes by its IR cut,
 proof block reads by the sample. A window with one salt, opened before its activations are committed, doesn't meet
 `LayerCommitted`, so it is out of scope.
 
-*Live coins only.* Every number below is for live windows. A certified window's noise comes from the certifier's
+*Live coins only.* Every number below is for live windows. A certified window's noise comes from the network attester's
 salt, which reaches the prover before its operands are committed, so the window is seeded. A live window needs the
 live challenger's coins, under a coin commitment the challenger signs with its LMS key and the verifier reads. Coins
 from a challenger that runs in the prover's process are seeded. A window whose salt and round coins come from one live
@@ -177,7 +177,7 @@ a tile of words, which COMPILE's `salt-flow` and `noise-in-z` checks are meant t
 live, `DeadConeDead` fails, the premise is false and the statement says nothing. Only where every such tile is live,
 in every window, does a positive `D₀` merely add `D₀/u` to `ε(j)`, a term that doesn't shrink with `j`.
 
-*Liveness.* An honest stream whose execution phases fail independently at rate `f` (a late proof, a certifier or a
+*Liveness.* An honest stream whose execution phases fail independently at rate `f` (a late proof, a network attester or a
 node fault; no statement gives a rate) completes a period of `n` with probability `(1 − f)^n`, so half its periods
 fail from about `f = ln 2/n`. A failed period is credited for its prefix and the stream opens the next, each paying
 `Λ·ln(1/δ_s)` once, so over a stream the logical term is `Λ·ln(1/δ_s)/(u·E[j])`, with

@@ -25,7 +25,7 @@ namespace NetTiming
 
 open Finset
 
-/-! ## A certifier -/
+/-! ## A network attester -/
 
 /-- The witness sender's action: how many frames to release (0, 1 or 2), a jitter bit, and whether to fault. -/
 structure WAct where
@@ -100,7 +100,7 @@ theorem witnessCertifier_assumptions :
     simp only [witnessCertifier, witnessObs]
     exact (as.getD k default).jit.2
 
-/-- The witness certifier's jitter takes both values. -/
+/-- The witness network attester's jitter takes both values. -/
 theorem witnessCertifier_jitter_varies :
     (witnessCertifier.obs 0 [()] [⟨0, 0, false⟩]).jitter ≠ (witnessCertifier.obs 0 [()] [⟨0, 1, false⟩]).jitter := by
   simp [witnessCertifier, witnessObs]
@@ -157,7 +157,7 @@ def rDec (ws : List (Obs 1 1 2)) : Fin 3 → Fin 3 := fun k =>
 /-! ## A joint witness for the ingress bound
 
 Read inward (`NetTiming.Protocol.Ingress`): the outside's message is `z`, and its sender delivers `z k` frames `[true]`
-at step `k`; X's device is `rOp`, reacting to the last count it saw. The certifier is the witness certifier without jitter,
+at step `k`; X's device is `rOp`, reacting to the last count it saw. The network attester is the witness certifier without jitter,
 so J holds with `D = 1`, and W4's allocation is the full two slots. Every hypothesis of
 `Guarantees.EncardIngressDecodableLe` holds at once, and all `27 = (2 + 1)^3` messages are decoded: the bound is met
 exactly. -/
@@ -196,12 +196,12 @@ theorem ingress_witness_tight :
 
 /-! ## An allocation below the slot count
 
-The link has two slots and an allocation of one frame: the certifier releases at most one frame per bucket, whatever the
+The link has two slots and an allocation of one frame: the network attester releases at most one frame per bucket, whatever the
 sender asks, and the outside asks for both slots to send a 1. Every hypothesis of `Guarantees.EncardIngressDecodableLe`
 holds with `r = 1 < S = 2`, and all `8 = (1 + 1)^3` messages are decoded: the bound is met exactly, and it is below the
 `(2 + 1)^3 = 27` that `r = S` gives. -/
 
-/-- The allocated certifier's network certificate: `min(count, 1)` frames `[true]`, left-packed, no jitter, complete statuses. -/
+/-- The allocated network attester's network certificate: `min(count, 1)` frames `[true]`, left-packed, no jitter, complete statuses. -/
 def aObs (k : ℕ) (as : List WAct) : Obs 1 1 2 where
   rows _ s := if (s : ℕ) < min ((as.getD k default).count : ℕ) 1 then some [true] else none
   jitter := 0

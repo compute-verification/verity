@@ -9,7 +9,7 @@ public import Definitions.ResourceAccounting.Guarantees.RegisteredSite
 Stated in the actual-circuit model; `B4Via` is not proved here.
 
 A strategy's gates sit at any leaf, a device or a memory leaf as much as a host, while a registered link ends only at
-a host, a certifier, a challenger or the outside. A map of leaves `f` sends each leaf to the leaf a link may end at for
+a host, a network attester, a challenger or the outside. A map of leaves `f` sends each leaf to the leaf a link may end at for
 it. At a Site that map is the Site's own, `Site.linkPlace` (each device and memory leaf to its host, read through the
 Site's `host?`), and the registration fixes it, with the links' ends and capacities, before any coin: no run, and so
 no prover, chooses where its signals count.
@@ -17,7 +17,7 @@ no prover, chooses where its signals count.
 **A link's alphabet is counted once at the host, over every leaf `f` sends there.** What crosses a link toward a host
 is charged whichever device inside reads it, and a signal between two leaves of one host crosses no link and is
 charged nothing, which is right only because the host is inside the prover's boundary. The host's routing is the
-prover's, and nothing here trusts it: a location and the certifiers are asked to hold each leaf with its host.
+prover's, and nothing here trusts it: a location and the network attesters are asked to hold each leaf with its host.
 
 * `Actual.Run.signalVia`: what link `e` delivers at the link end `y` at a tick, each source with the leaf that reads it.
 * `AlphabetVia`, `DeclaredLinksVia`: `Alphabet` and `DeclaredLinks` with each wire taken between its two ends' link
@@ -93,11 +93,11 @@ is quantified after the Site, cannot choose where its signals count.
 
 A link's alphabet is counted once at the host, over every leaf `Site.linkPlace` sends there. What crosses a link toward
 a host is charged whichever device inside reads it, and a signal between two leaves of one host crosses no link and is
-charged nothing, which is right only because the host is inside the prover's boundary: the certifiers and the location
+charged nothing, which is right only because the host is inside the prover's boundary: the network attesters and the location
 are asked to hold each leaf with its host, and the host's routing is never trusted. On a Site whose every place is its
 own link end it is `B4` at the Site's places and links (`B4UnderId`).
 
-**What the rated hypothesis costs.** `B4Under` chooses the location and the certifiers inside, so `β` is asked to be
+**What the rated hypothesis costs.** `B4Under` chooses the location and the network attesters inside, so `β` is asked to be
 the registered rate at every link, and of a registered Site with any unrated link this says nothing. The registration's
 check does not discharge it: it asks a rate only of a link with no `unmediated` (stated beside `Properties.Core.Site`,
 not proved), the network check's `registered` holds only the one certifier link it is named to a rate

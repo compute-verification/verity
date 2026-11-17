@@ -25,7 +25,7 @@ META `program_sha512`), and `f` then projects a declaration to its program.
 * `Registration.DeclaredIsParams`: the Program each member's circuit file the verifier reads binds is the program the
   prefix declares for the day the window lies in.
 * `Registration.CertifiedIsParams`: a network attester check's links, each with its key, are exactly the registered
-  boundary links with a certifier at an end, each with the key pinned for its certifier.
+  boundary links with a network attester at an end, each with the key pinned for its certifier.
 * `Registration.RootIsRegistered`: a θ entry an answer names, root, rows and domain, is the one θ registers for its
   value.
 * `Registration.KeyIsRegistered`: the key an answer's check ran under is an auditor's device's registered key at the
@@ -86,8 +86,8 @@ def DeclaredIsParams (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (m 
     (cut : m.span.Cut n) (w : TickSpan) (D : Digests) (c : Composite) (log : Registration) (h : String) : Prop :=
   AtHead D c log h (DeclaredIn V θ F m cut w)
 
-/-- **The links network attesters certify, each with its certifier's key**: the id of a boundary link of the view's
-Site (`Site.Boundary`) with a network attester at an end, beside that certifier's registered key (`Site.Loc.key`: its
+/-- **The links network attesters certify, each with its network attester's key**: the id of a boundary link of the view's
+Site (`Site.Boundary`) with a network attester at an end, beside that network attester's registered key (`Site.Loc.key`: its
 LMS public key, I ‖ T[1], in lower-case hex, which registration's `owner` check holds to the auditor's own). -/
 def certifiedKeys (v : View) : Set (String × String) :=
   {lk | ∃ k ∈ v.site.links, v.site.Boundary k ∧
@@ -100,12 +100,12 @@ a registered certified link the check doesn't read fails it as a link the check 
 reading no link meets it only where no certified link is registered.
 
 The check's parameters hold one key today, so it holds only where every registered certifier pins that key. Once the
-certifier's parameters carry key entries (each a key, its session and its start), this becomes per entry: each entry's
+network attester's parameters carry key entries (each a key, its session and its start), this becomes per entry: each entry's
 key pinned for its link in the prefix that entry's head names.
 
-No theorem reads it, and the certifier's check doesn't read the registration: its link names and key are its
+No theorem reads it, and the network attester's check doesn't read the registration: its link names and key are its
 parameters. The code reads both off the registered Site (`NetworkCheck.Registered.registered`), but nothing holds the
-check's parameters to that reading. It becomes a lemma when the certifier's parameters are the ones
+check's parameters to that reading. It becomes a lemma when the network attester's parameters are the ones
 `NetworkCheck.Registered.registered` returns at an accepted log's view, with a property that this reading is
 `certifiedKeys`. -/
 def CertifiedIn (p : NetworkCheck.Check.Params) (v : View) : Prop :=

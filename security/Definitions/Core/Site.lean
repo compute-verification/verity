@@ -31,10 +31,10 @@ counts are public.
 * **Links** (`Site.Link`): two ends, each a location or `outside`, the rest of the world, with a capacity `β` in bits a
   second each way and a latency in the Site's units of time. A network attester is the leaf that splits an uplink: one
   link from a host to it, one from it to the outside. The prover's boundary links are a host's links to the outside or
-  to a certifier (`Site.Boundary`), and a link is certified when a certifier is at one of its ends (`Site.Certified`).
+  to a network attester (`Site.Boundary`), and a link is certified when a network attester is at one of its ends (`Site.Certified`).
   A link may say why no certifier splits it (`Site.Link.unmediated`): onsite a boundary link that is not certified
   says so, and a link states no capacity only where it says so. The checks ask no more of it: a link that says so may
-  be any link, a certifier's own among them, at a capacity or at none.
+  be any link, a network attester's own among them, at a capacity or at none.
 
 The Site is folded from an append-only log, **the registration** (`Verity.Registration`), whose entries each have a
 kind (`Registration.Entry`): the site entry (`Registration.Entry.site`), which adds sheets, locations and links
@@ -120,7 +120,7 @@ def Kind.parents : Kind → List (Option Kind)
   | .auditorHost => [some .site]
   | .outside => []
 
-/-- The pairs of kinds a link may join, in either order: two hosts, a host and the outside, a certifier and a host or
+/-- The pairs of kinds a link may join, in either order: two hosts, a host and the outside, a network attester and a host or
 the outside, and a memory challenger and a host. No link ends at an auditor's device. -/
 def Kind.links : List (Kind × Kind) :=
   [(.host, .host), (.host, .outside), (.certifier, .host), (.certifier, .outside), (.challenger, .host)]
@@ -217,7 +217,7 @@ def SCHEMES : List String := ["lms-sha512/n64-w1-h20/v0", "hss-lms-sha512/n64-w1
 /-- A link between two ends, with its capacity `β` in bits a second each way and its latency in the Site's units of
 time. `unmediated` is the reason no certifier splits the link, where the link states one. A link states no capacity
 (`β` none) only where it carries `unmediated`: an interface that reads no line rate has none, and no amount is read
-from it. The checks hold `unmediated` to nothing else: a link that carries it may be any link, a certifier's own among
+from it. The checks hold `unmediated` to nothing else: a link that carries it may be any link, a network attester's own among
 them, at a capacity or at none. -/
 structure Link where
   id : String
@@ -378,10 +378,10 @@ def held (i : String) : ℕ := ((S.locs.filter fun x => x.kind = .memory ∧ x.p
 def Joins (k : Link) (a b : Kind) : Prop :=
   (S.kind? k.ends.1, S.kind? k.ends.2) = (some a, some b) ∨ (S.kind? k.ends.1, S.kind? k.ends.2) = (some b, some a)
 
-/-- **A boundary link** of the prover's: a host's link to the outside, or to the certifier that splits its uplink. -/
+/-- **A boundary link** of the prover's: a host's link to the outside, or to the network attester that splits its uplink. -/
 def Boundary (k : Link) : Prop := S.Joins k .host .outside ∨ S.Joins k .certifier .host
 
-/-- **A certified link**: a certifier is at one of its ends. -/
+/-- **A certified link**: a network attester is at one of its ends. -/
 def Certified (k : Link) : Prop := S.kind? k.ends.1 = some .certifier ∨ S.kind? k.ends.2 = some .certifier
 
 /-- The far ends of `i`'s links: for each link with an end at `i`, its other end. -/
@@ -417,7 +417,7 @@ for a composite. The code's `Core.Site.Registration.Composite` is this type, `Li
 these three. -/
 abbrev Composite : Type := List String
 
-/-- **Onsite**, the composite of an auditor with devices at the datacenter: network certification, the inference-only
+/-- **Onsite**, the composite of an auditor with devices at the datacenter: network attestation, the inference-only
 policy, PoUS, PoUW, PoUB, SPOT and the wipe. Its log's boundary links the auditor's certifiers split and its
 memory the auditor's challengers reach (`Site.Entry.Covered`, `Site.Entry.Reached`). -/
 def Composite.onsite : Composite :=

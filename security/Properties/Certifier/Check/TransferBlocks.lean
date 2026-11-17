@@ -9,7 +9,7 @@ public import Lms.Sign
 The property of `NetworkCheck.TransferBlocks.verdict`, the verdict of record on one execution phase of N2
 (`service.OF_RECORD` in `verity/protocols/accounting/certifier/verifier/service.py`), stated against its functions as they run: for
 every case, if the verdict accepts, the execution phase's proof block was proved, its rows opened to an output word of
-3, both certificates are the certifier's, its declared sync is one of Σ_sync (on a network attester link, which
+3, both certificates are the network attester's, its declared sync is one of Σ_sync (on a network attester link, which
 declares none, nothing is asked of the syncs, and the public row its ``pub`` commitment opens to holds both ends' grids
 at the network attester's parameters digest), and its public outputs are verdict 1 and deadline 1.
 `Proofs.Properties.Certifier.Check.TransferBlocks` proves it.
@@ -19,7 +19,7 @@ verdict's own terms. The public row (`pubRow`), the commitments' parse (`commitm
 certificate's message are the code's own functions, read as they are.
 
 Its two lemmas (`Proofs.Properties.Certifier.Check.TransferBlocks`) read the predicates below that, which put another
-function in the verdict's place (`TransferBlocksAcceptMeansBy`, `AcceptsAll`) and say what the certifier's device signs
+function in the verdict's place (`TransferBlocksAcceptMeansBy`, `AcceptsAll`) and say what the network attester's device signs
 (`CertifierSigned`): the honest one, that an execution phase the property's conclusion holds of is accepted, and on a
 network attester link one whose certificates the device signed whatever its syncs; the nontrivial one, that no verifier
 accepting every execution phase has the property.
@@ -53,15 +53,15 @@ def ExecutionPhaseOpened (c : Case) : Prop :=
     c.units[0]? = some u ∧ commitments file u = some [bcPub, bcWit, bcOut] ∧
     CommitsRow row (8 * row.size) c.saltPub bcPub ∧ CommitsRow (le 2 3) outBits c.saltOut bcOut
 
-/-- Certificate `x` is the certifier's for end `d` (its code: egress 0, ingress 1) of the execution phase: it names the
+/-- Certificate `x` is the network attester's for end `d` (its code: egress 0, ingress 1) of the execution phase: it names the
 link, the end and the window, carries the key's identifier, and its signature decodes and verifies under the key over
-`certificateMessage` of its fields in the certifier session. -/
+`certificateMessage` of its fields in the network attester session. -/
 def ExecutionPhaseCertificate (c : Case) (d : Nat) (x : NetworkCheck.Check.Certificate) : Prop :=
   x.link = c.link ∧ x.direction.code = d ∧ x.window = c.window ∧ x.keyId = c.key.extract 0 16 ∧
     ∃ m sig, certificateMessage x.keyId c.session x.link x.direction x.window x.digest = .ok m ∧
       Lms.Signature.decode c.lms x.signature = .ok sig ∧ Lms.verify c.lms c.key m sig = .ok true
 
-/-- There are two certificates, egress first, each the certifier's for its end of the execution phase. -/
+/-- There are two certificates, egress first, each the network attester's for its end of the execution phase. -/
 def ExecutionPhaseCertified (c : Case) : Prop :=
   c.certificates.size = 2 ∧ ∀ d < 2, ∃ x, c.certificates[d]? = some (some x) ∧ ExecutionPhaseCertificate c d x
 
@@ -90,7 +90,7 @@ network attester link, no sync asked), and its public outputs are verdict 1 and 
 def TransferBlocksAcceptMeans : Prop :=
   ∀ c : Case, (verdict c).map Verdict.accepted = .ok true → ExecutionPhaseAccepted c ∧ ExecutionPhaseVerdict c
 
-/-! ## Another verifier in the verdict's place, and the certifier's device -/
+/-! ## Another verifier in the verdict's place, and the network attester's device -/
 
 /-- `ExecutionPhaseVerdict` with `v`'s result in place of the verdict's. -/
 def ExecutionPhaseVerdictBy (v : Case → Flock.V Verdict) (c : Case) : Prop :=
@@ -105,7 +105,7 @@ def TransferBlocksAcceptMeansBy (v : Case → Flock.V Verdict) : Prop :=
 def AcceptsAll (v : Case → Flock.V Verdict) : Prop :=
   ∀ c : Case, (v c).map Verdict.accepted = .ok true
 
-/-- The execution phase's two certificates as the certifier's device issues them under its key `k` (on a network
+/-- The execution phase's two certificates as the network attester's device issues them under its key `k` (on a network
 attester link, where it functions as an active network attester): the link's key is `k`'s public key, and each end's
 certificate (egress first) names the link, the end and the window, carries `k`'s identifier, and its signature is the
 encoding of the one `Lms.signAt` gives, at a leaf of `k`, over the certificate's message in the session. -/

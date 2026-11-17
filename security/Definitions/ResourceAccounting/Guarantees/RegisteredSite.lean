@@ -41,7 +41,7 @@ def Placed.onto {L L' : Type*} (A : Placed L) (f : L → L') : Placed L' :=
       exact Fin.ext e.2.1 }
 
 /-- **A strategy placed at the places a link may end at**: in every run, every gate is at a place that is the one a
-link may end at for itself (`Site.linkPlace`). On a valid registration's Site that is a host, a certifier, a
+link may end at for itself (`Site.linkPlace`). On a valid registration's Site that is a host, a network attester, a
 challenger, a site or the outside, and never a device or a memory leaf: a host with everything in it is one leaf of
 the model, and a run with a gate at a device or at a memory leaf is not placed so. -/
 def AtLinkEnds (S : Verity.Site) {Ω : Type*} (R : Ω → Actual.Run S.Place) : Prop :=
@@ -64,7 +64,7 @@ circuit `A` placed on the Site's places, a device or a memory leaf as much as a 
   and then no limit is stated across it.
 * **The wires run on the registered links** (`Placed.Links` at the Site's links and `β`, the one physical premise). It is
   taken of `A`'s image under `Site.linkPlace`, which sends each device and each memory leaf to its host (the Site's
-  own `host?`) and every other place to itself, since a registered link ends at a host, a certifier, a challenger or
+  own `host?`) and every other place to itself, since a registered link ends at a host, a network attester, a challenger or
   the outside: a wire between two places of one host needs no link, and every other wire between two places runs on
   a registered link between the places a link may end at for them, within the link's capacity.
 * **The subtree holds each host whole** (`Site.HostsWhole`), so that what leaves it crosses a link. A subtree at a
@@ -76,7 +76,7 @@ circuit `A` placed on the Site's places, a device or a memory leaf as much as a 
 
 The limit is read off the Site: it has no parameter but the Site and the place. Where a network attester stands in
 front of a host without splitting its interface, the registration holds the host's own links to the outside and,
-beside them, the host's link to the certifier and the certifier's to the outside, each at the interfaces' rates
+beside them, the host's link to the network attester and the network attester's to the outside, each at the interfaces' rates
 summed. The limit of that host's subtree, and of its site's, then counts the interfaces' rates twice, and the bound
 is loose there by up to a factor of two. -/
 def EgressRegistered : Prop :=
@@ -87,17 +87,17 @@ def EgressRegistered : Prop :=
       A.egress (S.placesIn (S.under i)) (Set.Ico a b) ≤
         linkCapacity S.placeEnds β (S.placesIn (S.under i)) * (b - a)
 
-/-- **The leak limit as a sum over the trusted devices.** In the model: the certifiers `cert`; the memory challengers
-`chal` that are trusted devices, apart from the certifiers; the location `X`; and the sinks `sink`, apart from `X`,
-sealed: the links with exactly one end among the sinks and no end at a certifier, at a challenger of `chal` or in `X`
+/-- **The leak limit as a sum over the trusted devices.** In the model: the network attesters `cert`; the memory challengers
+`chal` that are trusted devices, apart from the network attesters; the location `X`; and the sinks `sink`, apart from `X`,
+sealed: the links with exactly one end among the sinks and no end at a network attester, at a challenger of `chal` or in `X`
 have no capacity (`Covered` at the sinks). Under `B4`'s premises at the trusted devices `cert ∪ chal` and the location
-`X ∪ sink`, with each certifier's record over `[a, b)` within `K` and each challenger's of `chal` within `c`
+`X ∪ sink`, with each network attester's record over `[a, b)` within `K` and each challenger's of `chal` within `c`
 (`RecordsWithin`), what the outside of `X`, the sinks and the trusted devices does during `[a, b)` takes at most
 `2 ^ (∑ K + jitter · buckets · #cert + β° (b − a) + challengerTerm)` values, with `β°` the capacity of the links across
 `X`'s boundary with no certifier, challenger or sink at an end (`uncertifiedLinkCapacity`).
 
 A sink adds nothing, and nothing is asked of what it does, only of its links. What the sinks do is not on the left
-side: this says nothing of what a sink learns. A challenger of `chal` is asked what a certifier is (`TrustedUnits`),
+side: this says nothing of what a sink learns. A challenger of `chal` is asked what a network attester is (`TrustedUnits`),
 and its whole cost is the last summand (`challengerTerm`), which is `0` when `chal` is empty. `K` and `c` are
 parameters: this gives no device's record limit a value. -/
 def LeakParts : Prop :=
@@ -120,7 +120,7 @@ challengers (`Site.challengersOf`) that holds every shared one (`Site.sharedOf`)
 subtree's certifiers with `units`; the location is the subtree's prover places with the other challengers, each a
 sink. Under `B4`'s premises there, with each trusted device's record over `[a, b)` within `K` (`RecordsWithin`), what
 the outside does during `[a, b)` takes at most `2 ^ (∑ K + jitter · buckets · # + β° (b − a))` values, the sum and the
-count over the certifiers and `units`, with `β°` the capacity of the registered links with exactly one end among the
+count over the network attesters and `units`, with `β°` the capacity of the registered links with exactly one end among the
 subtree's prover places and none of the subtree's auditor's devices at either end (`uncertifiedLinkCapacity` at the
 Site's links).
 
@@ -140,7 +140,7 @@ unmediated link may be unrated, and then no limit is stated across it.
 
 **A host is one leaf.** The strategy is placed at the places a link may end at (`AtLinkEnds`): a host's own work, its
 devices' and its memory leaves' are all gates at the host. The links premise (`DeclaredLinks`) asks a registered link
-between the two leaves of every wire, and a registered link ends at a host, a certifier, a challenger or the
+between the two leaves of every wire, and a registered link ends at a host, a network attester, a challenger or the
 outside, so a run with a wire into or out of a device's own leaf meets it at no valid Site. A run with a gate at a
 device or at a memory leaf is outside this statement: the leak limit is not stated of it. -/
 def LeakPartsRegistered : Prop :=

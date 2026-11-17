@@ -14,7 +14,7 @@ import Mathlib.Data.Set.Card
 * `Records.Toy.recordsWithin`: over the toy's four runs a device's record takes at most two values, the size of its
   one-bit format (`encard_range_bool_le`).
 * `LeakPartsRegistered_honest`: at the example onsite log, which is valid, and the subtree at its host `node0` with no
-  memory challenger a trusted device, the toy's strategy, its gates at the host and at the certifier's place, is
+  memory challenger a trusted device, the toy's strategy, its gates at the host and at the network attester's place, is
   placed at the places a link may end at and has each trusted device's record within one bit, and the subtree has a
   trusted device.
   So the guarantee's three scope premises, `Registration.Valid`, `AtLinkEnds` and `RecordsWithin`, hold together at
@@ -104,7 +104,7 @@ open Verity ResourceAccounting.Records
 
 /-- **`LeakPartsRegistered`'s honest lemma**: the example onsite log is valid; at its Site and the subtree at `node0`,
 with no memory challenger a trusted device, the toy's strategy is placed at the places a link may end at, its gates
-at a host and at the certifier's place, none at a device or a memory leaf; each trusted device's record over
+at a host and at the network attester's place, none at a device or a memory leaf; each trusted device's record over
 `[0, 1)` is within one bit; and the subtree has a trusted device, its certifier. -/
 theorem LeakPartsRegistered_honest :
     Registration.Valid Registration.Example.digests Registration.Example.auditor .onsite

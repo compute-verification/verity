@@ -9,7 +9,7 @@ public import Definitions.Registration.Guarantees
 boundary links (`Site.Boundary`). At a small onsite site (`Registration.Witness`):
 
 * `RegistrationSound_honest`: its log passes the check, and its Site has a device and a boundary link, the host's
-  uplink to the certifier that splits it.
+  uplink to the network attester that splits it.
 * `RegistrationSound_nontrivial`: the view of a log whose device names no sheet fails the registered facts, so the
   conclusion fails for a check that accepts every log.
 
@@ -30,7 +30,7 @@ def sheet : Sheet := ⟨⟨"sim-int8", 1000, fun _ => 64000⟩, 3200, 2 ^ 25, 64
 log. -/
 def digests : Digests := ⟨(·.sku), (·.previous ++ "+"), fun _ => "genesis"⟩
 
-/-- The auditor: its data sheet for the one SKU, a tenth's tolerance, and its certifier's key. -/
+/-- The auditor: its data sheet for the one SKU, a tenth's tolerance, and its network attester's key. -/
 def auditor : Auditor :=
   { sheet := fun s => if s = sheet.sku then some sheet else none, tolerance := ⟨1 / 10⟩,
     key := fun i => if i = "cert0" then some "key0" else none }
@@ -38,10 +38,10 @@ def auditor : Auditor :=
 /-- The device, on the host, naming the sheet. -/
 def gpu : Loc := { id := "gpu0", kind := .accelerator, parent := some "node0", sheet := sheet.sku }
 
-/-- The host's uplink, to the certifier that splits it. -/
+/-- The host's uplink, to the network attester that splits it. -/
 def uplink : Link := { id := "uplink0", ends := ("node0", "cert0"), β := some 100000, latency := 100000 }
 
-/-- The site's one entry: the site, a host with the device, and the certifier on the host's uplink to the outside. -/
+/-- The site's one entry: the site, a host with the device, and the network attester on the host's uplink to the outside. -/
 def entry : Entry := .site "genesis"
   { sheets := [sheet]
     locs := [{ id := "site0", kind := .site }, { id := "node0", kind := .host, parent := some "site0" }, gpu,

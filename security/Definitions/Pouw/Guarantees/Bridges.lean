@@ -19,7 +19,7 @@ Stated in the actual-circuit model; none is proved here.
   most `T` at every oracle and salt is accepted while `T < (1 − γ)(1 − ε_s)·W` with probability at most
   `(1 − ε_s)^t + ε(q, N)`.
 * `B4` (egress factoring, reduced to the assumptions), across `X`'s secret inputs: under the named physical premises
-  `CausalStrategy`, `DeclaredLinks`, `TrustedUnits` and `Secrets` (each certifier's sends during `[a, b)` a
+  `CausalStrategy`, `DeclaredLinks`, `TrustedUnits` and `Secrets` (each network attester's sends during `[a, b)` a
   function of its own record before `b`, its gates in declared record cells, and of its own jitter word; the strategy
   varies only `X`'s secrets), what the outside does during `I` takes at most (the number of records placed in `I`) ×
   `2^{res_out}` values, `res_out` being `log₂ χ` bits a bucket and certifier plus `β°_X |I|`. Per run, a width bound
@@ -69,11 +69,11 @@ def pouwRow : Prop :=
 /-- **B4.** For a strategy `S` over a causal world (`CausalStrategy`: causal from every tick, each run causal at `ℓ`),
 on links as declared (`DeclaredLinks`: alphabets across the strategy, each run's wires on declared links within
 capacity), with the trusted devices trusted across it (`TrustedUnits`, record cells `record`), varying only the secret
-inputs of a location `X` apart from the certifiers `cert` (`Secrets`: what the certifiers and the outside
-`O = (X ∪ cert)ᶜ` can tell at `a` doesn't depend on the coins; the certifiers' record placed before `a` is part of the
+inputs of a location `X` apart from the network attesters `cert` (`Secrets`: what the network attesters and the outside
+`O = (X ∪ cert)ᶜ` can tell at `a` doesn't depend on the coins; the network attesters' record placed before `a` is part of the
 former): what `O` does during `I = [a, b)` takes at most (the number of records placed in `I`) × `2^{res_out}` values,
 with `res_out = jitter · (buckets of I) · #cert + β°_X (b − a)`, a jitter word per certifier. A wire from `X` to a
-certifier runs on a certified link and one from `X` to `O` on an uncertified one, by `Links`. The model ranges the
+network attester runs on a certified link and one from `X` to `O` on an uncertified one, by `Links`. The model ranges the
 secrets over those whose runs accept every window and meet integrity: that is `B4` at the strategy restricted to them
 (`Ω` a subtype), whose premises restrict (`CausalFrom` by `ResourceAccounting.SecurityProofs.Actual.causalFrom_comp`, the others
 pointwise or by shrinking a range), so it needs no statement of its own. -/

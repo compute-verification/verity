@@ -3,14 +3,14 @@ module
 public import Definitions.Certifier.Cells
 
 /-!
-# The tap: one auditor device on each server's uplink, the relay and the certifier at once
+# The tap: one auditor device on each server's uplink, the relay and the network attester at once
 
 Definitions only. The relay (`Definitions.Certifier.Cells`) and the network attester are one device, a tap
 on each AI server's uplink. Its one code run on what reaches it from the server (the `Arrivals` of each
-connection) gives both what the client receives, the relay's cells (`certifierCode`), and the certifier's record of
+connection) gives both what the client receives, the relay's cells (`certifierCode`), and the network attester's record of
 them, the observations the audits read (`recordingCode`). Its trust is one `trusted-device`
 (`Verity.Assumptions.TrustedDevice`) over that code, with no second device and no second trust, so that what the
-certifier saw is what the relay sent is a fact of the code, not a premise.
+network attester saw is what the relay sent is a fact of the code, not a premise.
 
 **The record is the wire.** The deployed tap (`verity/protocols/accounting/certifier/device/network_certifier_serve.py`, one relay on the auditor's
 machine) records every cell it sends, padding and fail cells included, a row a bucket, each cell a frame that names its

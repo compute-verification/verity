@@ -49,7 +49,7 @@ On `RAcc δ`, the incorrect set is one of `incorrectSets d P δ`. Every observat
 with every status complete, is then `Accepted` with advice held only at that set's committed gates. So, with its inputs
 other than the ingress among `As`, the run's observations are among the sequences this guarantee counts. The leak is
 then at most `c + log2 #incorrectSets + β + n·log2 D` bits, except with that probability. That the transfer gates carry the
-run's observations is the certifier's trust (`trusted-device`), and the statuses are its published record. The theorem is
+run's observations is the network attester's trust (`trusted-device`), and the statuses are its published record. The theorem is
 `NetTiming.sampledLeak` (`Proofs.Certifier.SampledLeak`), with `SampledAuditAccepted` a hypothesis. `RAcc` pins
 the inputs besides the ingress to the trace's committed values, so it takes that inputs among `As` suffice for the
 trace's (`AdviceIn`); `sampledLeak_reg` proves that for every circuit at the inputs pinned to the trace at the

@@ -62,7 +62,7 @@ def queue (S : ℕ) (enq : ℕ → ℕ) : ℕ → ℕ
   | 0 => 0
   | t + 1 => queue S enq t + enq t - min (queue S enq t + enq t) S
 
-/-- The FIFO certifier's release count in bucket `t`. -/
+/-- The FIFO network attester's release count in bucket `t`. -/
 def released (S : ℕ) (enq : ℕ → ℕ) (t : ℕ) : Fin (S + 1) :=
   ⟨min (queue S enq t + enq t) S, Nat.lt_succ_of_le (min_le_right _ _)⟩
 

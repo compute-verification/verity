@@ -1,7 +1,7 @@
 module
 
 /-!
-# The certifier program: the active network attester's records as rows, and their audit
+# The network attester program: the active network attester's records as rows, and their audit
 
 The executable form of `security/Definitions/Certifier/RecordRows.lean` over the lanes of
 `security/Definitions/Certifier/Cells.lean`, for the records the active network attester writes

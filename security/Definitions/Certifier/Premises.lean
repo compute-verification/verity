@@ -5,7 +5,7 @@ module
 
 What a property of the network attester may take besides its acceptance (the lean-proofs skill, "One shape"): one
 physical premise, `DeviceIntact`. It is the listed `trusted-device` (`Verity.Assumptions.TrustedDevice`) read
-for the certifier device: the device runs its code as built. Nothing is assumed of SHA-512 or LMS: a property that relies
+for the network attester device: the device runs its code as built. Nothing is assumed of SHA-512 or LMS: a property that relies
 on the device's hashes or signatures concludes its claim or a break the run itself carries.
 -/
 
@@ -13,7 +13,7 @@ on the device's hashes or signatures concludes its claim or a break the run itse
 
 namespace NetTiming
 
-/-- **The certifier device runs as built**: on every input `x` (its configuration, its key and the trace the world gives
+/-- **The network attester device runs as built**: on every input `x` (its configuration, its key and the trace the world gives
 it) the physical `device` returns what its `code` returns. The host changes none of it, and no attestation stands
 behind it: it is trust in the auditor's device and its host provider, never in a host the prover controls
 (`trusted-device`). It doesn't say the device's key stays secret. It states only

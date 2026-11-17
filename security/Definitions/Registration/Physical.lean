@@ -8,7 +8,7 @@ public import Definitions.Pouw.Confidence
 The actual-circuit model's physical assumptions.
 A physical assumption is a constraint on the actual circuit `A` of one run, a `Prop` over `Placed` taken as a hypothesis
 by what needs it, never a global assumption; `TrustedUnits` is one on a strategy, a map from coins to runs, since what a
-certifier sends is a function of its record across runs. The *feasible set* is the actual circuits that meet the
+network attester sends is a function of its record across runs. The *feasible set* is the actual circuits that meet the
 constraints on one run (`Feasible`); each guarantee names the ones it uses. Each that fails frees a different covert
 resource:
 
@@ -23,7 +23,7 @@ resource:
 | `TrustedUnits S 𝒱 cert …` | a strategy `S`: gates in `𝒱`, the auditor's devices on machines the prover doesn't control, are the protocol's; what each certifier sends outside itself during `[a, b)` is a function of its own record before `b` and of its own jitter word, one of `χ` classes a bucket (v2.8) | forged records, timing channels |
 
 The hardware is a tree of *locations* `𝒳` (a set of `Finset L`) and *links* `e : E` (a finite type), each joining two
-leaves `ends e` with capacity `β_e` bits a tick each way. A link is *certified* when a certifier sits on it, at one of its ends
+leaves `ends e` with capacity `β_e` bits a tick each way. A link is *certified* when a network attester sits on it, at one of its ends
 (`cert`). `β_X` (`linkCapacity`) is the total capacity of the links across `X`'s boundary (`boundary`), `β°_X`
 (`uncertifiedLinkCapacity`) that of the uncertified ones, and a *spatial unit* is a location with `β°_X = 0`
 (`Hardware.SpatialUnit`). `in_X(I), out_X(I) ≤ β_X |I|` is then a lemma (`ResourceAccounting.SecurityProofs.Actual.ingress_le`,
@@ -35,9 +35,9 @@ window whose coins reach it only through one location's secret inputs. A guarant
 hypotheses as these named premises (`shape.premises` in `lean-audit.json`), never as bare hypotheses.
 
 Four constraints read what the circuit doesn't carry, taken as parameters: which link each wire runs on (`link`), the
-location of the ring's multiplications modulo `p` (`ring`), the certifiers' leaves (`cert`) and record cells
-(`record`, v2.6: a certifier's record is its gates in them, `Actual.Run.record`), the trusted devices' leaves (`𝒱`) with
-what the protocol says each of their gates does (`Spec`), and the buckets of ticks over which a certifier's jitter is
+location of the ring's multiplications modulo `p` (`ring`), the network attesters' leaves (`cert`) and record cells
+(`record`, v2.6: a network attester's record is its gates in them, `Actual.Run.record`), the trusted devices' leaves (`𝒱`) with
+what the protocol says each of their gates does (`Spec`), and the buckets of ticks over which a network attester's jitter is
 counted. `Hardware` bundles the parameters that don't depend on `A`, and `Usage A` those of the constraints on one
 run that name its gates; `TrustedUnits` takes each run's `Spec`.
 -/
@@ -115,20 +115,20 @@ structure Spec where
 end Placed
 
 open Classical in
-/-- **The certifiers' record** in a run (v2.6): the gates at the certifiers' leaves `cert` in the record cells each
-declares (`cells y` at the leaf `y`, `Hardware.record`). A certifier's record is what it holds, not a set chosen per
-run, so the record placed before `t` is part of what the certifiers can tell at `t` (`history`). -/
+/-- **The network attesters' record** in a run (v2.6): the gates at the network attesters' leaves `cert` in the record cells each
+declares (`cells y` at the leaf `y`, `Hardware.record`). A network attester's record is what it holds, not a set chosen per
+run, so the record placed before `t` is part of what the network attesters can tell at `t` (`history`). -/
 noncomputable def Actual.Run.record {L : Type*} (R : Actual.Run L) (cert : Finset L) (cells : L → Set ℕ) :
     Finset (Fin R.A.N) :=
   univ.filter fun g => R.A.x g ∈ cert ∧ R.A.cell g ∈ cells (R.A.x g)
 
 /-- **Trusted devices** (v2.8), across a strategy `S`: in every run, every computed gate placed in `𝒱` reads what the
-protocol (`spec r`) says and computes as it says, and the certifiers' leaves `cert` lie in `𝒱` (W1); and for some jitter
+protocol (`spec r`) says and computes as it says, and the network attesters' leaves `cert` lie in `𝒱` (W1); and for some jitter
 words `J`, one per certifier, each one of `χ = 2^jitter` classes a bucket of ticks (`bucket`) in each run, what each
 certifier `y` sends outside itself from the gates it places during `[a, b)`, values and ticks (`sent`), is a function of
 its own record placed before `b` (its gates in its record cells `record y`, `Actual.Run.record`, as seen, so whatever
 timing it logs is counted there; a send during `[a, b)` can't read a later record) and of its own jitter word on the
-buckets of `[a, b)` (W2 and J). What a certifier reads is unconstrained.
+buckets of `[a, b)` (W2 and J). What a network attester reads is unconstrained.
 
 Each trusted device, every certifier among them, is the auditor's hardware and runs on a machine the prover doesn't
 control: the auditor's own VM or box, under the auditor's account, never a process on the prover's node. A device on a
@@ -160,9 +160,9 @@ def DeclaredLinks {Ω L E : Type*} (S : Ω → Actual.Run L) (ends : E → L × 
     (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → E) : Prop :=
   Alphabet S β link ∧ ∀ r, (S r).A.Links ends β (link r)
 
-/-- **The strategy varies only `X`'s secrets** (v2.8): `X` is a location apart from the certifiers `cert`, and what the
-certifiers and the outside `(X ∪ cert)ᶜ` can tell at `a` (`history`: their inputs, their gates placed before `a` and
-what they read from outside before `a`) is fixed across the coins; the certifiers' record placed before `a` is part of
+/-- **The strategy varies only `X`'s secrets** (v2.8): `X` is a location apart from the network attesters `cert`, and what the
+network attesters and the outside `(X ∪ cert)ᶜ` can tell at `a` (`history`: their inputs, their gates placed before `a` and
+what they read from outside before `a`) is fixed across the coins; the network attesters' record placed before `a` is part of
 the former. One physical premise, that the coins reach the window only through `X`'s secret inputs. -/
 def Secrets {Ω L : Type*} [LinearOrder L] [Fintype L] (S : Ω → Actual.Run L) (cert X : Finset L) (a : ℕ) : Prop :=
   Disjoint X cert ∧ ∀ r r', (S r).history cert a = (S r').history cert a ∧
@@ -182,13 +182,13 @@ noncomputable def linkCapacity (ends : E → L × L) (β : E → ℕ) (X : Finse
   ∑ e ∈ boundary ends X, β e
 
 open Classical in
-/-- `β°_X`: the total capacity of the uncertified links across `X`'s boundary, those with no end at a certifier's leaf
+/-- `β°_X`: the total capacity of the uncertified links across `X`'s boundary, those with no end at a network attester's leaf
 (`cert`). -/
 noncomputable def uncertifiedLinkCapacity (ends : E → L × L) (β : E → ℕ) (cert X : Finset L) : ℕ :=
   ∑ e ∈ (boundary ends X).filter (fun e => (ends e).1 ∉ cert ∧ (ends e).2 ∉ cert), β e
 
 /-- **Coverage** (the listed claim `certifier-coverage`): every boundary link of `X` is certified, `β°_X = 0`
-(`uncertifiedLinkCapacity`), so nothing leaves `X` but through a certifier. One physical premise, the auditor's placement
+(`uncertifiedLinkCapacity`), so nothing leaves `X` but through a network attester. One physical premise, the auditor's placement
 in the onsite protocol; `Hardware.SpatialUnit` is it at a `Hardware`'s parameters. -/
 def Covered (ends : E → L × L) (β : E → ℕ) (cert X : Finset L) : Prop :=
   uncertifiedLinkCapacity ends β cert X = 0
@@ -198,9 +198,9 @@ end Links
 /-- The hardware a run's physical assumptions are about: the tree's locations `units`, the latencies, each location's
 compute `compute` (`Φ`) and memory `M` (work a tick and bits), the links `E` with their ends and capacities `β` (bits a
 tick), the location `ring` of the ring's multiplications modulo `p` (its `add` and `one` sit elsewhere) with the
-sequential depth `D` and the span `Δ + RTT` (`span`) of `SequentialSpeed` (v2.7), the certifiers' leaves, the trusted
-devices' leaves, the buckets of ticks, each certifier's jitter bits a bucket, and the record cells `record y` each
-certifier's leaf `y` declares (v2.6: its record is its gates in them, `Actual.Run.record`). -/
+sequential depth `D` and the span `Δ + RTT` (`span`) of `SequentialSpeed` (v2.7), the network attesters' leaves, the trusted
+devices' leaves, the buckets of ticks, each network attester's jitter bits a bucket, and the record cells `record y` each
+network attester's leaf `y` declares (v2.6: its record is its gates in them, `Actual.Run.record`). -/
 structure Hardware (L : Type*) (E : Type*) where
   units : Set (Finset L)
   ℓ : L → L → ℕ

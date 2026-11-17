@@ -14,7 +14,7 @@ import Mathlib.Tactic.SetLike
 
 `Definitions.Certifier.Tap`. Under `trusted-device` the tap's run is its code, so the cells the client receives
 are the relay's code's (`certifier_cells`) and, on a schedule the record format holds (`RecordFormat.fits`), read back from the
-record the same run writes (`certifier_cells_read`): what the certifier saw is what the relay sent, by the one code run. Of the data reaching the tap on a connection, each cell its
+record the same run writes (`certifier_cells_read`): what the network attester saw is what the relay sent, by the one code run. Of the data reaching the tap on a connection, each cell its
 lane sends before its fail cell is in the record, as that cell's data in its bucket (`certifier_data_read`). The rest of the
 server's bytes, after the fail cell or past the lane's end, reach neither the client nor the record, so the record
 does not fix the whole stream the server sent.
@@ -34,7 +34,7 @@ theorem certifier_cells (f : RecordFormat κ Cell Ob) (arr : Srv → κ → Arri
   rw [htrust (s, σ)]
   rfl
 
-/-- **What the certifier saw is what the relay sent**: on a schedule the record format holds, the cells the trusted tap
+/-- **What the network attester saw is what the relay sent**: on a schedule the record format holds, the cells the trusted tap
 sends read back from the record its same run writes. -/
 theorem certifier_cells_read (f : RecordFormat κ Cell Ob) (arr : Srv → κ → Arrivals Cell) (tap : Dev)
     (run : Dev → CertifierSchedule κ × Srv → (κ → List (ℕ × CellView Cell)) × Ob)

@@ -11,11 +11,11 @@ Definitions only. `docs/network-transparency/timing-channel.md` §1.1, §1.3, §
 Ingress is the same interaction with the boundary read inward, so its statement reuses `Interaction`, `Certifier` and
 `Obs` with the two parties exchanged:
 * the secret is the message `m` of the outside (the operator and every colluding endpoint), which it wants to deliver
-  into X. Its party is `snd m`: it chooses when ingress frames reach the certifiers, and their content, order and faults;
+  into X. Its party is `snd m`: it chooses when ingress frames reach the network attesters, and their content, order and faults;
 * `op` is X's devices, which don't know `m`;
-* the certifiers' record `obs` is what the ingress links release into X: each of the `L` ingress links' row (`rows`), the
+* the network attesters' record `obs` is what the ingress links release into X: each of the `L` ingress links' row (`rows`), the
   step's jitter class, and every boundary link's status;
-* `wire` is everything that enters X: what the certifiers emit inward, which W2 (`Regenerates`, read inward) makes a
+* `wire` is everything that enters X: what the network attesters emit inward, which W2 (`Regenerates`, read inward) makes a
   function of the record.
 
 Both parties see every record. X's moves are a fixed function of the records, so the outside sender can recompute them,

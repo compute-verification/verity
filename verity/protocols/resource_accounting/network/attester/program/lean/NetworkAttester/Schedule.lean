@@ -3,7 +3,7 @@ module
 public import NetworkAttester.Run
 
 /-!
-# The certifier program: the logical schedule, the clock-sync advice and the constant-rate Program
+# The network attester program: the logical schedule, the clock-sync advice and the constant-rate Program
 
 The executable forms of `security/Definitions/Certifier/Schedule.lean` that the difftest runs, under the same names
 in `NetworkAttester`. They mirror `schedule.py` one for one, with each Python name in its docstring. Lean core only:
@@ -63,7 +63,7 @@ def handingFrom (T W : Nat) (syncs : Fin W → ClockSync) : Nat → List Logical
       else max (max last (W * T)) f.anchor
     h :: handingFrom T W syncs h fs
 
-/-- `handing_buckets`: when the shaper hands each frame to the certifier, `h(k) = max(eligible(k), h(k−1))` in canonical
+/-- `handing_buckets`: when the shaper hands each frame to the network attester, `h(k) = max(eligible(k), h(k−1))` in canonical
 order, starting from `last = 0`. -/
 def handingBuckets (T W : Nat) (syncs : Fin W → ClockSync) (frames : List LogicalFrame) : List Nat :=
   handingFrom T W syncs 0 frames
@@ -77,7 +77,7 @@ def enqueued (T W : Nat) (syncs : Fin W → ClockSync) (frames : List LogicalFra
 def payloads (frames : List LogicalFrame) (k : Nat) : List Bool :=
   (frames[k]?.map LogicalFrame.payload).getD []
 
-/-- `expected_grids`, read at bucket `t`: the certifier's rule (FIFO at the allocation `S`, left-packed, the queue carried
+/-- `expected_grids`, read at bucket `t`: the network attester's rule (FIFO at the allocation `S`, left-packed, the queue carried
 across windows) applied to the enqueue counts, with the frames leaving in canonical order. -/
 def expectedRow (S T W : Nat) (syncs : Fin W → ClockSync) (frames : List LogicalFrame) (t : Nat) : Row S (List Bool) :=
   fifoGrid (t + 1) S (payloads frames) (enqueued T W syncs frames) (Fin.last t)

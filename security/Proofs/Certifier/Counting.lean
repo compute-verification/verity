@@ -156,7 +156,7 @@ theorem actRun_take (z : Z) {m n : ℕ} (h : m ≤ n) : (I.actRun z n).take m = 
     · have : m = k + 1 := by omega
       subst this; rw [List.take_of_length_le (by rw [length_actRun])]
 
-/-- The observation at step `k` is the certifiers' record at `k`, over the ingress and the actions through `k`. -/
+/-- The observation at step `k` is the network attesters' record at `k`, over the ingress and the actions through `k`. -/
 theorem obsRun_getElem (z : Z) {n k : ℕ} (hk : k < n) :
     (I.obsRun z n)[k]'(by rw [length_obsRun]; exact hk) =
       I.certifier.obs k (I.trace z (k + 1)).2.1 (I.actRun z (k + 1)) := by

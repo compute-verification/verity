@@ -14,7 +14,7 @@ chooses from what it has observed. The ingress direction is the mirror image: `D
 (`Ingress.lean`) reads this interaction inward, and its guarantees are `Guarantees.EncardIngressObsDecodableLe`
 and `Guarantees.EncardIngressDecodableLe`, with their `…Contents` versions.
 
-**Emission and acceptance are separate.** The certifier's `obs` and `wire` say what is recorded and emitted, whatever
+**Emission and acceptance are separate.** The network attester's `obs` and `wire` say what is recorded and emitted, whatever
 happens. The verifier's `Accepted` is a predicate on an observation prefix and a declared advice string, and it reads
 only the rows and the statuses (W5's record). No violation policy is modelled: every theorem is about runs accepted up to
 the horizon.
@@ -40,7 +40,7 @@ inductive Status
   | notEstablished (r : Reason)
   deriving DecidableEq
 
-/-- What the certifiers of ∂X emit at one step, as the model observes it: the row of each of the `L` egress links, the
+/-- What the network attesters of ∂X emit at one step, as the model observes it: the row of each of the `L` egress links, the
 step's jitter class, and the coverage status of each of the `K` boundary links (ingress links included, because a
 device in X can set an ingress link's status from its inner side). -/
 structure Obs (L K S : ℕ) where
@@ -48,7 +48,7 @@ structure Obs (L K S : ℕ) where
   jitter : ℕ
   status : Fin K → Status
 
-/-- The certifiers of ∂X (X a spatial unit), after conditioning on their own noise. At step `k` what they record (`obs`)
+/-- The network attesters of ∂X (X a spatial unit), after conditioning on their own noise. At step `k` what they record (`obs`)
 and what they put on the wire (`wire`) are functions of the ingress and of the sender's actions so far (both lists of
 length `k + 1`). `wire` is everything any receiver can see, the published record (grid and status) included. `fault` marks actions that are faults (overflow, malformed traffic,
 pulling a link, refusing delivery). -/

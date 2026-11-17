@@ -232,13 +232,13 @@ theorem queue_add_sum_released (S : ℕ) (enq : ℕ → ℕ) (T : ℕ) :
     have := min_le_left (queue S enq T + enq T) S
     omega
 
-/-- **The certifier never releases more than was enqueued.** -/
+/-- **The network attester never releases more than was enqueued.** -/
 theorem sum_released_le (T S : ℕ) (enq : ℕ → ℕ) :
     ∑ t ∈ Finset.range T, (released S enq t : ℕ) ≤ ∑ t ∈ Finset.range T, enq t := by
   have := queue_add_sum_released S enq T
   omega
 
-/-- **Fixed M, at the certifier.** When the sender enqueues at most `M` frames over the window, the FIFO certifier can release
+/-- **Fixed M, at the network attester.** When the sender enqueues at most `M` frames over the window, the FIFO certifier can release
 at most `binom(T + M, M)` distinct grids: the doc's `binom(M+T, T)`. -/
 theorem encard_fifoGrids_le_of_available (T S M : ℕ) (f : ℕ → F) :
     {g | ∃ enq : ℕ → ℕ, ∑ t ∈ Finset.range T, enq t ≤ M ∧ g = fifoGrid T S f enq}.encard ≤

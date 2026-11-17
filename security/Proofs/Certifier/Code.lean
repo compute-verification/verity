@@ -12,7 +12,7 @@ public import Mathlib.Data.Fintype.BigOperators
 public import Mathlib.Data.Finset.Dedup
 
 /-!
-# The certifier program agrees with the reference definitions
+# The network attester program agrees with the reference definitions
 
 The program (`certifier_program`, `NetworkAttester`) is Lean core only: it sums over `List.finRange`, as Python does,
 and still hands each frame at a tick it computes from a declared clock sync per execution phase. The reference

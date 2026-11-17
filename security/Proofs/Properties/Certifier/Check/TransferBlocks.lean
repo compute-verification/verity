@@ -57,7 +57,7 @@ Its two lemmas:
 * honest: `transferBlocksAcceptMeans_honest`, the converse, that an execution phase proved, opened, certified and synced is
   accepted with the property's outputs and digest (each predicate is its check, `proved_of` … `synced_of`, and the
   verdict's digest always computes, `verdictDigest_ok`); and `transferBlocksAcceptMeans_honest_certifier`, that on a network attester
-  link a window proved and opened whose two certificates the certifier's device signed (`CertifierSigned`, under a key
+  link a window proved and opened whose two certificates the network attester's device signed (`CertifierSigned`, under a key
   `Lms.key` derives at parameters `Lms.Params.make` admits) is accepted whatever syncs it declares, by LMS's
   completeness (`Properties.CertifierDevice.Proofs.Lms.lmsCorrect`). What stays a hypothesis is the proof system's:
   the findings of its run of Flock's verifier (`ExecutionPhaseProved`) and the statement's public file holding the sampled
@@ -356,7 +356,7 @@ theorem transferBlocksAcceptMeans_honest :
   exact ⟨by rw [hv]; rfl, _, hv, rfl, hd⟩
 
 /-- **An honest network attester execution phase is accepted** (the honest lemma of `TransferBlocksAcceptMeans` on a network attester link): one
-proved and opened whose two certificates the certifier's device signed under its key (a key `Lms.key` derives at
+proved and opened whose two certificates the network attester's device signed under its key (a key `Lms.key` derives at
 parameters `Lms.Params.make` admits, the link's), whatever syncs it declares. -/
 theorem transferBlocksAcceptMeans_honest_certifier :
     ∀ (c : Case) (w : ByteArray) (N W H : Nat) (toy : Bool) (I seed : ByteArray) (k : Lms.PrivateKey),

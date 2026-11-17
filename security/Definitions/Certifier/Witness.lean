@@ -24,7 +24,7 @@ conclusion false at an audit that accepts everything. Those statements read thes
   Program's acceptance;
 * `fxLeakI`: a sender whose secret is its every step's frame length, which `fxLeakDec` reads back from the last step of
   the wire or the record;
-* `inI`: a certifier recording one frame a bucket (`oneRow`) in the first of two slots, every status complete;
+* `inI`: a network attester recording one frame a bucket (`oneRow`) in the first of two slots, every status complete;
 * `sampProg`: two inputs and the negation of the first, with one proof block `{0, 1, 2}` (`sampPart`) sampled Bernoulli
   at rate `1/2` (`sampDesign`);
 * `fxRows`: a rows format of the Python network attester's fixture `fxQueue` (three connections), one window of ten
@@ -82,7 +82,7 @@ def AccSeqsAt {L K S : ℕ} (acc : List (Obs L K S) → Prop) (n D : ℕ) : Set 
 /-- The verifier that accepts everything. -/
 def acceptAll {L K S : ℕ} (_ : List (Obs L K S)) : Prop := True
 
-/-- **A sender whose secret shows**: its secret `z` is its every action, and the certifier records and puts on the wire
+/-- **A sender whose secret shows**: its secret `z` is its every action, and the network attester records and puts on the wire
 one frame of `z` bits in the first slot, jitter class 0, its one status complete. -/
 def fxLeakI : Interaction 1 1 2 ℕ Unit ℕ (Obs 1 1 2) where
   certifier :=
@@ -102,7 +102,7 @@ def fxLeakDec (w : List (Obs 1 1 2)) : ℕ := ((w.getLast?.bind fun o => o.rows 
 /-- One frame `[true]` in the first of two slots. -/
 def oneRow : Row 2 (List Bool) := fun σ => if σ = 0 then some [true] else none
 
-/-- **A certifier at one frame a bucket**: at every step it records and puts on the wire `oneRow` on its one link,
+/-- **A network attester at one frame a bucket**: at every step it records and puts on the wire `oneRow` on its one link,
 jitter class 0, its one status complete. -/
 def inI : Interaction 1 1 2 Unit Unit Unit (Obs 1 1 2) where
   certifier :=
