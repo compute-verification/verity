@@ -537,7 +537,7 @@ class Rejected(Exception):
 def kept_run(serve_dir: Path) -> str:
     runs = sorted(p.parent.name for p in (serve_dir / PRIVATE).glob("*/fetch.tar.gz"))
     if len(runs) != 1:
-        raise NotRun(f"{len(runs)} network certifier runs kept under {serve_dir / PRIVATE} ({runs[:4]}), not one: the run's "
+        raise NotRun(f"{len(runs)} network attester runs kept under {serve_dir / PRIVATE} ({runs[:4]}), not one: the run's "
                         "load goes through the network certifier only with CERTIFIER_FRONT")
     return runs[0]
 
@@ -560,7 +560,7 @@ def kept_ingress(serve_dir: Path) -> tuple[object, dict, list[tuple[int, list]]]
         phases = [(r.window, list(WRW.window_rows(r, params)))
                   for r in RC.read_records(WC.witness(kept), params)[RC.INGRESS]]
     except (SystemExit, NotRun) as e:
-        raise ValueError(f"the certifier front's kept run: {e}") from None
+        raise ValueError(f"the network attester front's kept run: {e}") from None
     finally:
         if unpacked is not None:
             rm(unpacked)
@@ -587,7 +587,7 @@ def placement(serve_dir: Path, run: str, steps: dict[str, str] | None = None) ->
     alone."""
     kept = serve_dir / PRIVATE / run
     if not (kept / SESSION).is_file():
-        raise NotRun(f"{kept} has no {SESSION}, which names the gate the certifier ran on: keep the run with this "
+        raise NotRun(f"{kept} has no {SESSION}, which names the gate the network attester ran on: keep the run with this "
                      "tree's front")
     gate = json.loads((kept / SESSION).read_text())["gate"]
     node = SS.served_peer(kept / "fetch.tar.gz") or socket.gethostname()
@@ -634,7 +634,7 @@ def unpack(fetch: Path) -> tuple[Path, Path]:
     run = certifier_run(d)
     if run is None:
         rm(d)
-        raise NotRun(f"{fetch}: no network certifier run (a certified.jsonl) in the fetch")
+        raise NotRun(f"{fetch}: no network attester run (a certified.jsonl) in the fetch")
     return d, run
 
 
@@ -918,7 +918,7 @@ def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str,
             io = WC.io(network_attester)
             dep, params = WC.deployment(network_attester)
         except SystemExit as e:
-            raise Rejected(f"the kept network certifier run: {e}") from None
+            raise Rejected(f"the kept network attester run: {e}") from None
         T = params.window
         certified = bind(reqs, io)
         out = keep / run / "chain" / "out"
@@ -1085,8 +1085,8 @@ def settle(serve_dir: Path, window: int, d: Path, limit: str,
         case.unlink(missing_ok=True)
         close_open(serve_dir)
         if not any((serve_dir / PRIVATE).glob("*/fetch.tar.gz")):
-            raise NotRun(f"no network certifier run kept under {serve_dir / PRIVATE}: the run's load didn't go through the "
-                         "certifier's front (CERTIFIER_FRONT unset, or the gate, its tunnel or ssh failed)")
+            raise NotRun(f"no network attester run kept under {serve_dir / PRIVATE}: the run's load didn't go through the "
+                         "network attester's front (CERTIFIER_FRONT unset, or the gate, its tunnel or ssh failed)")
         (serve_dir / PRIVATE / "held").mkdir(mode=0o700, exist_ok=True)
         hold = Path(tempfile.mkdtemp(dir=serve_dir / PRIVATE / "held", prefix=f"window-{window}-"))
         got, unpacked = step(hold)

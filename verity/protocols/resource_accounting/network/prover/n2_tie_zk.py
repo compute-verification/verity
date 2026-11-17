@@ -212,7 +212,7 @@ def network_attester_link(run: Path, windows: int) -> SimpleNamespace:
                              "whose root the network attester signed")
         cells.append(c)
     releases, lens = _released(params, cells)
-    return SimpleNamespace(source=f"network certifier run {dep.get('run_id')} (network_attester_serve.py, its deployment's key)",
+    return SimpleNamespace(source=f"network attester run {dep.get('run_id')} (network_attester_serve.py, its deployment's key)",
                            run_id=dep.get("run_id"), params=params, session=session, link=RC.LINK, cells=cells,
                            records=tuple(records[w] for w in range(windows)), releases=releases, prompt_lens=lens)
 

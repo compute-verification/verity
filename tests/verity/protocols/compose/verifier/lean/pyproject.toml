@@ -26,12 +26,12 @@ parts = 3
 # harness drives) and, through their path requires, the core interface, Flock's verifier, and the ported components'
 # Lean: SPOT (`core_vstar_recursive`: its form's dispatch and the recursive audit) over its one-stage audit
 # (with the LMS verifier and the difftest harness's Lean), PoUW's check (with
-# its window, commitments, and core's identity and randomness), the network certifier's period check (with the
-# certifier program and the LMS verifier), the inference-only policy's check (`inference_only_check`), PoUS's run check (with the
+# its window, commitments, and core's identity and randomness), the network certifier's period check (with network
+# attestation's program and the LMS verifier), the inference-only policy's check (`inference_only_check`), PoUS's run check (with the
 # memory attester's Lean), the PoUB session's and the memory attester's wipe. The reference runs the
 # subprotocols' Python: PoUW's `core_check` and what it imports, and SPOT's one-stage difftest (`one_stage`,
 # the integrity profile, the proof system) with its generators, PoUW's check cases, the network certifier's period
-# difftest (its mirror over the certifier's certificates, LMS and PoUW's reading of one-stage's answers) with its
+# difftest (its mirror over the network attester's certificates, LMS and PoUW's reading of one-stage's answers) with its
 # generator, the wipe's protocol (`wipe_protocol_case`, its mirror and signed wipes), and the inference-only policy's
 # difftest (`inference_only_reference` and θ's provenance difftest's declarations), each from its own suite's tests; and space's
 # and bandwidth's period hooks (`pous.period`, `poub.period`), space's signed by

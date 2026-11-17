@@ -103,7 +103,7 @@ MEASURED = {"format": "verity/advice-charge/v2", "label": "measured on test run 
             "prompt_len": {"count": 5}, "output_len": {"count": 5}, "finishes": {"eos": 3, "length": 2, "abort": 0}}
 TREE = "ab12" * 10
 #: the network attester's published verdict line, after an earlier attempt's
-LINE = 'THE NETWORK CERTIFIER {"rc": 0, "verdict": "accept"}'
+LINE = 'THE NETWORK ATTESTER {"rc": 0, "verdict": "accept"}'
 #: SCHEDULE's egress capacity a phase: its 4 · 8 cells a bucket over 63 buckets exceed its caps' 252 · 4 = 1008 cells
 CAPACITY = 1008 * 512 * 8
 #: the auditor's record of its network attester's key, as `record_files.public_json` writes one, and session; and
@@ -295,7 +295,7 @@ def lock(tmp_path_factory, monkeypatch) -> Path:
 
 def answer(public: dict | None, verdict: str = "accept") -> dict:
     return {"protocol": OR.NETWORK, "verdict": verdict, "reason": None, "commitment": "ab" * 64, "public": public,
-            "profile": {"link": "served", "windows": 1, "placement": {"trusted-device": "the certifier on the gate's host"}}}
+            "profile": {"link": "served", "windows": 1, "placement": {"trusted-device": "the network attester on the gate's host"}}}
 
 
 def network_row(public: dict | None) -> dict:
@@ -485,7 +485,7 @@ def accepted(tmp_path: Path, public: dict = PUBLIC, windows: int = 1, caps: list
                      composites={"remote": remote_composite()}, coins=coins)
     (out / "machine.txt").write_text(f"ubuntu\n{NODE}\n{TREE}\n96\nserve dir /serve/d\n")
     with open(out / "verdicts.txt", "a") as f:
-        f.write(f'THE NETWORK CERTIFIER {{"rc": 1, "verdict": "error"}}\nRECORD {{}}\n{LINE}\n'
+        f.write(f'THE NETWORK ATTESTER {{"rc": 1, "verdict": "error"}}\nRECORD {{}}\n{LINE}\n'
                 "COMPOSITE CASE verity/certifier/v0 accept\n")
     if registration is not None:
         (out / OR.REGISTRATION).write_text(json.dumps(registration))
@@ -556,7 +556,7 @@ def test_an_accepted_rows_form_answer_is_K_term_by_term_with_its_overcount_and_c
     assert sum(t["bits"] for t in b["terms"]) == b["K"]
     assert b["notes"] == [OR.OVERCOUNT] and "k_sched" in OR.OVERCOUNT and "k_fail" in OR.OVERCOUNT
     assert b["connections"] == {"count": 4 * 63, "from": OR.CONNECTIONS}
-    assert rec["placement"] == {"trusted-device": "the certifier on the gate's host"}
+    assert rec["placement"] == {"trusted-device": "the network attester on the gate's host"}
     assert rec["advice_charge"]["charged"] == {"is": OR.CHARGED, "bits_per_phase": [9088], "share": 9088 / K,
                                                "lean": "scans[j].free"}
     assert "no cap and no advice length" in OR.CHARGED and "audits[].free" in OR.CHARGED
@@ -1774,7 +1774,7 @@ REFUSED_INPUTS = {
     "another form": (key_record(), {"auditor": site_registration()["params"]["auditor"], "log": site_registration()["log"]},
                      CERTIFIER, "--site-registration isn't a registration's params and log: Malformed: not {params, log}"),
     "no certifier holding the key": (key_record(), site_registration(ANOTHER), CERTIFIER,
-                                     "the auditor's registration holds the record's key for no network certifier its "
+                                     "the auditor's registration holds the record's key for no network attester its "
                                      "log places"),
 }
 
@@ -2481,7 +2481,7 @@ def test_a_remote_run_whose_report_drops_the_certifier_takes_its_period_checks_a
     rec = record(out)
     assert rec["verdicts"]["the network certifier"] == {"protocol": OR.NETWORK, "verdict": "accept",
                                                         "from": "pieces/certifier/answer.json"}
-    assert rec["bound"]["K"] == K and rec["placement"] == {"trusted-device": "the certifier on the gate's host"}
+    assert rec["bound"]["K"] == K and rec["placement"] == {"trusted-device": "the network attester on the gate's host"}
     assert rec == record(accepted(tmp_path / "onsite")) | {"verdicts": rec["verdicts"]}
 
 

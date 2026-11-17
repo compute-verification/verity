@@ -377,7 +377,7 @@ def test_the_certifier_only_path_needs_no_scan_names_its_stubs_and_counts_the_ta
     assert got["stubbed"][:3] == list(cr.STUBBED) and len(got["stubbed"]) == 5
     assert got["negatives_refused"] == {"rehearsal/c1/late": True, "rehearsal/c1/extra": True, "tie/token": True,
                                         "n2/tampered": True}
-    assert "on the certifier-only path" in cr.markdown(got) and "Stubbed:" in cr.markdown(got)
+    assert "on the attester-only path" in cr.markdown(got) and "Stubbed:" in cr.markdown(got)
     ep["chain"]["tie"]["runs"]["token"] = {"verdict": "accepted", "ok": False}
     Path(steps.endpoint).write_text(json.dumps(ep))
     assert cr.report(steps)["negatives_refused"]["tie/token"] is False

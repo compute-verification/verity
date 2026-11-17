@@ -343,12 +343,12 @@ def score(case: Path, observed: Path | None = None) -> dict:
         else:
             times = {t: x / 1e6 for t, x in enumerate(certifier["tick_late_us"])}
         sender = channel.measure([(times[t], coins[t]) for t in sorted(coins) if t in times])
-        problems += [f"the certifier failed connection {c['ordinal']} ({c['failed']})"
+        problems += [f"the network attester failed connection {c['ordinal']} ({c['failed']})"
                      for c in certifier["connections"] if c["failed"]]
         admitted = [c["admitted"] for c in sorted(certifier["connections"], key=lambda c: c["ordinal"])
                     if c.get("admitted") is not None]
         firsts = [c["first"] for c in server["connections"] if "first" in c]
-        problems += [f"connection {k}: the certifier admitted it in interval {s}, so its first bytes leave in "
+        problems += [f"connection {k}: the network attester admitted it in interval {s}, so its first bytes leave in "
                      f"{s + cfg['delay']}, and the server took {first} (admit_lag)"
                      for k, (s, first) in enumerate(zip(admitted, firsts)) if s + cfg["delay"] != first]
         over = sum(x > certifier["slack_ms"] * 1000 for x in certifier["tick_late_us"])
@@ -423,7 +423,7 @@ def host() -> dict:
     idle = Path("/sys/devices/system/cpu/cpuidle/current_driver")
     return {"name": platform.node(), "kernel": platform.release(), "cpu": model,
             "cpus": sorted(os.sched_getaffinity(0)), "cpuidle": idle.read_text().strip() if idle.exists() else None,
-            "parties": "the server, the certifier and the observer are processes on this one host, over loopback",
+            "parties": "the server, the network attester and the observer are processes on this one host, over loopback",
             "clock": "CLOCK_MONOTONIC_RAW of this host, the network attester's, read by all three; the kernel's "
                      "stamps are its wall clock's, moved to it by the two clocks' difference as the observer started "
                      "and as it ended"}

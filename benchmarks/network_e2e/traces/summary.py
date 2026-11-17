@@ -900,7 +900,7 @@ FIELDS = """\
   `raw/accept.PID.jsonl` (`vllm_accept_stamp`), and under `--admit tick` the feed `tick_plugin.TickFeed` wrote
   (`raw/tick-feed.jsonl`) and the gate's log (`raw/tick.PID.jsonl`: each step's admissions and every event);
   `<trace>/server.log`, `<trace>/meta.json`: the server's log, argv, timings, adversary (seed and prefix-cache mode),
-  network certifier (its schedule, where it ran) and tick (τ in µs, where τ was calibrated, the origin, the run, the watermark's
+  network attester (its schedule, where it ran) and tick (τ in µs, where τ was calibrated, the origin, the run, the watermark's
   outcome, and `where` the releases came from: a network certifier trace's watermark is warden.json's, its last line, the lost
   releases it named and its error).
 - `<trace>/warden/`, a network certifier trace's: what the network certifier published (`deployment.json`, `requests.records`,
@@ -1004,16 +1004,16 @@ def readme(s: dict) -> str:
                          f"{g.get('opened') or '-'} |")
         fed = {name: g["releases"] for name, g in gated.items() if g.get("releases")}
         if fed:
-            lines += ["", "A network certifier trace's releases are the server's (`raw/tick-feed.jsonl`), checked against the network "
+            lines += ["", "A network attester trace's releases are the server's (`raw/tick-feed.jsonl`), checked against the network "
                           "certifier's log of each connection and its run (`summary.feed_releases`); a disagreeing one is "
                           "left out of requests.jsonl, so the replay refuses the trace:", ""]
-            lines += [f"- {name}: {r['released']} released, {r['agree']} agree, {r['unlogged']} the certifier logged no "
+            lines += [f"- {name}: {r['released']} released, {r['agree']} agree, {r['unlogged']} the network attester logged no "
                       f"release for, {r['disagree']} disagree" for name, r in fed.items()]
     network_certifiers = {name: t["warden"] for name, t in s["traces"].items() if t.get("warden")}
     if network_certifiers:
         where = {w.get("where") for w in network_certifiers.values()}
-        lines += ["", "## The network certifier", "",
-                  f"The network certifier traces reach the server only through the active network certifier ({', '.join(map(str, where))}): "
+        lines += ["", "## The network attester", "",
+                  f"The network attester traces reach the server only through the active network attester ({', '.join(map(str, where))}): "
                   "`network_attester_serve.py serve`, one connection to the server per client connection, each direction in B-byte "
                   "cells on its schedule, D counted from the network certifier's "
                   f"{'; '.join(sorted({w.get('egress_base') or 'base (not recorded)' for w in network_certifiers.values()}))}. Its records, "
@@ -1036,9 +1036,9 @@ def readme(s: dict) -> str:
                       "publisher's keep of each record (pack, sign and commit), the network certifier's collections, the host's 1-minute load "
                       "and CPU pressure, and the client loop's stalls of 20 ms or more. The late ticks one by one, with what "
                       "ran around each, are the trace's `network_attester.ticks.late` in summary.json.", "",
-                      "| trace | cores (server / client / network certifier) | ticks | lateness ms: " +
+                      "| trace | cores (server / client / network attester) | ticks | lateness ms: " +
                       " / ".join(LATE_LABELS) + " | over slack | tick work p99 / max ms | publish max ms | network "
-                      "certifier collections | load p50 / max | CPU pressure max ms per 100 ms | client stalls (max ms) |",
+                      "attester collections | load p50 / max | CPU pressure max ms per 100 ms | client stalls (max ms) |",
                       "|---|---|---|---|---|---|---|---|---|---|---|"]
             for name, w in probed.items():
                 t, c, cores = w.get("ticks") or {}, w.get("client_loop") or {}, w.get("cpus")
@@ -1072,8 +1072,8 @@ def readme(s: dict) -> str:
                   "The order requests arrived in at each place along the wire (`summary.arrival_order`), against the order "
                   "the engine first scheduled them in (the replay's engine order) and against the place before: the pairs "
                   "of requests put the other way round (inversions), and the seconds from the client's send to the arrival "
-                  "there. The network certifier orders by (bucket, ordinal): its admission s, and its release a, the bucket of the "
-                  "request's last ingress cell, after which the server has the whole request. A network certifier trace's "
+                  "there. The network attester orders by (bucket, ordinal): its admission s, and its release a, the bucket of the "
+                  "request's last ingress cell, after which the server has the whole request. A network attester trace's "
                   "`<trace>.admitted` and `<trace>.released` are the trace with that order as its certified ingress "
                   "(`summary.network_attester_views`), for `replay.read_corpus_trace`.", ""]
         for name, o in ordered.items():

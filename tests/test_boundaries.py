@@ -384,7 +384,7 @@ def test_spot_never_imports_the_network_attester_in_python() -> None:
     assert spot < certifier, f"{SPOT_NOT_CERTIFIER}: tests/import_order.toml lists {CERTIFIER_ROW} no later than {SPOT_ROW}"
     ties = sorted(f"{a} -> {b}" for a, b in listing.against if listing.steps[a] <= spot < listing.steps[b])
     assert not ties, (f"{SPOT_NOT_CERTIFIER}: a tie of tests/import_order.toml leaves the rows up to {SPOT_ROW} for a later "
-                      f"row, which may load the certifier: {ties}")
+                      f"row, which may load the network attester: {ties}")
     offenders = _spot_python_offenders()
     assert not offenders, f"{SPOT_NOT_CERTIFIER}:\n" + "\n".join(offenders)
 
@@ -463,7 +463,7 @@ def test_spot_never_imports_the_network_attester_in_lean() -> None:
                          _lean_modules(files, _tracked("*lakefile.toml")))
     offenders = [_chain(parent, f) for f in sorted(parent) if _covered(f, CERTIFIER_LEAN)]
     assert not offenders, (f"{SPOT_NOT_CERTIFIER}: take what you need from SPOT's own modules or the shared vocabulary "
-                           "(Core, Hash), never from the certifier's:\n" + "\n".join(offenders))
+                           "(Core, Hash), never from the network attester's:\n" + "\n".join(offenders))
 
 
 def test_a_spot_import_of_the_certifier_is_found() -> None:

@@ -245,7 +245,7 @@ OVERCOUNT = ("a known overcount, proved and larger than necessary: k_sched and k
              "schedule can carry (`Schedule.rowsCells`), whatever the traffic, and each connection's cell count twice, in "
              "k_sched (its lane's length, #S_s ≤ ∏_c (cap_c + 1)) and in k_fail (its fail cell's position), which in a "
              "run coincide; K is MonitoringPeriodLeakAccepted's count as it states it")
-CONNECTIONS = ("the caps of the certifier's case's params (``cells``), one a connection: the period's check refuses any "
+CONNECTIONS = ("the caps of network attestation's case's params (``cells``), one a connection: the period's check refuses any "
                "but its schedule's (`NetworkCheck.Period.Schedule.rowsCells`), egress_cells for each of the lanes · m · T "
                "connections the network certifier can carry over the period's m execution phases, so this counts the "
                "connections the schedule can carry, not those served")
@@ -298,7 +298,7 @@ POOLED_EPS = ("eps, δ_net's δ part (`EPS`), over each monitoring period at the
               "scales the run's (`RULES`) and its delta_net states; the run's own period (``run``) is proved. Each "
               "window's δ_net adds ε_ks, ε_bind and ε_tap to it (`ERRORS`), which no check computes")
 #: the run's published line of the network attester's verdict (`served_verdicts.pieces`)
-LINE = "THE NETWORK CERTIFIER "
+LINE = "THE NETWORK ATTESTER "
 #: the run's published line naming each protocol's coins (served_verdicts.sh's first), and the form of its sampled
 #: proofs' part that names the live challenger: PP_CHALLENGER gate:USER@HOST at a named peer, whose session V3c's audit
 #: holds to PP_CHALLENGER_KEY
@@ -408,7 +408,7 @@ POOLED_RULES = {
     "links": ("each link's node cell at δ / links, summed over the links: IntegrityHorizon on each link's windows at "
               "δ / links, joined by the union bound, our composition, which no Lean statement covers"),
 }
-WINDOW_S = ("a stated parameter: a window an execution phase, T buckets of τ (the certifier's case's params.schedule), "
+WINDOW_S = ("a stated parameter: a window an execution phase, T buckets of τ (network attestation's case's params.schedule), "
             "the fewest the period's check takes, as it ties a compute audit to each execution phase's scan. More "
             "windows lower each share and leave the count, which no window count enters")
 NO_GATES = ("in AND gates: missing. A proof block's AND gates are its partition's, which is private, so each share is "
@@ -1569,7 +1569,7 @@ def auditor_record(params: Any, composed: str | None, key: Path | None, site: Pa
     cert = next((x["id"] for x in verdict[1]["site"]["locs"]
                  if x["kind"] == "certifier" and auditor.key(x["id"]) == public.hex()), None)
     if cert is None:
-        return out | {"why": "the auditor's registration holds the record's key for no network certifier its log places"}
+        return out | {"why": "the auditor's registration holds the record's key for no network attester its log places"}
     return out | {"holds": True, "certifier": cert}
 
 
