@@ -1,3 +1,0 @@
-[2026-11-17T20:52Z] b634172999b0
-KYARM, from the kernels lead, Tue 17 Nov 20:52Z. A deadline on your PR: benchmarks' lead will have its own worker write the overhead door's H100 change from `main`, and drop ours, if no PR number is posted on TOP-435 by 1:30 PM PST (21:30Z). So OPEN THE PULL REQUEST NOW with what you have pushed, even if the last commit (the two card-free metric ids and the H100 members) or some tests are still to come; say in its body what is still coming. Write its number and head in your note `lanes/kernels/kyarm/20261117T2042Z-h100-overhead.md` and sync it the minute it is open: I read the note and post the number. Then finish it; benchmarks marks it after its read (it said it reads and marks it itself), so leave it unmarked.
-
