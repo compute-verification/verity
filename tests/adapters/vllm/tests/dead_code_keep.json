@@ -17,6 +17,7 @@
   "verity_vllm.program.quarantine.collective": "provisional TP AllReduce definitions; test_tp_collective.py",
   "verity_vllm.program.quarantine.collective.allreduce": "see quarantine.collective",
   "verity_vllm.program.quarantine": "the admission home of provisional Definitions: collective",
+  "verity_vllm.program.predict.mtp": "dsa's MTP draft layer: its part of the weights record (draft_layer, the name-to-path map a match reads) and the draft forward, held against the pin's launches by tests/program/test_predict_mtp.py; live once the predictor builds a drafted request's Program, which domain.check_phi refuses until then",
   "verity_vllm.compiler.advice_check": "AdviceCheck_v1, the advice format's check Definition, read by its circuit-check sidecar and tests/compiler/test_network_attester_advice_check.py",
   "verity_vllm.compiler.cache_step_v3": "the prefix cache's step v3 (LIVE through compile_slice_v4 to v6), held by tests/compiler/test_network_attester_cache_step_v3.py; its other callers are benchmarks/mempool and benchmarks/network_e2e/encodings",
   "verity_vllm.compiler.compile_slice_v4": "CompileSlice_v4, which compile_slice_v5 and v6 build on, held by tests/compiler/test_network_attester_compile_slice_v4.py; benchmarks/network_e2e/encodings' pool drivers import it",
