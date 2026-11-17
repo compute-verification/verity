@@ -151,7 +151,7 @@ FRAME_TAG = b"verity-network-certifier/frame/v2\0"
 EMPTY_TAG = b"verity-network-certifier/empty/v2\0"
 NODE_TAG = b"verity-network-certifier/node/v2\0"
 CERTIFICATE_TAG = b"verity/net-cert/v1"
-MARK_TAG = domains.CERTIFIER_MARK.encode()
+MARK_TAG = domains.ATTESTER_MARK.encode()
 DIGEST_BYTES = _DIGEST_BYTES["sha512"]
 SALT_BYTES = 64
 #: what a link's name gains for the link its marks are attested under (`marks_link`)

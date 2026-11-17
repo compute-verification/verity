@@ -75,7 +75,7 @@ carries `β K`.
 reaches a machine outside the registered devices only through a bit their programs exchange: the coins are
 confidential (`CoinsConfidential`). For the MVP that holds by placement: the device that runs a
 server's network attester also produces that server's live coins, and private messages travel only on private links
-(`WitnessPathPrivate`), so no coin leaves the boundary the certifier counts but through
+(`WitnessPathPrivate`), so no coin leaves the boundary the network attester counts but through
 the links it counts. Trust in that device and its host provider is `trusted-device`. A coin readable outside the
 boundary falsifies the premise: an outside machine computes the block's words from it and returns the root in 512
 bits. -/

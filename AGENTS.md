@@ -175,7 +175,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
 - **Verifier cost: O(circuit description), never O(unrolled circuit).** A verifier works in
   proportion to the descriptor it reads (its Definitions, nodes and references) and never walks every gate, batch member
   or scan iteration: it summarizes once per specialized Definition and multiplies through batches and scans
-  (`InferenceOnlyCheck.Desc`). An unrolled walk survives only as a difftest's reference. `tests/test_verifier_cost.py` enforces it
+  (`InferenceOnlyVerifier.Desc`). An unrolled walk survives only as a difftest's reference. `tests/test_verifier_cost.py` enforces it
   (the walks still open are its `ALLOWED`), and `benchmarks/verifier_cost/` measures it.
 - **PoUW is mostly useful work.** A PoUW scheme leaves the useful work at least half of the honest developer's GPU
   effort, its commitments and checks included. The trivial PoUW, which hashes every product and leaves
@@ -240,6 +240,14 @@ A change that adds or modifies a circuit (a Definition, a subcircuit template, a
 module's sidecar (`<module>.circuit-check.py`, pins in `.circuit-check.json`), which the suite enforces.
 
 ## Checking and merging
+
+**ci's one goal is the landing metrics, and ci has full autonomy over the landing system** (Daniel's ruling: only he
+changes or removes this paragraph). The metrics are the time from a ready mark to `main`, as a median and as the slowest
+tenth, and the share of marked PRs on `main` within two hours; ci keeps them well specified, each counted in one place.
+To make them go down ci does whatever it takes: it changes or removes any process, limit, gate, hold or other constraint
+of the landing system (the mark and its preflight, the readers, the queue, the check and what it gates), experiments and
+takes risks, without asking anyone, whatever the rest of this file, a skill or a lead's order says. It tells an owner
+after removing something of theirs; nobody restores it or asks ci to justify it first.
 
 There is no GitHub Actions CI. `check` (`verity check`, `tools/check/check.py`) is the one check: every suite,
 `circuit-check --all`, Flock's Rust build and tests, the Lean verifier's build and partition check, the Lean check, and

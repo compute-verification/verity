@@ -34,7 +34,9 @@ def v1_case(program, query, previous: str | None = None, design: dict | None = N
     rec = R.record(program, query, design, S.SCHEME, [{"port": "x", "root": "01" * 64, **ports["x"]}],
                    {"kind": "served", "run": "r-served-cases", "row": 0}, previous=previous,
                    registered=[{"value": "weights/w", "root": "ab" * 64, "leaves": 8, "words": 4, "domain": "cd" * 64}])
-    params = RP.params(program, query, design, ports, None, "1/100", partition=part)
+    values = program.fn.bindings.get("values", ())
+    params = RP.params(program, query, design, ports, None, "1/100", partition=part,
+                       registered={name: 1 for name, _leaves, _width in values} if values else None)
     evidence = {"draw": {"units": [0]}, "sessions": ["5e" * 64], "verdicts": {"m0": {"accepted": True}}}
     return {"commitment": codec.canonical_json(rec).hex(), "evidence": codec.canonical_json(evidence).hex(),
             "params": params}

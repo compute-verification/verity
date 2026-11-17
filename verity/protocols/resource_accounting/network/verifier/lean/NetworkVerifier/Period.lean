@@ -159,7 +159,7 @@ schedule it runs under, and the certificate the key signed for both once, before
   `window · bucket_ms`, an execution phase's milliseconds, two listed entries of one key, starting at `a` and `a'` with
   bases `b` and `b'`, have `a · L + b' = a' · L + b`. Each key's life starts at 0, so two keys' bases share no origin:
   a key's first listed entry's start is the auditor's pin, and every later entry of that key is read off it by the
-  certifier's signatures, which is why a key may be listed in more than one session. A later entry of a key also runs
+  network attester's signatures, which is why a key may be listed in more than one session. A later entry of a key also runs
   the session right after its key's entry listed before it (`follows`): its ordinal is that entry's plus one. The
   key's device state gives each session it starts the next ordinal and moves the key's life on by the session's whole
   span, so an entry whose ordinal is not the next, which a session of the key that no entry lists would leave, is
@@ -170,7 +170,7 @@ schedule it runs under, and the certificate the key signed for both once, before
   execution phase missing any record's certificate is refused, and the network attester certifies no record of an
   execution phase in which it refused a
   connection (traffic past the window's Program slots, `network_certifier`'s "Admission"), so such an execution phase is refused; its two registrations, ingress then egress, are what `network_certifier_rows.check_registration` reads:
-  the execution phase's value, link, end and window, in its session's numbers (`w − a`, as the certifier wrote them),
+  the execution phase's value, link, end and window, in its session's numbers (`w − a`, as the network attester wrote them),
   the schedule's digest (a registration under another schedule is
   refused), the schedule's rows, words, word bits, row format and layout (its first bucket `(w − a) · T`), the
   execution phase's domain in the entry's
@@ -473,7 +473,7 @@ def headDigest (link : String) (d : Direction) (w : Nat) (sd : ByteArray) (s : S
 
 /-- `network_certifier_rows.check_registration` of the link's rows in direction `d` for execution phase `w` of the period, under
 the entry `w` picks (`entryAt`): its signer is the entry's key, refused by name first when it is another listed key,
-outside its stretch, or no listed one; and the registration is the certifier's, so its value, its window, its layout's
+outside its stretch, or no listed one; and the registration is the network attester's, so its value, its window, its layout's
 first bucket, its domain and the head its certificate signs are in that session's numbers, `w` less the entry's start,
 and its domain binds the entry's session. -/
 def rowsCheck (p : Params) (s : Schedule) (sd : ByteArray) (w : Nat) (d : Direction) (r : Rows) : Found Unit := do
@@ -590,7 +590,7 @@ def wired (audits : Array Audit) (s : Schedule) (regs : Array Json) (reg : Json)
 /-- The scan's state in a registration: the entry of its `roots` whose port is `scan/state`. -/
 def stateName : String := "scan/state"
 
-/-- The value a window circuit registers the scan's state rows as (the certifier's `blocks.SCAN_STATE`), row a the state
+/-- The value a window circuit registers the scan's state rows as (the network attester's `blocks.SCAN_STATE`), row a the state
 before bucket a: the entry of an audit's `registered`, or of the scan's, whose value it is. -/
 def stateValue : String := "verity/certifier/scan-state/v1"
 
@@ -737,7 +737,7 @@ def Facts.readAt (f : Facts) (δ : Core.Ratio) : Facts :=
 /-- Execution phase `w`'s findings in the rows form, in the order the module docstring gives, and on acceptance its
 scan's facts and its tied audits' free inputs (`tiedAudits`: the parameters' `free` of each audit whose output the
 scan's `prog` is, each once). `w` is the period's number: the records' certificates and the rows' registrations, the
-certifier's, are held to the session's number of the entry `w` picks (`certifiesOn`, `rowsCheck`). -/
+network attester's, are held to the session's number of the entry `w` picks (`certifiesOn`, `rowsCheck`). -/
 def rowsExecutionPhaseCheck (p : Params) (s : Schedule) (sd : ByteArray) (audits : Array Json) (w : Nat)
     (reg : Json) (x : ExecutionPhase) : Found (Facts × Nat) := do
   let what := s!"window {w}"
@@ -855,7 +855,7 @@ def follows (xb x : Start) : Bool := xb.ordinal + 1 == x.ordinal
 certified start (`startRefusal`), the entry starts where its key's first listed entry puts it (`heldTo`, by key
 identifier, which names one key, `entriesKeyRefusal`), and its session is the one right after that of its key's entry
 listed before it (`follows`). A key's first listed entry is held to itself: its start is the auditor's pin, and each
-later entry of the key is read off it by the certifier's signatures. -/
+later entry of the key is read off it by the network attester's signatures. -/
 def startCheck (p : Params) (s : Schedule) (sd : ByteArray) (starts : Array Start) (i : Nat) (e : Entry) (x : Start) :
     Option (Core.Verdict × String) :=
   match startRefusal p sd e x with

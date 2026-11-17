@@ -25,7 +25,7 @@ check reads as its ``client.json`` (`client_doc`), with the request's id, its to
 them. A request the shim did not send has a line too, with why (``unsent``): one it refused, and one it never read
 whole, its client having closed first. No prompt and no token id is kept.
 
-    python cell_shim.py --deployment CERTIFIER_OUT/deployment.json --tokenizer CHECKPOINT --log shim.jsonl
+    python cell_shim.py --deployment ATTESTER_OUT/deployment.json --tokenizer CHECKPOINT --log shim.jsonl
         [--listen 127.0.0.1:0]
 
 The network attester's listener is read from ``endpoints.json`` beside ``--deployment``, which its serve command writes there.

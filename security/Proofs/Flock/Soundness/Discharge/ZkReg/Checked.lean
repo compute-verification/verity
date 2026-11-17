@@ -127,34 +127,8 @@ theorem checkPort_at {c : Circuit} {pub : Public} {t : Tables} {indices : Array 
         Registered.opens reg (Registered.tableRow pub t p (Registered.ref t c.ports.size p i))
           (positions.getD (Registered.ref t c.ports.size p i) 0)
           (paths.getD (Registered.ref t c.ports.size p i) ByteArray.empty) = true := by
-  unfold Registered.checkPort at h
-  simp only at h
-  split at h
-  · rename_i p hp
-    split at h
-    · exact absurd (Registered.except_bind_ok h) fun ⟨_, h1, _⟩ => Registered.throw_ne_ok _ _ h1
-    · split at h
-      · exact absurd (Registered.except_bind_ok h) fun ⟨_, h1, _⟩ => Registered.throw_ne_ok _ _ h1
-      · obtain ⟨⟨positions, paths⟩, hent, h⟩ := Registered.except_bind_ok h
-        simp only at h
-        split at h
-        · exact absurd (Registered.except_bind_ok h) fun ⟨_, h1, _⟩ => Registered.throw_ne_ok _ _ h1
-        · split at h
-          · exact absurd h (Registered.throw_ne_ok _ _)
-          · rename_i hrow
-            split at h
-            · rename_i hinst
-              refine ⟨p, positions, paths, hp, hent, fun i hi => ?_⟩
-              have hi' := List.find?_eq_none.mp hinst i (List.mem_range.mpr hi)
-              simp only [Bool.not_eq_true', Bool.and_eq_false_iff, decide_eq_false_iff_not, not_or,
-                Classical.not_not] at hi'
-              obtain ⟨hr, hreads⟩ := hi'
-              have ho := List.find?_eq_none.mp hrow _ (List.mem_range.mpr hr)
-              exact ⟨hr, (reg.readAt_eq _).symm.trans hreads, by simpa using ho⟩
-            · split at h
-              · exact absurd (Registered.except_bind_ok h) fun ⟨_, h1, _⟩ => Registered.throw_ne_ok _ _ h1
-              · split at h <;> exact absurd h (Registered.throw_ne_ok _ _)
-  · exact absurd h (Registered.throw_ne_ok _ _)
+  obtain ⟨p, positions, paths, hp, -, -, hent, -, hall⟩ := Registered.checkPort_spec h
+  exact ⟨p, positions, paths, hp, hent, hall⟩
 
 variable {mPts n : ℕ} {Reg : Type}
 

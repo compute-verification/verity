@@ -409,7 +409,8 @@ def decide(s: Snapshot) -> list[Action]:
     (`_aside`), which goes behind it as behind any PR waiting.
 
     A red or a member set aside drops its candidate and every one above it, a refused records run drops its staged batch, and
-    a member others took from the queue drops its own candidate and every one above it, or its staged batch (`_chain`); in
+    a member others took from the queue drops its own candidate and every one above it, or its staged batch (`_chain`); a
+    candidate dropped but on `main` drops the staged batch built on it, whatever its records run's state; in
     the same tick each is built again (`_restack`), in order on what is left of the chain, without the suspects, the ejected,
     the members set aside and the members not ready at the heads they were built at: no other member leaves, and each keeps
     its place.  One with a Lean member is staged again off the chain (`Build.records`) while no other batch stays staged,
@@ -495,9 +496,14 @@ def _decide(s: Snapshot, leaves: list[Leave] | None) -> list[Action]:
             acts += [Drop(d.sha, BASE_FAILED) for d in chain[k + 1:]]
             chain, rest = chain[:k], [*chain[k:], *rest]
         break
-    kept, passed = [], []
+    kept, passed, moved = [], [], []
+    dead = {a.sha for a in acts if isinstance(a, Drop) and a.why != ON_MAIN}
     for c in staged:
         first, got = _first(s, c, ready)
+        if got is None and c.base in dead:
+            acts.append(Drop(c.sha, BASE_DROPPED))
+            moved.append(c)
+            continue
         acts += first
         if got is None:
             kept.append(c)
@@ -506,7 +512,7 @@ def _decide(s: Snapshot, leaves: list[Leave] | None) -> list[Action]:
             ejected, out = ejected | got[0], out | got[1]
             rest.append(c)
     n = len(acts)
-    kept += _restack(s, ready, chain, rest, landed | ejected | out, main, acts, kept, hold)
+    kept += _restack(s, ready, chain, [*moved, *rest], landed | ejected | out, main, acts, kept, hold)
     settled = landed | ejected
     if held:
         return _leaving(s, leaves, acts, chain, kept, settled, CHAIN_WAITS)
@@ -723,9 +729,9 @@ def _chain(s: Snapshot, ready: dict[int, Ready], acts: list[Action]
     candidates already on `main`; the staged batches kept (`Candidate.waits`), first in rank first; and the candidates
     dropped for `_restack` to build again: that first stale candidate with every one above it on the chain, then each
     staged batch with a member that left.  The drops of the other candidates go to ``acts``, each with every candidate above
-    it.  A staged batch another candidate `repairs` is dropped for it, whatever their ranks; one is kept whatever its base,
-    which the batch leaves once it goes onto the chain (`Commit`), while no member of it is in a candidate on the chain, on
-    `main`, in a staged batch first in rank or taken from the queue by others."""
+    it.  A staged batch another candidate `repairs` is dropped for it, whatever their ranks; one is kept, while no member of
+    it is in a candidate on the chain, on `main`, in a staged batch first in rank or taken from the queue by others, and
+    `decide` drops it, built again, once its base is dropped but on `main`."""
     by_sha: dict[str, Candidate] = {}
     for c in sorted(s.candidates, key=lambda c: c.sha):
         by_sha.setdefault(c.sha, c)
@@ -1009,7 +1015,7 @@ def _said(c: Candidate, under: list[Ready], built: dict[int, Ready]) -> Candidat
 
 def _restack(s: Snapshot, ready: dict[int, Ready], chain: list[Candidate], rest: list[Candidate], out: set[int], main: str,
              acts: list[Action], staged: list[Candidate], hold: bool = False) -> list[Candidate]:
-    """Build ``rest``, the candidates this tick dropped for a red, a refusal, a member set aside or a leave, lowest first,
+    """Build ``rest``, the candidates this tick dropped for a red, a refusal, a member set aside, a leave or a dropped base, lowest first,
     again in order on ``chain``'s top (``main`` when it is empty), each `Build.replaces` its own, without the members of
     ``out`` (on `main`, ejected, suspected or set aside), those not ready at the heads they were built at, and those a
     candidate below or a staged batch kept (``staged``) holds; one with none left is not built.  ``chain`` gains each, as a

@@ -144,24 +144,24 @@ theorem leak_le_registered {Ω : Type*} (hkinds : S.LinkKinds)
     (hu : units ⊆ S.challengersOf pinned i) (hsh : S.sharedOf pinned i ⊆ units)
     (β : Fin S.links.length → ℕ)
     (hcs : ResourceAccounting.CausalStrategy R ℓ) (hdl : ResourceAccounting.DeclaredLinks R S.placeEnds β link)
-    (hT : ResourceAccounting.TrustedUnits R 𝒱 (S.placesIn (S.certifiersOf i ∪ units)) spec record bucket jitter)
-    (hsec : ResourceAccounting.Secrets R (S.placesIn (S.certifiersOf i ∪ units))
+    (hT : ResourceAccounting.TrustedUnits R 𝒱 (S.placesIn (S.attestersOf i ∪ units)) spec record bucket jitter)
+    (hsec : ResourceAccounting.Secrets R (S.placesIn (S.attestersOf i ∪ units))
       (S.placesIn (S.proverUnder i ∪ (S.challengersOf pinned i \ units))) a)
-    (hK : ResourceAccounting.RecordsWithin R (S.placesIn (S.certifiersOf i ∪ units)) record a b K) :
+    (hK : ResourceAccounting.RecordsWithin R (S.placesIn (S.attestersOf i ∪ units)) record a b K) :
     (Set.range fun r =>
         (R r).acts (S.placesIn (S.proverUnder i ∪ (S.challengersOf pinned i \ units)) ∪
-          S.placesIn (S.certifiersOf i ∪ units))ᶜ (Set.Ico a b)).encard ≤
-      ((2 ^ ((∑ y ∈ S.placesIn (S.certifiersOf i ∪ units), K y) +
-        jitter * ((Finset.Ico a b).image bucket).card * (S.placesIn (S.certifiersOf i ∪ units)).card +
+          S.placesIn (S.attestersOf i ∪ units))ᶜ (Set.Ico a b)).encard ≤
+      ((2 ^ ((∑ y ∈ S.placesIn (S.attestersOf i ∪ units), K y) +
+        jitter * ((Finset.Ico a b).image bucket).card * (S.placesIn (S.attestersOf i ∪ units)).card +
         ResourceAccounting.uncertifiedLinkCapacity S.placeEnds β (S.placesIn (S.auditorsOf pinned i))
           (S.placesIn (S.proverUnder i)) * (b - a)) : ℕ) : ℕ∞) := by
   have hin : ∀ y ∈ S.challengersOf pinned i \ units, S.Within i y := fun y hy =>
     S.within_of_not_shared (Finset.mem_sdiff.2
       ⟨(Finset.mem_sdiff.1 hy).1, fun h => (Finset.mem_sdiff.1 hy).2 (hsh h)⟩)
-  have h := ResourceAccounting.leak_le_sum_K R ℓ S.placeEnds β link 𝒱 (S.placesIn (S.certifiersOf i ∪ units))
+  have h := ResourceAccounting.leak_le_sum_K R ℓ S.placeEnds β link 𝒱 (S.placesIn (S.attestersOf i ∪ units))
     (S.placesIn (S.proverUnder i ∪ (S.challengersOf pinned i \ units))) spec record bucket jitter a b K hcs hdl hT
     hsec hK
-  rw [S.uncertified_sealed β (S.certifiersOf i ∪ units) (S.proverUnder i) (S.challengersOf pinned i \ units) hends
+  rw [S.uncertified_sealed β (S.attestersOf i ∪ units) (S.proverUnder i) (S.challengersOf pinned i \ units) hends
       (S.challengers_sealed hkinds i (S.challengersOf pinned i \ units)
         fun y hy => ⟨(S.mem_challengersOf (Finset.mem_sdiff.1 hy).1).1, hin y hy⟩),
     S.units_union_sinks hu] at h
