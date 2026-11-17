@@ -42,7 +42,7 @@ from verity_vllm.records import workload as workload_record
 
 #: The names the library's other modules read here.
 __all__ = [
-    "CHECKPOINTS", "DEFAULT_ROW_PROTOCOLS", "DTYPES", "MANIFESTS", "RECORDS", "ROOT", "TARGETS", "TARGET_NUM_SMS", "VLLM",
+    "CARD_FILES", "CHECKPOINTS", "DEFAULT_ROW_PROTOCOLS", "DTYPES", "MANIFESTS", "RECORDS", "ROOT", "TARGETS", "TARGET_NUM_SMS", "VLLM",
     "WORKLOADS", "WORKLOAD_SCHEMA", "BuildConfig", "CommitConfig", "EnginePin", "MatchConfig", "RowConfig", "RowEngine",
     "RowId", "RunEnv", "UsageError", "checkpoint_dir", "checkpoint_entries", "checkpoints_hf_home", "done_source_refusal",
     "group", "option", "parse_protocols", "row_batch", "row_execution", "row_file", "row_path", "row_target", "row_tokens",
@@ -56,6 +56,7 @@ WORKLOADS = ROOT / "workloads"
 CHECKPOINTS = MANIFESTS / "checkpoints.json"
 #: The circuit database's index (`pipeline.config_record`, `verity-vllm records`); the rows it lists are the rows of record.
 RECORDS = MANIFESTS / "records.json"
+CARD_FILES = ROOT.parents[1] / "hardware/cards"
 
 
 def checkpoints_hf_home() -> str | None:
