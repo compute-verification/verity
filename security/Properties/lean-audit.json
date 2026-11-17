@@ -7255,10 +7255,38 @@
    "unfolded_hash": "64ed7c7948d4c6808e470ef89624c5e6f6782bb446f567a6e6fd751dd4aa954f"
   },
   "Properties.Poub.Subprotocol.acceptIsVerified_acceptAll": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.Poub.Subprotocol.acceptIsVerified_acceptAll : False"
+   ],
+   "assumptions": [],
+   "type_hash": "0000000000000000000000000000000000000000000000000000000000000000"
   },
   "Properties.Poub.Subprotocol.acceptIsVerified_accepts": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.Poub.Subprotocol.acceptIsVerified_accepts (h : Properties.Poub.Subprotocol.HonestLogAccepted) :",
+    "  Exists fun reg =>",
+    "    Exists fun pub =>",
+    "      Exists fun prof =>",
+    "        And (Eq (Poub.Difftest.registrationOf Properties.Poub.Subprotocol.HonestLog.registration) (Except.ok reg))",
+    "          (Eq",
+    "            (Poub.Protocol.check Properties.Poub.Subprotocol.HonestLog.params reg",
+    "              Properties.Poub.Subprotocol.HonestLog.evidence)",
+    "            (Core.Outcome.accept pub prof))"
+   ],
+   "assumptions": [
+    "Properties.Poub.Subprotocol.HonestLogAccepted"
+   ],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Properties.Poub.Subprotocol.HonestLogAccepted"
+    ],
+    "reads": []
+   },
+   "type_hash": "cf4583908d6642e0345b4a93c7c43ad834a871cf26e1ca4e1f86addf1056a0fe"
   },
   "Properties.Poub.Subprotocol.acceptIsVerified_complete": {
    "owner": "@memory-accounting",
