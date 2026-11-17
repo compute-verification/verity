@@ -19,9 +19,9 @@ What `Spot.Wires.check` has tested of a wire, and what it gives of a row the wir
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
-open InferenceOnlyCheck.Record.SecurityProofs (mem_of_lookup)
+open InferenceOnlyVerifier.Record.SecurityProofs (mem_of_lookup)
 
 /-! ## What `Spot.Wires.check` tests of a wire -/
 
@@ -148,4 +148,4 @@ theorem wire_of_writer {c : Spot.Wires.Wiring} {S : Spot.Wires.Summary} (h : Spo
   exact ⟨w, hwm, rt, wtT, p, ow, rfl, rfl, rfl, rfl, hsh, hb, hlr, hlw, hlp, hlo, by omega, hwd, hk0, hko, hkw,
     by omega, by omega, by omega, idx, hidx, rfl⟩
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs

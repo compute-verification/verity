@@ -13,7 +13,7 @@ each of the `n` leaves of `t` is as wide as the leaf of `S` at its place.
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.LeafWidths
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.LeafWidths
 open Flock.Program
 
 /-! ## The check's monad -/
@@ -402,4 +402,4 @@ theorem eqRange_sound (fuel : ℕ) (t : Ty) (a : ℕ) (S : Ty) (b n w w' : ℕ) 
           exact hjp _ _ h
       · exact hjp _ _ h
 
-end InferenceOnlyCheck.Properties.SecurityProofs.LeafWidths
+end InferenceOnlyVerifier.Properties.SecurityProofs.LeafWidths
