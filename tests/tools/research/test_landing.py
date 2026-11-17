@@ -239,6 +239,30 @@ def test_a_failure_outside_the_suites_or_without_a_failing_test_points_at_no_fil
     assert implicated(d) is None
 
 
+HARNESS_LOG = """=================================== FAILURES ===================================
+_ test_each_directory_follows_the_interface _
+
+    def test_each_directory_follows_the_interface():
+        inputs = set(tomllib.loads(HARNESS.read_text())["tool"]["verity"]["tests"]["inputs"])
+        assert not unread, "list it under [tool.verity.tests] inputs in benchmarks/harness/pyproject.toml"
+>       assert lacks == [], f"{where} and lacks {'; '.join(lacks)}"
+E       AssertionError: benchmarks/inference_only/pyproject.toml declares core = 'verity bench inference_only' and lacks a part
+
+tests/test_interface.py:26: AssertionError
+=========================== short test summary info ============================
+"""
+
+
+def test_a_suite_below_the_trees_root_names_its_frames_from_its_directory_and_the_paths_its_report_names_from_the_root():
+    """A suite in `benchmarks/harness` whose assertion names `benchmarks/inference_only/pyproject.toml` named
+    `benchmarks/harness/benchmarks/inference_only/pyproject.toml`, a path no change touches, and not the file at fault."""
+    from research.landing import suite_named
+
+    s = {"name": "verity-bench", "suite": "benchmarks/harness", "failed_tests": ["tests/test_interface.py::test_x"]}
+    assert suite_named(s, HARNESS_LOG) == {"benchmarks/harness/tests/test_interface.py", "benchmarks/harness/pyproject.toml",
+                                           "benchmarks/inference_only/pyproject.toml"}
+
+
 def test_a_runs_tree_root_is_its_job_jsons_run_cwd_and_a_malformed_job_json_raises(tmp_path):
     """No job.json, or one naming no absolute `run.cwd`, gives no root; a job.json that isn't a JSON object raises rather than
     reading as a run with no root."""

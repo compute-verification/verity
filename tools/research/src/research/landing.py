@@ -785,10 +785,13 @@ def _report(log: str) -> str:
 
 def _named(log: str, base: str, root: str | None = None) -> set[str]:
     """The repository paths a pytest log's failures name (`_report`), each `relative` to the repository: their tracebacks'
-    frames and the paths and `art:` ids the report holds."""
+    frames, from ``base``, and the paths and `art:` ids the report holds besides, from the repository's root."""
     report = _report(log)
-    paths = {relative(m[1] or m[2], base, root) for m in TRACE_RE.finditer(report)}
-    paths |= {relative(m[1], base, root) for m in NAMED_RE.finditer(report)}
+    frames = list(TRACE_RE.finditer(report))
+    spans = [m.span(1 if m[1] else 2) for m in frames]
+    paths = {relative(m[1] or m[2], base, root) for m in frames}
+    paths |= {relative(m[1], "", root) for m in NAMED_RE.finditer(report)
+              if not any(a <= m.start(1) < b for a, b in spans)}
     return {p for p in paths if p} | {f"art:{h}" for h in ART_RE.findall(report)}
 
 
