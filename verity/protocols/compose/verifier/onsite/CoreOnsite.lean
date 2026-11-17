@@ -12,7 +12,7 @@ by PoUB's P2 session on PoUS's store (`Poub.P2Protocol.protocol`,
 `verity/remote-bandwidth/p2/v0`), communication by the network attester over the period
 (`NetworkCheck.Period.protocol`, `verity/certifier/v0`: the period's link-execution phases certified and proved, and the bound
 `K` on what left the site), and the wipe by the memory challenger's streamed-label wipe of the period
-(`MemoryChallenger.WipeProtocol.protocol`, `verity/wipe/v0`). `Core.Composition.tiedSameB` composes them on the caller's
+(`MemoryAttester.WipeProtocol.protocol`, `verity/wipe/v0`). `Core.Composition.tiedSameB` composes them on the caller's
 blobs: every subprotocol accepts or onsite doesn't, and any subprotocol's rejection rejects onsite whatever the others
 answer. The policy's commitment and SPOT's are the run's registration record (in either form, the one-stage
 one), and both must commit to the same one; every window of the period must name that record as its Commit record,
@@ -20,7 +20,7 @@ remote's tie (`Core.Remote.executionPhases`). Two records reject onsite whatever
 must also be on one store (`store`): two stores reject onsite unless it rejects already.
 
 `counted` (`verity/onsite/counted/v0`) is onsite with the wipe's count held to the network attester's: the wipe's
-subprotocol is `countedWipe` (`MemoryChallenger.WipeProtocol.mkCounted`, `verity/wipe/counted/v0`), which certifies at
+subprotocol is `countedWipe` (`MemoryAttester.WipeProtocol.mkCounted`, `verity/wipe/counted/v0`), which certifies at
 the count its evidence gives, and beside it stands the count over the span between the wipe's two marks (`hostSpan`,
 `NetworkCheck.Span.protocol` on the registered hardware, `verity/certifier/span/v0`). Its ties hold the two to one
 another: the wipe is of the host the count's link is on, and that link is the host's one link besides the memory
@@ -40,8 +40,8 @@ public import CoreComposition.Blobs
 public import CoreComposition.Cases
 public import CoreComposition.Tie
 public import CoreRemote
-public import MemoryChallenger.WipeCount
-public import MemoryChallenger.WipeProtocol
+public import MemoryAttester.WipeCount
+public import MemoryAttester.WipeProtocol
 public import InferenceOnlyCheck.Protocol
 public import NetworkCheck.Period
 public import NetworkCheck.Span
@@ -55,8 +55,8 @@ meta import CoreComposition.Blobs
 meta import CoreComposition.Cases
 meta import CoreComposition.Tie
 meta import CoreRemote
-meta import MemoryChallenger.WipeCount
-meta import MemoryChallenger.WipeProtocol
+meta import MemoryAttester.WipeCount
+meta import MemoryAttester.WipeProtocol
 meta import InferenceOnlyCheck.Protocol
 meta import NetworkCheck.Period
 meta import NetworkCheck.Span
@@ -76,7 +76,7 @@ open Composition
 /-- Onsite's subprotocols, in the order of their ids. -/
 def components : List BlobProtocol :=
   [NetworkCheck.Period.protocol, InferenceOnlyCheck.Protocol.protocol, PousCheck.RunProtocol.protocol, PouwCheck.Period.protocol,
-    Poub.P2Protocol.protocol, VStar.Recursive.Sampled.protocol, MemoryChallenger.WipeProtocol.protocol]
+    Poub.P2Protocol.protocol, VStar.Recursive.Sampled.protocol, MemoryAttester.WipeProtocol.protocol]
 
 /-- The subprotocols that must commit to one record: the policy and SPOT. -/
 def tied : List String := [InferenceOnlyCheck.Protocol.protocolId, VStar.Recursive.Sampled.protocol.id]
@@ -127,14 +127,14 @@ private def allRefused : Answer := answer (components.map refused)
   some "params: verity/inference-only/v0 is missing"
 -- a served run that leaves PoUS's case or the wipe's out of the composite gets a rejection naming the one missing
 private def without (id : String) : Answer := answer ((components.filter (·.id != id)).map refused)
-#guard [PousCheck.RunProtocol.protocol.id, MemoryChallenger.WipeProtocol.protocol.id].all fun id =>
+#guard [PousCheck.RunProtocol.protocol.id, MemoryAttester.WipeProtocol.protocol.id].all fun id =>
   (without id).verdict == .reject && (without id).published.isNone &&
     (without id).reason == some s!"params: {id} is missing"
 #guard (answer ((components.take 5).map refused ++
-    [refused Spot.OneStage.protocol, refused MemoryChallenger.WipeProtocol.protocol])).reason ==
+    [refused Spot.OneStage.protocol, refused MemoryAttester.WipeProtocol.protocol])).reason ==
   some "params: verity/sampled-proofs/one-stage/v1 is not a component of this composition"
 #guard (answer ((components.take 5).map refused ++
-    [refused Spot.OneStageZk.protocol, refused MemoryChallenger.WipeProtocol.protocol])).reason ==
+    [refused Spot.OneStageZk.protocol, refused MemoryAttester.WipeProtocol.protocol])).reason ==
   some "params: verity/sampled-proofs/one-stage/v2 is not a component of this composition"
 -- one-stage v1, whose verdicts are the evidence's, is refused by name: a one-stage statement naming no proofs is v1's,
 -- and onsite rejects on it with SPOT's refusal (`VStar.Recursive.Sampled.V1_REFUSED`)
@@ -206,10 +206,10 @@ private def answered : List (Outcome Keyed Keyed) := [.accept [] [], .undecided 
 
 /-! ## The wipe's count, held to the network attester's -/
 
-/-- The wipe whose count the composition holds (`MemoryChallenger.WipeProtocol.mkCounted`, `verity/wipe/counted/v0`),
+/-- The wipe whose count the composition holds (`MemoryAttester.WipeProtocol.mkCounted`, `verity/wipe/counted/v0`),
 under the accepted schemes. -/
 def countedWipe : Protocol :=
-  MemoryChallenger.WipeProtocol.mkCounted MemoryChallenger.WipeProtocol.COUNTED_ID MemoryChallenger.SCHEMES
+  MemoryAttester.WipeProtocol.mkCounted MemoryAttester.WipeProtocol.COUNTED_ID MemoryAttester.SCHEMES
 
 /-- The one link what leaves `host` leaves on, as the registered hardware `S` has it: `host`'s links besides the memory
 challengers' are one link, and it joins `host` and a network attester. Refused, by name: an id that is no host's; a
@@ -243,12 +243,12 @@ def spanParams (j : Lean.Json) : Flock.V NetworkCheck.Span.Params := do
 (`verity/certifier/span/v0`) on `spanParams`, the same check on parameters that hold the registered hardware. -/
 def hostSpan : Protocol := { NetworkCheck.Span.protocol with params := spanParams }
 
-/-- What the wipe's case names of its span (`MemoryChallenger.WipeProtocol.named`); `none` unless its commitment and
+/-- What the wipe's case names of its span (`MemoryAttester.WipeProtocol.named`); `none` unless its commitment and
 its evidence decode and name it. -/
-def wipeNamed (k : Case) : Option MemoryChallenger.WipeProtocol.Named :=
-  match MemoryChallenger.WipeProtocol.decodeCommitment k.commitment,
-    MemoryChallenger.WipeProtocol.decodeEvidence k.evidence with
-  | .ok c, .ok e => (MemoryChallenger.WipeProtocol.named c e).toOption.join
+def wipeNamed (k : Case) : Option MemoryAttester.WipeProtocol.Named :=
+  match MemoryAttester.WipeProtocol.decodeCommitment k.commitment,
+    MemoryAttester.WipeProtocol.decodeEvidence k.evidence with
+  | .ok c, .ok e => (MemoryAttester.WipeProtocol.named c e).toOption.join
   | _, _ => none
 
 /-- What the count's case names of its span (`NetworkCheck.Span.named`); `none` unless its parameters and its commitment
@@ -263,7 +263,7 @@ count's link, as the registered hardware in the count's parameters has it (its i
 def wipeNode : Tie :=
   ⟨"node",
     [(countedWipe.id, fun k =>
-        (Core.canonicalJson k.params.toUTF8 >>= MemoryChallenger.WipeProtocol.decodeParams).toOption.map ([·.server])),
+        (Core.canonicalJson k.params.toUTF8 >>= MemoryAttester.WipeProtocol.decodeParams).toOption.map ([·.server])),
       (hostSpan.id, fun k =>
         ((Core.canonicalJson k.params.toUTF8 >>= spanParams).toOption.bind (·.registered)).map ([·.host.toUTF8]))]⟩
 
@@ -271,7 +271,7 @@ def wipeNode : Tie :=
 subprotocols name to the first: the start mark the wipe's signed message names is the SHA-512 of the count's start
 certificate; the count's start mark opens to the wipe's start message and its end mark to the wipe's end message; and
 the count the wipe's evidence gives is the bits that can have left over the span and its tail, in whole MiB
-(`MemoryChallenger.StreamedWipe.egressUnits`: rounded up, saturating). -/
+(`MemoryAttester.StreamedWipe.egressUnits`: rounded up, saturating). -/
 def wipeCount : List Tie :=
   [⟨"start mark",
       [(countedWipe.id, fun k => (wipeNamed k).map ([·.startMark])),
@@ -285,7 +285,7 @@ def wipeCount : List Tie :=
     ⟨"egress",
       [(countedWipe.id, fun k => (wipeNamed k).map fun n => [mibBytes n.egressMib]),
         (hostSpan.id, fun k => (spanNamed k).bind fun n =>
-          n.egressBits.map fun b => [mibBytes (MemoryChallenger.StreamedWipe.egressUnits b)])]⟩]
+          n.egressBits.map fun b => [mibBytes (MemoryAttester.StreamedWipe.egressUnits b)])]⟩]
 
 def COUNTED_ID : String := "verity/onsite/counted/v0"
 
@@ -370,24 +370,24 @@ private def canonText (j : Lean.Json) : String := (Flock.canon j).toOption.getD 
 private def markOf (phase fill : UInt8) (m : ByteArray) : ByteArray :=
   (NetworkCheck.Span.guardMark phase fill).extract 0 175 ++ m
 
-private def wipeCommitment : MemoryChallenger.StreamedWipe.Commitment :=
-  ⟨"node0".toUTF8, ⟨#[0]⟩, ⟨16, 3, 1, 1000, #[("gpu", 16 * MemoryChallenger.StreamedWipe.LABEL_BYTES)]⟩⟩
+private def wipeCommitment : MemoryAttester.StreamedWipe.Commitment :=
+  ⟨"node0".toUTF8, ⟨#[0]⟩, ⟨16, 3, 1, 1000, #[("gpu", 16 * MemoryAttester.StreamedWipe.LABEL_BYTES)]⟩⟩
 
 /-- A closed session of no batches under no key, naming the count's start certificate (`guardMark 5 1`'s) as its start
 mark. No check accepts it; the ties read it. -/
-private def wipeSigned : MemoryChallenger.StreamedWipe.Signed :=
-  ⟨wipeCommitment, MemoryChallenger.StreamedWipe.COMPLETE,
+private def wipeSigned : MemoryAttester.StreamedWipe.Signed :=
+  ⟨wipeCommitment, MemoryAttester.StreamedWipe.COMPLETE,
     Flock.Sha512.hash ((NetworkCheck.Span.guardMark 5 1).extract 4 111), 0, 0, #[], "", .empty, .empty⟩
 
-private def startMsg : ByteArray := MemoryChallenger.StreamedWipe.startMessage wipeCommitment
-private def endMsg : ByteArray := (MemoryChallenger.StreamedWipe.endMessage wipeSigned).toOption.getD .empty
+private def startMsg : ByteArray := MemoryAttester.StreamedWipe.startMessage wipeCommitment
+private def endMsg : ByteArray := (MemoryAttester.StreamedWipe.endMessage wipeSigned).toOption.getD .empty
 
 /-- The wipe's case: of `server`, its evidence the signed session and a count. -/
-private def wipeCase (server : String) (signed : Option MemoryChallenger.StreamedWipe.Signed) (egressMib : Int) : Case :=
+private def wipeCase (server : String) (signed : Option MemoryAttester.StreamedWipe.Signed) (egressMib : Int) : Case :=
   { id := countedWipe.id,
-    params := canonText (MemoryChallenger.WipeProtocol.Params.toJson ⟨server.toUTF8, ⟨#[0]⟩, #[]⟩),
+    params := canonText (MemoryAttester.WipeProtocol.Params.toJson ⟨server.toUTF8, ⟨#[0]⟩, #[]⟩),
     commitment := (canonText wipeCommitment.toJson).toUTF8,
-    evidence := (canonText (MemoryChallenger.WipeProtocol.Evidence.toJson ⟨signed, some egressMib⟩)).toUTF8 }
+    evidence := (canonText (MemoryAttester.WipeProtocol.Evidence.toJson ⟨signed, some egressMib⟩)).toUTF8 }
 
 /-- The count's case on the host `node0`'s one link: its marks at execution phases 5 and 7, opening to `first` and
 `last`. Over them and the schedule's tail of one, four execution phases of 1,572,864 bits: one MiB, rounded up. -/

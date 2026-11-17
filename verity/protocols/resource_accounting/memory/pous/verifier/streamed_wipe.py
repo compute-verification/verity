@@ -47,7 +47,7 @@ A batch record is `u32 b ‖ u32 first ‖ u32 count ‖ u64 send_ns ‖ u64 rec
 answers)` (96 bytes).  The guarantee (Lean `Pous.Guarantees.StreamedWipe`) covers the sequential reveal,
 batch size 1 (`WipeParams.covered`); a larger batch lets an answer depend on the whole batch, which the proof doesn't
 cover yet, so `verdict` refuses it.  `verdict` is what a verifier checks of a signed session; its public output is the
-verdict alone.  Its Lean port decides it (`MemoryChallenger.StreamedWipe` and `wipe_verdict.judge` in
+verdict alone.  Its Lean port decides it (`MemoryAttester.StreamedWipe` and `wipe_verdict.judge` in
 `verity/protocols/resource_accounting/memory/pous/attester/lean/`, reading the records' `to_json`), and `verdict` here is the reference that port is
 difftested against.  The egress the bound reads is not the session's: the wipe's check takes it as evidence beside the
 signed session, in whole MiB (`egress_units`, 15 bits), and publishes it (`wipe_period`).  `retained_bits` and
@@ -194,7 +194,7 @@ class WipeCommitment:
                 "clock": CLOCK}
 
     def to_json(self) -> dict[str, Any]:
-        """The commitment as the Lean verdict reads it (`MemoryChallenger.StreamedWipe.Commitment.ofJson`): its header."""
+        """The commitment as the Lean verdict reads it (`MemoryAttester.StreamedWipe.Commitment.ofJson`): its header."""
         return self.header()
 
 
@@ -256,7 +256,7 @@ class SignedWipe:
         return message(self.commitment, self.ended, self.start_mark, self.fill_start_ns, self.fill_end_ns, self.batches)
 
     def to_json(self) -> dict[str, Any]:
-        """The signed session as the Lean verdict reads it (`MemoryChallenger.StreamedWipe.Signed.ofJson`)."""
+        """The signed session as the Lean verdict reads it (`MemoryAttester.StreamedWipe.Signed.ofJson`)."""
         return {"commitment": self.commitment.to_json(), "ended": self.ended, "start_mark": self.start_mark.hex(),
                 "fill_start_ns": self.fill_start_ns, "fill_end_ns": self.fill_end_ns,
                 "batches": [r.to_json() for r in self.batches], "scheme": self.scheme,
