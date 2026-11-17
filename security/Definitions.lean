@@ -74,10 +74,6 @@ public import Definitions.Flock
 public import Definitions.Core.Assumptions
 public import Definitions.Core.Guarantees
 public import Definitions.InferenceOnly.Assumptions
-public import Definitions.Slowdown.Guarantees.Threads
-public import Definitions.Slowdown.Guarantees.Layered
-public import Definitions.Slowdown.Guarantees.Fit
-public import Definitions.Slowdown.Guarantees.FitRate
 public import Definitions.Slowdown.Assumptions.Capability
 public import Definitions.Slowdown.Guarantees.Capability
 public import Definitions.Slowdown.Guarantees.Coverage
@@ -86,7 +82,6 @@ public import Definitions.Slowdown.Guarantees.CoveringTwoCosts
 public import Definitions.Slowdown.Guarantees.Cut
 public import Definitions.InferenceOnly.Guarantees.PartitionCovers
 public import Definitions.InferenceOnly.Guarantees.CompliesCK
-public import Definitions.Slowdown.Guarantees.Witnesses
 public import Definitions.Slowdown.Guarantees.Formalism
 public import Definitions.Slowdown.Guarantees.Formalism.Witnesses
 public import Definitions.Pous.Assumptions

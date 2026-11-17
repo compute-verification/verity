@@ -1,24 +1,16 @@
 module
 
 public import Proofs.Slowdown.CutCharged
-public import Proofs.Slowdown.Layered
-public import Proofs.Slowdown.FitKeep
-public import Proofs.Slowdown.WeightsSlotsWitness
-public import Proofs.Slowdown.FitRate
-public import Proofs.Slowdown.FitWitness
 public import Proofs.Slowdown.Capability
 public import Proofs.Slowdown.CoveringTwoCostsWitness
-public import Proofs.Slowdown.Witnesses
 public import Proofs.Slowdown.Formalism
 public import Proofs.Slowdown.Lemmas
-public import Proofs.Slowdown.ReadsBy
 public import Proofs.Core
 /-!
 # Proofs of the slowdown bound's guarantees
 
-The cuts and the min-cut bound (`Cut`, `CutCharged`), the work and product counts of threads, fit and layered
-references, covering at one and two costs, the local bounds (`Capability`), the
-training formalism (`Formalism`), and their witnesses. The policy they take as a hypothesis is
+The cuts and the min-cut bound (`Cut`, `CutCharged`), covering at one and two costs, the local bounds
+(`Capability`), the training formalism (`Formalism`), and their witnesses. The policy they take as a hypothesis is
 `Proofs.InferenceOnly`'s. Inference divided into sessions complies and is slowed by at most 1 (`Inference`).
 -/
 

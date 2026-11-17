@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Slowdown.Guarantees.Actual
+public import Definitions.ResourceAccounting.Guarantees.Actual
 public import Proofs.ResourceAccounting.Actual.Physical
 public import Proofs.InferenceOnly.ReadsIn
 import Mathlib.Data.NNRat.Floor

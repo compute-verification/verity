@@ -1,7 +1,6 @@
 module
 
 public import Properties.InferenceOnly.Desc
-public import Properties.InferenceOnly.Threads
 
 /-!
 # What a verdict of the description-sized check carries
@@ -9,20 +8,16 @@ public import Properties.InferenceOnly.Threads
 `InferenceOnlyCheck.Desc.evaluate` is the policy check `inference-only-check` runs (`InferenceOnlyCheck.Desc.check` writes its refusals, and the check
 of record, `InferenceOnlyCheck.Theta.evaluate`, returns its verdict once θ's provenance is checked). `DescAgrees`
 (`Properties.InferenceOnly.Desc`) makes its verdict the one `InferenceOnlyCheck.evaluate` gives on every expansion of the instance gate by gate
-(`Expands`), of which there is one. The statements here restate the verdict's properties (`Properties.InferenceOnly`,
-`Properties.InferenceOnly.Threads`) of `Desc.evaluate`: on every instance with a verdict, the instance has an expansion, and on each
+(`Expands`), of which there is one. The statements here restate the verdict's properties (`Properties.InferenceOnly`) of
+`Desc.evaluate`: on every instance with a verdict, the instance has an expansion, and on each
 the verdict has the property (`OnExpansions`).
 
 * `DescReports`: the verdict is the definition's (`Reported`).
 * `DescWitnesses`: a verdict of compliance witnesses the policy, on the registered compiler's inference blocks `d.𝓘`
   when the owners are they (`Witnessed`).
-* `DescThrottles`, `DescThrottlesDark`, `DescThrottlesSlots`, `DescThrottlesDarkSlots`: a verdict of compliance carries
-  the thread bounds (`Throttled`, `ThrottledDark` and their `Slots` forms), under their named assumptions
-  (`WeightsIncompressible` or `WeightsIncompressibleSlots`, and `ThetaRegistered`), which the check does not see.
 
-Each is proved from `DescAgrees` (`SecurityProofs.DescAgrees`, `Proofs.Properties.InferenceOnly.Agrees`): `DescReports` and
-`DescWitnesses` in `Proofs.Properties.InferenceOnly.DescVerdict`, and the four bounds in `Proofs.InferenceOnly.DescVerdict` (package
-`security_proofs`), whose proofs need the thread bounds'.
+Each is proved from `DescAgrees` (`SecurityProofs.DescAgrees`, `Proofs.Properties.InferenceOnly.Agrees`), in
+`Proofs.Properties.InferenceOnly.DescVerdict`.
 -/
 
 @[expose] public section
@@ -45,29 +40,5 @@ def DescReports : Prop :=
 owners are its inference blocks `d.𝓘`, the registered compiler's, each meets both bounds. -/
 def DescWitnesses : Prop :=
   ∀ (j out : Json), Desc.evaluate j = .ok out → OnExpansions Witnessed j out
-
-/-- **A verdict of compliance of the description-sized check throttles every threaded reference training circuit the
-declaration contains, if its weights are incompressible and its θ registered** (`WeightsIncompressible`,
-`ThetaRegistered`). On every instance with a verdict of `InferenceOnlyCheck.Desc.evaluate`, the verdict is `Throttled` on every
-expansion. -/
-def DescThrottles : Prop :=
-  ∀ (j out : Json), Desc.evaluate j = .ok out → OnExpansions Throttled j out
-
-/-- **A verdict of compliance of the description-sized check puts counted multiplications off the books in dark
-gates**, for every threaded reference training circuit the declaration contains partly, if its weights are
-incompressible and its θ registered (`WeightsIncompressible`, `ThetaRegistered`). On every instance with a verdict of
-`InferenceOnlyCheck.Desc.evaluate`, the verdict is `ThrottledDark` on every expansion. -/
-def DescThrottlesDark : Prop :=
-  ∀ (j out : Json), Desc.evaluate j = .ok out → OnExpansions ThrottledDark j out
-
-/-- **`DescThrottles` per parameter slot** (`WeightsIncompressibleSlots`, `ThetaRegistered`): on every instance with
-a verdict of `InferenceOnlyCheck.Desc.evaluate`, the verdict is `ThrottledSlots` on every expansion. -/
-def DescThrottlesSlots : Prop :=
-  ∀ (j out : Json), Desc.evaluate j = .ok out → OnExpansions ThrottledSlots j out
-
-/-- **`DescThrottlesDark` per parameter slot** (`WeightsIncompressibleSlots`, `ThetaRegistered`): on every instance
-with a verdict of `InferenceOnlyCheck.Desc.evaluate`, the verdict is `ThrottledDarkSlots` on every expansion. -/
-def DescThrottlesDarkSlots : Prop :=
-  ∀ (j out : Json), Desc.evaluate j = .ok out → OnExpansions ThrottledDarkSlots j out
 
 end InferenceOnlyCheck.Properties

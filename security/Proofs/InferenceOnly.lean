@@ -4,8 +4,6 @@ public import Proofs.Slowdown
 public import Proofs.Core
 public import Proofs.InferenceOnly.Pull
 public import Proofs.InferenceOnly.Rate
-public import Proofs.InferenceOnly.Verdict
-public import Proofs.InferenceOnly.DescVerdict
 public import Proofs.InferenceOnly.PartitionCovers
 public import Proofs.InferenceOnly.CompliesCK
 public import Proofs.InferenceOnly.Lemmas
