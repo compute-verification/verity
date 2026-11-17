@@ -55,7 +55,7 @@ runs/
 tests/verity/commitments/fixtures/layouts
 benchmarks/nci/sources
 tests/benchmarks/one_stage/fixtures/bundle-window
-tests/benchmarks/two_stage/fixtures/guard.tar.xz
+tests/benchmarks/one_stage/fixtures/guard.tar.xz
 tests/verity/protocols/proofs/flock/prover/fixtures/f1-gate
 tests/verity/protocols/proofs/flock/prover/fixtures/forged-proofs
 tests/verity/protocols/proofs/flock/prover/fixtures/hidden-outputs
