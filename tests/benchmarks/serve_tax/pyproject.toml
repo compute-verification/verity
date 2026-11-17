@@ -49,6 +49,10 @@ inputs = ["benchmarks/serve_tax", "verity/errors.py",
     "adapters/vllm/verity_vllm/engine/step_trace.py",
     "adapters/vllm/verity_vllm/pipeline/__init__.py",
     "adapters/vllm/verity_vllm/pipeline/serve_admit.py",
+    # the release front of prod-all-on (tests/test_release_front.py): the tick's routes and the corpus's stand-in
+    "adapters/vllm/verity_vllm/pipeline/tick_plugin.py",
+    "benchmarks/network_e2e/traces/corpus.py",
+    "benchmarks/network_e2e/traces/traffic.py",
     # the record of the value settings in force that an arm's meta.json and a replay's replay.json hold
     "adapters/vllm/verity_vllm/settings.py",
 ]
