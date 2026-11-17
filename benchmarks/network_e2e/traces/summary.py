@@ -94,7 +94,7 @@ def network_attester_log(d: Path) -> dict[int, dict]:
     return {c["ordinal"]: c for c in json.loads(p.read_text())["connections"]} if p.exists() else {}
 
 
-def feed_releases(d: Path, network_certifiers: dict[int, dict],
+def feed_releases(d: Path, network_attesters: dict[int, dict],
                   client: dict[str, dict]) -> tuple[dict[str, tuple[int, int]], dict] | None:
     """A network attester trace's releases under ``--admit tick`` as the server got them: each request's (N, bucket) from the
     release headers that `tick_plugin.TickFeed` wrote to the feed (``raw/tick-feed.jsonl``, keyed by the request's id),
@@ -113,7 +113,7 @@ def feed_releases(d: Path, network_certifiers: dict[int, dict],
             got.setdefault(str(r["key"]), r)
     out, disagree, unlogged = {}, [], 0
     for rid, f in got.items():
-        w = network_certifiers.get(((client.get(rid) or {}).get("warden") or {}).get("ordinal")) or {}
+        w = network_attesters.get(((client.get(rid) or {}).get("warden") or {}).get("ordinal")) or {}
         server = [f.get("run"), f.get("n"), f.get("bucket")]
         network_attester = None if w.get("release") is None else [run, w["release"], w["ingress_end"]]
         if server[0] == run and network_attester in (None, server):
@@ -126,7 +126,7 @@ def feed_releases(d: Path, network_certifiers: dict[int, dict],
                  "disagreeing": disagree[:10]}
 
 
-def arrival_fields(rid: str, c: dict, accepts: dict, added: dict, network_certifiers: dict) -> dict:
+def arrival_fields(rid: str, c: dict, accepts: dict, added: dict, network_attesters: dict) -> dict:
     """A request's arrival on each side of the wire: the API server's (`vllm_accept_stamp`), the engine core's (the
     tracer's `arrivals`) and, through the network attester, its connection's (`network_attester_log`)."""
     a = accepts.get(rid) or {}
@@ -134,7 +134,7 @@ def arrival_fields(rid: str, c: dict, accepts: dict, added: dict, network_certif
     out = {"accept_unix": a.get("accept"), "conn_request": a.get("conn_request"), "headers_unix": a.get("headers"),
            "body_unix": a.get("body"), "engine_add_unix": e.get("t"), "engine_add_index": k}
     if "warden" in c:
-        w = network_certifiers.get(c["warden"]["ordinal"], {})
+        w = network_attesters.get(c["warden"]["ordinal"], {})
         out["warden"] = {**c["warden"], "arrived": w.get("arrived"), "admitted": w.get("admitted"),
                          "released": w.get("ingress_end"), "ended": w.get("ended"), "ingress_cells": w.get("ingress_cells"),
                          "egress_cells": w.get("egress_cells"), "failed": w.get("failed")}
@@ -204,9 +204,9 @@ def join_trace(d: Path, plan: dict[int, dict], eos: tuple[int, ...] = EOS) -> di
     by_step = {o["step"]: o for o in outputs}
     accepts = {a["id"]: a for a in raw(d, "accept") if a.get("id") and a.get("path") == "/v1/completions"}
     added = {a["id"]: (k, a) for k, a in enumerate(raw(d, "arrivals"))}
-    network_certifiers = network_attester_log(d)
+    network_attesters = network_attester_log(d)
     releases = {rid: (c["release"], c["bucket"]) for rid, c in client.items() if "release" in c}
-    if (fed := feed_releases(d, network_certifiers, client)) is not None:
+    if (fed := feed_releases(d, network_attesters, client)) is not None:
         releases = fed[0]
     first, last = {}, {}
     with open(d / "steps.jsonl", "w", encoding="utf-8") as f:
@@ -239,7 +239,7 @@ def join_trace(d: Path, plan: dict[int, dict], eos: tuple[int, ...] = EOS) -> di
             "client_error": c.get("error"), "client_finish_reason": c.get("finish_reason"),
             "client_ids_match": c.get("output_ids") == out_ids if c else None,
             **(dict(zip(("release", "bucket"), releases[e["id"]])) if e["id"] in releases else {}),
-            **arrival_fields(e["id"], c, accepts, added, network_certifiers)})
+            **arrival_fields(e["id"], c, accepts, added, network_attesters)})
     reqs.sort(key=lambda r: (r["i"] is None, r["i"]))
     with open(d / "requests.jsonl", "w", encoding="utf-8") as f:
         for r in reqs:
@@ -1009,27 +1009,27 @@ def readme(s: dict) -> str:
                           "left out of requests.jsonl, so the replay refuses the trace:", ""]
             lines += [f"- {name}: {r['released']} released, {r['agree']} agree, {r['unlogged']} the network attester logged no "
                       f"release for, {r['disagree']} disagree" for name, r in fed.items()]
-    network_certifiers = {name: t["warden"] for name, t in s["traces"].items() if t.get("warden")}
-    if network_certifiers:
-        where = {w.get("where") for w in network_certifiers.values()}
+    network_attesters = {name: t["warden"] for name, t in s["traces"].items() if t.get("warden")}
+    if network_attesters:
+        where = {w.get("where") for w in network_attesters.values()}
         lines += ["", "## The network attester", "",
                   f"The network attester traces reach the server only through the active network attester ({', '.join(map(str, where))}): "
                   "`network_attester_serve.py serve`, one connection to the server per client connection, each direction in B-byte "
                   "cells on its schedule, D counted from the network certifier's "
-                  f"{'; '.join(sorted({w.get('egress_base') or 'base (not recorded)' for w in network_certifiers.values()}))}. Its records, "
+                  f"{'; '.join(sorted({w.get('egress_base') or 'base (not recorded)' for w in network_attesters.values()}))}. Its records, "
                   "certificates and connection log are in `<trace>/warden/`, and `check` is `network_attester_serve.py check` of "
                   "them against the client shim's record of every cell.", "",
                   "| trace | B / r / D (buckets of τ ms) | windows | connections | failed | refused | cut | buckets of "
                   "ingress p50 / max | egress cells p50 / max | tick lateness p99 / max ms (over slack) | check |",
                   "|---|---|---|---|---|---|---|---|---|---|---|"]
-        for name, w in network_certifiers.items():
+        for name, w in network_attesters.items():
             p, ing, eg, late, chk = w["params"], w["ingress_buckets"], w["egress_cells"], w["tick_lateness_ms"] or {}, w["check"]
             verdict = "-" if chk is None else "accepted" if chk["accepted"] else f"refused: {(chk['problems'] or ['?'])[0]}"
             lines.append(f"| {name} | {p['cell_bytes']} / {p['slots']} / {p['delay']} ({p['bucket_ms']}) | {w['windows']} | "
                          f"{w['connections']} | {w['failed'] or 0} | {w['refused']} | {w['cut']} | {ing.get('p50')} / "
                          f"{ing.get('max')} | {eg.get('p50')} / {eg.get('max')} | {late.get('p99')} / {late.get('max')} "
                          f"({late.get('over_slack')}) | {verdict} |")
-        probed = {name: w for name, w in network_certifiers.items() if w.get("ticks") or w.get("client_loop")}
+        probed = {name: w for name, w in network_attesters.items() if w.get("ticks") or w.get("client_loop")}
         if probed:
             lines += ["", "Where the trace probed them (`network_attester_probe.py`, `host_sample.py`, `corpus.drive_network_attester`), the "
                       "network certifier's ticks and the client's event loop: each tick's lateness in ms, its own work (`_tick`), the "

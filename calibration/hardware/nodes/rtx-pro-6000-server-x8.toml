@@ -44,7 +44,7 @@ bytes = { value = 5991479377920, unit = "B", mark = "measurement", source = "lsb
 rate = { value = 698092307693, unit = "B/s", mark = "ceiling", source = "the host card's disk.read_max (xeon-6776p-2s), the PCI Express lanes into the server's sockets and the USB ports counted with them: as memory.vda, a virtio_blk device with no model and no transport of its own; the link its PCI device reports, 2.5 GT/s on one lane, is the hypervisor's emulation and bounds nothing (art:bb5d32c3c5ee). The provider's limit for a disk of its kind and size, 2 GiB/s, is a setting and no ceiling: a run read 2.564 GB/s from it (art:53c2656f4c56), about ten times what that link would carry" }
 
 # The node's own way out: the interfaces a route of the node sends packets out of, each at its line rate, each way.
-# None of the auditor's hardware sits on one, so each registers as a boundary link that no certifier splits.
+# None of the auditor's hardware sits on one, so each registers as a boundary link that no attester splits.
 [interface.eth0]
 rate = { value = 400000000000, unit = "bit/s", mark = "measurement", source = "/sys/class/net/eth0/speed on the node's VM reads 400000 Mb/s, and ethtool the same at full duplex with the link detected (art:8e47f2512256). eth0, a device of the mlx5_core driver, is the one interface a route of the node's main tables names, the default route among them; the others are the loopback and a bridge with no device behind it, which is down. No latency of it is on record and nothing reads one, so its link registers at latency 0" }
 
