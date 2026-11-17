@@ -589,7 +589,7 @@ def test_the_published_arm_starts_the_server_as_the_models_recipe_does(tmp_path,
     with pytest.raises(SystemExit, match="need a context of 16384"):
         S.context_of({"long": (1,)}, 4096)
     for model_id, why in (("moonlight", "no recipe for moonlight"), (None, "no recipe for no model")):
-        with pytest.raises(SystemExit, match=why + r" \(Model.published; it holds glm53's\)"):
+        with pytest.raises(SystemExit, match=why + r" \(Model.published; it holds glm53, glm53-standin's\)"):
             S.published_context("published", model_id, None)
     # the line of a model with no recipe, which a job never starts, adds nothing to stock's
     plain = S.server_argv(S.ARMS["compiled"], S.MODELS["moonlight"], Path("/ck"), 8000)
@@ -615,6 +615,45 @@ def test_the_published_arm_starts_the_server_as_the_models_recipe_does(tmp_path,
     assert [n for n, a in S.ARMS.items() if a.published] == ["published", "prod", "prod-again", "prod-record", "prod-seeded",
                                                              "prod-trace"]
     assert S.ARMS["published"].parent == "compiled" and S.changes_of("published") == []
+
+
+def test_glm53s_stand_in_is_its_recipe_on_one_card_from_random_weights(tmp_path, monkeypatch):
+    """The stand-in's line is GLM-5.3's recipe line but for its served name, one card in place of eight and vLLM's random
+    weights; its checkpoint directory holds the adapter's cut config and GLM-5.3's tokenizer and no weight; a record
+    names its cut; it has no metric id, and its runs write no measurement into result.json."""
+    glm, std = S.MODELS["glm53"], S.MODELS["glm53-standin"]
+    context = S.published_context("prod", "glm53-standin", None)
+    assert context == glm.published_context and S.tp_size(std) == 1 and S.tp_size(glm) == 8
+    real = S.server_argv(S.ARMS["prod-record"], glm, Path("/ck"), 8000, max_model_len=context)
+    line = S.server_argv(S.ARMS["prod-record"], std, Path("/ck"), 8000, max_model_len=context)
+    swap = {"glm-5.3": "glm-5.3-stand-in", "8": "1"}
+    assert [x for x in line if x not in ("--load-format", "dummy")] == [swap.get(x, x) for x in real]
+    assert line[line.index("--load-format") + 1] == "dummy"
+    assert (std.repo, std.revision, std.check, std.metric, std.target) == (glm.repo, glm.revision, glm.check, None, None)
+    assert glm.ref == f"{glm.repo}@{glm.revision}"
+    assert std.ref == f"{glm.ref} stand-in (7 layers, 16 experts, 8 heads, random weights)"
+    monkeypatch.setattr(S, "card", lambda: "NVIDIA H200")
+    assert S.hardware(std) == "1 × NVIDIA H200"
+    written = {}
+    monkeypatch.setattr(S, "kit", lambda: (None, NS(write_result=lambda *a: written.update(m=a[-1]))))
+    monkeypatch.setattr(S, "result_of", lambda r: (True, "line", {}, [{"name": "agentic", "value": 2.6}]))
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path / "run"))
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r-9")
+    for model, kept in ((std, []), (glm, [{"name": "agentic", "value": 2.6}])):
+        S.write_result({"model": model.served, "arm": "prod-record", "reference": "prod"}, tmp_path)
+        assert written["m"] == kept
+    ck, out = tmp_path / "glm53", tmp_path / "standin"
+    ck.mkdir()
+    for name in ("tokenizer.json", "tokenizer_config.json", "config.json", "model-00001-of-00282.safetensors"):
+        (ck / name).write_text("{}")
+    assert S.main(["standin", "--model-id", "glm53-standin", "--tokenizer-from", str(ck), "--out", str(out)]) == 0
+    assert sorted(p.name for p in out.iterdir()) == ["config.json", "tokenizer.json", "tokenizer_config.json"]
+    cfg = json.loads((out / "config.json").read_text())
+    assert (cfg["num_hidden_layers"], cfg["n_routed_experts"], cfg["num_attention_heads"], cfg["vocab_size"]) == (7, 16, 8, 154880)
+    with pytest.raises(SystemExit, match="holds no tokenizer.json"):
+        S.main(["standin", "--model-id", "glm53-standin", "--tokenizer-from", str(tmp_path / "none"), "--out", str(out)])
+    with pytest.raises(SystemExit):
+        S.main(["standin", "--model-id", "glm53", "--tokenizer-from", str(ck), "--out", str(out)])
 
 
 def test_an_added_seed_takes_the_place_of_the_lines_seed():
@@ -2123,6 +2162,7 @@ def test_a_runs_result_holds_the_number_under_its_metric_id_only_once_every_load
         S.main(["cost", *map(str, dirs), "--out", str(out), "--result"])
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path / "run"))
     monkeypatch.setenv("RESEARCH_RUN_ID", "r-9")
+    monkeypatch.setattr(S, "card", lambda: "NVIDIA H200")
     assert S.main(["cost", *map(str, dirs), "--out", str(out), "--result"]) == 0
     saved = json.loads((tmp_path / "run" / "result.json").read_text())
     assert (saved["schema"], saved["run_id"], saved["validation"]["status"]) == ("research/result/v0.1", "r-9", "passed")
@@ -2265,3 +2305,18 @@ def test_llama32_1bs_number_is_its_chat_and_long_loads_alone_as_a_point_of_glm53
     assert (one, S.member(S.MODELS["glm53"], "two-stage", "compiled")) == (
         "llama-3.2-1b-h200-record-over-compiled", "glm-5.3-h200-two-stage-over-compiled")
     assert S.result_of(r | {"hardware": "1 × NVIDIA H200", "member": one})[3][-1]["member"] == one
+
+
+def test_a_card_no_record_lists_in_its_driver_is_refused_naming_what_to_add(monkeypatch: pytest.MonkeyPatch):
+    """A point's member carries its card's record's `short`, never a name made from nvidia-smi's: a card whose name no
+    record lists in its `driver` is refused, naming the keys and the file to add."""
+    S.kit()
+    from verity_bench import kit
+    monkeypatch.setattr(kit, "host_stamp", lambda: {"card": "NVIDIA Z9 80GB"})
+    with pytest.raises(SystemExit, match=r"0 card records under .*cards have 'NVIDIA Z9 80GB'.*in `driver`: add "
+                                         r"\{ value = \"NVIDIA Z9 80GB\", source = \.\.\. \} to its one record's `driver` "
+                                         r"and give it a `short`.*<sku>\.toml"):
+        S.member(S.MODELS["llama32-1b"], "record", "compiled")
+    with pytest.raises(SystemExit, match="0 card records"):
+        S.card_record("")
+    assert S.card_record("NVIDIA H200")["sku"] == "h200-sxm-141gb"

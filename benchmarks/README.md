@@ -175,8 +175,8 @@ Each benchmark or loop declares the numbers a lead is held to in a `metrics.toml
 `infra/control/store_index.sh`, beside the loop), one `[[metric]]` table per number. Each metric's `owner` owns its
 file: the longest `owns` entry in `.agents/skills/using-slack/registry.json` covering the file names that handle, so a
 lead's numbers in another lead's directory take a file entry of their own there. The console's Metrics tab reads every
-`metrics.toml` on `main` under `benchmarks/`, `applications/`, `infra/` or `tools/`, and `research metrics show` reads the
-tab's report.
+`metrics.toml` on `main` under `benchmarks/`, `calibration/`, `applications/`, `infra/` or `tools/`, and `research
+metrics show` reads the tab's report.
 
 A metric's value has one of two sources. A run's value is the measurement its `id` names in the run's `result.json`,
 which the benchmark records it under (`serve_tax`'s `Model.metric`) and `research run` preserves to the evidence store;
@@ -194,7 +194,9 @@ the `command` of a metric whose newest value is older than its `every` as a `res
 docstring lists, and a metric whose command's script is under `infra/control/` is a loop's, which the loop sends. A
 metric's keys:
 
-- `id`: `OWNER/NAME`, under its owner's prefix.
+- `id`: `OWNER/NAME`, under its owner's prefix. A metric's line holds one quantity: when its meaning changes (a
+  denominator, a ceiling), it keeps its `id`, and the runs of the old quantity are labelled `superseded_by` the first
+  run from `main` that writes the new one.
 - `title`: the number's headline on the tab, three to six plain words with no digit or backtick.
 - `owner`: a handle in the registry.
 - `unit`: the unit its value is in, at most three words (`hours`, `GB`), a rate's two sides, either side of " a ",
@@ -202,7 +204,8 @@ metric's keys:
   not the unit.
 - `axis`: one sentence, on one line and ending with a period, saying what the chart's y axis is.
 - `better`: `lower` or `higher`.
-- `command`: the one command that measures it, naming a script under `benchmarks/`, `applications/`, `infra/` or `tools/`.
+- `command`: the one command that measures it, naming a script under `benchmarks/`, `calibration/`, `applications/`, `infra/` or
+  `tools/`.
 - `every`: how often its owner measures it, in minutes, hours or days (`5m`, `12h`, `7d`); a value older than that is
   stale, so a number that reaches the tab through the index needs an `every` well over the index's hour.
 - Optional: `floor`, the number it must not cross; `goal`, the narrowest goal on the Goals page it serves; `tags`, a
@@ -341,7 +344,6 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | Directory | What it measures | Status |
 | --- | --- | --- |
 | `hash/` | GPU kernels for PoUW's Dither prover (`dither/`: the no-fold and J10-R units, their gates and harnesses) and the served path's SHA-512 commitment library (`lib/`) | maintained |
-| `torch_gpu/` | the H200 demo's GPU kernels, each bit-exact to its Definition: the serve-time commit (`commit_slots`, `sha512_rows`) and the store's load with bandwidth receipts (`p2_stage`) | maintained |
 | `kernels/` | the served path's exact kernels and what a kernel build ships with: the exact W8A8 linear (`s8_linear`), vLLM's int8-exact linear kernels' gates and benches (`exactlin`), the ship frame every build here sources (`ship.sh`, `ship_clock.c`, `ship_nvcc.sh`, `ship_probe.sh`), the nvcc a job's own library compiles with (`job_nvcc.sh`), and the Marlin MoE path's `moe_align_block_size` made a function of its inputs by the integration's `verity_vllm.engine.moe_align`, checked run to run and against the pin's op and timed against it (`moe_align`) | maintained |
 | `pouw/` | Pearl-C's kernels on the RTX PRO 6000, their harness, and the served vLLM path and its audits; `contents.py` lists the rest | maintained |
 | `../calibration/tc_probe/` | tensor-core instructions bit for bit against their silicon models, and the trust each instruction's evidence earns | maintained |

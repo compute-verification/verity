@@ -4096,10 +4096,6 @@
    "nontrivial": "Pouw.SecurityProofs.OnsiteFreed_nontrivial",
    "kind": "exclusion"
   },
-  "Pous.SecurityProofs.ObligationWide320": {
-   "honest": ["Pous.SecurityProofs.ObligationWide320_honest"],
-   "nontrivial": "Pous.SecurityProofs.ObligationWide320_nontrivial"
-  },
   "Flock.SecurityProofs.RecursiveKSDeployed": {
    "honest": ["RecDeploy.HonestHalfFixture.recursiveKSDeployed_honest"],
    "nontrivial": "Flock.Guarantees.recursiveKSDeployed_nontrivial"
