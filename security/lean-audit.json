@@ -46789,10 +46789,10 @@
    }
   },
   "MemoryChallenger.WipeProtocol": {
-   "digest": "b9bec8d0e908b0541e1119a108a429a965cb41e45e7c0e8e1e0491aaf7ab2e5e",
+   "digest": "478774405c1ed8d5b7e2f040ac05ba334f327be2d465df691b91aa616068bbc5",
    "definitions": {
     "MemoryChallenger.WipeProtocol.EPS": "3531a8db9b9865dca0216151f8cd12d96646f4f742bffc1f22bcf747a9ab0383",
-    "MemoryChallenger.WipeProtocol.EXPERIMENTAL": "dda750b69b6a3dce5216ff99221e1a320df9f6ebbc871ff9f1a844fcd1e41ab0",
+    "MemoryChallenger.WipeProtocol.EXPERIMENTAL": "6f048af5be50aa98af614149d59fa43c3402d7fc8fc2284f1fdb95284abe6a92",
     "MemoryChallenger.WipeProtocol.Evidence": "db9be82ac106f5299a2c093b4e4368756a10b889b3e442cdd828d01dfd9a57a3",
     "MemoryChallenger.WipeProtocol.Evidence.egress": "a2c0fed8c3fc3baa0ca1c9f02dae6b7420fa812104d6aece31cba8f8a67bfed0",
     "MemoryChallenger.WipeProtocol.Evidence.egressMib": "03cb67f49a203489f674c3486012612e27a638fa0ab3aaa0bd020e964ec8aa79",
@@ -46834,7 +46834,7 @@
     "MemoryChallenger.WipeProtocol.ratioSearch": "d28316fceffcd02b4774b9e8642791c0980c3619418182e598841a2adb0270f5",
     "MemoryChallenger.WipeProtocol.samples": "7a145ac3840232f5e62e20ad5f71db9989984c8bc67b8f5d18d1db9c447713e0",
     "MemoryChallenger.WipeProtocol.uncounted": "f8377fb93b754c89929752667d6ddf7f8c7952761a1135e168b6ec01fbf67126",
-    "MemoryChallenger.WipeProtocol.writerGap": "dc84c1538f781c772179c3c885505b72a9ab41a3aa99a84eeabb420701cb3c66",
+    "MemoryChallenger.WipeProtocol.writerGap": "9979a645caa42ed520fa1d57d6717e7f04b404e161ce0e622a1fbf6ba965161c",
     "_private.MemoryChallenger.WipeProtocol.0.MemoryChallenger.WipeProtocol.hexJ": "d1ca30893491681448632d04d8023bdb929531cf409e6162a2124e8a2d1deb9f",
     "_private.MemoryChallenger.WipeProtocol.0.MemoryChallenger.WipeProtocol.natJ": "e8727017f342ed9865812bb9541059197bd40dd29953092439507393e12349aa"
    }

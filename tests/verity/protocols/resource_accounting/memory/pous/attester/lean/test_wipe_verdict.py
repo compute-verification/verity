@@ -96,7 +96,7 @@ def _params(batch: int = 1, k: int = 3, labels: int = 8) -> sw.WipeParams:
     return sw.WipeParams(labels, k, batch, LIMIT, (("gpu", 3 * sw.LABEL_BYTES), ("host-dram", (labels - 3) * sw.LABEL_BYTES)))
 
 
-CERTIFICATE = b"a start certificate, as the network certifier returned it"
+CERTIFICATE = b"a start certificate, as the network attester returned it"
 
 
 def _honest(batch: int = 1, spends=(1, 1, 1), tampered=frozenset(),

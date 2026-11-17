@@ -79,7 +79,7 @@ ONSITE = "verity/onsite/v0"
 BINDINGS = "bindings.json"
 WORKERS, ZK_SERVER, PROVER, VERIFIER = SP.WORKERS, SP.ZK_SERVER, WP.PROVER, SP.VERIFIER
 CHALLENGER, MEMORY_ATTESTER = SP.CHALLENGER, WP.CHALLENGER
-BANDWIDTH_VERIFIER, NETWORK_CERTIFIER = "bandwidth-verifier", NC.NETWORK_CERTIFIER
+BANDWIDTH_VERIFIER, NETWORK_ATTESTER = "bandwidth-verifier", NC.NETWORK_CERTIFIER
 #: served_verdicts.py's record reads each piece's answer by its runner name
 RECORD_NAMES = {"integrity": "sampled-proofs", "work": "pouw", "inference-only": "inference-only", "space": "pous",
                 "bandwidth": "bandwidth", "communication": "certifier", "wipe": "wipe"}
@@ -165,7 +165,7 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
               needs=frozenset({"receipts"})),
     Component("certifier", SP.IDS["certifier"], parties=NC.MANIFEST.parties, channels=NC.MANIFEST.channels,
               needs=frozenset({"windows", "ingress-relay"}), requires=("sampled-proofs",),
-              colocated=((CHALLENGER, NETWORK_CERTIFIER),)),
+              colocated=((CHALLENGER, NETWORK_ATTESTER),)),
     Component("wipe", "verity/wipe/v0", parties=(*WP.MANIFEST.parties, _VERIFIER),
               channels=(*WP.MANIFEST.channels, Channel(MEMORY_ATTESTER, VERIFIER, ("WipeReport",), after=("End",)))),
 )}
@@ -187,7 +187,7 @@ PROVER_NODE, AUDITOR_HOST, GATE_HOST = "prover-node", "auditor-host", "gate-host
 AUDITOR_REMOTE = "auditor-remote"
 #: each party's machine: the developer's on the prover node, the auditor's devices on machines it doesn't control
 PLACEMENT = {WORKERS: PROVER_NODE, ZK_SERVER: PROVER_NODE, PROVER: PROVER_NODE, CHALLENGER: GATE_HOST,
-             NETWORK_CERTIFIER: GATE_HOST, MEMORY_ATTESTER: AUDITOR_HOST, BANDWIDTH_VERIFIER: AUDITOR_HOST,
+             NETWORK_ATTESTER: GATE_HOST, MEMORY_ATTESTER: AUDITOR_HOST, BANDWIDTH_VERIFIER: AUDITOR_HOST,
              VERIFIER: AUDITOR_HOST}
 #: the configuration this table's demo runs, whose `[[pin]]` entries are the only statement of the keys the auditor pinned
 CONFIG = ROOT / "demos" / "onsite_full.toml"
@@ -476,11 +476,11 @@ PARTIES: dict[str, dict[str, Piece]] = {
         WORKERS: Piece("certifier", WORKERS, SERVED_WINDOW, "the certifier's developer side: its front before the "
                        "requests (CERTIFIER_FRONT, which the served window runs), and its piece split around V3c: the "
                        "chain on V3c's committed window (CERTIFIER_CHAIN_CMD), then the period check on V3c's "
-                       "period.json (CERTIFIER_PERIOD_CMD)", scripts=(CERTIFIER_PIECE,), reaches=NETWORK_CERTIFIER,
+                       "period.json (CERTIFIER_PERIOD_CMD)", scripts=(CERTIFIER_PIECE,), reaches=NETWORK_ATTESTER,
                        binds=("gate",), hooks=_certifier_piece),
-        NETWORK_CERTIFIER: Piece("certifier", NETWORK_CERTIFIER, GATE, "the network certifier behind the gate, "
+        NETWORK_ATTESTER: Piece("certifier", NETWORK_ATTESTER, GATE, "the network attester behind the gate, "
                                  "in front of serve-openai before the requests"),
-        VERIFIER: Piece("certifier", VERIFIER, CHECK, "the network certifier's row"),
+        VERIFIER: Piece("certifier", VERIFIER, CHECK, "the network attester's row"),
     },
     "wipe": {
         PROVER: Piece("wipe", PROVER, RUNTIME, "the streamed wipe of the card before its engine loads, its session "

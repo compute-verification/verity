@@ -19,22 +19,22 @@ each a named `Prop` on a trace, the session's record of computation off the node
 * `Covered O I` (`certifier-coverage`): on every accepting outcome where nothing but the verifier's messages entered
   the node over its uplinks during the credited passes, no device outside the node computed for it then. It is what
   the provider's lockdown (`ProviderLockdown`) became, with the network attesters in its place, and it says what the
-  certifiers cover and what they don't.
-* `IngressCounted I δ` (the certifiers' count, at δ_net): except with probability `δ` when the audit accepts, where the
-  certifiers sign nothing but the verifier's messages entering the node over the credited passes, nothing else
+  network attesters cover and what they don't.
+* `IngressCounted I δ` (the network attesters' count, at δ_net): except with probability `δ` when the audit accepts, where the
+  network attesters sign nothing but the verifier's messages entering the node over the credited passes, nothing else
   entered.
 
 In the per-party names, `Covered` is `Covered` (every uplink from the prover's server passes through an active
-certifier) and `IngressCounted` is `Faithful` of the certifiers (what they sign is what crossed their links); neither
+network attester) and `IngressCounted` is `Faithful` of the network attesters (what they sign is what crossed their links); neither
 names the prover, whose strategy is arbitrary. The line reads no `Secret`, `Confined` or `WitnessPathPrivate`: those
-keep what the certifiers sign from the auditor, and the bits-read bound needs only that it was counted.
+keep what the network attesters sign from the auditor, and the bits-read bound needs only that it was counted.
 
 Statement C in full, no device outside the node computing on a registered block or a receipt during a credited pass,
-was a premise of the memory line (`NoOutsideCompute`), on the prover's own conduct. It is now the event the certifiers
+was a premise of the memory line (`NoOutsideCompute`), on the prover's own conduct. It is now the event the network attesters
 observe (`Quiet T I.counted`), inside the line's event, and their count's error δ_net in its bound. The three give the
-sketch bound where the certifiers observed nothing else entering (`ResourceAccounting.SecurityProofs.Remote.sketchBound_of_covered`)
+sketch bound where the network attesters observed nothing else entering (`ResourceAccounting.SecurityProofs.Remote.sketchBound_of_covered`)
 and `SketchBound` gives `SketchBoundAt` at every `O`. The relay breaks no premise: its receipts come in from the
-helper, so the certifiers count them and the line credits that outcome nothing. How the split stands to the sketch
+helper, so the network attesters count them and the line credits that outcome nothing. How the split stands to the sketch
 model's premises, under which `SketchBound` is derived (`ResourceAccounting.Guarantees.Remote.SketchBoundRun`):
 
 * `Present` is the block clause over the passes together with the same statement without a location (`PresentAt`, in
@@ -65,14 +65,14 @@ nothing off the node computed for it.
 It is what `ProviderLockdown T O applied lifted` became: the provider's security group, admitting packets only from and
 to the auditor's devices over `[applied, lifted)`, is replaced by certifiers on every uplink, which count what enters
 (`Ingress.counted`, observed in the line's event) rather than being trusted to block it, so the lockdown's interval
-and its records go. The certifiers see every frame on an uplink, so two of the lockdown's gaps close: name resolution
+and its records go. The network attesters see every frame on an uplink, so two of the lockdown's gaps close: name resolution
 over an uplink, and a flow opened before the lockdown, which a stateful rule kept admitting. What this assumes besides
 certifiers on every uplink, the gaps left:
 
 * the paths the node's host serves without an uplink: the provider's resolver and metadata service at link-local
   addresses, and its management plane;
 * a GPU cluster's fabric between hosts and a shared filesystem the node mounts, unless a certifier sits on each;
-* the verifier taking the session's messages from the node alone, over the session's channel, and the certifiers and
+* the verifier taking the session's messages from the node alone, over the session's channel, and the network attesters and
   the verifier being the auditor's devices (`trusted-device`). -/
 def Covered (T : Trace Ω) (O : Outside T) (I : Ingress Ω) : Prop :=
   ∀ ω, T.accepts ω → Quiet T I.entered ω → ∀ p < T.passes, ∀ t, T.tick ω p ≤ t → t < T.tick ω (p + 1) →
@@ -80,10 +80,10 @@ def Covered (T : Trace Ω) (O : Outside T) (I : Ingress Ω) : Prop :=
 
 variable [Fintype Ω]
 
-/-- **The certifiers' count of what enters, at δ_net** (`trusted-device`: each certifier is the auditor's device, running
+/-- **The network attesters' count of what enters, at δ_net** (`trusted-device`: each network attester is the auditor's device, running
 its stated code): except with probability `δ` when the audit accepts, where the network attesters on the node's uplinks
 sign nothing but the verifier's messages entering it over the credited passes, nothing else entered over them. `δ` is
-δ_net, the certifiers' error at the session's boundary: their sampled audit's `δ + ε_ks + ε_bind`
+δ_net, the network attesters' error at the session's boundary: their sampled audit's `δ + ε_ks + ε_bind`
 (`NetTiming.Guarantees.SampledAuditAccepted`) at the ingress windows covering the credited span. -/
 def IngressCounted (T : Trace Ω) (I : Ingress Ω) (δ : ℝ) : Prop :=
   T.Holds δ fun ω => Quiet T I.counted ω → Quiet T I.entered ω

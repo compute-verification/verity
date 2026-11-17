@@ -33,7 +33,7 @@ Each of `Properties.Poub.Subprotocol`'s three properties, and the memory line
   outside device, nothing but the verifier's messages entering it as its certifiers count, and the sampler's fallbacks
   0, on a schedule that runs each pass inside its window with each sample's receipts fixed (`HonestSchedule`), and at
   its correct receipts the distinguishers' advantage and the hiding terms are 0 (`lineHeldAtSubprotocol_honest`); and
-  there the event is empty: the certifiers count nothing else entering and every line credits no more bits read than the
+  there the event is empty: the network attesters count nothing else entering and every line credits no more bits read than the
   passes read (`lineHeld_honest`). Nontrivial: at a verifier that accepts everything and records one summary for every
   record, the bound fails on a node whose four passes read its one block once (`lineHeld_nontrivial`,
   `lineHeldAtSubprotocol_nontrivial`); and the line credits only what the passes read: on one record and summary its
@@ -291,7 +291,7 @@ theorem read_absent {Ω : Type} (T : Trace Ω) (ω : Ω) (p : ℕ)
   rwa [h t (Finset.mem_Ico.1 ht).1 (Finset.mem_Ico.1 ht).2] at htj
 
 /-- **`LineHeld`'s event is empty at the honest node.** At the honest trace on a clock whose passes take a tick or more
-each, at every outcome the certifiers count nothing but the verifier's messages entering the node (`quietIngress`), and
+each, at every outcome the network attesters count nothing but the verifier's messages entering the node (`quietIngress`), and
 the line of any record credits no more bits read than the passes read: every pass reads every registered block
 (`read_full`). -/
 theorem lineHeld_honest (node : Node) {Ω : Type} (passes : ℕ) (tick : Ω → ℕ → ℕ) (rec : Ω → Record)
@@ -614,7 +614,7 @@ theorem toy_delta : (Toy.node.delta : ℝ) = 1 / 2 := by
 /-- **`LineHeld`'s bound fails at a verifier that accepts everything.** With a verdict that holds of every record and
 one summary recorded for every record, the toy node (no sample, one block, held in node memory until tick 10 only, its
 four passes reading it once) meets every premise at `δs = δnet = 0`, while its line credits `4 · 1` blocks read at every
-outcome where the certifiers count nothing else entering, which is every outcome: the event has probability 1 and the
+outcome where the network attesters count nothing else entering, which is every outcome: the event has probability 1 and the
 bound is `δ = 1/2`. The statement is `LineHeldBy`'s negation at that verifier, its node, trace, records and premises
 bound by `∃` and its `let`s inlined, so that it concludes the bound's failure. -/
 theorem _root_.Properties.Poub.Line.SecurityProofs.lineHeld_nontrivial :

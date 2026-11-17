@@ -73,7 +73,7 @@ EXPERIMENTAL = (
     "foreign_bits at eps = 2^-128 is Pous.Guarantees.StreamedWipeMeetsReads' threshold at the session's k and r = "
     "ratio(k), proved for the streamed-label fill in the wipe game; that game's acceptance is not this verdict (the "
     "guarantee is frozen, no-function), and eps leaves out its PRF advantage and its premises: every tier declared, the "
-    "egress certified by the network certifier, no side channel")
+    "egress certified by the network attester, no side channel")
 OTHER = "the wipe's commitment is not of the period's server and session"
 EGRESS_RANGE = "the evidence's egress is {} MiB, outside 0 to {}"
 UNSIGNED = "the memory challenger has not signed the wipe: its reads are incomplete or not yet verified"
@@ -81,7 +81,7 @@ NO_JUDGE = ("no wipe-protocol among the period's tools: the Lean decides the wip
             "nothing alone")
 #: The id of the wipe's component whose count a composition holds (`MemoryChallenger.WipeProtocol.COUNTED_ID`).
 COUNTED = "verity/wipe/counted/v0"
-NO_COUNT = "the evidence gives no egress count: a counted wipe is held to the network certifier's count over its span"
+NO_COUNT = "the evidence gives no egress count: a counted wipe is held to the network attester's count over its span"
 NO_MARK = "the session names no start mark: the memory challenger held no start certificate, so no count is of its span"
 
 
@@ -159,8 +159,8 @@ def writer_gap(egress_mib: int) -> list[str]:
     writer's, which no network attester signs."""
     if not 0 <= egress_mib < sw.EGRESS_MAX_UNITS:
         return []
-    return [f"the egress count is {egress_mib} MiB, the evidence writer's, which no network certifier signed: no wipe "
-            "is certified on it until the check that composes the wipe with the network certifier"]
+    return [f"the egress count is {egress_mib} MiB, the evidence writer's, which no network attester signed: no wipe "
+            "is certified on it until the check that composes the wipe with the network attester"]
 
 
 def profile(p: sw.WipeParams, egress_mib: int) -> dict[str, Any]:
@@ -329,15 +329,15 @@ def uncertified(where: Mapping[str, Any], egress_mib: int | None) -> list[str]:
                          "subprotocol again")
     out = [] if wipe_party.holds(where) else [f"key custody: {mc.premise(where)}"]
     if egress_mib is not None and egress_mib >= sw.EGRESS_MAX_UNITS:
-        out.append("egress: uncounted, the check was given no network certifier's count over the session, so the bound "
+        out.append("egress: uncounted, the check was given no network attester's count over the session, so the bound "
                    "is vacuous")
     elif egress_mib is not None:
-        out.append(f"egress: {egress_mib} MiB, the evidence writer's count, which no network certifier signed, so the "
-                   "check certifies no wipe on it until the check that composes the wipe with the network certifier")
+        out.append(f"egress: {egress_mib} MiB, the evidence writer's count, which no network attester signed, so the "
+                   "check certifies no wipe on it until the check that composes the wipe with the network attester")
     out += [f"tier {u['tier']}: {u['what']} ({u['bytes']} bytes) is undeclared: the fill doesn't cover it and M doesn't "
             "count it" for u in where["undeclared_tiers"]]
     out += where["store_gaps"]
-    out += [f"link {e['name']}: {e['ends'][0]} to {e['ends'][1]} ({e['via']}) is counted by no network certifier, so what "
+    out += [f"link {e['name']}: {e['ends'][0]} to {e['ends'][1]} ({e['via']}) is counted by no network attester, so what "
             "leaves on it is outside E" for e in where["links"] if e["counted_by"] is None]
     return out
 
