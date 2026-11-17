@@ -6,6 +6,8 @@ tied_row = "llama32-1b__bf16__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager"
 [node.vy-spot-glm53]
 VENV = "/workspace/venv312"
 CUDA_HOME = "/usr/local/cuda-12.9"
+# CUDA 12.9 has no nvdisasm, which cuobjdump needs for the Pearl-C cubin's SASS
+NVDISASM_PATH = "/usr/local/cuda-13.0/bin"
 HF_HOME = "/workspace/research/vllm-servedproof/hf"
 LLAMA_ROOT = "/workspace/research/vllm-servedproof/llama"
 FLOCK_WORK = "/workspace/research/vllm-servedproof/flock-work"
@@ -62,18 +64,17 @@ COMPOSE_OFF_NODE = "1"
 COMPOSE_NODE = "vy-nebius-cpu-14"
 LEASE_MEM_GB = "128"
 GPU_LEASE_WHO = "vllm-served-run"
-H1_PEER = "vy-spot-glm53"
 
 [run.window.plain]
 env = { POUW = "h1", H1_GATE = "", V3C_CLASS = "", COMPOSITE = "" }
 
 [run.window.tie]
 # V3C_AUDIT_MEM_GB above node A's memory defers the records audit off the node
-env = { POUW = "pearlplus", PEARLPLUS_TIE = "1", V3C_CLASS = "4,32,4", V3C_LAW = "${V3C_LAW:-stratified-rate:1/2097152}", PRECISION = "bfloat16", V3C_AUDIT_MEM_GB = "2100" }
+env = { POUW = "pearlplus", PEARLPLUS_TIE = "1", V3C_CLASS = "4,32,4", V3C_LAW = "${V3C_LAW:-stratified-rate:1/2097152}", PRECISION = "bfloat16", V3C_AUDIT_MEM_GB = "2100", POUW_TIMEOUT = "300m", PEARLPLUS_LEAN_TIMEOUT = "13500" }
 
 [run.window.coins.gate]
 main_line = true
-env = { PP_CHALLENGER = "gate:research@${VY_CHALLENGER_1_HOST}", PP_PEER = "vy-spot-glm53", PP_GATE_KEY = "${HOME}/.ssh/vllm_lane_ed25519", PP_CHALLENGER_KEY = "tests/benchmarks/pouw/fixtures/challenger-key.json" }
+env = { PP_CHALLENGER = "gate:research@${VY_CHALLENGER_1_HOST}", PP_GATE_KEY = "${HOME}/.ssh/vllm_lane_ed25519", PP_CHALLENGER_KEY = "tests/benchmarks/pouw/fixtures/challenger-key.json" }
 
 [run.window.coins.development]
 env = { PP_CHALLENGER = "local", PEARLC_CHALLENGER_GATE = "", DEVELOPMENT = "1" }

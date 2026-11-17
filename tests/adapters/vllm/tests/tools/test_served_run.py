@@ -120,6 +120,10 @@ def test_the_tied_window_runs_with_the_settings_the_tree_writes(tmp_path):
     assert (env["POUW"], env["PEARLPLUS_TIE"], env["V3C_CLASS"], env["PRECISION"]) == ("pearlplus", "1", "4,32,4", "bfloat16")
     assert env["H1_PEER"] == env["PP_PEER"] == "vy-spot-glm53" and "COMPOSITE" not in env
     assert int(env["V3C_AUDIT_MEM_GB"]) > 2015, "the records audit defers off node A, which has 2015 GB"
+    piece, lean = 60 * int(env["POUW_TIMEOUT"].removesuffix("m")), int(env["PEARLPLUS_LEAN_TIMEOUT"])
+    window = 3600 * int(PLACEMENT["run"]["window"]["research"][-1].removesuffix("h"))
+    assert lean + 3600 <= piece <= window - 1800, "Pearl+'s Lean follows its tie and Python check inside its piece, which ends inside the window's"
+    assert env["NVDISASM_PATH"] == "/usr/local/cuda-13.0/bin" != f"{env['CUDA_HOME']}/bin", "the Pearl-C cubin's SASS needs nvdisasm"
     assert env["ROW_ID"] == PLACEMENT["tied_row"] and "__bf16__" in env["ROW"] and env["ROW"].endswith(PLACEMENT["tied_row"])
     assert not {"H1_TIE", "CERTIFIER_FRONT", "LOAD", "SLOTS", "PROMPTS"} & env.keys()
     assert "--prefix-caching" not in env.get("SERVE_ARGS", "")
@@ -184,7 +188,7 @@ def test_development_coins_are_chosen_and_the_run_says_so(tmp_path):
     assert got.returncode == 0, got.stderr
     env = env_of(got)
     assert (env["PP_CHALLENGER"], env["DEVELOPMENT"]) == ("local", "1")
-    assert not {"PP_PEER", "PP_GATE_KEY", "PP_CHALLENGER_KEY"} & env.keys()
+    assert env["PP_PEER"] == "vy-spot-glm53" and not {"PP_GATE_KEY", "PP_CHALLENGER_KEY"} & env.keys()
     assert not [s for s in flags(got, "--send") if s.endswith("/main.txt")]
 
 
@@ -218,7 +222,25 @@ def test_the_compose_run_sends_the_windows_hand_off_to_the_compose_node(tmp_path
     words = shlex.split(got.stdout)
     assert words[words.index("--on") + 1] == "vy-nebius-cpu-14" == PLACEMENT["run"]["window"]["env"]["COMPOSE_NODE"]
     assert flags(got, "--send") == [str(d / "compose.tar"), str(d / "compose.tar.sha256")]
-    assert words[words.index("--") + 1:] == ["bash", "adapters/vllm/tools/served_run/compose.sh"] and not flags(got, "--env")
+    assert words[words.index("--") + 1:] == ["bash", "adapters/vllm/tools/served_run/compose.sh"]
+    assert flags(got, "--env") == ["PP_PEER=vy-nebius-cpu-14"]
+
+
+@pytest.mark.parametrize("args", [("window",), ("window", "--development"), ("window", "--tie"), ("setup",), ("copy",),
+                                  ("audit",), ("audit", "--development"), ("compose",)])
+def test_every_run_carries_its_nodes_name_in_the_cluster_as_pp_peer_and_a_window_as_h1_peer(tmp_path, args):
+    at = {**ROW_OF_CARDS, "SERVED_RUN": "r-window", "AUDIT_NODE": "vy-nebius-cpu-16"}
+    if args[0] == "compose":
+        at["HANDOFF"] = str(handoff(tmp_path, git(make_tree(tmp_path), "rev-parse", "HEAD")))
+    got = run(tmp_path, *args, "--dry-run", **at)
+    assert got.returncode == 0, got.stderr
+    words, env = shlex.split(got.stdout), env_of(got)
+    assert env["PP_PEER"] == words[words.index("--on") + 1]
+    assert env.get("H1_PEER") == (env["PP_PEER"] if args[0] == "window" else None)
+
+
+def test_no_file_of_the_served_run_names_the_retired_node():
+    assert not [f.name for f in HERE.rglob("*") if f.is_file() and b"vy-dc-h200" in f.read_bytes()]
 
 
 def test_the_compose_run_refuses_another_commit_than_the_windows(tmp_path):
@@ -273,9 +295,9 @@ def test_the_settings_are_node_as_and_its_rows_and_name_no_address(tmp_path, tie
     got = run(tmp_path, "settings", f"some/{row[:14]}", VY_CHALLENGER_1_HOST=ADDRESS)
     assert got.returncode == 0, got.stderr
     env = dict(line.split("=", 1) for line in got.stdout.splitlines())
-    assert {k: env[k] for k in ("VENV", "HIDDEN_SO", "DISK_FLOOR_GB", "H1_PEER", "ROW_ID")} == {
+    assert {k: env[k] for k in ("VENV", "HIDDEN_SO", "DISK_FLOOR_GB", "H1_PEER", "PP_PEER", "ROW_ID")} == {
         "VENV": NODE_A["VENV"], "HIDDEN_SO": NODE_A["HIDDEN_SO"], "DISK_FLOOR_GB": NODE_A["DISK_FLOOR_GB"],
-        "H1_PEER": "vy-spot-glm53", "ROW_ID": row}
+        "H1_PEER": "vy-spot-glm53", "PP_PEER": "vy-spot-glm53", "ROW_ID": row}
     assert env["ROW"] == f"{NODE_A['LLAMA_ROOT']}/{NODE_A['builds'][row]}/{row}" and (env["POUW"] == "pearlplus") == tie
     assert not {"CARD", "CORES", "END", "PRODUCT", "PP_CHALLENGER"} & env.keys() and ADDRESS not in got.stdout
 
@@ -336,3 +358,27 @@ def test_the_bindings_bind_every_party_of_the_demo_by_the_env_files_names(tmp_pa
 @pytest.mark.parametrize("script", ["window.sh", "compose.sh", "setup.sh", "workload_env.sh", "copy.sh", "audit.sh", "handoff.sh"])
 def test_the_runs_scripts_parse(script):
     assert subprocess.run(["bash", "-n", str(HERE / script)], capture_output=True, check=False).returncode == 0
+
+
+def window_exit(tmp_path: Path, rc: int, off_node: str, deferred: bool = False) -> tuple[int, str]:
+    d, out = tmp_path / "serve", tmp_path / "out"
+    out.mkdir(exist_ok=True)
+    if deferred:
+        (d / "private" / "deferred").mkdir(parents=True)
+        (d / "private" / "deferred" / "deferred.env").write_text("K=0\n")
+    got = subprocess.run(["bash", "-c", f'log() {{ echo "$*"; }}; . {shlex.quote(str(HERE / "handoff.sh"))}; window_exit {rc}'],
+                         capture_output=True, text=True, check=False, cwd=tmp_path,
+                         env={**os.environ, "D": str(d), "OUT": str(out), "COMPOSE_OFF_NODE": off_node, "RESEARCH_RUN_ID": "r1"})
+    return got.returncode, got.stdout
+
+
+@pytest.mark.parametrize(("rc", "off_node", "want"), [(0, "0", 0), (1, "0", 1), (2, "0", 2), (0, "1", 4), (1, "1", 1), (2, "1", 2)])
+def test_an_on_node_record_with_nothing_to_pack_exits_by_its_verdict_and_an_off_node_one_without_its_hand_off_exits_4(
+        tmp_path, rc, off_node, want):
+    assert window_exit(tmp_path, rc, off_node)[0] == want
+
+
+@pytest.mark.parametrize("off_node", ["0", "1"])
+def test_a_pending_record_deferred_off_the_node_exits_0_and_says_what_is_left(tmp_path, off_node):
+    rc, said = window_exit(tmp_path, 2, off_node, deferred=True)
+    assert rc == 0 and "pending: audited and composed off this node: `run.sh copy` and `run.sh audit` with SERVED_RUN=r1" in said

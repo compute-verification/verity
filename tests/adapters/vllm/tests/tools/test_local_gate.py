@@ -10,9 +10,14 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+import importlib.util
+
 import pytest
 
-from tests.protocols import local_gate as LG
+_spec = importlib.util.spec_from_file_location(
+    "local_gate", Path(__file__).resolve().parents[5] / "adapters" / "vllm" / "tools" / "served_run" / "local_gate.py")
+LG = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(LG)
 
 
 class Refused(Exception):
