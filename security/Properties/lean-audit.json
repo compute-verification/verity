@@ -2485,6 +2485,7 @@
     "Properties.Pouw.PearlPlus",
     "Properties.Pouw.PearlPlusSample",
     "Properties.Remote",
+    "Properties.InferenceOnly.RecordRows",
     "Properties.Verity.ExecutionPhaseFiles",
     "Definitions.Core.Compiler",
     "Properties.Verity.Committed",
@@ -2690,6 +2691,7 @@
     "InferenceOnlyVerifier.Protocol",
     "InferenceOnlyVerifier.Count",
     "InferenceOnlyVerifier.Record",
+    "InferenceOnlyVerifier.RowsProtocol",
     "Properties.InferenceOnly.Record",
     "Properties.InferenceOnly"
    ],
