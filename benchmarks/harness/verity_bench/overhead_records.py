@@ -52,7 +52,7 @@ DOOR_ENV = frozenset({"VERITY_BENCH_VENV"})
 RUN_DEFAULT_ENV = {"ONEDNN_MAX_CPU_ISA": "AVX512_CORE_BF16"}
 #: the run's bound, which its GPU lease enforces too: the sweep's and a timed run's
 MINUTES = {"points": 150, "run": 60}
-CENSUS = Path("benchmarks/census")
+CENSUS = Path("calibration/census")
 DATACENTER, WORLD = "dc-12500-machines-600s", "world-inference-2027"
 #: the one conversion from FLOP to Boolean gates, with its source and status
 GATES = Path("benchmarks/slowdown/data/hardware.toml")

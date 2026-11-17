@@ -421,7 +421,7 @@ def main(argv: list[str] | None = None, **kw: Any) -> int:
     ap.add_argument("--scheme", default="band-chain/d12/v1", help="a registered name (verity.protocols.resource_accounting.memory.pous.verifier.schemes)")
     ap.add_argument("--impl", required=True, choices=sorted(IMPLS))
     ap.add_argument("--weight-set", required=True, help="an id of benchmarks/pous/weight_sets.json")
-    ap.add_argument("--hardware", required=True, help="a census hardware id (benchmarks/census/hardware.json), e.g. l40s-48gb/bf16")
+    ap.add_argument("--hardware", required=True, help="a census hardware id (calibration/census/hardware.json), e.g. l40s-48gb/bf16")
     ap.add_argument("--out", required=True)
     ap.add_argument("--audits", type=int, default=20,
                     help="timed audits per round; 0 (band-gpu, p2-v3-gpu): an untimed placement, which runs the gates, encode, "
@@ -458,7 +458,7 @@ def main(argv: list[str] | None = None, **kw: Any) -> int:
                          "matches (a timed run of a large W then skips the encode an untimed run measured)")
     ap.add_argument("--pous-timed-audit", default=None,
                     help="reference, p2-v3-gpu: a built pous-timed-audit, the audit's verdict of record (default: "
-                         "pous_check's; p2-v3-gpu builds it there once a run, a no-op after pod.sh's PREPARE=1)")
+                         "pous_verifier's; p2-v3-gpu builds it there once a run, a no-op after pod.sh's PREPARE=1)")
     ap.add_argument("--mc-lms-key", default="",
                     help="p2-v3-mc-gpu: sign the memory attester's sessions with S1's LMS key in this directory (made "
                          "there when absent); without one they are test-signed and the verdict rejects them all")

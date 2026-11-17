@@ -98,8 +98,8 @@ from verity_config.settings import of
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-CARD_FILES = ROOT / "hardware/cards"
-NODE_FILES = ROOT / "hardware/nodes"
+CARD_FILES = ROOT / "calibration/hardware/cards"
+NODE_FILES = ROOT / "calibration/hardware/nodes"
 RS = ROOT / "benchmarks" / "poub_session"
 
 #: this directory's registry: PACED, UNPACED, and the variables a research run sets
@@ -134,12 +134,12 @@ RECORDS = ["out/verifier.json", "out/host-run.txt", "out/host/*/out/verifier.jso
 LOOPBACK = ("loopback: both processes ran on this machine, the prover the CPU reference over a test store; it "
             "certifies nothing")
 LOCAL = "local: the verifier and its coins ran on the machine being measured"
-#: the node sheet (`hardware/nodes/`) of a --local session's card, by a word of the name nvidia-smi gives it, taken at
+#: the node sheet (`calibration/hardware/nodes/`) of a --local session's card, by a word of the name nvidia-smi gives it, taken at
 #: that one card: the share is of the one card's read rate (LOCAL_NODE names another sheet)
 LOCAL_SHEETS = {"H200": "h200-sxm-141gb-x1", "RTX PRO 6000": "rtx-pro-6000-server-x8"}
 #: what a --local result's digests are of: the session's verifier, and the data sheets its node is read from
 VERIFIER = ROOT / "verity" / "protocols" / "resource_accounting" / "memory" / "poub" / "verifier"
-SHEETS = ROOT / "hardware"
+SHEETS = ROOT / "calibration" / "hardware"
 #: the one session form `--local` runs, the node run's paced session (PACED's default) as `run.sh` passes it to its
 #: verifier: a coin a pass group, seven credited stretches of a second at 2773 openings each, the groups counted at
 #: the pass the session's calibration measures on the card (`--pace-pass-ms 0`)
@@ -520,9 +520,9 @@ def sheet_of(name: str) -> str:
     if kind := SETTINGS.LOCAL_NODE:
         return kind
     if (kind := next((k for word, k in LOCAL_SHEETS.items() if word in name), None)) is None:
-        raise CouldNotRun(f"the tree has no data sheet for {name} (hardware/nodes/ has "
+        raise CouldNotRun(f"the tree has no data sheet for {name} (calibration/hardware/nodes/ has "
                           f"{', '.join(LOCAL_SHEETS.values())} for its cards), and the share is of the card's own sheet: "
-                          "add its card and a node of it there (hardware/README.md) and name the node with LOCAL_NODE; "
+                          "add its card and a node of it there (calibration/hardware/README.md) and name the node with LOCAL_NODE; "
                           "a result against a sheet not on main is not comparable, and its digest says so")
     return kind
 
@@ -924,7 +924,7 @@ def text(doc: dict) -> str:
     elif doc.get("local"):
         lines.append(f"  {doc['local']}")
     if m := doc.get("machine"):
-        lines.append(f"  card: {m['card']}, the verifier's node one card of hardware/nodes/{m['sheet']}.toml; "
+        lines.append(f"  card: {m['card']}, the verifier's node one card of calibration/hardware/nodes/{m['sheet']}.toml; "
                      f"data sheets sha256 {m['sheet_sha256'][:16]}, verifier sha256 {m['verifier_sha256'][:16]}")
     if not doc["loopback"] and doc["value"] is not None and doc["value"] >= 1:
         lines.append(f"  {NOTHING}")
@@ -1000,7 +1000,7 @@ def detail(p: dict, machine: dict | None = None, error: float | None = None, sto
             + " against a prover of "
             + ("SHA-512 compressions not stated" if p.get("budget_log2") is None
                else f"2^{p['budget_log2']} SHA-512 compressions on any hardware")
-            + (f"; the share against hardware/nodes/{machine['sheet']}.toml at one card" if machine else ""))
+            + (f"; the share against calibration/hardware/nodes/{machine['sheet']}.toml at one card" if machine else ""))
 
 
 def refused(why: str, *, local: bool, run: Callable = subprocess.run) -> int:
