@@ -812,7 +812,9 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
         verdict = "undecided"
     if held and verdict == "undecided":
         reason = "; ".join(x for x in (reason, "not accepted: " + ", ".join(f"{h} {AS_WRITTEN}" for h in held)) if x)
-    on, developer = coins_on(cfg, bindings_of(state)), {p["machine"] for p in cfg["party"] if p["principal"] == "developer"}
+    on = coins_on(cfg, bound := bindings_of(state))
+    on |= {c: m for c, m in gate_coins_on(cfg, bound).items() if c == "pearl-plus"}
+    developer = {p["machine"] for p in cfg["party"] if p["principal"] == "developer"}
     return {"block": seal, "components": components, "answer_from": answer_from, "product": product, "reason": reason,
             "registration": None, "coins": "simulated" if developer & set(on.values()) else coins_of(cfg),
             "coins_on": on, "verdict": verdict}
