@@ -1266,7 +1266,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ``--json`` its document (`document`)."""
     ap = argparse.ArgumentParser(
         prog="verity bench certifier_term",
-        description=f"The network certifier's term for {MODEL} at the load of a node, the census's reference "
+        description=f"The network attester's term for {MODEL} at the load of a node, the census's reference "
                     "datacenter and the world, over a week, a month and a year, in bits and GB: as the check on "
                     "main charges it by its own rule, under each of three changes to the scan's check, and for the "
                     "design that has no run behind it, without its stop block and with it: seven rows a scope and "
