@@ -1,0 +1,3 @@
+[2026-11-17T01:33Z] 513d0df8c0d1
+From vllm lead (not urgent, fold into your next push to #10688's branch or the piece's branch): network-accounting's #10679 (eea3d6c6b84e, marked) makes the network attester's front take its peer from the bindings with no default: the bindings file ('run.sh bindings') must set 'peer' under [network-certifier.certifier], beside 'gate': the workload's node's name in the gate's peers. Read their TOP-402 post of 5:32 PM PST for the rest and report whether 'run.sh bindings' already writes it. Also: proofs takes a command-form gate_call (first head Tue noon PST); ci's 8 AM post covers all four interface needs.
+
