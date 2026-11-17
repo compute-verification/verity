@@ -4,7 +4,7 @@ lane, over live and dead leaves and leaves whose admitted rows lie outside some 
 lanes g >= j hold no admitted row and are ungated all the same), and the references' XOR is the served receipt.  A
 mismatch is reported by leaf, lane and word.  `lane_refs.served` (the gate's check under DITHER_LANE_REFS) runs on a
 capture of the gate's shape, checked in place and through a saved capture as after serving.  Where PARTIALS_LIB names an
-h1u build and CUDA is up, the gpu's (`kh_lanes`) rows too, at m = 2 and 3 (job.sh's partials bench).  The cpu tests'
+h1u build and CUDA is up, the gpu's (`kh_lanes`) rows too, at m = 2 and 3.  The cpu tests'
 K run from 128 to 512, since the references take any K (`h1zy.combine` stages the combine from K = 384, `h1zy.LEAST_K`);
 the gpu test's are 512 and 4608."""
 from __future__ import annotations

@@ -4,8 +4,6 @@ the Python values the kernel self-check binds, so each family is checked here on
 Definition's word reference, every port in the Definition's return order."""
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 import numpy as np
 import pytest
 from verity.circuits.defs import bind

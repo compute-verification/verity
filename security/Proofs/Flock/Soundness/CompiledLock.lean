@@ -1,6 +1,7 @@
 module
 
-public import Proofs.Flock.Soundness.Model.Compiled
+public import Definitions.Flock.Compiled
+public import Proofs.Flock.Soundness.Merkle
 public import Proofs.Flock.Soundness.Game
 public import Proofs.Flock.Soundness.LigeritoMid
 

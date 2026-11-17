@@ -2,7 +2,7 @@
 `F32LogRn_v1` on bits: each is Boolean, names its word primitive and is its Boolean version, its gates and its Flock rows and
 nonzeros are pinned, and it agrees with the word on edges, every binade's ends, its thresholds or the words near 1, the
 words whose result lies nearest a rounding boundary, and random words. Each is held on every one of the 2^32 words by
-`benchmarks/f32_exhaustive/run.py boolean F32ExpRn` and `... boolean F32LogRn`."""
+`calibration/f32_exhaustive/run.py boolean F32ExpRn` and `... boolean F32LogRn`."""
 from __future__ import annotations
 
 import numpy as np

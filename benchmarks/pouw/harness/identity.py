@@ -5,6 +5,9 @@ bus id, so CUDA and NVML agree. NVML is addressed by that UUID, never by an inde
 from __future__ import annotations
 
 import re
+from pathlib import Path
+
+CARD_FILES = Path(__file__).resolve().parents[3] / "calibration/hardware/cards"
 
 #: what `bench.py`, `characterize.py`, `native.py` and the tests read
 __all__ = ["IdentityError", "check", "check_card", "expected_for", "parse_server_md", "resolve_gpu", "uuid_string"]
@@ -84,7 +87,7 @@ def check(env: dict[str, str], gpu: int, device_count: int, uuid: str, expected_
 
 
 #: what the card must be (the pods' bootstrap check), by its name within the device's: its compute capability, its card
-#: file (hardware/cards/), whose `sm.count` is the SMs it must have, its oldest driver and its build target. An RTX PRO
+#: file (calibration/hardware/cards/), whose `sm.count` is the SMs it must have, its oldest driver and its build target. An RTX PRO
 #: 6000 Blackwell, sm_120, driver 575 or later; or an H200 (`verity bench overhead`'s card), sm_90, driver 550 or later
 CARDS = {"RTX PRO 6000": ("12.0", "rtx-pro-6000-server", 575, "sm_120a"),
          "H200": ("9.0", "h200-sxm-141gb", 550, "sm_90a")}
@@ -97,7 +100,7 @@ def check_card(name: str, capability: str, sms: int, driver: str) -> dict:
     from verity.device import load_card, number  # here: loading the harness needs the standard library alone
 
     want_capability, sku, min_driver, arch = CARDS[known]
-    want_sms = int(number(load_card(sku)["sm"]["count"]))
+    want_sms = int(number(load_card(sku, directory=CARD_FILES)["sm"]["count"]))
     problems = []
     if capability != want_capability:
         problems.append(f"compute capability {capability}, not {want_capability}")

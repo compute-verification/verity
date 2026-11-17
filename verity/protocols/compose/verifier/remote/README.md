@@ -22,7 +22,7 @@ names, `Session*` means a run of a subprotocol.
 
 - the remote protocol, this one: `Core.Remote` (`CoreRemote.lean`, id `verity/remote/v1`; v0 is development);
 - PoUB, an onsite subprotocol whose code names still say "remote": `verity/protocols/resource_accounting/memory/poub/verifier/`, `Poub`,
-  `ResourceAccounting.Remote*`, `verity/remote-bandwidth/v0`, `benchmarks/remote_session/` and serve-openai's `--remote-verifier`;
+  `ResourceAccounting.Remote*`, `verity/remote-bandwidth/v0`, `benchmarks/poub_session/` and serve-openai's `--remote-verifier`;
 - `RemoteChallenger` (`verity/protocols/proofs/spot/verifier/challenger/remote.py`), a remote challenger's client;
 - the slowdown bound's remote regime (`Slowdown.Guarantees.SlowdownRemote`, the slowdown calculator's `regime.remote`): a bound over this
   protocol, not in it (part 6 below);
@@ -40,11 +40,11 @@ names, `Session*` means a run of a subprotocol.
 - **How the coins reach the developer.** The challenger opens each coin only after the developer's commitment is
   recorded, over one TCP stream that the developer's client opens at its own `127.0.0.1` port (`RemoteChallenger`).
   Deployed, on an auditor device, that port is the far end of a coin link the auditor device opens to the
-  developer's machine: `ssh -N -R` straight to that machine's sshd, relayed and counted by network certification's
+  developer's machine: `ssh -N -R` straight to that machine's sshd, relayed and counted by network attestation's
   code running on the auditor device (`verity/protocols/compose/verifier/live_challenger/coin_link.py`). No coin path of remote's own, with no
   network attester anywhere, is specified yet.
-- **No auditor devices at the site.** There are no network attesters or memory attesters. So network certification,
-  PoUS and PoUB are onsite's, not remote's, and memory wipes are neither composite's yet. For network certification,
+- **No auditor devices at the site.** There are no network attesters or memory attesters. So network attestation,
+  PoUS and PoUB are onsite's, not remote's, and memory wipes are neither composite's yet. For network attestation,
   see `security/Definitions/Certifier` and its `Guarantees`.
 
 ## Subprotocols
@@ -147,13 +147,12 @@ else is a theorem or a named gap.
 | PoUW's receipts | A skipped round passes its receipt, or a guessed fold state passes, only at the stated rate. Conjectured, as their docstrings say. | `ReceiptLuckAt`, `GuessLuckAt` | Believed because each receipt folds committed accumulator words under a key fixed after the commitment; search for a skipped round or a fold-state guess that passes more often than the rate. |
 | Enforcement | SPOT catches each incorrect proof block with probability at least q_det, whatever came before, and a detected cheat ends its identity and takes its hardware out of use within Δ. | `Slowdown.Assumptions.SampledDetection`, `Slowdown.Assumptions.TerminalDetection` | The first is what part 2's sample gives, not yet derived from it in Lean. The second is the auditor's policy: check that a refusal triggers it. |
 | The registered information | The data the registration names was public, not computed off the books before. | `InferenceOnly.Assumptions.ThetaRegistered` | Check the registered data's provenance: each named dataset or model is public, by its digest. |
-| Learning, 1: fresh weights are hard to hold | After enough training since registration, a short program that runs no longer than a block may run can't reproduce many freshly trained weight values: each costs about p bits, even to a program that knows the registered model and may replay a little training. | `Slowdown.Assumptions.DescriptionHard` | Compress the update: on adversarially chosen sets of updated weights, find the shortest program that outputs them within the time budget (codecs, low-rank fits, predictors from the registered model, short replays). A program well under p bits a weight refutes the price. |
-| Learning, 2: no cheap way around it | A floor, a hypothesis about every efficient method: each way of reaching the target below T_max carries some local bound's covered structure (freshly trained weights combined with fresh per-token values, a weighted count of at least Ω_*), except with probability η. It is the open part. | `Slowdown.Assumptions.CoversEfficientMethods` | Untested. Try to reach the target cheaply without that: small adapters, independently trained small experts, distillation from the served model, frozen features. A cheap success refutes it at that target. |
+| Learning, 1: fresh weights are hard to hold | After enough training since registration, a short program that runs no longer than a block may run can't reproduce many freshly trained weight values: each costs about p bits, even to a program that knows the registered model and may replay a little training. | not in Lean | Compress the update: on adversarially chosen sets of updated weights, find the shortest program that outputs them within the time budget (codecs, low-rank fits, predictors from the registered model, short replays). A program well under p bits a weight refutes the price. |
+| Learning, 2: no cheap way around it | A floor, a hypothesis about every efficient method: each way of reaching the target below T_max carries some local bound's covered structure (freshly trained weights combined with fresh per-token values, a weighted count of at least Ω_*), except with probability η. It is the open part. | not in Lean | Untested. Try to reach the target cheaply without that: small adapters, independently trained small experts, distillation from the served model, frozen features. A cheap success refutes it at that target. |
 
 For the counted uses with an upstream certificate, a block must import the specified context or perform the certified
 upstream computation. The certificate is a checkable wiring property of the training circuit: every gate a use requires
-reaches, inside that use's own upstream computation, the operand the use reads. It is named in the lock
-(`Slowdown.Capability.Consumers.Upstream`) until it is checked on a named circuit. The two learning rows are all the slowdown bound assumes
+reaches, inside that use's own upstream computation, the operand the use reads. The two learning rows are all the slowdown bound assumes
 about learning, and they are where its scientific content lies; the second, the floor, is the open part.
 
 ### 1. The proofs of the sampled proof blocks
@@ -319,7 +318,7 @@ times the fleet-time the reference training algorithm takes with no protocol (fl
 fleet's capacity, registered and unregistered hardware). It holds except with the total failure probability below,
 η + δ + …: an accepted run reaches the target in less fleet-time at most that often. **This is the argument's one
 endpoint.** No Lean states it: it is derived in prose (`security/README.md`, part 4) from the local bounds,
-`Verity.Guarantees.Counting` and `Slowdown.Guarantees.CapabilityFloor`. The Lean bound `SlowdownRemote` is a different,
+`Verity.Guarantees.Counting` and the floor. The Lean bound `SlowdownRemote` is a different,
 older formula (below), and the calculator's figures (Results per monitoring period) come from a third route.
 
 **Its total failure probability** over a monitoring period of n verification phases is at most
@@ -373,15 +372,7 @@ the local bound (an activation price, a joint price, a recoverable source), each
 
 **Lean.**
 
-- The local bounds `Slowdown.Guarantees.HeldBudget` (or, statistically, `Slowdown.Guarantees.StatHeldBudget`),
-  `Slowdown.Guarantees.ImportOrRecompute`, `Slowdown.Guarantees.RecomputeByGates` and `Slowdown.Guarantees.RecomputeByState`, and the
-  floor `Slowdown.Guarantees.CapabilityFloor`: **proved**
-  (`security/Proofs/Slowdown/Capability/`, `security/Proofs/Slowdown/Coverage.lean`), each from its premises. Every premise,
-  structure and bound is surveyed in `security/Definitions/Slowdown/Capability/README.md`.
-- Their premises, `Slowdown.Assumptions.CoversEfficientMethods`, `Slowdown.Assumptions.DescriptionHard` (or
-  `Slowdown.Assumptions.MinEntropyHard`) and the wiring property `Slowdown.Capability.Consumers.Upstream`, are named assumptions in
-  the lock, which those proofs take as hypotheses; none is tested yet: no price is measured at a decoder budget, and the
-  certificate is not checked on a named training circuit.
+- The local bounds and the floor are not in Lean.
 - The block-description bound (`Verity.Guarantees.BlockDescription`) and the counting bound
   (`Verity.Guarantees.Counting`): **proved**.
 
@@ -435,26 +426,21 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
   - No update price has been measured at a decoder budget.
   - The wiring property hasn't been checked on a named training circuit.
   - Coverage, the floor every efficient method is assumed to meet, is the open part: it is untested.
-  - The local bounds and the floor are proved, and their witnesses are toys: at a four-gate circuit, `DescriptionHard`,
-    `SourceHard` and `Recovers` hold against a decoder that compresses one string, each parameter spent (at 0 it
-    fails); at a toy task, coverage holds at η = 1/2 but not at 0, a one-gate guess escaping it. No instance meets the
-    premises on a training circuit.
+  - No instance meets the premises on a training circuit.
   - The displayed slowdown bound has no Lean statement.
 
 ### Promising directions
 
 The next steps test or strengthen part 6's premises: one instance meeting the local premises at once, attacks on
 update prices, the certificate checked on a training circuit, a use's import cost, weights by linear programming, and
-coverage tested directly. Each is in `security/Definitions/Slowdown/Capability/README.md` ("How to test each premise", "The
-frontier"); how the execution's boundaries fix what a block's c and k count is in `security/README.md`, part 2.
+coverage tested directly. How the execution's boundaries fix what a block's c and k count is in `security/README.md`, part 2.
 
 ## Assumptions, by name
 
 Each is a named `Prop` in a lock's `assumptions` (`security/lean-audit.json`, and `security/Properties/lean-audit.json`
 for the `Properties.*` ones), one line in plain words, except `CoinsAfterCommitment` (prose only). These are the named `Prop`s the statements above
 read; each theorem's full hypotheses are its Lean, among them `TagsOkZHJ`, `Built`, `StrictCR.Finder.CR`,
-`SampledLayer.JointSound` and `.Pins` (which `CircuitCredit` also reads), and the local bounds' structural
-hypotheses `HeldPriceAtMost`, `OverlapWeights` and `RequiresState`.
+`SampledLayer.JointSound` and `.Pins` (which `CircuitCredit` also reads).
 
 SPOT (`benchmarks/prove_path/README.md`, "What an accepted audit means"):
 
@@ -467,7 +453,7 @@ SPOT (`benchmarks/prove_path/README.md`, "What an accepted audit means"):
   table and link finders as `TableCRZAt` and `LinkCRZCAt`.
 - `trusted-device` (`Verity.Assumptions.TrustedDevice`, `security/Definitions/Core/Assumptions.lean`): the challenger is
   the auditor's device on a host the developer doesn't control, and the custody above rests on it; the verifier runs
-  on an auditor device too. In Lean, only onsite's guarantees (network certification's) read `TrustedDevice`.
+  on an auditor device too. In Lean, only onsite's guarantees (network attestation's) read `TrustedDevice`.
 - `CoinsAfterCommitment`: the challenger's coins reach the developer's machine only over paths the auditor's devices
   control, and only after the commitment. Prose only: no guarantee takes it. Onsite's `CoinsConfidential`
   (`Pouw.Assumptions.CoinsConfidential`, which `Pouw.Guarantees.Dither.FleetSound` takes) is another assumption: a
@@ -512,14 +498,6 @@ The slowdown, `SlowdownRemote`:
   circuit's work, and the count's verdict `InferenceOnly.CompliesAtMost c k n` (`security/Definitions/InferenceOnly.lean`), a hypothesis until
   `DescCountsCK` is proved (part 4, link 7).
 
-The local bounds (part 6):
-
-- `Slowdown.Assumptions.DescriptionHard` (in the lock): every selection of an item
-  family (updated weights, operands, or both) has time-bounded description length at least its price, less a deficit.
-- `Slowdown.Assumptions.CoversEfficientMethods` (in the lock): the floor, a hypothesis about every efficient method. Each
-  way of reaching the target below T_max carries some local bound's covered structure, with at least its weighted
-  count Ω_*, except with probability η. It is the open part, untested.
-
 ## Results per monitoring period
 
 The slowdown calculator, `benchmarks/slowdown`, a third route beside part 6's displayed bound and `SlowdownRemote`,
@@ -536,10 +514,10 @@ the figures: this page keeps none.
   not per verification phase. The calculator prints its own: `CertificateSlack`'s p/ε′ at ε′ = 10⁻⁴,
   PoUW's per-phase p assumed at 3·2⁻⁴⁰ (δ_bind, δ_ks unnumbered, part 5), with no term growing with the period.
 
-## The demo
+## The application
 
-**No run of record of the remote verifier yet:** `remote-v1 check` (to be `verity verify remote`) has none. The remote demo
-is `demos/remote.toml` (`demos/README.md`), which `verity run` doesn't accept yet: Pearl+ has no piece. The vLLM served
+**No run of record of the remote verifier yet:** `remote-v1 check` (to be `verity verify remote`) has none. The remote application
+is `applications/remote.toml` (`applications/README.md`), which `verity run` doesn't accept yet: Pearl+ has no piece. The vLLM served
 run runs both halves on one served run, PoUW's as a development run:
 
 - the vLLM served run (`adapters/vllm/tools/served_run/README.md`): Llama-3.2-1B INT8 served by vLLM on one H200, its
