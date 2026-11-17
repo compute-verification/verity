@@ -433,8 +433,6 @@ def parse_pattern(P: str, n_args: int) -> tuple[tuple, int]:
 
 
 _KINDS = ("and", "xor", "not")
-#: the traced circuits this process reuses (`trace_cache.use`); None, as a verifier always has it, traces every time
-CACHE = None
 
 
 @dataclass
@@ -469,14 +467,10 @@ def _flat_out(res: Any, ret: Type) -> list[L]:
     return [f for e in res for f in e]
 
 
-def trace(build: Callable, params: Sequence[Type], ret: Type, *, cse: bool = True, key: tuple | None = None,
-          calls: bool = False) -> Traced:
-    """``build``'s gate circuit over ``params`` to ``ret``. ``key``, a Definition's (name, version, bindings), lets `CACHE`, when a
-    build has turned it on, give the circuit an earlier trace of the same key and code made. With ``calls``, each `folded`
-    Definition the builder reaches through `CallTracingCircuit.fold_call` is a gate ``call:{name}:{P}`` over its parameters'
-    wires, read by one gate ``out{j}`` an output bit (`emit` writes them as a call); `CACHE` keeps no such circuit."""
-    if key is not None and CACHE is not None and not calls:
-        return CACHE.trace(key, build, params, ret, cse)
+def trace(build: Callable, params: Sequence[Type], ret: Type, *, cse: bool = True, calls: bool = False) -> Traced:
+    """``build``'s gate circuit over ``params`` to ``ret``. With ``calls``, each `folded` Definition the builder reaches through
+    `CallTracingCircuit.fold_call` is a gate ``call:{name}:{P}`` over its parameters' wires, read by one gate ``out{j}`` an
+    output bit (`emit` writes them as a call)."""
     # The cyclic collector stays off while tracing: reference counting frees a trace's forms, and the collector's passes over
     # the live ones cost more than the trace itself.
     on = gc.isenabled()
@@ -718,18 +712,17 @@ def definition(name: str, version: int, build: Callable, params: Sequence[tuple[
     reaches is a call, and ``traced`` is still the builder's whole circuit, the one a lowering that runs ``build`` makes."""
     types = [t for _, t in params]
     traced: list[Traced] = []
-    key = (name, version, {})
 
     def flat() -> Traced:
-        return traced[0] if traced and not calls else trace(build, types, ret, key=key)
+        return traced[0] if traced and not calls else trace(build, types, ret)
 
     @lru_cache(maxsize=None)
     def with_calls() -> Traced:
-        return trace(build, types, ret, key=key, calls=True)
+        return trace(build, types, ret, calls=True)
 
     def body(B, S, *colls):
         if not traced:
-            traced.append(with_calls() if calls else trace(build, types, ret, key=key))
+            traced.append(with_calls() if calls else trace(build, types, ret))
         return emit(traced[0], types, ret, B, *colls)
 
     d = CompositeDefinition(name, version, (), lambda S: (tuple(params), ret), body, doc=doc, conformance=conformance,
