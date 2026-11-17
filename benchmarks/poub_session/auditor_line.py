@@ -109,7 +109,7 @@ nothing: the line at that T holds no share and says "no bound at this period" wi
 
 **Conditional on** (`conditional_on`, `CONDITIONAL_ON`). The line's statement (`LineHeld`) reads statement C in full
 from the network attesters' record of the node's ingress (`Covered`, `IngressCounted`), which this line doesn't
-check, so a line says it is conditional on C (`NoOutsideCompute`, the label's name for it), until certifiers cover
+check, so a line says it is conditional on C (`NoOutsideCompute`, the label's name for it), until attesters cover
 the gate node's boundary. A relay prover, a thin node forwarding each coin to a helper that holds
 the store and computes the receipts, breaks that premise alone. The error's binding term takes the gap `binding-split`
 as closed (split_t = 0), which the deployed protocol doesn't yet ensure, so every line is conditional on that too,
@@ -203,7 +203,7 @@ CONDITIONAL_ON = {"NoOutsideCompute": (
     "statement C in full: no device outside the node computes for it during the session. LineHeld reads it from the "
     "network certifiers' record (no counted ingress over the credited passes, Accounting.Remote.Held.Assumptions."
     "Covered under certifier-coverage and IngressCounted at δ_net under trusted-device), which this line didn't check; "
-    "assumed until certifiers cover the gate node's boundary and certify that nothing but the verifier's messages "
+    "assumed until attesters cover the gate node's boundary and certify that nothing but the verifier's messages "
     "entered it over the credited span"),
     "binding-split": (
     "the receipts' binding term (ledger.binding, Accounting.Guarantees.Remote.ReceiptsBindingOfCR) is charged with "

@@ -1,7 +1,7 @@
 """A live run's parties, each a process of its own. The server and the attester share a host and its monotonic
 clock; the observer is on that host too, over loopback, or on another, where it reads its own clock alone:
 
-    python parties.py server|certifier|observer|waker|awake CONFIG.json [KEY=VALUE ...]
+    python parties.py server|attester|observer|waker|awake CONFIG.json [KEY=VALUE ...]
 
 - **The server** is the adversary. It samples a seed of its own, and interval t's bit and lead are SHA-512's of the
   seed and t (`coin`). It acts only through when and how it writes its own bytes: `Plan.writes` is every time it
@@ -562,7 +562,7 @@ def main(argv: list[str]) -> int:
         doc = asyncio.run(relay(cfg) if cfg["certifier"] == "relay" else network(cfg))
         doc["halts"] = [before, halts()]
     else:
-        raise SystemExit(f"a party is server, certifier, observer, waker or awake, not {role!r}")
+        raise SystemExit(f"a party is server, attester, observer, waker or awake, not {role!r}")
     Path(cfg["out"], f"{role}.json").write_text(json.dumps(doc))
     return 0
 

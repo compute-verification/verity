@@ -467,7 +467,7 @@ def test_a_tick_whose_wait_ends_early_waits_again_and_never_runs_before_its_boun
                                                                    ("fails", None)]
 
 
-def test_the_network_certifiers_clock_is_the_hosts_raw_one_and_its_wait_is_against_it(monkeypatch):
+def test_the_network_attesters_clock_is_the_hosts_raw_one_and_its_wait_is_against_it(monkeypatch):
     """Unless a caller injects them, the clock is the host's raw clock and each wait is against that clock. Here the
     raw clock is a count the test moves and each wait ends half its length early, then on its time: every clock
     read is of `CLOCK_MONOTONIC_RAW`, every wait is handed the network attester's own clock, and every tick runs at
@@ -532,7 +532,7 @@ def test_a_host_without_a_raw_clock_starts_no_network_attester(monkeypatch):
     assert (device.ticks, device.lateness, waits, device._pacer, device.records) == (0, [], [], None, [])
 
 
-def test_a_paced_network_certifiers_pacer_writes_each_client_its_cells_and_a_bucket_it_got_late_faults_every_grid():
+def test_a_paced_network_attesters_pacer_writes_each_client_its_cells_and_a_bucket_it_got_late_faults_every_grid():
     """With `paced`, each connection's cells reach its socket from the pacer, the bytes the loop writes unpaced. On the
     injected clock a bucket's time (origin 0, on the host's raw clock, the pacer's) has long passed when its tick hands
     it, so each reaches the pacer late, and the report of a window's first bucket handed faults the three grids' window
@@ -1284,22 +1284,22 @@ def released_elsewhere(name: str, line: bytes, watermark: bool) -> None:
     """Beside an honest request, `line` on another path (`elsewhere`): released whole where the release headers go
     after it, and where they don't (`UNREAD`) refused at its `END` as no one request to a server."""
     other = elsewhere(line)
-    certifier, _, server = streamed({1: [cells(http(b"{}"), B), cells(other, B)]}, watermark)
-    log = {e["ordinal"]: e for e in certifier.log}
+    attester, _, server = streamed({1: [cells(http(b"{}"), B), cells(other, B)]}, watermark)
+    log = {e["ordinal"]: e for e in attester.log}
     assert not to_watermark(other) and one_request(other) == (name not in UNREAD)
     if name in UNREAD:
         assert (log[2]["failed"], log[2]["release"], server.conns[1].received) == ("malformed", None, b"")
-        assert certifier.requests_released == 1
+        assert attester.requests_released == 1
     else:
-        assert log[2]["failed"] is None and certifier.requests_released == 2
+        assert log[2]["failed"] is None and attester.requests_released == 2
         assert server.conns[1].received == with_release(other, log[2]["release"], STREAM_RUN, log[2]["ingress_end"])
 
 
 def streamed(arrivals: dict[int, list[bytes]], watermark: bool):
     server = Ordered([[(0, b"r0"), (0, EOF)], [(0, b"r1"), (0, EOF)]])
     hooks = {"watermark": server.watermark} if watermark else {}
-    certifier, clients, _ = run(server, arrivals, params=STREAMED, run_nonce=lambda n: STREAM_RUN[:n], **hooks)
-    return certifier, clients, server
+    attester, clients, _ = run(server, arrivals, params=STREAMED, run_nonce=lambda n: STREAM_RUN[:n], **hooks)
+    return attester, clients, server
 
 
 @pytest.mark.parametrize("watermark", (True, False))
@@ -1313,19 +1313,19 @@ def test_a_clients_request_to_the_watermarks_path_is_refused_at_its_first_cell_a
     release headers go after it (`released_elsewhere`)."""
     honest, mine = cells(http(b"{}"), B), client_stream(CLIENT_LINES[name])
     alone = streamed({1: [honest]}, watermark)[2]
-    certifier, clients, server = streamed({1: [honest, cells(mine, B)]}, watermark)
-    log = {e["ordinal"]: e for e in certifier.log}
+    attester, clients, server = streamed({1: [honest, cells(mine, B)]}, watermark)
+    log = {e["ordinal"]: e for e in attester.log}
     assert (log[2]["failed"], log[2]["failed_at"], log[2]["release"], log[2]["ended"]) == ("malformed", 0, None, 2)
     assert log[2]["ingress_cells"] == 0 and server.conns[1].received == b""
-    ingress = [f for r in records(certifier)[0] for row in r.grid for f in row if f is not None]
+    ingress = [f for r in records(attester)[0] for row in r.grid for f in row if f is not None]
     assert {f[0] for f in ingress if HEADER.unpack_from(f)[1] == 2} == {PAD}
     assert [k for _, k, _ in clients[1].cells()] == [PAD] * R + [FAIL] + [PAD] * (R - 1)
-    assert reasons(certifier) == [(2, 2, "malformed")] and clients[1].shim().outcome == "fail"
+    assert reasons(attester) == [(2, 2, "malformed")] and clients[1].shim().outcome == "fail"
     assert server.events == alone.events and (log[1]["release"], log[1]["failed"]) == (0, None)
-    assert certifier.requests_released == 1 and bytes(clients[0].shim().data) == b"r0"
+    assert attester.requests_released == 1 and bytes(clients[0].shim().data) == b"r0"
     if watermark:
         admitted, _, lines, ended, early = tick_engine(server.events, STREAM_RUN)
-        assert ended and early == [] and certifier.watermark_lost == [] and certifier.watermark_error is None
+        assert ended and early == [] and attester.watermark_lost == [] and attester.watermark_error is None
         assert [n for _, n, _ in lines] == [0, 0] + [1] * (STREAMED.window - 2) and not any(lost for *_, lost in lines)
         assert {T: ns for T, ns in admitted.items() if ns} == {2: [0]}
     released_elsewhere(name, CLIENT_LINES[name], watermark)
@@ -1355,15 +1355,15 @@ def test_a_request_line_that_ends_past_the_first_cell_is_refused_at_its_end_and_
     honest, mine = cells(http(b"{}"), B), client_stream(LONG_LINES[name])
     assert not to_watermark(mine[:P]) and to_watermark(mine) and -(-len(mine) // P) == 2 * R + 1
     alone = streamed({1: [honest]}, True)[2]
-    certifier, clients, server = streamed({1: [honest, cells(mine, B)]}, True)
-    log = {e["ordinal"]: e for e in certifier.log}
+    attester, clients, server = streamed({1: [honest, cells(mine, B)]}, True)
+    log = {e["ordinal"]: e for e in attester.log}
     assert (log[2]["failed"], log[2]["release"], log[2]["ingress_end"], log[2]["ingress_cells"]) == \
         ("malformed", None, None, 2 * R)
     assert server.conns[1].received == b"" and server.events == alone.events
-    ingress = [f for r in records(certifier)[0] for row in r.grid for f in row if f is not None]
+    ingress = [f for r in records(attester)[0] for row in r.grid for f in row if f is not None]
     assert [f[0] for f in ingress if HEADER.unpack_from(f)[1] == 2] == [PAD] * R + [DATA] * (2 * R) + [PAD] * R
-    assert reasons(certifier) == [(4, 2, "malformed")] and clients[1].shim().outcome == "fail"
-    assert certifier.requests_released == 1 and certifier.watermark_lost == [] and log[1]["release"] == 0
+    assert reasons(attester) == [(4, 2, "malformed")] and clients[1].shim().outcome == "fail"
+    assert attester.requests_released == 1 and attester.watermark_lost == [] and log[1]["release"] == 0
     released_elsewhere(name, LONG_LINES[name], True)
 
 
@@ -1383,17 +1383,17 @@ def never_released(request_bytes: bytes, watermark: bool = True) -> None:
     honest, n = cells(http(b"{}"), B), -(-len(request_bytes) // P)
     assert 1 <= n <= STREAMED.ingress_cells
     alone = streamed({1: [honest]}, watermark)[2]
-    certifier, clients, server = streamed({1: [honest, cells(request_bytes, B)]}, watermark)
-    log = {e["ordinal"]: e for e in certifier.log}
+    attester, clients, server = streamed({1: [honest, cells(request_bytes, B)]}, watermark)
+    log = {e["ordinal"]: e for e in attester.log}
     assert (log[2]["failed"], log[2]["release"], log[2]["ingress_end"], log[2]["ingress_cells"]) == \
         ("malformed", None, None, n - 1)
     assert server.conns[1].received == b"" and server.events == alone.events
-    ingress = [f for r in records(certifier)[0] for row in r.grid for f in row if f is not None]
+    ingress = [f for r in records(attester)[0] for row in r.grid for f in row if f is not None]
     kinds = [f[0] for f in ingress if HEADER.unpack_from(f)[1] == 2]
     assert kinds.count(DATA) == n - 1 and END not in kinds
-    assert [(o, why) for _, o, why in reasons(certifier)] == [(2, "malformed")] and clients[1].shim().outcome == "fail"
-    assert certifier.requests_released == 1 and (log[1]["release"], log[1]["failed"]) == (0, None)
-    assert bytes(clients[0].shim().data) == b"r0" and certifier.watermark_lost == []
+    assert [(o, why) for _, o, why in reasons(attester)] == [(2, "malformed")] and clients[1].shim().outcome == "fail"
+    assert attester.requests_released == 1 and (log[1]["release"], log[1]["failed"]) == (0, None)
+    assert bytes(clients[0].shim().data) == b"r0" and attester.watermark_lost == []
 
 
 @pytest.mark.parametrize("watermark", (True, False))
@@ -1417,8 +1417,8 @@ def test_a_line_of_the_body_that_looks_like_a_request_line_is_the_bodys_and_is_r
     release order, its body as the client sent it. One byte more than its length says is a second request's."""
     inner = OWN_LINE + b"\r\n" + release_head(0, STREAM_RUN, 0) + b"\r\n"
     one = http(b"{}\r\n" + inner)
-    certifier, _, server = streamed({1: [cells(one, B)]}, True)
-    (entry,) = certifier.log
+    attester, _, server = streamed({1: [cells(one, B)]}, True)
+    (entry,) = attester.log
     assert (entry["failed"], entry["release"]) == (None, 0) and one_request(one)
     assert server.conns[0].received == with_release(one, 0, STREAM_RUN, entry["ingress_end"])
     assert server.conns[0].received.endswith(b"\r\n\r\n{}\r\n" + inner)
@@ -1438,8 +1438,8 @@ def test_bytes_that_are_at_most_one_request_are_released_whole(name):
     """Each of the requests `release.one_request` takes that fits the schedule's ingress, and bytes that open no
     request: released whole, with the release headers where they are a request."""
     data = ONE_REQUEST[name]
-    certifier, _, server = streamed({1: [cells(data, B)]}, True)
-    (entry,) = certifier.log
+    attester, _, server = streamed({1: [cells(data, B)]}, True)
+    (entry,) = attester.log
     assert (entry["failed"], entry["release"]) == (None, 0)
     assert server.conns[0].received == with_release(data, 0, STREAM_RUN, entry["ingress_end"])
 

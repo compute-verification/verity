@@ -15,7 +15,7 @@ a node's uplink are read from the node's file and its cards (`verity.device`).
 `with_dpu` adds an NVIDIA BlueField-3 DPU between a node's NIC and its way out, and the DPU's BMC behind it, with Amodo's
 measured stores and wipe coverage (amododesign.com, its note on DPU memory wipes): what a wipe can't reach on them is
 each device's residual, and neither states a write ceiling. `leaf_spine` puts nodes behind a leaf-spine fabric, each
-through its own certifier, with hosts outside every block and challengers on the leaves. `rack` is the demo's: nodes with DPUs on one leaf, a challenger, and
+through its own attester, with hosts outside every block and challengers on the leaves. `rack` is the demo's: nodes with DPUs on one leaf, a challenger, and
 the outside world over a WAN. `two_sites` is a fleet: two leaf-spines joined by a WAN between their spines.
 """
 from __future__ import annotations
@@ -110,10 +110,10 @@ def leaf_spine(blocks: int, *, leaves: int = 1, spines: int = 0, outside: tuple[
                uplink_gbps: int = UPLINK_GBPS, spine_gbps: int = 400, fabric_latency: float = 2e-6, uplink_latency: float = 1e-6,
                outside_latency: float | None = None, cadence: Cadence | None = None) -> Datacenter:
     """`blocks` nodes (`rtx_node`, named `{prefix}0`, `{prefix}1`, …, each `with_dpu` when `dpus`) behind a leaf-spine
-    fabric: each node's way out (its NIC, or its DPU) to its own certifier (`{prefix}I.cert`), the attester to a leaf
+    fabric: each node's way out (its NIC, or its DPU) to its own attester (`{prefix}I.cert`), the attester to a leaf
     switch (round-robin over `leaves`), every leaf to every spine, and the hosts `outside` every block (kind `outside`)
     and the `challengers` on the leaves too. With one leaf, `spines` may be 0. Latencies are one way, in seconds:
-    `uplink_latency` from a node to its certifier, `fabric_latency` a fabric hop, and an outside host's link a WAN of
+    `uplink_latency` from a node to its attester, `fabric_latency` a fabric hop, and an outside host's link a WAN of
     `outside_latency` when it is given, else a fabric hop. `cadence` is the attesters' (`Cadence`'s default when None)."""
     if blocks < 1 or leaves < 1 or (leaves > 1 and spines < 1):
         raise ValueError("at least one block and one leaf, and spines to join more than one leaf")
@@ -145,9 +145,9 @@ def leaf_spine(blocks: int, *, leaves: int = 1, spines: int = 0, outside: tuple[
 
 
 def rack(nodes: int = 2, dpus: bool = True, cadence: Cadence | None = None) -> Datacenter:
-    """The demo's rack: `nodes` nodes (`n0`, `n1`, …), each with a DPU when `dpus`, behind their own certifiers on one
+    """The demo's rack: `nodes` nodes (`n0`, `n1`, …), each with a DPU when `dpus`, behind their own attesters on one
     leaf, with a challenger on it and the outside world (`world`) 1 ms away over a WAN, every other hop 1 µs. Its
-    certifiers frame 32 bits, a bucket a tick of 0.1 ms, a record every 4 buckets."""
+    attesters frame 32 bits, a bucket a tick of 0.1 ms, a record every 4 buckets."""
     return leaf_spine(nodes, prefix="n", name="rack", outside=("world",), challengers=("challenger",), dpus=dpus,
                       fabric_latency=1e-6, outside_latency=1e-3,
                       cadence=cadence or Cadence(frame_bits=32, bucket_ticks=1, buckets=4, jitter_classes=128,
@@ -159,9 +159,9 @@ def two_sites(blocks: int = 2, *, leaves: int = 2, spines: int = 1, fabric_laten
               cadence: Cadence | None = None) -> Fleet:
     """Two sites under one developer, `east` and `west`, each a `leaf_spine` of `blocks` nodes, named `east.b0`, ….
     One WAN link joins the two sites' spines (`east.spine0`, `west.spine0`; their leaves when they have no spine), of
-    `wan_gbps` and `wan_latency` one way, both declared. The WAN is fabric: every block is behind its own certifier
+    `wan_gbps` and `wan_latency` one way, both declared. The WAN is fabric: every block is behind its own attester
     already. The one host outside every block, `outside`, is on the west site, so the east blocks reach it across the
-    WAN, through their own certifiers and both sites' fabric."""
+    WAN, through their own attesters and both sites' fabric."""
     top = "spine0" if spines else "leaf0"
     sites = [leaf_spine(blocks, leaves=leaves, spines=spines, outside=(outside,) if name == "west" else (),
                         fabric_latency=fabric_latency, cadence=cadence).prefixed(name, keep=frozenset({outside}))

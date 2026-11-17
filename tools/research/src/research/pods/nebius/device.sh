@@ -8,7 +8,7 @@
 # A timed run takes its GPU under the lease: gpu-lease 1 --on 7 --max-min M --timed -- vy-device memory-challenger CMD...
 set -euo pipefail
 case "${1:-}" in
-  certifier) cpus="${VY_CERTIFIER_CPUS:-120-123}" ;;
+  attester) cpus="${VY_CERTIFIER_CPUS:-120-123}" ;;
   memory-challenger) cpus="${VY_MEMORY_CHALLENGER_CPUS:-124-127}" ;;
   *) echo "usage: vy-device certifier|memory-challenger CMD..." >&2; exit 2 ;;
 esac

@@ -1,5 +1,5 @@
 # The advice's encodings (network attestation for arbitrary vLLM usage). `derived.py`: the fields of advice v0 (I1) that
-# cost zero bits, the residual that remains and its bits per certifier window; `cache_vectors.py`: the attester's
+# cost zero bits, the residual that remains and its bits per attester window; `cache_vectors.py`: the attester's
 # CacheStep_v1 against derived's prefix rules, and its difftest vectors; `replay_input.py`: a step trace or a
 # derived-format one as the replay's input; `compile_slice_pool.py`: CompileSlice_v4's pool calls against the advice
 # decoder's block pool (`verity_vllm.pipeline.advice_code.pool.BlockPool`) over whole traces; `arith_vectors.py`:

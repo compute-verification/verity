@@ -73,7 +73,7 @@ inputs = [
     "tools/research/src/research/pythonpath.py",
     "tools/research/src/research/store",
     "tools/research/src/research/telemetry",
-    "benchmarks/network_traces/certifier_piece.py",
+    "benchmarks/network_traces/attester_piece.py",
     "benchmarks/network_traces/served_session.py",
     "benchmarks/network_traces/settings.py",
     "benchmarks/network_traces/network_attester_chain.py",
