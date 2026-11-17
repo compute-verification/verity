@@ -26,7 +26,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.circuits import partition_object as PO
+from verity.circuits import codec, partition_object as PO
 from verity.circuits.codec import canonical_json, descriptor_id
 from verity.circuits.defs import CATALOG_PACKAGES, REGISTRY, CompositeDefinition, bind, catalog_package
 from verity.circuits.evaluation import evaluate_batch
@@ -945,6 +945,36 @@ def test_cap_is_a_run_field_the_registration_binds_and_the_circuits_digest_does_
     assert canonical_json(I.circuit_of(a)) == canonical_json(I.circuit_of(b)) and "cap" not in I.circuit_of(a)
     c = sliced()
     assert I.descriptor_record(c, 2)["cap"] == 2 and I.circuit_of(I.descriptor_record(c, 2)) == I.circuit_of(I.descriptor_record(c, 3))
+
+
+RECORD_CASE = (Path(__file__).resolve().parents[4] / "verity" / "protocols" / "workload_classification" / "training_detection"
+               / "inference_only" / "verifier" / "lean" / "scripts" / "served_record_case.py")
+
+
+def _reader_verdict(c: I.Circuit) -> dict:
+    """The inference-only record reader's verdict (the Lean `Record`'s reference, `served_record_case`) on ``c``'s
+    population Program and descriptor record, on a log of the run's own record alone."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("served_record_case", RECORD_CASE)
+    src = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(src)
+    desc = codec.encode_program(c.program()[0])
+    record = I.circuit_bytes(I.descriptor_record(c, 2)).decode()
+    run = {"format": "verity/registration/v2", "protocol": "verity/sampled-proofs/one-stage/v1",
+           "program": codec.program_digest(desc), "registered": [], "previous": None,
+           "window": {"circuit": hashlib.sha512(record.encode()).hexdigest(), "registered_roots": {}}}
+    case, _ = src.served_case(canonical_json(desc).decode(), record, [run], {"gamma": 1 << 20, "alpha": [1, 2]})
+    return src.verdicts(case)["check"]
+
+
+def test_the_record_reader_gives_a_verdict_on_a_period_s_record_with_its_inference_blocks():
+    """`sliced` with a slot a position: its descriptor record states the inference blocks, and the record reader takes its
+    population Program, wires and blocks to a verdict, three blocks with every input row free (it registers nothing).
+    Without blocks the reader refuses it at ``blocks``."""
+    blocks = I.Blocks(3, 1, (I.InferenceEntry(G8ID, 0, (3, 2), ("slot", "-"), 0), I.InferenceEntry(GID, 0, (3,), ("slot",), 0)))
+    got = _reader_verdict(sliced(blocks=blocks))
+    assert "error" not in got and (got["blocks"], got["free"], got["wired_rows"]) == (3, got["fresh"], 6), got
+    assert _reader_verdict(sliced()) == {"error": "blocks"}
 
 
 def test_a_proof_block_c_flock_would_refuse_is_refused_at_lowering():

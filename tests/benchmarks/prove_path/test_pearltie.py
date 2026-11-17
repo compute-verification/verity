@@ -32,7 +32,9 @@ circuit's values at W's entries and nothing else, chained right after W, and its
 value, each value's readers templates of their own. `window_tie.tie_of` ties the audit to W as its audit does (each value
 by its own name, in ``row-seg/v1`` rows of 32-bit words), and R1-R7 (`registration.check`) accept R on the log [W] and
 refuse it on [W'] (R6, and R7 at the flipped value's root). An R' written by hand after W' is accepted on [W']: no record
-holds a row, so the flipped row is refused by its reader's proof alone.
+holds a row, so the flipped row is refused by its reader's proof alone. The inference-only record reader gives the
+circuit's record a verdict on the log [the weights' registration, W, R], and refuses it at ``formats`` where R does not
+register one of Pearl+'s values.
 
 **Lean** (opt-in as the records, on a machine with Lean's toolchain): one-stage's Lean verifier (`served_cases.V1_LEAN`) on
 a5's v1 case of R with the tie's params accepts R on [W], refuses its docket on [W'], and accepts R' on [W']. The
@@ -44,6 +46,7 @@ values the one-stage proof hides once tied.
 """
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import sys
@@ -67,6 +70,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c im
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import HM96, HM96_WEIGHTS, Workload, activation_binding, commit_rows, weight_binding
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registered as G, docket as REG
+from verity.circuits import codec
 from verity.circuits.codec import canonical_json
 from verity.circuits.evaluation import evaluate_batch
 from verity.commitments.periods import interface as IF, rows as CS
@@ -75,6 +79,8 @@ HERE = (Path(__file__).resolve().parent)
 
 ROOT = Path(__file__).resolve().parents[3]
 ONE_STAGE = ROOT / "benchmarks" / "one_stage"
+INFERENCE_ONLY = (ROOT / "verity" / "protocols" / "workload_classification" / "training_detection" / "inference_only" / "verifier"
+                  / "lean")
 H200 = {"compute_capability": [9, 0], "num_sms": 132}
 CONFIG = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 128, "intermediate_size": 256,
           "num_attention_heads": 2, "num_key_value_heads": 1, "num_hidden_layers": 1, "vocab_size": 512,
@@ -351,6 +357,53 @@ def test_the_records_accept_a_flipped_row_on_its_own_w_so_only_its_readers_proof
     assert _verify_run().tie(flipped.W, _passes(flipped.manifests))["record"] == REG.digest(flipped.W)
     assert list(_check(written, flipped.W, R2).codes) == []
     assert list(_check(written, toy.W, R2).codes) != []
+
+
+def _record_case():
+    """The inference-only record reader's case script (`served_record_case`), which runs the Lean `Record`'s reference."""
+    name = "served_record_case"
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, INFERENCE_ONLY / "scripts" / f"{name}.py")
+        sys.modules[name] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(sys.modules[name])
+    return sys.modules[name]
+
+
+def _weights_registration(c, R: dict) -> dict:
+    """The deployment's registration of the circuit's parameters R does not register (its weights), each at the root R
+    commits it under and in the rows its reads read (`interface.read_shape`; a table's parameter in 16-bit leaves)."""
+    mine, params = {e["value"] for e in R["registered"]}, c.registered.params
+    out = []
+    for v in sorted(set(params) - mine):
+        try:
+            sh = IF.read_shape(c, v)
+            dims = (sh["rows"], sh["words"], sh["word_bits"])
+        except ValueError:
+            dims = (params[v], 1, 16)
+        out.append({"value": v, "root": R["window"]["registered_roots"][v], "leaves": dims[0], "words": dims[1],
+                    "word_bits": dims[2], "domain": hashlib.sha512(v.encode()).hexdigest()})
+    return {"format": REG.FORMAT_V2, "registered": out, "previous": None}
+
+
+@pytest.mark.slow
+@RECORDS
+def test_the_record_reader_gives_the_records_verdict_and_refuses_r_without_one_of_pearls_values(toy, written):
+    """The inference-only record reader on the cut circuit's population Program and its record as window-commit writes it,
+    on the log [the weights' registration, W, R]: it passes ``formats`` (each of Pearl+'s values a 32-bit format R
+    registers at its root) and gives its verdict, one block of the class's one slot. With R not registering an A value, the
+    record's format for it is held to nothing R registers, and the reader refuses it at ``formats``."""
+    SRC, c, R = _record_case(), toy.low.circuit, written.R
+    text = canonical_json(codec.encode_program(c.program()[0])).decode()
+    record = (written.dir / "circuit.json").read_text()
+    limits = {"gamma": 1 << 40, "alpha": [1, 2]}
+    first = _weights_registration(c, R)
+    case, _ = SRC.served_case(text, record, SRC.rechained([first, toy.W, R]), limits)
+    got = SRC.verdicts(case)["check"]
+    assert "error" not in got and (got["blocks"], got["free"], got["complies"]) == (1, 0, True), got
+    a = PEARL.a(0, 0)
+    R2 = {**R, "registered": [e for e in R["registered"] if e["value"] != a]}
+    case, _ = SRC.served_case(text, record, SRC.rechained([first, toy.W, R2]), limits)
+    assert SRC.verdicts(case)["check"] == {"error": "formats"}
 
 
 @pytest.fixture(autouse=True, scope="module")
