@@ -9,7 +9,8 @@ from typing import Callable, Sequence
 
 METRIC = "proofs/proof-throughput-blocks-per-second"
 UNIT = "proof blocks a second"
-MODEL = {"bf16-k6144": "glm-5.3"}
+MODEL = {"bf16-k6144": "glm-5.3", "bf16-k2048": "llama-3.2-1b"}
+VALUES = "stand-in: the workload's frozen population of uniform 16-bit words, not served values"
 PORT = 7710
 
 
@@ -89,7 +90,7 @@ def write(w, out: Path, workload: str, B: int, points: dict[int, list[dict]]) ->
     for n, group in sorted(points.items()):
         value, why = throughput(group)
         results = [rel(p) for p in group if p.get("result")]
-        extra = {"workload": workload, "B": B, "provers": n, "results": results}
+        extra = {"workload": workload, "model": MODEL[workload], "values": VALUES, "B": B, "provers": n, "results": results}
         m = w.measurement(METRIC, value, UNIT, why=None if value is not None else why, mark="measured",
                           member=member(workload, w.stamp["card"], n), extra=extra)
         print(json.dumps({k: m.get(k) for k in ("name", "value", "unit", "member")} | {"why": why}))

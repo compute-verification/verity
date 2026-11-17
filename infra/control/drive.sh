@@ -1,6 +1,6 @@
 #!/bin/sh
-# `drive.sh merge ARGS` and `drive.sh queue ARGS` (`research merge`, `research queue eject`) with the App's token, `status` and
-# `deploy`, on the control pod; ci's verified queue lands PRs (README). Each verb fetches origin/main and runs from $REPO's
+# `drive.sh queue ARGS` (`research queue eject`) with the App's token, `status` and `deploy`, on the control pod; `drive.sh
+# merge ARGS` runs `research merge`, which `research` no longer has; ci's verified queue lands PRs (README). Each verb fetches origin/main and runs from $REPO's
 # tools/research, checked out at the commit /data/drive/deployed pins (`drive.sh deploy SHA`, a commit main holds) or else at
 # main's tip, as lane ci (RESEARCH_LANE).
 # The queue's state is root's ~/.research/queue/verity.state.json, on the volume. Both git clones, drive's checkout ($REPO) and
@@ -21,7 +21,7 @@
 # and the store writes each file beside its destination, so a link never makes a write cross filesystems.
 # `drive.sh status` says whether a verb holds the lock and what drive runs. `drive.sh queue ARGS` runs `research queue ARGS`
 # under the lock against drive's state (the lander's `queue eject N --by ci --reason ...`, which edits verity.state.json), and
-# `drive.sh merge ARGS` runs `research merge ARGS` (`--push`) in the queue's clone on branch main, reset to origin's: $REPO is
+# `drive.sh merge ARGS` runs `research merge ARGS`, which `research` no longer has, in the queue's clone on branch main: $REPO is
 # a blob:none partial clone, where git fetches each object it lacks as a pack of its own. All of it runs with RESEARCH_DRIVE=1:
 # GitHub's rulesets let only the verity-drive App move main; `research` refuses those pushes anywhere else.
 DIR=/data/drive
@@ -70,8 +70,8 @@ store_links() {
     rm -rf "$RESEARCH_STORE/$d.old"
   done
 }
-# origin's main in $REPO: `merge` puts it and the queue's clone, where `research merge` runs, on branch main, as `research merge`
-# refuses any other checkout (the next sync detaches the queue's clone again); `queue` takes a detached one,
+# origin's main in $REPO: `merge` puts it and the queue's clone, where `research merge` ran, on branch main, as `research merge`
+# refused any other checkout (the next sync detaches the queue's clone again); `queue` takes a detached one,
 # at the commit $DIR/deployed pins (`deploy`) when it names one, else at main's tip, so a landing of drive's own code changes what
 # drive runs only once it is deployed.  A pin $REPO can't find fails the tick rather than run another commit.
 checkout() {
