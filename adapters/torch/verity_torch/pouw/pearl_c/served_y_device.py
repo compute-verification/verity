@@ -35,13 +35,14 @@ class DeviceTrees:
     (`run.Pipeline.row_digests`) over y's rows widened to FP32 a chunk at a time (exact, as `f32_rows`), the hm96 leaves at
     nonce `HM96_Y` + index and the frame leaves under the call's `y_domain` (`hm_level0`), its pads and its levels, on the
     current stream, into a tree that starts as the pass's poison byte where the pass has one.  One pipeline a width n, y's
-    rows its rows of k = n words, so only where n is a k the kernels take (None, and no tree, elsewhere); its first tree is
-    held to `commit_y` over a fixed `Y_CHECK_ROWS`-row y."""
+    rows its rows of k = n words, so only where n is a k the kernels take (elsewhere None, no tree, and the kernels' refusal
+    in `refused`); its first tree is held to `commit_y` over a fixed `Y_CHECK_ROWS`-row y."""
 
     pipes: dict[int, Any]
+    refused: dict[int, str]
 
     def __init__(self, run: Any) -> None:
-        self.run, self.pipes = run, {}
+        self.run, self.pipes, self.refused = run, {}, {}
         self.dom = _zeros(64, run.device)
 
     def __call__(self, y: Any, index: int) -> Any:
@@ -63,7 +64,8 @@ class DeviceTrees:
         try:
             return R.Pipeline(run.kernel.dev, R.BM, R.BM, n, run.variant, {"dom_b": self.dom.data_ptr(), **run.const_keys}, 0, 0,
                               bufs={"tree_b": 0, "segdig_b": 0})
-        except ValueError:
+        except ValueError as e:
+            self.refused[n] = str(e)
             return None
 
     def _tree(self, p: Any, y: Any, index: int) -> Any:

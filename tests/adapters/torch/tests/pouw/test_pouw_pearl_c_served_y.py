@@ -23,11 +23,11 @@ def _run():
 
 def test_a_width_the_kernels_refuse_gets_no_device_tree_and_no_check():
     """`DeviceTrees`: the kernels refuse rows of k = 2,624 words (k a multiple of 256), so its pipeline is None, held
-    so, and the call gives no tree: nothing is launched or held to `commit_y` at that width."""
+    so with the kernels' refusal, and the call gives no tree: nothing is launched or held to `commit_y` at that width."""
     trees = DeviceTrees(_run())
     trees._check = lambda *a: pytest.fail("a refused width is checked")
     y = torch.zeros(3, 2624, dtype=torch.bfloat16)
-    assert trees(y, 5) is None and trees.pipes == {2624: None}
+    assert trees(y, 5) is None and trees.pipes == {2624: None} and "k of 256" in trees.refused[2624]
 
 
 def test_y_tree_at_a_refused_width_is_commit_ys():
