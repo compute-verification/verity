@@ -15,7 +15,7 @@ import tomllib
 from pathlib import Path
 
 PACKAGE = (Path(__file__).resolve().parents[8] / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "attester" / "lean")
-WIPE_COUNT = "MemoryChallenger.WipeCount"
+WIPE_COUNT = "MemoryAttester.WipeCount"
 #: The definition every counted one is built on.
 SEED = "checkCounted"
 #: The executables that may reach the counted check, each with why.
