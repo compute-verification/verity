@@ -686,11 +686,11 @@ KNOWN: dict[str, str] = {
         "homonym, one operand set's call in a kernel chain: rename (compute-accounting)",
     "benchmarks/pouw/harness/native.py::Device": "homonym, one CUDA device handle: rename (compute-accounting)",
     "verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py::Gate": "homonym, a run's SASS gate: rename (compute-accounting)",
-    "benchmarks/machine_model/verity_machine_model/capacity.py::Window":
+    "calibration/machine_model/verity_machine_model/capacity.py::Window":
         "homonym, a capacity model's window and node cell: rename (compute-accounting)",
-    "benchmarks/machine_model/verity_machine_model/eps.py::Machine":
+    "calibration/machine_model/verity_machine_model/eps.py::Machine":
         "homonym, a machine model's Π: rename (compute-accounting)",
-    "benchmarks/machine_model/verity_machine_model/sheet.py::Sheet":
+    "calibration/machine_model/verity_machine_model/sheet.py::Sheet":
         "duplicate of the data sheet (`ResourceAccounting.TS.Sheet`'s Python mirror; `Verity.Accel.Card`): becomes a reading of the one data-sheet type in Core (compute-accounting)",
     "benchmarks/pouw/pearl_c_vllm/e2e.py::Coins":
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a client of it (compute-accounting)",
