@@ -4253,6 +4253,34 @@ def test_a_gate_whose_ssh_refuses_is_named_by_its_machine_and_no_line_or_kept_fi
         assert kept == {"coins_session": {"error": NAMED_REFUSED}}, kept
 
 
+def test_unhost_names_each_host_variables_machine_in_a_directorys_text_files_and_leaves_the_rest_as_they_are(tmp_path):
+    """`unhost DIR` rewrites the text files an audit writes where one holds a NAME_HOST variable's address, and leaves a
+    file without one, and every binary, byte for byte."""
+    d = tmp_path / "audit"
+    (d / "window").mkdir(parents=True)
+    (d / "summary.json").write_text(json.dumps({"error": SSH_REFUSED}))
+    (d / "window" / "run.log").write_text(f"{SSH_REFUSED}\n")
+    (d / "case.json").write_text('{"commitment": "ab"}')
+    (d / "proof.bin").write_bytes(b"\xff\xfe" + DOC_HOST.encode())
+    env = {**{k: v for k, v in os.environ.items() if not k.endswith("_HOST")}, "VY_CHALLENGER_1_HOST": DOC_HOST}
+    subprocess.run([sys.executable, str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.py"), "unhost", str(d)],
+                   env=env, check=True)
+    assert json.loads((d / "summary.json").read_text()) == {"error": NAMED_REFUSED}
+    assert (d / "window" / "run.log").read_text() == f"{NAMED_REFUSED}\n"
+    assert (d / "case.json").read_text() == '{"commitment": "ab"}'
+    assert (d / "proof.bin").read_bytes() == b"\xff\xfe" + DOC_HOST.encode()
+
+
+def test_step_3s_log_and_outputs_name_the_gate_by_its_machine_before_anything_reads_them():
+    """Step 3 on the gate's coins (no V3c on a gate) keeps run.sh's whole output, ssh's refusal included, in the serve
+    dir's sampled-proofs.log and its audit's summaries in $OUT/sampled-proofs: both are unhosted before the
+    SAMPLED-PROOFS line or the served copy reads them."""
+    text = (HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh").read_text()
+    run = text.index('bash benchmarks/prove_path/run.sh > "$D/sampled-proofs.log" 2>&1\n')
+    unhost = text.index('"$SAY_PY" "$SV" unhost "$D/sampled-proofs.log" "$OUT/sampled-proofs"\n', run)
+    assert unhost < text.index('mv "$OUT/sampled-proofs/served"', run) < text.index('say "SAMPLED-PROOFS', run)
+
+
 def test_a_compose_gate_whose_ssh_refuses_is_named_by_its_machine_in_its_line_and_its_kept_stderr(tmp_path):
     """The compose gate's ssh refusal reaches GATE-COMPOSE's line and the serve dir's private/gate-compose.err with the
     gate's address (VY_AUDITOR_2_HOST's) as its machine's name."""
