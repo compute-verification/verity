@@ -13,7 +13,7 @@ In this directory:
 
 ~~~sh
 lake build
-lake exe pouw-check id
+lake exe pouw-verifier id
 ~~~
 
 The build makes the library and its executables, `pouw-verifier` among them; the second line prints the execution phase
@@ -204,8 +204,8 @@ holds the served `credit._lean_live_verified` to `credit._live_verified`; and `c
 form.
 
 ~~~text
-lake build                                                         the library, pouw-check and pouw-check-difftest
-lake exe pouw-check id | check PARAMS COMMITMENT EVIDENCE | serve    the interface's command line
+lake build                                                         the library, pouw-verifier and pouw-verifier-difftest
+lake exe pouw-verifier id | check PARAMS COMMITMENT EVIDENCE | serve    the interface's command line
 uv run tools/check/suites.py verity-pouw-check-difftest     the difftest
 python tools/verity/lean/check.py verity/protocols/resource_accounting/compute/pouw/verifier/lean/check   the Lean check
 ~~~
