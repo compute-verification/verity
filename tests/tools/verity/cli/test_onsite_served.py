@@ -680,7 +680,7 @@ NETWORK = ROOT / "demos" / "onsite_network.toml"
 NETWORK_PIN = next(p["key-sha512"] for p in tomllib.loads(NETWORK.read_text())["pin"] if p["protocol"] == "wipe")
 NETWORK_BINDINGS = {"memory-challenger": {"wipe": {"address": "192.0.2.1:7001", "host": "auditor-1",
                                                    "command": "ssh auditor-1"}},
-                    "network-certifier": {"certifier": {"gate": "user@gate-1"}}}
+                    "network-certifier": {"certifier": {"gate": "user@gate-1", "peer": "peer-1"}}}
 
 
 def test_the_wipe_runs_in_the_workload_under_the_configurations_pin_and_no_party_of_it_raises(tmp_path, monkeypatch):
