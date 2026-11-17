@@ -1,12 +1,12 @@
 """network-certifier-chain: the network chain's reads of an active network attester's run (`network_attester_serve.py`'s directory, or the
-gate's ``warden-rehearse``'s: its witness under ``witness/``, its public files under ``out/``), in place of a certifier
-rehearsal's. A certifier rehearsal's run (whose records came through the older certifier's proxy in front of the
-endpoint, under a certifier key with salted clock certificates) is refused by name (`PROXY`): on the network attester
-path none of its records enters the chain. The older certifier's code is gone but kept records of its runs are not, so
+gate's ``warden-rehearse``'s: its witness under ``witness/``, its public files under ``out/``), in place of a network attester
+rehearsal's. A network attester rehearsal's run (whose records came through the older network attester's proxy in front of the
+endpoint, under a network attester key with salted clock certificates) is refused by name (`PROXY`): on the network attester
+path none of its records enters the chain. The older network attester's code is gone but kept records of its runs are not, so
 the refusal stays with the form that reads them.
 
 * `deployment`: ``deployment.json``, a network attester's (its link, its schedule and their digest, its key and
-  session), never a certifier's (``certifier_key``, ``links``), in a run holding no certifier rehearsal's file
+  session), never a network attester's (``certifier_key``, ``links``), in a run holding no certifier rehearsal's file
   (`CERTIFIER_FILES`).
 * `deployment_of`: the run's deployment held to the auditor's record of it (`RECORD`, ``CERTIFIER_KEY``'s form: the
   gate's own ``out/deployment.json`` of the run as the auditor read it off the gate, its SHA-512, key and session):
@@ -28,7 +28,7 @@ the refusal stays with the form that reads them.
   (`verdict`, `COUNTS`): whether it accepted, and the gate's own list of counts, less those only an accepted check's
   end holds (`ACCEPTED_COUNTS`). Which execution phases were certified or refused, and how many problems the check
   found, follow the traffic: `checked` keeps them on the chain's private side (`WITNESS_KEYS`), out of the record.
-* `io`: the certified I/O, read off the records' cells alone, in a certifier rehearsal's certified I/O's keys: each
+* `io`: the certified I/O, read off the records' cells alone, in a network attester rehearsal's certified I/O's keys: each
   connection's request (its ordinal's `DATA` and `END` payloads in bucket order), a network-certifier-form id request
   (`id_form.id_request`, offset 0), released in its `END`'s bucket, and its response's ids and buckets
   (`io_tie.parse_cell` of each egress `DATA` cell on its ordinal, none before the release).
@@ -63,7 +63,7 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for bench
 
 PROXY = ("a certifier rehearsal's run (its records through the older certifier's proxy in front of the endpoint): "
          "the network certifier path reads an active network certifier's own run (network_attester_serve.py's, or the gate's warden-rehearse)")
-#: what only a certifier rehearsal's run holds (per strategy under a fetched gate run's ``out/``)
+#: what only a network attester rehearsal's run holds (per strategy under a fetched gate run's ``out/``)
 CERTIFIER_FILES = ("plan.json", "calibration.json", "proxy.json.gz")
 #: an id request's fields (`id_form.id_request`'s keywords but the frame's)
 FIELDS = ("model", "user", "prompt", "max_tokens", "temperature", "top_p", "seed")
@@ -110,7 +110,7 @@ def witness(run: Path) -> Path:
 
 
 def deployment(run: Path) -> tuple[dict, W.NetworkAttesterParams]:
-    """The run's ``deployment.json`` and the network attester's schedule, refused by name where the run is a certifier
+    """The run's ``deployment.json`` and the network attester's schedule, refused by name where the run is a network attester
     rehearsal's (`PROXY`) or its digest isn't its parameters'."""
     for d in (run, run / "witness", run / "out", run / "out" / "honest", run / "honest"):
         if hit := next((d / f for f in CERTIFIER_FILES if (d / f).is_file()), None):

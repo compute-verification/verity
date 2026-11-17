@@ -26,7 +26,6 @@ says. These are the directories that have one:
 | `verity bench f32_exhaustive` | a reference primitive against MPFR, or a Boolean version against its word, on all 2^32 binary32 words |
 | `verity bench flock_s8_block` | Flock `--zk`'s price for proof blocks of adjacent cells of one int8 GEMM output row, on one GPU node |
 | `verity bench inference_only` | the inference-only policy of Llama 3.2 1B as served, and its one number: the least slowdown of training run inside the policy's inference blocks |
-| `verity bench int8_class_rate` | one card's sustained int8 rate per operand class at the declared clock, alone and beside SHA-512 |
 | `verity bench landing` | mark to `main` over the last 7 days, plain and Lean: each class's p90, median, count and share within 2 h, as a local research run (its README) |
 | `verity bench lean_unread_gate` | the unread landing gate on one change, timed by stage with its git calls counted, and with `--against REV` its guard: the same verdict as the gate at REV |
 | `verity bench memory` | the memory audit's number: the share of a node's memory read rate one accepted PoUB session leaves uncertified, from a gate run on the whole node, a recorded run or a loopback |
@@ -44,8 +43,7 @@ says. These are the directories that have one:
 | `verity bench prove_path` | a served run's proof blocks proved after the fact, behind the Lean ZK server and through the Lean verifier, with one forged run |
 | `verity bench rate_squaring` | squarings a second modulo the store codec's primes, each form gated before it is timed: `sq` on one GPU, `ifma` on the host's CPUs |
 | `verity bench recursion_e2e` | recursive witness zero knowledge, timed step by step: `plan`, `run`, `result`, `table` and `store` |
-| `verity bench remote_session` | PoUB's sessions: a verifier's and a prover's process over TCP, end to end |
-| `verity bench replay_determinism` | whether a served MoE window's recorded schedule, replayed, gives its served bytes, op by op |
+| `verity bench poub_session` | PoUB's sessions: a verifier's and a prover's process over TCP, end to end |
 | `verity bench replay_ladder` | the same replay across a ladder of dense and MoE models, with the per-model status table |
 | `verity bench route_capture` | what a model executes when served, step by step, and the routes class G's Definitions don't cover |
 | `verity bench scan_cost` | one scan of the network attester's synthetic run with every block proved, and what it costs for each second of execution phase: the prover's seconds and the Lean verifier's CPU seconds on one core |
@@ -64,8 +62,7 @@ says. These are the directories that have one:
 | `verity bench word_codec` | the KV cache's Sloth codec on one GPU: its tests and its benchmark at each width |
 
 A directory without a runner is run by the commands its README names, or its main module's docstring where it has no
-README. `benchmarks/kernels/`'s directories have no `verity bench` name: each runs as its script's header says, the
-canonical `moe_align_block_size` on one GPU as `bash benchmarks/kernels/moe_align/run.sh`. `verity-bench` is the
+README. `benchmarks/kernels/`'s directories have no `verity bench` name: each runs as its script's header says. `verity-bench` is the
 harness's own command. `verity bench numerical judge` compares two results under the proof campaign's contract.
 
 ## The harness
@@ -263,7 +260,6 @@ What the protocols cost: measured on served inference, and bounded on training.
 | `overhead/` | `verity bench overhead`, the one front door for overhead: a card's operating points C and L, a scheme's γ over stock at them in busy SM-time, and the table of γ from labelled runs of record | maintained |
 | `served_commit/` | what the Commit, every value of every step committed, adds to served vLLM: throughput, time to first token and per-token latency | maintained |
 | `demo_minutes/` | a demo's minutes from its first command to its verdict, read off its runs' records: remote's served run (`minutes.py`) and onsite's two `verity run` runs (`onsite_minutes.py`); and the share of a served run's sampled proof blocks whose proofs the Lean verifier accepted on the auditor's machine (`sampled_accepted.py`) | maintained |
-| `replay_determinism/` | whether a served MoE window's recorded schedule, replayed without batch invariance, gives its served bytes, and whether a request alone gives the bytes it got in its batch, op by op | maintained |
 | `dsa_topk/` | the DSA indexer's top-k at the integration's vLLM pin made a function of its logits by a vLLM plugin: outputs run to run, its set against the registered relation's, and its cost against the pin's kernels | maintained |
 | `replay_ladder/` | whether replaying a saturated window under its recorded schedule gives the served tokens across a ladder of dense and MoE models, run after run, against each request served alone; and the per-model status table | maintained |
 | `serve_tax/` | what each change to serving (step trace, release order, the certified tick, committing tokens and the KV cache) costs vLLM's own server against stock compiled vLLM at three loads, the serving cost (one number with a target: the served engine's best goodput against stock's, by vLLM's own benchmark client), and replaying a recorded window under its committed schedule | maintained |
@@ -288,7 +284,6 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | `tc_probe/` | tensor-core instructions bit for bit against their silicon models, and the trust each instruction's evidence earns | maintained |
 | `tc_probe_fp4/` | the FP4 path on Blackwell: its conversions bit for bit, and each sm_120a multiplier priced against dense NVFP4 | maintained |
 | `native_peak/` | a card's measured dense-GEMM throughput for one datatype (`native-peak/v1`) | maintained |
-| `int8_class_rate/` | the H200's sustained int8 rate per operand class at the declared clock, alone and beside SHA-512 at a ratio of compressions a T MAC (timings only) | maintained |
 | `tensor_duty/` | the falsification test of the H200 card's tensor clock: dense tensor MACs a second over the host's wall clock by tensor duty cycle, operand class and fill, at maximum power, against 132 x 4096 x `clock.tensor` (timings only) | maintained |
 
 ### Proving and recursion
@@ -355,7 +350,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | --- | --- | --- |
 | `pous/` | every PoUS implementation on one dataset, by its effective weight bandwidth | maintained |
 | `bandwidth/` | the device ceilings PoUB's timing cites: how fast a card and a host write labels, and the chip's on-chip stores; and a node's own report of its interfaces' line rates, its disks' interfaces and its cards' usable memory | maintained |
-| `remote_session/` | PoUB's session harness: a verifier's and a prover's process over TCP, end to end. The remote protocol's demo is `demos/remote.toml`, not this | maintained |
+| `poub_session/` | PoUB's session harness: a verifier's and a prover's process over TCP, end to end. The remote protocol's demo is `demos/remote.toml`, not this | maintained |
 | `memory/` | `verity bench memory`, the front door for the memory audit's number: the share of a node's memory read rate one accepted PoUB session leaves uncertified, at the data sheet's read bandwidth, from a gate run on the whole node, a recorded run or a loopback | maintained |
 | `kv_filler/` | the filler top-up beside vLLM serving, and what it costs inference | maintained |
 | `stacked_share/` | the share of a node's live KV a prover could hold as encoded carriers inside the audit's compute budget | maintained |
@@ -400,7 +395,7 @@ How fast the team's leads answer each other: measured on Linear's comments, not 
 
 | Directory | What it measures | Status |
 | --- | --- | --- |
-| `tree/` | the lines of `tests/tree.toml`'s not-yet list, each a path `main` holds outside the layout of record, and the unowned among them (`not_yet.py`); the rows of `ARCHITECTURE.md`'s table of code to write (`not_built.py`); and the sites the ratchet lints find, their lists allow and the lints find past their entries, in total and by lead (`lint_sites.py`, over `lint_counts.py`) | maintained |
+| `tree/` | the lines of `tests/tree.toml`'s not-yet list, each a path `main` holds outside the layout of record, and the unowned among them (`not_yet.py`); the rows of `ARCHITECTURE.md`'s table of code to write (`not_built.py`); and the sites the ratchet lints find, their lists allow and the lints find past their entries, in total and by lead (`lint_sites.py`, over `lint_counts.py`); and the share of Python and Lean lines that are prose, the prose items over the length AGENTS.md allows and those naming a date, an id, a commit, a machine or a person, in total and by lead (`prose.py`) | maintained |
 | `proof_status/` | the proofs' status as the Lean locks record it (`verity lean deployed`): the deployed guarantees, those at a trust gap of zero, each one's gap, and each lead's open premises and guarantees with no honest witness (`run.py`) | maintained |
 
 ### Security

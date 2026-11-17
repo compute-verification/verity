@@ -1,7 +1,8 @@
 """Under `research run`, the test that ran `benchmarks/exfiltration/run.py` with the run's environment wrote its fixture's
 figures into the run's result, and the Metrics tab drew them as the metric's points. Run by a plain pytest with the
-run's `RESEARCH_RUN_DIR` and `OUT` set, it now writes nothing there; without the suite's conftest, which unsets them
-(`tests/test_tests_write_no_measurement.py`), it writes the run's result again."""
+run's `RESEARCH_RUN_DIR` and `OUT` set, it writes nothing there; without the suite's conftest, which unsets them
+(`tests/test_tests_write_no_measurement.py`), the kit refuses inside pytest the run the process started
+under (`kit.refuse_the_started_run`), and the test fails, having written nothing."""
 
 from __future__ import annotations
 
@@ -31,5 +32,6 @@ def under_a_run(tmp_path: Path, *flags: str) -> tuple[subprocess.CompletedProces
 def test_a_test_run_under_a_research_run_writes_nothing_into_its_result(tmp_path):
     done, wrote = under_a_run(tmp_path / "with")
     assert done.returncode == 0 and wrote == [], done.stdout[-2000:] + done.stderr[-2000:]
-    # the same test with the run's variables left set fails its own asserts, having written the run's result first
-    assert "run/result.json" in under_a_run(tmp_path / "without", "--noconftest")[1]
+    done, wrote = under_a_run(tmp_path / "without", "--noconftest")
+    assert done.returncode == 1 and f"FAILED {WROTE}" in done.stdout and wrote == [], (done.stdout[-2000:]
+                                                                                      + done.stderr[-2000:])
