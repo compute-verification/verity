@@ -18,6 +18,7 @@ public import Lms.Verify
 public import Properties.Remote
 public import Properties.Verity.Sha512
 public import Properties.Verity.ExecutionPhaseFiles
+public import Properties.InferenceOnly.RecordRows
 
 /-!
 # Soundness as a causal game at a composite's compiled verifier, and each subprotocol's target
@@ -34,9 +35,8 @@ the inference-only policy has one compiled check, the same in every composite th
 verdict in a composite that lists Pearl+'s id and H1's period credit in any other, and the inference-only policy's is
 the rows check in a composite that lists its id and v0 in any other (`Subprotocol.protocolAt`, `component`). So a
 composite's subprotocols are read off its list (`subprotocols`): onsite's seven and remote's three of them, and the
-three of remote's plain sibling (`Composite.plain`). No compiled check carries the rows check's id yet: the game reads
-it as `rowsCheck`, whose behavior nothing here states (`rowsUnbuilt`), its claim is `rowsHeld`, which nothing here
-states either, and the code refuses the plain sibling's list (`Core.Composites.ofIds`). The five that decide a period are one per `ResourceAccounting.Audit` (`Subprotocol.ofAudit`):
+three of remote's plain sibling (`Composite.plain`). The rows check's compiled check is `rowsCheck`
+(`InferenceOnly.RowsProtocol.protocol`), and its claim is `rowsHeld`, on the rows check's own case. The five that decide a period are one per `ResourceAccounting.Audit` (`Subprotocol.ofAudit`):
 
 | subprotocol | `Audit` | its compiled check | onsite | remote | plain |
 | --- | --- | --- | --- | --- | --- |
@@ -44,7 +44,7 @@ states either, and the code refuses the plain sibling's list (`Core.Composites.o
 | PoUW | `.pouw` | `PouwCheck.Period.protocol` (`verity/pouw/period/v1`, its period credit) | yes | | |
 | | | `PouwCheck.PearlPlus.Protocol.protocol` (`verity/pouw/pearl-plus/v1`: Pearl+'s run verdict, its credit at Pearl's assumption) | | yes | yes |
 | the inference-only policy | | `InferenceOnlyCheck.Protocol.protocol` (`verity/inference-only/v0`) | yes | yes | |
-| | | `rowsCheck` (`verity/inference-only/rows/v1`, the rows check, not yet compiled) | | | yes |
+| | | `rowsCheck` (`InferenceOnly.RowsProtocol.protocol`, `verity/inference-only/rows/v1`, the rows check) | | | yes |
 | PoUS | `.pous` | `PousCheck.RunProtocol.protocol` (`verity/pous/p2/v4/run`) | yes | | |
 | PoUB-P2 | `.poub` | `Poub.P2Protocol.protocol` (`verity/remote-bandwidth/p2/v0`) | yes | | |
 | the network attester | `.network` | `NetworkCheck.Period.protocol` (`verity/certifier/v0`) | yes | | |
@@ -188,13 +188,8 @@ and holds each block to its budgets in rows of the committed circuit. Remote's p
 (`Verity.Registration.Composite.plain`). -/
 def rowsId : String := "verity/inference-only/rows/v1"
 
-/-- **What the rows check does, until a compiled check carries its id**: nothing here says (`opaque`), so no statement
-about the rows check holds by computing it, and its target at a composite that lists it is proved only from the compiled
-check that replaces this. -/
-opaque rowsUnbuilt : BlobProtocol := InferenceOnlyVerifier.Protocol.protocol
-
-/-- **The rows check**: `rowsUnbuilt` under the rows check's id. -/
-def rowsCheck : BlobProtocol := { rowsUnbuilt with id := rowsId }
+/-- **The rows check**: its compiled check, which carries `rowsId`. -/
+def rowsCheck : BlobProtocol := InferenceOnly.RowsProtocol.protocol
 
 /-- **The compiled check that decides subprotocol `a` in composite `k`**: PoUW's is Pearl+'s run verdict where `k`
 lists Pearl+'s id and H1's period credit elsewhere; the inference-only policy's is the rows check where `k` lists its id
@@ -302,12 +297,25 @@ def PolicyCase (k : Verity.Registration.Composite) (s : Sent) (p : InferenceOnly
       (canonicalJson x.2.1.params.toUTF8 >>= InferenceOnlyVerifier.Protocol.paramsOf) = .ok p ∧
       InferenceOnlyVerifier.Protocol.commitmentOf x.2.2.commitment = .ok c ∧ InferenceOnlyVerifier.Protocol.evidenceOf x.2.2.evidence = .ok e
 
+/-- **The rows check's case in what the prover sent composite `k`**, decoded: the three byte strings decode under the
+composition's formats, one of the subprotocols' cases is the rows check's (`InferenceOnly.RowsProtocol.protocol` on
+the blobs sent), and under the parameters `k` names for it that case decodes to the rows check's parameters `p`, its
+record `c` and its evidence `e`. -/
+def RowsCase (k : Verity.Registration.Composite) (s : Sent) (p : InferenceOnly.RowsProtocol.Params)
+    (c : InferenceOnlyVerifier.Protocol.Commitment) (e : InferenceOnly.RowsProtocol.Evidence) : Prop :=
+  ∃ ps cm ev, Decoded s ps cm ev ∧
+    ∃ x ∈ Properties.Composition.triples (s.components k) ps ev,
+      x.1 = InferenceOnly.RowsProtocol.protocol.onBlobs (Blobs.ofArray s.blobs) ∧
+      (canonicalJson x.2.1.params.toUTF8 >>= InferenceOnly.RowsProtocol.paramsOf) = .ok p ∧
+      InferenceOnlyVerifier.Protocol.commitmentOf x.2.2.commitment = .ok c ∧
+      InferenceOnly.RowsProtocol.evidenceOf x.2.2.evidence = .ok e
+
 /-- **The inference-only policy's clause where v0 doesn't decide it in composite `k`**: `k` lists no v0 (remote's plain
 sibling, which lists the rows check) or lists the rows check, whose verdict decides there (`Subprotocol.protocolAt`).
-It is the clause in rows on the record's circuit, which the rows check's guarantee states. Nothing here says what it
-is (`opaque`). v0's clause there would read a case no check of `k` accepted, or none, and hold of every play, so the
-policy's target at such a composite is neither empty nor proved by computing it. -/
-opaque rowsHeld : Verity.Registration.Composite → Sent → Prop
+It is the clause in rows, as the rows check's guarantee states it: every rows case in what the prover sent is
+`Properties.Remote.RowsHeld` on the blobs sent. -/
+def rowsHeld (k : Verity.Registration.Composite) (s : Sent) : Prop :=
+  ∀ p c e, RowsCase k s p c e → Properties.Remote.RowsHeld p c e (Blobs.ofArray s.blobs)
 
 /-- Subprotocol `a`'s compiled check at composite `k` accepts its own case in what the prover sent. -/
 def ComponentAccepts (k : Verity.Registration.Composite) (a : Subprotocol) (s : Sent) : Prop :=

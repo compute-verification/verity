@@ -4,6 +4,7 @@ public import Properties.Verity.Soundness
 public import Properties.Verity.Idle
 public import Proofs.Properties.Composition
 public import Proofs.Properties.Verity.Soundness.Composite
+public import Proofs.Properties.Verity.InferenceOnlyRows
 public import Proofs.Core.Game.Prob
 public import Proofs.Core.Game.Seq
 public import Proofs.Flock.Claims.Prob
@@ -18,7 +19,8 @@ composition and every component's on its own case (`accepts_same`, `accepts_comp
 `Verity.SoundnessOf` bounds at a composite lies inside the union of its subprotocols' events, each at most its target's
 error at the strategy: the union bound over the composite's subprotocols in one game (`soundness_at_of_targets`).
 `soundness_of_subprotocols` is it at onsite's list, which takes its targets by name (`Vocab.targets_onsite`), and
-`plain_soundness_of_subprotocols` at remote's plain sibling's, the rows check in v0's place (`Vocab.targets_plain`).
+`plain_soundness_of_subprotocols` at remote's plain sibling's, the rows check in v0's place (`Vocab.targets_plain`),
+whose target is proved (`Vocab.inferenceOnlySound_rows`).
 Remote's (`remote_soundness_of_subprotocols`) is in `Proofs.Properties.Verity.InferenceOnly`, beside the policy's target
 it applies, through `Vocab.targets_remote`.
 
@@ -155,7 +157,8 @@ theorem soundness_of_subprotocols : Soundness :=
     soundness_at_of_targets ι α d V .onsite (V.targets_onsite hS hW hI hP hB hN hX)
 
 theorem plain_soundness_of_subprotocols : PlainSoundness :=
-  fun ι α _ d V hS hW hI => soundness_at_of_targets ι α d V .plain (V.targets_plain hS hW hI)
+  fun ι α _ d V hS hW =>
+    soundness_at_of_targets ι α d V .plain (V.targets_plain hS hW (V.inferenceOnlySound_rows .plain (by decide)))
 
 open Classical in
 /-- **The close's sample**: from the prover's close, an event's probability is its probability over the device's sample, at
@@ -536,11 +539,10 @@ idle deployment whose errors are all `0`. -/
 theorem soundness_of_subprotocols_nontrivial : ¬ Idle.exact.SoundnessFor .onsite fun _ => True :=
   Idle.nontrivial_at .onsite (mem_subprotocols.2 (by decide))
 
-/-- **`PlainSoundness`'s honest lemma**: its three targets hold at the idle deployment, at the plain sibling. -/
+/-- **`PlainSoundness`'s honest lemma**: its two targets hold at the idle deployment, at the plain sibling. -/
 theorem plain_soundness_of_subprotocols_honest :
-    Idle.unbounded.SpotSound .plain ∧ Idle.unbounded.PouwSound .plain ∧
-      Idle.unbounded.InferenceOnlySound .plain :=
-  ⟨Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _⟩
+    Idle.unbounded.SpotSound .plain ∧ Idle.unbounded.PouwSound .plain :=
+  ⟨Idle.target_unbounded _ _, Idle.target_unbounded _ _⟩
 
 /-- **`PlainSoundness`'s nontrivial lemma**: its conclusion fails at the plain sibling for a verifier that accepts
 everything, at the idle deployment whose errors are all `0`. -/

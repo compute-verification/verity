@@ -18,9 +18,9 @@ where v0 decides the policy: one that lists v0 and not the rows check (`Vocab.in
 and no committed file.
 
 Remote's plain sibling lists no v0 (`v0_not_mem_plain`, `v0_not_mem_componentsOf_plain`): there v0's clause would read
-no case and hold of every play, so the policy's claim is `rowsHeld` (`Vocab.holds_plain`), which nothing states,
-`Vocab.inferenceOnlySound` doesn't apply (`not_inferenceOnlySound_hyp_plain`), and `InferenceOnlySound .plain` stays
-the hypothesis `Verity.PlainSoundness` takes until the rows check's guarantee.
+no case and hold of every play, so the policy's claim is `rowsHeld` (`Vocab.holds_plain`), the rows check's clause,
+`Vocab.inferenceOnlySound` doesn't apply (`not_inferenceOnlySound_hyp_plain`), and the target there is the rows check's
+(`Vocab.inferenceOnlySound_rows`).
 
 The claim is not empty of content on an accepted play: the policy's component accepting gives the case the claim reads
 (`policyCase_of_component`), so there `PolicyHeld` holds of a case that exists.
@@ -87,8 +87,8 @@ theorem v0_not_mem_componentsOf_plain : ∀ P ∈ componentsOf .plain, P.id ≠ 
   rw [componentsOf_plain]
   decide
 
-/-- **`Vocab.inferenceOnlySound` doesn't reach remote's plain sibling**: its hypotheses fail there, so
-`InferenceOnlySound .plain` stays open. -/
+/-- **`Vocab.inferenceOnlySound` doesn't reach remote's plain sibling**: its hypotheses fail there, where
+`Vocab.inferenceOnlySound_rows` proves `InferenceOnlySound .plain`. -/
 theorem not_inferenceOnlySound_hyp_plain :
     ¬ (InferenceOnlyVerifier.Protocol.protocolId ∈ Verity.Registration.Composite.plain ∧
       rowsId ∉ Verity.Registration.Composite.plain) :=
