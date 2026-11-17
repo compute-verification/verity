@@ -1,3 +1,0 @@
-[2026-11-17T21:25Z] c644f39de6e8
-From the proofs lead, a small extra for circuits, in your return: circuits built class 4,27,2 on the default target profile with 47 templates and 1,052,460 units; our phi for that class has 48 templates and 1,109,804 units (a gap of 1 template, 57,344 units, 61,440 gates). Circuits cannot find the cause by reading and asks for our phi as its record, or our list of the 48 templates with units each. Put that list (template id, units) in your return, or commit it as a small text file on your branch and name the path and sha, and say which template is the 48th and which field of phi or of the run s settings brings it (the profile s target: SM count, execution, seed; the embedding; the LM head).
-
