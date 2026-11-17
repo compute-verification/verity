@@ -898,6 +898,13 @@ constexpr int LEAF_PASS_WARPS = 8;
 constexpr size_t LEAF_PASS_SHARED = (size_t)LEAF_PASS_WARPS * 32 * 8 * sizeof(u64) + SK16_PACK * sizeof(u32) +
                                     (size_t)LEAF_PASS_WARPS * 32 * SK_ROWS * sizeof(int);
 
+// On sm_90 a leaf pass CTA's warps claim, read and hash in step (leaf_pass_kernel); elsewhere each warp claims alone.
+#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ == 900
+#define LEAF_IN_PHASE 1
+#else
+#define LEAF_IN_PHASE 0
+#endif
+
 // sketch16_pass_kernel with no receipt kept or stored: a warp takes the next 16 tiles from ctr[0], which are 32
 // leaves, and for s = 0 … 15 computes block s of each (lane l's receipt is receipt s of leaf 2 tile0 + l); every
 // second step the lane compresses its last two receipts into its leaf's hash, whose state stays in its registers.
@@ -907,11 +914,15 @@ constexpr size_t LEAF_PASS_SHARED = (size_t)LEAF_PASS_WARPS * 32 * 8 * sizeof(u6
 // consumer warp that helps takes one tile, help_leaf_tile), and one that runs past the shard's last tile computes and
 // counts only the leaves and tiles the shard has. The receipts are sketch16_pass_kernel's (the same blocks at the same
 // store indices); only which 32 blocks share a step differs. ctr, tiles_per and started are sketch16_pass_kernel's.
-// The hash takes every register a thread can have, so a CTA has its SM to itself.
+// The hash takes every register a thread can have, so a CTA has its SM to itself. With LEAF_IN_PHASE the CTA claims
+// its warps' 16 tiles each at once (warp w the w-th 16), and a warp whose claim is past the shard's last tile has none.
 __global__ void __launch_bounds__(32 * LEAF_PASS_WARPS, 1)
 leaf_pass_kernel(const uint4 *__restrict__ data, u64 n, u64 base, const u32 *__restrict__ pk, u64 *leaves,
                  u64 *receipts, unsigned *ctr, unsigned tiles_per, unsigned *started) {
   extern __shared__ __align__(16) u64 scratch[];
+#if LEAF_IN_PHASE
+  __shared__ unsigned claim;
+#endif
   const int lane = threadIdx.x & 31, warp = threadIdx.x >> 5, g = lane >> 2, t = lane & 3;
   u64 *held = scratch + (u64)warp * 256;
   u32 *sg = reinterpret_cast<u32 *>(scratch + (u64)LEAF_PASS_WARPS * 256);
@@ -920,10 +931,20 @@ leaf_pass_kernel(const uint4 *__restrict__ data, u64 n, u64 base, const u32 *__r
   sk16_prologue(sg, pk);
   const u64 tiles = n / 32, nl = n / PER_LEAF;
   for (;;) {
+#if LEAF_IN_PHASE
+    if (!threadIdx.x) claim = atomicAdd(ctr, (unsigned)(PER_LEAF * LEAF_PASS_WARPS));
+    __syncthreads();
+    const unsigned c0 = claim;
+    __syncthreads();
+    if (c0 >= tiles) break;
+    const u64 mine0 = (u64)c0 + warp * PER_LEAF;
+    const unsigned tile0 = (unsigned)(mine0 < tiles ? mine0 : tiles);
+#else
     unsigned tile0 = 0;
     if (!lane) tile0 = atomicAdd(ctr, (unsigned)PER_LEAF);
     tile0 = __shfl_sync(~0u, tile0, 0);
     if (tile0 >= tiles) break;
+#endif
     const u64 leaf0 = 2 * (u64)tile0, leaf = leaf0 + lane;
     const u64 mine = nl - leaf0 < 32 ? nl - leaf0 : 32;   // the claim's leaves that the shard has
     u64 x[8], w[16];
@@ -955,6 +976,11 @@ leaf_pass_kernel(const uint4 *__restrict__ data, u64 n, u64 base, const u32 *__r
       }
       __syncwarp();
     }
+#if LEAF_IN_PHASE
+    // The CTA's warps hash only when all have read: warps in both phases at once are far slower on sm_90, most likely
+    // because the two phases' code together outgrows the instruction cache.
+    __syncthreads();
+#endif
     sha::compress_kw(x, kC.kw_xpad);
     if (leaf < nl) {
       u64 d[8];
@@ -974,14 +1000,20 @@ constexpr int LEAF64_WARPS = 8;
 constexpr size_t LEAF64_SHARED =
     (size_t)SK64_SIGNS * sizeof(uint4) + (size_t)LEAF64_WARPS * 32 * SK64_ROWS * sizeof(int);
 
-// leaf_pass_kernel at 64 rows: the same claims, leaves, counts and receipts' store indices, block s of the claim's 32
-// leaves by reader.cu's sk64_tile_of (pk: the 32 KiB of reader.py's `pack64`) staged as sketch64_receipts_kernel
-// stages them, and each lane's receipt by sk64_receipt into its registers, from which it goes to the leaf's hash (and
-// to receipts[8 j], with `receipts`).
+// The leaf pass's 64-row kernels (leaf_pass64_kernel, help_leaf64_tile, leaf_consumer64_kernel) are built only with
+// LEAF_PASS64, which rows.sh passes for a run of 64 rows with the leaf pass; without it rs_leaf_pass refuses 64 rows.
+#ifdef LEAF_PASS64
+// leaf_pass_kernel at 64 rows: the same claims (in step under LEAF_IN_PHASE), leaves, counts and receipts' store
+// indices, block s of the claim's 32 leaves by reader.cu's sk64_tile_of (pk: the 32 KiB of reader.py's `pack64`) staged
+// as sketch64_receipts_kernel stages them, and each lane's receipt by sk64_receipt into its registers, from which it
+// goes to the leaf's hash (and to receipts[8 j], with `receipts`).
 __global__ void __launch_bounds__(32 * LEAF64_WARPS, 1)
 leaf_pass64_kernel(const uint4 *__restrict__ data, u64 n, u64 base, const uint4 *__restrict__ pk, u64 *leaves,
                    u64 *receipts, unsigned *ctr, unsigned tiles_per, unsigned *started) {
   extern __shared__ __align__(16) uint4 smem64[];
+#if LEAF_IN_PHASE
+  __shared__ unsigned claim;
+#endif
   const int lane = threadIdx.x & 31, warp = threadIdx.x >> 5, g = lane >> 2, t = lane & 3;
   const uint4 *sg = smem64;
   int *st = reinterpret_cast<int *>(smem64 + SK64_SIGNS) + warp * 32 * SK64_ROWS;
@@ -990,10 +1022,20 @@ leaf_pass64_kernel(const uint4 *__restrict__ data, u64 n, u64 base, const uint4 
   __syncthreads();
   const u64 tiles = n / 32, nl = n / PER_LEAF;
   for (;;) {
+#if LEAF_IN_PHASE
+    if (!threadIdx.x) claim = atomicAdd(ctr, (unsigned)(PER_LEAF * LEAF64_WARPS));
+    __syncthreads();
+    const unsigned c0 = claim;
+    __syncthreads();
+    if (c0 >= tiles) break;
+    const u64 mine0 = (u64)c0 + warp * PER_LEAF;
+    const unsigned tile0 = (unsigned)(mine0 < tiles ? mine0 : tiles);
+#else
     unsigned tile0 = 0;
     if (!lane) tile0 = atomicAdd(ctr, (unsigned)PER_LEAF);
     tile0 = __shfl_sync(~0u, tile0, 0);
     if (tile0 >= tiles) break;
+#endif
     const u64 leaf0 = 2 * (u64)tile0, leaf = leaf0 + lane;
     u64 x[8], w[16];
 #pragma unroll
@@ -1042,6 +1084,11 @@ leaf_pass64_kernel(const uint4 *__restrict__ data, u64 n, u64 base, const uint4 
         for (int i = 0; i < 8; ++i) w[i] = y[i];
       }
     }
+#if LEAF_IN_PHASE
+    // The CTA's warps hash only when all have read: warps in both phases at once are far slower on sm_90, most likely
+    // because the two phases' code together outgrows the instruction cache.
+    __syncthreads();
+#endif
     sha::compress_kw(x, kC.kw_xpad);
     if (leaf < nl) {
       u64 d[8];
@@ -1099,11 +1146,13 @@ __device__ __noinline__ void help_leaf64_tile(const uint4 *__restrict__ data, u6
   __syncwarp();
   if (!lane) atomicAdd(ctr + 1 + tile / tiles_per, 1u);
 }
+#endif
 
 // A consumer warp's part of a 64-row leaf consumer CTA's shared memory: its staging, then its tile's receipts.
 constexpr size_t CONSUMER64_STAGING = (size_t)CONSUMER_THREADS / 32 * 32 * SK64_ROWS * sizeof(int);
 constexpr size_t LEAF64_STAGING = CONSUMER64_STAGING + (size_t)CONSUMER_THREADS / 32 * 256 * sizeof(u64);
 
+#ifdef LEAF_PASS64
 // leaf_consumer_kernel behind leaf_pass64_kernel: the same claims, waits, levels and kept nodes, with
 // help_leaf64_tile where a consumer warp takes a tile itself (pk: reader.py's `pack64`, 32 KiB in global memory).
 // Its dynamic shared memory is the larger of LEAF64_STAGING and the tree's 2 · 2^h0 · 64 bytes.
@@ -1195,6 +1244,7 @@ __global__ void __launch_bounds__(CONSUMER_THREADS) leaf_consumer64_kernel(const
     __syncthreads();   // before the next claim rewrites `claimed` and the staging
   }
 }
+#endif
 
 // The in-place pass (`rs_mapped_pass`) counts its tiles in groups of CONSUMER_READY_BLOCKS positions, the last group
 // what is left; mapped_pass_tile is pass_tile through the map.
@@ -1885,8 +1935,9 @@ int rs_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk, uns
 // consumer warp's own (`help_leaf_tile`), which a pass with a receipt grid reaches only where a consumer CTA is on an
 // SM before any reading CTA: what a gate of that path launches. At 64 rows (`rs_rows`) pk is reader.py's `pack64`
 // (32 KiB, 16-byte aligned) and the kernels are leaf_pass64_kernel and leaf_consumer64_kernel, on the same grids,
-// counters and streams. 5, with nothing queued: the shard does not fit the leaf pass (h0 over 8, 2^36 blocks or more,
-// or the kernels' shared memory on this device), and rs_pass is the caller's.
+// counters and streams, in a build with LEAF_PASS64; without it, 6 at 64 rows with nothing queued. 5, with nothing
+// queued: the shard does not fit the leaf pass (h0 over 8, 2^36 blocks or more, or the kernels' shared memory on this
+// device), and rs_pass is the caller's.
 static_assert(LEAF64_WARPS == LEAF_PASS_WARPS, "a reading CTA is 8 warps at either row count");
 int rs_leaf_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk, unsigned *ctr, uint64_t *ys,
                  uint64_t *leaves, uint64_t *kept, int h0, uint64_t chunk, int ctas, uint64_t pad_r0, uint64_t pad_n,
@@ -1898,6 +1949,9 @@ int rs_leaf_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk
       chunk % PER_LEAF || !chunk || n % chunk || base % chunk || ctas < -1)
     return 1;
   const bool wide = gRows == SK64_ROWS;
+#ifndef LEAF_PASS64
+  if (wide) return 6;
+#endif
   if (wide && (uintptr_t)pk % 16) return 1;
   const bool reading = ctas >= 0;
   const uint64_t lc = chunk / PER_LEAF, chunks = n / chunk, base_leaf = base / PER_LEAF;
@@ -1912,8 +1966,12 @@ int rs_leaf_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk
   const size_t staging = wide ? LEAF64_STAGING : LEAF_STAGING;
   const size_t shared = tree_shared > staging ? tree_shared : staging;
   const size_t reader_shared = wide ? LEAF64_SHARED : LEAF_PASS_SHARED;
+#ifdef LEAF_PASS64
   const void *reader = wide ? (const void *)leaf_pass64_kernel : (const void *)leaf_pass_kernel;
   const void *consumer = wide ? (const void *)leaf_consumer64_kernel : (const void *)leaf_consumer_kernel;
+#else
+  const void *reader = (const void *)leaf_pass_kernel, *consumer = (const void *)leaf_consumer_kernel;
+#endif
   // The opt-in to a kernel's dynamic shared memory is a device's, so every call sets it.
   if (cudaFuncSetAttribute(reader, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)reader_shared) ||
       (wide && cudaFuncSetAttribute(consumer, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)shared)) ||
@@ -1944,15 +2002,19 @@ int rs_leaf_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk
   const uint4 *d = (const uint4 *)data, *pk64 = (const uint4 *)pk;
   uint64_t *out = receipts ? ys : nullptr;
   const unsigned tiles_per = (unsigned)(ready_blocks / 32);
+#ifdef LEAF_PASS64
   if (reading && wide)
     leaf_pass64_kernel<<<readers, 32 * LEAF64_WARPS, LEAF64_SHARED, sa>>>(d, n, base, pk64, leaves, out, ctr,
                                                                          tiles_per, started);
-  else if (reading)
+  else
+#endif
+  if (reading)
     leaf_pass_kernel<<<readers, 32 * LEAF_PASS_WARPS, LEAF_PASS_SHARED, sa>>>(d, n, base, pk, leaves, out, ctr,
                                                                              tiles_per, started);
   if (cudaGetLastError()) return 4;
   if (pad_n)
     if (const int rc = pass_pads(pad_r0, pad_n, pad, pad_out, hc, sb)) return rc;
+#ifdef LEAF_PASS64
   if (wide) {
     leaf_consumer64_kernel<<<(unsigned)side, CONSUMER_THREADS, shared, sb>>>(d, n, base_leaf, pk64, leaves, out, ctr,
                                                                              kept, chunk, ready_blocks, h0, hc, chunks);
@@ -1960,7 +2022,9 @@ int rs_leaf_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk
       leaf_consumer64_kernel<<<(unsigned)tail, CONSUMER_THREADS, shared, sa>>>(d, n, base_leaf, pk64, leaves, out, ctr,
                                                                                kept, chunk, ready_blocks, h0, hc,
                                                                                chunks);
-  } else {
+  } else
+#endif
+  {
     leaf_consumer_kernel<<<(unsigned)side, CONSUMER_THREADS, shared, sb>>>(d, n, base_leaf, pk, leaves, out, ctr, kept,
                                                                            chunk, ready_blocks, h0, hc, chunks);
     if (tail)
