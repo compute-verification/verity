@@ -334,10 +334,15 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
                             "--main", str(main), "--coin", str(piece / S.COIN_PUT)])
 
     # 6. the compose
+    from verity.protocols.proofs.spot.verifier import service as SV
+
     audit = out / "sampled-proofs"
+    rule = "stratified-rate:1/1"
     (audit / S.WINDOW_REGISTRATION).parent.mkdir(parents=True, exist_ok=True)
-    (audit / S.WINDOW_REGISTRATION).write_text(json.dumps({"previous": tie, "registered": [], "stand_in": True}))
-    (audit / S.AUDIT_SUMMARY).write_text(json.dumps({"tie": {"record": tie}, "stand_in": True}))
+    (audit / S.WINDOW_REGISTRATION).write_text(json.dumps({
+        "previous": tie, "registered": [], "population": 1,
+        "law": SV.selection_sampling_design(SV.SamplingDesign(rule), 1, (1,)), "stand_in": True}))
+    (audit / S.AUDIT_SUMMARY).write_text(json.dumps({"tie": {"record": tie}, "sampling_design": rule, "stand_in": True}))
     (audit / S.CIRCUIT_RECORD).write_bytes(circuit_record.read_bytes())
 
     def row() -> dict:

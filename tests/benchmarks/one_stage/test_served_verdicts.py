@@ -2313,13 +2313,24 @@ PEARL_LEAN_WORK = {"credited": 5400, "credited_tiles": 40, "macs": 5600, "rho": 
 #: the window-circuit record V3c held R's circuit to, kept beside R (`S.CIRCUIT_RECORD`), which Pearl+'s period opens on
 PEARL_RECORD = b'{"name":"toy window circuit cut at its linears"}\n'
 
+#: the window's proof blocks, one stratum
+PEARL_BLOCKS = 40
 
-def _pearlplus_piece(tmp_path: Path, monkeypatch, live, case: str = "of record") -> tuple[Path, Path, str, str]:
+
+def _committed(rule: str) -> dict:
+    from verity.protocols.proofs.spot.verifier import service as SV
+
+    return SV.selection_sampling_design(SV.SamplingDesign(rule), PEARL_BLOCKS, (PEARL_BLOCKS,))
+
+
+def _pearlplus_piece(tmp_path: Path, monkeypatch, live, case: str = "of record",
+                     rule: str = "stratified-rate:1/977") -> tuple[Path, Path, str, str]:
     """Pearl+'s accepted piece as `served_pearlplus.sh` leaves it, every condition of record met unless ``case`` breaks
     one: its live session checked (`live`), the session's tree and the auditor's ledger as the gate gave them (the lane's
     own reserve in its open Pearl-C period, whose circuit is the SHA-512 of the window-circuit record beside R), its coin
-    published, Pearl+'s verdict tied to W, the window's docket R chained after W and its audit tied to W, and the
-    Lean verdict on the same run. Returns the pieces dir, SPOT dir, the compose's key pin and lane."""
+    published, Pearl+'s verdict tied to W, the window's docket R chained after W and committed under ``rule``, its audit
+    tied to W at that rule, and the Lean verdict on the same run. Returns the pieces dir, SPOT dir, the compose's key pin
+    and lane."""
     from verity.protocols.proofs.spot.verifier.challenger import remote
 
     served, verified = _pearlplus_run()
@@ -2378,9 +2389,12 @@ def _pearlplus_piece(tmp_path: Path, monkeypatch, live, case: str = "of record")
         (piece / S.PEARLPLUS_LEAN).write_text(json.dumps(lean))
     audit = tmp_path / "audit"
     (audit / S.WINDOW_REGISTRATION).parent.mkdir(parents=True)
+    committed = _committed("rate:1/1000000000" if case == "rule not R's" else rule)
     (audit / S.WINDOW_REGISTRATION).write_text(json.dumps(
-        {"format": REG.FORMAT_V2, "previous": "ab" * 64 if case == "R not after W" else PEARL_W, "registered": []}))
-    (audit / S.AUDIT_SUMMARY).write_text(json.dumps({} if case == "audit untied" else {"tie": {"record": PEARL_W}}))
+        {"format": REG.FORMAT_V2, "previous": "ab" * 64 if case == "R not after W" else PEARL_W, "registered": [],
+         "population": PEARL_BLOCKS, "law": committed}))
+    (audit / S.AUDIT_SUMMARY).write_text(json.dumps({} if case == "audit untied" else {
+        "tie": {"record": PEARL_W}, "sampling_design": rule}))
     if case != "no circuit record":
         (audit / S.CIRCUIT_RECORD).write_bytes(PEARL_RECORD)
     pin = "00" * 64 if case == "other key" else None if case == "no pin" else hashlib.sha512(PUBLIC).hexdigest()
@@ -2423,21 +2437,19 @@ def test_pearlpluss_accepted_piece_under_every_condition_of_record_is_pouws_verd
     assert rec["legs"]["pouw"]["quantity"] == {"symbol": "W_cert", "value": 5400, "unit": "work", "tiles": 40}
 
 
-@pytest.mark.parametrize("design", ["stratified-rate:1/977", "rate:1/1000000000", None])
+@pytest.mark.parametrize("design", ["stratified-rate:1/977", "rate:1/1000000000", "work-rate:1/977"])
 def test_pearlpluss_verdict_of_record_says_a_weaker_tie_where_the_tied_audit_sampled_no_stratified_rate(
         tmp_path, monkeypatch, live, design):
-    """The tied audit's rule (its summary's ``sampling_design``) decides what PoUW's accept of record covers: at a
-    stratified rate every table W registers has a sampled reader, and the row says nothing more; at any other rule, or none
-    stated, the row's profile and the record's reason say the weaker tie with the rule, so nothing reads it as the tied
-    guarantee."""
+    """The tied audit's rule, its summary's ``sampling_design`` held to the sampling design R commits, decides what PoUW's
+    accept of record covers: at a stratified rate every table W registers has a sampled reader, and the row says nothing
+    more; at any other rule the row's profile and the record's reason say the weaker tie with the rule, so nothing reads
+    it as the tied guarantee."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
     monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
-    pieces, audit, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live)
-    summary = {"tie": {"record": PEARL_W}, "audit": {"accepted": True}, **({"sampling_design": design} if design else {})}
-    (audit / S.AUDIT_SUMMARY).write_text(json.dumps(summary))
+    pieces, audit, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live, rule=design)
     row = S.piece_row("work", pieces, spot=audit, key_sha512=pin, lane=lane)
-    weaker = None if design and design.startswith("stratified-rate:") else S.WEAKER_TIE.format(design=design)
+    weaker = None if design.startswith("stratified-rate:") else S.WEAKER_TIE.format(design=design)
     assert row["verdict"] == "accept" and row["answer"]["profile"].get("weaker_tie") == weaker, row
     reason = S.said({"work": row}, {"work": ("vy-dc-h200", "real")}, "vy-dc-h200")
     said = f"{S.PEARLPLUS_SAID}, {weaker}" if weaker else S.PEARLPLUS_SAID
@@ -2510,6 +2522,9 @@ def test_the_record_reads_pearlpluss_tie_from_the_window_tied_to_w_under_window_
                       f"record W {PEARL_W[:16]}..."),
     ("audit untied", f"the window's records audit is not tied to Pearl+'s window record W {PEARL_W[:16]}... "
                      "(records_audit --tie W)"),
+    ("rule not R's", f"the window's records audit states the rule 'stratified-rate:1/977', not the one its registration R "
+                     f"commits ({_committed('rate:1/1000000000')!r} over {PEARL_BLOCKS} proof blocks): what Pearl+'s tie "
+                     "covers is read from R's rule"),
     ("no circuit record", f"no window-circuit record V3c held R's circuit to ({S.CIRCUIT_RECORD} beside R: "
                           "FileNotFoundError), so nothing holds period p-pc's circuit to the window served"),
     ("period on another circuit", f"period p-pc committed circuit {hashlib.sha512(b'another circuit').hexdigest()[:16]}"

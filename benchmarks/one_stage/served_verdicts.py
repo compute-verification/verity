@@ -1922,7 +1922,9 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
        and the verdict is over the coin published at its sample (`pearlplus_coin`).
        Pearl+'s verdict (`PEARLPLUS_ANSWER`) held its passes to a window record W (``verify --tie W``), the
        window's docket R under `spot` is chained right after W, and its records audit is tied to W
-       (``records_audit --tie W``), so the window SPOT audited reads the roots Pearl+ credits. The period's
+       (``records_audit --tie W``), so the window SPOT audited reads the roots Pearl+ credits. The rule that audit's
+       summary states is the sampling design R commits (its kind, and its K unless stratified), and only a stratified
+       rate's leaves the answer without a weaker tie. The period's
        open (in the signed ledger) committed the SHA-512 of the window-circuit record V3c held R's circuit to
        (`CIRCUIT_RECORD` beside R), so the period holds the salt session to the circuit of the window served.
     4. **Lean.** The Lean `PouwCheck.PearlPlus` verdict (`PEARLPLUS_LEAN`) accepts the same run commitment on the same
@@ -1933,6 +1935,7 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     verdict. Nothing here decides anew: each condition reads what a check or a verifier answered."""
     from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
     from verity.protocols.proofs.spot.verifier.challenger import remote
+    from verity.protocols.proofs.spot.verifier.one_stage import draw as D
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
 
     if doc.get("coin_source") != LIVE_SOURCE:
@@ -1998,6 +2001,14 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
                       f"Pearl+'s window record W {w[:16]}...")
     if ((summary.get("tie") or {}).get("record")) != w:
         return None, f"the window's records audit is not tied to Pearl+'s window record W {w[:16]}... (records_audit --tie W)"
+    design, committed, n = summary.get("sampling_design"), reg.get("law"), reg.get("population")
+    rate, strata = D.parse_rate(design), D.parse_strata_rate(design)
+    kind = "subset" if rate else None if strata is None else "work" if strata[0] else "stratified"
+    k = (None if kind in (None, "stratified") else -1 if type(n) is not int else D.rate_count(*rate, n) if rate
+         else D.rate_count(strata[1], strata[2], 1, n))
+    if not (isinstance(committed, Mapping) and kind and committed.get("law") == kind and k in (None, committed.get("k"))):
+        return None, (f"the window's records audit states the rule {design!r}, not the one its registration R commits "
+                      f"({committed!r} over {n!r} proof blocks): what Pearl+'s tie covers is read from R's rule")
     try:
         held = hashlib.sha512((spot / CIRCUIT_RECORD).read_bytes()).hexdigest()
     except OSError as e:
@@ -2028,8 +2039,7 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     eps = _rational(work.get("epsilon"))
     if eps is None or eps != _rational(ref.get("epsilon")):
         return None, f"the Lean verdict's ε {work.get('epsilon')!r} is not the reference's {ref.get('epsilon')!r}"
-    design = summary.get("sampling_design")
-    weaker = {} if str(design).startswith("stratified-rate:") else {"weaker_tie": WEAKER_TIE.format(design=design)}
+    weaker = {} if kind == "stratified" else {"weaker_tie": WEAKER_TIE.format(design=design)}
     return {**answer, "public": {**answer["public"], "work": {k: work.get(k) for k in
                                                               ("credited", "credited_tiles", "macs", "rho", "epsilon")}
                                  | ({"give_up": work["give_up"]} if "give_up" in work else {})},
