@@ -22,6 +22,7 @@ stderr and the exit status is 2.
 whose listed form has none when its Boolean version was accepted. It prints the types and proof blocks on the card, those
 accepted in the listed form, those accepted on the Boolean version only, those with none by family (each with the
 record's reason and its proof blocks), and last a line that starts with the count. `--check` exits 1 when the count is not 0.
+`--record` also writes the count into the run's result (`metrics.toml`), marked as a recount of the record named.
 """
 from __future__ import annotations
 
@@ -36,6 +37,7 @@ from collections import Counter
 from pathlib import Path
 
 KNOWN_SCHEMAS = ("circuits/request-cover/v7", "circuits/request-cover/v8")
+METRIC = "circuits/proof-block-kinds-without-statement"
 ROOT = Path(__file__).resolve().parents[2]
 #: a block type's family, as `fifth_pass.by_family` names it: its Definition's name without the version
 FAMILY = re.compile(r"(\w+?)_v\d+\{")
@@ -229,19 +231,35 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--form", choices=("boolean", "listed"), default="boolean",
                     help="listed: count only a type's listed form; boolean (default): its Boolean version too")
     ap.add_argument("--check", action="store_true", help="exit 1 when the count is not 0")
+    ap.add_argument("--record", action="store_true",
+                    help=f"write the count as {METRIC} into the run's result, a recount of this record (needs --card)")
     a = ap.parse_args(argv)
+    if a.record and not a.card:
+        ap.error("--record needs --card, whose model the point names")
     try:
         with tempfile.TemporaryDirectory() as tmp:
             path = fetch(a.cover, Path(tmp)) if a.cover.startswith("art:") else Path(a.cover)
             c = json.loads(path.read_text())
         if a.card:
             held_to_card(c, a.card)
-        out, n = report(c, count(c, a.form), a.form)
+        recount = count(c, a.form)
+        out, n = report(c, recount, a.form)
     except RecordError as e:
         print(f"cover_count: {e}", file=sys.stderr)
         return 2
     print("\n".join(out))
+    if a.record:
+        record(recount, n, a.form, a.cover, json.loads(a.card.read_text())["model"].split()[0])
     return 1 if a.check and n else 0
+
+
+def record(recount: dict, n: int, form: str, cover: str, model: str) -> None:
+    from verity_bench import kit
+    fields = {"model": model, "kinds_on_card": len(recount["types"]),
+              "kinds_on_boolean_version_only": sum(t["boolean_only"] for t in recount["types"]),
+              "form": form, "recount_of": cover, "fresh_cover": False}
+    m = kit.writer("out").measurement(METRIC, n, "kinds", mark="measured", member=f"{model.lower()}-{form}", extra=fields)
+    print(json.dumps({k: m[k] for k in ("name", "value", "unit", "member", *fields)}), flush=True)
 
 
 if __name__ == "__main__":

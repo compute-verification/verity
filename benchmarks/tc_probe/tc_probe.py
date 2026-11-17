@@ -118,6 +118,7 @@ if TYPE_CHECKING:
 
 HERE = Path(__file__).resolve().parent
 N = 8  # every shape here has 8 output columns
+METRIC = "circuits/tensor-core-mismatched-words"
 MAX_TILES_PER_CALL = 1 << 16
 FIRST_MISMATCHES = 20
 UNASSERTED_FAMILIES = {"specials"}  # recorded, never compared for validation -- unless the declared model is total (family_asserted)
@@ -1679,6 +1680,20 @@ def chain_sweep(so: Path, base: Probe, args: argparse.Namespace, out: Path) -> d
 # --- main --------------------------------------------------------------------------------------------------------------------------
 
 
+def record(out: Path, instruction: str, device: str, results: dict, declared: list[str]) -> None:
+    which = "canary" if "canary" in results else "sweep" if "sweep" in results else None
+    if not declared or which is None:
+        return
+    from verity_bench import kit
+    src = results[which]
+    card = "-".join(device.lower().split()).removeprefix("nvidia-")
+    words = src["asserted_elements"] if which == "canary" else src["total_asserted_elements"]
+    fields = {"instruction": instruction, "card": card, "words_compared": words, "model": declared[0], "tiles": which}
+    m = kit.writer(out).measurement(METRIC, src["total_mismatches_by_model"][declared[0]], "words", mark="measured",
+                                    member=f"{instruction}-{card}", extra=fields)
+    print(json.dumps({k: m[k] for k in ("name", "value", "unit", "member", *fields)}), flush=True)
+
+
 def write_result(out: Path, doc: dict) -> None:
     tmp = out / "result.json.tmp"
     tmp.write_text(json.dumps(doc, indent=1))
@@ -2028,6 +2043,7 @@ def main() -> int:
             "artifacts": artifacts,
             "tc_evidence": evidence,
         })
+        record(out, ins.id, identity["device"], results, declared)
         if evidence.get("labels"):
             print("labels (apply to the result artifact once `research run` has stored it):", flush=True)
             for cmd in CANARY.label_commands("<artifact-id>", evidence["labels"], SHARED.RESEARCH_LANE or "<lane>"):
