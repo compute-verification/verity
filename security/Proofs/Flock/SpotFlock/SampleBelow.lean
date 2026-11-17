@@ -60,7 +60,7 @@ open Properties.Spot.SecurityProofs (flockSamplingDesign_subset deriveSamplingDe
 open Lean (Json)
 
 /-- **A first stage of count `K` proves units below its population**: with no closure map it proves the units it
-sampled (`select_proved`), a `subset K` sample over the population `Partition.units` gives. -/
+drew (`select_proved`), a `subset K` sample over the population `Partition.units` gives. -/
 theorem select_subset_lt {g : Reg} {K : ℕ} (hK : firstK g = some K) {src : ByteArray} {draw : Json}
     {proved : Array ℕ} {read : ℕ}
     (h : Spot.Select.select g.rule g.program g.query g.table g.closure src = .ok (draw, proved, read)) :

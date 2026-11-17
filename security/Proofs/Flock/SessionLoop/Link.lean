@@ -36,7 +36,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The link at the session loop's own level 0
 
-The loop's `Commit` carries each table's level-0 root that `Level0.ofSamples` sampled for the session (`Session.relay`'s
+The loop's `Commit` carries each table's level-0 root that `Level0.ofSamples` drew for the session (`Session.relay`'s
 `commitFrame` of `Level0.ofSession`'s roots). Here that link is held to `LeanRelease.LinkIs` at the deployed tables:
 
 * `Loop.level0Of_root`: a sampled level 0's root is `Link.root` of its own inputs (`Level0.ofSamples_ok`).

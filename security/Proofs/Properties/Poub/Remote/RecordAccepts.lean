@@ -212,7 +212,7 @@ def events1 (root : ByteArray) (o : Opening) : Array _root_.Poub.Session.Event :
   #[.start 0, .receive 0 0 root none none (some 0) 1, .boundary 1, .close 0 2, .verify 0 #[o]]
 
 /-- The session's run accepts, over any registration of one block, any two coins and any root of 64 bytes whose
-window's openings `checkWindow` accepts, and its record has one window, of one pass of one block, which sampled one
+window's openings `checkWindow` accepts, and its record has one window, of one pass of one block, which drew one
 receipt. -/
 theorem run_accepts (reg : Registration) (hB : reg.blocks = 1) (c0 c1 root : ByteArray) (hroot : root.size = 64)
     (o : Opening) (hcheck : checkWindow reg reg.digest #[] (window1 reg c0 root) #[(0, 0)] #[o] = .accept) :
