@@ -1,12 +1,12 @@
 module
 
-public import PouwCheck.Verified
+public import PouwVerifier.Verified
 
 /-!
 # A served window's live statements verified (`credit._live_verified`)
 
 The verifier of a window's live@<s> statements, which `credit.window` and `credit.period_credit` take each
-round's live proof outcome from (`credit._lean_live_verified`, through `pouw-check-difftest`'s `credit-live-verified`),
+round's live proof outcome from (`credit._lean_live_verified`, through `pouw-verifier-difftest`'s `credit-live-verified`),
 with `credit._live_verified` the Python reference the difftest (`tests/test_live_verified_difftest.py`) holds to it,
 string for string. `Credit.Internal.live` then holds those outcomes to the window, as `credit._live` does.
 
@@ -34,11 +34,11 @@ form (`LIVE_STATEMENTS_FORM`), and one statement a round of the window's (a retr
 
 @[expose] public section
 
-namespace PouwCheck.LiveVerified
+namespace PouwVerifier.LiveVerified
 
 open Lean (Json toJson)
-open PouwCheck.Credit
-open PouwCheck.Verified (CIRCUIT_FILES finding)
+open PouwVerifier.Credit
+open PouwVerifier.Verified (CIRCUIT_FILES finding)
 
 def LIVE_STATEMENT_KEYS : List String := ["circuit", "public", "round", "sessions"]
 
@@ -84,7 +84,7 @@ def knownPort (program window v : String) (rows : Array (Array Nat × ByteArray)
 `<pre>slots@<s>` and its header ports `req_<i>` at `<pre>requests@0` (a `row-seg/v1` value), at the roots `roots` gives
 them, each under the registered domain of the window Program's digest `program`, the slot table bound to the window's
 open root `window` and the request table to its session `session`; `m` and `s` at their known content
-(`live_reads.m_table`, `round_table`: one row of two 16-bit words under `PouwCheck.publicRowSalt` of `window` and s),
+(`live_reads.m_table`, `round_table`: one row of two 16-bit words under `PouwVerifier.publicRowSalt` of `window` and s),
 each `cap_<i>` at row i of the known `<pre>caps` of the period's committed `maxTokens` (`live_reads.caps_table`, as
 `Credit.capsRoot` reads it: row q request q's max_tokens, 0 past them, under `publicRowSalt` of `window` and q) and the
 output row `o0` at the known `live-ok` rows (`ok_table`: row s' the one word 1 under `okSalt` of `window` and s').
@@ -104,12 +104,12 @@ def readsFile (program pre window session : String) (t steps s m : Nat) (roots :
   let slots := (List.range t).map fun i => (s!"slot_{i}", port sv SLOT_WORDS sd Flock.HmRow.ROW_SCHEMA_V2 i)
   let reqs := (List.range t).map fun i => (s!"req_{i}", port rv HEADER_WORDS rd Flock.HmRow.ROW_SCHEMA_SEG i)
   let mp ← knownPort program window s!"{pre}{M_ROWS}@{s}"
-    #[(#[m % 65536, m / 65536], PouwCheck.publicRowSalt window s)] SLOT_WORDS s 0
+    #[(#[m % 65536, m / 65536], PouwVerifier.publicRowSalt window s)] SLOT_WORDS s 0
   let sp ← knownPort program window s!"{pre}{ROUND_ROWS}@{s}"
-    #[(#[s % 65536, s / 65536], PouwCheck.publicRowSalt window s)] SLOT_WORDS s 0
+    #[(#[s % 65536, s / 65536], PouwVerifier.publicRowSalt window s)] SLOT_WORDS s 0
   let capRows := (Array.range t).map fun q =>
     let c := maxTokens.getD q 0
-    (#[c % 65536, c / 65536], PouwCheck.publicRowSalt window q)
+    (#[c % 65536, c / 65536], PouwVerifier.publicRowSalt window q)
   let caps := (List.range t).zip (← knownPorts program window s!"{pre}{CAPS}" capRows SLOT_WORDS s (List.range t))
     |>.map fun (i, p) => (s!"cap_{i}", p)
   let op ← knownPort program window s!"{pre}{LIVE_OK_VALUE}"
@@ -217,4 +217,4 @@ def liveVerified (j : Json) : R Json := do
     return Json.mkObj [("outcomes", Json.arr out)]
   | _ => throw ("error", "credit-live-verified: the verifier's answers are neither null nor a list")
 
-end PouwCheck.LiveVerified
+end PouwVerifier.LiveVerified

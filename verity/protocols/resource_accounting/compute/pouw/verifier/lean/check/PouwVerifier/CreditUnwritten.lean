@@ -1,19 +1,19 @@
 module
 
-public import PouwCheck.Credit
+public import PouwVerifier.Credit
 
 /-!
 # The credit check not yet written in Lean (`credit.pearl_c_period_credit`)
 
-A Pearl-C period's credit, a function of `PouwCheck.Credit` that refuses every input with why (`NOT_WRITTEN`) until its
+A Pearl-C period's credit, a function of `PouwVerifier.Credit` that refuses every input with why (`NOT_WRITTEN`) until its
 check is written (`compute-accounting/pouw-verdict-from-main`); the Python's verdict of record on it
-(`verifier.not_written`) names it. Beside `PouwCheck.Credit`, which is past the lines a module may run to
+(`verifier.not_written`) names it. Beside `PouwVerifier.Credit`, which is past the lines a module may run to
 (`tests/test_lean_packages.py`'s `LONG`).
 -/
 
 @[expose] public section
 
-namespace PouwCheck.Credit
+namespace PouwVerifier.Credit
 
 open Lean (Json)
 
@@ -25,4 +25,4 @@ def NOT_WRITTEN : String :=
 until its check is written. -/
 def pearlCMonitoringPeriodCredit (_key _ledger _pins _main _name _passes _earlier : Json) : R Json := throw ("period", NOT_WRITTEN)
 
-end PouwCheck.Credit
+end PouwVerifier.Credit

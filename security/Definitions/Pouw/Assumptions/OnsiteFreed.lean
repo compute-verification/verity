@@ -36,7 +36,7 @@ its sampling blocks' timed work costs less than `F` at the prices `μ` is at mos
 
 It is the remote form's conclusion, at one credit for the whole accepted period. A remote guarantee in this vocabulary
 gives it: at `Definitions.Pouw.Witness`'s instance `WorkSound`'s conclusion does
-(`Pouw.SecurityProofs.OnsiteFreedWitness.twFloor`). At the served check (the J10-R period, `PouwCheck.Credit.window`)
+(`Pouw.SecurityProofs.OnsiteFreedWitness.twFloor`). At the served check (the J10-R period, `PouwVerifier.Credit.window`)
 the onsite form doesn't take it: `Properties.Pouw.Served.ServedFreed` composes `ServedWork` itself, whose floor depends
 on the period's credit.
 

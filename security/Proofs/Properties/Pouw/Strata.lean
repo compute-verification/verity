@@ -20,10 +20,10 @@ templates are distinct and name their K, and each unit so far is held, only by s
 namespace Properties.Pouw.Strata
 
 open Lean (Json toJson)
-open PouwCheck.Credit (callWork servedWork)
+open PouwVerifier.Credit (callWork servedWork)
 
-theorem nat_toJson (K : Nat) : PouwCheck.nat? (toJson K) = some K := by
-  simp [PouwCheck.nat?, PouwWindow.natOf?, PouwWindow.intOf?, toJson, Lean.JsonNumber.fromNat]
+theorem nat_toJson (K : Nat) : PouwVerifier.nat? (toJson K) = some K := by
+  simp [PouwVerifier.nat?, PouwWindow.natOf?, PouwWindow.intOf?, toJson, Lean.JsonNumber.fromNat]
 
 /-- Stratum `t` under the work sampling design at `K` over the work `W`. -/
 def samplingDesignOf (K W : Nat) (t : Flock.Draw.WorkStratum) : Flock.Draw.Stratum :=
@@ -31,11 +31,11 @@ def samplingDesignOf (K W : Nat) (t : Flock.Draw.WorkStratum) : Flock.Draw.Strat
 
 /-- What `samplingDesign` answers: `K` is at least one and at most the window's units, and the strata are `ss`'s under `samplingDesignOf`. -/
 theorem samplingDesign_ok {ss : Array Flock.Draw.WorkStratum} {K : Nat} {strata : Array Flock.Draw.Stratum}
-    (h : PouwCheck.Credit.samplingDesign ss (toJson K) = .ok strata) :
+    (h : PouwVerifier.Credit.samplingDesign ss (toJson K) = .ok strata) :
     1 ≤ K ∧ K ≤ ss.foldl (fun a s => a + s.size) 0 ∧ strata = ss.map (samplingDesignOf K (Flock.Draw.totalWork ss)) := by
-  unfold PouwCheck.Credit.samplingDesign at h
+  unfold PouwVerifier.Credit.samplingDesign at h
   rw [nat_toJson] at h
-  by_cases hK : (1 ≤ K && K ≤ PouwCheck.Credit.MAX_K) = true
+  by_cases hK : (1 ≤ K && K ≤ PouwVerifier.Credit.MAX_K) = true
   · simp only [Option.filter, hK, ite_true, bind, Except.bind, pure, Except.pure] at h
     have hK1 : 1 ≤ K := by simp at hK; omega
     split at h
@@ -197,13 +197,13 @@ theorem credited_eq (got : List Nat) (l : List (Nat × Nat)) :
 
 /-- What `established` answers is `epsAt`'s at `servedWork`'s credited work and `callWork`'s total. -/
 theorem established_ok {layout : Json} {got served : List Nat} {K : Nat} {e : Rat}
-    (h : PouwCheck.Credit.established layout got served K = some e) :
-    PouwWindow.epsAt K PouwCheck.Credit.DELTA
+    (h : PouwVerifier.Credit.established layout got served K = some e) :
+    PouwWindow.epsAt K PouwVerifier.Credit.DELTA
       ((((List.range (servedWork layout served).length).map fun i =>
         if i ∈ got then ((servedWork layout served).getD i (0, 0)).1 *
           ((servedWork layout served).getD i (0, 0)).2 else 0).sum : Nat) : Int)
       ((((callWork layout).map fun p => p.1 * p.2).sum : Nat) : Int) 1 = .ok e := by
-  unfold PouwCheck.Credit.established at h
+  unfold PouwVerifier.Credit.established at h
   dsimp only at h
   rw [credited_eq, total_eq] at h
   revert h
@@ -561,7 +561,7 @@ theorem inv_step {r c : Nat} {items : List (Nat × Nat)} {out : Array WorkStratu
           cases hh'
         · rw [(hmspec _ (List.getElem_mem hjl)).2.1, hget, hwork]
 
-theorem refuse_ne {α : Type} (w : String) (a : α) : PouwCheck.Credit.layoutRefuse w ≠ .ok a := by
+theorem refuse_ne {α : Type} (w : String) (a : α) : PouwVerifier.Credit.layoutRefuse w ≠ .ok a := by
   intro h
   cases h
 
@@ -615,7 +615,7 @@ theorem foldl_pushSome {α β : Type} (p : α → Option β) :
 def parseL (x : Json) : Option (String × Nat × Nat) :=
   match x with
   | .arr a => match a.toList with
-    | [.str s, k, n] => do pure (s, ← PouwCheck.nat? k, ← PouwCheck.nat? n)
+    | [.str s, k, n] => do pure (s, ← PouwVerifier.nat? k, ← PouwVerifier.nat? n)
     | _ => none
   | _ => none
 
@@ -623,7 +623,7 @@ def parseL (x : Json) : Option (String × Nat × Nat) :=
 def parseC (x : Json) : Option (String × Nat) :=
   match x with
   | .arr a => match a.toList with
-    | [.str s, b] => (s, ·) <$> PouwCheck.nat? b
+    | [.str s, b] => (s, ·) <$> PouwVerifier.nat? b
     | _ => none
   | _ => none
 
@@ -657,10 +657,10 @@ theorem filterMap_comp_eq {α β γ : Type} (f : α → Option β) (g : β → O
     rw [List.filterMap_cons, List.filterMap_cons, h x (List.mem_cons_self ..),
       ih fun y hy => h y (List.mem_cons_of_mem _ hy)]
 
-theorem strata_ok {layout : Json} {ss : Array WorkStratum} (h : PouwCheck.Credit.strata layout = .ok ss) :
+theorem strata_ok {layout : Json} {ss : Array WorkStratum} (h : PouwVerifier.Credit.strata layout = .ok ss) :
     ∃ (r c : Nat) (items : List (Nat × Nat)),
       callWork layout = items.map (fun q => (q.2, r * c * q.1)) ∧ ss = (items.foldl (add r c) (#[], 0)).1 := by
-  unfold PouwCheck.Credit.strata at h
+  unfold PouwVerifier.Credit.strata at h
   dsimp only at h
   split at h
   · split at h
@@ -757,7 +757,7 @@ theorem strata_ok {layout : Json} {ss : Array WorkStratum} (h : PouwCheck.Credit
                 split at hs
                 · rename_i s k n hal
                   simp only [hal]
-                  cases hk : PouwCheck.nat? k <;> cases hn : PouwCheck.nat? n <;> simp [hk, hn] at hs ⊢
+                  cases hk : PouwVerifier.nat? k <;> cases hn : PouwVerifier.nat? n <;> simp [hk, hn] at hs ⊢
                 · simp at hs
               | _ => simp [parseL] at hs
             case call =>
@@ -769,7 +769,7 @@ theorem strata_ok {layout : Json} {ss : Array WorkStratum} (h : PouwCheck.Credit
                 split at hs
                 · rename_i s b hal
                   simp only [hal]
-                  cases hb : PouwCheck.nat? b <;> simp [hb] at hs ⊢
+                  cases hb : PouwVerifier.nat? b <;> simp [hb] at hs ⊢
                 · simp at hs
               | _ => simp [parseC] at hs
         · obtain ⟨_, h', -⟩ := bind_ok h
