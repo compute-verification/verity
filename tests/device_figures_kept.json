@@ -4,7 +4,7 @@
     {"file": "adapters/vllm/tools/description_sizes.json", "count": 18, "lane": "vllm", "why": "a template's description size in bytes (1830), not a clock"},
     {"file": "benchmarks/numerical/bench-instances/v1/tu-k16.index.json", "count": 13, "lane": "compute-accounting", "why": "row ids of the instance index and, in src, the vu-k1536 row ids a chain state comes from, not clocks"},
     {"file": "benchmarks/numerical/bench-instances/v1/vu-k1536.index.json", "count": 8, "lane": "compute-accounting", "why": "row ids of the instance index and, in j, a layer's weight-row index, not clocks"},
-    {"file": "calibration/census/hardware.json", "count": 6, "lane": "compute-accounting", "why": "each line's memory_bytes, the vendor's published memory size (80 GB, 96 GB) kept as the census's citation"},
+    {"file": "calibration/census/hardware.json", "count": 6, "lane": "compute-accounting", "why": "each line's memory_bytes, the vendor's published memory size (80 GiB, 96 GiB) kept as the census's citation"},
     {"file": "verity/protocols/resource_accounting/compute/pouw/verifier/lean/scripts/fp8atom_cover.json", "count": 3, "lane": "compute-accounting", "why": "indices into fp8atom_vectors.py's steps and adds (4187, 1830, 2430), not a device's figures"}
   ]
 }
