@@ -45,7 +45,8 @@ async def _pipe(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> N
 
 class ReleaseFront:
     """The front before the server on loopback port ``upstream``, in buckets of ``bucket_s`` from its start. ``clock`` and
-    ``sleep`` are the event loop's (seconds); `summary` is what it released and whether the watermark held."""
+    ``sleep`` are the event loop's (seconds); `summary` is what it released, whether the watermark held, and how many
+    answers a side's hang-up cut short (``cut``, where any was)."""
 
     def __init__(self, upstream: int, bucket_s: float, clock: Callable[[], float] = time.monotonic,
                  sleep: Callable[[float], Awaitable[None]] = asyncio.sleep) -> None:
@@ -72,7 +73,7 @@ class ReleaseFront:
         try:
             up_r, up_w = await asyncio.open_connection("127.0.0.1", self.upstream)
         except OSError:
-            writer.write(b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+            writer.write(b"HTTP/1.1 502 Upstream Unreachable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
             writer.close()
             return
         up_w.write(_rewritten(head, self.released(head)))
@@ -81,7 +82,7 @@ class ReleaseFront:
             writer.write(_rewritten(await up_r.readuntil(b"\r\n\r\n"), []))
             await _pipe(up_r, writer)
         except (asyncio.IncompleteReadError, ConnectionError):
-            pass
+            self.summary["cut"] = self.summary.get("cut", 0) + 1
         finally:
             body.cancel()
             for w in (up_w, writer):

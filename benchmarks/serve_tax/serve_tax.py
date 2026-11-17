@@ -1945,12 +1945,13 @@ def topk_calls(d: Path | None) -> dict[str, int]:
     at tensor parallelism."""
     out = {}
     for f in sorted(d.glob("dsa_topk.*.json")) if d is not None and d.is_dir() else ():
-        for _ in range(3):              # a read may meet the process rewriting its record in place
+        for tries in range(3, 0, -1):   # a read may meet the process rewriting its record in place
             try:
                 out[f.name.split(".")[1]] = sum(json.loads(f.read_text())["calls"].values())
                 break
             except ValueError:
-                continue
+                if tries == 1:
+                    raise
     return out
 
 
