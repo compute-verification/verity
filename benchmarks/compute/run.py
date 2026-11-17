@@ -39,7 +39,8 @@ and what the run wrote under `out/`. `--from` takes a directory or a run id (`ma
 record from there through no store (`kit.record_dir`): nothing of research's is imported, no credential is looked up
 and nothing goes over the network. DIR must hold the answer and the policy below (exit 2 naming the file it lacks). The
 run printed is the `run.id` its `job.json` states and the commit its `store.conditions` state (`source.commit`,
-`-dirty` when `source.dirty`), as the store's attempt states them; without them, the directory's name and no commit.
+`-dirty` when `source.dirty`), as the store's attempt states them; without them, the directory's name and the commit
+`serve.sh` wrote in `out/compute-run.json`, else no commit.
 Nothing is withdrawn from a directory. Given a run id (`kit_report.RUN_ID`) that names no directory, it reads that
 run's record from the evidence store, through research's client. Anything else is refused (exit 2). A record whose
 `job.json` says it is made up (``made_up``, as the tests' fixture does) is reported as made up through the kit
@@ -730,7 +731,7 @@ def stated(tree: Path | None) -> tuple[tuple[str, dict] | None, str]:
 def from_dir(record: Path, per_call: bool = False, given: Path | None = None, top: int = 10) -> dict:
     """The printed document of the run record in the directory `record` (module docstring), through no store: the run
     is the `run.id` its `job.json` states, else the directory's name, and the commit the one its `store.conditions`
-    state, else None. `Unreadable` unless it holds every file of `REQUIRED`."""
+    state, else the one `serve.sh` wrote in its `RAN`, else None. `Unreadable` unless it holds every file of `REQUIRED`."""
     if not record.is_dir():
         raise Unreadable(f"{record} is not a directory: --from names a run's directory, the one holding out/")
     for path, what in REQUIRED.items():
@@ -743,6 +744,9 @@ def from_dir(record: Path, per_call: bool = False, given: Path | None = None, to
         run = (job.get("run") or {}).get("id") or record.resolve().name
         conds = (job.get("store") or {}).get("conditions") or {}
         commit = commit_of({"source": {"commit": conds.get("source.commit"), "dirty": conds.get("source.dirty")}})
+        if commit is None:
+            ran = (_held(record, RAN) or {}).get("commit")
+            commit = None if ran in (None, "", "unknown") else ran
     except (OSError, ValueError, AttributeError) as e:
         raise Unreadable(f"the record's {JOB} doesn't read as the run's ({type(e).__name__}: {e})") from e
     return _with_split(document(record, commit, str(run), [], given), record, per_call, given, top)
