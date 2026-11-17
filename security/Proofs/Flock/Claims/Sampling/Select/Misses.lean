@@ -41,14 +41,7 @@ import Proofs.Flock.Claims.Prob
 import Std.Tactic.BVDecide.Normalize.Prop
 import VCVio.Prelude.Core
 
-/-!
-# `Slots.select` misses a set of slots no more often than the claims' `P_a` (`Properties.Spot.DrawMisses`)
-
-* `misses_layout`: a sample that checks no proof block at a slot of `B` leaves `B` no input slot, and proves no unit at a
-  population slot of `B`.
-* `pa_slots`: the design's `P_a` on `Slots.layout`'s partition, the population's first stage times the input class's.
-* `sampleMisses`: the sample is accepted and misses `B` with probability at most `missBound`.
--/
+/-! `Slots.select` misses a set of slots no more often than the claims' `P_a` (`Properties.Spot.DrawMisses`). -/
 
 @[expose] public section
 
@@ -58,7 +51,6 @@ namespace Properties.Spot.SecurityProofs
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit Finset Claims.Sampling
 
-/-- The population's proof blocks, slot by slot. -/
 def popBlocks (pop : Array (Array Slots.ProofBlock)) : List Slots.ProofBlock := pop.toList.flatMap (·.toList)
 
 theorem blocks_toList (pop ic : Array (Array Slots.ProofBlock)) :
@@ -66,7 +58,6 @@ theorem blocks_toList (pop ic : Array (Array Slots.ProofBlock)) :
   simp [Slots.SlotOrder.blocks, popBlocks, List.flatten_append]
   rfl
 
-/-- The population's units, slot by slot. -/
 def popUnits (S : Array (String × Array (ℕ × ℕ))) : List ℕ := S.toList.flatMap fun p => expand p.2.toList
 
 theorem laysOut_units : ∀ (S : List (String × Array (ℕ × ℕ))) (pop : List (Array Slots.ProofBlock)),
@@ -94,8 +85,6 @@ theorem inputClass_blocks (d : Program) : ∀ b ∈ popBlocks (inputClass d), b.
     obtain ⟨g, -, rfl⟩ := hb
     rfl
 
-/-- **A sample that misses `B`**, over a layout of the population's strata `S` and an input class: no slot of `B` is an
-input slot, and no unit at a population slot of `B` is proved. -/
 theorem misses_layout (S : Array (String × Array (ℕ × ℕ))) (pop ic : Array (Array Slots.ProofBlock))
     (hlays : List.Forall₂ LaysOut S.toList pop.toList)
     (hic : ∀ b ∈ popBlocks ic, b.unit = none) (proved : Array ℕ) (B : Finset ℕ)
@@ -139,8 +128,6 @@ theorem slots_length (c : Array (Array Slots.ProofBlock)) :
     (c.toList.map fun s => s.toList.map puGates).flatten.length = (popBlocks c).length := by
   simp [popBlocks, List.length_flatten, List.length_flatMap, Function.comp_def]
 
-/-- **The design's `P_a` on `Slots.layout`'s partition**: the population's first stage on its window of `B`, times the
-input class's `all`. -/
 theorem pa_slots (first : OneStage) (pop ic : Array (Array Slots.ProofBlock)) (B : Finset ℕ) :
     (⟨[first, .all]⟩ : Design).Pa (slotPartition { classes := #[pop, ic] }) B =
       first.Pa (pop.toList.map (·.size)) (window 0 (popBlocks pop).length B) *
@@ -150,7 +137,6 @@ theorem pa_slots (first : OneStage) (pop ic : Array (Array Slots.ProofBlock)) (B
   congr 2
   simp [Function.comp_def]
 
-/-- `slotDesign`'s steps: the population, the rule's sampling design and its expansion, and the design they give. -/
 theorem slotDesign_ok (rule : Select.Rule) (d : Program) (query : Lean.Json) (table : Option Lean.Json)
     (D : Design) (h : slotDesign rule d query table = .ok D) :
     ∃ n named derived, Partition.units d query = .ok n ∧ rule.samplingDesignOver n = .ok named ∧
@@ -183,7 +169,6 @@ theorem strata_eq (d : Program) (query : Lean.Json) (rs : Array Flock.TemplateQu
 theorem length_popUnits (S : Array (String × Array (ℕ × ℕ))) : (popUnits S).length = (S.toList.map fun p => rsSize p.2).sum := by
   simp [popUnits, rsSize, List.length_flatMap]
 
-/-- The units at the slots of `W`, a set of as many units of `[0, n)` when the population's units are `[0, n)`, each once. -/
 theorem image_units (U0 : List ℕ) (hnd : U0.Nodup) (hlt : ∀ x ∈ U0, x < U0.length) (W : Finset ℕ)
     (hW : W ⊆ range U0.length) :
     (W.image fun v => U0.getD v 0) ⊆ range U0.length ∧ (W.image fun v => U0.getD v 0).card = W.card := by
@@ -214,8 +199,6 @@ theorem totalWork_eq (ws : Array Flock.Draw.WorkStratum) :
   | nil => simp
   | cons s l ih => intro a; simp only [List.foldl_cons, ih, List.map_cons, List.sum_cons, Nat.mul_comm s.work]; omega
 
-/-- **The population's first stage misses `W`** with probability at most the claims' `P_a(W)` of the sampling design it samples, on
-the population's strata: the units `sampleUnits` samples hold none at a slot of `W`. -/
 theorem samplingDesign_bound (d : Program) (query : Lean.Json) (rs : Array Flock.TemplateQuery.TRange)
     (he : Partition.evaluate d query = .ok rs) (pop : Array (Array Slots.ProofBlock))
     (hlays : List.Forall₂ LaysOut (Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count))).toList

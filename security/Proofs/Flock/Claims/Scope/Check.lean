@@ -2,22 +2,12 @@ module
 
 public import Flock.ProvedScope
 
-/-!
-# `ProvedScope.check`, both ways
-
-`check_ok_iff`: the verifier's scope check passes exactly when every rule of `statementRules` holds, the circuit parses and
-the public file loads as the check reads them (`circuitOf`, `publicOf`), a shared-row public file only where
-`sharedRowsOk`, and on a templated circuit (`Circuit.tmpl`) `scopeOkT`, on any other the wires acyclic where they feed
-the unit or the outputs (`wiresFeed`, `wiresAcyclic`) and `scopeOk` (`scopeOkI` with hidden outputs). `scopeOk` holds only where `wiresFeed` fails (`wiresFeed_of_scopeOk`), so
-with public outputs the wire condition holds of every circuit `scopeOk` passes. `check_wires`: an accepted flat circuit's
-wires, where they feed the unit or the outputs, are acyclic.
--/
+/-! `ProvedScope.check`, both ways. -/
 
 @[expose] public section
 
 namespace Flock.Readable
 
-/-- `leafOk`, as a proposition: `hm96-sha512/v1` leaves, or plain SHA-512 leaves with hidden outputs without `--zk`. -/
 def LeafOk (t : Tags) (zk : Bool) : Prop :=
   t.merkleLeaf = "hm96-sha512/v1" ∨
     (zk = false ∧ t.hiddenOutputs = true ∧ t.merkleLeaf = "flock-leaf/sha512-unsalted")
@@ -26,14 +16,12 @@ theorem leafOk_iff (t : Tags) (zk : Bool) : ProvedScope.leafOk t zk = true ↔ L
   unfold ProvedScope.leafOk LeafOk
   cases zk <;> cases t.hiddenOutputs <;> simp
 
-/-- Under `--zk`, and wherever outputs are public, the leaves `leafOk` covers are `hm96-sha512/v1`. -/
 theorem LeafOk.hm96 {t : Tags} {zk : Bool} (h : LeafOk t zk) (hz : zk = true ∨ t.hiddenOutputs = false) :
     t.merkleLeaf = "hm96-sha512/v1" := by
   rcases h with h | ⟨h1, h2, -⟩
   · exact h
   · rcases hz with hz | hz <;> simp_all
 
-/-- The rules of `statementRules`, as propositions. -/
 def Rules (t : Tags) (zk : Bool) (count : Nat) (pi : Bool) : Prop :=
   t.hm96Rows = true ∧ t.typed = false ∧ t.retainRounds = true ∧ LeafOk t zk ∧
     count ≤ (if zk then ProvedScope.zkTableCap else 1) ∧ pi = false
@@ -46,21 +34,15 @@ theorem firstFailure_none_iff (t : Tags) (zk : Bool) (count : Nat) (pi : Bool) :
     Bool.not_eq_true', Rules, ← leafOk_iff]
   cases t.typed <;> cases pi <;> cases zk <;> simp
 
-/-- `scopeOk` holds only where the wires feed neither the unit nor the outputs. -/
 theorem wiresFeed_of_scopeOk {c : Circuit} (h : ProvedScope.scopeOk c = true) : ProvedScope.wiresFeed c = false := by
   simp_all [ProvedScope.scopeOk, ProvedScope.wiresFeed]
 
-/-- What the check requires of the circuit's form: a templated circuit (`Circuit.tmpl`) in the form
-`ProvedScope.scopeOkT` covers, on its description; any other with the wire condition and `scopeOk` (`scopeOkI` with
-hidden outputs). -/
 def FormOk (t : Tags) (zk : Bool) (count : Nat) (c : Circuit) : Prop :=
   match c.tmpl with
   | some tu => ProvedScope.scopeOkT t.hiddenOutputs zk count c tu = true
   | none => (ProvedScope.wiresFeed c = true → ProvedScope.wiresAcyclic c = true) ∧
       (if t.hiddenOutputs then ProvedScope.scopeOkI c else ProvedScope.scopeOk c) = true
 
-/-- **The scope check passes, both ways**: a templated circuit (`Circuit.tmpl`) in the form `ProvedScope.scopeOkT` covers,
-on its description; any other with the wire condition and `scopeOk` (`scopeOkI` with hidden outputs). -/
 theorem check_ok_iff (t : Tags) (zk : Bool) (cf pf : ByteArray) (tables : List (String × ByteArray)) (count : Nat)
     (pi reg : Bool) :
     ProvedScope.check t zk cf pf tables count pi reg = .ok () ↔
@@ -126,8 +108,6 @@ theorem check_ok_iff (t : Tags) (zk : Bool) (cf pf : ByteArray) (tables : List (
         · simp [hw hf']
       simp only [hw', hok, Bool.false_eq_true, ↓reduceIte]
 
-/-- **The wire refusal holds of every flat statement the check accepts**: its circuit parses, and its wires, where they
-feed the unit or the outputs (`wiresFeed`), fill every slot from the leaves (`wiresAcyclic`). -/
 theorem check_wires {t : Tags} {zk : Bool} {cf pf : ByteArray} {tables : List (String × ByteArray)} {count : Nat}
     {pi reg : Bool} (h : ProvedScope.check t zk cf pf tables count pi reg = .ok ()) :
     ∃ c, ProvedScope.circuitOf t cf tables = .ok c ∧

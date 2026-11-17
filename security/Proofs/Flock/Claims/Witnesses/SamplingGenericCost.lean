@@ -39,23 +39,7 @@ import Proofs.Flock.Claims.Sampling.Cost
 import Proofs.Flock.Claims.Sampling.Wait
 import Proofs.Flock.SamplingGeneric.Bits
 
-/-!
-# Refutation witnesses: the generic sampled compiler's cost claims
-
-`Compiled.Bits` and `Compiled.Efficient` each fail at a toy instance, on the toy statement of `Witnesses.Sampling`.
-
-* `sksL` (`Witnesses.SamplingGeneric`) accepts every run while no witness is in its relation at `δ = 0`, and there
-  `λ > 0`: `Compiled.Bits_fails`.
-* `effL`: a compiled verifier over `findA`, a proof system whose verifier accepts after one round and whose extractor
-  assembles `()` at once, with its one proof block's session seen as accepted, under a commitment whose opening check
-  makes one SHA-512 call (`callCm`) that the compiled verifier counts as none. Every run is accepted, so the compiled
-  extractor reaches its first inner run's extraction, whose opening check calls (`ownLog_E_pos`), above the own-call
-  bound `0`: `Compiled.Efficient_fails`.
-
-The lock's `meets` witnesses of these claims are `twoSessions_meets` (the contract with two sampled sessions) and
-`twoOpenCalls_meets`: the opening checks' count holds at `twoL`, so `CompilerBits` and `CompilerEfficient` read
-antecedents that hold together.
--/
+/-! Refutation witnesses: the generic sampled compiler's cost claims each fail at a toy instance. -/
 
 @[expose] public section
 
@@ -64,8 +48,6 @@ namespace Claims.Witness.SamplingGeneric
 open Claims.SamplingGeneric
 open Claims.Sampling (AuditStatement Opening CommitmentScheme lamLin forkOn waitAccC flatMapRP ownLog)
 open Claims.Witness.Sampling (toyStmt sksD_noR slack_le_two)
-
-/-! ## `Compiled.Bits` fails at `sksL` -/
 
 theorem maxBelow_zero (n : ℕ) : maxBelow n (fun _ => 0) = 0 := by
   unfold maxBelow
@@ -88,7 +70,6 @@ theorem sksL_γ (x : Msg) : (sksL Coin).γ x = 0 := by
   rw [h, mul_zero, mul_zero]
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- `sksL`'s one proof block's shape makes no wait, so its session's expected reruns are its replay. -/
 theorem sksL_es (x : Msg) : (sksL Coin).es x = 1 := by
   show max ((1 : ℝ) + ((0 : ℕ) : ℝ) * ((0 : ℕ) : ℝ)) 0 = 1
   exact (max_eq_left (by norm_num)).trans (by norm_num)
@@ -150,8 +131,6 @@ theorem compiledBits_fails (H : Msg → Msg) : ¬ (sksL Coin).Bits H := by
 
 end Bits
 
-/-! ## `Compiled.Efficient` fails at `effL` -/
-
 /-- **A proof system whose extractor assembles `()` at once**: `toyA`'s verifier and relation, its extractor one wait
 over one coin vector that stops at no accepted rerun, its assemble step `()` and its check passing everything. -/
 def findA (Coin : Type) : Arg Coin :=
@@ -204,7 +183,6 @@ theorem ownLog_flatMapRP_head {R β γ : Type} (H : Msg → Msg) (run : R → Tr
   rw [Claims.Sampling.ownLog_flatMapRP, List.map_cons, List.sum_cons]
   exact Nat.le_add_right _ _
 
-/-- A wait whose first sample is accepted keeps it first. -/
 theorem waitAccC_head {R : Type} (H : Msg → Msg) (run : R → Transcript) {k : ℕ} (hk : 0 < k) (r : R) (rs : List R)
     (hr : (run r).out = .acc) : ∃ l, ((waitAccC k (r :: rs) []).eval H run).1 = (r, (run r).seen) :: l := by
   rw [Claims.Sampling.waitAccC_eval_nil, Claims.Sampling.accList,
@@ -212,8 +190,6 @@ theorem waitAccC_head {R : Type} (H : Msg → Msg) (run : R → Transcript) {k :
     List.map_cons]
   exact ⟨_, rfl⟩
 
-/-- **The compiled extractor makes a SHA-512 call of its own** wherever every run is accepted and each accepted run's
-extractions make one: its waits keep their first samples, so the first inner run's extractions are made. -/
 theorem ownLog_E_pos (L : Compiled Coin A) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (r₀ : Fin (L.V.k x) → Coin) (c : L.E.C x) {s : AuditStatement} (hs : L.parse x = some s)
     (hacc : ∀ r, (run H P L.V x ω r).out = .acc)
@@ -251,8 +227,6 @@ section Efficient
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- Each of `effL`'s runs' extractions makes a SHA-512 call of its own: its one slot's session finds `()` at once, and
-checking the opening it reveals makes `callCm`'s one call. -/
 theorem effL_runExt (H : Msg → Msg) (x : Msg) (run : (Fin ((effL Coin).V.k x) → Coin) → Transcript)
     (r : Fin ((effL Coin).V.k x) → Coin) (v : Seen) (c : (effL Coin).SlotEC x) :
     0 < (ownLog H run ((effL Coin).runExt x toyStmt r v c)).length := by
@@ -288,8 +262,6 @@ theorem compiledEfficient_fails (H : Msg → Msg) : ¬ (effL Coin).Efficient H :
 
 end Efficient
 
-/-! ## The opening checks' count holds beside the contract -/
-
 section Meets
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
@@ -305,8 +277,6 @@ theorem twoOpenCalls_meets (H : Msg → Msg) : (twoL Coin).OpenCallsLe H := by
 end Meets
 
 end Claims.Witness.SamplingGeneric
-
-/-! ## Stated over the spec -/
 
 namespace Claims.SamplingGeneric
 

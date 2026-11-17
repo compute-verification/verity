@@ -9,15 +9,7 @@ import Proofs.Core.QSort
 import Proofs.Flock.Claims.Sampling.Select.Take
 import Proofs.Flock.Claims.Sampling.Select.Steps
 
-/-!
-# How many proof blocks the second stage proves (`size_proved_selectSecond`)
-
-The second stage's sampling design has one cell per template `t` and sampled replay block, each sampling `k_t` of its `n_t` proof
-blocks (`flockSamplingDesign_second`); its sample returns each cell's count (`stratifiedWith_size`), and its sample object carries
-those units and no closure. So an accepted second stage proves exactly `|sample| · Σ_t k_t` proof blocks. At a
-registration the replay sample is `RegTwo.sample src₁`, the units the first stage proves, and this is the count
-`Kfirst · Σ_t k_t` of the sampled blocks whose gates the checked proof blocks need.
--/
+/-! How many proof blocks the second stage proves (`size_proved_selectSecond`). -/
 
 @[expose] public section
 
@@ -31,8 +23,6 @@ theorem getD_sample_closure (sample ns ks : Array ℕ) (m : ℕ) (units : Array 
     getD (Json.mkObj ((entries (Select.secondSamplingDesign sample ns ks)).toList ++
       [("population", Lean.toJson m), ("units", natsJson units)])) "closure" = Json.null := (rfl)
 
-/-- **An accepted second stage's sample object**: it passed `secondProblem`, drew `units` under `secondSamplingDesign`'s Flock sampling design
-over the `|sample|·Σ n_t` proof blocks, and carries those units and no closure. -/
 theorem selectSecond_units {sample ns ks : Array ℕ} {src : ByteArray} {draw : Json} {read : ℕ}
     (h : Select.selectSecond sample ns ks src = .ok (draw, read)) :
     Select.secondProblem sample ns ks = none ∧
@@ -64,7 +54,6 @@ theorem size_filterMap_map_some {α β γ : Type} (xs : Array α) (g : α → β
   have : (f ∘ g) = fun a => some (k a) := funext hf
   rw [this, Array.filterMap_eq_map' rfl, Array.size_map]
 
-/-- A sample object whose `units` are `units`, with no closure, proves exactly as many units. -/
 theorem size_proved_of_units {draw : Json} {units : Array ℕ} (hu : getD draw "units" = natsJson units)
     (hc : getD draw "closure" = Json.null) : (Draw.proved draw).size = units.size := by
   unfold Draw.proved
@@ -73,7 +62,6 @@ theorem size_proved_of_units {draw : Json} {units : Array ℕ} (hu : getD draw "
   simp only [natsJson, Array.size_empty, Nat.add_zero]
   exact size_filterMap_map_some units _ int? (fun a : ℕ => (a : Int)) int_toJson
 
-/-- **A work sampling design's sample returns its strata's counts**: `units` has `Σ_s k_s` entries. -/
 theorem sampleUnits_work_size {K n read : ℕ} {ws : Array Flock.Draw.WorkStratum} {src : ByteArray} {units : Array ℕ}
     (h : Draw.sampleUnits (.work K ws) n src = .ok (units, read)) : units.size = (ws.toList.map (·.k)).sum := by
   unfold Draw.sampleUnits at h
@@ -106,7 +94,6 @@ theorem sampleUnits_work_size {K n read : ℕ} {ws : Array Flock.Draw.WorkStratu
         rw [Array.toList_map, List.map_map]
         rfl
 
-/-- A second stage `secondProblem` passes has a count for each template's cells. -/
 theorem secondProblem_size {sample ns ks : Array ℕ} (h : Select.secondProblem sample ns ks = none) :
     ks.size = ns.size := by
   unfold Select.secondProblem at h
@@ -124,7 +111,6 @@ theorem sum_map_const {α : Type} (l : List α) (c : ℕ) : (l.map fun _ => c).s
   | nil => simp
   | cons a l ih => rw [List.map_cons, List.sum_cons, ih, List.length_cons, Nat.succ_mul, Nat.add_comm]
 
-/-- The cells' counts over templates `L`: each template's `k_t`, once for each of the `q` sampled replay blocks. -/
 theorem sum_cells_k (q : ℕ) (ns ks : Array ℕ) (L : List ℕ) :
     ((L.flatMap fun t => (List.range q).map fun i => (t, i)).map fun z => (cellOf q ns ks z).2).sum =
       q * (L.map fun t => ks.getD t 0).sum := by
@@ -148,10 +134,6 @@ theorem sum_range_getD (a : Array ℕ) : ((List.range a.size).map fun t => a.get
   simp only [getD_toList]
   rw [← Array.length_toList, map_range_getD]
 
-/-- **The second stage proves `|sample| · Σ_t k_t` proof blocks**: an accepted second stage's sample proves exactly
-`k_t` proof blocks of each template `t`'s cell in each sampled replay block, and no others. At a registration,
-`sample` is the replay sample `RegTwo.sample src₁`, and this is the count `Kfirst · Σ_t k_t` of the sampled proof
-blocks. -/
 theorem size_proved_selectSecond {sample ns ks : Array ℕ} {src : ByteArray} {draw : Json} {read : ℕ}
     (h : Select.selectSecond sample ns ks src = .ok (draw, read)) :
     (Draw.proved draw).size = sample.size * ks.toList.sum := by

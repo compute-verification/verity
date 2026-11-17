@@ -22,7 +22,6 @@ namespace Properties.Spot.SecurityProofs
 /-- A range list's units, in order. -/
 def expand (l : List (ℕ × ℕ)) : List ℕ := l.flatMap fun r => List.range' r.1 (r.2 - r.1)
 
-/-- Ranges `(template, first, count)` laid end to end from `a` to `b`. -/
 def Tiles : List (String × ℕ × ℕ) → ℕ → ℕ → Prop
   | [], a, b => a = b
   | (_, lo, n) :: l, a, b => lo = a ∧ Tiles l (a + n) b
@@ -40,7 +39,6 @@ theorem flatMap_set_perm {α β : Type} (f : α → List β) (e : List β) :
     rw [List.append_assoc]
     exact (flatMap_set_perm f e xs i (by simpa using hi) y hy).append_left _
 
-/-- The step of `Flock.Draw.strataOf`'s loop. -/
 def strataStep (out : Array (String × Array (ℕ × ℕ))) (x : String × ℕ × ℕ) : Array (String × Array (ℕ × ℕ)) :=
   match x with
   | (t, lo, n) =>
@@ -69,7 +67,6 @@ theorem strataOf_eq (L : Array (String × ℕ × ℕ)) : Flock.Draw.strataOf L =
     next _ h => simp only [pure_bind, h]
     next _ i h => simp only [pure_bind, h]; rfl
 
-/-- `strataOf`'s invariant: its strata's units are the units laid so far, each range ascending. -/
 def StrataInv (out : Array (String × Array (ℕ × ℕ))) (a : ℕ) : Prop :=
   (out.toList.flatMap fun p => expand p.2.toList).Perm (List.range' 0 a) ∧
     ∀ p ∈ out.toList, ∀ r ∈ p.2.toList, r.1 ≤ r.2
@@ -148,8 +145,6 @@ theorem strataStep_inv (out : Array (String × Array (ℕ × ℕ))) (a : ℕ) (t
       · exact hr p hp' r hr'
       · exact hexp.2 r hr'
 
-/-- **`strataOf` keeps the units**: over ranges laid end to end from `0` to `N`, its strata's units are `[0, N)`, each
-once. -/
 theorem strataOf_perm (L : Array (String × ℕ × ℕ)) (N : ℕ) (h : Tiles L.toList 0 N) :
     ((Flock.Draw.strataOf L).toList.flatMap fun p => expand p.2.toList).Perm (List.range' 0 N) := by
   rw [strataOf_eq]
@@ -173,7 +168,6 @@ theorem tiles_sum : ∀ (l : List (String × ℕ × ℕ)) (a b : ℕ), Tiles l a
   | [], _, _, h => h
   | (_, _, _) :: l, _, _, ⟨_, h2⟩ => tiles_sum l _ _ h2
 
-/-- A `forIn` in `Except` keeps an invariant every step keeps. -/
 theorem forIn_inv {α β ε : Type} (I : β → Prop) (f : α → β → Except ε (ForInStep β))
     (hf : ∀ a b, I b → ∀ s, f a b = .ok s → I s.value) :
     ∀ (l : List α) (b : β), I b → ∀ b', forIn l b f = .ok b' → I b'
@@ -190,7 +184,6 @@ theorem forIn_inv {α β ε : Type} (I : β → Prop) (f : α → β → Except 
       | done c => obtain rfl := Except.ok.inj h; exact this
       | yield c => exact forIn_inv I f hf l c this b' h
 
-/-- **The template query's ranges tile the population**: each node's units start where the last node's end, from `0`. -/
 theorem evaluate_tiles (d : Flock.TemplateQuery.Desc) (ts : Array String) (rs : Array Flock.TemplateQuery.TRange)
     (h : Flock.TemplateQuery.evaluate d ts = .ok rs) :
     Tiles (rs.map fun r => (r.template, r.first, r.count)).toList 0 (Flock.TemplateQuery.population rs) := by
@@ -236,7 +229,6 @@ theorem evaluate_tiles (d : Flock.TemplateQuery.Desc) (ts : Array String) (rs : 
             exact tiles_push _ 0 at₀ _ _ hb
   · exact absurd h (by simp [throw, throwThe, MonadExceptOf.throw])
 
-/-- The step of `Partition.callRanges`' fold. -/
 def callStep (acc : Array Flock.TemplateQuery.TRange × ℕ) (x : ℕ × String × ℕ) : Array Flock.TemplateQuery.TRange × ℕ :=
   if x.2.2 == 0 then acc else (acc.1.push ⟨x.1, x.2.1, acc.2, x.2.2⟩, acc.2 + x.2.2)
 
@@ -253,7 +245,6 @@ theorem callStep_tiles : ∀ (l : List (ℕ × String × ℕ)) (acc : Array Floc
     · simp only [Array.map_push, Array.toList_push]
       exact tiles_push _ 0 acc.2 _ _ h
 
-/-- **A Call query's ranges tile the population**: `callRanges` lays each Call with units where the last one ends. -/
 theorem callRanges_tiles (cs : Array (ℕ × String × ℕ)) :
     Tiles ((Partition.callRanges cs).map fun r => (r.template, r.first, r.count)).toList 0
       (Flock.TemplateQuery.population (Partition.callRanges cs)) := by
@@ -265,8 +256,6 @@ theorem callRanges_tiles (cs : Array (ℕ × String × ℕ)) :
     rw [heq, ← Array.foldl_toList, ← tiles_sum _ 0 _ h, Array.toList_map, List.foldl_map]
   rw [hpop, heq]; exact h
 
-/-- **The query's ranges tile the population**: a template query's (`evaluate_tiles`) or a Call query's
-(`callRanges_tiles`). -/
 theorem partition_evaluate_tiles (d : Program) (query : Lean.Json)
     (rs : Array Flock.TemplateQuery.TRange) (h : Partition.evaluate d query = .ok rs) :
     Tiles (rs.map fun r => (r.template, r.first, r.count)).toList 0 (Flock.TemplateQuery.population rs) := by
@@ -322,17 +311,13 @@ theorem toList_expandArr (ranges : Array (ℕ × ℕ)) :
     (ranges.flatMap fun (r : ℕ × ℕ) => (Array.range (r.2 - r.1)).map (r.1 + ·)).toList = expand ranges.toList := by
   simp [expand, Array.toList_flatMap, List.range'_eq_map_range]
 
-/-- The input class `Slots.layout` lays after the population: every gate of the root's input nodes, a proof block
-each, or no stratum when there are none. -/
 def inputClass (d : Program) : Array (Array Slots.ProofBlock) :=
   let inputs := (Slots.inputGates d.desc).map fun g => ({ unit := none, gates := (g, g + 1) } : Slots.ProofBlock)
   if inputs.isEmpty then #[] else #[inputs]
 
-/-- A population stratum as `Slots.layout` lays it: its units in order, each one proof block. -/
 def LaysOut (p : String × Array (ℕ × ℕ)) (s : Array Slots.ProofBlock) : Prop :=
   s.toList.map (·.unit) = (expand p.2.toList).map some
 
-/-- **`Slots.layout`'s classes**: the strata of the evaluated query, each laid out unit by unit, then the input class. -/
 theorem layout_ok (d : Program) (query : Lean.Json) (l : Slots.SlotOrder)
     (h : Slots.layout d query = .ok l) :
     ∃ rs, Partition.evaluate d query = .ok rs ∧ ∃ pop : Array (Array Slots.ProofBlock),
@@ -365,8 +350,6 @@ theorem layout_ok (d : Program) (query : Lean.Json) (l : Slots.SlotOrder)
       · exact absurd hab (by simp [throw, throwThe, MonadExceptOf.throw])
   exact key _ _ hf
 
-/-- **The slots `checked` lists**: `v` is one when slot `v` holds a proof block whose unit is proved (or none, an
-input). -/
 theorem mem_checked (l : Slots.SlotOrder) (proved : Array ℕ) (v : ℕ) :
     v ∈ Slots.checked l proved ↔ ∃ h : v < l.blocks.size, l.blocks[v].unit.all proved.contains = true := by
   unfold Slots.checked

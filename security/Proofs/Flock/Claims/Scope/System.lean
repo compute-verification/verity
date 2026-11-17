@@ -38,21 +38,7 @@ import Proofs.Core.Circuit
 import Std.Tactic.BVDecide.Normalize.Bool
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Block R1CS systems over GF(2), as the readable relation
-
-A `Sys` is `J` tables of block R1CS over GF(2), each block `N` bits: table `c`'s row `i` reads the columns `A c i` and
-`B c i` select, its pin is `pin c`, and each `slots` entry `(c, a, v)` fixes bit `a` of table `c`'s block `b` to `v b`.
-`Sys.rel` is that system as `Relation`'s fields. The block circuit `circ` is a Boolean circuit: its input gates are every
-table's block; then one row gate per row, the AND of the XOR of its table's bits that `A c i` selects and the XOR of those
-`B c i` selects (`xsum`); then a copy of each pin's bit and of each fixed bit. Every gate after the inputs is an output.
-Block `b`'s input gates read the hidden bits of every table's block `b` (table `c`'s bit `a` of block `b` is hidden value
-`(b·N + a)·J + c`: the tables' bits interleaved, so where table `c`'s bits sit depends on no other table's); its row
-gates' outputs are those hidden bits again, its pins' the public `1`, and its fixed bits' their public values.
-
-`relS_iff`: a witness satisfies `Claims.Flock.RelS` of a statement with these fields exactly when, in every block, every
-table's rows hold (`Sys.Holds`).
--/
+/-! Block R1CS systems over GF(2), as the readable relation. -/
 
 @[expose] public section
 
@@ -60,7 +46,6 @@ namespace Flock.Readable
 
 open Claims
 
-/-- The XOR of `A r && x r` over `r < n`. -/
 def xsum (A x : ℕ → Bool) (n : ℕ) : Bool := (List.range n).foldl (fun acc r => xor acc (A r && x r)) false
 
 theorem xsum_succ (A x : ℕ → Bool) (n : ℕ) : xsum A x (n + 1) = xor (xsum A x n) (A n && x n) := by
@@ -154,15 +139,12 @@ def rel : Relation where
     else .pub (1 + b * S.slots.length + (g - 2 * (S.J * S.N) - S.J))
   pub := S.pubs
 
-/-- Table `c`'s bit `a` of block `b` in `w`. -/
 def bit (w : Claims.Flock.Wit) (c b a : ℕ) : Bool := w.hid.getD ((b * S.N + a) * S.J + c) false
 
-/-- **The system holds in block `b`**: every table's rows, pins and fixed bits. -/
 def Holds (w : Claims.Flock.Wit) (b : ℕ) : Prop :=
   (∀ c < S.J, ∀ i < S.N, (xsum (S.A c i) (S.bit w c b) S.N && xsum (S.B c i) (S.bit w c b) S.N) = S.bit w c b i) ∧
     (∀ c < S.J, S.bit w c b (S.pin c) = true) ∧ ∀ s ∈ S.slots, S.bit w s.1 b s.2.1 = s.2.2 b
 
-/-- The system's shape: nonempty blocks, every pin and fixed bit in its table's block. -/
 structure WF : Prop where
   N_pos : 0 < S.N
   pin_lt : ∀ c < S.J, S.pin c < S.N
@@ -174,7 +156,6 @@ namespace Sys
 
 variable {S : Sys}
 
-/-- Row `q`'s AND on inputs `x`. -/
 def res (S : Sys) (x : ℕ → Bool) (q : ℕ) : Bool :=
   xsum (S.A (q / S.N) (q % S.N)) (fun r => x (q / S.N * S.N + r)) S.N &&
     xsum (S.B (q / S.N) (q % S.N)) (fun r => x (q / S.N * S.N + r)) S.N
@@ -291,7 +272,6 @@ theorem forall_rows (hN : 0 < S.N) (F : ℕ → ℕ → Prop) :
   · intro h q hq
     exact h _ ((Nat.div_lt_iff_lt_mul hN).2 hq) _ (Nat.mod_lt _ hN)
 
-/-- The output gates, by kind: the row gates, the pins' copies and the fixed bits' copies. -/
 theorem forall_outputs {P : Fin S.size → Prop} :
     (∀ o ∈ S.circ.outputs, P o) ↔ (∀ q (h : q < S.J * S.N), P ⟨S.J * S.N + q, by unfold size; omega⟩) ∧
       (∀ c (h : c < S.J), P ⟨2 * (S.J * S.N) + c, by unfold size; omega⟩) ∧
@@ -317,8 +297,6 @@ theorem forall_outputs {P : Fin S.size → Prop} :
         rwa [show (⟨2 * (S.J * S.N) + S.J + (o.val - 2 * (S.J * S.N) - S.J), _⟩ : Fin S.size) = o from
           Fin.ext (by dsimp only; omega)] at this
 
-/-- **The block circuit's outputs**: on block `b`'s inputs, every output gate holds the value its output reads exactly
-when the system holds in block `b`. -/
 theorem outputs_iff (hw : S.WF) (w : Claims.Flock.Wit) {b : ℕ} (hb : b < S.nB) (a : S.circ.toCircuit.Trace)
     (ha : ∀ g : Fin S.size, (a g).getLsbD 0 = w.hid.getD (S.idx b g.val) false) (val : Claims.Flock.Src → Bool)
     (hhid : ∀ i, val (.hid i) = w.hid.getD i false) (hpub : ∀ i, val (.pub i) = S.pubs.getD i false) :
@@ -396,8 +374,6 @@ theorem outputs_iff (hw : S.WF) (w : Claims.Flock.Wit) {b : ℕ} (hb : b < S.nB)
 theorem ofBool_getLsbD_zero (v : Bool) : (BitVec.ofBool v).getLsbD 0 = v := by
   cases v <;> rfl
 
-/-- **One block**: the block circuit maps block `b`'s inputs to its outputs exactly when the system holds in block
-`b`. -/
 theorem block_iff (hw : S.WF) (s : Claims.Flock.Stmt) (w : Claims.Flock.Wit) (hC : s.C = S.circ)
     (hinp : s.inp = S.rel.inp) (hout : s.out = S.rel.out) (hpub : s.pub = S.pubs) {b : ℕ} (hb : b < S.nB) :
     (∀ o ∈ s.C.outputs, (s.C.toCircuit.eval (fun g => BitVec.ofBool (Claims.Flock.val s w (s.inp b g.val))) o).getLsbD 0 =
@@ -409,8 +385,6 @@ theorem block_iff (hw : S.WF) (s : Claims.Flock.Stmt) (w : Claims.Flock.Wit) (hC
   obtain rfl : pub = S.pubs := hpub
   exact outputs_iff hw w hb _ (fun _ => ofBool_getLsbD_zero _) _ (fun _ => rfl) (fun _ => rfl)
 
-/-- **The relation**: a witness satisfies `RelS` of a statement with the system's fields and `nB` blocks exactly when
-the system holds in every block. -/
 theorem relS_iff (hw : S.WF) (s : Claims.Flock.Stmt) (w : Claims.Flock.Wit) (hC : s.C = S.circ)
     (hinp : s.inp = S.rel.inp) (hout : s.out = S.rel.out) (hpub : s.pub = S.pubs) (hnb : s.nBlocks = S.nB) :
     Claims.Flock.RelS s w ↔ ∀ b < S.nB, S.Holds w b := by

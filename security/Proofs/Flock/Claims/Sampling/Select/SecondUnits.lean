@@ -10,21 +10,7 @@ import Proofs.Flock.Claims.Sampling.Select.Bounds
 import Proofs.Flock.Soundness.ExecSample
 import Proofs.Flock.Soundness.ExecStrataOf
 
-/-!
-# The units a stratified or work sample returns, stratum by stratum
-
-`Flock.Draw.stratifiedWith` samples each stratum's `k` local indices (`Flock.Draw.subset`), maps them to the stratum's
-units, and returns the strata's units together, sorted. Over strata whose slots hold each unit once, the sample it
-returns is therefore strictly ascending, lies in the strata's slots, and holds exactly each stratum's `k` units in that
-stratum's slots: what `Draw.checkDraw` asks of a sample's units.
-
-* `subset_nodup`: a `subset` sample that succeeds holds each index once, each below `n`.
-* `pieces_count`: lists taken one from each stratum's slots, each without repeats, are together without repeats, and
-  the ones in a stratum's slots are that stratum's list.
-* `stratifiedWith_parts`: a stratified sample that ends is the strata's `subset` samples, as units, sorted.
-* `stratifiedWith_units`, `drawUnits_work_units`: the three facts above, of `stratifiedWith` and of `Draw.sampleUnits`
-  under a work sampling design.
--/
+/-! The units a stratified or work sample returns, stratum by stratum. -/
 
 @[expose] public section
 
@@ -34,7 +20,6 @@ namespace Properties.Spot.SecurityProofs
 
 open FlockSoundness FlockSoundness.Audit
 
-/-- A `subset` sample that succeeds holds each index once, each below `n`. -/
 theorem subset_nodup {k n : ℕ} {src : ByteArray} {D : Array ℕ} (h : Flock.Draw.subset k n src = some D) :
     D.toList.Nodup ∧ ∀ x ∈ D.toList, x < n := by
   obtain ⟨π, hkn, hπ, hmem⟩ := FlockSoundness.Discharge.Exec.subset_spec h
@@ -55,7 +40,6 @@ theorem subset_nodup {k n : ℕ} {src : ByteArray} {D : Array ℕ} (h : Flock.Dr
     obtain ⟨i, hi, rfl⟩ := (hmem x).1 (Array.mem_toList_iff.1 hx)
     exact hπ i (by omega)
 
-/-- A relation between two lists' entries that gives a property of the first's holds of each of its entries. -/
 theorem forall₂_left {α β : Type} {R : α → β → Prop} {Q : α → Prop} (hR : ∀ a b, R a b → Q a) :
     ∀ {l₁ : List α} {l₂ : List β}, List.Forall₂ R l₁ l₂ → ∀ a ∈ l₁, Q a
   | _, _, .nil, _, ha => nomatch ha
@@ -75,9 +59,6 @@ theorem forall₂_zipWith {α β γ : Type} {R : α → β → Prop} {R' : α �
   | _, _, .nil => .nil
   | _, _, .cons h hs => .cons (hR _ _ h) (forall₂_zipWith g hR hs)
 
-/-- **Lists taken one from each stratum's slots**: over strata whose slots `E s` hold each unit once, lists `P`, one
-from each stratum's slots and each without repeats, are together without repeats and in the strata's slots, and after
-any units outside the strata's slots, the ones in a stratum's slots are as many as that stratum's list. -/
 theorem pieces_count {α : Type} (E : α → List ℕ) {St : List α} {Ps : List (List ℕ)}
     (hF : List.Forall₂ (fun s P => (E s).Nodup → P.Nodup ∧ ∀ x ∈ P, x ∈ E s) St Ps) :
     (St.flatMap E).Nodup → Ps.flatten.Nodup ∧ (∀ x ∈ Ps.flatten, x ∈ St.flatMap E) ∧
@@ -119,8 +100,6 @@ theorem pieces_count {α : Type} (E : α → List ℕ) {St : List α} {Ps : List
       rw [List.flatten_cons, ← List.append_assoc]
       exact hrest
 
-/-- **A stratified sample that ends is the strata's `subset` samples, as units, sorted**: one sample `Dl` per stratum,
-of its `k` among its `size` local indices, the units `out` those index in order, and `D` those units sorted. -/
 theorem stratifiedWith_parts (src : ByteArray) (strata : Array Flock.Draw.Stratum) (p p' : ℕ) (D : Array ℕ)
     (h : (Flock.Draw.stratifiedWith (fun _ need => Draw.take src need) strata).run p = .ok (some D, p')) :
     ∃ (Ds : List (Array ℕ)) (out : Array ℕ),
@@ -194,8 +173,6 @@ theorem stratifiedWith_parts (src : ByteArray) (strata : Array Flock.Draw.Stratu
     rw [hmap] at hF hout
     exact ⟨Ds, out', hF, by simpa using hout, hD⟩
 
-/-- The units of a `subset` sample of a stratum's local indices are without repeats and in the stratum's slots, where
-those hold each unit once. -/
 theorem piece_of_subset {s : Flock.Draw.Stratum} {b : ByteArray} {Dl : Array ℕ}
     (h : Flock.Draw.subset s.k s.size b = some Dl) (hnd : (expand s.units.toList).Nodup) :
     (Dl.toList.map s.unit).Nodup ∧ ∀ x ∈ Dl.toList.map s.unit, x ∈ expand s.units.toList := by
@@ -216,8 +193,6 @@ theorem piece_of_subset {s : Flock.Draw.Stratum} {b : ByteArray} {Dl : Array ℕ
     rw [ej]
     exact List.getElem_mem hj'
 
-/-- **A stratified sample over strata whose slots hold each unit once**: the units it returns are strictly ascending,
-each in some stratum's slots, and each stratum's `k` of them in that stratum's. -/
 theorem stratifiedWith_units (src : ByteArray) (strata : Array Flock.Draw.Stratum) (p p' : ℕ) (D : Array ℕ)
     (h : (Flock.Draw.stratifiedWith (fun _ need => Draw.take src need) strata).run p = .ok (some D, p'))
     (hnd : (strata.toList.flatMap fun s => expand s.units.toList).Nodup) :
@@ -251,7 +226,6 @@ theorem stratifiedWith_units (src : ByteArray) (strata : Array Flock.Draw.Stratu
     rw [← hc]
     exact (hperm.filter _).length_eq
 
-/-- A work sampling design's sample that ends is its strata's stratified sample. -/
 theorem drawUnits_work_run {K n read : ℕ} {ws : Array Flock.Draw.WorkStratum} {src : ByteArray} {units : Array ℕ}
     (h : Draw.sampleUnits (.work K ws) n src = .ok (units, read)) :
     (Flock.Draw.stratifiedWith (fun _ need => Draw.take src need) (ws.map (·.toStratum))).run 0 =
@@ -286,8 +260,6 @@ theorem drawUnits_work_run {K n read : ℕ} {ws : Array Flock.Draw.WorkStratum} 
         subst h2
         rfl
 
-/-- **A work sampling design's sample over strata whose slots are the units `[0, m)` in order**: the units it returns
-are strictly ascending, below `m`, and each stratum's `k` of them in that stratum's slots. -/
 theorem drawUnits_work_units {K n m read : ℕ} {ws : Array Flock.Draw.WorkStratum} {src : ByteArray}
     {units : Array ℕ} (h : Draw.sampleUnits (.work K ws) n src = .ok (units, read))
     (hon : (ws.map (·.toStratum)).toList.flatMap (fun s => expand s.units.toList) = List.range m) :

@@ -42,27 +42,7 @@ import Proofs.Flock.Claims.ERepCost
 import Proofs.Flock.Claims.Finder
 import Proofs.Flock.Claims.Prob
 
-/-!
-# `B_ext`, and bits from a linear KS bound
-
-The compiled sampled verifier's `KS` (`SamplingGeneric.Compiled.KS`) is stated with the linear term `1 · Pr[B_ext]`,
-where `Bext` forks like `B`, runs the extractor in each branch, and outputs the first collision among the `H` calls the
-two extractions make themselves: the commitment's checks of the openings it keeps. The trace's commitment binds
-(`CommitmentScheme.Binds`), so two kept openings of one position to different values make such a collision. This file
-states that reduction at `Bext`, at any extractor, and derives `BitsLin` from `KSLin`.
-
-* `OwnColl`: one extraction's own calls hold two different inputs with one output.
-* `Pr_ownColl_le_Bext`: **the reduction's probability step**. `B_ext`'s first branch is the extraction on the judged
-  run's tape and coins and uniform extractor coins, so `Pr[OwnColl] ≤ Pr[B_ext finds a collision]`.
-* `KSLin_of_ownColl`: **the reduction**. If an accepted run whose extraction fails either falls in an event that
-  `κ + √(γ · Pr[B])` bounds or has an own-call collision, `KSLin` holds at `β = 1` and `Bext`. A verifier with no rounds
-  at `x` rejects every run, so `V.k x = 0` needs no case of its own.
-* `Bext_cost_le`: `B_ext`'s branches are one extraction each, the second's coins uniform too (`bextSwap`), so its
-  expected calls are at most `2·(own + t·runs)` for an extractor with `own` own calls, `runs` expected reruns, and
-  runs of at most `t` calls.
-* `lamLin_bound`, `Bits_of_KSLin`: `κ + t·√γ·2^{−255.5} + t·2βc/2^256 ≤ t·2^{−lamLin κ γ β c}`, so `KSLin` on a
-  scope (`KSLinOn`) with `StrictBirthday` for `B` and `ExpectedCR` for `Bext` gives `BitsLin` at `lamLin` on it.
--/
+/-! `B_ext`, the reduction of a collision among an extraction's own calls to it, and bits from a linear KS bound. -/
 
 @[expose] public section
 
@@ -70,9 +50,6 @@ namespace Claims.Sampling
 
 open Claims
 
-/-! ## Own calls and `B_ext`'s coins -/
-
-/-- Every call a rerun program logs as its own is an evaluation of `H`. -/
 theorem ownLog_valid {R α : Type} (H : Msg → Msg) (run : R → Transcript) (p : RP R α) :
     ∀ q ∈ ownLog H run p, H q.1 = q.2 := by
   induction p with
@@ -85,7 +62,6 @@ theorem ownLog_valid {R α : Type} (H : Msg → Msg) (run : R → Transcript) (p
     · exact ih _ q' hq'
   | rerun r k ih => exact ih _
 
-/-- A rerun program's SHA-512 calls are its own and its reruns', each rerun making at most `t`. -/
 theorem calls_le_own {R α : Type} (H : Msg → Msg) (run : R → Transcript) (t : ℕ)
     (ht : ∀ r, (run r).pLog.length + (run r).vLog.length ≤ t) (p : RP R α) :
     (p.eval H run).2.1 ≤ (ownLog H run p).length + t * (p.eval H run).2.2 := by
@@ -123,15 +99,12 @@ theorem Ex_fst {α β : Type} [Fintype α] [Fintype β] [Nonempty β] (f : α �
   funext a
   exact Ex_const (α := β) (f a)
 
-/-- `B_ext`'s coins, split into its first branch's (tape, judged coins, extractor coins) and the rest. -/
 def bextSplit (K Ω D C : Type) : (K × Ω × D × D) × C × C ≃ (Ω × D × C) × (K × D × C) where
   toFun s := ((s.1.2.1, s.1.2.2.1, s.2.1), (s.1.1, s.1.2.2.2, s.2.2))
   invFun p := ((p.2.1, p.1.1, p.1.2.1, p.2.2.1), p.1.2.2, p.2.2.2)
   left_inv _ := rfl
   right_inv _ := rfl
 
-/-- `B_ext`'s branches exchanged: at the round guess `j`, the coins `(r, r′)` go to the second branch's
-`forkCoins j r r′` and its complement `forkCoins j r′ r`, and the extractor's two coins swap. An involution. -/
 def bextSwap (Ω Coin C : Type) (k : ℕ) : BCoins Ω Coin k × C × C ≃ BCoins Ω Coin k × C × C where
   toFun s := ((s.1.1, s.1.2.1, forkCoins s.1.1 s.1.2.2.1 s.1.2.2.2, forkCoins s.1.1 s.1.2.2.2 s.1.2.2.1), s.2.2, s.2.1)
   invFun s := ((s.1.1, s.1.2.1, forkCoins s.1.1 s.1.2.2.1 s.1.2.2.2, forkCoins s.1.1 s.1.2.2.2 s.1.2.2.1), s.2.2, s.2.1)
@@ -144,7 +117,6 @@ def bextSwap (Ω Coin C : Type) (k : ℕ) : BCoins Ω Coin k × C × C ≃ BCoin
     simp only [Prod.mk.injEq, true_and, and_true]
     constructor <;> funext i <;> by_cases h : i.val < j.val <;> simp [forkCoins, h]
 
-/-- A verifier with no rounds at `x` rejects every run. -/
 theorem run_out_of_k_eq_zero {Ω Coin : Type} [Inhabited Coin] (H : Msg → Msg) (P : Prover Ω) (V : Verifier Coin)
     (x : Msg) (hk : V.k x = 0) (ω : Ω) (r : Fin (V.k x) → Coin) : (run H P V x ω r).out = .rej := by
   have h : ∀ n vnext, n = 0 → (stepWith H P x ω vnext n [] [] ⟨[], [], [], .rej⟩).out = .rej := by
@@ -155,15 +127,12 @@ section Bext
 
 variable {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **A collision among one extraction's own calls**: two different inputs with one output, in the `H` calls the
-extractor makes itself on the judged run `(ω, r₀)` at its coins `c`. -/
 def OwnColl (H : Msg → Msg) {V : Verifier Coin} (E : Extractor Coin W V) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (r₀ : Fin (V.k x) → Coin) (c : E.C x) : Prop :=
   ∃ p ∈ ownLog H (run H P V x ω) (E.ext x r₀ c), ∃ p' ∈ ownLog H (run H P V x ω) (E.ext x r₀ c),
     p.1 ≠ p'.1 ∧ p.2 = p'.2
 
 omit [Fintype Coin] [Nonempty Coin] in
-/-- `B_ext`'s first branch's collisions are `B_ext`'s. -/
 theorem Bext_out_of_ownColl (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W V) {Ω : Type} (P : Prover Ω)
     (x : Msg) (s : BCoins Ω Coin (V.k x) × E.C x × E.C x) (h : OwnColl H E P x s.1.2.1 s.1.2.2.1 s.2.1) :
     ∃ u v, findColl (ownLog H (run H P V x s.1.2.1) (E.ext x s.1.2.2.1 s.2.1) ++
@@ -177,8 +146,6 @@ theorem Bext_out_of_ownColl (H : Msg → Msg) (V : Verifier Coin) (E : Extractor
   refine ⟨u, v, huv, findColl_spec H _ (fun q hq => ?_) u v huv⟩
   rcases List.mem_append.1 hq with hq | hq <;> exact ownLog_valid H _ _ q hq
 
-/-- **The reduction's probability step**: an extraction's own calls collide with probability at most `B_ext`'s, over
-the tape, the judged run's coins and the extractor's. -/
 theorem Pr_ownColl_le_Bext (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W V) {Ω : Type} [Fintype Ω]
     [Nonempty Ω] (P : Prover Ω) (x : Msg) (hk : 0 < V.k x) :
     Pr (fun s : Ω × (Fin (V.k x) → Coin) × E.C x => OwnColl H E P x s.1 s.2.1 s.2.2) ≤ (Bext H V E Ω P x).Pr H := by
@@ -193,9 +160,6 @@ theorem Pr_ownColl_le_Bext (H : Msg → Msg) (V : Verifier Coin) (E : Extractor 
   rw [dite_eq_left_of_eq_true (eq_true hk)]
   exact Pr_mono fun s h => Bext_out_of_ownColl H V E P x s h
 
-/-- **`B_ext` is `KSLin`'s linear term at `β = 1`.** If, on every prover, an accepted run whose extraction fails
-either falls in an event `Q` that `κ + √(γ · Pr[B])` bounds or has a collision among the extraction's own calls, then
-`KSLin` holds at `β = 1` and the block's `Bext`. -/
 theorem KSLin_of_ownColl (H : Msg → Msg) (V : Verifier Coin) (R : Rel W) (E : Extractor Coin W V) (κ γ : Msg → ℝ)
     (Q : ∀ (x : Msg) (Ω : Type), Prover Ω → Ω × (Fin (V.k x) → Coin) × E.C x → Prop)
     (hsplit : ∀ x (Ω : Type) (P : Prover Ω) (s : Ω × (Fin (V.k x) → Coin) × E.C x),
@@ -225,10 +189,7 @@ theorem KSLin_of_ownColl (H : Msg → Msg) (V : Verifier Coin) (R : Rel W) (E : 
       _ ≤ Pr (Q x Ω P) + (Bext H V E Ω P x).Pr H := add_nonneg (Pr_nonneg _) (by unfold Finder.Pr; exact Pr_nonneg _)
       _ ≤ _ := add_le_add (hQ x Ω P) le_rfl
 
-/-! ## `B_ext`'s expected calls -/
-
 omit [Fintype Coin] [Nonempty Coin] in
-/-- An extraction's SHA-512 calls: its own, at most `own(x)`, and its reruns', at most `t` each. -/
 theorem ext_calls_le (H : Msg → Msg) {V : Verifier Coin} (E : Extractor Coin W V) {Ω : Type} (P : Prover Ω) (x : Msg)
     (t : ℕ) (ht : ∀ ω r, (run H P V x ω r).pLog.length + (run H P V x ω r).vLog.length ≤ t) {own : Msg → ℕ}
     (hown : ExtractOwnLe H E own) (ω : Ω) (r₀ : Fin (V.k x) → Coin) (c : E.C x) :
@@ -238,8 +199,6 @@ theorem ext_calls_le (H : Msg → Msg) {V : Verifier Coin} (E : Extractor Coin W
   unfold Extractor.eval
   exact_mod_cast (h.trans (Nat.add_le_add_right h' _))
 
-/-- **`B_ext`'s expected calls**: with runs of at most `t` calls, an extractor with at most `own(x)` own calls and
-`runs(x)` reruns in expectation makes `B_ext` spend at most `2·(own(x) + t·runs(x))` calls in expectation. -/
 theorem Bext_cost_le (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W V) {Ω : Type} [Fintype Ω]
     [Nonempty Ω] (P : Prover Ω) (x : Msg) (hk : 0 < V.k x) (t : ℕ)
     (ht : ∀ ω r, (run H P V x ω r).pLog.length + (run H P V x ω r).vLog.length ≤ t) {runs : Msg → ℝ}
@@ -277,8 +236,6 @@ theorem Bext_cost_le (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W
 
 end Bext
 
-/-! ## The bits -/
-
 theorem sqrt_birthday {γ t : ℝ} (hγ : 0 ≤ γ) (ht : 0 ≤ t) :
     Real.sqrt (γ * ((2 * t) ^ 2 / 2 ^ (513 : ℝ))) = t * (Real.sqrt γ * 2 ^ (-(255.5 : ℝ))) := by
   have h513 : Real.sqrt ((2 : ℝ) ^ (513 : ℝ)) = 2 ^ (256.5 : ℝ) := by
@@ -291,7 +248,6 @@ theorem sqrt_birthday {γ t : ℝ} (hγ : 0 ≤ γ) (ht : 0 ≤ t) :
     field_simp
   rw [this]; ring
 
-/-- `κ + √γ·2^{−255.5} + 2βc/2^256 ≤ 2^{−λ}` at `λ = lamLin κ γ β c`, for `κ > 0`, `γ ≥ 0` and `βc > 0`. -/
 theorem lamLin_bound {κ γ β c : ℝ} (hκ : 0 < κ) (hγ : 0 ≤ γ) (hβc : 0 < 2 * β * c) :
     κ + Real.sqrt γ * 2 ^ (-(255.5 : ℝ)) + 2 * β * c / 2 ^ (256 : ℝ) ≤ 2 ^ (-lamLin κ γ β c) := by
   have h2 : Real.sqrt γ * 2 ^ (-(255.5 : ℝ)) ≤ 2 ^ (-(255.5 - Real.logb 2 γ / 2)) := by
@@ -323,9 +279,6 @@ section Bits
 
 variable {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **Bits from `KSLinOn` at `B_ext`**: `KSLin` at `β = 1` and `Bext` on a scope, an extractor with at most `own(x)`
-own calls and `runs(x)` reruns in expectation, `κ > 0`, `γ ≥ 0`, and `runs + own ≤ c` with `c > 0`, give
-`λ = lamLin κ γ 1 c` bits on that scope, where `B` obeys the strict birthday bound and `B_ext` the expected-time one. -/
 theorem Bits_of_KSLin {H : Msg → Msg} {V : Verifier Coin} {Scope : Msg → Prop} {R : Rel W} {E : Extractor Coin W V}
     {κ γ runs c : Msg → ℝ} {own : Msg → ℕ} (h : KSLinOn H V Scope R E κ γ (fun _ => 1) (Bext H V E))
     (hruns : ExtractRunsExpLe H E runs) (hown : ExtractOwnLe H E own) (hκ : ∀ x, 0 < κ x) (hγ : ∀ x, 0 ≤ γ x)
@@ -369,8 +322,6 @@ theorem Bits_of_KSLin {H : Msg → Msg} {V : Verifier Coin} {Scope : Msg → Pro
   nlinarith [mul_le_mul_of_nonneg_left hl ht0]
 
 end Bits
-
-/-! ## The waits' slack -/
 
 theorem slack_pos : 0 < slack := by unfold slack; positivity
 

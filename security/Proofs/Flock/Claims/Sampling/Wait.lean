@@ -2,32 +2,13 @@ module
 
 public import Proofs.Flock.Claims.Sampling.Binding
 
-/-!
-# Waiting for accepted reruns: the truncation and the union over wrong sets
-
-The sampling extractor waits for `k` accepted reruns among `K` fresh samples (`waitAccC`) and runs the session's
-extraction at each, on coins of its own. At a tape where a run accepts with probability `a`, this file bounds the
-probability that the wait comes up short, or that for some set `B` among `S` every kept rerun is bad at its own coins
-(`bad B`), by `2k/K + e^{−k/8} + |S|^{1/k}·y`, when each `bad B` has `Pr[acc ∧ bad B] ≤ y`.
-
-* `waitAccC_eval`, `waitAccC_eval_nil`: the wait keeps the first `k` accepted samples (`accList`), each with what it
-  showed.
-* `W`, `W_eq`, `Pr_allBad`: given the samples, the kept samples are all bad (`AllBad`) with probability the product of
-  their own probabilities, `0` when fewer than `k` were kept.
-* `EW`, `EW_succ`, `EW_le`: over the samples, that averages at most `(g/a)^k`, `g = Pr[acc ∧ bad]`; one sample at a time,
-  `EW(k+1, K+1) = g·EW(k, K) + (1 − a)·EW(k+1, K)`.
-* `short_pow`, `short_le`: the wait is short with probability at most `2^k·(1 − a/2)^K`, and `a` times that is at most
-  `2k/K + e^{−k/8}` (`log 2 < 7/8`).
-* `wait_bad_le`: **the bound**, through a union over `S` capped at `1`: `a·min(1, |S|·(y/a)^k) ≤ |S|^{1/k}·y`.
--/
+/-! The sampling extractor's wait for accepted reruns: the truncation and the union over wrong sets. -/
 
 @[expose] public section
 
 namespace Claims.Sampling
 
 open Claims Finset
-
-/-! ## Uniform averages -/
 
 theorem Pr_prod_eq_Ex {α β : Type} [Fintype α] [Fintype β] (p : α × β → Prop) :
     Pr p = Ex fun a => Pr fun b => p (a, b) := by
@@ -50,7 +31,6 @@ theorem Pr_true {α : Type} [Fintype α] [Nonempty α] : Pr (fun _ : α => True)
   rw [Pr_false, sub_zero] at h
   exact (Pr_congr fun _ => ⟨fun _ => not_false, fun _ => trivial⟩).trans h
 
-/-- **Independent coordinates, one event each**: `Pr[∀ i, q_i(ρ_i)] = ∏ Pr[q_i]`. -/
 theorem Pr_pi_dep {δ : Type} [Fintype δ] (m : ℕ) (q : Fin m → δ → Prop) :
     Pr (fun ρ : Fin m → δ => ∀ i, q i (ρ i)) = ∏ i, Pr (q i) := by
   classical
@@ -64,7 +44,6 @@ theorem Pr_pi_dep {δ : Type} [Fintype δ] (m : ℕ) (q : Fin m → δ → Prop)
   rw [Finset.prod_boole]
   simp
 
-/-- **The union bound** over a finite set of events. -/
 theorem Pr_exists_le {α ι : Type} [Fintype α] (S : Finset ι) (p : ι → α → Prop) :
     Pr (fun a => ∃ i ∈ S, p i a) ≤ ∑ i ∈ S, Pr (p i) := by
   classical
@@ -81,7 +60,6 @@ theorem Pr_exists_le {α ι : Type} [Fintype α] (S : Finset ι) (p : ι → α 
       _ ≤ Pr (p i) + Pr (fun a => ∃ j ∈ S, p j a) := Pr_union_le _ _
       _ ≤ _ := add_le_add le_rfl ih
 
-/-- `∏_{j < k} f(l_j)`, `1` past `l`'s end, is the product over `l` when `l` has at most `k` entries. -/
 theorem prod_getElem? {R : Type} (b : R → ℝ) :
     ∀ (k : ℕ) (l : List R), l.length ≤ k → ∏ j : Fin k, (l[j.val]?).elim 1 b = (l.map b).prod
   | 0, l, h => by simp [List.length_eq_zero_iff.1 (Nat.le_zero.1 h)]
@@ -92,9 +70,6 @@ theorem prod_getElem? {R : Type} (b : R → ℝ) :
       List.map_cons, List.prod_cons]
     rw [prod_getElem? b k l (by simp only [List.length_cons] at h; omega)]
 
-/-! ## The wait keeps the first `k` accepted samples -/
-
-/-- The first `k` accepted samples among `rs`. -/
 def accList {R : Type} (acc : R → Prop) [DecidablePred acc] (k : ℕ) (rs : List R) : List R :=
   (rs.filter fun r => decide (acc r)).take k
 
@@ -124,7 +99,6 @@ theorem waitAccC_eval {R : Type} (H : Msg → Msg) (run : R → Transcript) (k :
       · simp only [ha, ↓reduceIte, decide_false, Bool.false_eq_true]
         exact ih _ hlen
 
-/-- **The wait keeps the first `k` accepted samples**, each with what it showed. -/
 theorem waitAccC_eval_nil {R : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) (rs : List R) :
     ((waitAccC k rs []).eval H run).1 =
       (accList (fun r => (run r).out = .acc) k rs).map fun r => (r, (run r).seen) := by
@@ -132,13 +106,10 @@ theorem waitAccC_eval_nil {R : Type} (H : Msg → Msg) (run : R → Transcript) 
     List.filter_map, List.map_take]
   rfl
 
-/-! ## Every kept sample bad: one wait's weight -/
-
 section Weight
 
 variable {R : Type} (acc : R → Prop) [DecidablePred acc]
 
-/-- The kept samples' weights `b`, multiplied: `0` when fewer than `k` were kept. -/
 noncomputable def W (b : R → ℝ) : ℕ → List R → ℝ
   | 0, _ => 1
   | _ + 1, [] => 0
@@ -164,11 +135,9 @@ theorem W_eq (b : R → ℝ) (rs : List R) : ∀ k : ℕ,
 
 variable {E : Type} [Fintype E] [Nonempty E]
 
-/-- Every kept sample is bad at its own coins, and `k` were kept. -/
 def AllBad (k : ℕ) (bad : R → E → Prop) (rs : List R) (c : Fin k → E) : Prop :=
   (accList acc k rs).length = k ∧ ∀ (j : Fin k) (r : R), (accList acc k rs)[j.val]? = some r → bad r (c j)
 
-/-- **Given the samples**, the kept samples are all bad with probability the product of their own probabilities. -/
 theorem Pr_allBad (k : ℕ) (bad : R → E → Prop) (rs : List R) :
     Pr (fun c : Fin k → E => AllBad acc k bad rs c) = W acc (fun r => Pr (bad r)) k rs := by
   rw [W_eq]
@@ -188,7 +157,6 @@ theorem Pr_allBad (k : ℕ) (bad : R → E → Prop) (rs : List R) :
 
 variable [Fintype R] [Nonempty R]
 
-/-- One wait's weight over `K` uniform samples. -/
 noncomputable def EW (b : R → ℝ) (k K : ℕ) : ℝ := Ex fun σ : Fin K → R => W acc b k ((List.finRange K).map σ)
 
 theorem EW_zero (b : R → ℝ) (K : ℕ) : EW acc b 0 K = 1 := by
@@ -199,7 +167,6 @@ theorem EW_succ_zero (b : R → ℝ) (k : ℕ) : EW acc b (k + 1) 0 = 0 := by
   simp only [EW, List.finRange_zero, List.map_nil, W]
   exact Ex_const 0
 
-/-- **One sample at a time**: `EW(k+1, K+1) = g·EW(k, K) + (1 − a)·EW(k+1, K)`. -/
 theorem EW_succ (b : R → ℝ) (k K : ℕ) : EW acc b (k + 1) (K + 1) =
     Ex (fun d => if acc d then b d else 0) * EW acc b k K + (1 - Pr acc) * EW acc b (k + 1) K := by
   let F : R → (Fin K → R) → ℝ := fun d σ =>
@@ -222,7 +189,6 @@ theorem EW_succ (b : R → ℝ) (k K : ℕ) : EW acc b (k + 1) (K + 1) =
   simp only [EW]
   ring
 
-/-- **One wait's weight averages at most `(g/a)^k`**, `g = 𝔼[1[acc]·b]`, `a = Pr[acc] > 0`. -/
 theorem EW_le {b : R → ℝ} (hb : ∀ r, 0 ≤ b r) (ha : 0 < Pr acc) :
     ∀ K k, EW acc b k K ≤ (Ex (fun d => if acc d then b d else 0) / Pr acc) ^ k := by
   have hg : 0 ≤ Ex (fun d => if acc d then b d else 0) := Ex_nonneg fun d => by split_ifs; exacts [hb d, le_rfl]
@@ -249,7 +215,6 @@ theorem EW_le {b : R → ℝ} (hb : ∀ r, 0 ≤ b r) (ha : 0 < Pr acc) :
             add_le_add (mul_le_mul_of_nonneg_left (ih k) hg) (mul_le_mul_of_nonneg_left (ih (k + 1)) (by linarith))
         _ = u ^ (k + 1) := by rw [hga]; ring
 
-/-- **The wait is short** with probability at most `2^k·(1 − a/2)^K`. -/
 theorem short_pow : ∀ K k, 1 - EW acc (fun _ => 1) k K ≤ 2 ^ k * (1 - Pr acc / 2) ^ K := by
   have ha0 : 0 ≤ Pr acc := Pr_nonneg _
   have ha1 : Pr acc ≤ 1 := Pr_le_one _
@@ -283,8 +248,6 @@ theorem short_pow : ∀ K k, 1 - EW acc (fun _ => 1) k K ≤ 2 ^ k * (1 - Pr acc
 
 end Weight
 
-/-- **The truncation term**: an acceptance probability `a` times a short wait's probability is at most
-`2k/K + e^{−k/8}`. -/
 theorem short_le {a S : ℝ} {k K : ℕ} (ha0 : 0 ≤ a) (ha1 : a ≤ 1) (hK : 0 < K) (hS1 : S ≤ 1)
     (hS : S ≤ 2 ^ k * (1 - a / 2) ^ K) : a * S ≤ 2 * k / K + Real.exp (-(k : ℝ) / 8) := by
   have hKr : (0 : ℝ) < K := by exact_mod_cast hK
@@ -315,27 +278,22 @@ theorem short_le {a S : ℝ} {k K : ℕ} (ha0 : 0 ≤ a) (ha1 : a ≤ 1) (hK : 0
       _ ≤ 2 ^ k * (1 - a / 2) ^ K := mul_le_of_le_one_left hb0 ha1
       _ ≤ _ := by linarith
 
-/-- `a·min(1, u^k) ≤ a·u` for `k ≥ 1`. -/
 theorem mul_min_pow_le {a u : ℝ} {k : ℕ} (hk : 1 ≤ k) (ha : 0 ≤ a) (hu : 0 ≤ u) : a * min 1 (u ^ k) ≤ a * u := by
   refine mul_le_mul_of_nonneg_left ?_ ha
   rcases le_total u 1 with h | h
   · exact (min_le_right _ _).trans (pow_le_of_le_one hu h (by omega))
   · exact (min_le_left _ _).trans h
 
-/-- `(C^{1/k}·y/a)^k = C·(y/a)^k` for `C ≥ 0` and `k ≥ 1`. -/
 theorem rpow_inv_pow {C y a : ℝ} {k : ℕ} (hk : 1 ≤ k) (hC : 0 ≤ C) :
     (C ^ (1 / (k : ℝ)) * y / a) ^ k = C * (y / a) ^ k := by
   rw [mul_div_assoc, mul_pow, ← Real.rpow_natCast (C ^ (1 / (k : ℝ))), ← Real.rpow_mul hC,
     one_div_mul_cancel (by exact_mod_cast (show k ≠ 0 by omega)), Real.rpow_one]
-
-/-! ## The bound -/
 
 section Bound
 
 variable {R E : Type} [Fintype R] [Nonempty R] [Fintype E] [Nonempty E] (acc : R → Prop) [DecidablePred acc]
 
 omit [Nonempty R] [Nonempty E] in
-/-- `g = 𝔼[1[acc]·Pr[bad]]` is `Pr[acc ∧ bad]` over a sample and its own coins. -/
 theorem Ex_acc_Pr (bad : R → E → Prop) :
     Ex (fun d => if acc d then Pr (bad d) else 0) = Pr (fun p : R × E => acc p.1 ∧ bad p.1 p.2) := by
   rw [Pr_prod_eq_Ex]
@@ -346,9 +304,6 @@ theorem Ex_acc_Pr (bad : R → E → Prop) :
   · simp only [h, ↓reduceIte, false_and]
     exact Pr_false.symm
 
-/-- **Waiting for `k` accepted samples among `K`**: at acceptance probability `a`, `a` times the probability that the
-wait is short or that, for some `B ∈ S`, every kept sample is bad at its own coins (`bad B`) is at most
-`2k/K + e^{−k/8} + |S|^{1/k}·y`, when each `Pr[acc ∧ bad B] ≤ y`. -/
 theorem wait_bad_le {ι : Type} (k K : ℕ) (hK : 0 < K) (hk : 1 ≤ k) (S : Finset ι) (bad : ι → R → E → Prop) {y : ℝ}
     (hy0 : 0 ≤ y) (hy : ∀ B ∈ S, Pr (fun p : R × E => acc p.1 ∧ bad B p.1 p.2) ≤ y) :
     Pr acc * Pr (fun c : (Fin K → R) × (Fin k → E) =>
