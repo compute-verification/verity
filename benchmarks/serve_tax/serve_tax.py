@@ -302,7 +302,7 @@ ARMS = {
     "record": Arm("compiled", "+ the scheduler's step trace (StepTrace)", plugin=("record",)),
     "record-ids": Arm("record", "+ each request's prompt ids and served ids, which a replay of vLLM's client's pass reads",
                       plugin=("record", "ids")),
-    "release-order": Arm("record", "+ admission in the certifier's release order", plugin=("record", "release_order")),
+    "release-order": Arm("record", "+ admission in the network attester's release order", plugin=("record", "release_order")),
     "tick": Arm("record", "+ admission on the certified tick", plugin=("record",), tick=True),
     "tokens": Arm("tick", "+ each window's tokens committed (rows-sha512)", plugin=("record", "tokens"), tick=True),
     "kv": Arm("tokens", "+ the paged KV cache hashed in place at each window edge", plugin=("record", "tokens", "kv"),
@@ -4167,7 +4167,7 @@ def main(argv: list[str] | None = None) -> int:
                    "verity_vllm.pipeline.tick_plugin's token_ns and catch_up")
     r.add_argument("--side", choices=(SERVER, CLIENT),
                    help="an arm behind the network certifier: the side this command serves, the engine and the id "
-                        "front on the node, or the certifier, its shim and vLLM's client on the certifier's host "
+                        "front on the node, or the network attester, its shim and vLLM's client on the network attester's host "
                         "(ignored by the other arms, which one command serves)")
     r.add_argument("--front", type=int, default=FRONT_PORT, metavar="PORT",
                    help="such an arm: the loopback port the id front listens on, on the node, and where the "

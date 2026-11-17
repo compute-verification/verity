@@ -13,14 +13,14 @@ untraced = ["test_serve_tax.py"]
 # the modules they import; the driver and the replay read the run's id and paths through verity_config's SHARED settings;
 # an arm names another benchmark's vLLM plugin by its file in this tree, which the driver's test checks is there; the
 # serving cost is the benchmark kit's paired ratio, and its result.json the kit's writer's; the client's shim to the
-# network certifier (cell_shim, tests/test_cell_shim.py) is run against the certifier itself on a
+# network certifier (cell_shim, tests/test_cell_shim.py) is run against the network attester itself on a
 # virtual clock, whose package imports the circuit language, the commitments and SPOT's verifier; the arm
-# behind the certifier names the certifier's program by its file in this tree, which its test (tests/test_certified.py,
+# behind the network attester names the network attester's program by its file in this tree, which its test (tests/test_certified.py,
 # both sides on stand-ins for the processes they start) checks is there
 inputs = ["benchmarks/serve_tax", "verity/errors.py",
     "verity/circuits",
     "verity/commitments",
-    # the record entry (`Record`): SPOT's challenger imports it, and the certifier's `active` imports SPOT's verifier
+    # the record entry (`Record`): SPOT's challenger imports it, and the network attester's `active` imports SPOT's verifier
     "verity/channel.py",
     "verity/protocols/__init__.py",
     "verity/protocols/resource_accounting/__init__.py",
