@@ -1,4 +1,4 @@
-"""The count over a span between two marks (`NetworkVerifier.Span`, `verity/certifier/span/v0`, `network-span serve`)
+"""The count over a span between two marks (`NetworkCheck.Span`, `verity/certifier/span/v0`, `network-span serve`)
 against its Python mirror (`verity.protocols.resource_accounting.network.verifier.span`), through the difftest harness's `ProtocolPort`,
 and the mirror's own arithmetic and formats.
 

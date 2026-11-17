@@ -81,7 +81,7 @@ field fixed-width or length-prefixed:
     signed digest (64) ‖ u32be len(signature) ‖ signature
 
 They are the bytes a certified record's leaf ends with, after its head and its salt (`service.encode`), where the Lean
-reads them (`NetworkVerifier.Check`'s commitment). `encode` refuses a certificate the layout cannot hold, and `decode`
+reads them (`NetworkCheck.Check`'s commitment). `encode` refuses a certificate the layout cannot hold, and `decode`
 bytes that end inside a part, a length that names more bytes than are left, bytes left after the signature, a
 direction code other than 0 and 1 and a link that is not UTF-8. So a certificate has one encoding and an encoding one
 certificate, and SHA-512 of these bytes names a certificate up to a collision.
@@ -684,7 +684,7 @@ class Certificate:
     def verify(self, key: PublicKey, session: bytes) -> bool:
         """The host's signature check: the certificate is `key`'s and its signature verifies over its message in
         certifier session `session`. It reads the certificate's public fields and its signed digest, nothing of the
-        head. The Lean's is `NetworkVerifier.Check.Certificate.signs`, which every Lean certificate check reads."""
+        head. The Lean's is `NetworkCheck.Check.Certificate.signs`, which every Lean certificate check reads."""
         if self.key_id != key.key_id:
             return False
         try:

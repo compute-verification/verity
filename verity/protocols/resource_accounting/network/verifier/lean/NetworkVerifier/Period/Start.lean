@@ -8,7 +8,7 @@ meta import NetworkVerifier.Check
 /-!
 # The scan's start
 
-What the period's check (`NetworkVerifier.Period`) holds an execution phase's scan's start to: the registered value the
+What the period's check (`NetworkCheck.Period`) holds an execution phase's scan's start to: the registered value the
 start unit reads (`startName`), its opening to the empty state (`startEmpty`), and the start finding (`scanStartCheck`).
 -/
 

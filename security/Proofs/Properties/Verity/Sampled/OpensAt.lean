@@ -405,7 +405,7 @@ The other six targets are the base's (`Instance.target_of_base`), each a premise
 (`PouwSound`), the inference-only policy's (`InferenceOnlySound`), PoUS's (`PousSound`), PoUB-P2's
 (`BandwidthAuditSound`), the network attester's (`NetworkAttesterSound`) and the wipe's (`WipeSound`). Of the
 network attester's: its period check takes each of SPOT's answers in its evidence as given
-(`NetworkVerifier`'s `answered` holds an answer to one-stage's id and its registration's digest, then reads its verdict
+(`NetworkCheck`'s `answered` holds an answer to one-stage's id and its registration's digest, then reads its verdict
 and profile), and verifies no proof behind one, so the `K` it publishes rests on answers no check of the
 composite has verified; the premise stands for that until the period check reads verified outcomes. Of the wipe's: the
 bits that leave the device during the wipe are the vocabulary's (`Verity.Wipe.egress`), which no statement yet ties

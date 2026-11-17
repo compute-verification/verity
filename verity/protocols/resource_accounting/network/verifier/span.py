@@ -1,4 +1,4 @@
-"""The count over a span between two marks (`NetworkVerifier.Span`, ``verity/certifier/span/v0``), in Python: the mirror
+"""The count over a span between two marks (`NetworkCheck.Span`, ``verity/certifier/span/v0``), in Python: the mirror
 its Lean check is held to (``network/tests/test_network_span_protocol.py``).
 
 A span runs from the execution phase of a start mark to the execution phase of an end mark, on one link of the network
