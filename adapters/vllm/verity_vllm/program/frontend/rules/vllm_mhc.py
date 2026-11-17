@@ -41,8 +41,6 @@ from verity_vllm.program.frontend.rules.vllm_dsa import (
 from verity_vllm.program.frontend.rules.vllm_iface import iface, targets_for
 from verity_torch.frontend.strided_views import _tensor_type
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 BF16, F32 = torch.bfloat16, torch.float32
 
 #: the kernels' threads at DeepSeek-V4-Pro's hidden size (registry.mhc's statics; an H200's GO run):

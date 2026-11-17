@@ -228,7 +228,7 @@ deployed guarantee). Of a run's measurements under one id,
 the tab's value is the one written last that names no member, or, where the run wrote none without a member, the one
 written last: one point a run. Beside it the tab lists the measurements that name a member from the newest run that
 wrote any. So a benchmark that writes one id for several periods, scopes or members writes the metric's own last: the
-one its `title`, `unit` and `axis` are for (`exfiltration-gb-world-year`'s, the `year` over the `world`).
+one its `title`, `unit` and `axis` are for (`exfiltration-total-gb`'s, the `year` over the `world`).
 
 The tab lists each number under every top goal its `goal` is or sits under, a top goal being a goal on the Goals page
 that nothing waits on, other than `top/parked`. A number whose goal sits under `top/parked` and under no top goal reads
@@ -277,7 +277,6 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | Directory | What it measures | Status |
 | --- | --- | --- |
 | `hash/` | GPU kernels for PoUW's Dither prover (`dither/`: the no-fold and J10-R units, their gates and harnesses) and the served path's SHA-512 commitment library (`lib/`) | maintained |
-| `flock_kernels/` | Flock's CUDA prover kernels on one GPU, each printing a digest of its output beside its time so that builds against two trees' kernels compare word for word: hm96's leaves (`hm96_leaves.cu`) | maintained |
 | `torch_gpu/` | the H200 demo's GPU kernels, each bit-exact to its Definition: the serve-time commit (`commit_slots`, `sha512_rows`) and the store's load with bandwidth receipts (`p2_stage`) | maintained |
 | `kernels/` | the served path's exact kernels and what a kernel build ships with: the exact W8A8 linear (`s8_linear`), vLLM's int8-exact linear kernels' gates and benches (`exactlin`), the ship frame every build here sources (`ship.sh`, `ship_clock.c`, `ship_nvcc.sh`, `ship_probe.sh`), the nvcc a job's own library compiles with (`job_nvcc.sh`), and the Marlin MoE path's `moe_align_block_size` made a function of its inputs by the integration's `verity_vllm.engine.moe_align`, checked run to run and against the pin's op and timed against it (`moe_align`) | maintained |
 | `pouw/` | Pearl-C's kernels on the RTX PRO 6000, their harness, and the served vLLM path and its audits; `contents.py` lists the rest | maintained |
@@ -364,7 +363,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 
 | Directory | What it measures | Status |
 | --- | --- | --- |
-| `ppl/` | the perplexity an intervention on a served model's matmuls or attention costs, against bf16 and plain int8 | maintained |
+| `ppl/` | the perplexity an intervention on a served model's matmuls or attention costs, against bf16 and plain int8; on one H200 (`h200.sh`), Llama 3.2 1B's as shipped and with its linears in Pearl-C's FP8 E4M3 form, as metrics | maintained |
 | `f32_exhaustive/` | a correctly rounded reference primitive (`F32LogRn_v1`, `F32ExpRn_v1`) against MPFR, or a Boolean version (`F32Sqrt_v2`) against its word, on all 2^32 binary32 words | maintained |
 | `definitions/` | the GPU probes behind the numerics Definitions: the approximate instructions FlashAttention-2 and the RMSNorm kernel run (`MUFU` exp2, reciprocal, square root and tanh), measured on every 32-bit input | maintained |
 | `numerical/` | the bench spine (`verity_numerical.bench`) that Flock and `circuit-check` import, and the per-unit-type cost inventory; the archived proof systems' tables are in the evidence store | frozen |
