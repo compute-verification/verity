@@ -1,3 +1,0 @@
-[2026-11-17T18:14Z] cfed4677b95c
-#10678 new head 321163e41d62f2a6dd5dfbfc7df03e77643a02c1 (pushed, not marked): plain merge of #10832's head 2add23e9f415 (no move between). Conflict tests/benchmarks/kernels/exactlin/pyproject.toml: #10832's lines stand (its comment 'test_kbench_record writes kbench.py's result through the harness kit's writer, its member's card from the card files.' and its inputs list), ours removes only the test_dither_a_helpers comment and the benchmarks/hash/dither/dither_a.py input. merge-tree onto origin/main 342636fbb4a0 rc=0, onto #10832 head rc=0 (0 = clean). Own diff vs main 19d8eeb3b586 + #10832: 73 files +40 -16214, numstat identical to e0264a48336b; same 49 deletions; no Lean; allowlists only our removals. Node runs next.
-
