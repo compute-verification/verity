@@ -20,13 +20,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Properties.InferenceOnly.ThetaSteps
 import Proofs.Properties.InferenceOnly.DescAgree
 
-/-!
-# θ's provenance check's property, proved
-
-`ThetaProvenance` (`Properties.InferenceOnly.Theta`) of `InferenceOnlyCheck.Theta.evaluate`, from its steps
-(`Proofs.Properties.InferenceOnly.ThetaSteps`) and, for each θ entry naming a node, the policy check's θ fold
-(`DescAgree.nodeThetaFold_ok`), which `InferenceOnlyCheck.Theta.evaluate` runs first.
--/
+/-! `ThetaProvenance` of `InferenceOnlyCheck.Theta.evaluate`, from its steps and the policy check's θ fold, which it
+runs first. -/
 
 @[expose] public section
 

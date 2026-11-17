@@ -2,15 +2,8 @@ module
 
 public import Properties.ZkServer
 
-/-!
-# The ZK server's record, proved
-
-`admitNext`, `stopEnds`, `outOfTurnStops` and `afterOnTime` of `Properties.ZkServer`, by unfolding
-`Core.ZkServer.admit` (its last step, `admit.served`, apart: `served_ok`, `admit_ok`), `Core.ZkServer.stop` and
-`Core.ZkServer.Decision.after`. `stopOf_push_stop` and `stopOf_push_refused` say what appending a stop or a refusal does
-to a recursive session's stop. The honest lemmas are at `finishedRecord` and `scheduledAdmitted`, the nontrivial ones at
-the empty record and at a missed release time.
--/
+/-! `admitNext`, `stopEnds`, `outOfTurnStops` and `afterOnTime` of `Properties.ZkServer`, by unfolding the ZK server's
+record. -/
 
 @[expose] public section
 
@@ -18,24 +11,19 @@ namespace Properties.ZkServer
 
 open Core.ZkServer
 
-/-- A statement `nextOf` names is one of the recursive session's statements. -/
 theorem nextOf_lt {evs : Events} {o : Open} {j : Nat} (h : nextOf evs o = some j) : j < o.parts.size := by
   simp only [nextOf] at h
   obtain ⟨hj, -⟩ := Array.findIdx?_eq_some_iff_getElem.mp h
   exact hj
 
-/-- A stop of the recursive session `s` appended to the record: its stop is the first one, else this one. -/
 theorem stopOf_push_stop (evs : Events) (s p why : String) :
     stopOf (evs.push (.stop s p why)) s = (stopOf evs s).or (some p) := by
   simp [stopOf, Array.findSome?_push]
 
-/-- A refusal appended to the record leaves every recursive session's stop as it was. -/
 theorem stopOf_push_refused (evs : Events) (s s' p : String) :
     stopOf (evs.push (.refused s' p)) s = stopOf evs s := by
   simp [stopOf, Array.findSome?_push]
 
-/-- `admit`'s last step admits only statement `j`, asked for as `part`, once the inner session finished, recording
-nothing. -/
 theorem served_ok {evs : Events} {s part : String} {o : Open} {j : Nat} {a : Admitted} {evs' : Events}
     (h : admit.served evs s part o j = (.ok a, evs')) :
     finished evs s = true ∧ o.parts[j]! = part ∧
@@ -52,8 +40,6 @@ theorem served_ok {evs : Events} {s part : String} {o : Open} {j : Nat} {a : Adm
       obtain ⟨rfl, rfl⟩ := h
       exact ⟨by simpa using hf, by simpa using hp, rfl, rfl⟩
 
-/-- `admit` admits only through its last step, at the recursive session's open, before any stop and at its next
-statement. -/
 theorem admit_ok {evs : Events} {s part : String} {a : Admitted} {evs' : Events}
     (h : admit evs s part = (.ok a, evs')) :
     ∃ o j, openOf evs s = some o ∧ stopOf evs s = none ∧ nextOf evs o = some j ∧

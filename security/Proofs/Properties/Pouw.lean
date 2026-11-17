@@ -5,12 +5,7 @@ public import Proofs.Properties.Pouw.Grid
 public import Proofs.Properties.Pouw.Sample
 import Std.Data.DTreeMap.Internal.Operations
 
-/-!
-# Proofs of PoUW's window properties (`Properties.Pouw`)
-
-The served numbers, by evaluation in the kernel (`decide +kernel`: no compiled code, only the kernel's reduction), and
-the refusals, by unfolding. The grid's properties are in `Proofs.Properties.Pouw.Grid` and K′'s in `Proofs.Properties.Pouw.Sample`.
--/
+/-! PoUW's window properties: the served numbers by evaluation in the kernel, and the refusals by unfolding. -/
 
 @[expose] public section
 
@@ -33,7 +28,6 @@ theorem kPrimeExactAtEquality : KPrimeExactAtEquality := by
 theorem publicItems_eq : PublicItems := by
   unfold PublicItems; decide +kernel
 
-/-- Python's grid functions on any integer refuse exactly off their domain, and on it answer the function on naturals. -/
 theorem grid_isOk (bits : Nat) (n lo : Int) :
     (floorPoint? bits n).isOk = decide (1 ≤ n) ∧ (pad? bits n).isOk = decide (1 ≤ n) ∧
     (bucket? bits n).isOk = decide (1 ≤ n) ∧ (level? bits n).isOk = decide (1 ≤ n ∧ onGrid bits n.toNat = true) ∧
@@ -131,10 +125,7 @@ theorem kPrimeLeast : KPrimeLeast := by
 theorem sampleMisses : DrawMisses := fun eps δ credited n w B k hk =>
   draw_misses eps δ credited n w B k (kPrimeRefuses eps δ credited n w k hk) hk
 
-/-! ## Completeness
-
-The other half of the refusals: every input on a function's domain is answered. Each comes with one answered input of the
-served grid and sample. -/
+/-! Every input on a function's domain is answered, each with one answered input of the served grid and sample. -/
 
 theorem grid_complete (bits : Nat) (n lo : Int) :
     (1 ≤ n → floorPoint? bits n = .ok (floorPoint bits n.toNat) ∧ pad? bits n = .ok (pad bits n.toNat) ∧

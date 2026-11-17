@@ -2,20 +2,12 @@ module
 
 public import Properties.Core.Evaluate
 
-/-!
-# Proofs of the evaluator's equalities (`Properties.Core.Evaluate`)
-
-A copy is its definition by unfolding (`rfl`: the kernel unfolds both sides to the same term). Where the evaluator masks
-an operand that Security reads unmasked, the bit fields both read are rewritten into division and remainder by powers of
-two (`Bits`), which `omega` decides. Where the types are the evaluator's own, each function commutes with `toCore` by
-cases on the constructors, and the lists by `List.foldl_map`, `List.filterMap_map` and induction on the groups.
--/
+/-! The evaluator's equalities with Security's definitions, by unfolding or by reading bit fields as division and
+remainder by powers of two. -/
 
 @[expose] public section
 
 namespace Properties.Evaluator
-
-/-! ## Bit fields as division and remainder -/
 
 namespace Bits
 
@@ -28,7 +20,6 @@ theorem shr16 (x : Nat) : x >>> 16 = x / 65536 := Nat.shiftRight_eq_div_pow x 16
 theorem shr23 (x : Nat) : x >>> 23 = x / 8388608 := Nat.shiftRight_eq_div_pow x 23
 theorem shr31 (x : Nat) : x >>> 31 = x / 2147483648 := Nat.shiftRight_eq_div_pow x 31
 
-/-- The exponent field of an FP32 word, in place. -/
 theorem and_exp (x : Nat) : x &&& 0x7F800000 = x / 8388608 % 256 * 8388608 := by
   rw [show (0x7F800000 : Nat) = (2 ^ 8 - 1) * 2 ^ 23 from rfl, show (8388608 : Nat) = 2 ^ 23 from rfl,
     show (256 : Nat) = 2 ^ 8 from rfl]
@@ -43,8 +34,6 @@ theorem and_exp (x : Nat) : x &&& 0x7F800000 = x / 8388608 % 256 * 8388608 := by
 end Bits
 
 open Bits
-
-/-! ## Scalar -/
 
 namespace Scalar
 
@@ -62,11 +51,8 @@ theorem selectBf16 : SelectBf16 := rfl
 
 end Scalar
 
-/-! ## FP32 and BF16 -/
-
 namespace Fp32
 
-/-- `toCore` and `ofCore` are inverse to each other, so the `toCore` equalities say the two `Decoded` agree. -/
 theorem decodedCorresponds :
     (∀ d, Decoded.ofCore (Decoded.toCore d) = d) ∧ ∀ d, Decoded.toCore (Decoded.ofCore d) = d :=
   ⟨fun d => by cases d <;> rfl, fun d => by cases d <;> rfl⟩
@@ -87,7 +73,6 @@ theorem guardNegInfZero : GuardNegInfZero := rfl
 theorem bf16ToF32Bits : Bf16ToF32Bits := rfl
 theorem f32ToBf16RnBits : F32ToBf16RnBits := rfl
 
-/-- The bits `Verity.Fp32.decode` reads, 0 to 31, are those of the word's low 32 bits. -/
 theorem decode_mask (u : Nat) : Verity.Fp32.decode (u &&& 0xFFFFFFFF) = Verity.Fp32.decode u := by
   have h1 : u % 4294967296 / 8388608 % 256 = u / 8388608 % 256 := by omega
   have h2 : u % 4294967296 % 8388608 = u % 8388608 := by omega
@@ -208,8 +193,6 @@ theorem bf16MulBf16 : Bf16MulBf16 := by
 
 end Fp32
 
-/-! ## Casts -/
-
 namespace Casts
 
 theorem bitLength : BitLength := rfl
@@ -229,7 +212,6 @@ theorem fp32Class_nan (w : Nat) :
   unfold Verity.TC.Spec.fp32Class
   by_cases h₁ : (w >>> 23) &&& 0xFF = 0xFF <;> by_cases h₂ : w &&& 0x7FFFFF = 0 <;> simp [h₁, h₂] <;> split <;> simp
 
-/-- Bits 16 to 31 of `s + 2^32 q` are those of `s`. -/
 theorem high_half_mod (q s : Nat) : (s + 4294967296 * q) / 65536 % 65536 = s / 65536 % 65536 := by
   rw [show s + 4294967296 * q = s + 65536 * q * 65536 by omega, Nat.add_mul_div_right _ _ (by decide),
     Nat.add_mul_mod_self_left]
@@ -250,11 +232,8 @@ theorem f2fpBf16 : F2fpBf16 := by
 
 end Casts
 
-/-! ## The BF16 tensor-core step -/
-
 namespace TC
 
-/-- Each `toCore` has the inverse `ofCore`, so the `toCore` equalities say the two pipelines, terms, values and classes agree. -/
 theorem typesCorrespond :
     ((∀ p, Pipeline.ofCore (Pipeline.toCore p) = p) ∧ ∀ p, Pipeline.toCore (Pipeline.ofCore p) = p) ∧
     ((∀ t, Term.ofCore (Term.toCore t) = t) ∧ ∀ t, Term.toCore (Term.ofCore t) = t) ∧
@@ -379,8 +358,6 @@ theorem hopperBf16Dot16 : HopperBf16Dot16 := by
   exact tcDotTotal_toCore _ acc a b
 
 end TC
-
-/-! ## The Boolean gates on bits -/
 
 namespace Gates
 

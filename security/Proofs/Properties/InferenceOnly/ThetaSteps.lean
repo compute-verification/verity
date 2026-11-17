@@ -2,17 +2,7 @@ module
 
 public import Properties.InferenceOnly.Theta
 
-/-!
-# θ's provenance check, step by step
-
-What each step of `InferenceOnlyCheck.Theta.evaluate` establishes when it returns: the trusted input's reading (`trustedOf_ok`:
-the log in R6's chain, each record's digest, the run's record and the parameters), the provenance's (`provenanceOf_ok`),
-one θ entry's checks (`entryStep_ok`), and the loop over θ (`provenance_ok`). `Proofs.Properties.InferenceOnly.Theta` joins them
-with the policy check's θ fold into `ThetaProvenance`.
-
-The check compares fields with strings through `strOf?`, never with `Json`'s `==`, which is `partial`: what it compares
-is then what these lemmas read. This module imports no Mathlib.
--/
+/-! What each step of `InferenceOnlyCheck.Theta.evaluate` establishes when it returns. -/
 
 @[expose] public section
 
@@ -22,7 +12,6 @@ open Lean (Json)
 open Flock.Program (Ty)
 open InferenceOnlyCheck.Theta
 
-/-- `mapM` in `Except`, entry by entry. -/
 theorem list_mapM_ok_get {α β ε : Type} [Inhabited α] [Inhabited β] (f : α → Except ε β) :
     ∀ (l : List α) (ys : List β), l.mapM f = .ok ys → ys.length = l.length ∧ ∀ n < l.length, f l[n]! = .ok ys[n]!
   | [], ys, h => by
@@ -69,7 +58,6 @@ theorem prevIs_none (prev : Json) (h : prevIs prev none = true) : prev = .null :
 theorem prevIs_some (prev : Json) (d : String) (h : prevIs prev (some d) = true) : strOf? prev = some d := by
   simpa [prevIs] using h
 
-/-- `forIn` over a list in `Except`, with an invariant on the prefix it has run through. -/
 theorem forIn_list_prefix {α β ε : Type} (Q : List α → β → Prop) (f : α → β → Except ε (ForInStep β)) :
     ∀ (l pre : List α) (b r : β),
       (∀ pre' x b s, Q pre' b → f x b = .ok s → ∃ b', s = .yield b' ∧ Q (pre' ++ [x]) b') →
@@ -86,7 +74,6 @@ theorem forIn_list_prefix {α β ε : Type} (Q : List α → β → Prop) (f : �
       have := forIn_list_prefix Q f l (pre ++ [x]) b' r hf hb' h
       simpa using this
 
-/-- The digests the loop keeps, for the records it has read. -/
 def LoopInv (pre : List Json) (ds : Array String) : Prop :=
   ds.size = pre.length ∧ (∀ n < pre.length, digest pre[n]! = .ok ds[n]!) ∧
     (∀ n < pre.length, (n = 0 → getD pre[n]! "previous" = .null) ∧
@@ -356,7 +343,6 @@ theorem findIdx_eq (xs : Array String) (r : String) (i : Nat) (h : xs.findIdx? (
   rw [getElem!_pos xs i hi]
   simpa using hp
 
-/-- The owners `provenance` reads: `ownersOf`'s, or no owner for any node where the parameters don't lower. -/
 theorem owners_some (o : Option (Array (Option Nat))) (n k p : Nat)
     (h : (o.getD (Array.replicate n none))[k]? = some (some p)) : ∃ own, o = some own ∧ own[k]? = some (some p) := by
   cases o with
@@ -365,8 +351,6 @@ theorem owners_some (o : Option (Array (Option Nat))) (n k p : Nat)
     split at h <;> simp at h
   | some own => exact ⟨own, rfl, by simpa using h⟩
 
-/-- `ThetaProvenance`'s conclusion, given that every θ entry names a node (which the policy check's θ fold gives,
-`Proofs.Properties.InferenceOnly.Theta`). -/
 theorem provenanceHeld_of (j tr out : Json) (h : Theta.evaluate j tr = .ok out)
     (hθ : ∀ i, parse j = .ok i → ∀ t < i.theta.size, ∃ k, natOf? i.theta[t]! = some k) : ProvenanceHeld j tr := by
   obtain ⟨-, hprov⟩ := evaluate_ok j tr out h

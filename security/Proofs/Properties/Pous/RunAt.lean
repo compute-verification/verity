@@ -3,16 +3,7 @@ module
 public import Properties.Pous.EndToEndAt
 public import Proofs.Properties.Pous.Run
 
-/-!
-# The composed check's property at every point, proved
-
-`runCheckAcceptsAt : RunCheckAcceptsAt` and `runCertifiesAt : RunCertifiesAt` (`Properties.Pous.EndToEndAt`):
-`runCheckAccepts`'s and `runCertifies`'s proofs (`Proofs.Properties.Pous.Run`) with the point's parameters `ps` in
-place of the deployed ones. The check's steps (`checkAt_ok`), the device's record (`inv_recorded`) and the list lemmas
-are already point-free and are reused; the lemmas on `C*`'s blocks, leaves and the table's strings are restated at
-`ps`. The one fact the deployed proof read off the point's numbers, `0 < blocksPerSegment`, follows from a challenged
-index being below `ps.blocks`.
--/
+/-! `runCheckAccepts` and `runCertifies` with a point's parameters `ps` in place of the deployed ones. -/
 
 @[expose] public section
 
@@ -26,8 +17,6 @@ local instance instLawfulBEqByteArray_runAt : LawfulBEq ByteArray where
   rfl {a} := show (a.data == a.data) = true from beq_iff_eq.2 rfl
 
 variable {ps : P2.Params}
-
-/-! ## `C*`'s blocks and leaves at `ps` -/
 
 theorem segment_sizeAt {C : Array (Array ByteArray)} (hS : ShapedAt ps C) :
     ∀ seg ∈ C.toList, seg.size = ps.blocksPerSegment := by
@@ -66,8 +55,6 @@ theorem leaves_getElem?At {C : Array (Array ByteArray)} (hS : ShapedAt ps C) (sa
   rw [leaves, List.getElem?_toArray, flatten_getElem? ps.blocksPerSegment _ (leaves_listsAt hS salt) s v hv]
   simp only [List.getElem?_mapIdx, Array.getElem?_toList]
   cases C[s]? <;> simp [List.getElem?_mapIdx]
-
-/-! ## The table's strings at `ps` -/
 
 theorem rowLeaves_sizeAt (salt digests : ByteArray) : (Run.rowLeaves ps salt digests).size = ps.blocks := by
   simp [Run.rowLeaves]
@@ -110,9 +97,6 @@ theorem mem_table_leafAt {pub : SetupProtocol.Public} {digests : ByteArray} {C :
   · refine List.mem_append_right _ (List.mem_flatMap.2 ⟨i, List.mem_range.2 hi, ?_⟩)
     simp
 
-/-! ## The theorem -/
-
-/-- What an accepted `checkAt` checked, at the point `pt`. -/
 theorem check_okAt {pt : Run.Point} {trusted : List ByteArray} {pub : SetupProtocol.Public} {digests : ByteArray}
     {r : Run.ChallengePhaseRecord} {sid : ByteArray} (h : Run.checkAt SCHEMES pt trusted pub digests r sid = .ok ()) :
     AuditsSetupAt pt pub r.commitment ∧ r.commitment.session = sid ∧
@@ -223,8 +207,6 @@ theorem runCheckAcceptsAt : RunCheckAcceptsAt := by
       · exact List.mem_map.2 ⟨C[s][v], Array.mem_toList_iff.2 (Array.mem_of_getElem? hflat), rfl⟩
   rw [hflat, hblk]
 
-/-! ## With the setup check -/
-
 theorem shaped_ofAt {c : SetupProtocol.Commitment} {C : Array (Array ByteArray)} (h : DecodesToCommitment ps c C) :
     ShapedAt ps C := by
   obtain ⟨W, ⟨hCs, -, hseg⟩, -⟩ := h
@@ -232,7 +214,6 @@ theorem shaped_ofAt {c : SetupProtocol.Commitment} {C : Array (Array ByteArray)}
   obtain ⟨-, -, -, -, -, -, hb, -⟩ := (hseg s hs).2 v hv
   exact hb
 
-/-- `RunCertifiesAt` from the setup check's two properties, which quantify over every parameter set. -/
 theorem runCertifiesAt : RunCertifiesAt := by
   intro pt trusted c C pub digests r sid dev ⟨hs, hc⟩
   have hD := PousCheck.Properties.SecurityProofs.acceptsDecodes pt.params c C ⟨pub, (), hs⟩

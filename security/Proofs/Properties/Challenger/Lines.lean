@@ -3,17 +3,7 @@ module
 public import Proofs.Properties.Challenger.Window
 import Proofs.Properties.InferenceOnly.RecordJson
 
-/-!
-# Each line of a ledger `checked` accepts is numbered by its place and is the device's own, or a break
-
-`Challenger.checked` reads every line of the ledger as an entry (`checked_lines`) and runs `verifyLedger` on the
-entries: entry `i` is numbered `i` (`verifyLedger_seq`) and its signature verifies over its message under the key
-(`Window.verifyLedger_sig`). A line whose signature verifies says what a line of the device's own ledger says, or the
-finder outputs a break (`Window.line_of_device`); so the line at each place does (`line_at`).
-
-Two entries whose texts without their `sig` agree have one number, the number being a field of that text
-(`seq_of_text`).
--/
+/-! Each line of a ledger `checked` accepts is numbered by its place and is the device's own, or a break. -/
 
 @[expose] public section
 
@@ -29,8 +19,6 @@ open Properties.Pouw.LiveSalt.Ledger (bind_ok of_triple of_triple_opt throw_spec
   toOption_spec ledgerTag_spec nat_spec some_pure_spec forIn_array_zipIdx_ok wp_ite restart join_spec
   ledgerMessage_spec chain)
 open Properties.Challenger.Window (SigInv sig_lms line_of_device ledgerEntry_fields entry_fields_equiv)
-
-/-! ## The lines `checked` reads -/
 
 theorem step_line {b : Array LedgerEntry} {pre : List (Json × Nat)} {cur : Json × Nat} {e : LedgerEntry}
     (h : pre.map (fun x => ledgerEntry? x.1) = b.toList.map some) (he : ledgerEntry? cur.1 = some e) :
@@ -49,7 +37,6 @@ theorem lines_arr {ls : Array Json} {es : Array LedgerEntry}
 
 -- the closers must not unfold `verifyLedger` or the key's hash while they search the context
 set_option maxHeartbeats 1000000 in
-/-- `checked` reads a list of lines, each an entry, and runs `verifyLedger` on the entries in the lines' order. -/
 theorem checked_lines {ledger : Json} {key : ChallengerKey} {r : Array Win × Array PeriodRecord}
     (h : checked ledger key = .ok r) :
     ∃ (lines : Array Json) (es : Array LedgerEntry), ledger = .arr lines ∧
@@ -65,7 +52,6 @@ theorem checked_lines {ledger : Json} {key : ChallengerKey} {r : Array Win × Ar
     | exact ⟨_, _, rfl, lines_arr ‹_›, ‹_›⟩
     | exact (rfl : ([] : List (Option LedgerEntry)) = [])
 
-/-- The line at a place of a ledger whose lines are all entries is the entry at that place. -/
 theorem line_entry {lines : Array Json} {es : Array LedgerEntry}
     (h : lines.toList.map ledgerEntry? = es.toList.map some) {i : Nat} {line : Json} (hi : lines[i]? = some line) :
     ∃ e, ledgerEntry? line = some e ∧ es.toList[i]? = some e := by
@@ -79,9 +65,6 @@ theorem line_entry {lines : Array Json} {es : Array LedgerEntry}
     rw [he] at h1
     exact ⟨e, Option.some.inj h1, rfl⟩
 
-/-! ## Each entry's number -/
-
-/-- Entry `i` of `pre` is numbered `i`. -/
 def SeqInv (pre : List LedgerEntry) : Prop :=
   ∀ (i : Nat) (e : LedgerEntry), pre[i]? = some e → e.seq = i
 
@@ -99,9 +82,7 @@ theorem seq_step {pre : List LedgerEntry} {e : LedgerEntry} (hI : SeqInv pre) (h
     · rw [ite_eq_right h0] at hx
       cases hx
 
--- `mvcgen` splits `verifyLedger`'s loop body into one goal per path through its checks
 set_option maxHeartbeats 4000000 in
-/-- **`verifyLedger` checked every entry's number**: entry `i` is numbered `i`. -/
 theorem verifyLedger_seq {es : Array LedgerEntry} {key : ChallengerKey} {r : Array Win × Array PeriodRecord}
     (h : verifyLedger es key = .ok r) : SeqInv es.toList := by
   unfold verifyLedger at h
@@ -117,9 +98,7 @@ theorem verifyLedger_seq {es : Array LedgerEntry} {key : ChallengerKey} {r : Arr
     mvcgen [-Spec.throw_Except, throw_spec, ledgerMessage_spec, join_spec]))
   all_goals refine ⟨_, rfl, seq_step hI (chain ‹_›).1⟩
 
--- `mvcgen` splits `Core.Record.ofJson` into one goal per field it parses
 set_option maxHeartbeats 4000000 in
-/-- A record entry's number is its JSON's `seq`, a number's mantissa. -/
 theorem recordOfJson_seq {j : Json} {r : Core.Record} (h : Core.Record.ofJson j = .ok r) :
     ∃ n : JsonNumber, getD j "seq" = .num n ∧ r.seq = n.mantissa.toNat := by
   refine of_triple (Q := fun r => ∃ n : JsonNumber, getD j "seq" = .num n ∧ r.seq = n.mantissa.toNat) ?_ h
@@ -127,9 +106,7 @@ theorem recordOfJson_seq {j : Json} {r : Core.Record} (h : Core.Record.ofJson j 
   mvcgen [Core.Record.ofJson, -Spec.throw_Except, throw_spec]
   all_goals exact ⟨_, by assumption, rfl⟩
 
--- `mvcgen` splits `ledgerEntry?` into one goal per field it parses
 set_option maxHeartbeats 1000000 in
-/-- A ledger entry's record decodes from its entry, with its number. -/
 theorem ledgerEntry_seq {line : Json} {e : LedgerEntry} (h : ledgerEntry? line = some e) :
     ∃ r, (Core.Record.ofJson e.entry).toOption = some r ∧ r.seq = e.seq := by
   refine of_triple_opt (Q := fun e => ∃ r, (Core.Record.ofJson e.entry).toOption = some r ∧ r.seq = e.seq) ?_ h
@@ -145,7 +122,6 @@ theorem equiv_num {x : Json} {n : JsonNumber} (h : JsonEquiv x (.num n)) : x = .
   | obj m => rw [JsonEquiv, FlockDeploy.jsonForm_obj] at h; cases h
   | _ => cases h
 
-/-- **Two entries whose texts without their `sig` agree have one number.** -/
 theorem seq_of_text {line line' : Json} {e e' : LedgerEntry} (he : ledgerEntry? line = some e)
     (he' : ledgerEntry? line' = some e') {s : String}
     (hs : Flock.canonUtf8 (Core.Record.unsigned e.entry) = .ok s)
@@ -162,15 +138,11 @@ theorem seq_of_text {line line' : Json} {e e' : LedgerEntry} (he : ledgerEntry? 
   have hnn : n = n' := Json.num.inj (equiv_num hq)
   rw [← hrs, ← hrs', hrn, hrn', hnn]
 
-/-! ## Each line is the device's -/
-
 theorem getD_ledger (ledger : Json) : getD (Json.mkObj [("ledger", ledger)]) "ledger" = ledger := by
   have h : (Json.mkObj [("ledger", ledger)]).getObjVal? "ledger" = .ok ledger :=
     (InferenceOnlyCheck.Record.SecurityProofs.Json.getObjVal?_mkObj (by simp) "ledger" ledger).2 (by simp)
   simp only [getD, field?, h, Except.toOption, Option.getD_some]
 
-/-- **A presented line is an entry under its place's number that says what a line of the device's own ledger
-says**, where the finder outputs no break. -/
 theorem line_at {dev : History} {key : ChallengerKey} {label : String} {lines : Array Json}
     {es : Array LedgerEntry} (hlines : lines.toList.map ledgerEntry? = es.toList.map some)
     (hseq : SeqInv es.toList) (hsig : SigInv key es.toList)

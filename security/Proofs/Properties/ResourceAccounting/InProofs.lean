@@ -2,13 +2,8 @@ module
 
 public import Definitions.Core.InProofs
 
-/-!
-# Proofs of `Verity.InProofs`' shape
-
-`Gives` is monotone in the relation it counts against: a relation that accepts less fails more units, so `Gives` at
-`right` gives it at any `ok` with `right ≤ ok` (`Gives.mono`). An event inside another has no greater probability
-(`prPMF_mono`).
--/
+/-! `Gives` is monotone in the relation it counts against (`Gives.mono`), and an event inside another has no greater
+probability. -/
 
 @[expose] public section
 

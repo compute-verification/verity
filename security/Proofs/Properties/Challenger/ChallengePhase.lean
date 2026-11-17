@@ -7,27 +7,7 @@ public import Proofs.Properties.Pouw.LiveSalt.Coin
 public import Proofs.Flock.Be64
 import all Init.Data.String.Defs
 
-/-!
-# A session `challengePhaseOf` accepts is a run the device closed, or a break
-
-`challengePhaseOf` accepts a session's files only when its close's LMS signature verifies under the verifier's key over the
-close message, which hashes the record's message (itself over the host and the commitment's tagged digest), the
-session's id, the log's chain and how the session ended, and only when the release log it read chains to the close's
-chain and the session's client closed it. Each of those strings is one the finder hashes (`readHashed`), and so is each
-the device hashes as it runs (`deviceHashed`). So the signature is the device's, or the finder outputs a forgery
-(`signed_or_break`), and the message it signs is a run's close, since the record's and the ledger's begin with roles of
-other lengths (`closeBytes_ne_record`, `closeBytes_ne_ledger`). Equal digests are equal strings, or a collision of
-two the finder hashes (`eq_or_break`). A close's string names its record's message, its session's id, its chain and its
-end (`closeBytes_inj`), a record's its host and its commitment's tagged digest (`recordBytes_inj`), and a chain its
-lines (`chain_bind`), each step's string being the previous digest, 64 bytes, then the line's field.
-A commitment's identity bytes name it (`Commitment.canon_inj`). So `challengePhaseOf_run` concludes that the
-commitment, the roots and the session id `challengePhaseOf` returns are those of a run of the device under the key whose client
-closed it, read from that run's own release log, which is the session's log, or the finder outputs a break
-(`challengePhaseOf_bound` without the log).
-
-`challengePhaseOf`'s, `challengePhaseNamed`'s and `sampleCoins`' facts are Hoare triples proved by `mvcgen` (`sessionOf_ok`,
-`challengePhaseNamed_ok`, `drawCoins_ok`), read back at an `.ok` result by `of_triple`.
--/
+/-! A session `challengePhaseOf` accepts is a run the device closed, or a break. -/
 
 @[expose] public section
 
@@ -49,8 +29,6 @@ local instance lawfulBEqByteArrayChallengePhase : LawfulBEq ByteArray where
 
 variable {dev : History} {key : ChallengerKey} {label : String} {coins : Json}
 
-/-! ## The messages' strings -/
-
 theorem field_bs (b : ByteArray) : bs (field b) = enc b := bs_append _ _
 
 theorem field_size (b : ByteArray) : (field b).size = 8 + b.size := by
@@ -61,22 +39,18 @@ theorem record_role_size : RECORD_ROLE.toUTF8.size = 27 := by decide
 theorem ledger_role_size : LEDGER_ROLE.toUTF8.size = 35 := by decide
 theorem log_tag_size : LOG_TAG.toUTF8.size = 32 := by decide
 
-/-- How a close says its session ended: `0x00` when its client closed it, else `0x01` and why not. -/
 def finOf : Option String → ByteArray
   | none => ByteArray.mk #[0]
   | some e => ByteArray.mk #[1] ++ e.toUTF8
 
-/-- What the close of session `session` hashes, over its record's message `r`. -/
 def closeBytes (I r : ByteArray) (session : String) (lines : Nat) (chain : ByteArray) (ended : Option String) :
     ByteArray :=
   field CLOSE_ROLE.toUTF8 ++ I ++ field r ++ field session.toUTF8 ++ field (Flock.be64 lines.toUInt64) ++
     field chain ++ field (finOf ended)
 
-/-- What the record made on host `host` hashes, over its commitment's tagged digest `d`. -/
 def recordBytes (I : ByteArray) (host : String) (d : ByteArray) : ByteArray :=
   field RECORD_ROLE.toUTF8 ++ I ++ field (field host.toUTF8) ++ field d
 
-/-- What a ledger entry's message hashes, over the entry's tagged digest `d`. -/
 def ledgerBytes (I d : ByteArray) : ByteArray := field LEDGER_ROLE.toUTF8 ++ I ++ field d
 
 theorem closeBytes_bs (I r : ByteArray) (session : String) (lines : Nat) (chain : ByteArray) (ended : Option String) :
@@ -91,7 +65,6 @@ theorem recordBytes_bs (I : ByteArray) (host : String) (d : ByteArray) :
 theorem ledgerBytes_bs (I d : ByteArray) : bs (ledgerBytes I d) = enc LEDGER_ROLE.toUTF8 ++ (bs I ++ enc d) := by
   simp only [ledgerBytes, bs_append, field_bs, List.append_assoc]
 
-/-- Two strings whose first fields have different sizes under `2^64` differ. -/
 theorem enc_ne {a a' : ByteArray} {r r' : List UInt8} (ha : a.size < 2 ^ 64) (ha' : a'.size < 2 ^ 64)
     (hne : a.size ≠ a'.size) : enc a ++ r ≠ enc a' ++ r' := by
   intro h
@@ -126,8 +99,6 @@ theorem finOf_none_inj {e : Option String} (h : finOf none = finOf e) : e = none
     have h01 : (0 : UInt8) = 1 := (List.cons.inj hb).1
     exact absurd h01 (by decide)
 
-/-- **A close's string names its record's message, its session, its chain and its end**, against a close of a session
-its client closed, whose session id is at most 512 bytes. -/
 theorem closeBytes_inj {I r r' : ByteArray} {s s' : String} {n n' : Nat} {ch ch' : ByteArray} {e' : Option String}
     (hr : r.size = 64) (hr' : r'.size = 64) (hs : s.toUTF8.size ≤ 512) (hch : ch.size = 64) (hch' : ch'.size = 64)
     (h : closeBytes I r s n ch none = closeBytes I r' s' n' ch' e') :
@@ -151,7 +122,6 @@ theorem closeBytes_inj {I r r' : ByteArray} {s s' : String} {n n' : Nat} {ch ch'
   obtain ⟨rfl, hb6⟩ := enc_split hb5 (hch.trans hch'.symm)
   exact ⟨rfl, String.toByteArray_inj.1 hs1, rfl, finOf_none_inj (enc_inj hb6)⟩
 
-/-- **A record's string names its host and its commitment's tagged digest.** -/
 theorem recordBytes_inj {I : ByteArray} {h h' : String} {d d' : ByteArray} (hd : d.size = 64) (hd' : d'.size = 64)
     (e : recordBytes I h d = recordBytes I h' d') : h = h' ∧ d = d' := by
   have hb := congrArg bs e
@@ -164,13 +134,9 @@ theorem recordBytes_inj {I : ByteArray} {h h' : String} {d d' : ByteArray} (hd :
   rw [field_bs, field_bs] at h3
   exact ⟨String.toByteArray_inj.1 (enc_inj h3), enc_inj h2⟩
 
-/-! ## The release log's chain -/
-
-/-- One step of the release log's chain over line `l`: the digest after it, and the strings hashed so far. -/
 def stepF (acc : ByteArray × List ByteArray) (l : String) : ByteArray × List ByteArray :=
   (Flock.Sha512.hash (acc.1 ++ field l.toUTF8), acc.2 ++ [acc.1 ++ field l.toUTF8])
 
-/-- What the chain over `lines` hashes after its start. -/
 def chainSteps (lines : List String) : List ByteArray :=
   (lines.foldl stepF (Flock.Sha512.hash (field LOG_TAG.toUTF8), [])).2
 
@@ -229,8 +195,6 @@ theorem last_mem_steps (l : List String) (x : String) : logChain l ++ field x.to
   rw [steps_concat]
   exact List.mem_append_right _ (List.mem_singleton_self _)
 
-/-- **The chain binds its lines**: two release logs with one chain are one, or the finder outputs a break, where every
-string either chain hashes is one it hashes. -/
 theorem chain_bind (hU : field LOG_TAG.toUTF8 ∈ readHashed key label coins ++ deviceHashed dev key.pub) :
     ∀ (n : Nat) (l l' : List String), l.length + l'.length ≤ n →
       (∀ y ∈ chainSteps l, y ∈ readHashed key label coins ++ deviceHashed dev key.pub) →
@@ -266,8 +230,6 @@ theorem chain_bind (hU : field LOG_TAG.toUTF8 ∈ readHashed key label coins ++ 
         · exact .inl (by rw [e])
         · exact .inr b
       · exact .inr b
-
-/-! ## What `challengePhaseOf` read when it accepts -/
 
 theorem mapM_str {f : Json → Flock.V String} (hf : ∀ j s, f j = .ok s → j = .str s) :
     ∀ {l : List Json} {xs : List String}, l.mapM f = .ok xs → l = xs.map Json.str
@@ -325,10 +287,7 @@ theorem mapM_ok_spec {α β : Type} (f : α → Flock.V β) (l : List α) :
 theorem releasedRootsOf_ok_spec (c : LiveCommitment) (log : List String) :
     ⦃⌜True⌝⦄ releasedRootsOf c log ⦃⇓? a => ⌜releasedRootsOf c log = .ok a⌝⦄ := ok_spec _
 
--- `mvcgen` splits `challengePhaseOf` into one goal per check it makes of the record, the close and the log
 set_option maxHeartbeats 4000000 in
-/-- What `challengePhaseOf` read when it accepts: its record, its close and the close's message, whose signature verifies under
-the key, its log's lines, which chain to the close's chain, a session its client closed, and the roots its log shows. -/
 theorem challengePhaseOf_read {key : ChallengerKey} {record log close : Json} {res : LiveCommitment × Roots × String}
     (h : challengePhaseOf key record log close = .ok res) :
     ∃ (r : ChallengerRecord) (c : ChallengerClose) (m : ByteArray) (ls : Array Json) (lines : List String),
@@ -357,9 +316,7 @@ theorem challengePhaseOf_read {key : ChallengerKey} {record log close : Json} {r
 theorem challengePhaseOf_ok_spec (key : ChallengerKey) (record log close : Json) :
     ⦃⌜True⌝⦄ challengePhaseOf key record log close ⦃⇓? a => ⌜challengePhaseOf key record log close = .ok a⌝⦄ := ok_spec _
 
--- `mvcgen` splits `challengePhaseNamed` into one goal per check it makes of the session's record and files
 set_option maxHeartbeats 1000000 in
-/-- `challengePhaseNamed` returns what `challengePhaseOf` returns of the session's files. -/
 theorem challengePhaseNamed_ok {a : Audited} {key : ChallengerKey} {session : Json} {r : LiveCommitment × Roots}
     (h : challengePhaseNamed a key session = .ok r) :
     ∃ sid, challengePhaseOf key (getD session "record") (getD session "log") (getD session "close") = .ok (r.1, r.2, sid) := by
@@ -369,7 +326,6 @@ theorem challengePhaseNamed_ok {a : Audited} {key : ChallengerKey} {session : Js
   mvcgen [challengePhaseNamed, -Spec.throw_Except, throw_spec, challengePhaseOf_ok_spec, recordOfJson_spec, mapM_spec]
   all_goals exact ⟨_, by assumption⟩
 
-/-- `trustedChallengePhaseOf` returns what `challengePhaseNamed` returns of the session the ledger pins. -/
 theorem trustedChallengePhaseOf_ok {ledger window : Json} {key : ChallengerKey} {pins main session : Json}
     {r : LiveCommitment × Roots} (h : trustedChallengePhaseOf ledger window key pins main session = .ok r) :
     ∃ a, pinnedChallengePhase ledger window key pins main = .ok a ∧ challengePhaseNamed a key session = .ok r := by
@@ -385,10 +341,7 @@ theorem challengerStream_ok_spec (c : LiveCommitment) (segment : Json) (after : 
     ⦃⌜True⌝⦄ challengerStream c segment after roots
       ⦃⇓? a => ⌜challengerStream c segment after roots = .ok a⌝⦄ := ok_spec _
 
--- `mvcgen` splits `sampleCoins` into one goal per check it makes of the record's form, the window and the family
 set_option maxHeartbeats 1000000 in
-/-- What `sampleCoins` read when it accepts: the session the ledger opens on the window, and the segment's coins, read
-against its commitment and the roots its log shows received for the family. -/
 theorem drawCoins_ok {key : ChallengerKey} {w label : String} {after : ByteArray} {coins : Json} {ξ : ByteArray}
     (h : sampleCoins key w label after coins = .ok ξ) :
     ∃ c roots, trustedChallengePhaseOf (getD coins "ledger") (Json.mkObj [("root", Json.str w)]) key (getD coins "pins")
@@ -406,14 +359,10 @@ theorem drawCoins_ok {key : ChallengerKey} {w label : String} {after : ByteArray
     | (intro h; exact ⟨_, _, by assumption, h⟩)
     | (intro h; subst_vars; exact ⟨_, _, by assumption, h⟩)
 
-/-! ## What the ledger's entries sign -/
-
 theorem toOption_some {ε α : Type} {x : Except ε α} {a : α} (h : x.toOption = some a) : x = .ok a := by
   cases x <;> simp_all [Except.toOption]
 
--- `mvcgen` splits `Core.Record.ofJson` into one goal per field it parses
 set_option maxHeartbeats 4000000 in
-/-- A record entry is an object, and its schema is the one it names. -/
 theorem recordOfJson_schema {j : Json} {r : Core.Record} (h : Core.Record.ofJson j = .ok r) :
     (∃ kvs, j = .obj kvs) ∧ getD j "schema" = .str r.schema := by
   refine of_triple (Q := fun r => (∃ kvs, j = .obj kvs) ∧ getD j "schema" = .str r.schema) ?_ h
@@ -423,9 +372,7 @@ theorem recordOfJson_schema {j : Json} {r : Core.Record} (h : Core.Record.ofJson
     | exact ⟨⟨_, rfl⟩, by assumption⟩
     | exact ⟨⟨_, by assumption⟩, by assumption⟩
 
--- `mvcgen` splits `ledgerEntry?` into one goal per field it parses
 set_option maxHeartbeats 1000000 in
-/-- A ledger entry's record decodes from its entry, with its schema. -/
 theorem ledgerEntry_record {line : Json} {e : LedgerEntry} (h : ledgerEntry? line = some e) :
     ∃ r, (Core.Record.ofJson e.entry).toOption = some r ∧ r.schema = e.schema := by
   refine of_triple_opt (Q := fun e => ∃ r, (Core.Record.ofJson e.entry).toOption = some r ∧ r.schema = e.schema) ?_ h
@@ -443,10 +390,7 @@ theorem ledgerEntry_obj {line : Json} {e : LedgerEntry} (h : ledgerEntry? line =
 theorem tagged_ok_spec (tag : String) (j : Json) :
     ⦃⌜True⌝⦄ taggedSha512 tag j ⦃⇓? a => ⌜taggedSha512 tag j = .ok a⌝⦄ := ok_spec _
 
--- `mvcgen` splits `ledgerMessage` into one goal per check it makes of the identifier and the schema
 set_option maxHeartbeats 1000000 in
-/-- What a ledger entry's message hashes: the role, the identifier and the entry's tagged digest under its schema's
-tag, the entry without its `sig`. -/
 theorem ledgerMessage_ok {I : ByteArray} {entry : Json} {m : ByteArray} (h : ledgerMessage I entry = .ok m) :
     ∃ schema tag d, getD entry "schema" = .str schema ∧ ledgerTag? schema = some tag ∧
       taggedSha512 tag (Core.Record.unsigned entry) = .ok d ∧ m = Flock.Sha512.hash (ledgerBytes I d) := by
@@ -456,9 +400,7 @@ theorem ledgerMessage_ok {I : ByteArray} {entry : Json} {m : ByteArray} (h : led
   mvcgen [ledgerMessage, -Spec.throw_Except, throw_spec, tagged_ok_spec]
   all_goals exact ⟨_, _, _, by assumption, by assumption, by assumption, rfl⟩
 
--- `mvcgen` splits `recordMessage` at its check of the identifier
 set_option maxHeartbeats 1000000 in
-/-- What a record's message hashes: the role, the identifier, the host and the commitment's tagged digest. -/
 theorem recordMessage_ok {I : ByteArray} {host : String} {c : LiveCommitment} {m : ByteArray}
     (h : recordMessage I host c = .ok m) :
     ∃ d, taggedSha512 COMMITMENT_TAG c.toJson = .ok d ∧ m = Flock.Sha512.hash (recordBytes I host d) := by
@@ -468,8 +410,6 @@ theorem recordMessage_ok {I : ByteArray} {host : String} {c : LiveCommitment} {m
   mvcgen [recordMessage, -Spec.throw_Except, throw_spec, tagged_ok_spec]
   all_goals exact ⟨_, by assumption, rfl⟩
 
-/-- What a close's message hashes: the role, the identifier, its record's message, its session, its line count, its
-chain and how it ended. -/
 theorem closeMessage_ok {I : ByteArray} {host : String} {c : LiveCommitment} {session : String} {lines : Nat}
     {chain : ByteArray} {ended : Option String} {m : ByteArray}
     (h : closeMessage I host c session lines chain ended = .ok m) :
@@ -478,8 +418,6 @@ theorem closeMessage_ok {I : ByteArray} {host : String} {c : LiveCommitment} {se
   obtain ⟨r, hr, h⟩ := bind_ok.1 h
   refine ⟨r, hr, ?_⟩
   cases ended <;> exact (Except.ok.inj h).symm
-
-/-! ## The strings the finder hashes -/
 
 theorem filterMap_str {f : Json → Option String} (lines : List String) (hf : ∀ s, f (.str s) = some s) :
     (lines.map Json.str).filterMap f = lines := by
@@ -590,10 +528,6 @@ theorem close_mem_signatures {r : ChallengerRecord} {c : ChallengerClose} {m : B
   simp only [hr, hc, hm]
   exact List.mem_append_left _ (List.mem_append_right _ (List.mem_singleton_self _))
 
-/-! ## The binding -/
-
-/-- **What the device signed under `pk` that is a close's message is a run's close**, or the finder outputs a break:
-the record's and the ledger's messages begin with roles of other lengths. -/
 theorem signed_close {r m : ByteArray} {session : String} {lines : Nat} {chain : ByteArray}
     (hsigned : Signed dev key.pub m)
     (hm : m = Flock.Sha512.hash (closeBytes (ident key.pub) r session lines chain none))
@@ -666,9 +600,7 @@ theorem close_form {chain : ByteArray} {lines : Nat} {session : String}
   simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at h
   exact ⟨h.1.1.1, h.2⟩
 
--- `mvcgen` splits `ChallengerClose.ofJson` into one goal per field it parses
 set_option maxHeartbeats 1000000 in
-/-- A close's chain is 64 bytes and its session id at most 128 characters. -/
 theorem closeOfJson_ok {j : Json} {c : ChallengerClose} (h : ChallengerClose.ofJson j = .ok c) :
     c.chain.size = 64 ∧ isChallengePhaseId c.session = true := by
   refine of_triple (Q := fun c => c.chain.size = 64 ∧ isChallengePhaseId c.session = true) ?_ h
@@ -676,10 +608,6 @@ theorem closeOfJson_ok {j : Json} {c : ChallengerClose} (h : ChallengerClose.ofJ
   mvcgen [ChallengerClose.ofJson, -Spec.throw_Except, throw_spec]
   all_goals exact close_form (by assumption)
 
-/-- **A session `challengePhaseOf` accepts from a sample's record is a run the device closed, its log that run's**, or the
-finder outputs a break: the commitment, the roots and the session id `challengePhaseOf` returns from the record's session
-files are a run's of the device under the key, a run its client closed, the roots the ones that run's own release log
-shows, and the session's log is that run's lines. -/
 theorem challengePhaseOf_run {c : LiveCommitment} {roots : Roots} {sid : String}
     (h : challengePhaseOf key (getD (getD coins "session") "record") (getD (getD coins "session") "log")
       (getD (getD coins "session") "close") = .ok (c, roots, sid)) :
@@ -743,8 +671,6 @@ theorem challengePhaseOf_run {c : LiveCommitment} {roots : Roots} {sid : String}
     · exact .inr b
   · exact .inr b
 
-/-- **A session `challengePhaseOf` accepts from a sample's record is a run the device closed**, or the finder outputs a break:
-`challengePhaseOf_run` without the log. -/
 theorem challengePhaseOf_bound {c : LiveCommitment} {roots : Roots} {sid : String}
     (h : challengePhaseOf key (getD (getD coins "session") "record") (getD (getD coins "session") "log")
       (getD (getD coins "session") "close") = .ok (c, roots, sid)) :
@@ -754,9 +680,6 @@ theorem challengePhaseOf_bound {c : LiveCommitment} {roots : Roots} {sid : Strin
   · exact .inl ⟨s, hs, hc, hid, he, hr⟩
   · exact .inr b
 
-/-- **A sample `sampleCoins` accepts reads its coins against a run the device closed**, or the finder outputs a break: the
-commitment and the roots its segment's coins are read against are a run's of the device under the key, a run its client
-closed, the roots the ones that run's own release log shows. -/
 theorem sampleCoins_challengePhase {w : String} {after ξ : ByteArray} (h : sampleCoins key w label after coins = .ok ξ) :
     ∃ c roots, challengerStream c (getD coins "segment") after
         (some (((roots.find? (·.1 == label)).map (·.2)).getD [])) = .ok ξ ∧

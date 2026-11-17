@@ -6,16 +6,7 @@ import all Lean.Data.Json.Basic
 import all Init.Data.Repr
 import all Init.Data.Int.Repr
 
-/-!
-# A pins log's line and a release log's lines, read back
-
-Two logs a session's reader reads line by line, each line the canonical text of a value:
-
-* the pins log, whose line names the commit the auditor's device ran: the text of a plain value of the line's form
-  reads as its commit (`pinOf_of_canon`);
-* the release log of a session that released one challenge of one family: under the head the commitment writes, the
-  root's line (`rootLine`) and the release's line (`releaseLine`) read as the family's one root (`released_one`).
--/
+/-! A pins log's line and a one-release log's lines read back as the values whose canonical text they are. -/
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -34,7 +25,6 @@ open Plain (PlainStr PlainAt canonical_canon)
 open Built (isDigest_hex plain_hexOf hexOf_len canon_mkObj_le canon_str_le canon_num keys?_mkObj wf_of_good)
 open Bodies (read_str read_num)
 
-/-- **A pins log's line reads as its commit**: the text of a plain value of the pins log's form. -/
 theorem pinOf_of_canon {d : Json} {text t : String} {pin : ByteArray} (hp : PlainAt PyJson.DEPTH d)
     (hc : Flock.canon d = .ok text) (hk : keys? d = some #["commit", "main", "pinned_utc"])
     (hcm : getD d "commit" = .str (Flock.hexOf pin)) (hm : getD d "main" = .str (Flock.hexOf pin))
@@ -51,12 +41,10 @@ theorem pinOf_of_canon {d : Json} {text t : String} {pin : ByteArray} (hp : Plai
   unfold pinOf?
   simp [hpe, hpy, hke, h1, h2, h3, hd, hl, strOf, Except.toOption, guard, bind, Option.bind, pure, failure]
 
-/-- The log's line of the one root the device received: the family `label`'s root `after`, at index 0. -/
 def rootLine (label : String) (after : ByteArray) : Json :=
   Json.mkObj [("event", .str "root"), ("index", Lean.toJson (0 : Nat)), ("label", .str label),
     ("received_at", Lean.toJson (0 : Nat)), ("root", .str (Flock.hexOf after))]
 
-/-- The log's line of the one release: the family `label`'s challenge at index 0, released after `after`. -/
 def releaseLine (label : String) (after : ByteArray) : Json :=
   Json.mkObj [("after", .str (Flock.hexOf after)), ("event", .str "release"), ("index", Lean.toJson (0 : Nat)),
     ("label", .str label), ("released_at", Lean.toJson (0 : Nat))]
@@ -68,7 +56,6 @@ theorem isTime_nat (n : Nat) : isTime (.num ⟨n, 0⟩) = true := by simp [isTim
 theorem canon_zero : ∃ t, Flock.canon (Lean.toJson (0 : Nat)) = .ok t ∧ t.length ≤ 1 :=
   ⟨_, canon_num 0, by decide⟩
 
-/-- The text of the root's line, and its length. -/
 theorem canon_rootLine {label : String} (after : ByteArray) (hl : PlainStr label) :
     ∃ t, Flock.canon (rootLine label after) = .ok t ∧ t.length ≤ 64 + label.length + (Flock.hexOf after).length := by
   obtain ⟨t, ht, hlen⟩ := canon_mkObj_le (l := [("event", .str "root"), ("index", Lean.toJson (0 : Nat)),
@@ -82,7 +69,6 @@ theorem canon_rootLine {label : String} (after : ByteArray) (hl : PlainStr label
   simp only [List.sum_cons, List.sum_nil] at hlen
   exact ⟨t, ht, by omega⟩
 
-/-- The text of the release's line, and its length. -/
 theorem canon_releaseLine {label : String} (after : ByteArray) (hl : PlainStr label) :
     ∃ t, Flock.canon (releaseLine label after) = .ok t ∧ t.length ≤ 68 + label.length + (Flock.hexOf after).length := by
   obtain ⟨t, ht, hlen⟩ := canon_mkObj_le (l := [("after", .str (Flock.hexOf after)), ("event", .str "release"),
@@ -110,8 +96,6 @@ theorem good_releaseLine (label : String) (after : ByteArray) : Good (releaseLin
     rcases hp with rfl | rfl | rfl | rfl | rfl
     all_goals first | exact Good.str _ | exact Good.num _)
 
-/-- **The log of one root and one release gives the family its root**: under the head a commitment of the one family
-`label` writes, the root's line and the release's line, each the text of its value, read as the family's one root. -/
 theorem released_one {c : LiveCommitment} {label : String} {after : ByteArray} {n : Nat}
     (hf : c.families = [(label, n)]) (hl : PlainStr label) (hll : label.length ≤ 128) (ha : after.size = 64) :
     ∃ a b, Flock.canon (rootLine label after) = .ok a ∧ Flock.canon (releaseLine label after) = .ok b ∧

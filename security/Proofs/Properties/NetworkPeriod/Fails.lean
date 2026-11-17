@@ -7,23 +7,8 @@ import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Data.Finset.Powerset
 import Mathlib.Data.Nat.Choose.Basic
 
-/-!
-# The period check's `K` at the terms of the failure forms
-
-`NetworkCheck.Period`'s terms charge every connection's cells (`capsTerm`), in `cells` and again in `schedules`.
-`MonitoringPeriodLeakFailsAtMost`'s count has neither factor: it has the registered parameters' count and the fail
-patterns of the period's failed connections. These lemmas say what the check's `K` bounds at the terms that count:
-
-* `rowsTermsFails`: the rows form's `rowsTerms` with `schedules` the registered parameters' count and `cells` the
-  failures' term (`failsTerm`: `⌈log2⌉` of `failsAtMost`, the patterns of at most `fails` of the connections at the
-  widest bound, which is 0 with no failure);
-* `failsAtMostCovers`: `failsAtMost` covers `failPatterns`, summed up to `fails`;
-* `rowsKBoundsFails`, `rowsKBoundsFailPatterns`: `K` at `rowsTermsFails` bounds the count, at the check's number for
-  the patterns and at `failPatterns`.
-
-The check does not compute `rowsTermsFails`: its `rowsTerms` is unchanged, and these are lemmas about `K` at another
-record.
--/
+/-! What the period check's `K` bounds at the terms `MonitoringPeriodLeakFailsAtMost`'s count has: the registered
+parameters' count and the failed connections' fail patterns. -/
 
 @[expose] public section
 
@@ -31,23 +16,15 @@ namespace NetTiming.MonitoringPeriodTerms
 
 open NetworkCheck.Period Properties.NetworkPeriod
 
-/-- The widest bound. -/
 def boundMax (cells : Array ℕ) : ℕ := cells.foldl max 0
 
-/-- One step of `failsAtMost`'s loop at `j`: the state is `C(n, j)`, `bound^j` and the sum so far. -/
 def failsStep (n bound : ℕ) (s : ℕ × ℕ × ℕ) (j : ℕ) : ℕ × ℕ × ℕ :=
   (s.1 * (n - j) / (j + 1), s.2.1 * bound, s.2.2 + s.1 * (n - j) / (j + 1) * (s.2.1 * bound))
 
-/-- `Σ_{j ≤ b} C(n, j) · bound^j`: the fail patterns of at most `b` of `n` connections, each failing at one of `bound`
-cells (`atMost`'s loop with each term weighted, as a fold). -/
 def failsAtMost (n bound b : ℕ) : ℕ := ((List.range (min b n)).foldl (failsStep n bound) (1, 1, 1)).2.2
 
-/-- **The failures' term**: `⌈log2 Σ_{j ≤ fails} C(N, j) · boundMax^j⌉` over the bounds' `N` connections, 0 with no
-failure. -/
 def failsTerm (cells : Array ℕ) (fails : ℕ) : ℕ := clog2 (failsAtMost cells.size (boundMax cells) fails)
 
-/-- The rows form's terms with each length read once: `rowsTerms` with `schedules` the registered parameters' count
-(`thetas`, one under one fixed schedule) and `cells` the term of the period's `fails` failed connections. -/
 def rowsTermsFails (facts : Array Facts) (scan : Scan) (scans : Array (Facts × ℕ × ℕ)) (cells : Array ℕ)
     (thetas fails jitter windows : ℕ) (charged : Array Facts := #[]) : Public :=
   { rowsTerms facts scan scans cells jitter windows charged with
@@ -62,10 +39,6 @@ theorem K_failsOfFn (facts : Array Facts) (scan : Scan) (jitter windows thetas f
   rw [foldl_ofFn]
   rfl
 
-/-- **The rows form's `K` at `fails` failures bounds the count of the runs with at most `fails`**, at the check's
-number for the patterns. For the bounds `bounds` of `m` connections, `thetas` registered parameters and `fails` failed
-connections: `failsAtMost`, times `thetas`, times each window's factors at the check's numbers, is at most `2 ^ K`.
-With no failure and one registered parameter the first two factors are one and their terms zero. -/
 theorem rowsKBoundsFails (facts : Array Facts) (scan : Scan) (jitter windows thetas fails : ℕ) {m n : ℕ}
     (bounds : Fin m → ℕ) (w : Fin n → Facts) (tied faulty : Fin n → ℕ) (charged : Array Facts) :
     failsAtMost m (boundMax (Array.ofFn bounds)) fails *
@@ -88,7 +61,6 @@ theorem rowsKBoundsFails (facts : Array Facts) (scan : Scan) (jitter windows the
   rw [K_failsOfFn, pow_add, pow_add, mul_comm (2 ^ clog2 thetas), mul_assoc]
   exact Nat.mul_le_mul hf (Nat.mul_le_mul (le_two_pow_clog2 _) hw)
 
-/-- The loop's state after `t ≤ n` steps: `C(n, t)`, `bound^t` and `Σ_{i ≤ t} C(n, i) · bound^i`. -/
 theorem failsFold (n bound t : ℕ) (ht : t ≤ n) :
     (List.range t).foldl (failsStep n bound) (1, 1, 1) =
       (n.choose t, bound ^ t, ∑ i ∈ Finset.range (t + 1), n.choose i * bound ^ i) := by
@@ -101,7 +73,6 @@ theorem failsFold (n bound t : ℕ) (ht : t ≤ n) :
     rw [List.range_succ, List.foldl_append, ih (Nat.le_of_succ_le ht), List.foldl_cons, List.foldl_nil]
     simp only [failsStep, hc, Finset.sum_range_succ (fun i => n.choose i * bound ^ i) (t + 1), pow_succ]
 
-/-- The loop is the sum it names. -/
 theorem failsAtMost_eq (n bound b : ℕ) :
     failsAtMost n bound b = ∑ i ∈ Finset.range (min b n + 1), n.choose i * bound ^ i := by
   simp only [failsAtMost, failsFold n bound (min b n) (Nat.min_le_right b n)]
@@ -123,8 +94,6 @@ theorem le_boundMax {m : ℕ} (bounds : Fin m → ℕ) (c : Fin m) : bounds c �
   rw [← Array.foldl_toList]
   exact (foldl_max_ge _ 0).2 _ (Array.mem_toList_iff.mpr (Array.mem_ofFn.2 ⟨c, rfl⟩))
 
-/-- **The check's number covers the fail patterns**: the patterns of at most `fails` of the `m` connections, each
-failing below its bound (`failPatterns`, summed up to `fails`), number at most `failsAtMost` at the widest bound. -/
 theorem failsAtMostCovers {m : ℕ} (bounds : Fin m → ℕ) (fails : ℕ) :
     ∑ i ∈ Finset.range (fails + 1), failPatterns bounds i ≤ failsAtMost m (boundMax (Array.ofFn bounds)) fails := by
   rw [failsAtMost_eq]
@@ -153,9 +122,6 @@ theorem failsAtMostCovers {m : ℕ} (bounds : Fin m → ℕ) (fails : ℕ) :
             omega
           rw [Nat.choose_eq_zero_of_lt hlt, zero_mul]
 
-/-- **The rows form's `K` at `fails` failures bounds `MonitoringPeriodLeakFailsAtMost`'s factors at the check's numbers**: the
-fail patterns of at most `fails` connections below their bounds (`Σ_{i ≤ fails} failPatterns bounds i`), times `thetas`
-registered parameters, times each window's factors, is at most `2 ^ K`. -/
 theorem rowsKBoundsFailPatterns (facts : Array Facts) (scan : Scan) (jitter windows thetas fails : ℕ) {m n : ℕ}
     (bounds : Fin m → ℕ) (w : Fin n → Facts) (tied faulty : Fin n → ℕ) (charged : Array Facts) :
     (∑ i ∈ Finset.range (fails + 1), failPatterns bounds i) *

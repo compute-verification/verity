@@ -7,21 +7,7 @@ public import Proofs.Properties.InferenceOnly.RecordSameSlot
 public import Proofs.Properties.InferenceOnly.RecordWire
 public import Proofs.Properties.InferenceOnly.RecordWireRead
 
-/-!
-# What a row's kind says of the row
-
-The record check classes every reader row by what fills it (`Record.Case.rowKind`). Two kinds are not fresh, and
-each says something of the row, on a record the check reads:
-
-* `theta_held`: a row of kind `theta` is held. The check gives the reason it counts as θ (`Record.Case.heldAt`).
-* `inside_writer`: a row of kind `inside` has a writer, and the writer's unit is in the row's slot.
-
-Both read what fills the row off the declarations. No two declarations fill one row (`inputsOf_decls`), so what
-fills a row is the fill of any declaration that covers it (`fill_of_cover`, by `cover_apart`: two disjoint wires do
-not both cover a row). A row of kind `inside` is filled by a wire's declaration whose wire the check found to stay
-inside a slot (`Record.sameSlot`); the row's writer is that wire's, at the row's index, and the test is sound there
-(`sameSlot_sound`) for a wire with a step for each digit and no digit of radix zero (`text_digits`).
--/
+/-! A row of kind `theta` is held, and a row of kind `inside` has a writer in the row's slot. -/
 
 @[expose] public section
 
@@ -33,9 +19,6 @@ open InferenceOnlyCheck.Record.SecurityProofs (read_front finish_text slotOf One
 open Spot.RecordText (Row Decl Fill Inputs fillAt)
 open Lean (Json)
 
-/-! ## One declaration fills a row -/
-
-/-- **Two disjoint wires do not both cover a row.** -/
 theorem cover_apart {a b : Spot.Wires.Wire} (h : Spot.Wires.disjoint a b = true) {t : String} {u : ℕ} {p : String}
     {row : ℕ} (ha : (a.indexOf t u p row).isSome = true) (hb : (b.indexOf t u p row).isSome = true) : False := by
   obtain ⟨i, hi⟩ := Option.isSome_iff_exists.1 ha
@@ -48,7 +31,6 @@ theorem cover_apart {a b : Spot.Wires.Wire} (h : Spot.Wires.disjoint a b = true)
   · exact h (h2.trans h2'.symm)
   all_goals omega
 
-/-- **What fills a row is the fill of any declaration that covers it**, where no two declarations fill one row. -/
 theorem fill_of_cover : ∀ {ds : List Decl}, Spot.Wires.pairwiseDisjoint (ds.map (·.w)) = true → ∀ {d : Decl},
     d ∈ ds → ∀ {r : Row}, (d.w.indexOf r.tid r.unit r.port r.row).isSome = true → fillAt ds r = some d.fill
   | [], _, _, hm, _, _ => by cases hm
@@ -68,12 +50,6 @@ theorem fill_of_cover : ∀ {ds : List Decl}, Spot.Wires.pairwiseDisjoint (ds.ma
       simp only [hna]
       exact fill_of_cover hrest hm' hc
 
-/-! ## A row of kind theta is held -/
-
-/-- **A row of kind `theta` is held**: the check gives a reason it counts as θ (`Case.heldAt`). A row a registered
-read or a table read fills is of kind `theta` where its parameter is θ, which is when `heldAt` gives the reason; a
-row an opening fills is of kind `theta` where the opening is held, which `openingHeld` decides by the opening's
-reader being pinned and its table lying in a θ parameter, the two things `heldAt` asks beside. -/
 theorem theta_held {f : Front} {pin : String → Option String} {c : Case} (hc : finish f pin = .ok c) (r : Row)
     (hk : c.rowKind r = Kind.theta) : (c.heldAt r).isSome = true := by
   obtain ⟨-, -, -, -, -, hheld⟩ := finish_case hc
@@ -142,11 +118,6 @@ theorem theta_held {f : Front} {pin : String → Option String} {c : Case} (hc :
       simp only [kindOf] at hk
       cases hk
 
-/-! ## A row of kind inside has its writer in its slot -/
-
-/-- **A row of kind `inside` has a writer, in the row's slot.** The row is filled by a wire's declaration, the wire
-one the check found to stay inside a slot (`Record.sameSlot`); the row's writer is that wire's (no two declarations
-fill one row), at the row's index, where `sameSlot` is sound (`sameSlot_sound`). -/
 theorem inside_writer {j tr : Json} {c : Case} (h : read j tr = .ok c) (r : Row)
     (hk : c.rowKind r = Kind.inside) :
     (c.wired.writerOf r.tid r.unit r.port r.row).isSome = true ∧
@@ -171,7 +142,6 @@ theorem inside_writer {j tr : Json} {c : Case} (h : read j tr = .ok c) (r : Row)
         split at hk
         · assumption
         · cases hk
-      -- the declaration that fills the row is wire `i`'s, and the wire covers the row
       have hfill0 := hfill
       unfold fillAt at hfill
       obtain ⟨d, hd, hdf⟩ := Option.map_eq_some_iff.1 hfill
@@ -201,7 +171,6 @@ theorem inside_writer {j tr : Json} {c : Case} (h : read j tr = .ok c) (r : Row)
           rfl
         · intro wt wu out s s' hw hs hs'
           obtain ⟨w', hw'm, idx', hidx'', rfl, rfl, rfl⟩ := writerOf_wire hchk hw
-          -- the writer's wire is wire `i`
           have hw'e : w' = w := by
             rw [hwires] at hw'm
             obtain ⟨i'', hi''⟩ := List.mem_iff_getElem?.1 hw'm

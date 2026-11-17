@@ -3,17 +3,7 @@ module
 public import Spot.RecordText
 public import Proofs.Properties.InferenceOnly.LeafWidthsType
 
-/-!
-# A field's leaf is a leaf of the return
-
-An output row is one field of a Definition's return type (`Flock.Program.fieldsOf`), and its leaves are the return's
-leaves from the field's first, the leaves of the fields before it.
-
-* `fields_leaf`: of a list of types, a leaf of one of them is a leaf of the list's, after the leaves of the types
-  before it, and the fold `Widths.wAt` runs over a Tuple's fields reads it at the field's width.
-* `field_leaf`: leaf `l` of field `f` of a type is the type's leaf `o + l`, `o` the leaves of the fields before
-  `f`, and the type's leaf there is as wide as the field's leaf `l`.
--/
+/-! A field's leaf is a leaf of the Definition's return, after the leaves of the fields before it. -/
 
 @[expose] public section
 
@@ -23,21 +13,16 @@ open Flock.Program
 open InferenceOnlyCheck.Properties.SecurityProofs.LeafWidths (wStep foldl_leaves field_le fold_wAt leaves_tuple leaves_record
   wAt_tuple wAt_record)
 
-/-- A list is its elements before one, the one and those after it. -/
 theorem split_at {α : Type} : ∀ (L : List α) (f : ℕ) (hf : f < L.length), L = L.take f ++ L[f] :: L.drop (f + 1)
   | [], _, hf => absurd hf (Nat.not_lt_zero _)
   | _ :: _, 0, _ => rfl
   | x :: xs, f + 1, hf => congrArg (x :: ·) (split_at xs f (Nat.lt_of_succ_lt_succ hf))
 
-/-- The fold `Widths.wAt` runs over a Record's fields is the fold over their types. -/
 theorem foldl_map_wStep {α : Type} (g : α → Ty) (j : ℕ) : ∀ (L : List α) (acc : Option ℕ × ℕ),
     (L.map g).foldl (wStep (fun t : Ty => t) j) acc = L.foldl (wStep g j) acc
   | [], _ => rfl
   | x :: xs, acc => foldl_map_wStep g j xs (wStep g j acc x)
 
-/-- **A leaf of one of a list of types is a leaf of the list's**: leaf `l` of the type at `f` is past the leaves of
-the types before it and within the list's, and the fold `Widths.wAt` runs over the list reads it there at its
-width. -/
 theorem fields_leaf (L : List Ty) (f l : ℕ) (hf : f < L.length) (hl : l < L[f]!.leaves) :
     (L.take f).foldl (fun a t => a + t.leaves) 0 + l < (L.map fun t => t.leaves).sum ∧
       (L.foldl (wStep (fun t : Ty => t) ((L.take f).foldl (fun a t => a + t.leaves) 0 + l)) (none, 0)).1 =
@@ -56,7 +41,6 @@ theorem fields_leaf (L : List Ty) (f l : ℕ) (hf : f < L.length) (hl : l < L[f]
   rw [← hsplit, Nat.add_sub_cancel_left] at hw
   exact ⟨by omega, hw⟩
 
-/-- `field_leaf`, of a type that is its own one field. -/
 theorem field_leaf_one (t : Ty) (h : fieldsOf t = [t]) (f l : ℕ) (hf : f < (fieldsOf t).length)
     (hl : l < (fieldsOf t)[f]!.leaves) :
     ((fieldsOf t).take f).foldl (fun a t => a + t.leaves) 0 + l < t.leaves ∧
@@ -73,9 +57,6 @@ theorem field_leaf_one (t : Ty) (h : fieldsOf t = [t]) (f l : ℕ) (hf : f < (fi
   rw [hz, Nat.zero_add]
   exact ⟨hl, rfl⟩
 
-/-- **A field's leaf is a leaf of the return**: leaf `l` of field `f` of the type `t` is `t`'s leaf `o + l`, `o` the
-leaves of the fields before `f` (an output row's first leaf, `outRow`), and `t`'s leaf there is as wide as the
-field's leaf `l`. -/
 theorem field_leaf (t : Ty) (f l : ℕ) (hf : f < (fieldsOf t).length) (hl : l < (fieldsOf t)[f]!.leaves) :
     ((fieldsOf t).take f).foldl (fun a t => a + t.leaves) 0 + l < t.leaves ∧
       Widths.wAt t (((fieldsOf t).take f).foldl (fun a t => a + t.leaves) 0 + l) =

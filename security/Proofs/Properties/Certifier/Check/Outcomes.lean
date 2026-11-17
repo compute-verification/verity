@@ -11,13 +11,8 @@ import Mathlib.Tactic.SetLike
 import Proofs.Properties.Certifier.Check.Check
 import Proofs.Properties.Certifier.Check.Grid
 
-/-!
-# The check's outcomes: refusals, acceptance and undecided
-
-The proofs of properties (1) to (3) of `Properties.Certifier.Check`, from the iffs they are the forward halves of
-(`answer_accepts_iff`, `accepts_iff`, `undecided_iff`). The converse halves, and the honest transcript's acceptance
-(`HonestAccepted`), are completeness, at the end.
--/
+/-! The check's refusals, acceptance and undecided outcomes, properties (1) to (3) of `Properties.Certifier.Check`, and
+their converses. -/
 
 @[expose] public section
 
@@ -49,7 +44,6 @@ theorem decodeRefusals : DecodeRefusals := by
       | error _ => simp only [he] at h; exact (h rfl).elim
       | ok ev => exact ⟨⟨p, hp⟩, ⟨cm, hc⟩, ⟨ev, he⟩⟩
 
-/-- `answer` accepts exactly when the three decode and the check accepts what they decode to. -/
 theorem answer_accepts_iff (a b c : ByteArray) :
     (protocol.answer a b c).verdict = .accept ↔ DecodedAccepted a b c := by
   unfold Core.Protocol.answer
@@ -88,7 +82,6 @@ theorem undigestedParamsReject : UndigestedParamsReject := by
   · obtain ⟨why, h'⟩ := check_unfit (c := c) hfit
     exact h why h'
 
-/-- The check accepts exactly the units every execution phase of which is accepted. -/
 theorem accepts_iff (p : Params) (c : Commitment) (e : Evidence) : protocol.Accepts p c e ↔ TransferBlocksAccepted p c e := by
   show (∃ pub prof, check p c e = .accept pub prof) ↔ _
   constructor
@@ -128,7 +121,6 @@ theorem acceptsOneRecordEach : AcceptsOneRecordEach := by
     rw [hset.1.1]
     rfl
 
-/-- The check is undecided exactly when no execution phase is refused and some awaits its record. -/
 theorem undecided_iff (p : Params) (c : Commitment) (e : Evidence) :
     (∃ why, protocol.check p c e = .undecided why) ↔ SomePending p c e := by
   show (∃ why, check p c e = .undecided why) ↔ _
@@ -175,38 +167,24 @@ theorem undecided_iff (p : Params) (c : Commitment) (e : Evidence) :
 
 theorem undecidedPending : UndecidedPending := fun p c e => (undecided_iff p c e).mp
 
-/-! ## Completeness
+/-! Completeness, not properties: the check accepts, or is undecided on, what an honest unit sends. -/
 
-Not properties: each says the check accepts (or is undecided on) what an honest unit sends, the converse of a property
-above, or the honest transcript. -/
-
-/-- **`answer` accepts bytes that decode to a unit the check accepts** (the converse of `AnswerAccepts`). -/
 theorem answer_of_decodedAccepted (a b c : ByteArray) (h : DecodedAccepted a b c) :
     (protocol.answer a b c).verdict = .accept :=
   (answer_accepts_iff a b c).mpr h
 
-/-- **The check accepts a unit every execution phase of which is accepted** (the converse of `AcceptsTransferBlocks`). -/
 theorem accepts_of_transferBlocksAccepted (p : Params) (c : Commitment) (e : Evidence) (h : TransferBlocksAccepted p c e) :
     protocol.Accepts p c e :=
   (accepts_iff p c e).mpr h
 
-/-- **The check is undecided on a unit with no execution phase refused and some awaiting its record** (the converse of
-`UndecidedPending`). -/
 theorem undecided_of_somePending (p : Params) (c : Commitment) (e : Evidence) (h : SomePending p c e) :
     ∃ why, protocol.check p c e = .undecided why :=
   (undecided_iff p c e).mpr h
 
-/-- The record an honest certifier issues for execution phase `(d, l, w)`: head `h`, the salt `s` it drew for it, and a
-certificate of the key's identifier over `(d, l, w)` and `h`'s digest `dg` under `s` with signature `σ`. -/
 def honestRecord (p : Params) (d : Direction) (l : String) (w : Nat) (h : RecordHead) (s dg σ : ByteArray) :
     Certified :=
   ⟨h, s, ⟨p.key.extract 0 16, l, d, w, certificateDigest s dg, σ⟩⟩
 
-/-- **The honest transcript is accepted.** Evidence that fits, with every declared sync admitted; parameters with their
-digests; and a commitment holding exactly one record of every execution phase, the honest one: on egress the head
-`record_head` makes of the Program's grid under the declared syncs, on ingress a complete head settled by the deadline
-of the ingress grid and its digest, each digest under the record's salt signed by the key over its
-`certificateMessage` in the parameters' session. -/
 def HonestAccepted : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (eg ig : ByteArray),
     EvidenceFits p e → ParamsDigests p eg ig →

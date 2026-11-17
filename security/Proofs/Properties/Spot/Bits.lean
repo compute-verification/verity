@@ -2,13 +2,7 @@ module
 
 public import Properties.Spot.Bits
 
-/-! # Bits' layout as the claims' program (`Properties.Spot.Bits`)
-
-`bitsGate` and `ofBGate` are inverse and keep the gates read, constructor by constructor. Bits lowers its gates in
-order, gate `g` to `gateSize kp g` gates (`lower_length`) after the `off kp g` lowered before it (`off_of_le`), so of
-`bitsProg kp κ`'s `off kp kp.size` gates (`bitsProg_length`), the one at `posOf kp g` is the last of gate `g`'s
-(`bitsProg_gate`).
--/
+/-! Bits' layout as the claims' program: gate `g` of `kp` lowers to gates whose last sits at `posOf kp g`. -/
 
 @[expose] public section
 
@@ -25,7 +19,6 @@ theorem bitsGate_ofBGate (g : Claims.Sampling.BGate) : bitsGate (ofBGate g) = g 
 theorem bitsGate_injective : Function.Injective bitsGate :=
   Function.LeftInverse.injective ofBGate_bitsGate
 
-/-- An `LGate` and its claims' gate read the same gates. -/
 theorem bitsGate_reads (g : Bits.LGate) : (bitsGate g).reads = g.reads := by
   cases g <;> rfl
 
@@ -50,7 +43,6 @@ private theorem sum_range_mono (h : ℕ → ℕ) {a b : ℕ} (hab : a ≤ b) :
     · obtain rfl : a = b + 1 := by omega
       exact Nat.le_refl _
 
-/-- **Of the first `n` lists flattened in order, list `g < n`'s element `i`** sits after the lists before it. -/
 private theorem getElem?_flatMap_range {α : Type} (f : ℕ → List α) {n g i : ℕ} (hg : g < n)
     (hi : i < (f g).length) :
     ((List.range n).flatMap f)[((List.range g).map fun x => (f x).length).sum + i]? = (f g)[i]? := by
@@ -79,7 +71,6 @@ private theorem filter_lt_range {m g : ℕ} (hg : g ≤ m) :
     · obtain rfl : g = m + 1 := by omega
       exact List.filter_eq_self.2 fun x hx => by simpa using List.mem_range.1 hx
 
-/-- Gate `g` lowers to `gateSize kp g` gates. -/
 theorem lower_length (kp : Bits.KeyProg) (κ : ℕ → Option Bool) (g : ℕ) :
     (Bits.lower kp κ g).length = Bits.gateSize kp g := by
   unfold Bits.lower Bits.gateSize
@@ -87,19 +78,15 @@ theorem lower_length (kp : Bits.KeyProg) (κ : ℕ → Option Bool) (g : ℕ) :
   | some r => rfl
   | none => cases κ g <;> rfl
 
-/-- `off kp g` at a gate of `kp` is the lowered length of the gates before it. -/
 theorem off_of_le (kp : Bits.KeyProg) {g : ℕ} (hg : g ≤ kp.size) :
     Bits.off kp g = ((List.range g).map (Bits.gateSize kp)).sum := by
   unfold Bits.off
   rw [filter_lt_range hg]
 
-/-- **`bitsProg`'s gates** are `off kp kp.size`. -/
 theorem bitsProg_length (kp : Bits.KeyProg) (κ : ℕ → Option Bool) :
     (bitsProg kp κ).gates.length = Bits.off kp kp.size := by
   simp only [bitsProg, Bits.prog, List.length_map, List.length_flatMap, lower_length, off_of_le kp (Nat.le_refl _)]
 
-/-- **Gate `g` sits at its position**: of `bitsProg kp κ`'s gates, the one at `Bits.posOf kp g` is the last of gate
-`g`'s lowered gates, under `bitsGate`. -/
 theorem bitsProg_gate (kp : Bits.KeyProg) (κ : ℕ → Option Bool) {g : ℕ} (hg : g < kp.size) :
     (bitsProg kp κ).gates[Bits.posOf kp g]? = ((Bits.lower kp κ g)[Bits.gateSize kp g - 1]?).map bitsGate := by
   have hpos : 0 < Bits.gateSize kp g := by

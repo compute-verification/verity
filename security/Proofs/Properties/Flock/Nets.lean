@@ -5,21 +5,8 @@ public import Proofs.Properties.Flock.Nets.Lines
 public import Proofs.Properties.Flock.Nets.Outs
 public import Proofs.Flock.SessionLoop.Concrete.Total
 
-/-!
-# The verifier's two fixed nets build (`Properties.Flock.Nets`)
-
-The kernel doesn't reduce `HmNets.symm`, the support merge every XOR of the builder runs, which is well-founded
-recursion, so neither layout evaluates in the kernel as written. `Nets.Twin` states the builder over a structurally
-recursive `symm` and proves it equal to the deployed one. Each SHA-512 compression of the two circuits then runs in the
-kernel chunk by chunk against a certificate of where its run puts each committed word (`Nets.Cert`, `Nets.Seg`): four
-schedule chunks, ten round chunks and the feed-forward, for `sha512x3`'s three compressions (`Nets.Sha0` to `Nets.Sha2`)
-and `hm96`'s three (`Nets.Hm1` to `Nets.Hm3`, the salt's midstate a literal by `Nets.SaltMid`). Composed, they give each
-circuit's next bit, the widths of its rows and its outputs (`Nets.Outs`).
-
-The layout's side holds for any builder state whose rows output the bits after its inputs in creation order and read
-only earlier bits: `Net.ofRows` succeeds on the layout (`Nets.Build`) and each line of its text fits (`Nets.Lines`).
-`Good` and `FlockDeploy.Concrete.Total` give both circuits those facts.
--/
+/-! The verifier's two fixed nets build in the kernel through `Nets.Twin`, a structurally recursive `symm`, because the
+kernel doesn't reduce the well-founded `HmNets.symm`. -/
 
 @[expose] public section
 
@@ -28,7 +15,6 @@ open Flock.HmNets hiding and
 
 namespace FlockDeploy.Concrete.Nets
 
-/-- **`sha512x3` builds** at its header fields. -/
 theorem sha_builds : Builds "sha512x3" (shaLaid ()) 256001 ⟨0, 64, SHA_IN⟩ ⟨1984, 16, SHA_OUT⟩ 64 := by
   have ht : Tot [] compression3 _ := tot_compression 3
   have ht := ht St.empty scoped_empty (belowL_nil _)
@@ -68,7 +54,6 @@ theorem sha_builds : Builds "sha512x3" (shaLaid ()) 256001 ⟨0, 64, SHA_IN⟩ �
   · rw [List.toList_toArray, houts]
     exact flatten_width shaOuts_width
 
-/-- **`hm96` builds** at its header fields. -/
 theorem hm_builds : Builds "hm96" (hmLaid ()) 246785 ⟨0, 32, HM_IN⟩ ⟨1920, 8, HM_OUT⟩ 32 := by
   have ht := tot_hm96Row Hm96.Default512.key St.empty scoped_empty (belowL_nil _)
   have hg := good_hm96Row Hm96.Default512.key

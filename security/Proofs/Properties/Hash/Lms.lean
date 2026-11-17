@@ -46,27 +46,14 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# LMS, proved: a key's signatures verify
-
-Completeness, not guarantees: `LmsCorrect` (every signature `signAt` returns verifies) and `LmsSigns` (`signAt` returns
-at every leaf below `2^H`), each read at the deployed parameters where a device's proof signs with them
-(`Proofs.Properties.Pous.Component`, `Proofs.Properties.Pous.WipeSigned`).
-
-A key `Lms.key` derives holds its tree: node `2^H + q` is leaf q's hash of its one-time public key, and each interior node
-r is `interior r` of its children (`key_spec`). The signature `signAt` gives at leaf q reveals each chain `a_i` steps in,
-and the verifier runs it the remaining `2^W − 1 − a_i` steps, which ends where the key's chain ended (`chain_chain`); so
-the verifier recomputes leaf q, and the path's siblings climb it to the root `T[1]` (`climb`). The signature's encoding
-is `4 + N(1 + P + H)` bytes, and its blocks decode back to it (`decode_encode`).
--/
+/-! LMS's completeness, not a guarantee: every signature `signAt` returns verifies, and `signAt` returns at every leaf
+below `2^H`. -/
 
 @[expose] public section
 
 namespace Properties.CertifierDevice.Proofs.Lms
 
 open _root_.Lms Flock
-
-/-! ## Bytes -/
 
 theorem sha512_size (m : ByteArray) : (Sha512.hash m).size = 64 := by
   unfold Sha512.hash
@@ -80,14 +67,11 @@ theorem beq_self (x : ByteArray) : (x == x) = true := by
   show (x.data == x.data) = true
   simp
 
-/-! ## Chains -/
-
 theorem chain_eq (p : Params) (I : ByteArray) (q i : Nat) (tmp : ByteArray) (start stop : Nat) :
     chain p I q i tmp start stop = (List.range' start (stop - start)).foldl
       (fun t j => p.hash (I ++ u32 q ++ u16 i ++ ⟨#[j.toUInt8]⟩ ++ t)) tmp := by
   simp [chain, Std.Legacy.Range.forIn_eq_forIn_range', List.forIn_pure_yield_eq_foldl]
 
-/-- A chain run `a` steps from its start, then on from step `a` to `e`, is the chain run `e` steps. -/
 theorem chain_chain (p : Params) (I : ByteArray) (q i : Nat) (x : ByteArray) {a e : Nat} (h : a ≤ e) :
     chain p I q i (chain p I q i x 0 a) a e = chain p I q i x 0 e := by
   rw [chain_eq, chain_eq, chain_eq, ← List.foldl_append]
@@ -98,7 +82,6 @@ theorem chain_chain (p : Params) (I : ByteArray) (q i : Nat) (x : ByteArray) {a 
   congr 1
   omega
 
-/-- Every digit is below `2^W`: at most `2^W − 1` steps. -/
 theorem digits_le (p : Params) (Q : ByteArray) (i : Nat) : (digits p Q)[i]! ≤ 2 ^ p.W - 1 := by
   unfold digits
   by_cases hi : i < p.P
@@ -108,8 +91,6 @@ theorem digits_le (p : Params) (Q : ByteArray) (i : Nat) : (digits p Q)[i]! ≤ 
   · rw [getElem!_neg _ _ (by simpa using hi)]
     exact Nat.zero_le _
 
-/-! ## The key's tree -/
-
 theorem get_set {α : Type _} [Inhabited α] (b : Array α) (i j : Nat) (v : α) :
     (b.setIfInBounds i v)[j]! = if i = j ∧ j < b.size then v else b[j]! := by
   by_cases hj : j < b.size
@@ -118,11 +99,9 @@ theorem get_set {α : Type _} [Inhabited α] (b : Array α) (i j : Nat) (v : α)
   · rw [getElem!_neg (b.setIfInBounds i v) j (by simpa using hj), getElem!_neg b j hj]
     simp [hj]
 
-/-- One step of `key`'s loop: node `top − 1 − a` from its children. -/
 def treeStep (p : Params) (I : ByteArray) (top : Nat) (b : Array ByteArray) (a : Nat) : Array ByteArray :=
   b.setIfInBounds (top - 1 - a) (Lms.interior p I (top - 1 - a) b[2 * (top - 1 - a)]! b[2 * (top - 1 - a) + 1]!)
 
-/-- After `n` steps: the size and the leaves kept, and the nodes `top − n … top − 1` each `interior` of its children. -/
 def TreeInv (p : Params) (I : ByteArray) (top : Nat) (init : Array ByteArray) (n : Nat) (b : Array ByteArray) :
     Prop :=
   b.size = 2 * top ∧ (∀ j, top ≤ j → b[j]! = init[j]!) ∧
@@ -162,7 +141,6 @@ theorem leaves_get (p : Params) (I seed : ByteArray) (top q : Nat) (hq : q < top
   rw [getElem!_pos _ _ (by simp [hsz]; omega), Array.getElem_append_right (by simp)]
   simp [leaves]
 
-/-- What `key` returns: its parameters, identifier and seed, a 16-byte identifier, and the tree. -/
 theorem key_spec {p : Params} {I seed : ByteArray} {k : PrivateKey} (h : key p I seed = .ok k) :
     k.params = p ∧ k.I = I ∧ k.seed = seed ∧ I.size = 16 ∧ k.tree.size = 2 * 2 ^ p.H ∧
       (∀ q, q < 2 ^ p.H → k.tree[2 ^ p.H + q]! = leaf p I q (otsPublic p I q ((List.range p.P).toArray.map fun i =>
@@ -183,9 +161,6 @@ theorem key_spec {p : Params} {I seed : ByteArray} {k : PrivateKey} (h : key p I
   · simp [hI] at h
     cases h
 
-/-! ## The climb -/
-
-/-- One step of `rootOf`'s climb: the node and its index, one level up. -/
 def climbStep (p : Params) (I : ByteArray) (b : ByteArray × Nat) (sib : ByteArray) : ByteArray × Nat :=
   (if b.2 % 2 = 1 then Lms.interior p I (b.2 / 2) sib b.1 else Lms.interior p I (b.2 / 2) b.1 sib, b.2 / 2)
 
@@ -207,7 +182,6 @@ theorem xor_one (r : Nat) : r ^^^ 1 = if r % 2 = 1 then r - 1 else r + 1 := by
     simpa [Nat.shiftRight_eq_div_pow] using this
   split <;> omega
 
-/-- Below the root level, the climb's node is an interior node or a leaf, not the root. -/
 theorem node_bounds {H q l : Nat} (hq : q < 2 ^ H) (hl : l < H) :
     2 ≤ (2 ^ H + q) >>> l ∧ (2 ^ H + q) >>> l < 2 * 2 ^ H := by
   rw [Nat.shiftRight_eq_div_pow]
@@ -219,13 +193,11 @@ theorem node_bounds {H q l : Nat} (hq : q < 2 ^ H) (hl : l < H) :
     omega
   · exact lt_of_le_of_lt (Nat.div_le_self _ _) (by omega)
 
-/-- The sibling of a node below the root is a node of the tree. -/
 theorem sibling_bounds {H r : Nat} (h1 : 2 ≤ r) (h2 : r < 2 * 2 ^ H) : 1 ≤ r ^^^ 1 ∧ r ^^^ 1 < 2 * 2 ^ H := by
   have : 2 * 2 ^ H % 2 = 0 := by simp
   rw [xor_one]
   split <;> omega
 
-/-- The path's siblings climb leaf q to node `(2^H + q) >>> l` after `l` levels. -/
 theorem climb (p : Params) (I : ByteArray) (tree : Array ByteArray) (q : Nat) (hq : q < 2 ^ p.H)
     (hr : ∀ r, 1 ≤ r → r < 2 ^ p.H → tree[r]! = Lms.interior p I r tree[2 * r]! tree[2 * r + 1]!) :
     ∀ l, l ≤ p.H → ((List.range l).map fun l => tree[((2 ^ p.H + q) >>> l) ^^^ 1]!).foldl (climbStep p I)
@@ -254,9 +226,6 @@ theorem top_shift (H q : Nat) (hq : q < 2 ^ H) : (2 ^ H + q) >>> H = 1 := by
   rw [Nat.shiftRight_eq_div_pow]
   exact Nat.div_eq_of_lt_le (by omega) (by omega)
 
-/-! ## Signing and verifying -/
-
-/-- Every node of the tree is N bytes. -/
 theorem node_size {p : Params} {I seed : ByteArray} {k : PrivateKey} (hk : key p I seed = .ok k) (hN : p.N ≤ 64) :
     ∀ r, 1 ≤ r → r < 2 * 2 ^ p.H → (k.tree[r]!).size = p.N := by
   obtain ⟨-, -, -, -, -, hleaf, hint⟩ := key_spec hk
@@ -276,9 +245,6 @@ theorem make_spec {N W H : Nat} {toy : Bool} {p : Params} (h : Params.make N W H
     refine ⟨?_, rfl, hc.2.2.1, hc.2.2.2⟩ <;>
     (have := hc.1; simp only [toyN, List.mem_cons, List.mem_nil_iff, or_false] at this; dsimp only; omega)
 
-/-! ## The signature's encoding -/
-
-/-- Blocks concatenated in order. -/
 def cat (l : List ByteArray) : ByteArray := l.foldr (· ++ ·) .empty
 
 theorem foldl_cat (l : List ByteArray) (acc : ByteArray) : l.foldl (· ++ ·) acc = acc ++ cat l := by
@@ -309,7 +275,6 @@ theorem cat_size {N : Nat} (l : List ByteArray) (h : ∀ x ∈ l, x.size = N) : 
     rw [ih (fun y hy => h y (by simp [hy])), h x (by simp), Nat.mul_succ]
     omega
 
-/-- Block k of blocks of N bytes each starts at byte `N · k`. -/
 theorem block_get {α : Type _} {N : Nat} (L : List (List α)) (hL : ∀ x ∈ L, x.length = N) :
     ∀ k (hk : k < L.length), ((L.flatten).drop (N * k)).take N = L[k] := by
   induction L with
@@ -335,8 +300,6 @@ theorem get!_append (a r : ByteArray) (i : Nat) (h : i < a.size) :
   simp only [ByteArray.data_append]
   rw [getElem!_pos _ i (by simp; omega), Array.getElem_append_left]
 
-/-- `Signature.decode` inverts `Signature.encode` on a signature of `P` chain values and `H` path nodes, N bytes each,
-whose leaf fits `u32`. -/
 theorem decode_encode (p : Params) (s : Signature) (hq : s.q < 2 ^ 32) (hC : s.C.size = p.N) (hy : s.y.size = p.P)
     (hpath : s.path.size = p.H) (hys : ∀ x ∈ s.y, x.size = p.N) (hps : ∀ x ∈ s.path, x.size = p.N) :
     Signature.decode p s.encode = .ok s := by
@@ -395,7 +358,6 @@ theorem decode_encode (p : Params) (s : Signature) (hq : s.q < 2 ^ 32) (hC : s.C
   rw [hq', hy', hp']
   rfl
 
-/-- The verifier runs each revealed chain value on to the chain's end: the one-time key's chain ends. -/
 theorem ots_z (p : Params) (I seed : ByteArray) (q : Nat) (a : Array Nat) (ha : ∀ i : Nat, a[i]! ≤ 2 ^ p.W - 1) :
     ((List.range p.P).toArray.map fun (i : Nat) => chain p I q i
       ((List.range p.P).toArray.map fun (i : Nat) => chain p I q i (secret p I seed q i) 0 a[i]!)[i]! a[i]! (2 ^ p.W - 1)) =
@@ -407,7 +369,6 @@ theorem ots_z (p : Params) (I seed : ByteArray) (q : Nat) (a : Array Nat) (ha : 
   simp only [Array.getElem_map, List.getElem_toArray, List.getElem_range]
   exact chain_chain p I q i _ (ha i)
 
-/-- The signature `signAt` gives at leaf `q < 2^H` verifies under the key's public key. -/
 theorem verify_signAt {N W H : Nat} {toy : Bool} {p : Params} {I seed : ByteArray} {k : PrivateKey} {q : Nat}
     (m : ByteArray) (hp : Params.make N W H toy = .ok p) (hk : key p I seed = .ok k) (hq : q < 2 ^ H) :
     ∃ sig, signAt k q m = .ok sig ∧ verify p k.publicKey m sig = .ok true ∧ sig.q = q ∧
@@ -474,7 +435,6 @@ theorem lmsCorrect : LmsCorrect := by
   have : 2 ^ H ≤ 2 ^ 30 := Nat.pow_le_pow_right (by omega) hH30
   exact ⟨hv, decode_encode p sig (by omega) hC hy hpath hys hps⟩
 
-/-- `Lms.key` succeeds on every 16-byte identifier. -/
 theorem key_ok (p : Params) {I : ByteArray} (hI : I.size = 16) (seed : ByteArray) : ∃ k, key p I seed = .ok k := by
   unfold key
   simp only [Std.Legacy.Range.forIn_eq_forIn_range', List.forIn_pure_yield_eq_foldl]

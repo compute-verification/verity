@@ -3,27 +3,8 @@ module
 public import InferenceOnlyCheck.Desc
 public import Mathlib.Tactic
 
-/-!
-# The description-sized inference-only check against the unrolled one
-
-`InferenceOnlyCheck.Desc.evaluate` (`verity/protocols/policy/inference_only/verifier/lean/InferenceOnlyCheck/Desc.lean`) computes per inference block its size and
-its fresh input bits from one summary per Definition, where `InferenceOnlyCheck.evaluate` walks the circuit gate by gate. What is
-proved here is the summaries' arithmetic, each step stated against the function that computes it:
-
-* `sizes_eq_count`: an inference block's size as `Desc.sizes` sums it, root node by root node, is the number of gates the expanded
-  division puts in it (each gate in its root node's inference block), which is what `InferenceOnlyCheck.tally` counts gate by gate
-  (`sizes_eq_tally` in `Proofs.Properties.InferenceOnly`).
-* `affine_resolves`: the batch fast path's gate for leaf `e` of a batch output (`Piece.affine`) is the gate §7's
-  resolution reaches member by member (`Flock.Program.resolveStep`: member `e / L`, its return leaf `e % L`).
-* `sum_copies`: copies of a frame of gates, one period apart and each within its period, have copies times one copy's
-  width: `freshWidth`'s count of a batch's whole members that no other read meets.
-
-Not proved here: that `analyze`'s reads per root node are the unrolled operands outside it (what `Prog.gate` returns,
-through §7's resolution), `Fresh.ReadsExact`, proved in `Proofs.Properties.InferenceOnly.Agrees` (`Fresh.readsExact`). That
-`freshWidth` is the width of the union of the gates it is given is proved in `Width` (`freshWidthExact`). The difftest
-holds the description-sized check against the unrolled one too (`runs` `InferenceOnlyCheck.DescDifftestMain` in the package's
-`lean-audit.json`: 4,009 declarations).
--/
+/-! The arithmetic of the description-sized check's summaries, each step against the function that computes it; not
+proved here: `Fresh.ReadsExact` (in `Agrees`) and `freshWidthExact` (in `Width`). -/
 
 @[expose] public section
 
@@ -31,13 +12,10 @@ namespace InferenceOnlyCheck.Properties.SecurityProofs.Desc
 
 open InferenceOnlyCheck.Desc
 
-/-! ## Sizes -/
-
 private theorem getElem!_modify' {α : Type} [Inhabited α] (xs : Array α) (j : ℕ) (f : α → α) {i : ℕ}
     (hi : i < xs.size) : (xs.modify j f)[i]! = if j = i then f xs[i]! else xs[i]! := by
   rw [getElem!_pos _ i (by simpa using hi), Array.getElem_modify, getElem!_pos xs i hi]
 
-/-- `sizes`' first `m` root nodes: per inference block, the gates of its nodes among them. -/
 theorem sizes_inv (offs : Array ℕ) (own : Array (Option ℕ)) (n : ℕ) : ∀ m,
     let s := (List.range m).foldl (fun s k => match own[k]! with
       | some u => s.modify u (· + (offs[k + 1]! - offs[k]!))
@@ -69,7 +47,6 @@ theorem sizes_spec (offs : Array ℕ) (own : Array (Option ℕ)) (n : ℕ) :
       ∑ k ∈ (Finset.range own.size).filter (fun k => own[k]! = some u), (offs[k + 1]! - offs[k]!) :=
   sizes_inv offs own n own.size
 
-/-- The gates of `[0, offs[m])` a predicate holds of, block by block: node `k`'s `[offs[k], offs[k + 1])`. -/
 theorem card_filter_blocks (offs : Array ℕ) (K : ℕ) (h0 : offs[0]! = 0) (hmono : ∀ k < K, offs[k]! ≤ offs[k + 1]!)
     (p : ℕ → Prop) [DecidablePred p] : ∀ m ≤ K,
     ((Finset.range offs[m]!).filter p).card = ∑ k ∈ Finset.range m, ((Finset.Ico offs[k]! offs[k + 1]!).filter p).card
@@ -79,9 +56,6 @@ theorem card_filter_blocks (offs : Array ℕ) (K : ℕ) (h0 : offs[0]! = 0) (hmo
       Finset.range_eq_Ico, ← Finset.Ico_union_Ico_eq_Ico (Nat.zero_le _) (hmono m (by omega)), Finset.filter_union,
       Finset.card_union_of_disjoint (Finset.disjoint_filter_filter (Finset.Ico_disjoint_Ico_consecutive _ _ _))]
 
-/-- **An inference block's size is its number of gates.** On a division that is `own`'s expansion, root node `k` holding gates
-`[offs[k], offs[k + 1])` (`offs` from `0` to the circuit's `N`, as the canonical layout lays the root's nodes out) and
-each of them in inference block `own[k]`, `Desc.sizes` gives per inference block `u` the number of gates the division puts in `u`. -/
 theorem sizes_eq_count (offs : Array ℕ) (own : Array (Option ℕ)) (n N : ℕ) (owner : ℕ → Option ℕ)
     (h0 : offs[0]! = 0) (hN : offs[own.size]! = N) (hmono : ∀ k < own.size, offs[k]! ≤ offs[k + 1]!)
     (hexp : ∀ k < own.size, ∀ g, offs[k]! ≤ g → g < offs[k + 1]! → owner g = own[k]!) (u : ℕ) (hu : u < n) :
@@ -96,17 +70,10 @@ theorem sizes_eq_count (offs : Array ℕ) (own : Array (Option ℕ)) (n N : ℕ)
   · rw [Finset.filter_true_of_mem fun g hg => (hblock g hg).trans h, Nat.card_Ico]
   · rw [Finset.filter_false_of_mem fun g hg => by rw [hblock g hg]; exact h, Finset.card_empty]
 
-/-! ## The batch fast path -/
-
 theorem affine_at (q : Piece) (w : ℕ) (A F : ℤ) (t : ℕ) : (q.affine w A F).at t = A + q.at t * F := by
   simp only [Piece.affine, Piece.at]
   ring
 
-/-- **The batch fast path is §7's resolution, member by member.** Leaf `e` of the output of a batch node at gate `o`,
-whose members have `G` gates each and return their `L` leaves as the gates `b + t * s` of their activation, is
-(`Flock.Program.resolveStep`) leaf `e % L` of member `e / L`, whose activation starts at `o + (e / L) * G`: gate
-`o + (e / L) * G + (b + (e % L) * s)`. Where `down` takes the fast path (`L = 1`, or `G = L * s`: the members' runs
-make one), that is the gate its piece (`Piece.affine`, `A = o + b`) gives the element `t` that names leaf `e`. -/
 theorem affine_resolves (q : Piece) (w : ℕ) (o b s : ℤ) (G L : ℕ) (hL : 0 < L) (h : L = 1 ∨ (G : ℤ) = L * s)
     (t e : ℕ) (he : q.at t = e) :
     (q.affine w (o + b) (if L == 1 then (G : ℤ) else s)).at t = o + ((e / L : ℕ) : ℤ) * G + (b + ((e % L : ℕ) : ℤ) * s) := by
@@ -126,11 +93,6 @@ theorem affine_resolves (q : Piece) (w : ℕ) (o b s : ℤ) (G L : ℕ) (hL : 0 
     · simp only [Nat.div_one, Nat.mod_one, beq_self_eq_true, ite_true, Nat.cast_zero, zero_mul, add_zero]
       ring
 
-/-! ## Copies of one frame -/
-
-/-- **Copies count as copies times one copy.** `cnt` copies of a frame of gates `S` (each below `span ≤ period`), copy
-`m` at `lo + m * period`, whose widths repeat from copy to copy (a batch's members, at the same offsets), have total
-width `cnt` times one copy's: `freshWidth`'s count of a frame that no other read meets, `x.cnt * distinctWidth x.res`. -/
 theorem sum_copies (S : Finset ℕ) (lo period span cnt : ℕ) (hS : ∀ x ∈ S, x < span) (hp : span ≤ period)
     (w : ℕ → ℕ) (hw : ∀ m < cnt, ∀ x ∈ S, w (lo + m * period + x) = w (lo + x)) :
     ∑ y ∈ (Finset.range cnt).biUnion (fun m => S.image (lo + m * period + ·)), w y = cnt * ∑ x ∈ S, w (lo + x) := by

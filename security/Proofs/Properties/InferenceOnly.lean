@@ -16,21 +16,8 @@ import all Lean.Data.Json.Basic
 import all Lean.Data.Json.FromToJson.Basic
 import all Init.Data.Ord.String
 
-/-!
-# The inference-only check's properties, proved
-
-Each statement of `Properties.InferenceOnly`, proved of `InferenceOnlyCheck.evaluate` from the lemmas about its steps
-(`Proofs.Properties.InferenceOnly.Lemmas`), and the description-sized check's summaries against it (`sizes_eq_tally`, with
-`Proofs.Properties.InferenceOnly.Desc`); and the day's bound a published count gives once `DescCountsCK` holds
-(`Proofs.Properties.InferenceOnly.Count`). It also brings in which branch a Definition's digests take
-(`Proofs.Properties.InferenceOnly.DefinitionDigest`), what a closure digest hashes (`Proofs.Properties.InferenceOnly.ClosureDigest`) and
-that one closure digest gives one canonical entry for each Definition reached (`Proofs.Properties.InferenceOnly.DigestEntries`),
-what the decoder reads alike from equivalent entries (`Proofs.Properties.InferenceOnly.DigestDecode`) and that its references are
-the canonical entry's flat parts (`Proofs.Properties.InferenceOnly.DigestRefs`), equivalent one by one in equivalent entries
-(`Proofs.Properties.InferenceOnly.DigestParts`), and `DigestPins` from the statement that equivalent entries pin the decoded
-Definition (`Proofs.Properties.InferenceOnly.DigestPins`), and that statement by induction from what the decoder reads
-of each entry (`Proofs.Properties.InferenceOnly.DigestReads`), which no statement here reads.
--/
+/-! Each statement of `Properties.InferenceOnly`, proved of `InferenceOnlyCheck.evaluate` from the lemmas about its
+steps. -/
 
 @[expose] public section
 
@@ -44,7 +31,6 @@ theorem parses_unique {j : Json} {i i' : Instance} (h : Parses j i) (h' : Parses
   rw [(parse_ok j i').2 h', Except.ok.injEq] at h1
   exact h1.symm
 
-/-- `evaluate j` refuses with `k` exactly when `Malformed j k`. -/
 theorem refused_iff_malformed (j : Json) (k : String) : evaluate j = .error k ↔ Malformed j k := by
   rw [evaluate_error, parse_error, Malformed, or_assoc]
   refine or_congr_right (or_congr_right (exists_congr fun i => ?_))
@@ -58,7 +44,6 @@ theorem refused_iff_malformed (j : Json) (k : String) : evaluate j = .error k �
     obtain ⟨c, hc⟩ := (circuitOf_isOk P).2 hg
     exact ⟨c, hc, (divisionOf_error hc _ _ k).2 hd⟩
 
-/-- `evaluate j` gives a verdict exactly when `WellFormed j`. -/
 theorem verdict_iff_wellFormed (j : Json) : (∃ out, evaluate j = .ok out) ↔ WellFormed j := by
   constructor
   · rintro ⟨out, h⟩
@@ -132,7 +117,6 @@ theorem Decodes : Properties.Decodes := by
     rw [mem_iff_index, ← hmem]
     exact (Finset.mem_filter.1 hg).2
 
-/-- One step of `failure`: inference block `u`'s verdict. -/
 def failStep (gamma num den : ℕ) (r : Array (ℕ × ℕ)) (u : ℕ) : Option (ℕ × String) :=
   if r[u]!.1 > gamma then some (u, "size") else if r[u]!.2 * den > num * r[u]!.1 then some (u, "nci") else none
 
@@ -268,11 +252,6 @@ theorem Witnesses : Properties.Witnesses := by
   refine ⟨⟨dv.n, U, (Reports j out hev i' P (.ofPartition d.D d.θ d.θ_input dv.n U) hpar hdec hL hθ hU).2.2.1.1 hc⟩,
     fun hI => (Reports j out hev i' P d hpar hdec hL hθ hI).2.2.1.1 hc⟩
 
-/-- **The check's rate refines the policy's budgets**, a lemma of `Reports`: when the verdict `out` on `j` has
-`complies` `true`, the owners cover every registered circuit the Program lays out with the registered information `theta`
-names by inference blocks within the policy's budgets at `c = gamma` and `k = α c`, `α = num / den`. A block of at
-most `c` gates with at most `α` fresh input bits per gate has at most `k`, as `α ≥ 0`, and a partition's blocks hold
-every computed gate. -/
 theorem refines {j out : Json} (hev : evaluate j = .ok out) {i : Instance} {P : Prog} {d : Verity.RegisteredCircuit}
     {n : ℕ} {U : Verity.Partition d.D n} (hpar : Parses j i) (hdec : Flock.Program.decode i.program.toUTF8 = .ok P)
     (hL : LaysOut P d.D) (hθ : Names i.theta d.θ) (hU : Divides i.owner U)
@@ -288,46 +267,32 @@ theorem refines {j out : Json} (hev : evaluate j = .ok out) {i : Instance} {P : 
       Option.ne_none_iff_exists'.1 fun h => by simp [(U.input_iff g).1 h] at hg
     exact ⟨u, by simp [Verity.Partition.gates, hu]⟩
 
-/-! ## Completeness
+/-! The converses of the refusals and of the verdict, each with an instance; a well-formed instance takes the decoder's
+answer as a hypothesis, because the decoder is `partial` and the kernel can't run it. -/
 
-The converses of the refusals and of the verdict: the check refuses only the malformed, and gives a verdict on every
-well-formed instance. Each comes with an instance where its case holds. A refusal's is concrete (`Json.null`, which has
-no fields). A well-formed instance needs a program the decoder decodes, and the decoder is `partial` (`Prog.gate` and
-the descriptor's resolution), so the kernel can't run it: the instance takes what the decoder returns as a hypothesis,
-a Program whose canonical layout has no gates, with θ and the owners empty. -/
-
-/-- **A refusal is its condition** (the converse of `RejectsExactly`). -/
 theorem malformed_of_refused (j : Json) (k : String) (h : evaluate j = .error k) : Malformed j k :=
   (refused_iff_malformed j k).1 h
 
-/-- **A well-formed instance gets a verdict** (the converse of `AcceptsExactly`). -/
 theorem verdict_of_wellFormed (j : Json) (h : WellFormed j) : ∃ out, evaluate j = .ok out :=
   (verdict_iff_wellFormed j).2 h
 
-/-- **`check`'s refusal is its condition** (the converse of `CheckRefuses`). -/
 theorem check_malformed_of_refused (j : Json) (k : String) (h : (check j).getObjVal? "error" = .ok (.str k)) :
     Malformed j k :=
   malformed_of_refused j k ((check_error j k).1 h)
 
-/-- **`check` gives a verdict on a well-formed instance** (the converse of `CheckAccepts`). -/
 theorem check_verdict_of_wellFormed (j : Json) (h : WellFormed j) :
     ∀ k, (check j).getObjVal? "error" ≠ .ok (.str k) :=
   (check_verdict_iff_wellFormed j).2 h
 
-/-- **A refusal's case holds**: `Json.null` is refused, with `instance`. -/
 theorem refused_instance : evaluate Json.null = .error "instance" := (rfl)
 
-/-- `check` refuses `Json.null` with `instance`. -/
 theorem check_refused_instance : (check Json.null).getObjVal? "error" = .ok (.str "instance") :=
   (check_error _ _).2 refused_instance
 
-/-- The instance of program text `s` with θ and the owners empty, `gamma = 0` and `alpha = 0 / 1`. -/
 def noGates (s : String) : Json :=
   Json.mkObj [("program", .str s), ("theta", .arr #[]), ("owner", .arr #[]), ("gamma", toJson (0 : ℕ)),
     ("alpha", .arr #[toJson (0 : ℕ), toJson (1 : ℕ)])]
 
-/-- **A well-formed instance's case holds**: where the decoder decodes `s` to a Program with no gates, `noGates s` is
-well-formed. -/
 theorem wellFormed_instance {s : String} {P : Prog} (hP : Flock.Program.decode s.toUTF8 = .ok P) (h0 : gates P = 0) :
     WellFormed (noGates s) := by
   refine ⟨⟨s, #[], #[], 0, 0, 1⟩, P, ⟨rfl, rfl, rfl, ⟨_, rfl, rfl⟩, ⟨_, _, rfl, rfl, rfl⟩, Nat.one_pos⟩, hP,
@@ -335,11 +300,6 @@ theorem wellFormed_instance {s : String} {P : Prog} (hP : Flock.Program.decode s
   rintro ⟨g, u, hg, -⟩
   exact absurd hg (by simp)
 
-/-! ## The description-sized check -/
-
-/-- **`InferenceOnlyCheck.Desc.sizes` is the unrolled tally.** On a division that is the expansion of the root nodes' inference blocks `own`
-(root node `k` holding gates `[offs[k], offs[k + 1])`, `offs` from `0` to the circuit's `N`, each of them in inference block
-`own[k]`), the description-sized check's size of each inference block is the one `InferenceOnlyCheck.tally` counts gate by gate. -/
 theorem sizes_eq_tally (c : GateTable) (d : Division) (offs : Array ℕ) (own : Array (Option ℕ))
     (h0 : offs[0]! = 0) (hN : offs[own.size]! = c.N) (hmono : ∀ k < own.size, offs[k]! ≤ offs[k + 1]!)
     (hexp : ∀ k < own.size, ∀ g, offs[k]! ≤ g → g < offs[k + 1]! → d.owner[g]! = own[k]!) (u : ℕ) (hu : u < d.n) :

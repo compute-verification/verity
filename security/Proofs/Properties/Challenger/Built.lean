@@ -8,25 +8,7 @@ import all Lean.Data.Json.Basic
 import all Init.Data.Repr
 import all Init.Data.Int.Repr
 
-/-!
-# An object built from a list: its keys, its reads, its text and a digest's hex
-
-What an honest party writes is an object built from a list of increasing keys (`Json.mkObj`), its values strings,
-numbers, digests in hex and objects built the same way. A proof that the reader accepts it needs what each of the
-reader's checks sees:
-
-* its pairs are the list (`toList_mkObj`), so its keys are the list's (`keys?_mkObj`) and a read of a key is the
-  list's lookup (`getD_mkObj`, `field?_mkObj`);
-* `Flock.canon` writes it as its items' text, each key between quotes and its value's text (`canon_mkObj`,
-  `objText`), no longer than its braces, its keys, its values' texts and four characters a key
-  (`canon_mkObj_le`, with `canon_str_le` and `canon_num` for its leaves);
-* a hex string is plain (`plain_hexOf`), twice its bytes long (`hexOf_len`), and a digest of that length
-  (`isDigest_hex`);
-* a tagged hash of a printable value is a digest (`tagged_ok`), as a value's well-formedness gives its keys in
-  order (`wf_of_good`).
-
-`PlainStr` is decided through `List.all`, so `decide` settles it for a literal.
--/
+/-! What the reader's checks see of an object built from a list of increasing keys: its keys, reads, text and hex. -/
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -42,8 +24,6 @@ open Claims.Json (Good Wf)
 open FlockComplete.JsonRT (get?_mkObj keys_of isSome_get?_mkObj)
 open Plain (PlainChar PlainStr canonStr_plain)
 
-/-! ## Plain strings, decided -/
-
 instance instDecidablePlainChar (c : Char) : Decidable (PlainChar c) :=
   inferInstanceAs (Decidable (' ' ≤ c ∧ c ≤ '~' ∧ c ≠ '"' ∧ c ≠ '\\'))
 
@@ -52,12 +32,9 @@ theorem plainStr_iff (s : String) : PlainStr s ↔ s.toList.all (fun c => decide
 
 instance instDecidablePlainStr (s : String) : Decidable (PlainStr s) := decidable_of_iff _ (plainStr_iff s).symm
 
-/-! ## Hex -/
-
 theorem plain_hexByte : (List.range 256).all (fun n =>
     (Flock.hexOf ⟨#[n.toUInt8]⟩).toList.all fun c => decide (PlainChar c)) = true := by decide +kernel
 
-/-- **A hex string is plain.** -/
 theorem plain_hexOf (b : ByteArray) : PlainStr (Flock.hexOf b) := by
   intro c hc
   rw [Properties.NetworkRecords.Bytes.hexOf_toList, List.mem_flatMap] at hc
@@ -71,15 +48,11 @@ theorem hexOf_len (b : ByteArray) : (Flock.hexOf b).length = 2 * b.size := by
     Array.length_toList, ByteArray.size]
   omega
 
-/-- **A digest's hex is a digest**, of twice its bytes' count in characters. -/
 theorem isDigest_hex {b : ByteArray} {n : Nat} (h : 2 * b.size = n) : isDigest (.str (Flock.hexOf b)) n = true := by
   show ((Flock.hexOf b).length == n && (Flock.unhex (Flock.hexOf b)).toOption.isSome) = true
   rw [hexOf_len, Flock.Hex.unhex_hexOf, h]
   simp [Except.toOption]
 
-/-! ## A built object's pairs, keys, reads and text -/
-
-/-- **An object built from a list of increasing keys lists it back.** -/
 theorem toList_mkObj {l : List (String × Json)} (hs : (l.map (·.1)).Pairwise (· < ·)) :
     (Std.TreeMap.Raw.ofList l compare).toList = l := by
   have hwf : (Std.TreeMap.Raw.ofList l compare).WF := Std.TreeMap.Raw.WF.ofList
@@ -105,7 +78,6 @@ theorem toList_mkObj {l : List (String × Json)} (hs : (l.map (·.1)).Pairwise (
   rw [Std.TreeMap.Raw.get?_eq_getElem?, ← hk, hv] at hv'
   exact Prod.ext hk (Option.some.inj hv')
 
-/-- The text of an object's items, each a key and its value's text. -/
 def objText (items : List (String × String)) : String :=
   "{" ++ ",".intercalate (items.map fun kv => Flock.canonStr kv.1 ++ ":" ++ kv.2) ++ "}"
 
@@ -126,7 +98,6 @@ theorem zipWith_keys {l : List (String × Json)} {ts : List String}
   | nil => rfl
   | cons _ _ ih => simp only [List.zipWith_cons_cons, List.map_cons, ih]
 
-/-- **`canon` writes an object of increasing keys as its items' text**, each value's text in the list's order. -/
 theorem canon_mkObj {l : List (String × Json)} {ts : List String} (hs : (l.map (·.1)).Pairwise (· < ·))
     (hv : List.Forall₂ (fun p t => Flock.canon p.2 = .ok t) l ts) :
     Flock.canon (Json.mkObj l) = .ok (objText (List.zipWith (fun p t => (p.1, t)) l ts)) := by
@@ -140,7 +111,6 @@ theorem canon_mkObj {l : List (String × Json)} {ts : List String} (hs : (l.map 
   rfl
 
 
-/-- **An object built from increasing keys has those keys.** -/
 theorem keys?_mkObj {l : List (String × Json)} (hs : (l.map (·.1)).Pairwise (· < ·)) :
     keys? (Json.mkObj l) = some (l.map (·.1)).toArray := by
   have h : (Std.TreeMap.Raw.ofList l compare).toArray.map (·.1) = (l.map (·.1)).toArray := by
@@ -172,8 +142,6 @@ theorem intercalate_length_le (xs : List String) :
       have h1 : ",".length = 1 := rfl
       omega
 
-/-- An object's text is its braces and, for each item, its key's text, a colon, its value's text and at most one
-comma. -/
 theorem objText_length_le (items : List (String × String)) :
     (objText items).length ≤ 2 + (items.map fun kv => (Flock.canonStr kv.1).length + kv.2.length + 2).sum := by
   have h := intercalate_length_le (items.map fun kv => Flock.canonStr kv.1 ++ ":" ++ kv.2)
@@ -208,8 +176,6 @@ theorem texts_of {l : List (String × Json)} {bs : List Nat}
       String.length_append, h1]
     omega
 
-/-- **`canon` writes an object of increasing plain keys in a text no longer than its parts**: two braces and, for
-each key, the key, its value's text and four more characters. -/
 theorem canon_mkObj_le {l : List (String × Json)} {ks : List String} {bs : List Nat}
     (hks : l.map (·.1) = ks) (hs : ks.Pairwise (· < ·)) (hk : ∀ k ∈ ks, PlainStr k)
     (hv : List.Forall₂ (fun p b => ∃ t, Flock.canon p.2 = .ok t ∧ t.length ≤ b) l bs) :
@@ -229,8 +195,6 @@ theorem canon_num (m : Int) : Flock.canon (.num ⟨m, 0⟩) = .ok (toString m) :
   rw [Flock.canon]
   rfl
 
-/-! ## A printable value's tagged hash -/
-
 theorem wf_of_good {j : Json} (h : Good j) : Wf j := by
   induction h with
   | null => exact .null
@@ -240,7 +204,6 @@ theorem wf_of_good {j : Json} (h : Good j) : Wf j := by
   | arr _ ih => exact .arr ih
   | obj hm _ ih => exact .obj hm ih
 
-/-- **A printable value has a tagged hash.** -/
 theorem tagged_ok (tag : String) {j : Json} (hg : Good j) : ∃ d, taggedSha512 tag j = .ok d := by
   obtain ⟨s, hs⟩ := FlockComplete.JsonRT.canon_ok_some j hg
   obtain ⟨t, ht, -⟩ := CanonLine.canon_utf8 (CanonRead.sortedKeys_of_wf j (wf_of_good hg)) hs

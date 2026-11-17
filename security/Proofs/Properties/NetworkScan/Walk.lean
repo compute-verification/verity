@@ -6,33 +6,13 @@ public import Proofs.Properties.InferenceOnly.BodiesOk
 public import Proofs.Properties.InferenceOnly.OperandsResolve
 public import Proofs.Properties.InferenceOnly.ReadsExact
 
-/-!
-# The walk lemma
-
-**The walk lemma** (`MemberReads`): in a Program Flock decodes, topological (`Flock.Program.Prog.orderViolation`) and
-laid out (`InferenceOnlyCheck.Desc.bodiesLaidOut`), a gate in the activation of member `m` of a root node `k` calling a composite
-(by a batch or a call: a scan's iteration reads the one before) reads only gates of that activation, or a gate one of
-node `k`'s argument references resolves to from the root, what its arguments bind. It is where Flock's walk
-(`Flock.Program.Prog.gate`, `Flock.Program.resolve`) takes a gate's operands, and the scan's causality
-(`Proofs.Properties.NetworkScan.Causal`) rests on it.
-
-Fix a member `m` of a root node `k` that calls a composite by a batch or a call, and its activation `A`
-(`Prog.child P.rootScope k m`). The activations below `A` (`Below`) are `A` and the members of nodes of one. A step of
-resolution (`step_below`) from a state below `A` ends at a gate at or past its activation's offset, moves below `A` (down
-into a node's member, up to the parent or a scan's previous iteration below `A`), or leaves `A` up through one of its
-parameters, to a reference of node `k`'s argument at the root. With `Resolve.step_ok`'s bound at the end of `A`'s gates,
-resolution from below `A` (`run_below`) ends in `A`'s gates or at what a reference of node `k`'s argument resolves to
-from the root. `Prog.gate`'s walk to a gate of `A` goes through `A` (`gateStep_root`) and stays below it, and each
-operand it returns is such a resolution (`gate_below`): `memberReads`.
--/
+/-! The walk lemma (`MemberReads`): a gate in a member of a root node calling a composite reads only its activation's
+gates or what the node's argument references resolve to. -/
 
 @[expose] public section
 
 namespace Properties.NetworkScan
 
-/-- **The walk lemma.** In a Program Flock decodes, topological and laid out, a gate `g` in the activation of member
-`m` of a root node `k` that calls a composite by a batch or a call reads (its operands, `Flock.Program.Prog.gate`) only
-gates of that activation, or a gate a reference of one of node `k`'s arguments resolves to from the root. -/
 def MemberReads : Prop :=
   ∀ (bytes : ByteArray) (P : Flock.Program.Prog), Flock.Program.decode bytes = .ok P → P.orderViolation = none →
     InferenceOnlyCheck.Desc.bodiesLaidOut P = true →
@@ -54,7 +34,6 @@ namespace Properties.NetworkScan.WalkProof
 open Flock.Program
 open InferenceOnlyCheck.Properties.SecurityProofs
 
-/-- The activations at or below `A`: `A`, and each member of a node of one. -/
 inductive Below (A : Scope) : Scope → Prop
   | self : Below A A
   | child {parent : Scope} {d off k m : ℕ} : Below A parent → Below A (.child parent d off k m)
@@ -83,7 +62,6 @@ theorem child_off (P : Prog) (k m : ℕ) : (P.child P.rootScope k m).off =
       0 + (P.defs[P.root]!).body.offsets[k]! + m * (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).gates := rfl
   rw [e, Nat.zero_add]
 
-/-- Two members of `G` gates each holding `x` are one. -/
 theorem member_eq {M m G x : ℕ} (h1 : M * G ≤ x) (h2 : x < M * G + G) (h3 : m * G ≤ x) (h4 : x < m * G + G) :
     M = m := by
   rcases Nat.lt_trichotomy M m with h | h | h
@@ -95,7 +73,6 @@ theorem member_eq {M m G x : ℕ} (h1 : M * G ≤ x) (h2 : x < M * G + G) (h3 : 
     rw [Nat.add_mul, Nat.one_mul] at this
     omega
 
-/-- `Prog.gate`'s walk goes down into a member of a node. -/
 theorem gateStep_child {P : Prog} {g : ℕ} {sc sc' : Scope} (h : gateStep P g sc = .ok (.inr sc')) :
     ∃ k m, sc' = P.child sc k m := by
   unfold gateStep at h
@@ -117,7 +94,6 @@ variable (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = f
   (hB : ∀ sc, Resolve.Good P sc → Resolve.BodyOk P sc.d) (hL : ∀ d < P.defs.size, Walk.LaidOut P d)
 include hroot hB hL
 
-/-- **An activation below `A` lies within `A`'s gates.** -/
 theorem below_off {A : Scope} : ∀ {sc : Scope}, Below A sc → Resolve.Good P sc →
     A.off ≤ sc.off ∧ sc.off + (P.defs[sc.d]!).gates ≤ A.off + (P.defs[A.d]!).gates := by
   intro sc h
@@ -139,9 +115,6 @@ theorem below_off {A : Scope} : ∀ {sc : Scope}, Below A sc → Resolve.Good P 
     constructor <;> omega
 
 omit hroot hL in
-/-- **One step of resolution from below `A`**, the activation of member `m` of root node `k` (a batch or a call): it ends
-at a gate at or past its activation's offset, moves below `A`, or leaves `A` up through a parameter, to a reference of
-node `k`'s argument at the root. -/
 theorem step_below {A : Scope} {k m : ℕ} (hA : A = P.child P.rootScope k m)
     (hf : ((P.defs[P.root]!).body.nodes[k]!).form ≠ .scan) (B : ℕ) (s : Scope × Ref) (x)
     (hs : Resolve.Inv P B s) (hb : Below A s.1) (h : resolveStep P s = .ok x) :
@@ -237,8 +210,6 @@ theorem step_below {A : Scope} {k m : ℕ} (hA : A = P.child P.rootScope k m)
             cases h
             exact ⟨(fun a ha => by cases ha), fun s' hs' => by cases hs'; exact Or.inl hpb⟩
 
-/-- **Resolution from below `A`** ends in `A`'s gates, or at the gate a reference of node `k`'s argument resolves to
-from the root, in no more steps. -/
 theorem run_below {A : Scope} {k m : ℕ} (hA : A = P.child P.rootScope k m)
     (hf : ((P.defs[P.root]!).body.nodes[k]!).form ≠ .scan) :
     ∀ (n : ℕ) (s : Scope × Ref) (a : ℕ), Resolve.Inv P (A.off + (P.defs[A.d]!).gates) s → Below A s.1 →
@@ -270,7 +241,6 @@ theorem run_below {A : Scope} {k m : ℕ} (hA : A = P.child P.rootScope k m)
         exact h
 
 omit hB in
-/-- **`Prog.gate`'s first step to a gate of `A`** goes into `A`. -/
 theorem gateStep_root {k m g : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
     (hc : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false)
     (hm : m < ((P.defs[P.root]!).body.nodes[k]!).members)
@@ -311,8 +281,6 @@ theorem gateStep_root {k m g : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
     exact hnone k (Array.mem_range.2 hk)
       (by simp only [Bool.and_eq_true]; exact ⟨decide_eq_true hin.1, decide_eq_true hin.2⟩)
 
-/-- **The operands of a gate of `A`**: each is a resolution from an activation below `A`, of a state that resolves before
-the end of `A`'s gates. -/
 theorem gate_below {k m g p : ℕ} {ops : Array ℕ} {sc : Scope} (hk : k < (P.defs[P.root]!).body.nodes.size)
     (hm : m < ((P.defs[P.root]!).body.nodes[k]!).members)
     (hc : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false)
@@ -400,7 +368,6 @@ theorem gate_below {k m g p : ℕ} {ops : Array ℕ} {sc : Scope} (hk : k < (P.d
 
 end
 
-/-- **The walk lemma.** -/
 theorem memberReads : MemberReads := by
   intro bytes P hdec hov hbl k hk m hm hc hf g p ops sc hgate hg1 hg2 a ha
   obtain ⟨hr, hrp, -⟩ := BodiesOk.decode_root bytes P hdec

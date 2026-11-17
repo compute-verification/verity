@@ -19,21 +19,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 
-/-!
-# Operands resolve on the walk: `Walk.OperandsResolve`, from `Resolve.BodiesOk`
-
-`Flock.Program.resolve` walks up through parameters and down through node outputs. Numbering the root's activations
-parents first and members in order, two places each (`pos`, through `seg`, the activations a body holds before a
-node), resolution's state has a potential (`phi`): just past its activation's place for a parameter's leaf, past the
-places of node `i`'s members for a leaf of node `i`. Each step down goes into a member of the node, each step up to a
-parameter or an earlier node of the parent, and a scan's carry to the iteration before, so each lowers it
-(`step_progress`); it stays below four times the root's activations (`phi_lt`), which `Desc.walkBound` keeps within
-`Flock.Steps.FUEL`. No step refuses: `Desc.resolvable` gives the root no parameters and every scan of no iterations no
-output leaves, and `Resolve.BodyOk` the scan step's `(carry, y)`. So resolution from any state `Resolve.Inv` holds of
-ends at a gate (`resolve_ok`), and a primitive node's operands, which `Resolve.BodyOk`'s `OpOk` reads in range, all
-resolve (`operands_prim`) in every activation `Prog.gate`'s walk reaches (`reach_walkQ`): `operandsResolve_of` proves
-`Walk.OperandsResolve` from `Resolve.BodiesOk`.
--/
+/-! `Walk.OperandsResolve` from `Resolve.BodiesOk`: each step of resolution lowers a potential, so it ends at a gate. -/
 
 @[expose] public section
 
@@ -41,18 +27,13 @@ namespace InferenceOnlyCheck.Properties.SecurityProofs.OperandsResolve
 
 open Flock.Program
 
-/-- The activations one activation of Definition `d` holds in its nodes before node `k`. -/
 def seg (P : Prog) (d k : ℕ) : ℕ :=
   (((P.defs[d]!).body.nodes.toList.take k).map fun n => n.members * (Desc.activations P)[n.fn]!).sum
 
-/-- An activation's place among the root's activations, each given two places: its parent's, then one, then two for
-each activation the parent's earlier nodes and earlier members of its node hold. -/
 def pos (P : Prog) : Scope → ℕ
   | .top _ _ _ => 0
   | .child parent d _ k m => pos P parent + 1 + 2 * seg P parent.d k + m * (2 * (Desc.activations P)[d]!)
 
-/-- Resolution's potential: just past the activation's place for a parameter's leaf, past the places of node `i`'s
-members for a leaf of node `i`. -/
 def phi (P : Prog) (s : Scope × Ref) : ℕ :=
   if s.2.p then 2 * pos P s.1 + 1 else 2 * (pos P s.1 + 1 + 2 * seg P s.1.d (s.2.i + 1))
 
@@ -92,7 +73,6 @@ theorem foldl_add_sum {α : Type} (f : α → ℕ) :
     rw [foldl_add_sum f xs]
     omega
 
-/-- **A composite's activations**: its own, and those its nodes hold. -/
 theorem activations_seg (P : Prog) (hc : Desc.calleesFirst P = true) {d : ℕ} (hd : d < P.defs.size)
     (hp : (P.defs[d]!).prim = false) : (Desc.activations P)[d]! = 1 + seg P d (P.defs[d]!).body.nodes.size := by
   rw [Walk.activations_get P hc hd, hp]
@@ -105,7 +85,6 @@ theorem activations_seg (P : Prog) (hc : Desc.calleesFirst P = true) {d : ℕ} (
   rw [List.take_of_length_le (by simp)]
   omega
 
-/-- What `Desc.resolvable` checks: the root has no parameters, and a scan of no iterations no output leaves. -/
 theorem resolvable_spec (P : Prog) (h : Desc.resolvable P = true) :
     (P.defs[P.root]!).body.params.size = 0 ∧ ∀ d < P.defs.size, (P.defs[d]!).prim = false →
       ∀ k < (P.defs[d]!).body.nodes.size, ((P.defs[d]!).body.nodes[k]!).form = .scan →
@@ -130,7 +109,6 @@ variable (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = f
   (hc : Desc.calleesFirst P = true)
 include hroot hB hc
 
-/-- An activation the walk reaches holds its activations among the root's. -/
 theorem pos_bound : ∀ sc, Resolve.Good P sc →
     pos P sc + 2 * (Desc.activations P)[sc.d]! ≤ 2 * (Desc.activations P)[P.root]!
   | .top d off st, h => by
@@ -153,7 +131,6 @@ theorem pos_bound : ∀ sc, Resolve.Good P sc →
     omega
 
 omit hroot hB in
-/-- A state's potential is below its activation's place plus two for each activation it holds. -/
 theorem phi_le (sc : Scope) (r : Ref) (hd : sc.d < P.defs.size) (hp : (P.defs[sc.d]!).prim = false) :
     phi P (sc, r) + 1 ≤ 2 * pos P sc + 4 * (Desc.activations P)[sc.d]! := by
   have ha := activations_seg P hc hd hp
@@ -162,7 +139,6 @@ theorem phi_le (sc : Scope) (r : Ref) (hd : sc.d < P.defs.size) (hp : (P.defs[sc
   dsimp only
   split <;> omega
 
-/-- **Resolution's potential stays below four times the root's activations.** -/
 theorem phi_lt (B : ℕ) (s : Scope × Ref) (hs : Resolve.Inv P B s) :
     phi P s < 4 * (Desc.activations P)[P.root]! := by
   obtain ⟨sc, r⟩ := s
@@ -172,7 +148,6 @@ theorem phi_lt (B : ℕ) (s : Scope × Ref) (hs : Resolve.Inv P B s) :
   omega
 
 omit hroot in
-/-- Down into member `m` of node `i`: below the node's leaves' potential. -/
 theorem phi_down (sc : Scope) (hg : Resolve.Good P sc) (i m off : ℕ) (r : Ref)
     (hi : i < (P.defs[sc.d]!).body.nodes.size)
     (hcomp : (P.defs[((P.defs[sc.d]!).body.nodes[i]!).fn]!).prim = false)
@@ -196,7 +171,6 @@ theorem phi_down (sc : Scope) (hg : Resolve.Good P sc) (i m off : ℕ) (r : Ref)
   omega
 
 omit hroot hB in
-/-- Back to the iteration before, through a scan's carry: below the parameter's potential. -/
 theorem phi_prev (parent : Scope) (d off off' k m j : ℕ) (r : Ref) (hd : d < P.defs.size)
     (hp : (P.defs[d]!).prim = false) (hm : m ≠ 0) :
     phi P (.child parent d off' k (m - 1), r) < phi P (.child parent d off k m, ⟨true, 0, j⟩) := by
@@ -214,7 +188,6 @@ theorem phi_prev (parent : Scope) (d off off' k m j : ℕ) (r : Ref) (hd : d < P
 
 end
 
-/-- Up to the parent, at a parameter or a node before the child's: below the parameter's potential. -/
 theorem phi_up (P : Prog) (parent : Scope) (d off k m i j : ℕ) (r : Ref) (hr : r.p = false → r.i < k) :
     phi P (parent, r) < phi P (.child parent d off k m, ⟨true, i, j⟩) := by
   rw [phi_p, pos_child]
@@ -235,7 +208,6 @@ variable (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = f
         ((P.defs[d]!).body.nodes[k]!).n = 0 → ((P.defs[d]!).body.nodes[k]!).out.leaves = 0)
 include hroot hB hc hrp hz
 
-/-- **Each step of resolution ends at a gate or lowers the potential**, from a state `Resolve.Inv` holds of. -/
 theorem step_progress (B : ℕ) (s : Scope × Ref) (hs : Resolve.Inv P B s) :
     (∃ a, resolveStep P s = .ok (.inl a)) ∨ ∃ s', resolveStep P s = .ok (.inr s') ∧ phi P s' < phi P s := by
   obtain ⟨sc, ⟨p, i, j⟩⟩ := s
@@ -327,8 +299,6 @@ theorem step_progress (B : ℕ) (s : Scope × Ref) (hs : Resolve.Inv P B s) :
 
 include hL
 
-/-- **Resolution ends at a gate** from any state `Resolve.Inv` holds of, within `Flock.Steps.FUEL` when four times the
-root's activations are. -/
 theorem resolve_ok (hfuel : 4 * (Desc.activations P)[P.root]! ≤ Flock.Steps.FUEL) (B : ℕ) (sc : Scope) (r : Ref)
     (hs : Resolve.Inv P B (sc, r)) : ∃ a, resolve P sc r = .ok a := by
   obtain ⟨a, ha, -⟩ := Walk.run_of_potential (what := "scope resolution") (step := resolveStep P) (Resolve.Inv P B)
@@ -360,7 +330,6 @@ theorem forIn_list_ne {α β ε : Type} (l : List α) (f : α → β → Except 
   rw [hr]
   exact fun h => by cases h
 
-/-- **`operands` returns** when every reference it resolves does. -/
 theorem operands_ok (P : Prog) (sc : Scope) (node : Node) (m : ℕ)
     (h : ∀ i < node.args.size, ∀ t < (if (node.form == Form.batch && (node.args[i]!).dims.isSome) = true then
         ((P.defs[node.fn]!).params[i]!).2.leaves else (node.args[i]!).seq.count),
@@ -390,7 +359,6 @@ variable (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = f
   (hB : ∀ sc, Resolve.Good P sc → Resolve.BodyOk P sc.d) (hL : ∀ d < P.defs.size, Walk.LaidOut P d)
 include hroot hB hL
 
-/-- **The activations `Prog.gate`'s walk reaches** are ones resolution starts from, holding `g`. -/
 theorem reach_walkQ {g : ℕ} (hg : g < (P.defs[P.root]!).gates) {sc : Scope} (h : Walk.Reach P g sc) :
     Resolve.WalkQ P g sc := by
   induction h with
@@ -427,8 +395,6 @@ theorem reach_walkQ {g : ℕ} (hg : g < (P.defs[P.root]!).gates) {sc : Scope} (h
           omega
     · simp [throw, throwThe, MonadExceptOf.throw] at hb
 
-/-- **A primitive node's operands resolve** in an activation resolution starts from: `Resolve.BodyOk`'s `OpOk` reads
-each argument's leaves in range, and each resolves (`resolve_ok`). -/
 theorem operands_prim (hc : Desc.calleesFirst P = true) (hrp : (P.defs[P.root]!).body.params.size = 0)
     (hz : ∀ d < P.defs.size, (P.defs[d]!).prim = false →
       ∀ k < (P.defs[d]!).body.nodes.size, ((P.defs[d]!).body.nodes[k]!).form = .scan →
@@ -453,10 +419,6 @@ theorem operands_prim (hc : Desc.calleesFirst P = true) (hrp : (P.defs[P.root]!)
 
 end
 
-/-- **`Walk.OperandsResolve`, from `Resolve.BodiesOk`**: `Desc.walkable` lays every body out (`Walk.bodiesLaidOut_spec`),
-gives the root no parameters and no scan of no iterations output leaves (`resolvable_spec`), and keeps four times the
-root's activations within `Flock.Steps.FUEL` (`Desc.walkBound`), so in every activation the walk reaches
-(`reach_walkQ`) a primitive node's operands resolve (`operands_prim`). -/
 theorem operandsResolve_of (hB : Resolve.BodiesOk) : Walk.OperandsResolve := by
   intro bytes P hdec hov hlo hin hwk han g hg sc hR _ k hk hpk m hm e
   have hB' := hB bytes P hdec hov hlo hin hwk han

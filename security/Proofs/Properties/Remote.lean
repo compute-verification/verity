@@ -14,38 +14,8 @@ public import Proofs.Core.Expand
 public import Std.Data.TreeMap.Raw.Lemmas
 import all Lean.Data.Json.Basic
 
-/-!
-# Remote's acceptance and the inference-only policy, proved
-
-Remote's check is `Core.Composition.holdTies` of its tie over `Core.Composition.checkSame` over its components on the
-caller's blobs (`remote_check`), so an acceptance is `checkSame`'s with the tie held (`Properties.Composition.acceptTied`),
-and `checkSame`'s is `Core.Composition.check`'s (`checkSame_accept`), which `Properties.Composition.acceptMeans` reduces
-to each component accepting its own case, with SPOT's record the policy's (`strays_two`) and every
-Commit record the period's windows name the policy's record too (`executionPhases_tied`). The policy's
-acceptance is `InferenceOnlyCheck.Theta.evaluate`'s with the record naming the circuit (`policy_accept`), which is
-`InferenceOnlyCheck.Desc.evaluate`'s and θ's provenance (`ThetaSteps.evaluate_ok`), whose verdict `DescReports`,
-`DescWitnesses` and `ThetaProvenance` read; `InferenceOnly.SecurityProofs.constInputs_isCK` and `constInputs_expand_isCK`
-give the `(c, k)`-partitions, of the declaration with its constants registered, which needs no assumption that it is
-Boolean or of positive fan-in; where it is, they are partitions of the declaration itself (`policyMet_old_clauses`).
-The parse, declaration and division an acceptance
-exhibits come from `DescAgrees` (the verdict is the gate-by-gate check's on an expansion) and `Decodes` (that check's
-verdicts are about a parse, a layout, a baseline and a division). SPOT's acceptance is one-stage v1's check
-at the coins it read (`OneStage.checkAt`), one-stage v2's on the verdicts its own run of the verifier computed
-(`stage_zk_registered`), so its record keeps R2 (`stage_registered_at`): SPOT's params decode to no other form that
-accepts (the recursive form is refused by name, the two-stage form refuses while its switch is off). It
-reads SPOT's acceptance through the caller's check (`VStar.Recursive.Caller.gate`), whose emptiness gives the caller's
-facts (`Properties.Spot.CallerHeld`): `CallerCheckSound`, which `stage_held` takes, is the forward half of
-`CallerCheckMeans` (`callerCheckSound_of_means`), which `callerCheckMeans` proves from the check's steps, so
-`acceptInferenceOnly` rests on no premise of the caller's (`callerCheckSound`).
-
-The policy's existence clause is neither empty nor trivial: `policyMet_honest` exhibits a declaration and a division into
-nonempty inference blocks that meet the policy, and `policyMet_nontrivial` one the policy refuses at every `α`. Both
-conclusions fail at the cases a check that accepts every input accepts, `ev = []` (`acceptInferenceOnly_nontrivial`,
-`acceptComplies_nontrivial`).
-
-The digests' tie and the cases' decoding are proved over three components left abstract (`accepted_three`,
-`strays_two`), then read at remote's, so that no subprotocol's decoder or digest is unfolded by `simp`.
--/
+/-! Remote's acceptance is each component's with the tie held, and gives the inference-only policy with no premise of
+the caller's (`callerCheckSound`). -/
 
 @[expose] public section
 
@@ -75,7 +45,6 @@ theorem instance_alpha (p : InferenceOnlyCheck.Protocol.Params) (e : InferenceOn
     (instanceOf p e).getObjVal? "alpha" = .ok p.alpha :=
   getObjVal?_mkObj (by simp) (by simp)
 
-/-- Two parses of one instance agree on its program, `Γ` and `α`. -/
 theorem parses_same {j : Json} {i i' : InferenceOnlyCheck.Instance} (h : Parses j i) (h' : Parses j i') :
     i.program = i'.program ∧ i.gamma = i'.gamma ∧ i.num = i'.num ∧ i.den = i'.den := by
   obtain ⟨hp, -, -, ⟨v, hv, hg⟩, ⟨a, b, hab, ha, hb⟩, -⟩ := h
@@ -90,7 +59,6 @@ theorem parses_same {j : Json} {i i' : InferenceOnlyCheck.Instance} (h : Parses 
   exact ⟨Json.str.inj (Except.ok.inj hp'), Option.some.inj (hg.symm.trans hg'),
     Option.some.inj (ha.symm.trans ha'), Option.some.inj (hb.symm.trans hb')⟩
 
-/-- Every parse of an expansion of the policy's instance carries the policy's parameters. -/
 theorem verifier_own {p : InferenceOnlyCheck.Protocol.Params} {e : InferenceOnlyCheck.Protocol.Evidence} {j' : Json}
     {i : InferenceOnlyCheck.Instance} (hx : Expands (instanceOf p e) j') (hi : Parses j' i) : VerifierOwn p i := by
   obtain ⟨i0, -, h0, -, theta', owner', h0', -, -⟩ := hx
@@ -111,7 +79,6 @@ theorem verifier_own {p : InferenceOnlyCheck.Protocol.Params} {e : InferenceOnly
   · rw [ha, hn']
   · rw [hb, hd']
 
-/-- An expansion of the policy's instance, and what it parses to, carry the registered circuit's text. -/
 theorem expands_program {p : InferenceOnlyCheck.Protocol.Params} {e : InferenceOnlyCheck.Protocol.Evidence} {j' : Json}
     {i : InferenceOnlyCheck.Instance} (hx : Expands (instanceOf p e) j') (hi : Parses j' i) : i.program = p.program := by
   obtain ⟨i0, -, h0, -, theta', owner', h0', -, -⟩ := hx
@@ -139,7 +106,6 @@ theorem checkSame_accept {id : String} {ss : List String} {cs : List Protocol} {
     · exact ⟨h, rfl⟩
     · cases h
 
-/-- When `strays` finds no stray, every component's digest is the first's. -/
 theorem strays_none {ss : List String} {cs : List Protocol} {ev : List Case} {s : String} {d : ByteArray}
     {rest : List (String × ByteArray)}
     (hm : ss.mapM (fun s => (committedBy s cs ev).map (s, ·)) = some ((s, d) :: rest))
@@ -153,7 +119,6 @@ theorem strays_none {ss : List String} {cs : List Protocol} {ev : List Case} {s 
     exact bytes_eq_of_beq (by simpa [bne] using this)
   | some y => simp [hf] at h
 
-/-- Remote's check on the caller's blobs is its tie held over `checkSame` over its components on them. -/
 theorem remote_check (blobs : Array ByteArray) (ps : List Named) (c : ByteArray) (ev : List Case) :
     (Core.Remote.protocol.on blobs).check ps c ev =
       holdTies [Core.Remote.executionPhases] ev (checkSame "verity/remote/v0"
@@ -165,13 +130,10 @@ theorem id_policy : InferenceOnlyCheck.Protocol.protocol.id = "verity/inference-
 theorem id_monitoringPeriod : PouwCheck.Period.protocol.id = "verity/pouw/period/v1" := rfl
 theorem id_sampled (bs : Blobs) : (VStar.Recursive.Sampled.protocol.onBlobs bs).id = "verity/sampled-proofs/v1" := rfl
 
-/-- SPOT's commitment and digest are the one-stage registration record's, on any blobs. -/
 theorem digestOf_sampled (bs : Blobs) (b : ByteArray) :
     Properties.Composition.digestOf (VStar.Recursive.Sampled.protocol.onBlobs bs) b =
       Properties.Composition.digestOf Spot.OneStage.protocol b := rfl
 
-/-- What the policy's check accepts: a record naming the registered circuit, and a verdict of compliance of the check of
-record. -/
 theorem policy_accept {p : InferenceOnlyCheck.Protocol.Params} {c : InferenceOnlyCheck.Protocol.Commitment}
     {e : InferenceOnlyCheck.Protocol.Evidence} {pub : Unit} {prof : Json}
     (h : InferenceOnlyCheck.Protocol.check p c e = .accept pub prof) :
@@ -191,7 +153,6 @@ theorem policy_accept {p : InferenceOnlyCheck.Protocol.Params} {c : InferenceOnl
   · simp only [Bool.not_eq_true] at hn
     simp [hn] at h
 
-/-- The record names the circuit the program decodes to. -/
 theorem names_program {p : InferenceOnlyCheck.Protocol.Params} {c : InferenceOnlyCheck.Protocol.Commitment} {P : Prog}
     (hn : InferenceOnlyCheck.Protocol.names p c = true) (hP : Flock.Program.decode p.program.toUTF8 = .ok P) :
     InferenceOnlyCheck.Theta.strAt c.record "program" = some (Flock.hexOf P.sha512) := by
@@ -199,17 +160,11 @@ theorem names_program {p : InferenceOnlyCheck.Protocol.Params} {c : InferenceOnl
   rw [hP] at hn
   simpa using hn
 
-/-- `PolicyMet` from its first clause, every inference block meeting both bounds: the rest follows
-(`InferenceOnly.CompliesRate`, and the partitions of the declaration with its constants registered by `constInputs_isCK` and
-`constInputs_expand_isCK`, on the division with its constants taken out). -/
 theorem policyMet_of_meets {d : RegisteredCircuit} {n : ℕ} {U : Partition d.D n} {Γ : ℕ} {α : ℝ}
     (h : ∀ u, Meets d U Γ α u) : PolicyMet d U Γ α :=
   ⟨h, ⟨n, U, h⟩, fun h1 => ⟨n, U.constInputs, InferenceOnly.SecurityProofs.constInputs_isCK h h1⟩,
     fun _ hW => ⟨n, U.constInputs.expand, InferenceOnly.SecurityProofs.constInputs_expand_isCK h hW⟩⟩
 
-/-- **`PolicyMet` keeps its earlier partition clauses**: where their antecedents hold, `d` Boolean, or of positive
-fan-in in bits with every computed gate 1 to `W` bits wide, `d` has no constant, so its partitions with its constants
-registered are partitions of `d` and of its expansion, with the same units. -/
 theorem policyMet_old_clauses {d : RegisteredCircuit} {n : ℕ} {U : Partition d.D n} {Γ : ℕ} {α : ℝ}
     (h : PolicyMet d U Γ α) :
     (d.D.Boolean → ∃ (B : ℕ) (P : Partition d.D B), P.IsCK d Γ ⌊α * Γ⌋₊) ∧
@@ -250,7 +205,6 @@ theorem policyMet_nontrivial : ∃ (d : RegisteredCircuit) (n : ℕ) (U : Partit
   have h0 := (h.1 0).1
   omega
 
-/-- What a verdict of compliance on the policy's instance gives, on each of its expansions. -/
 theorem policy_met {p : InferenceOnlyCheck.Protocol.Params} {e : InferenceOnlyCheck.Protocol.Evidence} {out : Json}
     (hd : InferenceOnlyCheck.Desc.evaluate (instanceOf p e) = .ok out) (hc : out.getObjVal? "complies" = .ok (.bool true))
     {P : Prog} (hP : Flock.Program.decode p.program.toUTF8 = .ok P) :
@@ -262,7 +216,6 @@ theorem policy_met {p : InferenceOnlyCheck.Protocol.Params} {e : InferenceOnlyCh
   have hR := (InferenceOnlyCheck.Properties.SecurityProofs.DescReports _ _ hd).2 j' hx i P d hi hP' hL hN hD
   exact ⟨verifier_own hx hi, policyMet_of_meets (hR.2.2.1.1 hc)⟩
 
-/-- What the policy's acceptance establishes about its decoded case. -/
 theorem policyHeld {p : InferenceOnlyCheck.Protocol.Params} {c : InferenceOnlyCheck.Protocol.Commitment}
     {e : InferenceOnlyCheck.Protocol.Evidence} {pub : Unit} {prof : Json}
     (h : InferenceOnlyCheck.Protocol.check p c e = .accept pub prof) : PolicyHeld p c e := by
@@ -276,8 +229,6 @@ theorem policyHeld {p : InferenceOnlyCheck.Protocol.Params} {c : InferenceOnlyCh
   exact ⟨P, hP, names_program hn hP, InferenceOnlyCheck.Properties.SecurityProofs.ThetaProvenance _ _ _ hb,
     ⟨j', i, d, hx, hpi, hL, hθ, hD, policy_met hd hc hP j' i d hx hpi hL hθ hD⟩, policy_met hd hc hP⟩
 
-/-- What one-stage v1's check at any coins gives on acceptance: its record keeps R2 against the audit's own
-verifier. -/
 theorem stage_registered_at {p : Spot.OneStage.Params} {c : Spot.OneStage.Commitment}
     {ξ : Option ByteArray} {e : Spot.OneStage.Evidence} {pub : Spot.OneStage.Public}
     {prof : Integrity} (h : Spot.OneStage.checkAt p c ξ e = .accept pub prof) :
@@ -288,8 +239,6 @@ theorem stage_registered_at {p : Spot.OneStage.Params} {c : Spot.OneStage.Commit
   · obtain ⟨samplingDesign, d, n, hreg, -⟩ := Properties.Spot.acceptMeans _ _ _ _ _ h
     exact hreg.2.1
 
-/-- One-stage v2's check at the coins it read accepts only where v1's check accepts at them, on the verdicts its own
-run of the verifier computed, in either form: the one statement's run, or the per-member run. -/
 theorem stage_zk_at {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment} {ξ : ByteArray}
     {e : Spot.OneStageZk.Evidence} {bs : Blobs} {pub : Spot.OneStage.Public} {prof : Integrity}
     (h : Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
@@ -314,8 +263,6 @@ theorem stage_zk_at {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment} 
     | reject s => simp at h
     | undecided s => simp at h
 
-/-- One-stage v2 accepts only where v1's check accepts at the coins it read, on the verdicts its own run of the
-verifier computed, so its record keeps R2 against the v1 part of its params' verifier. -/
 theorem stage_zk_registered {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment}
     {e : Spot.OneStageZk.Evidence} {bs : Blobs} {pub : Spot.OneStage.Public} {prof : Integrity}
     (h : Spot.OneStageZk.checkBlobs p c e bs = .accept pub prof) :
@@ -326,20 +273,15 @@ theorem stage_zk_registered {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Comm
     exact stage_registered_at hr
   · cases h
 
-/-- `digestOf` of a commitment that decodes is the digest of what it decodes to. -/
 theorem digestOf_ok {P : Protocol} {b : ByteArray} {c : P.Commitment} (h : P.commitment b = .ok c) :
     Properties.Composition.digestOf P b = some (P.digest c) := by
   unfold Properties.Composition.digestOf
   rw [h]
   rfl
 
-/-- A list of length three is three elements. -/
 theorem three_of_length {α : Type} {l : List α} (h : l.length = 3) : ∃ a b c, l = [a, b, c] :=
   ⟨_, _, _, List.eq_getElem_of_length_eq_three l h⟩
 
-/-- What an accepted composition of any three components gives: three parameters and three cases, each case carrying
-the parameters the composition names for it and decoding to what its component's check accepts. Over components
-left abstract, so that no component's code is unfolded. -/
 theorem accepted_three {id : String} {P₁ P₂ P₃ : Protocol} {ps : List Named} {c : ByteArray} {ev : List Case}
     {pub prof : Keyed} (h : check id [P₁, P₂, P₃] ps c ev = .accept pub prof) :
     ∃ (n₁ n₂ n₃ : Named) (k₁ k₂ k₃ : Case), ps = [n₁, n₂, n₃] ∧ ev = [k₁, k₂, k₃] ∧
@@ -361,8 +303,6 @@ theorem accepted_three {id : String} {P₁ P₂ P₃ : Protocol} {ps : List Name
     simp [Properties.Composition.triples]
   exact ⟨n₁, n₂, n₃, k₁, k₂, k₃, rfl, rfl, h2.1, h2.2.1, hpar _ m₁, hpar _ m₃, hacc _ m₁, hacc _ m₂, hacc _ m₃⟩
 
-/-- What `strays` finding none gives for the first and third of three components of distinct ids whose commitments
-decode: the third's digest is the first's. Over components left abstract, so that no digest is computed. -/
 theorem strays_two {P₁ P₂ P₃ : Protocol} {k₁ k₂ k₃ : Case} {c₁ : P₁.Commitment} {c₃ : P₃.Commitment}
     (n₁₃ : (P₁.id == P₃.id) = false) (n₂₃ : (P₂.id == P₃.id) = false) (h₁ : P₁.commitment k₁.commitment = .ok c₁)
     (h₃ : P₃.commitment k₃.commitment = .ok c₃) (h : strays [P₁.id, P₃.id] [P₁, P₂, P₃] [k₁, k₂, k₃] = none) :
@@ -376,8 +316,6 @@ theorem strays_two {P₁ P₂ P₃ : Protocol} {k₁ k₂ k₃ : Case} {c₁ : P
     simp [e₁, e₃]
   exact strays_none hm h (P₃.id, P₃.digest c₃) (by simp)
 
-/-- `strays_two`'s converse: the first and third of three components of distinct ids whose commitments decode to one
-digest leave no stray. -/
 theorem strays_two_none {P₁ P₂ P₃ : Protocol} {k₁ k₂ k₃ : Case} {c₁ : P₁.Commitment} {c₃ : P₃.Commitment}
     (n₁₃ : (P₁.id == P₃.id) = false) (n₂₃ : (P₂.id == P₃.id) = false) (h₁ : P₁.commitment k₁.commitment = .ok c₁)
     (h₃ : P₃.commitment k₃.commitment = .ok c₃) (d₃ : P₃.digest c₃ = P₁.digest c₁) :
@@ -393,8 +331,6 @@ theorem strays_two_none {P₁ P₂ P₃ : Protocol} {k₁ k₂ k₃ : Case} {c�
   simp only [hm]
   simp [List.find?, bytes_bne_self]
 
-/-- Remote's check on the caller's blobs is its tie held over `checkSame` over its components on them, the components
-named by their ids. -/
 theorem remote_check_ids (blobs : Array ByteArray) (ps : List Named) (c : ByteArray) (ev : List Case) :
     (Core.Remote.protocol.on blobs).check ps c ev =
       holdTies [Core.Remote.executionPhases] ev (checkSame "verity/remote/v0"
@@ -411,8 +347,6 @@ theorem ne_monitoringPeriod_stage (bs : Blobs) :
     (PouwCheck.Period.protocol.id == (VStar.Recursive.Sampled.protocol.onBlobs bs).id) = false := by
   rw [id_monitoringPeriod, id_sampled]; decide
 
-/-- What remote's tie gives once the policy's commitment decodes: every Commit record the period's windows name, when
-they decode, has the policy's record's digest. -/
 theorem executionPhases_tied {kI kW kS : Case} {cI : InferenceOnlyCheck.Protocol.Commitment}
     (hI : kI.id = InferenceOnlyCheck.Protocol.protocol.id) (hW : kW.id = PouwCheck.Period.protocol.id)
     (hcI : InferenceOnlyCheck.Protocol.protocol.commitment kI.commitment = .ok cI)
@@ -448,9 +382,6 @@ theorem executionPhases_tied {kI kW kS : Case} {cI : InferenceOnlyCheck.Protocol
     cases hy
     rw [hyr d hd, ← hxr _ (List.mem_singleton_self _)]
 
-/-! ## The caller's check's steps -/
-
-/-- The declared day's code (`VStar.Recursive.Caller.declaredCode`) is none exactly when `DeclaredDay` holds. -/
 theorem declaredCode_none_iff (rec : Json) (v : Spot.Docket.Verifier) :
     (VStar.Recursive.Caller.declaredCode (Spot.getD rec "program") v.declared).isSome = false ↔
       Properties.Spot.DeclaredDay rec v := by
@@ -462,7 +393,6 @@ theorem declaredCode_none_iff (rec : Json) (v : Spot.Docket.Verifier) :
     · by_cases hp : Spot.jeq (Spot.getD rec "program") (.str p) = true <;> simp [h, hp]
     · simp [h]
 
-/-- The pool chain (`VStar.Recursive.Caller.poolChained`) holds exactly when `PoolChained` does. -/
 theorem poolChained_iff (rec : Json) (v : Spot.Docket.Verifier) :
     VStar.Recursive.Caller.poolChained rec v = true ↔ Properties.Spot.PoolChained rec v := by
   unfold VStar.Recursive.Caller.poolChained Properties.Spot.PoolChained
@@ -472,8 +402,6 @@ theorem poolChained_iff (rec : Json) (v : Spot.Docket.Verifier) :
       rcases ho : Spot.Docket.poolOpen rec v p with _ | ⟨d, r⟩ <;> simp [he, ho]
     all_goals exact ⟨fun h => ⟨d, r, ⟨rfl, rfl⟩, h⟩, fun ⟨_, _, ⟨h1, h2⟩, h⟩ => by subst h1 h2; exact h⟩
 
-/-- The pool's codes (`VStar.Recursive.Caller.poolMarks`) add none exactly when the window names the pool's reset, week
-and spent mark and no reset falls where the week's is spent before it. -/
 theorem poolMarks_nil (w : Json) (pool : Option Spot.Docket.Pool) (log : Array Json) (c : Array String) :
     VStar.Recursive.Caller.poolMarks w pool log c = #[] ↔ c = #[] ∧
       Spot.jeq (Spot.getD w "pool_reset") (match pool with | some p => .bool p.reset | none => .null) = true ∧
@@ -485,14 +413,11 @@ theorem poolMarks_nil (w : Json) (pool : Option Spot.Docket.Pool) (log : Array J
     Properties.Spot.kept_nil]
   exact ⟨fun ⟨⟨⟨⟨a, r⟩, wk⟩, s⟩, o⟩ => ⟨a, r, wk, s, o⟩, fun ⟨a, r, wk, s, o⟩ => ⟨⟨⟨⟨a, r⟩, wk⟩, s⟩, o⟩⟩
 
-/-- The registered compiler's codes (`VStar.Recursive.Caller.compilerMarks`) add none exactly when the window names the
-log's compiler and advice within its length. -/
 theorem compilerMarks_nil (w : Json) (b : Option (Option (String × Nat))) (c : Array String) :
     VStar.Recursive.Caller.compilerMarks w b c = #[] ↔ c = #[] ∧ Spot.Docket.compilerOk w b = true ∧
       Spot.Docket.adviceOk w b = true := by
   rw [VStar.Recursive.Caller.compilerMarks, Properties.Spot.kept_nil, Properties.Spot.kept_nil, and_assoc]
 
-/-- The declared day's codes (`VStar.Recursive.Caller.declaredMarks`) add none exactly when `DeclaredDay` holds. -/
 theorem declaredMarks_nil (rec : Json) (v : Spot.Docket.Verifier) (c : Array String) :
     VStar.Recursive.Caller.declaredMarks (Spot.getD rec "program") v.declared c = #[] ↔
       c = #[] ∧ Properties.Spot.DeclaredDay rec v := by
@@ -502,8 +427,6 @@ theorem declaredMarks_nil (rec : Json) (v : Spot.Docket.Verifier) (c : Array Str
   | none => simp
   | some code => simp [Properties.Spot.addCode_ne_nil]
 
-/-- The binding's codes (`VStar.Recursive.Caller.bindingMarks`) add none exactly when the window names the stream and
-the prover of the binding, if any. -/
 theorem bindingMarks_nil (w : Json) (b : Option (String × String)) (c : Array String) :
     VStar.Recursive.Caller.bindingMarks w b c = #[] ↔ c = #[] ∧
       (∀ sp, b = some sp → Spot.jeq (Spot.getD w "stream") (.str sp.1) = true ∧
@@ -517,8 +440,6 @@ theorem bindingMarks_nil (w : Json) (b : Option (String × String)) (c : Array S
     · rintro ⟨a, h⟩
       exact ⟨⟨a, (h _ rfl).1⟩, (h _ rfl).2⟩
 
-/-- The two codes the caller's check adds for a verifier that expects values registered (`R7-pool-chain`,
-`R7-output-refused`) are none exactly when, for such a verifier, `PoolChained` and `OutputPortsAccepted` hold. -/
 theorem v2Marks_iff (rec : Json) (v : Spot.Docket.Verifier) :
     ((!v.v2 || VStar.Recursive.Caller.poolChained rec v) = true ∧ (!v.v2 || Spot.Docket.portsAccepted v) = true) ↔
       (Properties.Spot.ExpectsV2 v → Properties.Spot.PoolChained rec v ∧ Properties.Spot.OutputPortsAccepted v) := by
@@ -526,7 +447,6 @@ theorem v2Marks_iff (rec : Json) (v : Spot.Docket.Verifier) :
   unfold Properties.Spot.ExpectsV2 Spot.Docket.Verifier.v2
   cases v.registered.isEmpty && v.certified.isEmpty <;> simp
 
-/-- **`CallerCheckMeans`**: the caller's check finds nothing exactly where the record keeps the caller's facts. -/
 theorem callerCheckMeans : CallerCheckMeans := by
   intro rec v
   simp only [VStar.Recursive.Caller.check]
@@ -536,14 +456,10 @@ theorem callerCheckMeans : CallerCheckMeans := by
   exact ⟨fun ⟨⟨⟨⟨⟨⟨_, dd⟩, bd⟩, ss⟩, r, wk, sp, o⟩, ck, ad⟩, v2⟩ => ⟨dd, bd, ss, r, wk, sp, o, ⟨ck, ad⟩, v2⟩,
     fun ⟨dd, bd, ss, r, wk, sp, o, ⟨ck, ad⟩, v2⟩ => ⟨⟨⟨⟨⟨⟨rfl, dd⟩, bd⟩, ss⟩, r, wk, sp, o⟩, ck, ad⟩, v2⟩⟩
 
-/-- **`CallerCheckSound`**, `CallerCheckMeans`' forward half. -/
 theorem callerCheckSound_of_means (hm : CallerCheckMeans) : CallerCheckSound := fun rec v => (hm rec v).1
 
-/-- `CallerCheckSound`, from `callerCheckMeans`. -/
 theorem callerCheckSound : CallerCheckSound := callerCheckSound_of_means callerCheckMeans
 
-/-- What SPOT's accepted case gives, on any blobs: `StageHeld`, in the one-stage form, where the caller's
-check finds nothing only where the record keeps the caller's facts (`CallerCheckSound`). -/
 theorem stage_held (hm : CallerCheckSound) {k : Case} {n : Named} {bs : Blobs} (hp : k.params = n.params)
     (h : Properties.Composition.DecodedAccepted (VStar.Recursive.Sampled.protocol.onBlobs bs) n.params.toUTF8
       k.commitment k.evidence) : StageHeld k := by
@@ -563,9 +479,6 @@ theorem stage_held (hm : CallerCheckSound) {k : Case} {n : Named} {bs : Blobs} (
   · exact absurd hchk' (VStar.Recursive.SampledTwo.checkBlobs_refuses VStar.Recursive.SampledTwo.form_off q c e bs
       pub prof)
 
-/-- What remote's acceptance gives: the three cases in order, one digest for the policy's and SPOT's
-records, which every Commit record the period's windows name has, the policy's case decoding to what the policy's
-check accepts, and SPOT's case decoding to what its check accepts on the blobs. -/
 theorem remote_accept {blobs : Array ByteArray} {ps : List Named} {c : ByteArray} {ev : List Case} {pub prof : Keyed}
     (h : (Core.Remote.protocol.on blobs).check ps c ev = .accept pub prof) :
     ∃ (kI kW kS : Case) (pI : InferenceOnlyCheck.Protocol.Params) (cI : InferenceOnlyCheck.Protocol.Commitment)

@@ -2,20 +2,8 @@ module
 
 public import Properties.Challenger
 
-/-!
-# v2's challenger keys and the size of what its challenger reads
-
-Each holds of whatever v2 parses, with no hypothesis on its verdict, so of every key and record a reading of the log
-takes from v2's parameters and evidence.
-
-* **The deployed key.** v2's parameters parse only with a challenger key at `Lms.deployed` (`KEY_PARAMS`), the
-  parameters the game's signature verifier reads: `paramsOfJson_deployed`, from bytes `params_deployed`, and so the key
-  v2's samples are read under (`oneStageZkSource`) is at them, `source_deployed`.
-* **Coins within limits.** v2's evidence parses only with its coins within `LIMITS` (`evidenceOf_within`). In coins
-  within limits `l`, `sampleCoins` checks at most `signaturesAt l` signatures (`signatures_le`) and SHA-512 hashes at most
-  `readsAt l` strings as it reads them (`readHashed_le`, counted through `readHashed_eq`'s parts). So one v2 record's
-  reading costs at most a constant at `LIMITS` and `Lms.deployed` (`record_calls_le`).
--/
+/-! v2's challenger keys are at `Lms.deployed`, and what its challenger reads for one record is bounded by a
+constant. -/
 
 @[expose] public section
 
@@ -24,8 +12,6 @@ namespace Properties.Challenger.Limits
 open Lean (Json)
 open Spot Spot.Challenger
 
-/-! ## The deployed key -/
-
 theorem deployedKey_params {key : ChallengerKey} (h : OneStageZk.deployedKey key = true) :
     key.params = Lms.deployed := by
   rcases key with ⟨⟨N, W, H⟩, pub⟩
@@ -33,8 +19,6 @@ theorem deployedKey_params {key : ChallengerKey} (h : OneStageZk.deployedKey key
   obtain ⟨⟨rfl, rfl⟩, rfl⟩ := h
   rfl
 
-/-- **Every challenger key parsed parameters name is at `Lms.deployed`**: they name one, and `paramsParsed` refuses
-it at other parameters (`KEY_PARAMS`). -/
 theorem paramsParsed_deployed {j : Json} {p : OneStageZk.Params} (h : OneStageZk.paramsParsed j = .ok p) :
     ∃ key label, p.base.challenger = some (key, label) ∧ key.params = Lms.deployed := by
   unfold OneStageZk.paramsParsed at h
@@ -47,17 +31,12 @@ theorem paramsParsed_deployed {j : Json} {p : OneStageZk.Params} (h : OneStageZk
   subst h
   exact ⟨_, _, hch, deployedKey_params (by simpa using hk)⟩
 
-/-- **Every challenger key v2's parameters name is at `Lms.deployed`**, in either form: the v1 part of parameters
-either form's parse returns is that of parameters `paramsParsed` returned but for its registration check's members
-(`paramsEitherOfJson_base`). -/
 theorem paramsOfJson_deployed {j : Json} {p : OneStageZk.Params} (h : OneStageZk.paramsEitherOfJson j = .ok p) :
     ∃ key label, p.base.challenger = some (key, label) ∧ key.params = Lms.deployed := by
   obtain ⟨j', p', ms, hp', hb⟩ := OneStageZk.paramsEitherOfJson_base h
   rw [hb]
   exact paramsParsed_deployed hp'
 
-/-- **The one statement's evidence holds its coins within `LIMITS`**: `evidenceOf` refuses them past
-(`LIMITS.form`). -/
 theorem evidenceParsed_within {b : ByteArray} {e : OneStageZk.Evidence} (h : OneStageZk.evidenceOf b = .ok e) :
     withinAt LIMITS e.base.coins = true := by
   unfold OneStageZk.evidenceOf at h
@@ -68,8 +47,6 @@ theorem evidenceParsed_within {b : ByteArray} {e : OneStageZk.Evidence} (h : One
   simp only [pure, Except.pure, Except.ok.injEq] at h
   subst h
   exact hw
-
-/-! ## Coins within limits -/
 
 theorem withinAt_spec {l : Limits} {coins : Json} (h : withinAt l coins = true) :
     arrSize (getD (getD coins "session") "log") ≤ l.log ∧ arrSize (getD (getD coins "session") "hellos") ≤ l.hellos ∧
@@ -83,8 +60,6 @@ theorem withinAt_spec {l : Limits} {coins : Json} (h : withinAt l coins = true) 
   simp only [Array.all_eq_true, decide_eq_true_eq] at hpath
   obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem ho
   simpa using hpath i (by simpa using hi)
-
-/-! ## Counting -/
 
 theorem length_flatMap_le {α β : Type} (f : α → List β) (k : Nat) (hf : ∀ a, (f a).length ≤ k) (xs : List α) :
     (xs.flatMap f).length ≤ k * xs.length := by
@@ -115,8 +90,6 @@ theorem foldl_snd_length {α β γ : Type} (f : α × List β → γ → α × L
   induction xs generalizing acc with
   | nil => simp
   | cons x rest ih => simp only [List.foldl_cons, ih, hf, List.length_cons]; omega
-
-/-! ## What the reader hashes, piece by piece -/
 
 theorem taggedMessage_length (tag : String) (m : Json) : (taggedMessage tag m).length ≤ 1 := by
   unfold taggedMessage
@@ -206,21 +179,16 @@ theorem ofJson_path {j : Json} {o : LiveOpening} (h : LiveOpening.ofJson j = .ok
     simp [arrSize]
   · contradiction
 
-/-! ## `readHashed`, restated through its parts -/
-
-/-- The strings of an array: how `readHashed` reads a log's lines. -/
 def linesOf : Json → List String
   | .arr ls => ls.toList.filterMap fun | .str s => some s | _ => none
   | _ => []
 
-/-- What `readHashed` hashes for the segment's openings, under the record's commitment `c`. -/
 def openingsHashed (c : LiveCommitment) (label : String) (segment : Json) : List ByteArray :=
   match nat? (getD segment "start"), getD segment "openings" with
   | some start, .arr os => (os.toList.zipIdx.filterMap fun (o, i) =>
       (LiveOpening.ofJson o).toOption.map fun o => openingHashed c o label ((start + i : Nat) : Int)).flatten
   | _, _ => []
 
-/-- What `readHashed` hashes for the session. -/
 def challengePhaseHashed (I : ByteArray) (label : String) (coins : Json) : List ByteArray :=
   let session := getD coins "session"
   match ChallengerRecord.ofJson (getD session "record") with
@@ -233,13 +201,11 @@ def challengePhaseHashed (I : ByteArray) (label : String) (coins : Json) : List 
       logHashed (linesOf (getD session "log")) ++ logHashed (linesOf (getD session "hellos")) ++
       openingsHashed r.commitment label (getD coins "segment")
 
-/-- What `readHashed` hashes for the ledger. -/
 def ledgerLinesHashed (I : ByteArray) (coins : Json) : List ByteArray :=
   match getD coins "ledger" with
   | .arr ls => ls.toList.flatMap (ledgerHashed I)
   | _ => []
 
-/-- What `readHashed` hashes for the pins log. -/
 def pinsHashed (coins : Json) : List ByteArray :=
   match getD coins "pins" with
   | .arr _ => logHashed (linesOf (getD coins "pins"))
@@ -325,18 +291,10 @@ theorem pinsHashed_length (l : Limits) (coins : Json) (h : withinAt l coins = tr
     omega
   · simp
 
-/-! ## The counts -/
-
-/-- At most how many signatures `sampleCoins` checks in coins within `l`: the record's, the close's and one per ledger
-line. -/
 def signaturesAt (l : Limits) : Nat := 2 + l.ledger
 
-/-- At most how many strings SHA-512 hashes as `sampleCoins` reads coins within `l`: the record's and close's five; each
-release log line, each refused hello and each pins log line, and two more per log; each opening's domain, leaf and
-path; and two per ledger line. -/
 def readsAt (l : Limits) : Nat := 11 + l.log + l.hellos + l.openings * (7 + l.path) + 2 * l.ledger + l.pins
 
-/-- **`sampleCoins` checks at most `signaturesAt l` signatures in coins within `l`.** -/
 theorem signatures_le (l : Limits) (key : ChallengerKey) (coins : Json) (h : withinAt l coins = true) :
     (signatures key coins).length ≤ signaturesAt l := by
   obtain ⟨-, -, hled, -⟩ := withinAt_spec h
@@ -353,7 +311,6 @@ theorem signatures_le (l : Limits) (key : ChallengerKey) (coins : Json) (h : wit
        simp only [Array.length_toList]
        omega)
 
-/-- **SHA-512 hashes at most `readsAt l` strings as `sampleCoins` reads coins within `l`.** -/
 theorem readHashed_le (l : Limits) (key : ChallengerKey) (label : String) (coins : Json)
     (h : withinAt l coins = true) :
     (readHashed key label coins).length ≤ readsAt l := by
@@ -364,17 +321,12 @@ theorem readHashed_le (l : Limits) (key : ChallengerKey) (label : String) (coins
   have := pinsHashed_length l coins h
   omega
 
-/-- **v2's evidence holds its coins within `LIMITS`**, in either form: the per-member form's v1 part is one
-`evidenceOf` read (`evidenceEitherOf_base`). -/
 theorem evidenceOf_within {b : ByteArray} {e : OneStageZk.Evidence} (h : OneStageZk.evidenceEitherOf b = .ok e) :
     withinAt LIMITS e.base.coins = true := by
   obtain ⟨b', e', h', hb⟩ := OneStageZk.evidenceEitherOf_base h
   rw [hb]
   exact evidenceParsed_within h'
 
-/-! ## A v2 record -/
-
-/-- Every challenger key v2's parameters name, decoded from bytes, is at `Lms.deployed`. -/
 theorem params_deployed {a : ByteArray} {p : OneStageZk.Params}
     (h : (Core.canonicalJson a >>= OneStageZk.paramsEitherOfJson) = .ok p) :
     ∃ key label, p.base.challenger = some (key, label) ∧ key.params = Lms.deployed := by
@@ -384,7 +336,6 @@ theorem params_deployed {a : ByteArray} {p : OneStageZk.Params}
     simp only [hj, bind, Except.bind] at h
     exact paramsOfJson_deployed h
 
-/-- The key v2's samples are read under (`oneStageZkSource`) is at `Lms.deployed`. -/
 theorem source_deployed {a : ByteArray} {p : OneStageZk.Params} {c : OneStage.Commitment} {d : Draws}
     (hp : (Core.canonicalJson a >>= OneStageZk.paramsEitherOfJson) = .ok p) (hd : oneStageZkSource p c = some d) :
     d.key.params = Lms.deployed := by
@@ -395,9 +346,6 @@ theorem source_deployed {a : ByteArray} {p : OneStageZk.Params} {c : OneStage.Co
   | none => rw [hw] at hd; cases hd
   | some w => rw [hw] at hd; cases hd; exact hk
 
-/-- **One v2 record's reading costs at most a constant**: where v2 decodes the parameters `a` and the evidence `b`
-and reads the samples `d` under them, the signatures `sampleCoins` checks in the evidence's coins, at `L` each under the
-key's parameters, and the strings SHA-512 hashes as it reads them are at most `LIMITS`' counts at `Lms.deployed`. -/
 theorem record_calls_le (L : Lms.Params → Nat) {a b : ByteArray} {p : OneStageZk.Params} {c : OneStage.Commitment}
     {e : OneStageZk.Evidence} {d : Draws} (hp : (Core.canonicalJson a >>= OneStageZk.paramsEitherOfJson) = .ok p)
     (he : OneStageZk.evidenceEitherOf b = .ok e) (hd : oneStageZkSource p c = some d) :
