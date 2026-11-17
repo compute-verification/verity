@@ -22,7 +22,7 @@ the ids it is asked for as a set (`evaluate_congr`), so it accepts the wiring's 
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Record.SecurityProofs
 
 open Spot.RecordText
 open Lean (Json)
@@ -59,9 +59,9 @@ theorem finish_wiring {f : Front} {pin : String → Option String} {c : Case} (h
                 exact hW₀
       · cases h
 
-end InferenceOnlyCheck.Record.SecurityProofs
+end InferenceOnlyVerifier.Record.SecurityProofs
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Lean (Json)
 open Flock.Program (Prog Scope Defn fieldsOf)
@@ -69,9 +69,9 @@ open Flock.TemplateQuery (TRange)
 open Flock.Sigma (bits)
 open Spot.Bits (bitsOf)
 open Spot.RecordText (Tmpl tmplOf templatesOf outerOf)
-open InferenceOnlyCheck.Record.SecurityProofs (bitsOf_eq tmplOf_spec tmplOf_names piece_templates eq_of_nodup_map read_front
+open InferenceOnlyVerifier.Record.SecurityProofs (bitsOf_eq tmplOf_spec tmplOf_names piece_templates eq_of_nodup_map read_front
   finish_text front_text finish_wiring)
-open InferenceOnlyCheck.Record.SecurityProofs.Json (bind_ok mapM_ok)
+open InferenceOnlyVerifier.Record.SecurityProofs.Json (bind_ok mapM_ok)
 
 /-! ## The template query reads its templates as a set -/
 
@@ -370,7 +370,7 @@ theorem templates_of {P : Prog} {doc : Json} {ts : List Tmpl} (hP : ReadProg P) 
 /-- **On a record `read` accepts, the wiring's templates are the Program's**: the template query accepts the
 wiring's template ids, and with the ranges it gives, a template of the wiring has the units the root has of it and is
 the template of their Definition. -/
-theorem templates_of_read {j tr : Json} {c : InferenceOnlyCheck.Record.Case} (h : InferenceOnlyCheck.Record.read j tr = .ok c) :
+theorem templates_of_read {j tr : Json} {c : InferenceOnlyVerifier.Record.Case} (h : InferenceOnlyVerifier.Record.read j tr = .ok c) :
     ∃ rs, Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg c.f.P)
         (c.W.templates.map (·.1)).toArray = .ok rs ∧ Templates c.f.P rs c.W := by
   obtain ⟨f, pin, hf, hc⟩ := read_front h
@@ -387,4 +387,4 @@ theorem templates_of_read {j tr : Json} {c : InferenceOnlyCheck.Record.Case} (h 
     (fun t ht => by rw [hWt]; exact hp2 t ht)
   exact ⟨rs, hrs, templates_of (readProg_of_read h) hts hrs (by rw [hWt]; exact hp1)⟩
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs

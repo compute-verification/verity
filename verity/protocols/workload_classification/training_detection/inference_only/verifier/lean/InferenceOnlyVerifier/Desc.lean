@@ -1,6 +1,6 @@
 module
 
-public import InferenceOnlyCheck.Check
+public import InferenceOnlyVerifier.Check
 
 /-!
 # The inference-only check at the size of the description
@@ -78,7 +78,7 @@ an earlier member of itself, which this check refuses.
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Desc
+namespace InferenceOnlyVerifier.Desc
 
 open Lean (Json toJson)
 open Flock.Program
@@ -1131,7 +1131,7 @@ def evaluate (j : Json) : Except String Json := do
 def refusal (j : Json) (code : String) : Json :=
   if code.startsWith UNWALKED then
     Json.mkObj [("error", Json.str "unwalked"), ("message", Json.str ((code.drop UNWALKED.length).toString))]
-  else InferenceOnlyCheck.refusalOf j code
+  else InferenceOnlyVerifier.refusalOf j code
 
 /-- `evaluate`, with a refusal as `refusal` writes it. -/
 def check (j : Json) : Json :=
@@ -1139,4 +1139,4 @@ def check (j : Json) : Json :=
   | .ok r => r
   | .error code => refusal j code
 
-end InferenceOnlyCheck.Desc
+end InferenceOnlyVerifier.Desc

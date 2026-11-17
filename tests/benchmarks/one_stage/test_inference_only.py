@@ -280,7 +280,7 @@ def lean(monkeypatch) -> Path:
     ref = IO._reference()
     monkeypatch.setattr(IO, "lean_count", lambda exe, inst, scratch, timeout_s=1800: {
         "flags": ["--count", "--detail"], "out": ref.check_count_detail(inst)})
-    return Path("inference-only-check")
+    return Path("inference-only-verifier")
 
 
 def test_a_run_within_its_policy_is_accepted_and_its_public_form_holds_no_count(small, tmp_path, lean):
@@ -462,13 +462,13 @@ def test_a_lean_verifier_that_gives_no_verdict_leaves_the_run_undecided(small, t
     d = _serve(tmp_path / "s", FULL)
     for body, why, said in (("echo no >&2; exit 2", "exit 2", "no"), ("echo hello", "printed no JSON object", "hello"),
                             ("echo '[7, 9]'", "printed no JSON object", "[7, 9]")):
-        exe = tmp_path / "inference-only-check"
+        exe = tmp_path / "inference-only-verifier"
         exe.write_text(f"#!/bin/sh\n{body}\n")
         exe.chmod(0o755)
         pub, full = IO.verdict(_policy(row), small, d, None, None, lean=exe, scratch=tmp_path)
-        assert pub["verdict"] == "refuse" and pub["lean"] == {"error": f"inference-only-check --count {why}"}
-        assert pub["reason"] == f"undecided: the Lean verifier gave no verdict: inference-only-check --count {why}"
-        assert full["lean_detail"] == {"flags": ["--count"], "error": f"inference-only-check --count {why}", "said": said,
+        assert pub["verdict"] == "refuse" and pub["lean"] == {"error": f"inference-only-verifier --count {why}"}
+        assert pub["reason"] == f"undecided: the Lean verifier gave no verdict: inference-only-verifier --count {why}"
+        assert full["lean_detail"] == {"flags": ["--count"], "error": f"inference-only-verifier --count {why}", "said": said,
                                        "memory": SC.UNLIMITED}
         assert list(tmp_path.glob("tmp*.json")) == []
 
@@ -504,7 +504,7 @@ def test_a_host_with_no_memory_limit_starts_no_lean_verifier_and_the_row_is_an_e
     row = IO.session_row(small, None, None)
     exe = _inference_only_check(tmp_path / "lean", NEW_USAGE, {"complies": True}, _whole(row))
     pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path)
-    why = f"inference-only-check not started: {SC.limits().refusal}"
+    why = f"inference-only-verifier not started: {SC.limits().refusal}"
     assert (pub["verdict"], pub["lean"]) == ("refuse", {"error": why})
     assert pub["reason"] == f"{SV.UNDECIDED}the Lean verifier gave no verdict: {why}"
     assert full["lean_detail"] == {"flags": ["--count"], "error": why}
@@ -513,7 +513,7 @@ def test_a_host_with_no_memory_limit_starts_no_lean_verifier_and_the_row_is_an_e
 
 
 #: `inference-only-check`'s usage while ``--count`` printed its whole verdict, and once it prints that only with ``--detail``
-OLD_USAGE = "usage: inference-only-check [--unrolled] INSTANCE TRUSTED | inference-only-check --policy [--unrolled] INSTANCE | inference-only-check --count INSTANCE"
+OLD_USAGE = "usage: inference-only-verifier [--unrolled] INSTANCE TRUSTED | inference-only-verifier --policy [--unrolled] INSTANCE | inference-only-verifier --count INSTANCE"
 NEW_USAGE = OLD_USAGE.replace("--count INSTANCE", "--count [--detail] INSTANCE")
 #: a count of blocks no other number in the verdict holds
 COUNT = 987654321
@@ -527,7 +527,7 @@ def _inference_only_check(where: Path, usage: str, count: dict, detail: dict | N
     (where / "count.json").write_text(json.dumps(count))
     if detail is not None:
         (where / "detail.json").write_text(json.dumps(detail))
-    exe = where / "inference-only-check"
+    exe = where / "inference-only-verifier"
     exe.write_text(f"""#!/bin/sh
 echo "$*" >> '{where}/args.log'
 if [ "$1" = --count ] && [ $# -eq 2 ]; then cat '{where}/count.json'; exit 0; fi
@@ -579,8 +579,8 @@ def test_a_binary_whose_usage_hides_detail_gives_no_rows_which_is_said(small, tm
     row = IO.session_row(small, None, None)
     exe = _inference_only_check(tmp_path / "lean", OLD_USAGE, {"complies": False}, _whole(row))
     pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path)
-    assert pub["verdict"] == "refuse" and pub["lean"] == {"error": "inference-only-check --count printed no row of the block"}
-    assert pub["reason"] == "undecided: the Lean verifier gave no verdict: inference-only-check --count printed no row of the block"
+    assert pub["verdict"] == "refuse" and pub["lean"] == {"error": "inference-only-verifier --count printed no row of the block"}
+    assert pub["reason"] == "undecided: the Lean verifier gave no verdict: inference-only-verifier --count printed no row of the block"
     assert full["lean_detail"] == {"flags": ["--count"], "out": {"complies": False}, "memory": SC.UNLIMITED}
 
 
@@ -607,7 +607,7 @@ def test_inference_only_check_counts_the_verdicts_gates_on_the_session_program(s
     reference test holds the instance to the Python count, and `inference-only-count-difftest` the Lean to the reference)."""
     import served_cases as SC
 
-    exe = SC.build(SC.INFERENCE_ONLY_LEAN[0], "inference-only-check")
+    exe = SC.build(SC.INFERENCE_ONLY_LEAN[0], "inference-only-verifier")
     row = IO.session_row(small, None, None)
     pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path)
     assert pub["verdict"] == "accept" and pub["lean"]["agrees_on_gates"] is True and pub["lean"]["gates"] == row["gates"]

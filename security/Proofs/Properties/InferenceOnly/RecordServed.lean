@@ -31,7 +31,7 @@ public import Proofs.Properties.InferenceOnly.RecordWired
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Record.SecurityProofs
 
 open Spot.RecordText
 open Lean (Json)
@@ -44,20 +44,20 @@ theorem front_leaves {j tr : Json} {f : Front} (h : front j tr = .ok f) :
   repeat (split at h <;> try cases h)
   rfl
 
-end InferenceOnlyCheck.Record.SecurityProofs
+end InferenceOnlyVerifier.Record.SecurityProofs
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Lean (Json)
-open InferenceOnlyCheck.Record (unwhole leavesOf passedOn)
-open InferenceOnlyCheck.Record.SecurityProofs (form read_front finish_text front_text front_leaves inst_of_read
+open InferenceOnlyVerifier.Record (unwhole leavesOf passedOn)
+open InferenceOnlyVerifier.Record.SecurityProofs (form read_front finish_text front_text front_leaves inst_of_read
   program_of_read wiring_of_read slot_of_read declared_of_heldAt)
 
 /-- **The wires of a record `read` accepts pass the check's `unwhole`**, on the templates the text gives and the
 leaves the Program gives each. -/
-theorem unwhole_of_read {j tr : Json} {c : InferenceOnlyCheck.Record.Case} (h : InferenceOnlyCheck.Record.read j tr = .ok c) :
+theorem unwhole_of_read {j tr : Json} {c : InferenceOnlyVerifier.Record.Case} (h : InferenceOnlyVerifier.Record.read j tr = .ok c) :
     Spot.RecordText.templatesOf c.f.P c.f.doc = .ok c.f.ts ∧
-      unwhole c.f.ts (c.f.ts.map (InferenceOnlyCheck.Record.leavesOf c.f.P (passedOn c.f.P))) c.wired.wires = none := by
+      unwhole c.f.ts (c.f.ts.map (InferenceOnlyVerifier.Record.leavesOf c.f.P (passedOn c.f.P))) c.wired.wires = none := by
   obtain ⟨f, pin, hf, hc⟩ := read_front h
   obtain ⟨rfl, -⟩ := finish_text hc
   refine ⟨front_text hf, ?_⟩
@@ -66,7 +66,7 @@ theorem unwhole_of_read {j tr : Json} {c : InferenceOnlyCheck.Record.Case} (h : 
 
 /-- **A record `read` accepts lays out a registered circuit**: the wired circuit of its Program, with θ the gates of
 the rows the check holds and the blocks the slots. -/
-theorem served_of_read {j tr : Json} {c : InferenceOnlyCheck.Record.Case} (h : InferenceOnlyCheck.Record.read j tr = .ok c) :
+theorem served_of_read {j tr : Json} {c : InferenceOnlyVerifier.Record.Case} (h : InferenceOnlyVerifier.Record.read j tr = .ok c) :
     ∃ d, Served form c d := by
   have hP := readProg_of_read h
   obtain ⟨-, -, -, -, hown, -⟩ := program_of_read h
@@ -86,9 +86,9 @@ theorem served_of_read {j tr : Json} {c : InferenceOnlyCheck.Record.Case} (h : I
     fun r hd hh => declared_of_heldAt h hh, hS, hrs, hT, hO, aligned hP hown hrs hT hS hts hwh,
     filled hP hrs hT hS hts hwh, fun r hh => held_unwired h r hh, hL, hN, hD⟩
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
-namespace InferenceOnlyCheck.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Record.SecurityProofs
 
 /-- **The record check's own form lays out a circuit** (`Properties.Record.LaidOut`). -/
 theorem form_laidOut : Properties.Record.LaidOut form := by
@@ -96,4 +96,4 @@ theorem form_laidOut : Properties.Record.LaidOut form := by
   have h' : read j tr = .ok c := h
   exact Properties.Record.SecurityProofs.served_of_read h'
 
-end InferenceOnlyCheck.Record.SecurityProofs
+end InferenceOnlyVerifier.Record.SecurityProofs

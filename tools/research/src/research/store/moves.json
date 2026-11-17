@@ -5165,6 +5165,12 @@
         "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwCheck.lean": "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwVerifier.lean",
         "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwCheck/": "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwVerifier/"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyCheck.lean": "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyVerifier.lean",
+        "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyCheck/": "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyVerifier/"
+      }
     }
   ]
 }

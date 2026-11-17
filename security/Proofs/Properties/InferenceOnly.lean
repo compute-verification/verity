@@ -34,7 +34,7 @@ of each entry (`Proofs.Properties.InferenceOnly.DigestReads`), which no statemen
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.SecurityProofs
 
 open Lean (Json toJson)
 open Flock.Program (Prog GateTable)
@@ -343,7 +343,7 @@ theorem wellFormed_instance {s : String} {P : Prog} (hP : Flock.Program.decode s
 theorem sizes_eq_tally (c : GateTable) (d : Division) (offs : Array ℕ) (own : Array (Option ℕ))
     (h0 : offs[0]! = 0) (hN : offs[own.size]! = c.N) (hmono : ∀ k < own.size, offs[k]! ≤ offs[k + 1]!)
     (hexp : ∀ k < own.size, ∀ g, offs[k]! ≤ g → g < offs[k + 1]! → d.owner[g]! = own[k]!) (u : ℕ) (hu : u < d.n) :
-    (InferenceOnlyCheck.Desc.sizes offs own d.n)[u]! = (tally c d)[u]!.1 := by
+    (InferenceOnlyVerifier.Desc.sizes offs own d.n)[u]! = (tally c d)[u]!.1 := by
   rw [Desc.sizes_eq_count offs own d.n c.N (fun g => d.owner[g]!) h0 hN hmono hexp u hu, ((tally_spec c d).2 u hu).1]
 
-end InferenceOnlyCheck.Properties.SecurityProofs
+end InferenceOnlyVerifier.Properties.SecurityProofs

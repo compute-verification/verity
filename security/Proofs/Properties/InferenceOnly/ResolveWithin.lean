@@ -24,7 +24,7 @@ and stays under it (`walk_within`), so the operands it ends with are `operands_w
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.Resolve
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.Resolve
 
 open Flock.Program
 
@@ -437,4 +437,4 @@ theorem ret_within_of (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decod
     exact BodiesOk.body_ok P hok sc.d (hS sc.d hSd hpd).1
   exact ret_within P ⟨hr, hrp⟩ hB hL U hU t ht h
 
-end InferenceOnlyCheck.Properties.SecurityProofs.Resolve
+end InferenceOnlyVerifier.Properties.SecurityProofs.Resolve

@@ -22,13 +22,13 @@ strong induction on the decoder's index: a node's callee sits at a smaller index
 
 public section
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Lean (Json)
 open Flock.Program
 open Claims.Json (Wf)
 open FlockDeploy (JsonEquiv)
-open InferenceOnlyCheck.DefinitionDigest (canonicalEntry)
+open InferenceOnlyVerifier.DefinitionDigest (canonicalEntry)
 open private natJ? intJ? paramsOf at_ buildNode from Circuits.Program
 
 /-- Node `nd`'s callee as `Reaches` reads it: its `fn` index into the descriptor's callees. -/
@@ -184,6 +184,6 @@ theorem entriesPin_of_reads (hD : DecodeReads) (hR : ReadsPin) : EntriesPin := b
 theorem digestPins_of_reads (hD : DecodeReads) (hR : ReadsPin) : DigestPins :=
   digestPins_of_entriesPin (entriesPin_of_reads hD hR)
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 end
