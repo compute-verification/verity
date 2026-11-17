@@ -620,10 +620,22 @@ ID_FORM = "--protocol ids --id-payload 503"
 SCAN_CLASS = "8,32,4,4,16"
 
 
+#: the most output tokens a front request asks for (`attester_piece.TOKENS`): its group stays in one execution phase
+FRONT_TOKENS = 4
+
+
 def _attester_piece(cfg, params, bound):
+    """Under Pearl+'s tie (``pearl-plus`` listed, whose piece sets ``PEARLPLUS_TIE``) the tied class is Pearl+'s and
+    V3c runs after the pieces, so the piece is whole (``CERTIFIER_CMD``) on the front's own window, sets no class, and
+    the front's requests ask for at most the window's steps, so each is in one window."""
     py = ".venv/bin/python"
     gate = f'--gate {shlex.quote(bound["gate"])} --peer {shlex.quote(bound["peer"])}'
-    return {"SERVE_ARGS": ID_FORM, "CERTIFIER_FRONT": f'{py} {ATTESTER_PIECE} front "$1" "$2" "$3" {gate}',
+    front = f'{py} {ATTESTER_PIECE} front "$1" "$2" "$3" {gate}'
+    if "pearl-plus" in cfg["protocols"]:
+        tokens = min(FRONT_TOKENS, cfg["workload"]["params"]["window-steps"])
+        return {"SERVE_ARGS": ID_FORM, "CERTIFIER_FRONT": f"{front} --tokens {tokens}",
+                "CERTIFIER_CMD": f'{py} {ATTESTER_PIECE} piece "$@"'}
+    return {"SERVE_ARGS": ID_FORM, "CERTIFIER_FRONT": front,
             "CERTIFIER_CHAIN_CMD": f'{py} {ATTESTER_PIECE} chain "$@"',
             "CERTIFIER_PERIOD_CMD": f'{py} {ATTESTER_PIECE} period "$@"',
             "V3C_CLASS": SCAN_CLASS, "CLASSES": f"4,32,4 {SCAN_CLASS}"}
@@ -717,7 +729,8 @@ PARTIES: dict[str, dict[str, Piece]] = {
         WORKERS: Piece("certifier", WORKERS, SERVED_WINDOW, "the network attester's developer side: its front before the "
                        "requests (CERTIFIER_FRONT, which the served window runs), and its piece split around V3c: the "
                        "chain on V3c's committed window (CERTIFIER_CHAIN_CMD), then the period check on V3c's "
-                       "period.json (CERTIFIER_PERIOD_CMD)", scripts=(ATTESTER_PIECE,),
+                       "period.json (CERTIFIER_PERIOD_CMD); under Pearl+'s tie, whole on its front's own window "
+                       "(CERTIFIER_CMD)", scripts=(ATTESTER_PIECE,),
                        reaches=NETWORK_ATTESTER, binds=("gate", "peer"), hooks=_attester_piece),
         NETWORK_ATTESTER: Piece("certifier", NETWORK_ATTESTER, GATE, "the network certifier behind the gate, "
                                  "in front of serve-openai before the requests"),
@@ -762,6 +775,8 @@ def pieces(cfg: Mapping[str, Any], party: str) -> list[Piece]:
 
 #: the runner's variables that are flags, serve-openai's and served_piece.py's, which each piece adds its own to
 JOINED = ("SERVE_ARGS", "POUS_ARGS")
+#: the runner's variables that name the class V3c commits, which two pieces may set only alike
+CLASS_KEYS = ("V3C_CLASS", "CLASSES")
 
 
 def variables(cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[str, str]:
@@ -771,8 +786,13 @@ def variables(cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[str, 
     bindings. A variable of `JOINED` is every piece's flags,
     in the pieces' order; any other is one piece's."""
     out = {"VERITY_CONFIGURATION": K.digest(cfg), "VERITY_PINS": json.dumps(cfg.get("pin", []), sort_keys=True)}
+    by: dict[str, str] = {}
     for p in [SERVE, *(x for c in cfg["protocols"] for x in PARTIES.get(c, {}).values())]:
         for k, v in p.variables(cfg, bindings).items():
+            if k in CLASS_KEYS and k in by and out[k] != v:
+                raise Refused("params", f"{k} is {out[k]} in {by[k]}'s piece and {v} in {p.component}'s: the runner "
+                                        f"commits one class, so give one of them the class or list one of them alone")
+            by.setdefault(k, p.component)
             out[k] = f"{out[k]} {v}" if k in JOINED and k in out else v
     return out
 
