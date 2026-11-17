@@ -434,42 +434,56 @@ class Copy:
             raise AssertionError("a step waited on its device")
 
 
-def test_each_steps_counters_are_kept_by_card_with_no_device_sync(tmp_path):
-    """At a step's end each device's counters are copied behind its kernels and written once the copy has landed, at
-    a later step's end, in order; only `Steps.drain`, at the process's exit, waits for one. A step is one that
-    scheduled tokens, outside a capture and a dummy run, numbered as the step trace numbers them."""
+def test_each_steps_counts_are_kept_by_card_with_no_device_sync(tmp_path):
+    """At a step's start and end each device's counters are copied on its stream, and the step's line, its end's
+    counts less its start's, is written once the end's copy has landed, at a later step's end, in order; only
+    `Steps.drain`, at the process's exit, waits for one. A step is one that scheduled tokens, outside a capture and a
+    dummy run, numbered as the step trace numbers them; what runs between steps counts in none."""
     landed, wait, lines = [False], [False], []
     canon = dsa_topk.Canon()
-    queued = []
 
     def queue(stats):
-        queued.append(Copy(stats, landed, wait))
-        return queued[-1], queued[-1]
+        c = Copy(stats, landed, wait)
+        return c, c
 
     steps = dsa_topk.Steps(canon, lines.append, queue)
     capturing = [False]
-    runner = dsa_topk.step_runner(lambda self, so, **kw: "out", steps, capturing=lambda: capturing[0])
+    work = []
+
+    def execute(self, so, **kw):
+        for device, add in work.pop(0).items():
+            canon._stats[device] = [(a + b + (1 << 31)) % (1 << 32) - (1 << 31)    # as an int32 holds it
+                                    for a, b in zip(canon._stats.get(device, [0, 0, 0]), add)]
+        return "out"
+
+    runner = dsa_topk.step_runner(execute, steps, capturing=lambda: capturing[0])
     so = lambda t: SimpleNamespace(total_num_scheduled_tokens=t)  # noqa: E731
+    line = lambda step, t, d, c: {"step": step, "tokens": t, "device": d, **dict(zip(dsa_topk.STATS, c))}  # noqa: E731
+    work.append({})
     assert runner(None, so(5)) == "out"                 # step 0, no device has counted yet: no line
-    canon._stats["cuda:0"], canon._stats["cuda:1"] = [3, 1, 0], [2, 0, 1]
-    runner(None, so(0))                                 # no tokens: no step
+    assert lines == []
+    work.extend([{"cuda:0": [9, 9, 9]}] * 3)            # between steps: no tokens, a dummy run, a capture
+    runner(None, so(0))
     runner(None, so(7), dummy_run=True)
     capturing[0] = True
     runner(None, so(7))
     capturing[0] = False
+    work.append({"cuda:0": [3, 1, 0], "cuda:1": [2, 0, 1]})
     runner(None, so(7))                                 # step 1, queued, not landed
     assert (steps.step, lines) == (2, [])
     landed[0] = True
-    canon._stats["cuda:0"] = [4, 1, 1]
+    canon._stats["cuda:0"][0] = (1 << 31) - 1           # the int32 wraps within step 2
+    work.append({"cuda:0": [2, 0, 1]})
     runner(None, so(9))                                 # step 2: step 1's copies landed, so both steps' lines
-    assert lines == [[1, 7, "cuda:0", 3, 1, 0], [1, 7, "cuda:1", 2, 0, 1],
-                     [2, 9, "cuda:0", 4, 1, 1], [2, 9, "cuda:1", 2, 0, 1]]
+    assert lines == [line(1, 7, "cuda:0", [3, 1, 0]), line(1, 7, "cuda:1", [2, 0, 1]),
+                     line(2, 9, "cuda:0", [2, 0, 1]), line(2, 9, "cuda:1", [0, 0, 0])]
     landed[0] = False
+    work.append({"cuda:1": [1, 1, 0]})
     runner(None, so(3))
     assert len(lines) == 4
     wait[0] = True
     steps.drain()
-    assert lines[4:] == [[3, 3, "cuda:0", 4, 1, 1], [3, 3, "cuda:1", 2, 0, 1]]
+    assert lines[4:] == [line(3, 3, "cuda:0", [0, 0, 0]), line(3, 3, "cuda:1", [1, 1, 0])]
 
 
 def test_steps_to_keeps_a_file_a_process_and_wraps_each_runner_once(tmp_path, monkeypatch):
@@ -482,10 +496,10 @@ def test_steps_to_keeps_a_file_a_process_and_wraps_each_runner_once(tmp_path, mo
     assert Runner.execute_model.dsa_topk_steps is steps
     dsa_topk.steps_to(canon, str(tmp_path), runners=[Runner])
     assert Runner.execute_model.dsa_topk_steps is steps
-    steps.write([0, 4, "cuda:0", 1, 0, 0])
+    steps.write({"step": 0, "tokens": 4, "device": "cuda:0", "rows_long": 1})
     path = tmp_path / f"dsa_topk_steps.{os.getpid()}.jsonl"
     lines = [json.loads(x) for x in path.read_text().splitlines()]
-    assert lines[0] == {"pid": os.getpid(), "stats": list(dsa_topk.STATS)} and lines[-1] == [0, 4, "cuda:0", 1, 0, 0]
+    assert lines[0] == {"pid": os.getpid(), "stats": list(dsa_topk.STATS)} and lines[-1]["rows_long"] == 1
     # the plugin keeps them only where asked
     calls = []
     monkeypatch.setattr(dsa_topk, "install", lambda *a, **k: canon)

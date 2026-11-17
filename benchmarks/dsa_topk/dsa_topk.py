@@ -340,31 +340,40 @@ def log_to(canon: Canon, d: str) -> None:
 
 
 class Steps:
-    """Each step's counters on each of its devices, as of the step's end, kept with no device sync: at a step's end a
-    copy of each device's counters is queued behind the step's kernels (``queue``: the copy into pinned host memory
-    and its event), and its line is written (``write``) once the copy has landed, at a later step's end or at
-    `drain`. A line is ``[step, tokens, device, *counts]``, each count the device's running total in `STATS`' order,
-    an int32 that wraps; a killed process loses the lines of its last steps still queued."""
+    """Each step's counts on each of its devices, kept with no device sync: at a step's start and end a copy of each
+    device's counters is queued on its stream (``queue``: the copy into pinned host memory and its event), and the
+    step's line is written (``write``) once its end's copy has landed, at a later step's end or at `drain`. A line is
+    ``{"step", "tokens", "device", **counts}``, each count named as in `STATS` and the step's own (its end's int32 less
+    its start's, modulo 2**32), so work between steps counts in none; a killed process loses the lines of its last
+    steps still queued."""
 
-    def __init__(self, canon: Canon, write: Callable[[list], None], queue: Callable[[Any], tuple[Any, Any]] | None = None) -> None:
+    def __init__(self, canon: Canon, write: Callable[[dict], None], queue: Callable[[Any], tuple[Any, Any]] | None = None) -> None:
         self.canon, self.write, self.queue = canon, write, queue or _queue
         self.step = 0
-        self._pending: list[tuple[int, int, str, Any, Any]] = []
+        self._start: dict[str, Any] = {}
+        self._pending: list[tuple[int, int, str, Any, Any, Any]] = []
+
+    def begin(self) -> None:
+        """A step that `end` will count starts its forward on this rank."""
+        self._start = {str(d): self.queue(s)[0] for d, s in self.canon._stats.items()}
 
     def end(self, tokens: int) -> None:
         """A step of ``tokens`` scheduled tokens has run its forward on this rank."""
         for device, stats in self.canon._stats.items():
-            self._pending.append((self.step, tokens, str(device), *self.queue(stats)))
+            self._pending.append((self.step, tokens, str(device), self._start.get(str(device)), *self.queue(stats)))
+        self._start = {}
         self.step += 1
         self.drain(wait=False)
 
     def drain(self, wait: bool = True) -> None:
         """Write each queued step's lines in order up to the first whose copy hasn't landed, or, with ``wait``, all."""
-        while self._pending and (wait or self._pending[0][4].query()):
-            step, tokens, device, host, done = self._pending.pop(0)
+        while self._pending and (wait or self._pending[0][5].query()):
+            step, tokens, device, start, host, done = self._pending.pop(0)
             if wait:
                 done.synchronize()
-            self.write([step, tokens, device, *host.tolist()])
+            before = start.tolist() if start is not None else [0] * len(STATS)
+            self.write({"step": step, "tokens": tokens, "device": device,
+                        **{n: (b - a) % (1 << 32) for n, a, b in zip(STATS, before, host.tolist())}})
 
 
 def _queue(stats: Any) -> tuple[Any, Any]:
@@ -379,12 +388,16 @@ def _queue(stats: Any) -> tuple[Any, Any]:
 
 def step_runner(execute: Callable[..., Any], steps: Steps,
                 capturing: Callable[[], bool] = lambda: _capturing()) -> Callable[..., Any]:
-    """A model runner's ``execute_model``, then `Steps.end` on a step that scheduled tokens, outside a capture and a
-    dummy run: the step's index is its place among them, as the step trace's (`verity_vllm.engine.step_trace`)."""
+    """A model runner's ``execute_model`` between `Steps.begin` and `Steps.end` on a step that scheduled tokens,
+    outside a capture and a dummy run: the step's index is its place among them, as the step trace's
+    (`verity_vllm.engine.step_trace`)."""
     def execute_model(self: Any, scheduler_output: Any, *args: Any, **kwargs: Any) -> Any:
-        out = execute(self, scheduler_output, *args, **kwargs)
         tokens = int(getattr(scheduler_output, "total_num_scheduled_tokens", 0) or 0)
-        if tokens and not kwargs.get("dummy_run") and not capturing():
+        counted = bool(tokens) and not kwargs.get("dummy_run") and not capturing()
+        if counted:
+            steps.begin()
+        out = execute(self, scheduler_output, *args, **kwargs)
+        if counted:
             steps.end(tokens)
         return out
     execute_model.dsa_topk_steps = steps  # type: ignore[attr-defined]

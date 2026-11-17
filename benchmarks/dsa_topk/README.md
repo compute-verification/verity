@@ -49,10 +49,11 @@ device's own counters, read every 4,096 calls outside a capture and when the pro
 calls it had made by then, so a killed process's rows are a lower bound.
 
 `VERITY_DSA_TOPK_STEPS=DIR` keeps each step's counters on each card in `DIR/dsa_topk_steps.PID.jsonl`: a header naming
-the counters, then a line a card a step, `[step, tokens, card, *running totals]`, the step numbered as the step trace
-numbers it (a step that scheduled tokens, outside a capture and a dummy run) by a wrapper of the model runner's
-`execute_model`. At a step's end the counters are copied into pinned host memory behind the step's kernels and the line
-is written once the copy has landed, at a later step's end; nothing waits on the device but the process's exit.
+the counters, then a line a card a step, `{"step", "tokens", "device", "rows_long", ...}`, each count the step's own,
+the step numbered as the step trace numbers it (a step that scheduled tokens, outside a capture and a dummy run) by a
+wrapper of the model runner's `execute_model`; the drafter's forwards count in their step. At a step's start and end
+the counters are copied into pinned host memory on the device's stream and the line is written once the end's copy has
+landed, at a later step's end; nothing waits on the device but the process's exit.
 `serve_tax` sets it beside each arm's step traces and joins the two by step (`serve_tax.topk_counts`).
 
 ## Using it

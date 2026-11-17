@@ -2505,22 +2505,17 @@ def past_end(d: Path, tags: Sequence[str], ends: Sequence[int]) -> dict[str, dic
 
 
 def topk_steps(arm_dir: Path) -> dict[int, dict]:
-    """The canonical top-k's counters by step, from its ranks' files beside the step traces (`dsa_topk.steps_to`): each
-    step's tokens as its ranks counted them and, for each card, each counter's count in that step (its running total
-    less the one before, modulo 2**32, as the device's int32 wraps). A card with no line at a step counted nothing
-    there."""
+    """The canonical top-k's counts by step, from its ranks' files beside the step traces (`dsa_topk.steps_to`): each
+    step's tokens as its ranks counted them and, for each card, its counts in that step by the header's names."""
     out: dict[int, dict] = {}
     for path in sorted((arm_dir / "server").glob("dsa_topk_steps.*.jsonl")):
         lines = [json.loads(x) for x in path.read_text().splitlines() if x.strip()]
         if not lines:
             continue
-        names, last = lines[0]["stats"], {}
-        for step, tokens, card, *totals in lines[1:]:
-            before = last.get(card, [0] * len(totals))
-            last[card] = totals
-            at = out.setdefault(step, {"tokens": set(), "cards": {}})
-            at["tokens"].add(tokens)
-            at["cards"][card] = {n: (b - a) % (1 << 32) for n, a, b in zip(names, before, totals)}
+        for line in lines[1:]:
+            at = out.setdefault(line["step"], {"tokens": set(), "cards": {}})
+            at["tokens"].add(line["tokens"])
+            at["cards"][line["device"]] = {n: line[n] for n in lines[0]["stats"]}
     return out
 
 

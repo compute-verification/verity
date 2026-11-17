@@ -173,17 +173,20 @@ def test_a_pass_has_the_canonical_top_ks_counts_by_card_joined_to_its_steps(tmp_
     server = tmp_path / "server"
     server.mkdir()
     names = ["rows_long", "rows_tied", "rows_bisected"]
-    wrap = (1 << 32) - 2                                # a running int32 total that wraps: -2 as its device holds it
-    ranks = {11: [[0, 5, "cuda:0", 1, 0, 0], [1, 8, "cuda:0", 4, 1, 0], [3, 2, "cuda:0", -2, 1, 1], [4, 9, "cuda:0", 3, 2, 1]],
-             12: [[0, 5, "cuda:1", 1, 0, 0], [1, 8, "cuda:1", 3, 0, 1], [4, 9, "cuda:1", 3, 0, 1]]}
+
+    def line(step: int, tokens: int, device: str, counts: list[int]) -> dict:
+        return {"step": step, "tokens": tokens, "device": device, **dict(zip(names, counts))}
+
+    ranks = {11: [line(0, 5, "cuda:0", [1, 0, 0]), line(1, 8, "cuda:0", [3, 1, 0]), line(3, 2, "cuda:0", [6, 0, 1]),
+                  line(4, 9, "cuda:0", [5, 1, 0])],
+             12: [line(0, 5, "cuda:1", [1, 0, 0]), line(1, 8, "cuda:1", [2, 0, 1]), line(4, 9, "cuda:1", [0, 0, 0])]}
     for pid, lines in ranks.items():
         (server / f"dsa_topk_steps.{pid}.jsonl").write_text(
             "".join(json.dumps(x) + "\n" for x in [{"pid": pid, "stats": names}, *lines]))
     counts = S.topk_steps(tmp_path)
     assert counts[1] == {"tokens": {8}, "cards": {"cuda:0": {"rows_long": 3, "rows_tied": 1, "rows_bisected": 0},
                                                  "cuda:1": {"rows_long": 2, "rows_tied": 0, "rows_bisected": 1}}}
-    assert counts[3]["cards"]["cuda:0"]["rows_long"] == wrap - 4 and counts[4]["cards"]["cuda:0"]["rows_long"] == 5
-    assert counts[4]["cards"]["cuda:1"] == dict.fromkeys(names, 0)
+    assert counts[3] == {"tokens": {2}, "cards": {"cuda:0": {"rows_long": 6, "rows_tied": 0, "rows_bisected": 1}}}
 
     def step(i: int, t: int, rid: str) -> dict:
         return {"kind": "step", "step": i, "T": t, "rows": [[rid, 0, t]]}
