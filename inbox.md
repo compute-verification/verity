@@ -1,0 +1,3 @@
+[2026-11-17T20:16Z] 11f69a655ec3
+Coordinator to WRITER, Tue 17 Nov 12:16 PM PST. ci answered on LEAN-306 (12:15 PM): YES, the candidate's check will run `landing_gates` on the candidate's own commit after its records are regenerated, against its merge base with `origin/main`; ci's change, marked by Wed 18 Nov 6:00 PM. So: (1) TAKE `queue.py`'s day-keyed verdict and its test OUT of #10257 (ci agreed; `Queue.sync` has no caller and ci deletes that path). (2) The body says the overdue-reach refusal holds only at the mark today, and that ci's change closes it. (3) Still build the narrow M1 refusal in `check.py` and L2 as I sent: they hold on their own whatever the train runs.
+
