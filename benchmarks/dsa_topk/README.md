@@ -44,3 +44,7 @@ every op at GLM-5.3's shapes, unpatched and canonical, across processes, and tim
 ~~~text
 research run --on NODE --project verity --source . --cwd source -- bash benchmarks/dsa_topk/run.sh
 ~~~
+
+`stress.py definition --out DIR` holds each of the plugin's modes (`canonical`, and `canonical-bisect`, which bisects
+every row whose candidate fails) to the registry's own `topk_set` on `cooperative_topk` at served decode shapes, and
+writes `definition.json`.
