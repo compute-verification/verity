@@ -140,7 +140,7 @@ def test_an_unlabelled_superseded_or_ambiguous_record_is_refused_by_name(tmp_pat
         E.build(store=steps.store, root=REPO, step="+ ")
     with pytest.raises(ValueError, match="no run of record holds the planner's rows: .*holds no row `\\(iv\\)`"):
         build(row="(iv)")
-    with pytest.raises(ValueError, match="the share of total compute is in \\(0, 1\\) and the network check's own below it"):
+    with pytest.raises(ValueError, match="the share of total compute is in \\(0, 1\\) and the network verifier's own below it"):
         build(share=0.1, network_check=0.1)
 
 

@@ -6,7 +6,7 @@ driver API (ctypes on libcuda.so.1; stdlib and numpy, nothing built on the machi
   python3 dev.py time MxNxK [...] [--fmt nvfp4|mxfp4] [--reps R] [--expect-uuid GPU-...]
                                                               self-timing for hillclimbing (the harness's numbers are the record)
 
-The check runs the weight side and one call in each mode (hash with C~ and U stored, nohash, plain) at every GEMM geometry,
+The verifier runs the weight side and one call in each mode (hash with C~ and U stored, nohash, plain) at every GEMM geometry,
 and compares every buffer the kernels write with the fixture, the rows' commitment roots and the seeds included.  One JSON
 object per line on stdout.  Exit 3: identity refused; 4: a buffer differs.
 

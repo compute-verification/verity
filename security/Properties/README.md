@@ -27,7 +27,7 @@ from the registry, path by path: `research msg owners PATH`.
 | `Core/` | The evaluator's primitives and the Site's fold and check are `Definitions.Core`'s |
 | `Flock/` | The circuit a registered Flock circuit file describes; the verifier's two fixed nets build |
 | `Hash/` | Core's identity hash is Flock's SHA-512 |
-| `InferenceOnly/`, `InferenceOnly.lean` | What the inference-only check's verdicts mean (`InferenceOnlyCheck`) |
+| `InferenceOnly/`, `InferenceOnly.lean` | What the inference-only verifier's verdicts mean (`InferenceOnlyCheck`) |
 | `Pous/`, `Pous.lean` | PoUS's setup, timed audit, period and wipe (`PousCheck`, `MemoryChallenger`) |
 | `Pouw/`, `Pouw.lean` | PoUW's execution phase, its check, commitments, credit and period (`PouwWindow`, `PouwCheck`) |
 | `Spot/`, `Spot.lean` | SPOT's one-stage audit: its verdict, sample, plan check and wires (`Spot`) |

@@ -216,7 +216,7 @@ challenger_audit() {  # A5_COINS=challenger: records_audit.py audit of WD on one
      ! -path '*/challenger-work/*' \( ! -path './challenger/*' -o -name windows.jsonl -o -name pins.jsonl \) -print0 \
     | xargs -0 -r -I{} cp --parents {} "$OUT/a5/")
   [ -z "$A5_PLAIN" ] || return $rc
-  # the case the audit wrote (a5.write_case: it names the challenger, its window root and coins), as SPOT's check reads it;
+  # the case the audit wrote (a5.write_case: it names the challenger, its window root and coins), as SPOT's verifier reads it;
   # v2_case.py's rebuild from the kept files carries no coins, which v2 refuses (NO_CHALLENGER)
   "$TPY" - "$A/window/case-v2.json" "$BASE/v2" "$TREE/verity/protocols/proofs/spot/verifier/lean/.lake/build/bin/spot-one-stage-zk" \
     > "$OUT/a5/v2.log" 2>&1 <<'PY'

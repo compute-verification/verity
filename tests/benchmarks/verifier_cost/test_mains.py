@@ -4,7 +4,7 @@ A benchmark's Lean here is one file, `<name>/Main.lean`, which its script copies
 builds against a verifier's package. Nothing else reads those files, so a change to a function one of them calls leaves its
 benchmark unable to build, unnoticed until somebody next runs it. So each main is elaborated here (`lake env lean`, which
 writes nothing) in the package that holds the libraries it imports, once `lake build` has built there the modules it imports;
-and whole_run.py, whose inputs come from SPOT's difftest module, still writes a run that its own check accepts.
+and whole_run.py, whose inputs come from SPOT's difftest module, still writes a run that its own verifier accepts.
 The ledger replay's two generators are held the same way to the references they write their inputs with: the challenger
 still accepts ledger_replay.py's ledger, and PoUW's period check replays.py's period.
 
@@ -94,5 +94,5 @@ def test_replays_writes_a_period_its_check_accepts(tmp_path):
                          capture_output=True, text=True)
     row = json.loads(got.stdout) if got.returncode == 0 else {"verdict": "no row", "replays": 0}
     assert row["verdict"] == "accept" and row["replays"] > 0 and (tmp_path / "period-1.json").is_file(), (
-        f"replays.py 1 wrote no period its check accepts ({got.returncode}), so replays.sh has nothing to count: fix the "
+        f"replays.py 1 wrote no period its verifier accepts ({got.returncode}), so replays.sh has nothing to count: fix the "
         f"generator in the change that moved what it calls:\n{got.stdout[-3000:]}{got.stderr[-3000:]}")

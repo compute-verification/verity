@@ -260,7 +260,7 @@ class Scheme:
     folds (`h1tile.STREAM`: the recombinations, the wrap correction and the dither peel). Such a unit's z is made from the
     noised words, so it reads the seed by design, and the unit check's ``noise-in-z`` rule gives way to ``stream``: every
     z leaf is the output of a call of one of them, and every leaf such a call reads is either another such call's output or
-    read by the receipt's own cone. That z is the Call's value is the stream Definitions' arithmetic, not this check's."""
+    read by the receipt's own cone. That z is the Call's value is the stream Definitions' arithmetic, not this verifier's."""
 
     name: str
     tile: tuple[int, int]

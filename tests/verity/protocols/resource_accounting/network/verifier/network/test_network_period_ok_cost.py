@@ -25,7 +25,7 @@ LEAN = Path(__file__).resolve().parents[7] / "verity" / "protocols" / "resource_
 SILENT = re.compile(r'/-.*?-/|--[^\n]*|"(?:\\.|[^"\\])*"', re.S)
 #: where a top-level declaration starts
 DECLARATION = re.compile(r"^(?:def|theorem|structure|abbrev|instance|namespace|end|#guard|@\[)", re.M)
-#: a `#guard`, to the next top-level line: what the build evaluates and no check runs
+#: a `#guard`, to the next top-level line: what the build evaluates and no verifier runs
 GUARD = re.compile(r"^#guard.*?(?=^\S)", re.S | re.M)
 #: an identifier with its qualifiers and field accesses, so a field (`c.root`) is not the definition (`root`)
 IDENTIFIER = re.compile(r"[A-Za-z_][\w.']*")

@@ -357,7 +357,7 @@ plan of the case, is left out and listed under "Refused".
   amount of it, the output count among them; where the two parts' errors sum to 1 or more, so are the two together.
   One line gives the errors: the compute audit's δ over the monitoring period, the network attester's ε with the
   scans' δ and the execution phases it sums, and their sum. One more line gives the compute audit's part with the
-  network check's own proving taken off the audit budget (`--network-check-share`, assumed: no run measures it and
+  network verifier's own proving taken off the audit budget (`--network-check-share`, assumed: no run measures it and
   the planner's rows don't count it).
 - **Inputs**: every input's part, value, unit, mark and source. A mark is `measured` (a run measured it), `modeled`
   (derived from other figures), `simulated` (what a stand-in does in its place: the network attester's set-time
@@ -437,7 +437,7 @@ research run --on auto --project verity --source . --cwd source --store-read -- 
 
 ## What you may change
 
-Every input the print lists with its mark: the share of total compute, the network check's share, the planner's row
+Every input the print lists with its mark: the share of total compute, the network verifier's share, the planner's row
 and step, the class of ids a response, the scans' δ and a workload's record, each by its flag. And the record the
 rows come from: the store's runs of record, or one run's record directory with `--from`.
 

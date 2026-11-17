@@ -19,7 +19,7 @@ built here, in a scope of its own as `served_cases.lean_answer` runs every check
   over the profile's gamma: the verdict and its reason at each.
 
 The case's audit record is a stand-in naming that Program, the one the suite's class test makes (`v1_case.py`): the
-check reads the Program and its division, and nothing of a workload. OUT gets one JSON object,
+verifier reads the Program and its division, and nothing of a workload. OUT gets one JSON object,
 written after the Program's digest and again after the profile, so a later failure keeps both. Nothing here reads a run.
 """
 import json

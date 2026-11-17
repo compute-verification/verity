@@ -6,7 +6,7 @@ The placement here is the spec's arithmetic, written again (`placement`): unit u
 j-th call of its K in its round s, reads its A rows from row M·j + R·ti of ``<prefix>a/<K>@<s>``, its B rows from row
 b0 + C·tj of ``<prefix>b/<K>`` (b0 the call's linear's first row there), and its z and receipt rows at row t of
 ``<prefix>zy@<c>`` and ``<prefix>receipt@<c>``; the partials are the leaf's own. The file is `leaf_lanes.registered_file`
-at that placement. The check accepts it for each statement of several units of an execution phase whose calls span two rounds and
+at that placement. The verifier accepts it for each statement of several units of an execution phase whose calls span two rounds and
 two linears of one K, and refuses a file of another unit, one read at another round count, and a unit past the execution phase.
 """
 from __future__ import annotations

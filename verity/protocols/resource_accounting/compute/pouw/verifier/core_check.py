@@ -1380,7 +1380,7 @@ def draw_twin(coins: Any, recorded: bool, opening: Any, stream: Any, registratio
     key. A live one (`window.LIVE_SCHEME`, a certified execution phase's) is read only from its sample session's
     (`window.DRAW_FAMILIES`) signed record with the key it is signed under, ``{"key", "record"}``: that key must be `key`, the challenger key the execution phase's
     parameters pin (``coin-key``, so a record the prover signed under a key of its own, over coins it holds, is
-    refused), and this check verifies the record under it (`challenger.record_reason`; a bare live commitment is
+    refused), and this verifier verifies the record under it (`challenger.record_reason`; a bare live commitment is
     refused, `SIGNED_LIVE`); it has its ``pouw/draw`` coin 0 (`challenger.live_reason`)."""
     live = isinstance(coins, dict) and ("record" in coins or coins.get("scheme") == Wd.LIVE_SCHEME)
     if live:

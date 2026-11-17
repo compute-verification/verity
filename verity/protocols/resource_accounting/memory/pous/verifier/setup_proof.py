@@ -1,4 +1,4 @@
-"""PoUS's setup as a sampled proof about the store, the auditor's side: what its check takes in place of the store.
+"""PoUS's setup as a sampled proof about the store, the auditor's side: what its verifier takes in place of the store.
 
 Today's setup check (`setup.verifier_key_from_encoding`, `PousCheck.SetupProtocol`) reads all of C* and decodes it.  In
 proofs it reads none of it: the store's blocks are committed and their root registered, the challenger samples

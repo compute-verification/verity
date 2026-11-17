@@ -65,7 +65,7 @@ def test_a_judgment_that_is_no_json_object_is_refused() -> None:
     ({"c": 99}, "checks.gates"),                                                         # a class of 100 gates, over c
     ({"k": 7}, "checks.fresh"),                                                          # a class of 8 fresh bits, over k
     (_class(1, unpriced={"mux": 1}), "checks.gates"),                                    # gates that are a lower bound: undecided
-    ({"verdict": "refuse", "reason": "a refusal no check gives"}, "verdict"),
+    ({"verdict": "refuse", "reason": "a refusal no verifier gives"}, "verdict"),
     ({"checks": {**J.checks, "count": "undecided"}}, "verdict"),                         # an accept over a check that isn't one
 ])
 def test_a_judgment_that_isnt_one_is_refused_by_field(change: dict, field: str) -> None:

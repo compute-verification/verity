@@ -369,7 +369,7 @@ def main(argv: Sequence[str] | None = None, metrics: Mapping[str, str] | None = 
     ap.add_argument("--share", type=float, default=SHARE, metavar="S",
                     help=f"the share of total compute the figure is read at (default {SHARE})")
     ap.add_argument("--network-check-share", type=float, default=NETWORK_CHECK_SHARE, metavar="S",
-                    help="the network check's own proving as a share of total compute, which the planner's rows don't "
+                    help="the network verifier's own proving as a share of total compute, which the planner's rows don't "
                          f"count (default {NETWORK_CHECK_SHARE}, assumed)")
     ap.add_argument("--row", default=ROW, help=f"the planner's row (default `{ROW}`, the plan of record's; `{ASSUMED_ROW}` "
                                                "is printed only under its label, what its rows say of their pricing)")

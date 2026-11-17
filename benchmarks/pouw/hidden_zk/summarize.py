@@ -8,7 +8,7 @@ has passed, its output row holding two output ports, a form the proof does not c
 only with a refusal as their reason (REFUSED). A hiding tile's rows (row-seg/v1, row/v2) are covered and its session
 sampled, but a tile is no Program's: the verifier holds no descriptor (`--program`), so its honest checks are as expected
 only refused for that alone, once `Zk.verify` and every check before it have passed (`NO_PROGRAM`). Every other tile check
-is as expected only when a check rejects it. A refusal never counts as an acceptance: each config counts the honest checks
+is as expected only when a verifier rejects it. A refusal never counts as an acceptance: each config counts the honest checks
 Lean accepted (`lean_accepted`) apart from those it refused for `NO_PROGRAM` alone (`lean_refused_no_program`), and its
 `as_expected` says only that every check and control gave the verdict it must.
 Under HZ_STAGE_ONLY=1 nothing is proved or verified, so a config is `stage_only` and its `as_expected`, its two counts and

@@ -21,7 +21,7 @@ INGRESS, EGRESS, FAILS, LINK = "requests", "responses", "fails", "warden"
 CERTIFIED = {INGRESS: (LINK, Direction.INGRESS), EGRESS: (LINK, Direction.EGRESS),
              FAILS: (f"{LINK}-{FAILS}", Direction.EGRESS)}
 KIND_CHARS = {PAD: "p", DATA: "d", END: "e", FAIL: "f", REFUSED: "r"}
-#: a check's words for how a connection that neither ended nor was refused failed: the network attester's own two
+#: a verifier's words for how a connection that neither ended nor was refused failed: the network attester's own two
 #: outcomes, and `error` for any other, a client's exception among them, whose words are its connection's own line
 FAILED = ("cut", "fail", "error")
 #: the local file beside `deployment.json` that holds the run's two addresses (`endpoints_record`), never published

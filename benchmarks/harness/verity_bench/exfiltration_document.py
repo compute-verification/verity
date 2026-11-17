@@ -249,7 +249,7 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
     store: no label is read, no run carries the stop class's record, and the calculator is handed no answer."""
 
     if not (0 < share < 1 and 0 <= network_check < share):
-        raise ValueError(f"the share of total compute is in (0, 1) and the network check's own below it, not {share!r} "
+        raise ValueError(f"the share of total compute is in (0, 1) and the network verifier's own below it, not {share!r} "
                          f"and {network_check!r}")
     measured = served_share(served)
     root = root or jobs.repository_root()

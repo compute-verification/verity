@@ -1,6 +1,6 @@
 """Three conditions on a two-stage design's wires, decided, as the verifier's `Spot.SecondWires` defines them, which the
 difftest's ``second_wires`` holds this to. Round 2's check of the wires (`second_stage`'s ``second-wires``) holds each
-wire to the parts, to its rows' units and to the links; these three it does not decide, and no check calls this module.
+wire to the parts, to its rows' units and to the links; these three it does not decide, and no verifier calls this module.
 
 * `rows_under`: at the rows of each port a wire names, each run's last unit reads a row under the rows' ``per``, so
   every unit the run holds reads one of its writer's units of its own replay block. One lookup of a port's rows a wire
