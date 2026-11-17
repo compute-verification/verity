@@ -121,6 +121,7 @@ import os
 import re
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import tarfile
@@ -233,10 +234,11 @@ def in_tree(pkg: str, entry: str, file: str) -> str:
     """``entry`` of ``pkg``'s ``file`` (a path dependency's `dir`, a `proved_in` package) as a repository path: a kept build
     is taken into it and its `.lake` built, so one outside the tree is refused (`check.OutsideTree`)."""
     p = os.path.relpath(os.path.normpath(ROOT / pkg / entry), ROOT)
-    if p == ".." or p.startswith("../"):
-        raise lean_check().OutsideTree(f"{pkg}/{file}: {entry!r} names {p}, outside the tree, whose .lake a build of {pkg} "
-                                       f"would write: a package it requires by path or names under proved_in must lie in "
-                                       f"the tree")
+    real = (ROOT / p).resolve()
+    if p == ".." or p.startswith("../") or not real.is_relative_to(ROOT.resolve()):
+        raise lean_check().OutsideTree(f"{pkg}/{file}: {entry!r} names {p!r}, which resolves to {str(real)!r}, outside the "
+                                       f"tree, whose .lake a build of {pkg} would write: a package it requires by path or "
+                                       f"names under proved_in must lie in the tree")
     return p
 
 
@@ -1260,7 +1262,10 @@ class LakeArtifacts:
         for name in sorted({s for s in _strings(out) if ARTIFACT.fullmatch(s)}):
             f = MK.output(build, mod, name)
             hashed = f.parent / f"{f.name}.hash"
-            if not f.is_file() or not hashed.is_file() or hashed.read_text().strip() != name.split(".", 1)[0]:
+            for g in (f, hashed):
+                if (why := _plain(g, build.parent.parent)) is not None:
+                    return why if why else f"{f.name} isn't in the build under {name}"
+            if hashed.read_text().strip() != name.split(".", 1)[0]:
                 return f"{f.name} isn't in the build under {name}"
             if f.stat().st_mtime_ns > hashed.stat().st_mtime_ns:
                 return f"{f.name} was written after {hashed.name}, which names what was there before"
@@ -1536,6 +1541,23 @@ class LakeArtifacts:
         return n
 
 
+def _plain(f: Path, base: Path) -> str | None:
+    """None when ``f`` is a regular file reached from ``base`` (a package's directory) through no link; "" when it is
+    missing; else why it is refused: a build writes its `.lake`, so an output that is a link, or lies under one, is the
+    build's choice of a file anywhere, which the index would hard-link and make read-only."""
+    try:
+        st = f.lstat()
+    except FileNotFoundError:
+        return ""
+    except OSError as e:
+        return f"{f.name} can't be read ({e.strerror})"
+    if not stat.S_ISREG(st.st_mode):
+        return f"{f.name} is no regular file of the build (a link, a directory or a special file)"
+    if f.resolve() != base.resolve() / f.relative_to(base):
+        return f"{f.name} lies under a link in the build, to {str(f.resolve())!r}"
+    return None
+
+
 def _strings(j) -> list[str]:
     if isinstance(j, str):
         return [j]
@@ -1550,13 +1572,17 @@ def _move(src: Path, dst: Path) -> None:
 
 
 def scratch_tree(dest: Path, files: list[str]) -> None:
-    """``files`` copied from this checkout into ``dest``, and with them `CARRIED`."""
+    """``files`` copied from this checkout into ``dest``, and with them `CARRIED`. A symbolic link among them is refused
+    (`check.OutsideTree`): copied as a link, it would let the tree choose where the audit's steps write outside any sandbox
+    (`WarmDeps.take` and `WarmBuilds.take` into a package's `.lake`), and the tree holds none."""
     for f in dict.fromkeys([*files, *(LEAN_TOOL + c for c in CARRIED)]):
         s, d = ROOT / f, dest / f
-        d.parent.mkdir(parents=True, exist_ok=True)
         if s.is_symlink():
-            d.symlink_to(os.readlink(s))
-        elif s.is_file():
+            raise lean_check().OutsideTree(f"{f!r} is a symbolic link (to {os.readlink(s)!r}), which a copy of the tree "
+                                           f"would keep and the audit then write through: the tree holds no links, so replace it "
+                                           f"with the file or directory it points to")
+        d.parent.mkdir(parents=True, exist_ok=True)
+        if s.is_file():
             shutil.copy2(s, d)
 
 
