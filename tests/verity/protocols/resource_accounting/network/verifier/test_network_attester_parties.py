@@ -114,7 +114,7 @@ RUN = {NC.WORKERS: [Message(NC.RECORDS, {**HEAD, "record": r}, bytes(range(256))
 
 
 def test_the_runs_witness_goes_to_the_workers_and_its_certificates_and_registrations_to_the_verifier() -> None:
-    """The records and the rows' salts reach the workers alone, the certificates, the rows' registrations, the
+    """The records and the rows' salts reach the workers alone, the attestations, the rows' registrations, the
     deployment and the groups the verifier alone, each as it was sent; the salts read back as the rows' and the wiring's."""
     for receiver, other in ((NC.WORKERS, NC.VERIFIER), (NC.VERIFIER, NC.WORKERS)):
         to, wrong = (NC.MANIFEST.sends(NC.NETWORK_ATTESTER, p) for p in (receiver, other))

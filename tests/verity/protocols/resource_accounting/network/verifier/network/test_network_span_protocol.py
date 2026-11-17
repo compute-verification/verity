@@ -52,13 +52,13 @@ GUARD_SITE = {
     "locs": [_GUARD_LOC | {"id": "node0", "kind": "host"},
              _GUARD_LOC | {"id": "cert0", "key": "00" * 24, "kind": "certifier", "owner": "auditor"}],
     "sheets": []}
-#: The SHA-512 of `guard_mark(5, 1)`'s certificate's bytes, which the Lean's `#guard` holds too.
+#: The SHA-512 of `guard_mark(5, 1)`'s attestation's bytes, which the Lean's `#guard` holds too.
 GUARD_START = ("37ccc33e0f5191d268bc91c122be57358555be87a54a8b0fa8384ca157a82be17d31e4d6bae5b7c54bc387c9e7d6f8d0"
                "00111046dd3372fafaef4af0455cfe69")
 
 
 def guard_mark(phase: int, fill: int) -> CertifiedMark:
-    """The Lean's `guardMark`: an egress certificate on `eth0-marks` at `phase`, its key id and its signed digest
+    """The Lean's `guardMark`: an egress attestation on `eth0-marks` at `phase`, its key id and its signed digest
     bytes of `fill` and its signature empty, with a salt of `fill + 1` and a mark of `fill + 2`."""
     c = Certificate(bytes([fill]) * 16, "eth0-marks", Direction.EGRESS, phase, bytes([fill]) * 64, b"")
     return CertifiedMark(bytes([fill + 2]) * 64, bytes([fill + 1]) * 64, c)
@@ -105,11 +105,11 @@ def test_each_rejection_has_its_own_reason(server):
     """Lean and the mirror each reject a span for the reason its change is aimed at: a mark on another link name, an
     ingress one, one under another key or in another session, one its salt and message do not open; marks out of
     order; an execution phase missing, in the span or in its tail, shown twice or outside, a second execution phase
-    of tail under the edge schedule among them; an execution phase with no certificates, as the network attester
-    leaves one it faulted or refused a connection in; an egress or a fails certificate on another link name, at
+    of tail under the edge schedule among them; an execution phase with no attestations, as the network attester
+    leaves one it faulted or refused a connection in; an egress or a fails attestation on another link name, at
     another execution phase, an ingress one or one that does not verify; and an egress cells' head that names another
     schedule, or is another execution phase's, link's, session's or key's. Neither reason holds a number: none names
-    an execution phase. A certificate on another link name or at another execution phase is named by its record, an
+    an execution phase. An attestation on another link name or at another execution phase is named by its record, an
     egress and a fails one each."""
     both = ("cert-link", "cert-phase")
     cases = [(m, n, None) for m in REASONS for n in range(3 if m in both else 2)]
@@ -249,7 +249,7 @@ def test_an_execution_phase_counts_every_cell_of_both_egress_records():
 
 
 def test_a_commitment_reads_back_its_two_marks():
-    """`commitment` reads back the two marks and each certificate's bytes, the issuer's own (`Certificate.encode`), on
+    """`commitment` reads back the two marks and each attestation's bytes, the issuer's own (`Certificate.encode`), on
     a link whose name is any UTF-8; and the parameters take a link's name as the period's check does, to 65,535 UTF-8
     bytes and no further."""
     r = random.Random(0)
@@ -268,7 +268,7 @@ def test_a_commitment_reads_back_its_two_marks():
 
 
 def test_what_a_tie_reads_off_a_case():
-    """`named`: the SHA-512 of the start certificate's bytes, the two marks' messages and the bits over the span and
+    """`named`: the SHA-512 of the start attestation's bytes, the two marks' messages and the bits over the span and
     its tail, at the vector the Lean's `#guard` holds; no bits when the marks are out of order; and on a generated
     span the count's own `egress_bits`, public beside the tail and nothing else: the two marks' execution phases stay
     in the commitment."""

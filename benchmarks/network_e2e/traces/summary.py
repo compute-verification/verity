@@ -101,7 +101,7 @@ def feed_releases(d: Path, network_attesters: dict[int, dict],
     kept where they agree with the network attester's own record: the deployment's ``run_id``, and its log of the
     request's connection (warden.json's ``release`` and ``ingress_end``, a, by the client's ordinal) where it has one. A
     request whose release disagrees is left out, so `replay.read_corpus_trace` refuses the trace rather than read an
-    uncertified release. Returns the releases by request id and what the check found; None for a trace without a
+    unattested release. Returns the releases by request id and what the check found; None for a trace without a
     network attester's deployment or a feed."""
     feed, dep = d / "raw" / "tick-feed.jsonl", d / "warden" / "deployment.json"
     if not (feed.exists() and dep.exists()):
@@ -172,7 +172,7 @@ def serving(reqs: list[dict]) -> dict:
 
 
 def tick_log(d: Path) -> dict | None:
-    """What the certified tick's gate logged (``raw/tick.PID.jsonl``, `serve_admit.TickGate`), None where it logged
+    """What the attested tick's gate logged (``raw/tick.PID.jsonl``, `serve_admit.TickGate`), None where it logged
     nothing: its admissions (``steps``: the engine steps that added any, ``requests``: how many they added) and its events
     by kind (``unordered``, ``stale``, ``late``, ``skipped``, ``opened``, ... ; none in a run the tick ordered whole)."""
     recs = raw(d, "tick")
@@ -445,7 +445,7 @@ def late_ticks(w: Path, origin_unix: float, cores: list[int]) -> dict | None:
 
 def publisher_pace(pub: dict, window_s: float, end_s: float) -> dict:
     """Whether a spawned publisher (`network_attester_probe`'s `publisher`) kept up: each record's lag, from the network attester's handing
-    its close over to the publisher's having kept it (packed, certified, and for the wire's links committed and signed),
+    its close over to the publisher's having kept it (packed, attested, and for the wire's links committed and signed),
     the most behind, how many lagged a whole window or more, the share of each window's span its keeps took (every link's
     keeps of that window, summed), and serve's wait in `close` for the last records, which ended the run that long past
     `end_s`, its last tick's end. Seconds from the network attester's origin."""
@@ -474,13 +474,13 @@ def client_loop(w: Path) -> dict | None:
             "max_lag_ms": c.get("max_lag_ms"), "lags": c["lags"][:20], "gc_counts": c.get("gc_counts")}
 
 
-#: a network attester trace's views for the replay, each with the network attester's order as the certified ingress: view -> its record's field
+#: a network attester trace's views for the replay, each with the network attester's order as the attested ingress: view -> its record's field
 VIEWS = {"admitted": "admitted", "released": "released"}
 
 
 def network_attester_views(root: Path, name: str, w: dict) -> list[str]:
     """For a network attester trace, a directory per `VIEWS` entry, <name>.<view>, that `replay.read_corpus_trace` reads as a
-    trace whose certified ingress is the network attester's: each request's ``send_unix`` is the middle of the unix bucket of the
+    trace whose attested ingress is the network attester's: each request's ``send_unix`` is the middle of the unix bucket of the
     network attester's tick for it (admission s, or release a: the bucket of the request's last ingress cell), plus 10 µs per
     request before it in that bucket in ordinal order, so that the order is the network attester's (bucket, ordinal). The client's
     own send is in ``client_send_unix``, and ``chunks``, ``first_token_s`` and ``done_s`` are rebased on the new
