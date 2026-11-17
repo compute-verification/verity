@@ -40,7 +40,9 @@ store. No node is audited, so it certifies nothing, and its output says so.
 SERVE=node and GPUS=1, a vLLM engine (VLLM_PY's) serving ROLE's pinned checkpoint with its weights in one arena of
 most of the card's memory (`arena_of`), which is the store; the node prover reads the whole arena in paced, timed
 passes beside the serving, and the Lean verifier and its coins run in processes beside them, in one session form
-(`PACE`, refused otherwise). The checkpoint is fetched into LOCAL_WORK; with no `gpu-lease` installed, the lease is
+(`PACE`, refused otherwise). LEAF_CTAS is the node's `--leaf-ctas` here as in the node run (`leaf_ctas`: 1 to 999,
+unset for today's pass), refused beside a NODE_ARGS whose own `--leaf-ctas` says another number. The checkpoint is
+fetched into LOCAL_WORK; with no `gpu-lease` installed, the lease is
 the tree's own program, its locks in LOCAL_WORK unless the machine has a lease directory of its own (`LEASE_DIR`).
 The run's records stay in LOCAL_WORK/runs/ (the research run's own directory under one). A session whose store is below `STORE_MIN` of the card's memory prints no number. The verifier
 and the coins ran on the machine being measured, so the number is a measurement to improve on and not an audit: the
@@ -593,11 +595,29 @@ def checkpoint(work: Path, vllm_py: str, run: Callable) -> Path:
     return snap
 
 
+def leaf_ctas(given: dict) -> str | None:
+    """LEAF_CTAS as the node's `--leaf-ctas N`, read as `gate_run.sh` reads it, or None where unset (today's pass).
+    It refuses a value outside 1 to 999, and a NODE_ARGS whose own `--leaf-ctas` says another number."""
+    want = given.get("LEAF_CTAS") or ""
+    if not want:
+        return None
+    if not re.fullmatch(r"[1-9][0-9]{0,2}", want):
+        raise Unreadable(f"LEAF_CTAS is {want}: the leaf pass's reading CTAs, 1 to 999, or unset for today's pass")
+    words = shlex.split(given.get("NODE_ARGS") or "")
+    named = [v for w, v in zip(words, words[1:] + [""]) if w == "--leaf-ctas"]
+    named += [w.split("=", 1)[1] for w in words if w.startswith("--leaf-ctas=")]
+    if [v for v in named if v != want]:
+        raise Unreadable(f"LEAF_CTAS is {want} and NODE_ARGS asks for --leaf-ctas {' and '.join(named)}: set the leaf "
+                         "pass's reading CTAs once, as LEAF_CTAS, and take --leaf-ctas out of NODE_ARGS")
+    return None if named else f"--leaf-ctas {want}"
+
+
 def local(run: Callable = subprocess.run) -> tuple[dict, Path]:
     """The node's session on one card of this machine: `run.sh` with ROLE=both, SERVE=node and GPUS=1, a vLLM engine
     serving ROLE's pinned checkpoint with its weights in one arena (`engine.py`), the store, which the node prover
-    (`node.py`) reads whole in paced, timed passes, and the verifier beside them on cores of its own, in the one
-    session form (`PACE`), read from its records. VLLM_PY is the vLLM interpreter; the checkpoint and the caches are
+    (`node.py`) reads whole in paced, timed passes (the leaf pass where LEAF_CTAS asks, `leaf_ctas`), and the verifier
+    beside them on cores of its own, in the one session form (`PACE`), read from its records. VLLM_PY is the vLLM
+    interpreter; the checkpoint and the caches are
     kept in LOCAL_WORK, and on a machine with no lease of its own (no `gpu-lease` and no `LEASE_DIR`) the tree's
     lease's locks too, while a machine's own lease directory stays the one every lane there counts in. The run's records are kept, in
     the research run's directory under one and else in a directory of LOCAL_WORK/runs/, which is returned with the
@@ -609,6 +629,7 @@ def local(run: Callable = subprocess.run) -> tuple[dict, Path]:
                          f"(a coin a pass group, seven credited stretches of a second at 2773 openings each, at the "
                          "pass the calibration measures), so its "
                          f"numbers compare: {', '.join(other)} is another")
+    leaf = leaf_ctas(given)
     if not SETTINGS.VLLM_PY:
         raise CouldNotRun("--local serves with vLLM, and VLLM_PY names no vLLM interpreter: make one (`uv venv "
                           "VENV && uv pip install --python VENV/bin/python vllm`) and set VLLM_PY=VENV/bin/python")
@@ -634,7 +655,7 @@ def local(run: Callable = subprocess.run) -> tuple[dict, Path]:
            "ENGINE_ARGS": " ".join(filter(None, [ENGINE_ARGS, f"--arena-gib {arena} --util {util:g}",
                                                  given.get("ENGINE_ARGS")])),
            "NODE_ARGS": " ".join(filter(None, [NODE_ARGS, f"--model-dir {shlex.quote(str(snap))}",
-                                               f"--node local/{kind}/serving", given.get("NODE_ARGS")])),
+                                               f"--node local/{kind}/serving", leaf, given.get("NODE_ARGS")])),
            "VERIFIER_ARGS": " ".join(filter(None, [given.get("VERIFIER_ARGS"), "--node",
                                                    shlex.quote(f"{held}/{NODE_FILE}"), "--hbm-bytes", str(hbm_bytes)]))}
     if shutil.which("gpu-lease") is None and not LEASE_DIR.is_dir():
