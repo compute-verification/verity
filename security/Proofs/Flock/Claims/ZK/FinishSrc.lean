@@ -131,7 +131,7 @@ theorem throw_run_go {α : Type} (e : String) (t : Transcript) (l : Array Claims
     ((throw e : TMW PS α).run t).go l = (.error e, l) := rfl
 
 /-- **Where the inner proof returns at `asksCut`, its batched constraint held** on the pads, at the coins of the rounds
-it drew from: `innerP` stops on a batched constraint that fails. -/
+it sampled from: `innerP` stops on a batched constraint that fails. -/
 theorem innerP_batched {coin : ℕ → ℕ → F128} {n : ℕ} {hs : Hashes PS} {lay : Zk.PadLayout}
     {p : FlockComplete.PadsZk} {ic : FlockComplete.InnerCommit} {finalC : F128} {cons : Array (String × Zk.Lin)}
     {t t' : Transcript} {l l' : Array Claims.Msg} {i : Zk.InnerProof}

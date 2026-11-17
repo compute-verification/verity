@@ -12,7 +12,7 @@ audit of several members (`Flock.Guarantees.JointAuditV5`) laid out in order (`J
 the audit's, and each member's sample is its part of it:
 
 * **The window's sample is v2's units** (`joint_sample_eq`, `joint_sampleUnits_of_drew`, `joint_sample_of_drew`): at coins
-  whose bytes start with the coins v2 drew its units from, at a window whose sampling design and population are the ones v2 drew
+  whose bytes start with the coins v2 sampled its units from, at a window whose sampling design and population are the ones v2 sampled
   under, the window's sample is the proof blocks v2's units name. A sample reads only a prefix of its bytes
   (`sampleUnits_append`).
 * **Member `k`'s sample is its part of v2's units** (`member_sample_eq`, `member_sample_of_drew`): the units `u` with
@@ -99,8 +99,8 @@ theorem joint_sample_eq (w : JointAuditV5) (ω : w.L.Ω) {units : Array ℕ} {re
     w.L.draw ω = Finset.univ.filter fun u => u.val ∈ units :=
   Finset.ext fun u => (w.draw_ok ω h u).trans (by simp)
 
-/-- **v2's sample ends the same on the window's bytes**: at coins whose bytes start with the coins v2 drew its units
-from, at a window whose sampling design and population are the ones v2 drew under. -/
+/-- **v2's sample ends the same on the window's bytes**: at coins whose bytes start with the coins v2 sampled its units
+from, at a window whose sampling design and population are the ones v2 sampled under. -/
 theorem joint_sampleUnits_of_drew {k : Verity.Registration.Composite} {s : Verity.Sent} {dr : Draws}
     {L : Flock.Draw.SamplingDesign} {n : ℕ} {ξ : ByteArray} {units : Array ℕ} (h : Drew k s dr L n ξ units)
     (w : JointAuditV5) (ω : w.L.Ω) (hL : w.samplingDesign = L) (hn : w.nJ = n)
@@ -113,8 +113,8 @@ theorem joint_sampleUnits_of_drew {k : Verity.Registration.Composite} {s : Verit
   rw [ht, hL, hn]
   exact sampleUnits_append L n ξ t units read hdu
 
-/-- **v2's units are the window's sample** at coins whose bytes start with the coins v2 drew them from, at a window
-whose sampling design and population are the ones v2 drew under: the period's one sample is the joint audit's. -/
+/-- **v2's units are the window's sample** at coins whose bytes start with the coins v2 sampled them from, at a window
+whose sampling design and population are the ones v2 sampled under: the period's one sample is the joint audit's. -/
 theorem joint_sample_of_drew {k : Verity.Registration.Composite} {s : Verity.Sent} {dr : Draws} {L : Flock.Draw.SamplingDesign}
     {n : ℕ} {ξ : ByteArray} {units : Array ℕ} (h : Drew k s dr L n ξ units) (w : JointAuditV5) (ω : w.L.Ω)
     (hL : w.samplingDesign = L) (hn : w.nJ = n) (hξ : bitsOf ξ <+: bitsOf (_root_.Properties.Spot.bytesOf (w.src ω 0))) :
@@ -135,8 +135,8 @@ theorem member_sample_eq {w : JointAuditV5} (hw : w.Laid) (k : Fin w.ms.length) 
   rw [hw.design_sample_ok k ω h v]
   simp
 
-/-- **Member `k`'s sample is its part of v2's units**, at coins whose bytes start with the coins v2 drew them from, at a
-window laid out in order whose sampling design and population are the ones v2 drew under. -/
+/-- **Member `k`'s sample is its part of v2's units**, at coins whose bytes start with the coins v2 sampled them from, at a
+window laid out in order whose sampling design and population are the ones v2 sampled under. -/
 theorem member_sample_of_drew {k : Verity.Registration.Composite} {s : Verity.Sent} {dr : Draws} {L : Flock.Draw.SamplingDesign}
     {n : ℕ} {ξ : ByteArray} {units : Array ℕ} (h : Drew k s dr L n ξ units) {w : JointAuditV5} (hw : w.Laid)
     (j : Fin w.ms.length) (ω : w.L.Ω) (hL : w.samplingDesign = L) (hn : w.nJ = n)
@@ -161,7 +161,7 @@ theorem printedPart_member {w : JointAuditV5} (hw : w.Laid) (k : Fin w.ms.length
   rw [member_sample_eq hw k ω h, printedPart, printedSample, card_filter_ascending ha, sampleOf_filter ha]
 
 /-- **Member `k`'s sample file is the subset print of its part of v2's units**, at coins whose bytes start with the
-coins v2 drew them from, at a window laid out in order whose sampling design and population are the ones v2 drew under, where
+coins v2 sampled them from, at a window laid out in order whose sampling design and population are the ones v2 sampled under, where
 v2's units are ascending below the population. -/
 theorem printedPart_of_drew {k : Verity.Registration.Composite} {s : Verity.Sent} {dr : Draws} {L : Flock.Draw.SamplingDesign}
     {n : ℕ} {ξ : ByteArray} {units : Array ℕ} (h : Drew k s dr L n ξ units) {w : JointAuditV5} (hw : w.Laid)

@@ -20,7 +20,7 @@ public import Proofs.Flock.ZkAny.RelaySwitch
   (`roundRun_same_first`), the readied frame being the rep's run from its start (`repRun_first0`, `roundPlace_prior`)
   and the model's state the rep's start (`ofLoop_answered_switch`), its placeholder, configuration and schedule the
   model's (`freshOf_ok`, `ofLoop_cfgAlike`, `Sched.schedSoFar_alike`), the round's count the plan's, and the table's
-  level 0 the one the loop drew (`BuiltAt`), so giving a table whose commitment's cap is its root
+  level 0 the one the loop sampled (`BuiltAt`), so giving a table whose commitment's cap is its root
   (`tab_of_placeholder`, `cap_of_sampled`).
 * `tab_of_same`, `tab_of_placeholder`: a level 0 at another's `m` and `t_pad` gives a table where it does, so one
   sampled at the table's `m` gives one where the rep's placeholder is there.
@@ -205,7 +205,7 @@ open Loop LeanRelease in
 is the same stream's**: at the loop's own frames (`hrel`), the session's entry being the setup's with the `Commit`'s
 words as its link (`hK2`), the model's own table at the rep the one the rep's level 0 gives (`hK3`; of the placeholder's
 shape where `real` answers the loop's own, `hR`, within the bounds `hS` and `hP` give), and every level 0 bound to the
-session the one the loop drew for its table (`BuiltAt`), the rep streams' names distinct (`hnd`), where the round is the
+session the one the loop sampled for its table (`BuiltAt`), the rep streams' names distinct (`hnd`), where the round is the
 first of table `i`'s rep `r`'s stream (`hk`), the rep's frame fresh (`FreshAt`) and readied at the model's state but for
 `stopped` (`hu₀`): the frame the session's next request finds keeps `SameInv` for the stream's first round
 (`roundRun_same_first`), the frame `roundPlace` readied being the rep's run from its start (`repRun_first0` at rep 0,
