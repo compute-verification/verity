@@ -4,22 +4,8 @@ public import Properties.InferenceOnly
 public import InferenceOnlyCheck.Desc
 import Mathlib.Data.NNRat.Floor
 
-/-!
-# The description-sized inference-only check's property, stated against the Lean functions
-
-`InferenceOnlyCheck.Desc.evaluate` reads θ and the owners per root node and never lays the circuit out (`InferenceOnlyCheck.Desc`).
-
-* `DescAgrees`: on every instance with a verdict, the instance expanded gate by gate (`Expands`: the same program, `Γ`
-  and `α`, θ as its nodes' gates and each gate's owner its root node's) exists, and on every expansion
-  `InferenceOnlyCheck.evaluate` gives the same verdict. So `Reports` and `Witnesses` (`Properties.InferenceOnly`) hold of
-  `InferenceOnlyCheck.Desc.evaluate`'s verdict, on the expansion. The converse is not claimed: `InferenceOnlyCheck.Desc.evaluate` refuses
-  some instances whose expansion `InferenceOnlyCheck.evaluate` accepts (its module docstring, "Refusals"), and its codes may differ.
-  `SecurityProofs.DescAgrees` (`Proofs.Properties.InferenceOnly.Agrees`) proves it from the three statements
-  `descAgrees_of_open` (`Proofs.Properties.InferenceOnly.Fresh`) takes: `Resolve.bodiesOk` proves `Resolve.BodiesOk`,
-  `operandsResolve_of` `Walk.OperandsResolve` from it, and `Fresh.readsExact` `Fresh.ReadsExact`.
-  `Properties.InferenceOnly.Desc.Verdict` restates `Reports`, `Witnesses` and the thread bounds of `InferenceOnlyCheck.Desc.evaluate` from it,
-  and `Properties.InferenceOnly.Desc.Cover` states the cover theorem's factor of the check of record's verdict.
--/
+/-! The description-sized inference-only check's property, whose converse is not claimed:
+`InferenceOnlyCheck.Desc.evaluate` refuses some instances whose expansion `InferenceOnlyCheck.evaluate` accepts. -/
 
 @[expose] public section
 

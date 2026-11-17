@@ -1,8 +1,3 @@
-/-
-Part B's select: the comparator `Flock.ReadNet.below` is `tok < bound` on the token's unsigned value (`sound_below`), and
-the select `Flock.ReadNet.select` (`EmbeddingReadSelect_v1{V, H}`) returns the row inside the vocabulary and the fill row
-outside, its verdict `opened` inside and 1 outside (`select_spec`, `Gates.SelectSpec`).
--/
 module
 
 public import Flock.ReadNet.Select
@@ -47,9 +42,8 @@ namespace ResourceAccounting.ReadUnit.Gates
 open Flock.HmNets hiding and
 open FlockSoundness.Discharge.Hm
 
-/-! ## The comparator -/
+/-! Part B's select and its comparator against `Gates.SelectSpec`. -/
 
-/-- One bit of the comparator: below `bound` on the bits up to `i` from below it on those under `i` and bit `i`. -/
 theorem below_step (bound i N : ℕ) (hN : N < 2 ^ i) (b : Bool) :
     (if bound.testBit i then (!b || decide (N < bound % 2 ^ i)) else (!b && decide (N < bound % 2 ^ i))) =
       decide (N + 2 ^ i * b.toNat < bound % 2 ^ (i + 1)) := by
@@ -88,8 +82,6 @@ theorem belowGo_cons (bound : ℕ) (b : Lin) (bs : List Lin) (i : ℕ) (lt : Lin
   rw [Flock.ReadNet.belowGo]
   cases bound.testBit i <;> simp
 
-/-- The comparator from bit `i` on: where the bits below `i` read `N` and `lt` says whether `N` is below `bound`'s low
-bits, the result says whether the whole value is below `bound`'s low bits. -/
 theorem sound_belowGo (bound : ℕ) : ∀ (bs : List Lin) (i : ℕ) (lt : Lin),
     Sound (Flock.ReadNet.belowGo bound bs i lt) fun z r => ∀ N : ℕ, N < 2 ^ i →
       ev z lt = decide (N < bound % 2 ^ i) →
@@ -113,15 +105,11 @@ theorem sound_belowGo (bound : ℕ) : ∀ (bs : List Lin) (i : ℕ) (lt : Lin),
     have e2 : i + 1 + bs.length = i + (b :: bs).length := by simp only [List.length_cons]; omega
     rw [e1, e2]
 
-/-- **The comparator**: whenever its rows hold, `below`'s bit is whether the bits' unsigned value (least significant
-first) is below `bound` modulo `2 ^ n`, `n` the bits' count. -/
 theorem sound_below (bits : List Lin) (bound : ℕ) :
     Sound (Flock.ReadNet.below bits bound) fun z r => ev z r = decide (num (evs z bits) < bound % 2 ^ bits.length) :=
   Sound.mono (sound_belowGo bound bits 0 Lin.zero) fun z r h => by
     have := h 0 (by norm_num) (by simp; exact Nat.mod_one bound)
     simpa using this
-
-/-! ## The select -/
 
 theorem ev_fill (z : Var → Bool) (k : ℕ) :
     ((List.replicate k Flock.ReadNet.fillBits).flatten).map (ev z) = Hash.EmbeddingRead.fill k := by
@@ -139,9 +127,6 @@ theorem length_fill_flat : ∀ k : ℕ, ((List.replicate k Flock.ReadNet.fillBit
 theorem xor_and_sel (a b c : Bool) : (b ^^ (c && (a ^^ b))) = (if c then a else b) := by
   cases a <;> cases b <;> cases c <;> rfl
 
-/-- **Part B, the select**: the select generator meets `Gates.SelectSpec` for a table of `V < 2 ^ 32` rows: on a 32-bit
-token it returns the row inside the vocabulary and `V`'s fill row outside, and its verdict is `opened` inside and 1
-outside. -/
 theorem select_spec {V : ℕ} (hV : V < 2 ^ 32) : SelectSpec V (Flock.ReadNet.select V) := by
   intro tok opened row
   unfold Flock.ReadNet.select

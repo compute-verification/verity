@@ -8,17 +8,7 @@ import Mathlib.Basic.ENNReal.Inv
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pous.Prob
 
-/-!
-# A sure-bound guarantee against advice, over the product of the coins
-
-An audit's guarantee in PoUW's shape holds at every value `o` of the advice (the other audits' coins): if its account's
-charge is at most `B` on every one of its own coins, it accepts with `B` below the certificate with probability at most
-`ε`. Taking `B` the largest charge over its own coins bounds, over both, the probability that it accepts and its
-account is short of the certificate on every one of its own coins.
-
-PoUS's and the bandwidth audit's probability (`Pous.pr`, in `ℝ≥0∞`) is the same fraction as PoUW's (`Pouw.pr`, in `ℝ`):
-`pr_eq_toReal`.
--/
+/-! A sure-bound guarantee against advice, over the product of the coins. -/
 
 @[expose] public section
 

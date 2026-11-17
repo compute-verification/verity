@@ -10,41 +10,12 @@ import Proofs.Flock.SamplingGeneric.TwoReg
 import Proofs.Flock.SamplingGeneric.TwoRegMiss
 import Proofs.Flock.Soundness.Game
 
-/-!
-# A period of two-stage verification phases: one failure probability for the whole period, proved
-
-`MonitoringPeriodTwoProd` is `monitoringPeriod_union` and `monitoringPeriod_prod` at `twoAtRec`. A run in which every verification phase is accepted
-and the escapes multiply below `δ` either has a verification phase accepted with a sampled proof block incorrect at
-its boundary values, at most `Σ_t ε_t` by `monitoringPeriod_union` and the hypothesis on the event, or every sample misses with
-the product of the escapes below `δ`, at most `δ` by `monitoringPeriod_prod`.
-
-`monitoringPeriod_prod` asks that the strategy that plays a verification phase fix its missProb before the phase's coins and that
-the missProb bound the phase's miss. Both hold at `escAt`: it reads the statement and the boundary values that strategy
-fixes, and the two stages, sampling by the design, miss with probability at most `P̄_a` at the boundary values'
-footprint at best interiors (`CompiledTwo.pr_missTwo_le_Pa`), whatever interiors the prover commits after the first
-stage's coins.
-
-* `Design.Two.Pa_congr_esc`, `Design.Two.paBestAt_eq`: `P̄_a` reads a footprint through its replay blocks' escapes, so
-  it is one value at every best interiors.
-* `twoAtRec_accepted_le`: a verification phase is accepted with a sampled proof block incorrect at its boundary values
-  at most as often as the hypothesis on the event says in scope, and never out of scope.
-* `twoAtRec_missed_le`: its sample misses with probability at most `escAt`.
-* `monitoringPeriodTwoProd_of`: `MonitoringPeriodTwoProd` from each verifier's contract.
-* `period_leadEscape`: the escapes of the verification phases before the first whose sample holds an incorrect proof
-  block multiply below `c` with probability at most `c`. It is `period_lead` with the escapes multiplied: a phase
-  whose sample misses passes the rest of the run the budget `c / e`, `e` its missProb.
-* `monitoringPeriodTwoLead_of`: `MonitoringPeriodTwoLead` from each verifier's contract, by `monitoringPeriod_union` and `period_leadEscape`. So
-  **`CompilerMonitoringPeriodTwoProd` is proved** (`compilerMonitoringPeriodTwoProd`).
-* `monitoringPeriodTwoProd_regVal`, `monitoringPeriodTwoLead_regVal`: both at the committed boundary trace, where knowledge soundness of
-  the argument and binding bound the event by `ε_reg,2` (`CompiledTwo.eventTwo_le`).
--/
+/-! A period of two-stage verification phases with one failure probability for the whole period, proved. -/
 
 @[expose] public section
 
 namespace Claims.Sampling
 
-/-- **`P̄_a` reads a footprint through its replay blocks' escapes**: two footprints at which every replay block's
-missProb agrees have one `P̄_a`. -/
 theorem Design.Two.Pa_congr_esc (d : Design.Two) (Pt : Partition) {fp fp' : ℕ → ℕ → ℕ}
     (h : ∀ ρ < d.part.blocks.length, d.esc Pt fp ρ = d.esc Pt fp' ρ) : d.Pa Pt fp = d.Pa Pt fp' := by
   unfold Design.Two.Pa
@@ -57,7 +28,6 @@ theorem Design.Two.Pa_congr_esc (d : Design.Two) (Pt : Partition) {fp fp' : ℕ 
     Finset.prod_congr rfl fun ρ hρ => h ρ (Finset.mem_range.1 (Finset.mem_sdiff.1 hρ).1)
   rw [h1, h2]
 
-/-- **`P̄_a` at best interiors is one value**: at every best interiors `ι`, it is `P̄_a` at the footprint at `ι`. -/
 theorem Design.Two.paBestAt_eq (d : Design.Two) (s : AuditStatement) (Pt : Partition) (val : ℕ → Option Bool)
     {ι : ℕ → ℕ → Bool} (hι : BestInteriorsAt s Pt d val ι) :
     d.PaBestAt s Pt val = d.Pa Pt (footprintAt s Pt d.part val ι) := by
@@ -75,8 +45,6 @@ open Claims.Sampling (AuditStatement Partition incorrectAllAt)
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
-/-- On a statement that parses and whose partitions evaluate, the incorrect set at boundary values `val` is
-`incorrectAllAt` at `val` and the committed interiors. -/
 theorem FregTwoAt_eq (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} (P : Prover Ω) {x : Msg}
     {s : AuditStatement} {Pt : Partition} {d : Sampling.Design.Two} (hs : L.parse x = some s)
     (hPt : L.partition s = some Pt) (hd : L.two s = some d) (ω : Ω) (val : ℕ → Option Bool)
@@ -96,8 +64,6 @@ variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg 
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 open Classical in
-/-- **The missProb a verification phase fixes** is `1`, or its statement is in the two-stage scope and the missProb is
-`P̄_a` at the boundary values' footprint at best interiors. -/
 theorem escAt_cases (L : CompiledTwo Coin A) (x : Msg) (val : ℕ → Option Bool) :
     escAt L x val = 1 ∨ ∃ s Pt d, L.parse x = some s ∧ L.partition s = some Pt ∧ L.two s = some d ∧
       InScopeTwo Pt d s ∧ escAt L x val = ENNReal.ofReal (d.PaBestAt s Pt val) := by
@@ -112,7 +78,6 @@ theorem escAt_cases (L : CompiledTwo Coin A) (x : Msg) (val : ℕ → Option Boo
   · exact Or.inl (by simp only [escAt, hs, hPt, hd, ite_eq_right hin])
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- The missProb a verification phase fixes is finite. -/
 theorem escAt_ne_top (L : CompiledTwo Coin A) (x : Msg) (val : ℕ → Option Bool) : escAt L x val ≠ ⊤ := by
   rcases escAt_cases L x val with h | ⟨s, Pt, d, -, -, -, -, h⟩
   · rw [h]
@@ -120,9 +85,6 @@ theorem escAt_ne_top (L : CompiledTwo Coin A) (x : Msg) (val : ℕ → Option Bo
   · rw [h]
     exact ENNReal.ofReal_ne_top
 
-/-- **A verification phase is accepted with a sampled proof block incorrect at its boundary values** at most as often
-as `ε`, when `ε` bounds that event at the statement and prover its strategy sends on a statement in scope; out of scope
-never, since the verifier refuses it. -/
 theorem twoAtRec_accepted_le (H : Msg → Msg) (L : CompiledTwo Coin A)
     (href : ∀ x (P : Prover Unit) r, (run H P L.V x () r).out = .acc → L.Scope x)
     (val : (O → V) × Tick × Adv → Msg → Prover Unit → ℕ → Option Bool) (n : ℕ) (e : ℝ≥0∞) {ε : ℝ}
@@ -144,9 +106,6 @@ theorem twoAtRec_accepted_le (H : Msg → Msg) (L : CompiledTwo Coin A)
       Verity.Game.prCoin_false]
     exact zero_le
 
-/-- **A verification phase's sample misses** the proof blocks incorrect at its boundary values with probability at most
-the missProb there (`escAt`): in scope, the two stages, sampling by the design, miss with probability at most `P̄_a` at
-the boundary values' footprint at best interiors (`CompiledTwo.pr_missTwo_le_Pa`); out of scope the missProb is `1`. -/
 theorem twoAtRec_missed_le (H : Msg → Msg) (L : CompiledTwo Coin A) (hS : L.Sessions H)
     (val : (O → V) × Tick × Adv → Msg → Prover Unit → ℕ → Option Bool) (n : ℕ) (e : ℝ≥0∞)
     (τ : Strategy (twoGame L ((O → V) × Tick × Adv))) :
@@ -167,8 +126,6 @@ theorem twoAtRec_missed_le (H : Msg → Msg) (L : CompiledTwo Coin A) (hS : L.Se
     intro r hr u hu hF
     exact hr ⟨u, hu, by rw [CompiledTwo.FregTwoAt_eq H L P hs hPt hd]; exact hF⟩
 
-/-- **The period's one failure probability, from each verifier's contract**: when every verification phase's verifier
-meets the two-stage compiler's contract, `MonitoringPeriodTwoProd` holds at every boundary traces `val`. -/
 theorem monitoringPeriodTwoProd_of (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
     (val : (t : ℕ) → (O → V) × Tick × Adv → Msg → Prover Unit → ℕ → Option Bool) (hS : ∀ t, (Lv t).Sessions H) :
     MonitoringPeriodTwoProd (O := O) (V := V) (Tick := Tick) (Adv := Adv) H Lv val := by
@@ -176,7 +133,6 @@ theorem monitoringPeriodTwoProd_of (H : Msg → Msg) (Lv : ℕ → CompiledTwo C
   have hs := monitoringPeriodGood_of_plays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv))
     (fun t τ => (Lv t).Scope τ.2.1.1 →
       acceptedSampledAt H (Lv t) τ.2.1.1 τ.2.1.2 (val t τ.1 τ.2.1.1 τ.2.1.2) ≤ ε t) T 0 s hev
-  -- some verification phase accepted with a sampled proof block incorrect at its boundary values
   have hA := monitoringPeriod_union (fun t => twoGame (Lv t) ((O → V) × Tick × Adv))
     (fun t τ => twoAtRec H (Lv t) (val t τ.1 τ.2.1.1 τ.2.1.2) (regCountAt (Lv t) τ.2.1.1 (val t τ.1 τ.2.1.1 τ.2.1.2))
       (escAt (Lv t) τ.2.1.1 (val t τ.1 τ.2.1.1 τ.2.1.2)))
@@ -187,7 +143,6 @@ theorem monitoringPeriodTwoProd_of (H : Msg → Msg) (Lv : ℕ → CompiledTwo C
     (fun t τ hτ => twoAtRec_accepted_le H (Lv t) (fun x P r h => (hS t).refuses x Unit P () r h) (val t) _ _ τ hτ)
     T 0 s hs
   simp only [Nat.zero_add] at hA
-  -- every sample misses, with the product of the escapes below `δ`
   have hB := monitoringPeriod_prod (fun t => twoGame (Lv t) ((O → V) × Tick × Adv))
     (fun t τ => twoAtRec H (Lv t) (val t τ.1 τ.2.1.1 τ.2.1.2) (regCountAt (Lv t) τ.2.1.1 (val t τ.1 τ.2.1.1 τ.2.1.2))
       (escAt (Lv t) τ.2.1.1 (val t τ.1 τ.2.1.1 τ.2.1.2)))
@@ -216,10 +171,6 @@ theorem monitoringPeriodTwoProd_of (H : Msg → Msg) (Lv : ℕ → CompiledTwo C
     _ ≤ (∑ t ∈ Finset.range T, ENNReal.ofReal (ε t)) + ENNReal.ofReal δ := add_le_add hA hB
     _ = ENNReal.ofReal δ + ∑ t ∈ Finset.range T, ENNReal.ofReal (ε t) := add_comm _ _
 
-/-- **The escapes before the first sampled incorrect proof block multiply below `c` with probability at most `c`.**
-If at every strategy satisfying `good` a verification phase's records all carry one missProb `e` and its sample misses
-with probability at most `e`, the escapes of the phases before the first whose sample holds an incorrect proof block
-(`ServedEsc.leadMissProb`) multiply below `c` with probability at most `c`. -/
 theorem period_leadEscape {β : ℕ → Type} (G : (i : ℕ) → Verity.Game (β i))
     (rec : (i : ℕ) → Strategy (G i) → β i → ServedEsc O V Tick Adv) (good : (i : ℕ) → Strategy (G i) → Prop)
     (hstage : ∀ i τ, good i τ → ∃ e : ℝ≥0∞, e ≠ ⊤ ∧ (∀ b, (rec i τ b).missProb = e) ∧
@@ -277,9 +228,6 @@ theorem period_leadEscape {β : ℕ → Type} (G : (i : ℕ) → Verity.Game (β
           _ ≤ e * (c / e) := by gcongr
           _ ≤ c := ENNReal.mul_div_le
 
-/-- **The period's one failure probability through the first sampled incorrect proof block, from each verifier's
-contract**: when every verification phase's verifier meets the two-stage compiler's contract, `MonitoringPeriodTwoLead` holds at
-every boundary traces `val`. -/
 theorem monitoringPeriodTwoLead_of (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
     (val : (t : ℕ) → (O → V) × Tick × Adv → Msg → Prover Unit → ℕ → Option Bool) (hS : ∀ t, (Lv t).Sessions H) :
     MonitoringPeriodTwoLead (O := O) (V := V) (Tick := Tick) (Adv := Adv) H Lv val := by
@@ -311,15 +259,10 @@ theorem monitoringPeriodTwoLead_of (H : Msg → Msg) (Lv : ℕ → CompiledTwo C
       (twoAtRun H Lv val T s) ≤ _
   exact (Verity.Game.value_or_le _ _ _).trans (add_le_add hA hB)
 
-/-- **The period's one failure probability from the verification phases' verifiers**: `monitoringPeriodTwoLead_of` and
-`monitoringPeriodTwoProd_of`. -/
 theorem compilerMonitoringPeriodTwoProd : CompilerMonitoringPeriodTwoProd := by
   intro Coin _ _ _ A O V Tick Adv H Lv val hS
   exact ⟨monitoringPeriodTwoLead_of H Lv val hS, monitoringPeriodTwoProd_of H Lv val hS⟩
 
-/-- **The event at the committed boundary trace**: on a statement in scope, at a prover with no tape, the run accepts
-with a sampled proof block of the committed incorrect set with probability at most `ε_reg,2`
-(`CompiledTwo.eventTwo_le`, from knowledge soundness of the argument, binding and the contract). -/
 theorem acceptedSampledAt_regVal_le {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS H)
     (hbind : L.commit.Binds H) (hS : L.Sessions H) {x : Msg} (hx : L.Scope x) (P : Prover Unit) :
     acceptedSampledAt H L x P (L.regVal H P x ()) ≤ L.εregTwo H x P := by
@@ -331,12 +274,6 @@ theorem acceptedSampledAt_regVal_le {H : Msg → Msg} {L : CompiledTwo Coin A} (
   exact (Pr_unit fun r : Fin (L.V.k x) → Coin => (run H P L.V x () r).out = .acc ∧
     ∃ u ∈ L.checked x r, u ∈ incorrectAllAt s Pt d.part (L.regVal H P x ()) (L.iregVal H P x () r)).symm.trans_le h
 
-/-- **The period's one failure probability at the committed boundary trace**: when the argument is knowledge sound and
-every verification phase's verifier binds and meets the contract, at every strategy whose verification phases'
-committed-form errors (`CompiledTwo.εregTwo` at the statement and prover each sends) are at most `ε_t`, every
-verification phase is accepted and the escapes at the committed boundary traces multiply below `δ` with probability at
-most `δ + Σ_t ε_t`. It is `CompilerMonitoringPeriodTwoReg`'s premises with the period's one `δ` in place of the least rate of any
-cell. -/
 theorem monitoringPeriodTwoProd_regVal (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A) (hA : A.KS H)
     (hS : ∀ t, (Lv t).commit.Binds H ∧ (Lv t).Sessions H) (T : ℕ) (ε : ℕ → ℝ)
     (s : Strategy (monitoringPeriodG (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T))
@@ -349,10 +286,6 @@ theorem monitoringPeriodTwoProd_regVal (H : Msg → Msg) (Lv : ℕ → CompiledT
   monitoringPeriodTwoProd_of H Lv (fun t _ x P => (Lv t).regVal H P x ()) (fun t => (hS t).2) T ε s
     (fun t τ hp hx => (acceptedSampledAt_regVal_le hA (hS t).1 (hS t).2 hx τ.2.1.2).trans (herr t τ hp)) δ
 
-/-- **The period's one failure probability through the first sampled incorrect proof block, at the committed boundary
-trace**: under `monitoringPeriodTwoProd_regVal`'s premises, some verification phase is accepted with a sampled proof block of
-its committed incorrect set, or the escapes at the committed boundary traces of the verification phases before the
-first such sample multiply below `δ`, with probability at most `δ + Σ_t ε_t`. -/
 theorem monitoringPeriodTwoLead_regVal (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A) (hA : A.KS H)
     (hS : ∀ t, (Lv t).commit.Binds H ∧ (Lv t).Sessions H) (T : ℕ) (ε : ℕ → ℝ)
     (s : Strategy (monitoringPeriodG (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T))

@@ -36,24 +36,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The read's gates refine its reference at a unit of the parsed circuit file
-
-`gatesRefine_partsOf`: at unit `u` of the parsed file's partition (`Flock.Bridge.partsOf`), let the unit net's rows hold
-the read's program (`HoldsRead`) and compute its reference wherever they hold (`hsound`). Then, where the stack's
-constant gate is registered as 1 and is among `u`'s inputs, and copy `j`'s verdict gate is committed, the read's gates
-at copy `j` refine `Hash.EmbeddingRead` (`ReadUnit.GatesRefine`), at the ports through the copy's gates
-(`Flock.Bridge.copyGate`). The values are the unit's local evaluation, where every copy holds the unit net's rows
-(`Flock.Bridge.rows_localEval`), so the read's row need not be committed: a block that consumes it inside itself binds
-it as a block that commits it does. `gatesRefine_layout` discharges its constant and verdict premises from the parsed
-file's layout, for one copy.
-
-`readUnitSampled_partsOf` is the read's binding at the parsed file: `ResourceAccounting.SecurityProofs.readUnitSampledCR` at
-`partsOf`, for reads each at one copy's gates in its unit, with its gate premise discharged by `gatesRefine_partsOf` at
-every read. `readUnitSampled_layout` discharges its constant and verdict premises from the parsed file's layout, and
-`readUnitSampled_check` the rest from the file's parse and the read's template check (`unrolled_leaves_of_parse`,
-`read_of_check`): no premise about the read's gates remains.
--/
+/-! The read's gates refine its reference at a unit of the parsed circuit file. -/
 
 @[expose] public section
 
@@ -62,11 +45,6 @@ namespace ResourceAccounting.ReadUnit.Gates
 open Flock.HmNets hiding and
 open FlockSoundness.Discharge.Hm
 
-/-- **The read's gates refine its reference at a unit of the parsed circuit file.** At unit `u` of `partsOf`, let the
-unit net's rows hold the read's program for a table of `V` rows of `H` words (`hr`), computing its reference wherever
-they hold with their constant set (`hsound`). If the stack's constant gate is registered as 1 and is among `u`'s inputs,
-and copy `j`'s verdict gate is committed, then the read's gates at copy `j` refine `Hash.EmbeddingRead` at SHA-512
-under the hm96 key `key`, at the ports through copy `j`'s gates. -/
 theorem gatesRefine_partsOf (key : Hash.Msg) {V H : ℕ} (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit)
     (n : ℕ) {run : (List Lin × Lin) × St}
     (hr : HoldsRead (FlockSoundness.Rows.ofNet hU) (readIn H (Hash.Tree.depth V)) run.2 (run.1.1 ++ [run.1.2]))
@@ -90,10 +68,6 @@ theorem gatesRefine_partsOf (key : Hash.Msg) {V H : ℕ} (D : Flock.Desc) (hU : 
   obtain ⟨z, hsat, hz1, hz⟩ := Flock.Bridge.rows_localEval D hU n tr u hj
   exact ⟨fun c => z c.val, hsat, hz1.trans (hconsts _ hone_io true hone), fun c _ => hz c, fun i _ => hz _⟩
 
-/-- **`gatesRefine_partsOf` at the parsed file's layout.** Its premises that the unit's constant gate is among its
-inputs and copy `j`'s verdict gate is committed hold where the stack has a copy (`hupv`), the read has more than `16 H`
-outputs (`hlen`), and its verdict, output `16 H`, sits on bit 0 of copy `j`'s returned leaf `H` (`hout`, `hleaf`):
-`readUnitSampled_layout`'s two steps, for one copy and with no probability. -/
 theorem gatesRefine_layout (key : Hash.Msg) {V H : ℕ} (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit)
     (n : ℕ) {run : (List Lin × Lin) × St}
     (hr : HoldsRead (FlockSoundness.Rows.ofNet hU) (readIn H (Hash.Tree.depth V)) run.2 (run.1.1 ++ [run.1.2]))
@@ -112,16 +86,6 @@ theorem gatesRefine_layout (key : Hash.Msg) {V H : ℕ} (D : Flock.Desc) (hU : F
   exact gatesRefine_partsOf key D hU n hr hsound consts u hj hone (Flock.Bridge.constGate_mem_io D hU n u hupv)
     (Flock.Bridge.copyGate_mem_committed D hU n u hj (hr.out (16 * H)) hleaf (by omega) hout (by omega) (by omega))
 
-/-- **Each read of a sampled proof block of the parsed circuit file returns its table's row at its index**, but with probability
-at most the layer below's `ε` plus the chance of finding a SHA-512 collision. At the parsed file's partition
-(`partsOf`), let the unit net's rows hold the read's program and compute its reference wherever they hold (`hr`,
-`hsound`), and let each unit's constant gate be registered as 1, among its inputs, and each copy's verdict gate
-committed. Take reads `R`, each at the ports through one copy's gates in its unit (`hR`), with tables committed under
-their roots: a unit of `units_per_vu` stacked copies holds a read a copy. Then over the outcomes `ω`, a run that accepts
-while a read of a sampled proof block returns, in its unit's local evaluation and at an index inside its table, a row other than
-its table's has probability at most `ε`, the layer below's bound on accepting while a sampled read's unit is wrong or the
-read's registered rows fail, plus `E[cost] / 2^256`, where `cost` is what the collision search behind the reads' checks
-costs (`Claims.ExpectedCR`). -/
 theorem readUnitSampled_partsOf {Ω : Type} [Fintype Ω] [Nonempty Ω] (key : Hash.Msg) {V H : ℕ} (D : Flock.Desc)
     (hU : FlockSoundness.Built D.unroll.unit) (n : ℕ) {run : (List Lin × Lin) × St}
     (hr : HoldsRead (FlockSoundness.Rows.ofNet hU) (readIn H (Hash.Tree.depth V)) run.2 (run.1.1 ++ [run.1.2]))
@@ -161,11 +125,6 @@ theorem readUnitSampled_partsOf {Ω : Type} [Fintype Ω] [Nonempty Ω] (key : Ha
   rw [hp]
   exact gatesRefine_partsOf key D hU n hr hsound consts (R.unit i) hj (hone _) (hone_io _) (hok _ j hj)
 
-/-- **`readUnitSampled_partsOf` at the parsed file's layout.** Its premises that each unit's constant gate is among its
-inputs and each copy's verdict gate is committed hold where the stack has a copy (`hupv`), the read has more than
-`16 H` outputs (`hlen`), and its verdict, output `16 H`, sits on bit 0 of every copy's returned leaf `H` (`hout`,
-`hleaves`): the unit's constant gate is opened at the unit (`Flock.Bridge.constGate_mem_io`), and a copy's gate on a
-returned leaf is committed (`Flock.Bridge.copyGate_mem_committed`). -/
 theorem readUnitSampled_layout {Ω : Type} [Fintype Ω] [Nonempty Ω] (key : Hash.Msg) {V H : ℕ} (D : Flock.Desc)
     (hU : FlockSoundness.Built D.unroll.unit) (n : ℕ) {run : (List Lin × Lin) × St}
     (hr : HoldsRead (FlockSoundness.Rows.ofNet hU) (readIn H (Hash.Tree.depth V)) run.2 (run.1.1 ++ [run.1.2]))
@@ -210,15 +169,6 @@ theorem readUnitSampled_layout {Ω : Type} [Fintype Ω] [Nonempty Ω] (key : Has
       (by omega) (by omega))
     R hR acc sampled tr cost ε hcommitted below hcr
 
-/-- **A sampled read unit of a parsed circuit file returns its table's row, at a template the read's check accepts.**
-Let the circuit file parse into `ct` (`hparse`, `Flock.HmOut.parseTmpl`), with its unit template passing the read's
-check (`hcheck`, `Flock.ReadNet.check V H`) and its unit returning the circuit's outputs (`ho`). The parse gives a copy
-in the stack and one leaf per output port in each copy (`unrolled_leaves_of_parse`), which the check makes the read's
-`H + 1` outputs (`unrolled_outPorts`). Then the unrolled unit's rows run the read's program, its input `x` on column
-`x` and its outputs on the unit's returned output group, and for any reads each at one copy's ports of that run,
-committed under the pinned hm96 key: over the outcomes `ω`, a run that accepts while a read of a sampled proof block returns, in
-its unit's local evaluation and at an index inside its table, a row other than its table's has probability at most the
-layer below's `ε` plus `E[cost] / 2^256` (`readUnitSampled_layout`, `read_of_check`). -/
 theorem readUnitSampled_check {Ω : Type} [Fintype Ω] [Nonempty Ω] {V H : ℕ} {tags : Flock.Tags} {bytes : ByteArray}
     {tables : List (String × ByteArray)} {ct : Flock.Circuit} {tu : Flock.TmplUnit}
     (hparse : Flock.HmOut.parseTmpl tags bytes tables = .ok ct) (ht : ct.tmpl = some tu)

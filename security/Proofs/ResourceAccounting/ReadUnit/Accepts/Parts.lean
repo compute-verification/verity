@@ -3,12 +3,7 @@ module
 public import Proofs.ResourceAccounting.ReadUnit.Accepts.Cost
 public import Proofs.ResourceAccounting.ReadUnit.Frame.Parts
 
-/-!
-# How many columns each of the read's parts has
-
-Each part's program adds at most a fixed number of variables and returns at most a fixed number of bits
-(`cost_segPart`, …, `cost_selectPart`), so its Definition's columns are at most `partColsMax H` (`partDef_cols_le`).
--/
+/-! How many columns each of the read's parts has: at most `partColsMax H`. -/
 
 @[expose] public section
 
@@ -16,8 +11,6 @@ namespace ResourceAccounting.ReadUnit.Accepts
 
 open Flock.HmNets hiding and
 open Flock.ReadNet
-
-/-! ## Words -/
 
 theorem length_padTail_le (total : ℕ) : (padTail total).length ≤ 144 := by
   simp only [padTail, List.length_append, List.length_cons, List.length_nil, List.length_replicate,
@@ -70,8 +63,6 @@ theorem cost_flat {m : M (List Word)} {k : ℕ} (h : Cost k m W8) :
   Cost.mono (Cost.bind' h fun o ho => Cost.pure' 0 (Q := fun o : List Lin => o.length ≤ 512) (flatten_le_of_W8 ho))
     (by omega) fun _ h => h
 
-/-! ## The row segment, its outer hash and the leaf -/
-
 theorem cost_segment (m : ℕ) (cv : List Word) (bits : List Lin) (hcv : W8 cv) (hb : bits.length = m) :
     Cost ((m + 1159) / 1024 * COMPRESS) (Flock.ReadNet.segment m cv bits) W8 := by
   unfold Flock.ReadNet.segment
@@ -108,8 +99,6 @@ theorem cost_leaf (x y : List Word) (hy : W64 y) : Cost (512 + (2 * COMPRESS + (
   have h3 := hlf.1
   simp only [List.length_append]
   omega
-
-/-! ## The frame's gadgets -/
 
 theorem cost_orL (a b : Lin) : Cost 1 (Frame.orL a b) fun _ => True := cost_and_pure _ _ _
 
@@ -276,8 +265,6 @@ theorem cost_eqDigest (x y : List Word) (hx : W8 x) : Cost 512 (Frame.eqDigest x
     simp only [List.length_zip]
     omega
 
-/-! ## The select -/
-
 theorem cost_belowGo (bound : ℕ) : ∀ (bs : List Lin) (k : ℕ) (lt : Lin),
     Cost bs.length (belowGo bound bs k lt) fun _ => True
   | [], _, _ => by
@@ -302,8 +289,6 @@ theorem cost_selectRow (V : ℕ) (tok : List Lin) (opened : Lin) (row : List Lin
         (Q := fun h : List Lin => h.length ≤ row.length)
         fun r hr => (by rw [hr.1]; simp only [List.length_zip]; omega : r.length ≤ row.length))
       fun h hh => Cost.bind' (cost_and _ _) fun r _ => Cost.pure' 0 (a := (h, Lin.one ^^^ r)) hh
-
-/-! ## The parts -/
 
 theorem cost_segPart (m : ℕ) (hm : m ≤ 8192) : Cost (9 * COMPRESS) (segPart m).prog fun o => o.length ≤ 512 :=
   cost_flat (Cost.mono (cost_segment m _ _ (w8_wordsAt 0) (by simp [bitsAt]))
@@ -341,8 +326,6 @@ theorem cost_selectPart (V H : ℕ) : Cost (33 + 16 * H) (selectPart V H).prog f
         omega))
     (by simp only [bitsAt, List.length_map, List.length_range]; omega) fun _ h => h
 
-/-! ## Each part's columns -/
-
 theorem cols_le {p : Part} {k L : ℕ} (h : Cost k p.prog fun o => o.length ≤ L) :
     (defOf p.ins p.run).cols ≤ k + L := by
   obtain ⟨h1, h2⟩ := h ⟨p.ins, []⟩
@@ -351,7 +334,6 @@ theorem cols_le {p : Part} {k L : ℕ} (h : Cost k p.prog fun o => o.length ≤ 
   show p.run.2.next - p.ins + p.run.1.length ≤ k + L
   omega
 
-/-- The columns of each part's Definition are at most this. -/
 def partColsMax (H : ℕ) : ℕ := (segs H + 9) * COMPRESS + 32 * H + 2048
 
 theorem depth_le {V : ℕ} (hV : V < 2 ^ 32) : depth V ≤ 32 := by

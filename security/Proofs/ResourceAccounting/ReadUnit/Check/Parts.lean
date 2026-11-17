@@ -2,14 +2,7 @@ module
 
 public import Proofs.ResourceAccounting.ReadUnit.Check.Compose
 
-/-!
-# Each call's part, read at the root
-
-For each call of the root, its part's statement on the values the root's columns hold: the segments and the outer hash
-(`root_seg`, `root_outer`, together `root_rowSeg`), the hm96 leaf (`root_leaf`), the frame's leaf hash (`root_leafHash`)
-and nodes (`root_node`, up the path in `root_climb`), the comparison with the root (`root_eq`) and the select
-(`root_select`).
--/
+/-! Each call's part of the read, read at the root. -/
 
 @[expose] public section
 
@@ -20,7 +13,6 @@ open Flock.HmNets hiding and
 
 variable {V H : ℕ} {z : ℕ → Bool}
 
-/-- Every call's copy holds its part's run (`root_facts`). -/
 abbrev Copies (V H : ℕ) (z : ℕ → Bool) : Prop :=
   ∀ i < nCalls V H, ∀ p ∈ (parts V H)[partOf V H i]?, CopyHolds V H z i p
 
@@ -44,7 +36,6 @@ theorem drop_colV (k a n : ℕ) : (colV V H z k (a + n)).drop a = colV V H z (k 
   intro t _ _
   simp [colV, Nat.add_assoc]
 
-/-- **Segment `j`**: its copy's words hold the digest of the segment's message. -/
 theorem root_seg (hf : rootVal V H z (lay V H).zero = false) (hc : rootVal V H z ((lay V H).const + 1) = true)
     (hcp : Copies V H z) {j : ℕ} (hj : j < segs H) :
     (Verity.sha512 ((Flock.HmRow.segmentPrefix j (segs H) (segM H j)).data.toList ++
@@ -78,7 +69,6 @@ theorem root_seg (hf : rootVal V H z (lay V H).zero = false) (hc : rootVal V H z
   rw [hbits, ← wordsBytes_eq _ ⟨o1, o2⟩, wordsBytes, hout] at o3
   exact o3
 
-/-- **The outer hash**: its copy's words hold SHA-512 of `Q(16 H)` and the segments' digests. -/
 theorem root_outer (hcp : Copies V H z) :
     (Verity.sha512 (Hash.RowSeg.outerPrefix (16 * H) ++
       (List.range (segs H)).flatMap fun j => ReadUnit.bytesOf (outV V H z j 512))).bytes =
@@ -109,7 +99,6 @@ theorem ins_drop_take (k n a b : ℕ) (h : a + b ≤ n) : ((ins k n).drop a).tak
   intro t _ _
   simp [ins, Nat.add_assoc]
 
-/-- **Part A at the root**: the outer hash's copy holds the row's `sha512/row-seg/v1` digest. -/
 theorem root_rowSeg (hf : rootVal V H z (lay V H).zero = false) (hc : rootVal V H z ((lay V H).const + 1) = true)
     (hcp : Copies V H z) :
     Hash.RowSeg.digest Verity.sha512 (colV V H z ROW_AT (16 * H)) = ReadUnit.digestOf (outV V H z (segs H) 512) := by
@@ -136,7 +125,6 @@ theorem root_rowSeg (hf : rootVal V H z (lay V H).zero = false) (hc : rootVal V 
   rw [← Hash.BindingProofs.bytes_inj, digestOf_bytes (length_outV _ _), ← root_outer hcp, Hash.RowSeg.digest,
     Hash.RowSeg.outerMsg, length_colV, hfl]
 
-/-- **Part B at the root**: the leaf's copy holds the hm96 leaf of the row's digest and the salt. -/
 theorem root_leaf (hcp : Copies V H z) :
     ReadUnit.digestOf ((outV V H z (segs H + 1) 1536).drop 1024) =
       Hash.Hm96.leaf Verity.sha512 pinnedKey (ReadUnit.digestOf (outV V H z (segs H) 512))
@@ -171,8 +159,6 @@ theorem le_indexBytes (b : ℕ) : b ≤ 8 * Frame.indexBytes b := by
 
 theorem utf8_seg : Hash.utf8 Flock.HmRow.ROW_SCHEMA_SEG = Hash.utf8 Hash.RowLeaf.Format.seg.schema := rfl
 
-/-- **The frame's leaf hash at the root**: its copy holds the frame leaf of the hm96 leaf at the token's index, in the
-dense domain under the domain id. -/
 theorem root_leafHash (hf : rootVal V H z (lay V H).zero = false) (hcp : Copies V H z) (hD : depth V ≤ 32) :
     ReadUnit.digestOf (outV V H z (segs H + 2) 512) = Verity.sha512 (Hash.Tree.leafMsg
       (denseDomain (depth V) (ReadUnit.digestOf (colV V H z DOMAIN_AT 512))) (ReadUnit.num (colV V H z 0 (depth V)))
@@ -243,23 +229,15 @@ theorem select_part : selectPart V H ∈ (parts V H)[partOf V H (segs H + 4 + de
   simp only [partOf, h1, h2, h3, h4, h5, h6, h7, ↓reduceIte]
   rfl
 
-/-! ## Up the path -/
-
-/-- The digest after level `j` of the climb: the frame leaf's (`j = 0`), then each node's. -/
 def curV (V H : ℕ) (z : ℕ → Bool) (j : ℕ) : Verity.Digest := ReadUnit.digestOf (outV V H z (segs H + 2 + j) 512)
 
-/-- The path's `j`-th sibling. -/
 def sibV (V H : ℕ) (z : ℕ → Bool) (j : ℕ) : Verity.Digest := ReadUnit.digestOf (colV V H z (pathAt H + 512 * j) 512)
 
-/-- The dense domain of `2 ^ D` ranks under the domain id the root's input holds. -/
 def domV (V H : ℕ) (z : ℕ → Bool) : Hash.Tree.Domain :=
   denseDomain (depth V) (ReadUnit.digestOf (colV V H z DOMAIN_AT 512))
 
-/-- The index the climb reads: the token's low `D` bits. -/
 def posV (V H : ℕ) (z : ℕ → Bool) : ℕ := ReadUnit.num (colV V H z 0 (depth V))
 
-/-- **Node `k` at the root**: its copy holds the frame node at level `k` over the digest below and the path's `k`-th
-sibling, swapped by the index's bit `k`. -/
 theorem root_node (hf : rootVal V H z (lay V H).zero = false) (hc : rootVal V H z ((lay V H).const + 1) = true)
     (hcp : Copies V H z) (hD : depth V ≤ 32) {k : ℕ} (hk : k < depth V) :
     curV V H z (k + 1) = Verity.sha512 (if posV V H z / 2 ^ k % 2 = 0 then
@@ -353,8 +331,6 @@ theorem root_node (hf : rootVal V H z (lay V H).zero = false) (hc : rootVal V H 
     simp only [↓reduceIte]
     rfl
 
-/-- **The climb at the root**: from level `k`, the frame's climb over the path's siblings from `k` reaches the last
-node's digest. -/
 theorem root_climb (hf : rootVal V H z (lay V H).zero = false) (hc : rootVal V H z ((lay V H).const + 1) = true)
     (hcp : Copies V H z) (hD : depth V ≤ 32) : ∀ m k, k + m = depth V →
       (Hash.Tree.climb Verity.sha512 (domV V H z) k (posV V H z / 2 ^ k) (curV V H z k)
@@ -375,14 +351,11 @@ theorem root_climb (hf : rootVal V H z (lay V H).zero = false) (hc : rootVal V H
       show posV V H z / 2 ^ k / 2 = posV V H z / 2 ^ (k + 1) by rw [Nat.div_div_eq_div_mul, ← Nat.pow_succ]]
     exact root_climb hf hc hcp hD m (k + 1) (by omega)
 
-/-! ## The comparison and the select -/
-
 theorem sound_eqPart : Sound eqPart.prog fun z out => ∃ b, out = [b] ∧
     (ev z b = true → wordsDigest z (wordsAt 0 8) = wordsDigest z (wordsAt 512 8)) :=
   Sound.bind' (FrameRead.sound_eqDigest (wordsAt 0 8) (wordsAt 512 8)) fun b =>
     Sound.pure' fun _ h => ⟨b, rfl, h (shaped_wordsAt 0 8) (shaped_wordsAt 512 8)⟩
 
-/-- **The comparison at the root**: where its bit is set, the last node's digest is the root's input. -/
 theorem root_eq (hcp : Copies V H z) (hok : rootVal V H z ((lay V H).outAt (segs H + 3 + depth V) 0) = true) :
     curV V H z (depth V) = ReadUnit.digestOf (colV V H z ROOT_AT 512) := by
   have hi : segs H + 3 + depth V < nCalls V H := by unfold nCalls; omega
@@ -423,8 +396,6 @@ theorem outV_succ (i n : ℕ) :
     outV V H z i (n + 1) = outV V H z i n ++ [rootVal V H z ((lay V H).outAt i n)] := by
   simp [outV, List.range_succ]
 
-/-- **The select at the root**: its row is the row input inside the vocabulary and the fill row outside, and its
-verdict is the comparison's bit inside and set outside. -/
 theorem root_select (hV : V < 2 ^ 32) (hcp : Copies V H z) :
     outV V H z (segs H + 4 + depth V) (16 * H) =
         (if ReadUnit.num (colV V H z 0 32) < V then colV V H z ROW_AT (16 * H) else Hash.EmbeddingRead.fill H) ∧
@@ -477,8 +448,6 @@ theorem root_select (hV : V < 2 ^ 32) (hcp : Copies V H z) :
   rw [ht, hop] at h2
   exact ⟨ha.symm.trans h1, hb'.symm.trans h2⟩
 
-/-! ## The read -/
-
 theorem depth_le (hV : V < 2 ^ 32) : depth V ≤ 32 := by
   unfold depth
   split
@@ -497,12 +466,9 @@ theorem take_colV {k n m : ℕ} (h : m ≤ n) : (colV V H z k n).take m = colV V
   simp only [colV]
   rw [← List.map_take, List.take_range, Nat.min_eq_left h]
 
-/-- The opening the root's inputs hold: the row, the salt's bytes and the path's siblings. -/
 def openV (V H : ℕ) (z : ℕ → Bool) : Hash.RowLeaf.Opening :=
   ⟨colV V H z ROW_AT (16 * H), ReadUnit.bytesOf (colV V H z (saltAt H) 1536), (List.range (depth V)).map (sibV V H z)⟩
 
-/-- **The read at the root**: the select's row is the read's at the token, root, domain id and opening the root's
-inputs hold, and where its verdict is set the read accepts them at SHA-512 under the pinned hm96 key. -/
 theorem root_read (hV : V < 2 ^ 32) (hH : 16 * H < 2 ^ 64) (hf : rootVal V H z (lay V H).zero = false)
     (hc : rootVal V H z ((lay V H).const + 1) = true) (hcp : Copies V H z) :
     outV V H z (segs H + 4 + depth V) (16 * H) =

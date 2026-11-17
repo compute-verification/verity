@@ -1,9 +1,3 @@
-/-
-Part B's leaf, hm96-sha512's leaf generator against `Hash.Hm96`: on a digest `x` and a salt `y`, both in leaf order,
-its first 16 words hold the commit string `b ‖ c` (`commitString_eq`: `b = x ⊕ M·y` bit by bit, `bytes_b`; `c` the
-salt's SHA-512) and its last eight the leaf `SHA-512(leafPrefix(key) ‖ b ‖ c)`, under the pinned key (`leaf_spec`,
-`Gates.Hm96LeafSpec`).
--/
 module
 
 public import Flock.ReadNet.Leaf
@@ -48,10 +42,9 @@ namespace ResourceAccounting.ReadUnit.Gates
 open Flock.HmNets hiding and
 open FlockSoundness.Discharge.Hm
 
-/-- The pinned hm96 key's bytes. -/
 def pinnedKey : Hash.Msg := Flock.Hm96.Default512.key.data.toList
 
-/-! ## Bits and the mask -/
+/-! Part B's leaf, hm96-sha512's leaf generator, against `Hash.Hm96` under the pinned key. -/
 
 theorem hm96Bit_eq (s : List UInt8) (t : ℕ) : Hash.Hm96.bit s t = bitL s t := by
   rw [Hash.Hm96.bit, bitL, Nat.testBit_eq_decide_div_mod_eq]
@@ -80,7 +73,6 @@ theorem foldl_congr_mem {f g : Bool → ℕ → Bool} :
     rw [List.foldl_cons, List.foldl_cons, h c j (by simp)]
     exact foldl_congr_mem (fun acc i hi => h acc i (by simp [hi])) _
 
-/-- `M·y`'s bit `i`, as a sum in order. -/
 theorem maskBit_eq (key y : Hash.Msg) (i : ℕ) :
     Hash.Hm96.maskBit key y i = (List.range 1536).foldl (fun acc j => acc ^^ (bitL y j && bitL key (i + j))) false := by
   rw [Hash.Hm96.maskBit, show 8 * Hash.Hm96.SALT_BYTES = 1536 from rfl, foldl_filter_xor]
@@ -110,7 +102,6 @@ theorem foldl_pow_testBit (f : ℕ → Bool) : ∀ n : ℕ,
       · rw [ite_eq_left rfl, Nat.add_comm, Nat.testBit_two_pow_add_eq, Nat.testBit_lt_two_pow hlt]
         rfl
 
-/-- Bit `s` of `M·y`'s byte `p` is `M·y`'s bit `8 p + s`. -/
 theorem testBit_mask (key y : Hash.Msg) {p s : ℕ} (hp : p < 64) (hs : s < 8) :
     ((Hash.Hm96.mask key y).getD p 0).toNat.testBit s = Hash.Hm96.maskBit key y (8 * p + s) := by
   obtain ⟨hlt, hbit⟩ := foldl_pow_testBit (fun s => Hash.Hm96.maskBit key y (8 * p + s)) 8
@@ -125,15 +116,11 @@ theorem bitL_bytes (d : Verity.Digest) {i s : ℕ} (hi : i < 64) (hs : s < 8) :
     List.getD_eq_getElem _ _ (by simpa [Verity.Digest.bytes] using hi)]
   simp only [Verity.Digest.bytes, List.getElem_ofFn]
 
-/-! ## `b = x ⊕ M·y` -/
-
-/-- Word `w` of `b` as the leaf generator builds it, before it commits it. -/
 def bWord (x y : List Word) (w : ℕ) : Word :=
   (List.range 64).map fun p => maskBit Flock.Hm96.Default512.key
     ((List.range 1536).map fun j => y.flatten.getD (wordBit j) Lin.zero) (wordBit (64 * w + p))
     (x.flatten.getD (wordBit (wordBit (64 * w + p))) Lin.zero)
 
-/-- Bit `i` of `b` as the leaf generator's net computes it: the digest's bit `i` and `M·y`'s. -/
 theorem ev_bi (z : Var → Bool) {x y : List Word} (hx : Shaped 8 x) (hy : Shaped 24 y) {i : ℕ} (hi : i < 512) :
     ev z (maskBit Flock.Hm96.Default512.key ((List.range 1536).map fun j => y.flatten.getD (wordBit j) Lin.zero) i
       (x.flatten.getD (wordBit i) Lin.zero)) =
@@ -151,7 +138,6 @@ theorem ev_bi (z : Var → Bool) {x y : List Word} (hx : Shaped 8 x) (hy : Shape
 
 theorem bytesBE_append (a b : List (BitVec 64)) : bytesBE (a ++ b) = bytesBE a ++ bytesBE b := List.flatMap_append
 
-/-- **`b`'s bytes are `x ⊕ M·y`.** -/
 theorem bytes_b (z : Var → Bool) {x y : List Word} (hx : Shaped 8 x) (hy : Shaped 24 y) {b : List Word}
     (hb : b.map (bv z) = (List.range 8).map fun w => bv z (bWord x y w)) :
     bytesBE (b.map (bv z)) =
@@ -178,8 +164,6 @@ theorem bytes_b (z : Var → Bool) {x y : List Word} (hx : Shaped 8 x) (hy : Sha
           (Nat.pow_le_pow_right (by norm_num) (by omega)))
       rw [h8, h8]
 
-/-! ## The prefixes -/
-
 theorem saltPrefix_data : Flock.Hm96.Default512.saltPrefix.data.toList = Hash.Hm96.saltPrefix := by
   rw [Flock.Hm96.Default512.saltPrefix, pad_data,
     show Flock.Hm96.sha512.saltTag = "verity/hm96-sha512/salt/v1".toUTF8.push 0 from rfl, push_zero_data]
@@ -203,10 +187,6 @@ theorem size_leafPrefix : Flock.Hm96.Default512.leafPrefix.size = 128 := by
   simp only [List.length_append, this, Hash.BindingProofs.bytes_length]
   norm_num
 
-/-! ## The leaf -/
-
-/-- **The commit string is `b ‖ c`**: the leaf generator's `b` and `c` words hold hm96's commit string of the digest and
-the salt, under the pinned key. -/
 theorem commitString_eq (z : Var → Bool) {x y b c : List Word} (hx : Shaped 8 x) (hy : Shaped 24 y)
     (hb : b.map (bv z) = (List.range 8).map fun w => bv z (bWord x y w))
     (hc : c.map (bv z) = chainW 2 ((Flock.ReadNet.midstate Flock.Hm96.Default512.saltPrefix).map (bv z))
@@ -218,7 +198,6 @@ theorem commitString_eq (z : Var → Bool) {x y b c : List Word} (hx : Shaped 8 
     List.map_append, map_bv_constWords, length_bytesBE, List.length_map, hy.1, wordsBE_append]
   rfl
 
-/-- **Part B, the leaf**: the leaf generator meets `Gates.Hm96LeafSpec` under the pinned key. -/
 theorem leaf_spec : Hm96LeafSpec pinnedKey Flock.ReadNet.leaf := by
   intro x y
   simp only [Flock.ReadNet.leaf]

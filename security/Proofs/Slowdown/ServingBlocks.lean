@@ -4,17 +4,7 @@ public import Definitions.Slowdown.Guarantees.ServingBlocks
 public import Proofs.Core.Formalism
 public import Mathlib.Tactic.Linarith
 
-/-!
-# The serving-block bound: proofs
-
-Each serving block's two caps are summed by `Verity.SecurityProofs.ServingBlockSum`, beside the dark remainder's.
-* The serving cap (`assigned_le_serving`) is Theorem 3 on the one block `u`: what `u` computes wholly inside itself is at
-  most `q(c_S, k_S)`, and the rest, the operations assigned to `u` with a gate outside it, `boundary_le` charges to
-  `in(u) \ θ`, at most `μ` operations per gate.
-* The inference cap (`assigned_le_inference`) is `Verity.SecurityProofs.InferenceCap` with `U` the operations computed
-  wholly inside no inference block: an operation outside `U` is wholly inside the inference block holding its
-  representative, which the per-block cap at `(c, k)` bounds.
--/
+/-! The serving-block bound: proofs. -/
 
 @[expose] public section
 
@@ -22,7 +12,6 @@ namespace ResourceAccounting.SecurityProofs.ServingBlocks
 
 open Verity Finset ResourceAccounting.ServingBlocks
 
-/-- The union bound: a nonnegative sum over `V` is at most the sum of its parts `P i`, when every `v` lies in one. -/
 theorem sum_le_sum_sum_filter {α ι : Type*} (V : Finset α) (s : Finset ι) (P : ι → α → Prop)
     [∀ i, DecidablePred (P i)] (f : α → ℝ) (hf : ∀ v ∈ V, 0 ≤ f v) (hcov : ∀ v ∈ V, ∃ i ∈ s, P i v) :
     ∑ v ∈ V, f v ≤ ∑ i ∈ s, ∑ v ∈ V with P i v, f v := by
@@ -43,12 +32,9 @@ variable {C : Circuit} (J : Counted C)
 theorem V_subset : J.V ⊆ C.computed := fun v hv => by
   simpa [Circuit.computed] using J.V_computed v hv
 
-/-- A partition's sum over `J.V ∩ R` is `R`'s local count. -/
 theorem sum_inter (R : Finset (Fin C.N)) : ∑ v ∈ J.V ∩ R, J.ω v = J.assigned R := by
   rw [Counted.assigned, Finset.filter_mem_eq_inter]
 
-/-- **Theorem 3 on one block, with what it leaves**: `R`'s local count is what `R` computes wholly inside itself plus
-the weight of its operations not computed wholly inside it. -/
 theorem assigned_le (R : Finset (Fin C.N)) : J.assigned R ≤ J.inside R + J.outside R (fun _ : Unit => R) := by
   classical
   unfold Counted.assigned Counted.inside Counted.outside
@@ -62,8 +48,6 @@ theorem assigned_le (R : Finset (Fin C.N)) : J.assigned R ≤ J.inside R + J.out
 
 end Counted
 
-/-- An operation assigned to `R` but not computed wholly inside it has a gate in `in(R) \ θ`: of its gates outside `R`
-take the last; it is not the representative, so another gate of the operation reads it, a later one, which is in `R`. -/
 theorem exists_crossing {d : RegisteredCircuit} {J : Counted d.D} (hB : OperationBodies d J) {R : Finset (Fin d.D.N)}
     {v : Fin d.D.N} (hv : v ∈ J.V) (hvR : v ∈ R) (hout : ¬ J.body v ⊆ R) :
     ∃ a ∈ d.unregistered R, a ∈ J.body v := by
@@ -82,8 +66,6 @@ theorem exists_crossing {d : RegisteredCircuit} {J : Counted d.D} (hB : Operatio
   simp only [Circuit.into, Finset.mem_filter, Finset.mem_univ, true_and]
   exact ⟨huR, g, hgR, hug⟩
 
-/-- **The boundary charge**: the weight assigned to `R` that is not computed wholly inside `R` is at most
-`ω_max μ |in(R) \ θ|`, each such operation charged to one of its gates in `in(R) \ θ`, each in at most `μ` of them. -/
 theorem boundary_le (d : RegisteredCircuit) (J : Counted d.D) (R : Finset (Fin d.D.N)) (ωmax : ℝ) (μ : ℕ)
     (hB : OperationBodies d J) (hμ : Overlap J μ) (hω0 : 0 ≤ ωmax) (hω : ∀ v ∈ J.V, J.ω v ≤ ωmax) :
     J.outside R (fun _ : Unit => R) ≤ ωmax * μ * (d.unregistered R).card := by
@@ -111,8 +93,6 @@ theorem boundary_le (d : RegisteredCircuit) (J : Counted d.D) (R : Finset (Fin d
           _ = ωmax * μ := mul_comm _ _
     _ = ωmax * μ * (d.unregistered R).card := by rw [Finset.sum_const, nsmul_eq_mul, mul_comm]
 
-/-- **The serving cap** of a block `R` of at most `c` gates reading at most `k` unregistered input bits:
-`Ω_R ≤ q(c, k) + ω_max μ k`, Theorem 3 on the one block with the boundary charge. -/
 theorem assigned_le_serving (d : RegisteredCircuit) (J : Counted d.D) (q : ℕ → ℕ → ℝ) (c k : ℕ) (R : Finset (Fin d.D.N))
     (ωmax : ℝ) (μ : ℕ) (hq : PerBlockCap d J q c k) (hR : R ⊆ d.D.computed) (hc : R.card ≤ c)
     (hk : (d.unregistered R).card ≤ k) (hB : OperationBodies d J) (hμ : Overlap J μ) (hω0 : 0 ≤ ωmax)
@@ -122,9 +102,6 @@ theorem assigned_le_serving (d : RegisteredCircuit) (J : Counted d.D) (q : ℕ �
   have := mul_le_mul_of_nonneg_left hcard (mul_nonneg hω0 (Nat.cast_nonneg μ))
   linarith [Counted.assigned_le J R, hq R hR hc hk, boundary_le d J R ωmax μ hB hμ hω0 hω]
 
-/-- **The inference cap** of a unit `u` of `P` with the `(c, k)`-partition `Pf` refining `P`:
-`Ω_u ≤ n_u q(c, k) + (what the inference blocks inside u leave of u)`, `Verity.SecurityProofs.InferenceCap` with `U` the
-operations computed wholly inside no inference block. -/
 theorem assigned_le_inference (d : RegisteredCircuit) (J : Counted d.D) (q : ℕ → ℕ → ℝ) (c k : ℕ) {B nf : ℕ}
     (P : Partition d.D B) (Pf : Partition d.D nf) (r : Pf.Refines P) (hCK : Pf.IsCK d c k)
     (hq : PerBlockCap d J q c k) (u : Fin B) :
@@ -155,7 +132,6 @@ theorem assigned_le_inference (d : RegisteredCircuit) (J : Counted d.D) (q : ℕ
   obtain ⟨hvV, hvU⟩ := Finset.mem_inter.1 hvVU
   exact Finset.mem_filter.2 ⟨hvV, hvu, fun i => (Finset.mem_filter.1 hvU).2 i⟩
 
-/-- What the dark remainder's units are assigned is what the empty family of blocks leaves of their gates. -/
 theorem dark_le {C : Circuit} (J : Counted C) {B : ℕ} (P : Partition C B) (T : Finset (Fin B)) {qD : ℝ}
     (hD : UncertifiedCap J (T.biUnion P.gates) (Fin.elim0 : Fin 0 → Finset (Fin C.N)) qD) :
     ∑ u ∈ T, ∑ v ∈ J.V ∩ P.gates u, J.ω v ≤ qD := by

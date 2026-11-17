@@ -33,14 +33,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The read's values: numbers, lengths and openings
-
-What the read's parts and its template check read of the values its forms hold: a bit list's number (`num_append`,
-`num_lt`, `num_take_of_lt`), the lengths of evaluated forms, words and bytes, and the opening the read's witness forms
-hold (`openingOf`). The frame read climbs at the token's low bits, and the climb reads only a domain's id and positions,
-not its count (`climb_count`).
--/
+/-! The read's values: numbers, lengths and openings. -/
 
 @[expose] public section
 
@@ -62,7 +55,6 @@ theorem num_lt : ∀ l : List Bool, num l < 2 ^ l.length
     simp only [num, List.length_cons, pow_succ]
     cases b <;> simp only [Bool.toNat_false, Bool.toNat_true] <;> omega
 
-/-- A number below `2 ^ k` is its low `k` bits'. -/
 theorem num_take_of_lt (l : List Bool) (k : ℕ) (h : num l < 2 ^ k) : num (l.take k) = num l := by
   by_cases hk : k ≤ l.length
   · have hsplit := num_append (l.take k) (l.drop k)
@@ -96,7 +88,6 @@ theorem length_wordsBytes (z : Var → Bool) {k : ℕ} {ws : List Word} (h : Sha
     (wordsBytes z ws).length = k * 8 := by
   rw [wordsBytes, length_readBytes, length_evs, length_flatten_of_shaped h, Nat.mul_div_cancel _ (by norm_num : 0 < 64)]
 
-/-- The climb reads a domain's id, not its count. -/
 theorem climb_count (H : Hash.Msg → Verity.Digest) (id : Verity.Digest) (c₁ c₂ : ℕ) (p : ℕ → ℕ)
     (sibs : List Verity.Digest) : ∀ (lv cur : ℕ) (x : Verity.Digest),
       Hash.Tree.climb H ⟨id, c₁, p⟩ lv cur x sibs = Hash.Tree.climb H ⟨id, c₂, p⟩ lv cur x sibs := by
@@ -104,7 +95,6 @@ theorem climb_count (H : Hash.Msg → Verity.Digest) (id : Verity.Digest) (c₁ 
   | nil => intro lv cur x; rfl
   | cons s ss ih => intro lv cur x; simp only [Hash.Tree.climb, Hash.Tree.nodeMsg, ih]
 
-/-- The opening the read's witness forms hold under `z`: the row, the salt's bytes and the siblings' digests. -/
 def openingOf (z : Var → Bool) (row : List Lin) (salt : List Word) (path : List (List Word)) : Hash.RowLeaf.Opening :=
   ⟨evs z row, wordsBytes z salt, path.map (wordsDigest z)⟩
 

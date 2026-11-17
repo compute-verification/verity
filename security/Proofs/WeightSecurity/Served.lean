@@ -7,21 +7,8 @@ public import Proofs.Core.Game.Union
 public import Proofs.Spot.ExfiltrationBound
 public import Proofs.WeightSecurity.Theft
 
-/-! `WeightSecurity.SecurityProofs.TheftServed : WeightSecurity.Guarantees.TheftServed`, `Theft`'s leakage lemma at an
-audited deployment, with `TheftServedReq` and `TheftServedMinEntropy`. On a run whose releases are isolated and whose
-audit leaves fewer than `M` incorrect proof blocks undetected, the outsider's view is its view against the datacenter
-that deviates through the served channel with the run's own covert string (`Served.view_eq_resp`): each window's advice
-and bucket, the values its release changed, and the halt. Those values number at most `F · M + (L + 1) · |O|`
-(`Served.sum_card_changed_le`): through the windows accepted before the first rejection, which sampled none of their
-incorrect proof blocks, the changes count against those blocks, which count in `Served.lead`, and the rejected window
-and the lag's windows change at most `|O|` values each. So the outsider steals only where the run leaves `M` undetected,
-its releases aren't isolated, or some honest-use party `Ou.withString ch s` steals, which `HonestUseHard` bounds by `p`
-each (`theftServed_isolated`). Local releases are isolated (`Served.isolated_of_local`), which gives `TheftServed`.
-
-`card_servedChannel_le` counts the served channel's covert strings,
-`|Adv|^T · |Tick|^T · (Σ_{j ≤ K} C(T·|O|, j)) · |V|^K · (T + 1)`, the overwrites by `card_overwrites_le`, and `card_servedChannel_le_rpow` bounds that by two to `servedBits`, the names of
-the overwritten values by `(T·|O| + 1)^K`, which gives `TheftServedReq`. The witnesses are proved at the toy
-deployment. -/
+/-! `TheftServed`, `Theft`'s leakage lemma at an audited deployment, with `TheftServedReq` and
+`TheftServedMinEntropy`. -/
 
 @[expose] public section
 
@@ -38,7 +25,6 @@ theorem Outsider.view_length (O : Outsider R X M Θ') (r : R) (resp : List (X ×
   | 0 => rfl
   | n + 1 => by simp [Outsider.view, Outsider.view_length O r resp n]
 
-/-- **Two responders that agree along the outsider's view give it the same view.** -/
 theorem Outsider.view_congr (O : Outsider R X M Θ') (r : R) (resp resp' : List (X × M) → X → M) :
     ∀ q, (∀ n < q, resp (O.view r resp n) (O.query r (O.view r resp n)) =
         resp' (O.view r resp n) (O.query r (O.view r resp n))) → O.view r resp q = O.view r resp' q
@@ -64,7 +50,6 @@ theorem count_le_length (L : ℕ) : ∀ l : List (Served O V Tick Adv), count L 
     · exact Nat.succ_le_succ this
     · exact Nat.succ_le_succ (min_le_left _ _)
 
-/-- **The halt comes at most `L + 1` windows after the accepted ones.** -/
 theorem count_le_accLen (L : ℕ) : ∀ l : List (Served O V Tick Adv), count L l ≤ accLen l + (L + 1)
   | [] => Nat.zero_le _
   | w :: l => by
@@ -82,7 +67,6 @@ theorem accLen_le_count (L : ℕ) : ∀ l : List (Served O V Tick Adv), accLen l
     simp only [accLen, count]
     split_ifs <;> omega
 
-/-- **The windows before the first rejection are accepted.** -/
 theorem accepted_of_lt_accLen : ∀ (l : List (Served O V Tick Adv)) (n : ℕ) (w : Served O V Tick Adv),
     n < accLen l → l[n]? = some w → w.accepted
   | [], _, _, h, _ => by simp [accLen] at h
@@ -95,8 +79,6 @@ theorem accepted_of_lt_accLen : ∀ (l : List (Served O V Tick Adv)) (n : ℕ) (
         exact accepted_of_lt_accLen l n w (by omega) (by simpa using hw)
     · simp [accLen, hv] at h
 
-/-- **The windows accepted before the first rejection count in `lead`** when no accepted window sampled an incorrect
-proof block: each of them sampled none. -/
 theorem sum_incorrectAt_le_lead : ∀ l : List (Served O V Tick Adv), (¬ ∃ w ∈ l, w.accepted ∧ w.sampledIncorrect) →
     ∑ n ∈ range (accLen l), incorrectAt l n ≤ lead l
   | [] => fun _ => by simp [accLen]
@@ -114,7 +96,6 @@ theorem sum_incorrectAt_le_lead : ∀ l : List (Served O V Tick Adv), (¬ ∃ w 
 
 variable [Fintype O]
 
-/-- **Local releases are isolated**: each window's bound, summed. -/
 theorem isolated_of_local (C : Θ → Q × Adv → O → V) (E : ℕ) (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ')
     (L : ℕ) (θ : Θ) (r : R) (l : List (Served O V Tick Adv)) (hloc : Local C E Ou L θ r l) :
     Isolated C E Ou L θ r l := by
@@ -127,9 +108,6 @@ theorem isolated_of_local (C : Θ → Q × Adv → O → V) (E : ℕ) (Ou : Outs
   refine (hloc n hn' _ hw).trans (le_of_eq ?_)
   simp [incorrectAt, hw]
 
-/-- **Through the halt, the releases change at most `F · lead + (L + 1) · |O|` values** when the releases are isolated
-and no accepted window sampled an incorrect proof block: through the last window accepted before the first rejection,
-at most `F` per incorrect proof block of those windows, which count in `lead`, and after it at most `|O|` a window. -/
 theorem sum_card_changed_le (C : Θ → Q × Adv → O → V) (F : ℕ) (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ')
     (L : ℕ) (θ : Θ) (r : R) (l : List (Served O V Tick Adv)) (hiso : Isolated C F Ou L θ r l)
     (hacc : ¬ ∃ w ∈ l, w.accepted ∧ w.sampledIncorrect) :
@@ -147,7 +125,6 @@ theorem sum_card_changed_le (C : Θ → Q × Adv → O → V) (F : ℕ) (Ou : Ou
 
 variable [DecidableEq O]
 
-/-- The values a run's releases changed through the halt, by window and slot: the overwrite of its covert string. -/
 noncomputable def overwrite (C : Θ → Q × Adv → O → V) (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ')
     (L : ℕ) (θ : Θ) (r : R) (l : List (Served O V Tick Adv)) (T : ℕ) : Fin T × O → Option V :=
   fun p => if p.1.val < count L l ∧ p.2 ∈ changed C Ou L θ r l p.1.val then l[p.1.val]?.map (·.egress p.2) else none
@@ -175,8 +152,6 @@ theorem card_overwrite_le (C : Θ → Q × Adv → O → V) (F M : ℕ)
 
 variable [Fintype V] [Fintype Adv] [Inhabited Adv] [Fintype Tick] [Inhabited Tick]
 
-/-- **An isolated run that leaves fewer than `M` incorrect proof blocks undetected is the served channel's deviation
-with its own covert string**: each window's advice and bucket, the run's overwrite and its halt. -/
 theorem view_eq_resp (C : Θ → Q × Adv → O → V) (F M : ℕ) (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ')
     (T L : ℕ) (θ : Θ) (r : R) (l : List (Served O V Tick Adv)) (hiso : Isolated C F Ou L θ r l)
     (hesc : ¬ Undetected M l) :
@@ -257,10 +232,6 @@ theorem ite_exists_le_sum {ι : Type} [Fintype ι] (P : ι → Prop) [Decidable 
   · rw [ite_eq_right h]
     exact zero_le
 
-/-- **The leakage lemma over a game of coins.** Every party's run is a game `g z` at the weights' and outsider's coins
-`z`. Wherever the outsider wins, either the bad event happens or some honest-use party `O.withString ch s` steals the
-weights. Then the outsider wins with probability at most the bad event's plus `|ch.S| · p`, the union bound over the
-covert strings with `HonestUseHard` for each. -/
 theorem value_leak {Ω R Θ X Y M Θ' α : Type} [Fintype Ω] [Fintype R] (C : Θ → X → Y) (gen : Ω → Θ)
     (Stolen : Θ → Θ' → Prop) (q : ℕ) (A : Set (Outsider R X Y Θ')) (p : ℝ) (O : Outsider R X M Θ')
     (ch : Channel R X Y M) (hhon : HonestUseHard C gen Stolen q A p) (hsim : Simulable A O ch)
@@ -296,8 +267,6 @@ theorem value_leak {Ω R Θ X Y M Θ' α : Type} [Fintype Ω] [Fintype R] (C : �
     _ = avg (fun z => value (Bad z) (g z)) + ENNReal.ofReal (Fintype.card ch.S * p) := by
         rw [sum_const, card_univ, nsmul_eq_mul, ENNReal.ofReal_mul (Nat.cast_nonneg _), ENNReal.ofReal_natCast]
 
-/-- **Overwrites of at most `K` of the positions `P`** number at most `Σ_{j ≤ K} C(|P|, j) · |V|^K`, by the
-Hamming-ball count `Population.Exfil.card_devBall_le`. -/
 theorem card_overwrites_le (P V : Type) [Fintype P] [DecidableEq P] [Fintype V] [Nonempty V] (K : ℕ) :
     Fintype.card {d : P → Option V // (univ.filter fun p => d p ≠ none).card ≤ K} ≤
       (∑ j ∈ range (K + 1), (Fintype.card P).choose j) * Fintype.card V ^ K := by
@@ -322,8 +291,6 @@ theorem card_overwrites_le (P V : Type) [Fintype P] [DecidableEq P] [Fintype V] 
   · exact Subtype.ext ((hrec d).symm.trans ((congrArg (fun D : Population.Exfil.Dev P V =>
       fun p => if h : p ∈ D.1 then some (D.2 ⟨p, h⟩) else none) h).trans (hrec d')))
 
-/-- **The served channel's covert strings**: advice and a bucket per window, an overwrite of at most `K` of the `T · |O|`
-values, and the halt. -/
 theorem card_servedChannel_le (R Q Adv O V Tick : Type) [Fintype Adv] [Fintype O] [DecidableEq O] [Fintype V]
     [Nonempty V] [Fintype Tick] (T K : ℕ) :
     Fintype.card (servedChannel R Q Adv O V Tick T K).S ≤
@@ -346,8 +313,6 @@ theorem card_servedChannel_le (R Q Adv O V Tick : Type) [Fintype Adv] [Fintype O
         gcongr
     _ = _ := by ring
 
-/-- **At most `K` of `N` positions: at most `(N + 1)^K` choices**, the binomial expansion's terms bounding the
-binomial coefficients, `N.choose j ≤ N^j`. -/
 theorem sum_choose_le_pow (N K : ℕ) : ∑ j ∈ range (K + 1), N.choose j ≤ (N + 1) ^ K := by
   rw [add_pow]
   refine sum_le_sum fun j hj => ?_
@@ -359,7 +324,6 @@ theorem sum_choose_le_pow (N K : ℕ) : ∑ j ∈ range (K + 1), N.choose j ≤ 
       _ ≤ N ^ j * K.choose j := Nat.le_mul_of_pos_right _ (Nat.choose_pos hjK)
   simpa using hc
 
-/-- **Two to the served channel's bits** is the product of its parts' counts. -/
 theorem rpow_servedBits (Adv O V Tick : Type) [Fintype Adv] [Inhabited Adv] [Fintype O] [Fintype V] [Nonempty V]
     [Fintype Tick] [Inhabited Tick] (T K : ℕ) :
     (2 : ℝ) ^ servedBits Adv O V Tick T K =
@@ -376,8 +340,6 @@ theorem rpow_servedBits (Adv O V Tick : Type) [Fintype Adv] [Inhabited Adv] [Fin
   rw [Real.rpow_add two_pos, Real.rpow_add two_pos, m, m, Real.rpow_add two_pos, Real.rpow_add two_pos, e _ hA,
     e _ hTk, e _ hV, e _ hN, e _ hT]
 
-/-- **The served channel's covert strings number at most two to its bits**: `card_servedChannel_le` with the
-overwrites' positions counted at most `(T · |O| + 1)^K`. -/
 theorem card_servedChannel_le_rpow (R Q Adv O V Tick : Type) [Fintype Adv] [Inhabited Adv] [Fintype O] [DecidableEq O]
     [Fintype V] [Nonempty V] [Fintype Tick] [Inhabited Tick] (T K : ℕ) :
     (Fintype.card (servedChannel R Q Adv O V Tick T K).S : ℝ) ≤ (2 : ℝ) ^ servedBits Adv O V Tick T K := by
@@ -395,10 +357,6 @@ theorem card_servedChannel_le_rpow (R Q Adv O V Tick : Type) [Fintype Adv] [Inha
       _ = _ := by rw [Nat.mul_comm ((T * Fintype.card O + 1) ^ K) (Fintype.card V ^ K)]
   exact_mod_cast hle
 
-/-- **`TheftServed` at isolated releases**: the bound with the probability that the releases aren't isolated, each
-incorrect proof block's changes counted wherever they fall. On a run whose releases are isolated and whose audit leaves
-fewer than `M` incorrect proof blocks undetected, the outsider's view is the served channel's deviation with the run's
-own covert string (`Served.view_eq_resp`). -/
 theorem theftServed_isolated {Ω R Θ Q Adv O V Tick Θ' : Type} [Fintype Ω] [Fintype R] [Fintype Adv] [Inhabited Adv]
     [Fintype O] [DecidableEq O] [Fintype V] [Fintype Tick] [Inhabited Tick]
     (C : Θ → Q × Adv → O → V) (gen : Ω → Θ) (Stolen : Θ → Θ' → Prop) (A : Set (Outsider R (Q × Adv) (O → V) Θ'))
@@ -443,11 +401,8 @@ theorem theftServed_isolated {Ω R Θ Q Adv O V Tick Θ' : Type} [Fintype Ω] [F
         exact avg_le_const δ
     _ = _ := by ring
 
-/-- **`TheftServed` as a simulation**, for any event and not only a stolen model. Except where the releases aren't
-isolated or the audit leaves `M` incorrect proof blocks undetected, the outsider's whole view of the deployment is what
-it rebuilds (`Outsider.rebuild`) from one covert string `s` of the served channel and the answers that honest use of the
-served function gives the outsider with `s` written in: the served function's API plus one message of at most
-`servedBits` bits (`card_servedChannel_le_rpow`). Whatever the outsider ends up holding is a function of that view. -/
+/-- It holds for any event, not only a stolen model: whatever the outsider ends up holding is a function of that
+view. -/
 theorem theftServed_simulation {Ω R Θ Q Adv O V Tick Θ' : Type} [Fintype Ω] [Fintype R] [Fintype Adv] [Inhabited Adv]
     [Fintype O] [DecidableEq O] [Fintype V] [Fintype Tick] [Inhabited Tick]
     (C : Θ → Q × Adv → O → V) (gen : Ω → Θ) (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ') (T L F M : ℕ)
@@ -498,7 +453,6 @@ theorem card_W : Fintype.card (W × Unit) = 256 := by simp [W]
 
 theorem honest_C (θ : W) : honest C θ = honest C (0, 0) := rfl
 
-/-- Honest use of a served function that reads no weight reveals nothing: every party's output is one fixed guess. -/
 theorem guess_le_of {Y : Type} (C' : W → Unit × Unit → Y) (hc : ∀ θ, honest C' θ = honest C' (0, 0))
     (P : Outsider Unit (Unit × Unit) Y W) :
     Claims.Pr (fun z : W × Unit => Stolen (gen z.1) (P.model z.2 (honest C' (gen z.1)) 2)) ≤ 1 / 256 := by
@@ -513,12 +467,10 @@ theorem guess_le_of {Y : Type} (C' : W → Unit × Unit → Y) (hc : ∀ θ, hon
           card_singleton, card_W]
         norm_num
 
-/-- Honest use of the toy's served function reveals nothing: every party's output is one fixed guess. -/
 theorem guess_le (P : Outsider Unit (Unit × Unit) (Unit → Fin 16) W) :
     Claims.Pr (fun z : W × Unit => Stolen (gen z.1) (P.model z.2 (honest C (gen z.1)) 2)) ≤ 1 / 256 :=
   guess_le_of C honest_C P
 
-/-- The honest run's audit leaves no incorrect proof block undetected. -/
 theorem honest_undetected : Served.UndetectedLe 1 0 WeightSecurity.ToyServed.honestRun := by
   classical
   intro θ r
@@ -530,7 +482,6 @@ theorem honest_undetected : Served.UndetectedLe 1 0 WeightSecurity.ToyServed.hon
     rcases hw with rfl | rfl <;> exact hd
   · simp [Served.lead] at h
 
-/-- The thief steals the weights from the leaking run on every coin. -/
 theorem leak_steals (z : WeightSecurity.ToyServed.W × Unit) : value (fun l => WeightSecurity.ToyServed.Stolen
     (WeightSecurity.ToyServed.gen z.1) (WeightSecurity.ToyServed.thief.out z.2
       (Served.view WeightSecurity.ToyServed.thief 0 z.2 l 2)))
@@ -541,7 +492,6 @@ theorem leak_steals (z : WeightSecurity.ToyServed.W × Unit) : value (fun l => W
   simp [WeightSecurity.ToyServed.Stolen, WeightSecurity.ToyServed.gen, WeightSecurity.ToyServed.thief, Served.view,
     Served.reply, Served.count, Outsider.view]
 
-/-- The leaking run's releases change one slot per window, which has one incorrect proof block. -/
 theorem leak_local (z : WeightSecurity.ToyServed.W × Unit) : value (fun l => ¬ Served.Local WeightSecurity.ToyServed.C 1
     WeightSecurity.ToyServed.thief 0 (WeightSecurity.ToyServed.gen z.1) z.2 l)
     (WeightSecurity.ToyServed.leakRun (WeightSecurity.ToyServed.gen z.1) z.2) = 0 := by
@@ -565,7 +515,6 @@ theorem leak_isolated (z : WeightSecurity.ToyServed.W × Unit) : value (fun l =>
   le_antisymm ((value_mono (fun l hl hloc => hl (Served.isolated_of_local WeightSecurity.ToyServed.C 1
     WeightSecurity.ToyServed.thief 0 _ _ l hloc)) _).trans_eq (leak_local z)) zero_le
 
-/-- The toy's covert capacity at one changed unit: `16` values, `3` names and `3` halts. -/
 theorem rpow_bits :
     (2 : ℝ) ^ servedBits Unit Unit (Fin 16) Unit 2 (1 * 0 + (0 + 1) * Fintype.card Unit) = 144 := by
   rw [rpow_servedBits]

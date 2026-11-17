@@ -1,9 +1,3 @@
-/-
-What the rows of the frame-v3 read's small gadgets force: a list's `mapM` entry by entry (`sound_mapM_getD`), the AND
-tree and the digest comparison (`sound_eqDigest`), one bit of the layouts' selection (`sound_selectGo`, whose sum
-telescopes to the selected layout's bit, `selV_telescope`) and the flags (`sound_flags`: flag `j` is set iff the hidden
-number is at least `2 ^ (8 (j + 1))`).
--/
 module
 
 public import Proofs.ResourceAccounting.ReadUnit.Frame.Bytes
@@ -17,7 +11,7 @@ open FlockSoundness.Discharge.Hm
 open Flock.ReadNet Flock.ReadNet.Frame
 open ResourceAccounting.ReadUnit.Gates
 
-/-! ## `mapM` -/
+/-! What the rows of the frame-v3 read's small gadgets force. -/
 
 theorem sound_mapM_getD {β γ : Type} (d : γ) (f : β → M γ) (Q : (Var → Bool) → β → γ → Prop)
     (hf : ∀ x, Sound (f x) fun z r => Q z x r) :
@@ -33,13 +27,9 @@ theorem sound_mapM_getD {β γ : Type} (d : γ) (f : β → M γ) (Q : (Var → 
     | zero => simpa using hr
     | succ i => simpa using hall i (by simpa using hi)
 
-/-! ## The body's constant bits -/
-
-/-- The cached constant bits hold their values at `z`. -/
 def ConstsOk (z : Var → Bool) (c : Consts) : Prop :=
   (∀ f, c.1 = some f → ev z f = false) ∧ ∀ f, c.2 = some f → ev z f = true
 
-/-- With `BL.constant` a constant form, the constant bits are `pure`: the cache gains only constant forms. -/
 theorem constBits_constForm (c : Consts) (v w : ℕ) : ∃ c' : Consts, constBits constForm c v w =
       pure (c', (List.range w).map fun j => if v.testBit j then c'.2.getD Lin.one else c'.1.getD Lin.zero) ∧
     (∀ f, c'.1 = some f → f = Lin.const false ∨ c.1 = some f) ∧
@@ -49,7 +39,6 @@ theorem constBits_constForm (c : Consts) (v w : ℕ) : ∃ c' : Consts, constBit
     exact ⟨_, rfl, fun f hf => by first | exact Or.inr hf | exact Or.inl (Option.some.inj hf).symm,
       fun f hf => by first | exact Or.inr hf | exact Or.inl (Option.some.inj hf).symm⟩
 
-/-- **The constant bits** (`_body.const` over `BL.constant` in a flat net): `v`'s low `w` bits. -/
 theorem sound_constBits (c : Consts) (v w : ℕ) : Sound (constBits constForm c v w) fun z r =>
     ConstsOk z c → ConstsOk z r.1 ∧ evs z r.2 = (List.range w).map v.testBit ∧ r.2.length = w := by
   obtain ⟨c', he, h1, h2⟩ := constBits_constForm c v w
@@ -76,8 +65,6 @@ theorem sound_constBits (c : Consts) (v w : ℕ) : Sound (constBits constForm c 
   refine List.map_congr_left fun j _ => ?_
   simp only [Function.comp_apply]
   split <;> rename_i hj <;> simp [hj, g0, g1]
-
-/-! ## The AND tree and the comparison -/
 
 theorem sound_andPairs : ∀ l : List Lin, Sound (andPairs l) fun z r =>
     r.length = (l.length + 1) / 2 ∧ ((∀ f ∈ r, ev z f = true) ↔ ∀ f ∈ l, ev z f = true)
@@ -121,7 +108,6 @@ theorem map_eq_of_zip {α β : Type} (f : α → β) :
     rw [List.map_cons, List.map_cons, hp (a, a') (by simp),
       map_eq_of_zip f (by simpa using h) fun p hp' => hp p (List.mem_cons_of_mem _ hp')]
 
-/-- **The comparison** (`LmsEqual_v1{N = 64}`): whenever its rows hold, its bit is set only where the two digests agree. -/
 theorem sound_eqDigest (x y : List Word) : Sound (eqDigest x y) fun z r =>
     Shaped 8 x → Shaped 8 y → ev z r = true → wordsDigest z x = wordsDigest z y := by
   refine Sound.mono (sound_andReduce _) fun z r h hx hy hr => ?_
@@ -137,9 +123,6 @@ theorem sound_eqDigest (x y : List Word) : Sound (eqDigest x y) fun z r =>
   simp only [wordsDigest, evs, List.map_flatten]
   exact congrArg _ (congrArg _ hw)
 
-/-! ## The selection -/
-
-/-- `_select`'s sum over values: `m`, then for each flag `z` and adjacent bits `(a, b)`, `z (a ⊕ b)` added. -/
 def selV : Bool → List Bool → List (Bool × Bool) → Bool
   | m, z :: zs, (a, b) :: ps => selV (m ^^ (z && (a ^^ b))) zs ps
   | m, _, _ => m
@@ -174,8 +157,6 @@ theorem selV_false (m : Bool) : ∀ (k : ℕ) (ps : List (Bool × Bool)), selV m
   | k + 1, (a, b) :: ps => by
     rw [List.replicate_succ, selV, Bool.false_and, Bool.xor_false, selV_false m k ps]
 
-/-- **The sum telescopes**: under flags whose first `k` are set and the rest clear, the sum over adjacent bits of
-`c :: cs` is its bit `k`. -/
 theorem selV_telescope : ∀ (k r : ℕ) (c : Bool) (cs : List Bool), k ≤ cs.length →
     selV c (List.replicate k true ++ List.replicate r false) ((c :: cs).zip cs) = (c :: cs).getD k false
   | 0, r, c, cs, _ => by simp [selV_false]
@@ -194,8 +175,6 @@ theorem map_zip_tail (z : Var → Bool) : ∀ col : List Lin,
     simp only [List.tail_cons, List.zip_cons_cons, List.map_cons, evs] at this ⊢
     rw [this]
 
-/-- **One bit of the selection**: under flags holding `k` ones then zeros, with `k` below the layouts' count, the
-selected bit holds layout `k`'s. -/
 theorem sound_selectBit (fl col : List Lin) : Sound (selectBit fl col) fun z r => ∀ k s : ℕ,
     evs z fl = List.replicate k true ++ List.replicate s false → k < col.length →
       ev z r = ev z (col.getD k Lin.zero) := by
@@ -208,9 +187,6 @@ theorem sound_selectBit (fl col : List Lin) : Sound (selectBit fl col) fun z r =
     rw [selV_telescope k s _ _ (by simp at hk ⊢; omega)]
     exact getD_evs z (c :: cs) k
 
-/-! ## The flags -/
-
-/-- Whether any of bits `lo … hi - 1` of `bits` is set at `z`. -/
 def anyFrom (z : Var → Bool) (bits : List Lin) (lo hi : ℕ) : Bool :=
   (List.range' lo (hi - lo)).any fun i => ev z (bits.getD i Lin.zero)
 
@@ -236,7 +212,6 @@ theorem sound_orL (a b : Lin) : Sound (orL a b) fun z r => ev z r = (ev z a || e
   rw [ev_xor, ev_xor, hr]
   cases ev z a <;> cases ev z b <;> rfl
 
-/-- The flags' OR chain over bits `t + 7, …, 8`, the bits above it being `t + 8 … N - 1`. -/
 theorem sound_flagsGo (bits : List Lin) (N : ℕ) : ∀ (t : ℕ) (acc : Option Lin) (out : List Lin),
     Sound (flagsGo bits t acc out) fun z r => t + 8 ≤ N → acc.elim false (ev z) = anyFrom z bits (t + 8) N →
       evs z r = (List.range ((t + 7) / 8)).map (fun j => anyFrom z bits (8 * (j + 1)) N) ++ evs z out
@@ -264,7 +239,6 @@ theorem sound_flagsGo (bits : List Lin) (N : ℕ) : ∀ (t : ℕ) (acc : Option 
       rw [hr, anyFrom_step z bits (show t + 8 < N by omega), show t + 8 + 1 = t + 1 + 8 by omega, ← hacc]
       exact Bool.or_comm _ _
 
-/-- **The flags** (`frame_v3._flags`): flag `j < n - 1` is set iff bits `8 (j + 1) … 8 n - 1` of `bits` have one set. -/
 theorem sound_flags (bits : List Lin) (n : ℕ) : Sound (flags bits n) fun z fl => 1 ≤ n →
     evs z fl = (List.range (n - 1)).map fun j => anyFrom z bits (8 * (j + 1)) (8 * n) := by
   refine Sound.mono (sound_flagsGo bits (8 * n) _ none []) fun z fl h hn => ?_

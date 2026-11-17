@@ -3,18 +3,7 @@ module
 public import Definitions.Slowdown.Guarantees.Layered
 public import Proofs.Slowdown.Threads
 
-/-!
-# Proofs that keyed circuits are threaded
-
-Fix a small subcircuit `R` and a thread `t`. Following keys from any value of `t` in `R` reaches either a value of `t`
-that `R` reads (where the path leaves `R`) or a stop in `R` (`walk`). Each fan-in read of a root in `R` does so too, and
-two fan-in reads never reach the same value, so a root of `t` in `R` gives `d ≤ #(t's reads) + #(t's lookups in R)`, by
-induction down the roots (`root_reads`). The lookups of `t` in `R` read disjoint columns of fresh inputs, so `R` holds
-at most `E` of them when it reads less than `(E + 1) · b` bits (`lookupsIn_bits`). A subcircuit that reads fewer than
-`d − E` values of `t` thus holds no root of `t`, and each of `t`'s counted multiplications in `R` is charged to a read
-(at most `e` each) or to a lookup (at most `eLk` each), with a lookup costing a read of its token
-(`threaded_of_layered`).
--/
+/-! Proofs that keyed circuits are threaded. -/
 
 @[expose] public section
 
@@ -34,7 +23,6 @@ section Layered
 
 variable {c : RegisteredCircuit} {T : Threading c} {d e eLk b : ℕ}
 
-/-- The lookups of thread `t` in `R`. -/
 def lookupsIn (L : Layered T d e eLk b) (R : Finset (Fin c.D.N)) (t : Fin T.m) : Finset (Fin c.D.N) :=
   R.filter fun v => v ∈ L.lookups ∧ T.thread v = some t
 
@@ -44,7 +32,6 @@ theorem mem_lookupsIn {L : Layered T d e eLk b} {R : Finset (Fin c.D.N)} {t : Fi
   exact mem_filter
 
 open Classical in
-/-- The counted multiplications of thread `t` in `R` whose activation's key path reaches `u`. -/
 noncomputable def fiber (L : Layered T d e eLk b) (R : Finset (Fin c.D.N)) (t : Fin T.m) (u : Fin c.D.N) :
     Finset (Fin c.D.N) :=
   (T.threadMults R t).filter fun g => KeyPath L.key (L.roots ∪ L.lookups) (T.act g) u
@@ -55,21 +42,18 @@ theorem mem_fiber {L : Layered T d e eLk b} {R : Finset (Fin c.D.N)} {t : Fin T.
   unfold fiber
   exact mem_filter
 
-/-- A key path only goes down. -/
 theorem path_le (L : Layered T d e eLk b) {a u : Fin c.D.N} (h : KeyPath L.key (L.roots ∪ L.lookups) a u) :
     u ≤ a := by
   induction h with
   | refl a => exact le_rfl
   | step _ hk _ ih => exact ih.trans (c.D.reads_lt _ _ (L.key_reads _ _ hk)).le
 
-/-- A key path stays in its thread. -/
 theorem path_thread (L : Layered T d e eLk b) {a u : Fin c.D.N} (h : KeyPath L.key (L.roots ∪ L.lookups) a u) :
     T.thread u = T.thread a := by
   induction h with
   | refl a => rfl
   | step _ hk _ ih => exact ih.trans (L.key_thread _ _ hk)
 
-/-- Following keys from a value of thread `t` in `R` reaches a value of `t` that `R` reads, or a stop in `R`. -/
 theorem walk (L : Layered T d e eLk b) (R : Finset (Fin c.D.N)) (hR : R ⊆ c.D.computed) (t : Fin T.m) :
     ∀ a, a ∈ R → T.thread a = some t → ∃ u, KeyPath L.key (L.roots ∪ L.lookups) a u ∧
       (u ∈ T.threadReads R t ∨ (u ∈ R ∧ u ∈ L.roots ∪ L.lookups)) := by
@@ -90,8 +74,6 @@ theorem walk (L : Layered T d e eLk b) (R : Finset (Fin c.D.N)) (hR : R ⊆ c.D.
         simp only [Circuit.into, mem_filter, mem_univ, true_and]
         exact ⟨hkR, a, haR, hkr⟩
 
-/-- **A root costs `d`**: a subcircuit that holds a root of thread `t` reads `d` values of `t` or holds lookups of `t`
-to make up the difference. -/
 theorem root_reads (L : Layered T d e eLk b) (R : Finset (Fin c.D.N)) (hR : R ⊆ c.D.computed) (t : Fin T.m) :
     ∀ r, r ∈ R → r ∈ L.roots → T.thread r = some t →
       d ≤ (T.threadReads R t).card + (lookupsIn L R t).card := by
@@ -137,7 +119,6 @@ theorem root_reads (L : Layered T d e eLk b) (R : Finset (Fin c.D.N)) (hR : R �
             card_le_card_of_injOn f (fun p hp => mem_coe.2 (hall p (mem_coe.1 hp))) hinj
         _ ≤ (T.threadReads R t).card + (lookupsIn L R t).card := card_union_le _ _
 
-/-- **Lookups cost bits**: the lookups of a thread in `R` read disjoint columns of fresh inputs, `b` bits each. -/
 theorem lookupsIn_bits (L : Layered T d e eLk b) (R : Finset (Fin c.D.N)) (hR : R ⊆ c.D.computed) (t : Fin T.m) :
     (lookupsIn L R t).card * b ≤ freshInput c R := by
   classical
@@ -167,7 +148,6 @@ theorem lookupsIn_bits (L : Layered T d e eLk b) (R : Finset (Fin c.D.N)) (hR : 
         unfold freshInput Circuit.width
         exact sum_le_sum_of_subset hsub
 
-/-- **Keyed circuits are threaded.** -/
 theorem threaded_of_layered (L : Layered T d e eLk b) (Γ : ℕ) (S : ℝ) (E : ℕ) (hS : S < ((E + 1) * b : ℕ)) :
     T.Threaded Γ S (d - E) (e + E * eLk) := by
   classical

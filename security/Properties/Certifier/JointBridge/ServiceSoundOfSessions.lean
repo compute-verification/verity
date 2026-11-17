@@ -3,27 +3,7 @@ module
 public import Definitions.Pouw.Assumptions.TS
 public import Properties.Pouw.MonitoringPeriod
 
-/-!
-# PoUW's proof system soundness from its proof layer
-
-`Properties.Pouw.MonitoringPeriod.ServiceSound` bounds, in each window, the event that PoUW's deployed check
-(`PouwCheck.protocol.check`) accepts the window and some unit it publishes as sampled (`Public.drawn`) has an opening that
-fails its relation. `ResourceAccounting.TS.ProofLayer.SoundAt` bounds each proof of a window's proof layer the same way, and
-`ResourceAccounting.Guarantees.TS.SessionSoundAt` concludes it of a layer whose proofs are Flock sessions. This module states
-the step between the two:
-
-* `Sessions.layer`: a window verdict `acc` with its sampled proof blocks (`drawn`), each unit `u` read at its key `key u` of the
-  window's openings, as a proof layer of `n_π` proofs a window. Proof `i` is one session: `sessOf x w u` is the session
-  that proves sampled proof block `u`, and the session's statement is its sampled proof blocks' relations. Every proof of a window is
-  accepted where the verdict accepts the window;
-* `Sessions.checkLayer`: that layer at PoUW's check, its verdict the check's acceptance and its sampled proof blocks the check's
-  `Public.drawn`;
-* `CheckProofSystemSound`: the check layer's soundness at `δ` (the named premise
-  `ResourceAccounting.Assumptions.TS.ProofSoundAt`) gives `ServiceSound` at `n_π · δ`, a union bound over the window's
-  sessions. With one session a window (`n_π = 1`, the window's staged statement in one session) the bound is `δ`;
-* `CheckProofSystemSoundHonest`, `CheckProofSystemSoundNontrivial`: some period of the deployed check meets the
-  premise with the check accepting on every path, and some period breaks the conclusion at `0`.
--/
+/-! PoUW's proof system soundness from its proof layer. -/
 
 @[expose] public section
 

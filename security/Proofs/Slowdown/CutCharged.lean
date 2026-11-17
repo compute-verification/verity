@@ -2,25 +2,7 @@ module
 
 public import Proofs.Slowdown.CutWitness
 
-/-!
-# Blocks charged whole: what they hold, `HECharged`, and that it says something
-
-A set of gates holds whole at most its own gates over the fewest gates of a MAC, MACs being disjoint
-(`card_inside_mul_le`): what a block charged whole holds.
-
-`HECharged` is the count over a set `G` of blocks with (H) at each block's own reads (`bound_on_rows`), at one `β_x`.
-Each block of `G` reads at most `k` gates outside `θ`, and (H) at `k` holds at what the block reads (`hardness_mono`),
-so the count applies with `S / (β_w β_x)` for its `Q`. Its two other terms are the statement's: the MACs a block
-outside `G` holds, matmul by matmul, are the MACs each of whose gates is in the block (`card_whole_eq`), which is
-`Work.inside`; and the pairs of a block of `G` and an output with a wire in it are at most `O` (`outOn_le`). MACs are
-disjoint, so the MACs a block outside `G` holds whole take `γ` of its at most `c` gates each (`card_inside_mul_le`):
-the second bound.
-
-`HECharged_honest` and `HECharged_nontrivial` are at the toy (`Toy`). With a block for each MAC, the first under the
-budget `k = 2` and the second charged whole, `HECharged`'s premises hold together. With one block holding both MACs
-and no block charged, the block reads three gates, so none of `ReadsOn`'s three limits holds at `k = 0`, `T = 0` and
-`S = 0`, where the bound is `0`, below `N = 2`.
--/
+/-! Blocks charged whole: what they hold, and `HECharged`. -/
 
 @[expose] public section
 
@@ -28,7 +10,6 @@ namespace Slowdown.Cut.SecurityProofs
 
 open Verity Finset
 
-/-- A set `A` of gates holds whole at most `|A| / γ` MACs of at least `γ` gates each: MACs are disjoint. -/
 theorem card_inside_mul_le {C : Circuit} {ι : Type} [Fintype ι] (W : Work C ι) (A : Finset (Fin C.N)) {γ : ℕ}
     (hγ : ∀ s, γ ≤ (W.mac s).card) : (W.inside A).card * γ ≤ A.card :=
   calc (W.inside A).card * γ = ∑ _s ∈ W.inside A, γ := by rw [sum_const, smul_eq_mul]
@@ -36,7 +17,6 @@ theorem card_inside_mul_le {C : Circuit} {ι : Type} [Fintype ι] (W : Work C ι
     _ = ((W.inside A).biUnion W.mac).card := (card_biUnion fun s _ t _ hst => W.mac_disjoint s t hst).symm
     _ ≤ A.card := card_le_card (biUnion_subset.2 fun _ hs => (mem_filter.1 hs).2)
 
-/-- (H) at a budget holds at every smaller one. -/
 theorem hardness_mono {ρ V : Type} [Fintype ρ] [DecidableEq V] {d : RegisteredCircuit}
     {A : ρ → Finset (Finset (Fin d.D.N))} {val : Finset (Fin d.D.N) → V} {β : ρ → ℝ} {k k' : ℕ}
     (h : Assumptions.Hardness d A val β k) (hk : k' ≤ k) : Assumptions.Hardness d A val β k' :=
