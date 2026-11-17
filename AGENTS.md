@@ -57,7 +57,7 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
   rules below still call an integration. `adapters/vllm/` (`verity_vllm`) builds each served workload's circuit and
   commits its values while serving. It sits on `adapters/torch/` (`verity_torch`), the translator from PyTorch to
   circuits, which also traces a training step.
-- `demos/`: one file per demo, the configuration `verity run` reads (`demos/README.md`, one table of them); a demo holds no
+- `applications/`: one file per demo, the configuration `verity run` reads (`applications/README.md`, one table of them); a demo holds no
   code.
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
   end to end, GPU probes, and `benchmarks/census/`, data that `verity` only takes as parameters.
