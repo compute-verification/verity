@@ -13,7 +13,7 @@ import Proofs.Pous.Thm1.Theorem1iTimed
 
 namespace Pous.EndToEnd.SecurityProofs
 
-open MemoryChallenger
+open MemoryAttester
 open scoped ENNReal
 
 theorem size_bytesOf {n : ℕ} (x : Bytes n) : (bytesOf x).size = n := by
@@ -376,13 +376,5 @@ theorem endToEndRing_nontrivial :
   rw [pr_eq_one fun _ => trivial]
   exact not_le.2 bound_lt_one
 
-/-- **`endToEndRingDeployed` holds at the honest instance**: `endToEndRing_honest`, its event being `endToEndRing`'s. -/
-theorem endToEndRingDeployed_honest : HonestPassesAccepts := honestPassesAccepts
-
-/-- **`endToEndRingDeployed` is nontrivial**: `endToEndRing_nontrivial`, its bound being `endToEndRing`'s. -/
-theorem endToEndRingDeployed_nontrivial :
-    ¬ pr (fun _ : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams => True) ≤
-      ENNReal.ofReal Params.δ + Params.εMax :=
-  endToEndRing_nontrivial
 
 end Pous.EndToEnd.SecurityProofs

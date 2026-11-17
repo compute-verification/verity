@@ -21,7 +21,7 @@ from verity.device import load_card, rate
 sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "benchmarks" / "one_stage")))
 import zk_cost as Z
 
-CARD_FILES = Path(__file__).resolve().parents[3] / "hardware/cards"
+CARD_FILES = Path(__file__).resolve().parents[3] / "calibration/hardware/cards"
 
 K, FIXED_S, MARGINAL_S = 6144, 2.0, 1e-3
 PUBLIC_INPUTS = "refused: public input ports (--public-inputs): a statement form the soundness proof does not cover"

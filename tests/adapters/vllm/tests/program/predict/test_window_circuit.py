@@ -980,7 +980,7 @@ NORM, TAIL = "RMSNormFusedCuda_v2{N=64}", "RMSNormFusedCudaTail_v1{N=64}"
 
 
 def _add(at: int) -> str:
-    return f"RMSNormFusedCudaAdd_v1{{N=64,C=16,AT={at}}}"
+    return f"RMSNormFusedCudaAdd_v2{{N=64,C=16,AT={at},R=8}}"
 
 
 @pytest.fixture(scope="module")
@@ -990,7 +990,7 @@ def split():
 
 def test_a_fused_norm_read_at_another_row_count_is_cut_at_its_residual_add_in_order_of_at(split):
     """The norm after o_proj reads its x as o_proj's 16 rows, so the norm after down_proj (the next layer's input norm and the
-    final norm), whose x is down_proj's 32, is cut at its residual add: 4 `RMSNormFusedCudaAdd_v1{N=64, C=16, AT}` units, part
+    final norm), whose x is down_proj's 32, is cut at its residual add: 4 `RMSNormFusedCudaAdd_v2{N=64, C=16, AT, R=8}` units, part
     AT reading x's elements [16·AT, 16·(AT+1)) as 8 of down_proj's rows and res whole, and `RMSNormFusedCudaTail_v1{N=64}`,
     its r row j part AT = j's sum and its w a weight read. The GEMMs read the tail's normed row and the next residual add its
     r, as they read v2's. A first key block whose keys' values are two value-GEMM rows each is `AttnBlockFirst_v2{VS=8}`, its
