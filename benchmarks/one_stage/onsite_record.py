@@ -1,4 +1,4 @@
-"""onsite-record: the onsite demo's record of one served run (``record/onsite.json``, `FORMAT`): every verdict its run of
+"""onsite-record: the onsite application's record of one served run (``record/onsite.json``, `FORMAT`): every verdict its run of
 record needs, the network attester's bound term by term, and that bound over each monitoring period for the serving
 node, a datacenter and the world. It reads only the run's public $OUT and decides nothing:
 
@@ -50,7 +50,7 @@ whose --registered file the audit completed at the window's committed roots and 
 reporting exactly its reads (the audit's published record, `AUDIT`), and lists every other drawn member as not
 credited, by name, with why; ``missing`` where the record states no completion, and where SPOT's verdict is
 not established, which credits none (`UNESTABLISHED_CREDIT`). ``of_record`` holds when every verdict it reads accepted
-and every drawn member is credited, the condition for the demo's run of record, naming its composite of record by id (``composite``), the verdicts not established, the
+and every drawn member is credited, the condition for the application's run of record, naming its composite of record by id (``composite``), the verdicts not established, the
 members not credited and the verdicts it doesn't read (``not_claimed``: PoUW's, `NOT_CLAIMED`, listed as it is, missing
 and development where its row is, and under a composite without PoUW remote's too, `NOT_CLAIMED_WITHOUT_POUW`), and
 the verified compute it credits, none (``verified_compute``, `POUW`); ``placement`` is the network attester's

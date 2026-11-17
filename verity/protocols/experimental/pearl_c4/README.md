@@ -6,7 +6,7 @@ verifier can recompute a sampled tile bit for bit. Pearl-C does that on FP8 prod
 scale group (`mma.sync kind::mxf4nvf4`): the noise enters inside one FP4 atom per element, one noisy cast forms each
 operand, and the BF16 clean-up is checked as in Pearl-C.
 
-It is a protocol being tried: no demo lists it, and its guarantee rests on a premise that is stated and not proved.
+It is a protocol being tried: no application lists it, and its guarantee rests on a premise that is stated and not proved.
 PoUW loads nothing of `experimental/`: its registry names the scheme and refuses it with `NotImplementedError`.
 
 ## Try it

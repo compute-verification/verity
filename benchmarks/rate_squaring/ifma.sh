@@ -3,7 +3,8 @@
 # for G = 1, 2 and 3 vectors a thread,
 # each compiler's build (gcc, and clang where the node has it) gated against
 # Python's pow (384 words at K = 1, 777 and 1,000) before it is timed: on one thread, on one thread a physical core of
-# the mask, and on every CPU of the mask. Results in $RESEARCH_RUN_DIR/out.
+# the mask, and on every CPU of the mask. Results in $RESEARCH_RUN_DIR/out. result.py then writes the run's result.json, the
+# fastest timing as metrics.toml's number where every build passed its gate (else exit 5).
 #
 #   RESEARCH_RUN_DIR=DIR taskset -c 48-95 bash benchmarks/rate_squaring/ifma.sh
 set -uxo pipefail
@@ -52,3 +53,4 @@ for cc in "${CCS[@]}"; do
     fi
   done
 done
+uv run -q python $D/result.py "$O"
