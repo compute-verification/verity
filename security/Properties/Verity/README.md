@@ -73,7 +73,7 @@ composite that lists v0 and not the rows check, would read no case at the plain 
 | | | `Verity.rowsCheck` (`verity/inference-only/rows/v1`): the rows check, not yet compiled | | yes | |
 | PoUS | `PousSound` | `PousCheck.RunProtocol.protocol` (`verity/pous/p2/v4/run`) | | | yes |
 | PoUB-P2, on PoUS's store | `BandwidthAuditSound` | `Poub.P2Protocol.protocol` (`verity/remote-bandwidth/p2/v0`) | | | yes |
-| the network attester | `NetworkAttesterSound` | `NetworkVerifier.Period.protocol` (`verity/certifier/v0`) | | | yes |
+| the network attester | `NetworkAttesterSound` | `NetworkCheck.Period.protocol` (`verity/certifier/v0`) | | | yes |
 | the wipe | `WipeSound` | `MemoryChallenger.WipeProtocol.protocol` (`verity/wipe/v0`) | | | yes |
 
 ## How to read it

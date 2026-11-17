@@ -1814,7 +1814,7 @@ def test_auditor_record_holds_the_key_and_session_of_the_entry_whose_stretch_hol
     """A rows-form period's parameters list each session of the network attester from its start on (the period
     check's accepted case with two sessions is this shape): with two listed and the period's execution phase in the
     second's stretch, auditor-record holds the second's key and session to the auditor's record, the entry
-    NetworkVerifier.Period.entryAt picks, so it holds against a record of the second and not against one of the first."""
+    NetworkCheck.Period.entryAt picks, so it holds against a record of the second and not against one of the first."""
     first = {"key": ANOTHER, "session": "6f" * 32, "start": 0}
     params = dict(CERTIFIER, first=4, keys=[first, dict(ENTRY, start=3)])
     a = auditor_files(tmp_path / "second")
@@ -1933,7 +1933,7 @@ def test_a_period_listing_no_circuit_files_holds_auditor_listing_and_one_with_no
 
 
 #: the scan's state as V3c's audit's window commits it in its activations, the entry the period holds to the scan's
-#: state (`NetworkVerifier.Period.auditStateEntries`), and V3c's audit's docket whose window commits it
+#: state (`NetworkCheck.Period.auditStateEntries`), and V3c's audit's docket whose window commits it
 STATE_ENTRY = {"value": OR.SCAN_STATE, "root": "5a" * 64, "domain": "d5" * 64, "leaves": 64, "words": 8}
 STATED = {**NO_ADVICE, "window": {**NO_ADVICE["window"],
                                   "activations": {"program": "ab" * 64, "values": {OR.SCAN_STATE: STATE_ENTRY}}}}

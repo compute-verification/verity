@@ -108,7 +108,7 @@ quotes the warm's beside it.
     records_audit.py count --circuit FILE --bits N [--catalog MODULE ...] [--pin NAME=ROOT ...] [--pins FILE ...] [--registration FILE]
     records_audit.py period --window DIR --audit DIR --out FILE [--pin NAME=ROOT ...] [--pins FILE ...]
 
-``period``: a window's audit as one compute audit of the network attester's period (`NetworkVerifier.Period`'s rows form),
+``period``: a window's audit as one compute audit of the network attester's period (`NetworkCheck.Period`'s rows form),
 the ``audits`` entry `scan_period.rows_case` reads (`scan_zk.answers` writes the block round's in that shape): the window's
 docket (``--window``'s ``registration.json``), the population Program's descriptor the audit sampled (``--audit``'s
 ``window/program.json``, the one the docket names), the audit's one-stage answer (`served_integrity.answer`:

@@ -58,7 +58,7 @@ def test_the_select_pins_are_io_shells_select_entry_at_its_rows():
 
 
 def test_leans_pins_are_the_mirrors():
-    """`slotEntryPins` and `selectEntryPins` in `NetworkVerifier/Period/Decode.lean` are the mirror's lists, digest for digest."""
+    """`slotEntryPins` and `selectEntryPins` in `NetworkCheck/Period/Decode.lean` are the mirror's lists, digest for digest."""
     text = re.sub(r"\\\n\s*", "", PERIOD.read_text())
     for lean, pins in (("slotEntryPins", "SLOT_ENTRY_PINS"), ("selectEntryPins", "SELECT_ENTRY_PINS")):
         m = re.search(rf"^def {lean} : List String :=\s*\[(.*?)\]", text, re.M | re.S)
