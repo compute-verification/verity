@@ -4622,6 +4622,8 @@ def test_a_remote_quick_tier_runs_in_a_check_slot_on_the_machine_and_is_judged_a
     assert int(ttl) >= Q.REMOTE_WAIT_S + Q.REMOTE_TIMEOUT_S + Q.REMOTE_GRACE_S and _custody_ttl_problem(ttl, flags) is None, \
         "the custody key outlasts the run and the wait for its upload, so `research run` takes the launch"
     assert [Path(flags[i + 1]).name for i, x in enumerate(flags) if x == "--send"] == ["quick_tier.py"]
+    assert [flags[i + 1] for i, x in enumerate(flags) if x == "--env"] == ["CHECK_RUN_CORES=8", "CHECK_RUN_BOOK_GB=6"], \
+        "the tier asks its slot for 8 cores and books 6 GiB of it (slot.py's RUN_CORES_ENV and RUN_BOOK_ENV)"
     assert slot_only.through_slot(argv[argv.index("--") + 1:]), "cpu-1's launcher refuses a run whose command isn't slot.py's"
     assert json.loads((world.tmp / "slot-seen.json").read_text())[:8] == [
         "--by", "lane-1", "--wait-max", f"{Q.REMOTE_WAIT_S:g}", "--run-max", f"{Q.REMOTE_TIMEOUT_S:g}", "--", "sh"]

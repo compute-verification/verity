@@ -3891,6 +3891,10 @@ READY_NOT_STARTED = 3
 SPILL_CPUS, SPILL_MEM_GB = 4, 16
 #: the slot list of a pool on a CPU node, which slot.py takes when its run names one (`MACHINE:POOL` from `place`)
 POOL_SLOTS = "/workspace/research/locks/{pool}/slots"
+#: what a quick tier asks of its slot, in the run's environment (slot.py's RUN_CORES_ENV and RUN_BOOK_ENV, which a slot.py
+#: from before them ignores): the slot of the fewest cores with 8 or more, so an 8-core line where the machine lists one, and
+#: 6 GiB booked of its mem=, what a tier holds with room, so the rest of mem= stays free to the machine's other runs
+QUICK_ASK = {"CHECK_RUN_CORES": "8", "CHECK_RUN_BOOK_GB": "6"}
 #: a lane's own test run, which no landing needs (its candidate's full check decides whether a PR lands)
 LANE_RUN = ('`research run --on auto --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && '
             'uv run tools/check/suites.py --changed $(git fetch -q origin main && git merge-base HEAD FETCH_HEAD) --quick"`')
@@ -3951,7 +3955,7 @@ def quick_run(rid: str, on: str, wt: Path, at: str, base: str, *, merged: str | 
     """The `research run` of the quick tier at ``at`` (``wt``, a checkout of it, its `--source`) since ``base`` as run ``rid`` on
     machine ``on`` (`RemoteQuickTier`): in a check slot of the machine (of its ``pool``'s), a `--priority` one with
     ``priority``, waiting `wait_s` for it and running `timeout_s` in it; ``merged``, the PR head when ``at`` is its merge onto
-    ``base``; ``audit``, `LEAN_AUDIT` when it audits (`lean_audit`)."""
+    ``base``; ``audit``, `LEAN_AUDIT` when it audits (`lean_audit`). The run's environment names `QUICK_ASK`."""
     slot = (["env", f"CHECK_SLOTS={POOL_SLOTS.format(pool=pool)}"] if pool else []) + list(SLOT)
     job = Path(quick_tier.__file__)
     args = [*(x for d in LEAN_BUILDS for x in ("--lean", d)), "--head", at, "--base", base,
@@ -3961,6 +3965,7 @@ def quick_run(rid: str, on: str, wt: Path, at: str, base: str, *, merged: str | 
             "--run-max", f"{timeout_s:g}"]
     return [sys.executable, "-m", "research", "run", "--id", rid, "--on", on, "--project", project,
             "--source", str(wt), "--cwd", "source", "--send", str(job), "--require-result",
+            *(x for k, v in QUICK_ASK.items() for x in ("--env", f"{k}={v}")),
             "--timeout", f"{wait_s + timeout_s:g}", "--custody-ttl", str(math.ceil(wait_s + timeout_s + REMOTE_GRACE_S)),
             "--declared-output", "out/*", "--", *slot, *opts,
             "--", "sh", "-c", f'exec python3 "$RESEARCH_RUN_DIR/inputs/{job.name}" {shlex.join(args)}']
