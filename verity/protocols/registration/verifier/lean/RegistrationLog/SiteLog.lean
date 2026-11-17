@@ -7,7 +7,8 @@ public import CoreProtocol.Site
 
 The registration log the Site is folded from (`Site.Registration`, `Site.ofLog`), its entries, the digests it names
 things by (`Registration.Digests`, the deployed `Registration.sha512`), the refusals its check names, and the JSON
-`verity.device` writes for it, under `verity/registration/site/v2` and `verity/registration/genesis/v1`. The Site's
+`verity.protocols.registration.verifier.site_log` writes for it, under `verity/registration/site/v2` and
+`verity/registration/genesis/v1`. The Site's
 types, its views, the auditor's figures, the composites and the sheet's tag are the interface's (`CoreProtocol.Site`);
 the checks an entry passes are `RegistrationLog.SiteCheck`'s.
 -/
@@ -75,7 +76,7 @@ inductive Refusal
 
 end Site.Registration
 
-/-! ## The JSON `verity.device` writes, and the deployed digests -/
+/-! ## The JSON `site_log` writes, and the deployed digests -/
 
 namespace Site
 
@@ -85,7 +86,7 @@ open Flock (V)
 def SITE : String := "verity/registration/site/v2"
 def GENESIS : String := "verity/registration/genesis/v1"
 
-/-- A refusal's name in `verity.device` (`REFUSALS`): the constructor's, in kebab case. -/
+/-- A refusal's name in `site_log` (`REFUSALS`): the constructor's, in kebab case. -/
 def Registration.Refusal.name : Registration.Refusal → String
   | .previous => "previous" | .duplicateId => "duplicate-id" | .unknownRef => "unknown-ref" | .kind => "kind"
   | .sheetDigest => "sheet-digest" | .figures => "figures" | .capacity => "capacity" | .owner => "owner"
@@ -96,7 +97,7 @@ def Registration.Entry.toJson : Registration.Entry → Json
       ("locs", .arr (s.locs.map Loc.toJson).toArray), ("previous", .str p),
       ("sheets", .arr (s.sheets.map Sheet.toJson).toArray)]
 
-/-- The deployed digests: SHA-512 over the JSON `verity.device` writes, under the registration log's tags. -/
+/-- The deployed digests: SHA-512 over the JSON `site_log` writes, under the registration log's tags. -/
 def Registration.sha512 : Registration.Digests where
   sheet k := tagged SHEET k.toJson
   entry e := tagged SITE e.toJson
