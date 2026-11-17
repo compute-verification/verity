@@ -57,7 +57,7 @@ def profile_manifest(engine: Engine, *, adapter_revision: str, wheel_sha256: str
             case=case, cp=engine.cp, llm=engine.llm, wheel_sha256=wheel_sha256, vllm_commit=vllm_commit,
             adapter_revision=adapter_revision,
             interception="none (production uninstrumented: StepTrace scheduler observer + engine outputs; Inductor/Triton caches read after the run)",
-            # the header says what the engine was built with (a compiled engine used to be labelled enforce_eager True here)
+            # the header says what the engine was built with
             sampling=sampling_desc, env_flags=engine.env_flags, enforce_eager=bool(engine.kwargs.get("enforce_eager", False)),
             # the manifest's `parallelism.tensor_parallel_size` / `engine_kwargs.tensor_parallel_size` must say what the
             # engine was built with (the default 1 made a TP=2 rank's header claim TP=1; only the `backends.all_reduce` probe differed)

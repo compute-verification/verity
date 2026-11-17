@@ -96,8 +96,8 @@ def _body(B, S, row):
 
 WardenRowIdentity = CompositeDefinition(
     "WardenRowIdentity", 1, ("B",), _signature, _body, conformance="exact-model-tested", register=False,
-    doc="WardenRowIdentity{B}: one network certifier bucket row's 8·B bits, each through two NOTs: the toy unit whose port opens "
-        "a row of the network certifier's signed root (network_attester_zk.py)")
+    doc="WardenRowIdentity{B}: one network attester bucket row's 8·B bits, each through two NOTs: the toy unit whose port opens "
+        "a row of the network attester's signed root (network_attester_zk.py)")
 
 
 # --- the run ----------------------------------------------------------------------------------------------------------
@@ -128,7 +128,7 @@ def attestation(run: Path, n: int) -> SimpleNamespace:
     head, dom = WR.check_registration(doc["registration"], key, session, params, link, direction, w)
     opening = WR.Cells.of(link, direction, records[w], params, session, salts, wiring_salt)
     if opening.head != head:
-        raise SystemExit(f"window {w}: the network certifier's rows and wiring under its salts aren't its registered head")
+        raise SystemExit(f"window {w}: the network attester's rows and wiring under its salts aren't its registered head")
     units = WR.Units.span(q, pads, n)
     placed = opening.wiring.place(params, units.cells)
     B = params.cell_bytes
@@ -458,8 +458,8 @@ def prove(a) -> int:
         summary["unsigned_registration"] = f"refused: {e}"
     log(f"{at.head.value}: {N} rows of {B} bytes, root {at.head.root.hex()[:16]}; the Program's units read connection "
         f"{at.connection}'s cells {at.pads} … {at.pads + a.units - 1} (units {at.units.digest().hex()[:16]}) at rows "
-        f"{at.positions}, slots {at.slots} ({at.data_rows} data); the network certifier's cost {at.cost}; the prover's own root "
-        f"under the network certifier's certificate: {summary['unsigned_registration']}")
+        f"{at.positions}, slots {at.slots} ({at.data_rows} data); the network attester's cost {at.cost}; the prover's own root "
+        f"under the network attester's certificate: {summary['unsigned_registration']}")
     M = _one_stage()
     sg = stager(M, B, a.units, out / "stager")
     check_shape(M, sg)
@@ -473,7 +473,7 @@ def prove(a) -> int:
                                                    "units": m["units"], "predicted_opens": m["opens"],
                                                    "predicted": m["predicted"] or "accepted"}
         log(f"staged {name}: port {m['port']} registered, {m['ands']} ANDs, units {m['units'][:16]}, rows that open "
-            f"the network certifier's root (host) {sum(m['opens'])}/{len(m['opens'])}; the host's read: "
+            f"the network attester's root (host) {sum(m['opens'])}/{len(m['opens'])}; the host's read: "
             f"{m['predicted'] or 'accepted'}")
         if (m["predicted"] is None) != MEMBERS[name][1] or WHY.get(name, "") not in (m["predicted"] or ""):
             raise SystemExit(f"{name}: the host's read of its statement ({m['predicted'] or 'accepted'}) is not the "
@@ -507,7 +507,7 @@ def prove(a) -> int:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="network_attester_zk.py", description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="command", required=True)
-    p = sub.add_parser("prove", help="the toy proof block's ports registered against the network certifier's egress root, "
+    p = sub.add_parser("prove", help="the toy proof block's ports registered against the network attester's egress root, "
                                      "proved --zk")
     p.add_argument("--run", required=True, type=Path, help="a network-certifier-serve run's directory")
     p.add_argument("--bin")

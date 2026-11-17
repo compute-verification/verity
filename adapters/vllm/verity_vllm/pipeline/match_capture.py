@@ -266,7 +266,8 @@ def main(args: Options) -> None:
     # before any run; the plan's hooks go in beside the observer below (counts / shapes only).
     from verity_vllm.acquire.install import IncompletePlan
     from verity_vllm.acquire.stage import MANIFEST_ENV, plan_at_stage
-    from verity_vllm.observe.capture import Capture, ObserverConfig, make_header
+    from verity_vllm.observe.capture import Capture, ObserverConfig
+    from verity_vllm.observe.capture_types import make_header
 
     man_path = args.acquisition_manifest or settings.raw(MANIFEST_ENV) or None
     try:

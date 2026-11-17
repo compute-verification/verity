@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# `bash adapters/vllm/tools/served_run/run.sh [window|commit|serve] [--dry-run] [FLAG...]`: one of the vLLM served run's runs,
+# `bash adapters/vllm/tools/served_run/run.sh [window|commit|serve] [--dry-run] [--development] [FLAG...]`: one of the vLLM served run's runs,
 # started by `research run` on the node placement.toml places it on, with that node's paths and the run's own variables as
 # its environment, and the model the served run's workload names (placement.toml's `row`, the integration's file adapters/vllm/workloads/<row>.json, fetched by
 # its art id and checked against that directory's SHA256SUMS: `model`, `case` and `engine.revision`):
@@ -16,7 +16,9 @@
 #   commit   once per workload: its Build, Match and Commit with its sealed replay bundle (commit.sh), a workload dir under
 #            LLAMA_ROOT (placement.toml's COMMIT_RUN names the one `window` and `serve` use)
 #   serve    the endpoint alone, serving until UNTIL (serve.sh)
-# Further FLAGs go to `research run` (`--env WC_TIMEOUT=45m`, `--env PP_CHALLENGER=...`); --dry-run prints the command and
+# A run with a coins table (the window's) takes the gate's coins, the auditor's challenger's, sending the files its
+# `send` names from the tree's root; --development takes its development coins instead, and the run says so.
+# Further FLAGs go to `research run` (`--env WC_TIMEOUT=45m`); --dry-run prints the command and
 # starts nothing. It returns once the run starts, 0, or 1 where it can't start it: `research status RUN` checks on it.
 # A placement value's ${NAME} is an address, which this environment holds and no file does (the window run's H1_GATE
 # names VY_CHALLENGER_1_HOST, the challenger host's): with NAME unset nothing starts, unless a FLAG sets that value.
@@ -25,9 +27,11 @@ HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 cd "$HERE/../../../.."
 RUN=window
 case ${1:-} in window|commit|serve) RUN=$1; shift;; esac
-DRY=0
-if [ "${1:-}" = --dry-run ]; then DRY=1; shift; fi
-mapfile -t ARGV < <(python3 - "$HERE" "$RUN" "$@" <<'EOF'
+DRY=0 DEV=0
+while :; do
+  case ${1:-} in --dry-run) DRY=1; shift;; --development) DEV=1; shift;; *) break;; esac
+done
+mapfile -t ARGV < <(python3 - "$HERE" "$RUN" "$DEV" "$@" <<'EOF'
 import hashlib
 import json
 import os
@@ -37,14 +41,22 @@ import sys
 import tomllib
 from pathlib import Path
 
-here, run = Path(sys.argv[1]), sys.argv[2]
+here, run, dev = Path(sys.argv[1]), sys.argv[2], sys.argv[3] == "1"
 script = {"window": "benchmarks/one_stage/served_verdicts.sh", "commit": "adapters/vllm/tools/served_run/commit.sh", "serve": "adapters/vllm/tools/served_run/serve.sh"}[run]
 placement = tomllib.loads((here / "placement.toml").read_text())
 r = placement["run"][run]
 node = placement["node"][r["node"]]
+if dev and "development" not in r.get("coins", {}):
+    sys.exit(f"run.sh: the {run} run takes no coins, so --development chooses nothing: drop it")
+coins = r.get("coins", {}).get("development" if dev else "gate", {})
+for name in coins.get("send", []):
+    if not Path(name).is_file():
+        sys.exit(f"run.sh: the {run} run takes the gate's coins, the auditor's challenger's, and sends {name}, which is not at "
+                 f"the tree's root: put it there (the deployment's challenger-key/v1 record, labelled `challenger-key current`), "
+                 f"or choose development coins with --development")
 placed = {**{k: v for k, v in node.items() if not isinstance(v, dict)}, **(node.get("serving", {}) if run != "commit" else {}),
-          **r.get("env", {})}
-flags = {a.split("=", 1)[0] for f, a in zip(sys.argv[3:], sys.argv[4:]) if f == "--env"}
+          **r.get("env", {}), **coins.get("env", {})}
+flags = {a.split("=", 1)[0] for f, a in zip(sys.argv[4:], sys.argv[5:]) if f == "--env"}
 for key, value in list(placed.items()):
     unset = [name for name in re.findall(r"\$\{(\w+)\}", str(value)) if not os.environ.get(name)]
     if unset and key in flags:
@@ -67,7 +79,9 @@ doc = json.loads(f.read_text())
 env = {**placed, "REPO": doc["model"], "REV": doc["engine"]["revision"], "ROLE": doc["case"],
        "ROW": row if run == "commit" else f"{node['LLAMA_ROOT']}/{node['COMMIT_RUN']}/{row}"}
 print("\n".join(["research", "run", "--on", r["node"], "--project", "verity", "--source", ".", *r["research"],
-                 *(x for k, v in env.items() for x in ("--env", f"{k}={v}")), "--", *r.get("wrap", []), "bash", script]))
+                 *(x for name in coins.get("send", []) for x in ("--send", name)),
+                 *(x for k, v in env.items() for x in ("--env", f"{k}={v}")), "--", *r.get("wrap", []), *coins.get("wrap", []),
+                 "bash", script]))
 EOF
 )
 [ "${#ARGV[@]}" -gt 0 ] || exit 1

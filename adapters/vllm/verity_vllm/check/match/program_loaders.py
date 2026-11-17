@@ -130,11 +130,11 @@ def _finish_oracle(d: str, label: str, pj: dict, desc: dict, rows: list[dict], c
     """The rest of load_oracle over the retained rows."""
     # weight layout: the WEIGHTS parameter's offset ranges -> weight name from the hints ("module/param.name"). The fold lays
     # out one prompt parameter per request followed by the weights (`fold._header`): weights = param n_input_nodes-1 (== 1
-    # only at B=1; the hard-coded 1 read request 1's PROMPT as the weight map at B>1).
+    # only at B=1).
     n_in = pj.get("n_input_nodes", 2)
     # the weights Record is the LAST root parameter (fold contract) -- its index is the largest `p` index any instance reads,
     # not `n_input_nodes - 1`: a Record that is not width-homogeneous (FP8: e4m3 weights, f32 block scales, bf16 norms) is encoded as
-    # ONE Input node per leaf field (436 for Qwen3-4B-FP8 at B=1), so the node count no longer says how many prompt parameters there are.
+    # ONE Input node per leaf field (436 for Qwen3-4B-FP8 at B=1), so the node count does not say how many prompt parameters there are.
     p_idx = {i for o in rows for a in _operand_refs(o) for r in a for i in _p_indices(r)}
     w_param = max(p_idx) if p_idx else n_in - 1
     # the fold states its parameter layout by name (program.json `params`): the weights index is read from it when present
