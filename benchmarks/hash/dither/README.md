@@ -39,8 +39,6 @@ loaded build's own flags (`workspace_bytes`). The other front ends and the scrip
 
 - The references the gates hold kernels to, beside the Definition: `h1v3_ref.py` (H1V3 itself, from the tree on
   `PYTHONPATH`).
-- `job.sh`: `h1u.cu`'s libraries built on a CPU node, then `benchmarks/pouw`'s partials tests on each build on a leased
-  H200 or B200.
 
 ## Tools
 

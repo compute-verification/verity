@@ -27,8 +27,7 @@ unpacks, with the ship frame `benchmarks/kernels/ship.sh` (`benchmarks/kernels/R
   holds every variant to `verity.commitments`' reference, bit for bit, and times it.
 - `p2_stage/`: what times the store's load, P2's decode of the encoded weights store into GPU memory
   (`verity/protocols/resource_accounting/memory/poub/prover/p2_stage/`'s `stage` and `layout`), with PoUB's receipts beside it.
-  `full.sh` holds every loaded tensor to the weights manifest's SHA-256 on an H200, and `bw.sh` the receipts to their
-  fixture.
+  `full.sh` holds every loaded tensor to the weights manifest's SHA-256 on an H200.
 ## Interface
 
 Nothing outside `benchmarks/torch_gpu` loads a file of it: any file here may change or go without a word to another

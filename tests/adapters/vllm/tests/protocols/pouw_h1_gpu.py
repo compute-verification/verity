@@ -175,7 +175,6 @@ def period_unit(j10r: bool, arch: str | None = None) -> Any:
         return None
     from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1tile as HT
     from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1window as HW
-
     from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
     return lambda k: HW.tile_unit(k, PH.TILE, HT.PouwH1Tile5, **({"arch": arch} if arch else {}))
 
@@ -188,9 +187,10 @@ def period_program(model: Any, rows: int, steps: int, j10r: bool = False, arch: 
     digest (the period's ``--circuit``) and what declaring them cost, once before any window, as a period declares them.
     The digest is taken in a child process, since at FILL it alone takes minutes and tens of GB, which no window pays, so
     this process's RSS is the windows' own."""
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
+
     from verity_vllm.protocols import pouw
     from verity_vllm.protocols.pouw import h1_hooks as PHK
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
 
     layers = PHK.layers(model, pouw.linear_types(), ks)
     shapes = [tuple(int(d) for d in m.weight.shape) for m in layers]
@@ -498,11 +498,12 @@ def requests_check(h1: Any, requests: int) -> dict[str, Any]:
 
 
 def run(a: argparse.Namespace) -> dict[str, Any]:
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
+
     from verity_vllm.engine.build import build_engine
     from verity_vllm.program.frontend.kernel_readback import int8_exact_of
     from verity_vllm.program.frontend.target_profile import TargetProfile
     from verity_vllm.protocols import pouw
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
     from verity_vllm.protocols.pouw import h1_hooks as PHK
 
     outdir = Path(a.out)
@@ -658,13 +659,14 @@ def tokens_digest(gen: list[dict[str, Any]]) -> str:
 
 
 def fill(a: argparse.Namespace) -> dict[str, Any]:
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
+
     from verity_vllm.engine.build import build_engine
     from verity_vllm.program.frontend.kernel_readback import int8_exact_of
     from verity_vllm.program.frontend.target_profile import TargetProfile
     from verity_vllm.protocols import pouw
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
     from verity_vllm.protocols.pouw import h1_hooks as PHK
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
 
     decl = declared_of(a)
     outdir = Path(a.out)
@@ -838,7 +840,9 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
             print(f"[fill] {name} served step_s={out['step_s']} registered_s={out.get('registered_s')} "
                   f"hashed_s={out.get('hashed_s')} register_path={out.get('register_path')} rss_gib={rss_gib()}", flush=True)
             if com is not None:
-                from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import commit as CT
+                from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+                    commit as CT,
+                )
                 rc = com.finalize()
                 out["committer"] = {**CT.committed(com, rc, ("values_retained_bytes", "expected_tensors", "committed_tensors",
                                                              "errors_n", "errors")),
@@ -864,7 +868,9 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
                     out["roots1"] = h1.details["roots1"]
                     out["ok"] = bool(out["ok"] and out["roots1"]["tied"])
                     if a.live_dump and out["requests"].get("live"):
-                        from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import live as LV
+                        from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+                            live as LV,
+                        )
                         out["live_dump"] = LV.dump(h1, Path(a.live_dump) / name)
         finally:
             SV.NR.commit = nr_commit
@@ -898,7 +904,9 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         doc["h1_baseline"] = window("baseline", plain, outdir / "baseline")
     if a.commit:
         if a.period:
-            from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
+            from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+                challenger as PHC,
+            )
             from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
             layout = SV.declared_layout(period[2]["shapes"], period[2]["modules"], decl.rows, decl.steps)
             draw_k, files = PHC.draw_k(layout), period_files(Path(a.circuits), period[1], layout, decl)
@@ -1141,8 +1149,9 @@ def local_weights(model: Any, layers: list[Any], rows: int, steps: int, period: 
     """The served model's ``b/<K>`` registered once under a fresh local key and the Program install declares
     (`pouw._install_h1`'s shapes and names, on the serving card's ``arch``; ``period``'s, from `period_program`, when
     given), for a window with no auditor's registration (no ``--model``)."""
-    from verity_vllm.protocols import pouw
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
+
+    from verity_vllm.protocols import pouw
     shapes = [tuple(int(d) for d in m.weight.shape) for m in layers]
     modules = {w: f"linear {w}" for w in range(len(layers))} | pouw._named(model, layers)
     given = {} if period is None else {"program": period[0], "program_digest": period[1]}
@@ -1411,9 +1420,12 @@ def credit_check(h1: Any, served: Any, made: Any) -> dict[str, Any]:
     on, the sampled proof blocks the first and last of each kept call (`receipts_producer`'s: the first layer's linears at step 0
     and the last step), their operands and receipts the producer's on the serving GPU; then each prover-side negative
     (`pouw_h1_credit.NEGATIVES`) at the first of them."""
-    from tests.protocols import pouw_h1_credit as PC
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+        served as SV,
+    )
     from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
+
+    from tests.protocols import pouw_h1_credit as PC
     t0 = time.monotonic()
     w = PC.of_run(h1, served)
     units = [u for c in sorted(made.kept) for u in (w.u0(c), w.u0(c) + CR.call_work(w.layout)[c][0] - 1)]
@@ -1497,10 +1509,9 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     its tree), from which its sampling coin is read (none refuses it). With `lean_answers` (a memo directory in the
     verifier's scratch) credit's verifier runs are `answers.Answers` on it: a run another step answered is taken by key,
     and its ``lean_answers`` says how many."""
-    from verity.protocols.proofs.spot.verifier.challenger import remote
-
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import answers as A
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
+    from verity.protocols.proofs.spot.verifier.challenger import remote
 
     rec, tree = json.loads(Path(calls_file).read_text()), Path(directory)
     d = tree if window_file is not None else tree / "out"

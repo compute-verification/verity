@@ -82,10 +82,13 @@ source to other outputs, which Lean's nondeterminism can do as staleness can), o
 (`proved_in.unpassed`), the run drops each of those modules' trace, `.hash` files and objects in the tree
 (`mismatched`, `forget`) and runs that check.py once more, on the packages it was given, with nothing restored from
 the artifact cache, so Lake compiles them; the first one's reports go to `mismatched/<path>/` (its first package's),
-and a second failure fails the run.
+and a second failure fails the run. The run's outcome is then the second audit's, and its result and last line name each
+module so caught with its package (`mismatched`); check.py has already removed the entry each was restored under from
+the artifact cache (`check.forget_mismatched`).
 
 In the build sandbox a prover's sample runs on its seal, after its build passed, so a spec that read that seal fails
-`proved_in.sampled` there rather than `proved_in.unpassed`; the run takes the one as the other (`SAMPLED_ONLY`).
+`proved_in.sampled` there rather than `proved_in.unpassed`; the run takes the one as the other (`SAMPLED_ONLY`), and
+so a package whose path dependency's sample failed in the same check.py (`requires.sampled`).
 
 It audits with it, the same way, every package whose guarantees' records read PKG's build (`requirers`: PKG is in its
 `closure`, by path or by `proved_in`). Packages whose first audit takes the same flags share one check.py (`batches`), so
@@ -197,10 +200,11 @@ def _module(path: Path, name: str):
 LA = _module(ROOT / "tools" / "verity" / "lean" / "lean_audit.py", "lean_audit_for_lean_changed")
 #: `tools/verity/lean/check.py`, the audit tool, loaded as this file's own copy
 AUDIT = _module(ROOT / "tools" / "verity" / "lean" / "check.py", "lean_audit_tool_for_lean_changed")
-#: the failure codes a report's sampled mismatch alone explains (`mismatched`): the package's own (`sampled`), and a
+#: the failure codes a report's sampled mismatch alone explains (`mismatched`): the package's own (`sampled`), a
 #: spec's whose `proved_in` package it failed, `proved_in.unpassed` where it kept that package's build from passing and
-#: `proved_in.sampled` where the sample ran on that package's seal, after its build passed
-SAMPLED_ONLY = ("sampled", "proved_in.unpassed", "proved_in.sampled")
+#: `proved_in.sampled` where the sample ran on that package's seal, after its build passed, and a requirer's whose path
+#: dependency it failed in the same check.py (`requires.sampled`)
+SAMPLED_ONLY = ("sampled", "proved_in.unpassed", "proved_in.sampled", "requires.sampled")
 SIBLINGS = _module(ROOT / "tools" / "verity" / "lean" / "siblings.py", "lean_siblings_for_lean_changed")
 PROBE = _module(ROOT / "tools" / "verity" / "lean" / "axiom_probe.py", "axiom_probe_for_lean_changed")
 #: the audit's build sandbox, as `tools/verity/lean/check.py` runs it: writable only in the `.lake` directories it is given
@@ -227,12 +231,23 @@ def read_here(f: str) -> bytes | None:
     return p.read_bytes() if p.is_file() else None
 
 
+def in_tree(pkg: str, entry: str, file: str) -> str:
+    """``entry`` of ``pkg``'s ``file`` (a path dependency's `dir`, a `proved_in` package) as a repository path: a package
+    whose build the audit of ``pkg`` writes, so one outside the tree is refused (`check.OutsideTree`)."""
+    p = posixpath.normpath(posixpath.join(pkg, entry))
+    if p == ".." or p.startswith(("../", "/")):
+        raise AUDIT.OutsideTree(f"{pkg}/{file}: {entry!r} names {p}, outside the tree, whose .lake a build of {pkg} would "
+                                f"write: a package it requires by path or names under proved_in must lie in the tree")
+    return p
+
+
 def path_deps(pkg: str, read=read_here) -> list[str]:
-    """The packages ``pkg`` requires by path, as `lean_audit.path_deps` reads them from its manifest, through ``read``."""
+    """The packages ``pkg`` requires by path, as `lean_audit.path_deps` reads them from its manifest, through ``read``;
+    each must lie in the tree (`in_tree`)."""
     b = read(f"{pkg}/lake-manifest.json")
     if b is None:
         return []
-    return sorted({posixpath.normpath(posixpath.join(pkg, d["dir"])) for d in json.loads(b).get("packages", [])
+    return sorted({in_tree(pkg, d["dir"], "lake-manifest.json") for d in json.loads(b).get("packages", [])
                    if d.get("type") == "path"})
 
 
@@ -245,7 +260,7 @@ def provers(pkg: str, read=read_here) -> list[str]:
     except (OSError, ValueError, AttributeError) as e:
         print(f"lean_changed: {pkg}/lean-audit.json can't be read ({e!r}); it is taken to name no proved_in", file=sys.stderr)
         return []
-    return sorted({posixpath.normpath(posixpath.join(pkg, d)) for d in named if isinstance(d, str)})
+    return sorted({in_tree(pkg, d, "lean-audit.json") for d in named if isinstance(d, str)})
 
 
 def closure(pkg: str, read=read_here) -> list[str]:
@@ -513,11 +528,17 @@ def lake_dirs(ro: list[str]) -> None:
 
 def in_sandbox(pkg: str, tree: Path, argv: list[str], at: tuple[str, ...] | list[str] = ()) -> list[str]:
     """``argv`` in the sandbox, writable in the `.lake` of ``tree/pkg`` and the packages it requires by path but not in their
-    fetched dependencies, which it binds read-only (`--ro`, after `lake_dirs`). The paths are resolved, as mountinfo names
-    them: a slot tree is a link into the node's cache root. A build passes ``at``, `bound`'s words, and reads the tree at
-    the fixed path, where its fetched dependencies are read-only too."""
-    rw = [str((tree / p / ".lake").resolve()) for p in closure(pkg)]
-    ro = [str(Path(d) / "packages") for d in rw if (Path(d) / "packages").is_dir()]
+    fetched dependencies, which it binds read-only (`--ro`, after `lake_dirs`). Each package's directory is resolved (a
+    slot tree is a link into the node's cache root) and must stay in the tree (`check.OutsideTree`), and its `.lake` is
+    passed as it is, so that the sandbox refuses one the tree holds as a link. A build passes ``at``, `bound`'s words, and
+    reads the tree at the fixed path, where its fetched dependencies are read-only too."""
+    rw = []
+    for p in closure(pkg):
+        if not (d := (tree / p).resolve()).is_relative_to(tree.resolve()):
+            raise AUDIT.OutsideTree(f"{tree / p} resolves to {d}, outside the tree {tree.resolve()}, so a build of {pkg} "
+                                    f"would write its .lake there: a package of the tree must be a directory in it")
+        rw.append(str(d / ".lake"))
+    ro = [str(Path(d) / "packages") for d in rw if not Path(d).is_symlink() and (Path(d) / "packages").is_dir()]
     lake_dirs(ro)
     return [*UNSHARE, "--", "bash", str(SANDBOX), *(a for d in ro for a in ("--ro", d)), *at, *rw, "--", *argv]
 
@@ -666,14 +687,15 @@ def compiled(text: str) -> list[str]:
     return sorted({m.replace("«", "").replace("»", "") for m in BUILT.findall(text)})
 
 
-def put_built(artifacts, reps: dict[Path, dict], since: float, log=print, who: str = "lean-records") -> None:
-    """Put what the builds of ``reps`` ({package: what says its build ran in the sandbox}) compiled since ``since`` into the
+def put_built(artifacts, reps: dict[Path, dict], since: float, tree: Path, log=print, who: str = "lean-records") -> None:
+    """Put what the builds of ``reps`` ({package: what says its build ran in the sandbox}, each in ``tree``, the slot's
+    copy of the tree) compiled since ``since`` into the
     node's artifact cache (`LakeArtifacts.put`), whatever became of the run: a module is stored for what its compile read,
     which a failure elsewhere in the package, or a kill, doesn't change, unless a source of the build runs code while it
     compiles (`LA.runs_code`). Before anything writes the tree again: a key is computed from the sources the tree
     holds, and those are the sources `put` reads for such code."""
     try:
-        log(f"{who}: {artifacts.put(reps, since, log)} module version(s) new in the artifact cache")
+        log(f"{who}: {artifacts.put(reps, since, log, tree)} module version(s) new in the artifact cache")
     except (OSError, ValueError) as e:
         log(f"{who}: the artifact cache was not written: {e}")
 
@@ -697,7 +719,7 @@ def put_left(tree: Path, left: dict | None, artifacts, log=print) -> None:
         return
     reps = LA.built(Path(str(left.get("out"))))
     if reps := {at: rep for at, rep in reps.items() if tree.resolve() in at.resolve().parents}:
-        put_built(artifacts, reps, since, log, f"lean-records: {tree}: of what {left.get('run', 'a run')} left")
+        put_built(artifacts, reps, since, tree, log, f"lean-records: {tree}: of what {left.get('run', 'a run')} left")
 
 
 def storable(sandbox: bool) -> bool:
@@ -1228,14 +1250,16 @@ def label(out: Path) -> None:
 
 def write_result(run_dir: Path, run_id: str, pkg: str, outcome: str, rc: int, out: Path, update: bool, path: str = "slot",
                  records: dict[str, dict] | None = None, passes: dict[str, str] | None = None,
-                 allow: list[str] | None = None, stale: list[str] | None = None) -> None:
+                 allow: list[str] | None = None, stale: list[str] | None = None,
+                 mismatched: dict[str, str] | None = None) -> None:
     """A recorded run's `result.json`, of kind ``FAST_KIND``: what `research merge` and `research queue`'s records gate read
     of the Attempt. ``outcome`` is one of `OUTCOMES`, and its `validation.status` is `passed` exactly when it is `PASS` or
     `REGENERATED`; ``records`` is each package's (`verdicts`), and ``passes`` {inputs key: package} each key a package's
     records passed on in this run (`passed`), which the store indexes as `passes.<key>` (`stored`). ``path``: `slot` (a
     `build` slot's tree), `dev-cache` (`dev_records`) or `reused` (no package ran: `reused`). A run given `--allow` also
     says what it was given (``allow``, each `CODE:ENTRY`, in its fingerprint too) and which of those matched no failure
-    (``stale``, `stale_allowances`)."""
+    (``stale``, `stale_allowances`). One whose sampled recompile caught a module says which (``mismatched``, {module: its
+    package}), in `mismatched` and in its validation's detail."""
     rel = os.path.relpath(out, run_dir)
     ran = ("nothing ran" if outcome == REFUSED
            else f"{len(stale)} allowance(s) matched no failure ({', '.join(stale)}), which fails the run" if stale
@@ -1243,6 +1267,9 @@ def write_result(run_dir: Path, run_id: str, pkg: str, outcome: str, rc: int, ou
            else f"every failure left on the {path} path is one --allow named, which is no pass (exit {rc}; no pass is kept "
                 f"for such a package, and its regenerated record is kept under {ALLOWED_RECORD}/)" if outcome == ALLOWED
            else f"check.py's first failing exit {rc} on the {path} path" if rc else f"{outcome} on the {path} path")
+    if mismatched:
+        ran += (f", after a sampled recompile caught {', '.join(sorted(mismatched))}, whose restored or kept outputs are "
+                f"not what their sources compile to, and each was compiled again")
     doc = {"schema": "research/result/v0.1", "kind": FAST_KIND, "run_id": run_id, "commit": git("rev-parse", "HEAD"),
            "outcome": outcome, "workload_fingerprint": {"package": pkg, "update": update, "replay": False, "runs": False,
                                                         "path": path, **({"allow": allow} if allow else {})},
@@ -1252,6 +1279,7 @@ def write_result(run_dir: Path, run_id: str, pkg: str, outcome: str, rc: int, ou
                                     "it"},
            "records": records or {}, "passes": passes or {},
            **({"allow": allow, "stale_allowances": stale or []} if allow else {}),
+           **({"mismatched": mismatched} if mismatched else {}),
            "artifacts": [] if rel.startswith("..") or not out.exists() else [rel]}
     tmp = run_dir / "result.json.tmp"
     tmp.write_text(json.dumps(doc, indent=1) + "\n")
@@ -1259,15 +1287,18 @@ def write_result(run_dir: Path, run_id: str, pkg: str, outcome: str, rc: int, ou
 
 
 def finish(pkg: str, outcome: str, rc: int, out: Path, update: bool, path: str, records: dict[str, dict], log=print,
-           passes: dict[str, str] | None = None, allow: list[str] | None = None, stale: list[str] | None = None) -> int:
+           passes: dict[str, str] | None = None, allow: list[str] | None = None, stale: list[str] | None = None,
+           mismatched: dict[str, str] | None = None) -> int:
     """End a `--records` run: in a recorded run its `result.json` (`write_result`), and on every path its last line,
-    `OUTCOME_LINE` and JSON (``outcome``, ``pkg``, ``records``, ``passes``, and for a run given `--allow` what it was given,
-    ``allow``, and which of those matched no failure, `stale`); ``rc``, its exit status."""
+    `OUTCOME_LINE` and JSON (``outcome``, ``pkg``, ``records``, ``passes``, for a run given `--allow` what it was given,
+    ``allow``, and which of those matched no failure, `stale`, and for one whose sampled recompile caught a module, each
+    such module and its package, ``mismatched``); ``rc``, its exit status."""
     run_dir, run_id = os.environ.get("RESEARCH_RUN_DIR"), os.environ.get("RESEARCH_RUN_ID")
     if run_dir and run_id:
-        write_result(Path(run_dir), run_id, pkg, outcome, rc, out, update, path, records, passes, allow, stale)
+        write_result(Path(run_dir), run_id, pkg, outcome, rc, out, update, path, records, passes, allow, stale, mismatched)
     log(OUTCOME_LINE + json.dumps({"outcome": outcome, "package": pkg, "records": records, "passes": passes or {},
-                                   **({"allow": allow, "stale": stale or []} if allow else {})}, sort_keys=True))
+                                   **({"allow": allow, "stale": stale or []} if allow else {}),
+                                   **({"mismatched": mismatched} if mismatched else {})}, sort_keys=True))
     return rc
 
 
@@ -1538,11 +1569,12 @@ def overall(records: dict[str, dict]) -> str:
 
 def conclude(pkg: str, records: dict[str, dict], rc: int, out: Path, update: bool, path: str, log=print,
              passes: dict[str, str] | None = None, allow: frozenset[tuple[str, str]] = frozenset(),
-             audited: list[Path] | None = None) -> int:
+             audited: list[Path] | None = None, mismatched: dict[str, str] | None = None) -> int:
     """End a run whose packages' ``records`` are judged (`finish`): its outcome their worst (`overall`), `FAILED` too when
     an allowance of ``allow`` matched no failure in the reports this run left under ``audited`` (`unmatched`); its exit
     status 0 on `PASS` and `REGENERATED`, `ALLOWED_RC` on `ALLOWED`, and ``rc`` (check.py's first failing status), else 1,
-    on `FAILED`."""
+    on `FAILED`. ``mismatched`` ({module: its package}) names each module a sampled recompile caught, which the run then
+    compiled (`mismatched`): the outcome is the second audit's, and the result names them."""
     outcome = overall(records)
     if stale := unmatched(allow, audited or [], log):
         outcome = max(outcome, FAILED, key=OUTCOMES.index)
@@ -1550,8 +1582,12 @@ def conclude(pkg: str, records: dict[str, dict], rc: int, out: Path, update: boo
         log(f"lean-records: every failure left is one --allow named, each still in its package's report: exit {ALLOWED_RC}, "
             f"which is no pass; check, research merge and the records gate take nothing from this run for "
             f"{', '.join(q for q, r in records.items() if r['outcome'] == ALLOWED)}")
+    if mismatched:
+        log(f"lean-records: a sampled recompile caught {len(mismatched)} module(s) whose restored or kept outputs are not "
+            f"what their sources compile to, each compiled again before the audit that gave this outcome: "
+            + ", ".join(f"{m} ({p})" for m, p in sorted(mismatched.items())))
     return finish(pkg, outcome, (rc or 1) if outcome == FAILED else ALLOWED_RC if outcome == ALLOWED else 0, out, update,
-                  path, records, log, passes, named(allow), stale)
+                  path, records, log, passes, named(allow), stale, mismatched)
 
 
 def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool = False, moved: Path | None = None,
@@ -1635,7 +1671,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
             committed = as_found(todo)
             new: dict[str, bytes] = {}
             outcomes: dict[str, str] = {}
-            left, killed, ok = left_by(tree), {}, []
+            left, killed, ok, caught = left_by(tree), {}, [], {}
             put_left(tree, left, artifacts, log)
             env, fds = {**os.environ, "LEAN_NUM_THREADS": str(LA.COMMON.cores())}, () if slot is None else (slot,)
             for first, batch in batches(todo, pkg, update, moved, log):
@@ -1676,6 +1712,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                     if redone or not got or AUDIT.killed(got) or not (bad := mismatched(to, tree, log, allowed)):
                         return got
                     store, redone = None, True
+                    caught.update({mod: os.path.relpath(d, tree) for mod, d in bad.items()})
                     for mod, d in bad.items():
                         forget(lib := d / ".lake" / "build" / "lib" / "lean", lib / LA.MK.path_of(mod, ".trace"))
                     label(aside := set_aside(to, out, ps[0]))
@@ -1688,7 +1725,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
 
                 all_got = audit(batch, all_out, first)
                 shared = store, redone
-                put_built(artifacts, LA.built(all_out), since, log, f"lean-records: {who}")
+                put_built(artifacts, LA.built(all_out), since, tree, log, f"lean-records: {who}")
                 log(f"lean-records: {who}: check.py exit {all_got} in {time.monotonic() - t0:.0f} s on {tree} ({n} files "
                     f"changed there{', audited twice' if redone else ''}), without the kernel replay or the tests: a "
                     f"{FAST_KIND} result, which check and research merge refuse; reports in {all_out}")
@@ -1699,7 +1736,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                         t1, since, (store, redone) = time.monotonic(), time.time(), shared
                         mark(tree, package=p, phase="check", since=since, out=str(mine_out))
                         up, got = True, audit([p], mine_out, True)
-                        put_built(artifacts, LA.built(mine_out), since, log, f"lean-records: {p}")
+                        put_built(artifacts, LA.built(mine_out), since, tree, log, f"lean-records: {p}")
                         log(f"lean-records: {p}: check.py exit {got} in {time.monotonic() - t1:.0f} s on {tree}, audited again "
                             f"with --update{', twice' if redone and not shared[1] else ''}; reports in {mine_out}")
                     if AUDIT.killed(got):
@@ -1734,7 +1771,8 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                 except OSError as e:
                     log(f"lean-records: nothing bundled for other nodes: {e}")
             records = verdicts(outcomes, new, out, tree, files, skip, log, committed, allowed, pkg)
-            return conclude(pkg, records, rc, out, update, "slot", log, passes, allowed, [reports(out, pkg, p) for p in todo])
+            return conclude(pkg, records, rc, out, update, "slot", log, passes, allowed, [reports(out, pkg, p) for p in todo],
+                            caught)
     finally:
         if slot is not None:
             os.close(slot)
@@ -1954,7 +1992,7 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
             bind = bound(pkg, tree)
             step, (rc, text) = f"lake build +{mod}:deps", build(pkg, tree, lake, [f"+{mod}:deps"], sandbox, at=bind)
             if storing:                                 # before `lean` reads the file itself, whose code then runs
-                put_built(artifacts, {tree / pkg: built_report(bind, text)}, since, log, f"lean-try: {pkg}")
+                put_built(artifacts, {tree / pkg: built_report(bind, text)}, since, tree, log, f"lean-try: {pkg}")
 
             def ask(args: list[str]) -> tuple[int, str, float, int]:
                 argv = [lake, *args]
@@ -2113,7 +2151,7 @@ def build_files(files: list[str], deps: Path, tree: Path | None = None, log=prin
                 bind = bound(pkg, tree)
                 rc, text = build(pkg, tree, lake, mods, sandbox, at=bind)
                 if storing:
-                    put_built(artifacts, {tree / pkg: built_report(bind, text)}, since, log, f"lean-build: {pkg}")
+                    put_built(artifacts, {tree / pkg: built_report(bind, text)}, since, tree, log, f"lean-build: {pkg}")
                 errs = first_errors(text, pkg, have)
                 if rc and (healed := clashed(tree, closure(pkg), text)):
                     errs = {f: e for f, e in errs.items() if not CLASH.search(e)}

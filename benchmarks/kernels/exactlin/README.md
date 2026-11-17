@@ -55,8 +55,6 @@ For x [M, K] bf16, W [N, K] int8 and s_w [N] float32:
     allocation and `ptx_check`, and also measures where stock vLLM int8's kernels differ from the statement. `gate()`
     is what the benches call first, and `--dump` writes the outputs `replay.py` reads.
   - `replay.py`: `Int8RowQuant_v1` and `ScaledMmS8_v1`'s replay evaluators on `kgate.py --dump`'s outputs, on the CPU.
-  - `values.py`: the served values. The vLLM integration's `int8_exact_gpu` runs with the ops' two CUDA bodies
-    counting their calls and checks every tapped linear's y bit for bit; it runs through `served.sh` as `SERVED_SCRIPT`.
 - Kernel-level benches, run by `kbench.sh` (`KSCRIPT` picks the script):
   - `kbench.py`: the exact, stock and fused arms, interleaved rep by rep, each in a CUDA graph over enough weight
     copies to stream from DRAM. `--arms` also takes single kernels.
