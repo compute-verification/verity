@@ -4282,7 +4282,7 @@ def shares(got: dict, h: dict, read: set[int]) -> bool:
 
 def reaches(function: str, reached: set[str]) -> bool:
     """Whether a statement part that reaches the constants ``reached`` applies ``function``: a constant, or a field of one
-    (`PouwVerifier.protocol.check`, the `check` field of the structure `PouwVerifier.protocol`), whose path is the longest of its
+    (`PouwCheck.protocol.check`, the `check` field of the structure `PouwCheck.protocol`), whose path is the longest of its
     prefixes that is a constant, followed by fields, each a constant with that last component (its projection)."""
     parts = function.split(".")
     for i in range(len(parts), 0, -1):

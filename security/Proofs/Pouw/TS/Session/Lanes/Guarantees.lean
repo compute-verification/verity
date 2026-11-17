@@ -80,7 +80,7 @@ admit bits, and every `o0` row `ok = 1`. That each session's registered file hol
 (`PouwWindow.Lanes.ownOf` at one table per value, `roots`, each value placed in its table from a base row, `place`) is
 not asked either: acceptance checks it, at any roots and any placement, and `pouw-leaf-own` takes the roots from the
 accepted registration and produced record alone (`PouwWindow.Lanes.roots?`) and, for a unit of a window Program, the
-placement from the window's committed descriptor and round log (`PouwVerifier.LeafOwn.placeOf`), so no premise is left
+placement from the window's committed descriptor and round log (`PouwCheck.LeafOwn.placeOf`), so no premise is left
 on how the file was built. Each file marks its reads of the A, B and partials rows `read_in_full`
 (`PouwWindow.Lanes.readFull`), which the known-read check holds to one row of the registered words: so lane `l`'s
 partials row and the combine's `p<l>` are one row, the partials record is the rows the 33 statements read, and nothing

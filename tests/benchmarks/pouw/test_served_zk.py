@@ -1398,7 +1398,7 @@ def test_shape_compares_what_the_prover_sends(tmp_path):
 def test_a_staged_unit_opens_under_the_window_root(served, tmp_path):
     """stage_tile.py, run by hidden_zk/served_stage.py, stages a call's tile and a filler tile of a committed execution phase as `Pc8TileSide` units, each in its own
     process, on the committer's side rows and salts: each is over the circuit the verifier pins for the template
-    (`core_check.TILES`, Lean's `PouwVerifier.tiles`), and each public file's rows are the side trees' leaves, so the opening
+    (`core_check.TILES`, Lean's `PouwCheck.tiles`), and each public file's rows are the side trees' leaves, so the opening
     accepts.  Nothing cheaper catches a unit whose committed rows are not the side rows (the index field dropped or moved),
     or a change to the template or to Flock's lowering that moves the circuit off its pin, which only staging shows;
     about a minute at K = 128."""

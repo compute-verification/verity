@@ -6,7 +6,7 @@ public import PouwPearlPlus
 public import Mathlib.Algebra.BigOperators.Fin
 
 /-!
-# Pearl+'s run sample is `t` uniform work-weighted tickets (`PouwVerifier.PearlPlus.draw`)
+# Pearl+'s run sample is `t` uniform work-weighted tickets (`PouwCheck.PearlPlus.draw`)
 
 The sample a verdict opens (`PlanMeans`'s tiles): `t` work-weighted samples with replacement over every retained pass's
 tickets together (`tickets`, `pearlDraw`'s `weightedDraw`). Its units are the run's tiles in `tickets`' order, tile `u`

@@ -66,7 +66,7 @@ with each leaf statement's ``unit`` and ``statement``).
 ``check``: credit's own verification of those statements over the window's sampled proof blocks under its sample (``verified``:
 the CLI's is `credit._verified` with the Lean ``verity-verify-proof`` at FLOCK_VERIFY, then `credit._proved`), the prover's look
 before it hands them over: ``PROVED`` or ``REFUSED``. Credit's verdict of record (`verifier.RECORD_VERDICT` ``lean``,
-`PouwVerifier.Verified`, the lanes form among it) is the Lean's; this is the Python reference's. Each verifier run is
+`PouwCheck.Verified`, the lanes form among it) is the Lean's; this is the Python reference's. Each verifier run is
 answered as credit asks for it (`answers.Answers`), one ``LEAN-ANSWER`` line a verdict, and judged in credit's order.
 """
 from __future__ import annotations

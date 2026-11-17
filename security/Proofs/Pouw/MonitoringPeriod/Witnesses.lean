@@ -47,7 +47,7 @@ instance: H1's honest live-salt period (`Properties.Pouw.MonitoringPeriod.Witnes
 windows at `δ_s = 1%`, `δ_bind = δ_ks = 0`.
 
 * `h1CheckedCreditPeriod_honest`: every premise of `H1CheckedCreditMonitoringPeriod` holds there (`HonestH1.h1_meets`), with the
-  period's play accepted exactly where the deployed check (`PouwVerifier.protocol.check` at `Accept.h1Params`) accepts
+  period's play accepted exactly where the deployed check (`PouwCheck.protocol.check` at `Accept.h1Params`) accepts
   every window (`HonestH1.checkedPlay`), which it does on every path; the accepted prefix is the whole period and its
   live words are `128·64`.
 * `h1CheckedCreditPeriod_nontrivial`: on the same windows, with the deployed check's verdict, a play that accepts every

@@ -3,7 +3,7 @@ Remote Verity: what the verifier establishes with no hardware of its own at the 
 their work subprotocol:
 
 * `Core.Remote.V1.protocol` (`verity/remote/v1`), **the composite of record**: the inference-only policy, Pearl+'s run
-  verdict (`PouwVerifier.PearlPlus.Protocol.protocol`, `verity/pouw/pearl-plus/v1`: a served run's retained passes, the
+  verdict (`PouwCheck.PearlPlus.Protocol.protocol`, `verity/pouw/pearl-plus/v1`: a served run's retained passes, the
   work-weighted sample over their tiles at δ = 1/100, and the run's credit at Pearl's assumption) and SPOT.
   `Verity.Registration.Composite.remote` reads it.
 * `Core.Remote.protocol` (`verity/remote/v0`), **development**: H1's period credit in Pearl+'s place, with the
@@ -26,14 +26,14 @@ record takes from W are the ones Pearl+ credited. W states its version (its head
 weights Pearl+'s tiles open B against are W's ``pearl-b/`` values, each registered once in the run's record's log, and
 a version-2 W that registers no weight is refused, so PoUW's credited work reads the weights that log registers. A W
 that states no version is version 1, written before W registered the weights, and Pearl+'s verdict on it names its
-weights untied (`PouwVerifier.PearlPlus.WEIGHTS_UNTIED`): there the tie is by the record alone, nothing holds PoUW's
+weights untied (`PouwCheck.PearlPlus.WEIGHTS_UNTIED`): there the tie is by the record alone, nothing holds PoUW's
 committed weights to the weights the record registers, and remote doesn't establish that PoUW's credited work and the
 audited inference read the same weights. The audited circuit, cut at its linears, reads no B row.
 
 v0's subprotocols are the inference-only policy (`InferenceOnlyCheck.Protocol.protocol`, `verity/inference-only/v0`: the registered
 circuit divides into inference blocks within their gate and fresh-input budgets, which reads only the registered circuit
 and the registered information and so needs no hardware at the site), work by proof of useful work over the period
-(`PouwVerifier.Period.protocol`, `verity/pouw/period/v1`: the period's execution phases credited all or nothing), onsite's work
+(`PouwCheck.Period.protocol`, `verity/pouw/period/v1`: the period's execution phases credited all or nothing), onsite's work
 subprotocol, and integrity by SPOT (`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`: one-stage
 v2's audit on the proofs themselves, on the blobs the caller hands in; one-stage v1, whose verdicts are the evidence's,
 and the recursive audit, which SPOT's soundness doesn't cover, are refused). `Core.Composition.tiedSameB`
@@ -88,7 +88,7 @@ def policyRecord (k : Case) : Option (List ByteArray) :=
   (InferenceOnlyCheck.Protocol.protocol.commitment k.commitment).toOption.map fun c => [InferenceOnlyCheck.Protocol.protocol.digest c]
 
 /-- The digests of the execution phase records a period's case names, in its close's order: each execution phase's Commit record as the
-period's credit reads it (`PouwVerifier.Credit.commitOf?`, under the auditor's ledger); `none` when the evidence doesn't
+period's credit reads it (`PouwCheck.Credit.commitOf?`, under the auditor's ledger); `none` when the evidence doesn't
 decode or an execution phase names no Commit record, which the period refuses. -/
 def executionPhaseRecords (k : Case) : Option (List ByteArray) := do
   let e ← (PouwVerifier.Period.evidenceOf k.evidence).toOption
@@ -188,7 +188,7 @@ private def strayOf (policy : String) (rs : List String) : Option String :=
 
 `W` is the serving process's registration of an execution phase's tables, the log's first record, in the form a served execution phase
 writes it. `R`, the run's registration record, is chained after it (`previous`) and registers those tables under the
-names PoUW's Commit gives them (`PouwVerifier.Credit.commitRows`, `commitIds`) as output values that reuse `W`'s entries
+names PoUW's Commit gives them (`PouwCheck.Credit.commitRows`, `commitIds`) as output values that reuse `W`'s entries
 (`outputs`). The policy's case, SPOT's (one-stage v2's, `Spot.OneStageZk`) and the period's one execution phase
 all name `R`. `R` registers one execution phase's tables, so a period credits at most one execution phase on it: every execution phase must name
 `R` (`executionPhases`), and PoUW's ROOTS1 holds each execution phase's tables to `R`'s (`Internal.arow`). -/
@@ -416,7 +416,7 @@ private def remoteOn (executionPhase : Json) : Answer :=
 #guard (remoteOn recR).reason.map (contains · s!"; {VStar.Recursive.Sampled.protocol.id} reject: coins: ") == some true
 #guard (remoteOn recR).reason.map (contains · s!"{InferenceOnlyCheck.Protocol.protocolId} reject") == some false
 
-/-- The period with its credit granted: `PouwVerifier.Period.protocol`'s decoders and digest, its check crediting one execution phase
+/-- The period with its credit granted: `PouwCheck.Period.protocol`'s decoders and digest, its check crediting one execution phase
 whatever the ledger and the execution phase say. -/
 private def credited : Core.Protocol where
   id := PouwVerifier.Period.protocolId
