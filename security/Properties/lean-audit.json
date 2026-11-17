@@ -2476,6 +2476,7 @@
     "Properties.Pouw.PearlPlus",
     "Properties.Pouw.PearlPlusSample",
     "Properties.Remote",
+    "Properties.InferenceOnly.RecordRows",
     "Properties.Verity.ExecutionPhaseFiles",
     "Definitions.Core.Compiler",
     "Properties.Verity.Committed",
