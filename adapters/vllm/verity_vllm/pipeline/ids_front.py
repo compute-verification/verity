@@ -8,7 +8,7 @@ The network attester's id egress form takes from the server only the scan's id e
 (`tick_plugin`), answers in HTTP, and a middleware can't take a response's head off. This relay does it for that server:
 a process of the server's side, on its host, between the network attester and the server.
 
-* **An id request** (a connection's first request, exactly `id_form.id_request` in the certifier's P + 9-byte cells, its
+* **An id request** (a connection's first request, exactly `id_form.id_request` in the network attester's P + 9-byte cells, its
   release headers aside: `serve_protocol.id_request_fields`) goes to the server as a ``POST /v1/completions`` of the same
   fields with ``return_token_ids``, on a connection of its own, under the release headers it came with, which the tick's
   feed reads. Of the server's streamed chunks only the token ids come back, each one id event written as its chunk
@@ -40,7 +40,7 @@ import json
 import signal
 import sys
 import time
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncGenerator, AsyncIterator, Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -63,7 +63,7 @@ BODY_BYTES = 1 << 26
 COMPLETIONS = b"POST /v1/completions HTTP/1.1"
 BLANK = b"\r\n\r\n"
 #: an id request's ``why`` where its connection ended before the server's stream of it did
-GONE = "the network certifier's side ended before the server's stream"
+GONE = "the network attester's side ended before the server's stream"
 
 
 class Broken(Exception):
@@ -120,7 +120,7 @@ async def _body(reader: asyncio.StreamReader, chunked: bool) -> AsyncIterator[by
             yield data
 
 
-async def token_ids(reader: asyncio.StreamReader) -> AsyncIterator[list[int]]:
+async def token_ids(reader: asyncio.StreamReader) -> AsyncGenerator[list[int], None]:
     """Each chunk's token ids (`chunk_ids`) of a streamed ``/v1/completions`` response read from `reader`, through
     ``data: [DONE]``; `Broken` where the response isn't a 200 whose events go on to ``[DONE]``."""
     try:
@@ -308,6 +308,7 @@ def main(opts: Options) -> int:
         out = stack.enter_context(Path(opts.log).open("a", buffering=1, encoding="utf-8")) if opts.log else None
 
         def log(rec: dict[str, Any]) -> None:
+            assert out is not None
             out.write(json.dumps(rec, separators=(",", ":")) + "\n")
         try:
             front = Front(upstream, opts.id_payload, log=log if out is not None else None)

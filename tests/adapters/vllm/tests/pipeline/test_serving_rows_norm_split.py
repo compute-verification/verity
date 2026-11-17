@@ -15,6 +15,7 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.ops.boolean import mufu as BM
+
 from verity_vllm.definitions.registry import boolean_dsa_norm as BD
 from verity_vllm.definitions.registry import boolean_norms as BN
 from verity_vllm.definitions.registry import boolean_norms_split as BS
@@ -24,7 +25,6 @@ from verity_vllm.definitions.registry import cuda_rmsnorm_split as NS
 from verity_vllm.definitions.registry import dsa_norm as DN
 from verity_vllm.definitions.registry import tp_allreduce as TA
 from verity_vllm.definitions.registry import tp_allreduce_split as TS
-
 from verity_vllm.pipeline import part_rows as PR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.pipeline import serving_templates as ST

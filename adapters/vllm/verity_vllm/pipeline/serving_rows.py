@@ -404,7 +404,7 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
     q = partition.get("query")
     if q is not None and q not in TEMPLATE_QUERIES:
         if q == P.Q_WORD[0] and sampling_design.get("law") == "stratified":
-            raise ValueError(f"a word partition ({P.Q_WORD[0]}) with the stratified law: its strata are templates, which a word "
+            raise ValueError(f"a word partition ({P.Q_WORD[0]}) with the stratified sampling design: its strata are templates, which a word "
                              f"partition does not have; the serving rows' partition is {' / '.join(TEMPLATE_QUERIES)}")
         raise ValueError(f"partition query {q!r}: the serving rows' window is the template instances' partition "
                          f"({' / '.join(TEMPLATE_QUERIES)}), never a word partition")
@@ -436,7 +436,7 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
 
 
 def partition_doc(window: CS.Binding, partition: Mapping[str, Any]) -> dict[str, Any]:
-    """The partition file as derived: the verifier's templates, law and scope, with the members, the partition object and digest."""
+    """The partition file as derived: the verifier's templates, sampling design and scope, with the members, the partition object and digest."""
     return {"format": PARTITION_FORMAT, "templates": list(dict.fromkeys(m.template for m in window.members)), "law": window.law,
             "query": window.query["name"], "scope": partition.get("scope"), "members": [[m.key, m.n] for m in window.members],
             **({"chunk_cap": partition["chunk_cap"]} if partition.get("chunk_cap") else {}),
@@ -692,7 +692,7 @@ def window_values(window: CS.Binding, rows: Sequence[list[Row]], store: Any, wei
     tmpls = list(dict.fromkeys(m.template for m in ms))
     plan, values = EX.Plan(tmpls, rows), dict(weight_values or {})
     hp = HR.Plan(tmpls, rows, on)
-    hreg = HR.declarations(hp, histories, {k: histories.edge(*k) for k in hp.keys()}) if histories is not None else None
+    hreg = HR.declarations(hp, histories, {k: histories.edge(*k) for k in hp}) if histories is not None else None
     if on and window.row_tables:
         raise ValueError("a window of history tables gives its reads by reference, which a window of row tables doesn't")
     reg = registered(ms, rows, hreg) if weight_values else merged(EX.declarations(plan), hreg)
@@ -704,7 +704,7 @@ def window_values(window: CS.Binding, rows: Sequence[list[Row]], store: Any, wei
     got = read_all(first, [by_t[t] for t in dict.fromkeys(m.template for m in first)], store, weights, arrivals, values)
     if histories is not None:
         at = HR.append(hp, first, got, histories)
-        values |= IF.supplied(hreg, {H.name(*k): histories.tables[k].entry() for k in hp.keys()}, window.partition_digest,
+        values |= IF.supplied(hreg, {H.name(*k): histories.tables[k].entry() for k in hp}, window.partition_digest,
                               module=G)
     if apart:
         read = dict(zip([m.key for m in first], got, strict=True))
@@ -717,7 +717,7 @@ def window_values(window: CS.Binding, rows: Sequence[list[Row]], store: Any, wei
     if histories is not None:
         hs, strings_of = HR.strings_of(hp, ms, histories, at)
         salts_of = {**salts_of, **hs}
-        roots = {**roots, **{H.name(*k): histories.tables[k].root.hex() for k in hp.keys()}}
+        roots = {**roots, **{H.name(*k): histories.tables[k].root.hex() for k in hp}}
     return data, entries, roots, salts_of, strings_of, [g[1] for g in got], hreg
 
 

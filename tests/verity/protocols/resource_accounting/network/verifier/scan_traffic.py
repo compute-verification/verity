@@ -1,4 +1,4 @@
-"""Network-certifier-form id requests and their responses served through the network attester's own ingress and egress,
+"""Network-attester-form id requests and their responses served through the network attester's own ingress and egress,
 both links' rows and the scan of the ingress rows: the joint scan's traffic (`test_network_attester_ingress_scan.py`'s
 cross-check of the network attester, and `verity/protocols/resource_accounting/network/prover/scan_zk.py`'s). It imports no test framework, so a
 node's bare venv runs it."""
@@ -124,7 +124,7 @@ def chain(cls: IS.Class, ingress: Sequence[bytes], egress: Sequence[bytes],
         raise ValueError("one ingress row and one egress row a bucket")
     got = IS.scan(cls, ingress, outputs)
     if got is None:
-        raise ValueError("the reference refuses the network certifier's own ingress rows")
+        raise ValueError("the reference refuses the network attester's own ingress rows")
     states, progs = got
     scan = [IS.empty(cls)] + states
     return Chain(cls, ingress, egress, scan, [IS.encode(cls, s) for s in scan],

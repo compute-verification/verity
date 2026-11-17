@@ -34,7 +34,7 @@ steps), ``hold_s`` (30 by default), ``log`` (a directory) and ``feed`` (a file).
 the OpenAI server's ASGI ``--middleware`` (inside `tick_plugin.TickFeed`), appends each streamed completion's count of
 output token ids as its bytes leave the server, keyed by its X-Request-Id, and the engine core reads them every step
 (`Sent`): e is what the server has sent, an upper bound on what the network attester in front of it has released, which
-takes its place once the certifier posts its released counts in the same records. Without ``feed``, e is the count the
+takes its place once the network attester posts its released counts in the same records. Without ``feed``, e is the count the
 engine emitted, so the hold is the drain alone. Refused at the engine core's first step: a scheduling policy other than
 FCFS, a KV connector, and more than one data-parallel engine.
 
@@ -94,6 +94,7 @@ class Sent:
     `poll` reads what came since the last call, and calling it on an engine request gives its count, 0 before any."""
 
     def __init__(self, pull: Callable[[], list[dict[str, Any]]]) -> None:
+        self.sent: dict[str, int]
         self.pull, self.sent = pull, {}
 
     def poll(self) -> None:
@@ -182,14 +183,19 @@ class Cut:
         self.carried: dict[str, int] = {}
         self.edges: list[dict[str, Any]] = []
         self.start: float | None = None
-        self.next_due: float = float(every_steps if every_steps is not None else every_s)
+        every = every_steps if every_steps is not None else every_s
+        assert every is not None
+        self.next_due: float = float(every)
         self.due_at: float | None = None
         self.held_at: float | None = None
         self.ready_at: float | None = None
         self.waits = 0
 
-    def _at(self, sched: Any, now: float) -> float:
-        return sched.current_step if self.every_steps is not None else now - self.start
+    def _at(self, sched: Any, now: float | None) -> float:
+        if self.every_steps is not None:
+            return sched.current_step
+        assert self.start is not None and now is not None
+        return now - self.start
 
     def due(self, core: Any) -> bool:
         if self.poll is not None:
@@ -222,6 +228,7 @@ class Cut:
             raise RuntimeError(f"the cut found {len(busy)} requests in flight ({busy[0]} first) after the seam's drain")
         if self.ready_at is None:
             raise RuntimeError("the cut was taken before it was ready: the seam asks a held edge's ready() first")
+        assert self.held_at is not None
         wait_s, waits = self.ready_at - self.held_at, self.waits
         self.held_at = self.ready_at = None
         self.waits = 0
@@ -263,6 +270,7 @@ class Cut:
         self.edges.append(rec)
         self.due_at = None
         every = self.every_steps if self.every_steps is not None else self.every_s
+        assert every is not None
         while self.next_due <= self._at(sched, t1):
             self.next_due += every
         live = {r.request_id for r in sched.waiting}

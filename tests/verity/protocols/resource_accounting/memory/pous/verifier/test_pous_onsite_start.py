@@ -1,5 +1,5 @@
 """A deployment's start of PoUS's parties, the timed rounds' and the wipe's (`ProtocolDef.starts`): the memory
-challenger's key refused unless the configuration pins it, before its tree or any other input is read, and the goal each
+attester's key refused unless the configuration pins it, before its tree or any other input is read, and the goal each
 start that reads the served store or the card raises under."""
 
 from __future__ import annotations

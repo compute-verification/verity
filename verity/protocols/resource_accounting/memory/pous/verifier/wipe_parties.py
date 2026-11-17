@@ -1,5 +1,5 @@
 """The streamed wipe as two parties of the deployment layer (`verity.runtime`), the protocol `wipe_party` speaks as a byte
-stream, in messages: the memory challenger, whose party is `verity/protocols/resource_accounting/memory/pous/attester/wipe_challenger.py`'s,
+stream, in messages: the memory attester, whose party is `verity/protocols/resource_accounting/memory/pous/attester/wipe_challenger.py`'s,
 and the prover, whose party is `verity/protocols/resource_accounting/memory/pous/prover/wipe_prover.py`'s. This module holds what both
 speak.
 
