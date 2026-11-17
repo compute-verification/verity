@@ -37,30 +37,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# A period whose communication audit is the network attester's monitoring period of sampled audits, pooled (trusted)
-
-A period's run leaves the network attester's claim (`commWithin`) and its verdict (`accepts .network`) as fields.
-`RealizesCommOfPooledLeakAccepted` is a run whose communication audit is the monitoring period of `m` execution
-phases that `NetTiming.Guarantees.PooledLeakAccepted` is about (its windows): each execution phase registered as
-`sw i` and audited in its verification phase on its own live coins, the network attester recording each one's
-observations. The network audit's own coins are the `m` verification phases' coins (`coins`), and the run's claim at
-`K` is the monitoring period's good event, `NetTiming.PooledGood`: the incorrect sets of the witnesses computed from
-each registration hold fewer than `Fmax` proof blocks in total, and every execution phase's observations meet its leak
-relation at its own incorrect set. That is the event whose secrets `PooledLeakAccepted` counts, with the incorrect
-proof blocks paid for once over the monitoring period, so `K` is the bits of that count: the pooled reading of the
-monitoring period, where the realization beside this one is the reading per phase. The run carries the deployed
-network attester in `PooledLeakAccepted`'s form, and its trust, `trusted-device` (`Verity.Assumptions.TrustedDevice`), is
-a field.
-
-The period's operator (`op`) is `PooledLeakAccepted`'s: fixed before the period, a function of the observations
-alone. Execution phase `i`'s operator at the record `o` is `op i (runsBefore o i)`, which reads only the execution
-phases closed before its own, and its own only through the observations before each step.
-
-`PhaseLeaks` names the second of the two inputs `PooledLeakAccepted` takes at each execution phase, the leak relation
-at the witness's incorrect set and at that phase's operator. The first, the miss probability given the earlier phases'
-coins, has its name among the network attester's definitions.
--/
+/-! A period whose communication audit is the network attester's monitoring period of sampled audits, pooled. -/
 
 @[expose] public section
 
@@ -127,62 +104,32 @@ structure RealizesCommOfPooledLeakAccepted {ι : Type} {d : Device ι} {α : Typ
     (r : PeriodRun d α C Ω) (K : ℝ) (L Kₒ S : ℕ)
     (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (reg : AuditStatement → Finset ℕ)
     (Dj m Fmax : ℕ) where
-  /-- each execution phase's registration -/
   sw : Fin m → AuditStatement
-  /-- each execution phase's partition into proof blocks -/
   Pw : Fin m → Partition
-  /-- each execution phase's registered values at its registered inputs -/
   ρ : Fin m → ℕ → Bool
-  /-- the period's operator, fixed before the period: execution phase `i`'s, at the observations of the execution
-  phases closed before it, in order, gives the ingress at each step from the observations before that step -/
   op : Fin m → List (List (Obs L Kₒ S)) → ℕ → List (Obs L Kₒ S) → List Bool
-  /-- one verification phase's coins -/
   Coin : Type
   [coinFintype : Fintype Coin]
   [coinNonempty : Nonempty Coin]
-  /-- the network audit's own coins are the `m` verification phases' coins, phase `i`'s at `coins x i` -/
   coins : Ω (r.own .network) ≃ (Fin m → Coin)
-  /-- the connections on the server's uplink that the network attester carries -/
   Conn : Type
   [connFintype : Fintype Conn]
-  /-- the cells it carries -/
   Cell : Type
-  /-- the server's state, which fixes what reaches the network attester -/
   Srv : Type
-  /-- the network attester's devices -/
   Dev : Type
-  /-- what reaches the network attester from the server on each connection, at the server's state -/
   arr : Srv → Conn → Arrivals Cell
-  /-- the network attester's record format over the period's execution phases -/
   fmt : RecordFormat Conn Cell (Fin m → List (Obs L Kₒ S))
-  /-- the deployed network attester -/
   device : Dev
-  /-- what the network attester does on a schedule and the server's state: the cells the client receives and its
-  record of the period's execution phases -/
   run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin m → List (Obs L Kₒ S))
-  /-- the network attester runs its code (`recordingCode`) on its host: `trusted-device`, the trust the network audit
-  rests on. `PooledLeakAccepted` takes it, and its record is what the leak relation (`hleak`) is about. -/
   trusted : Verity.Assumptions.TrustedDevice device run fun p => recordingCode fmt p.1 (arr p.2)
-  /-- the network attester's schedule at the coins -/
   sched : ((i : I) → Ω i) → CertifierSchedule Conn
-  /-- the server's state at the coins -/
   srv : ((i : I) → Ω i) → Srv
-  /-- the record format holds every schedule of the run -/
   fits : ∀ ξ, fmt.fits (sched ξ)
-  /-- execution phase `i`'s audit accepts at its own coins `x`, after the earlier phases' coins in `ω`, at the other
-  audits' coins `ξ` -/
   acc : ((i : I) → Ω i) → Fin m → (Fin m → Coin) → Coin → Prop
-  /-- a verification phase's verdict reads `ω` only at the phases before it -/
   acc_prefix : ∀ ξ i ω ω', (∀ j, j < i → ω j = ω' j) → acc ξ i ω = acc ξ i ω'
-  /-- the incorrect set of the witness computed from execution phase `i`'s registration, before its sample, after the
-  earlier phases' coins in `ω`, at the other audits' coins `ξ` -/
   W : ((i : I) → Ω i) → (Fin m → Coin) → Fin m → Finset ℕ
-  /-- an execution phase's incorrect set reads `ω` only at the phases before it -/
   W_prefix : ∀ ξ i ω ω', (∀ j, j < i → ω j = ω' j) → W ξ ω i = W ξ ω' i
-  /-- the network audit accepts only if every verification phase's audit accepts at its own coins -/
   accepts_imp : ∀ ξ ω, r.accepts .network (Function.update ξ (r.own .network) (coins.symm ω)) → ∀ i, acc ξ i ω (ω i)
-  /-- the claim at `K`: the monitoring period's good event, at the witnesses' incorrect sets and the network
-  attester's record of the run -/
   comm_iff : ∀ ξ ω, r.commWithin K (Function.update ξ (r.own .network) (coins.symm ω)) ↔
     PooledGood lay k reg Dj sw Pw ρ op Fmax (W ξ ω)
       (run device (sched (Function.update ξ (r.own .network) (coins.symm ω)),

@@ -82,56 +82,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# Proofs of the network attester's guarantees
-
-One theorem `NetTiming.SecurityProofs.G : NetTiming.Guarantees.G` per guarantee and per lemma (`Lemmas`), each the
-theorem of the same statement in `Occupancy` (Proposition 2), `Counting` (Theorem 1(b)), `Advice` (Theorem 3),
-`Ingress` (the ingress bound), `PerWindow` (the ingress bound over whole periods) or `SampledCharge` (the leak bound
-under a sampled audit: the incorrect proof blocks' charge), and every lemma behind them. `Schedule` counts the
-constant-rate Program's runs (Theorem 3 for it), for `Accepted` and `Causal`. `SampledLeak` composes `SampledCharge`'s
-count with `SampledAuditAccepted`, taken as a hypothesis (`NetTiming.sampledLeak`), which the module `SampledAuditAccepted` proves, and `SampledLeakReg` moves its count to the
-registration's values
-(`NetTiming.sampledLeak_registered`);
-`SampledLeakRegPlain` states it at the deployed plain record (`NetTiming.sampledLeak_registered_plain_sha512`). `Sanity` shows every named assumption satisfiable, and `Witnesses` gives each acceptance guarantee its honest and
-nontrivial lemmas; `CountWitnesses` gives the counts', and `PeriodWitnesses` two more instances of the pooled
-monitoring period's guarantee, at the instances of `Definitions.Certifier.Witness`, from what `WitnessToys`
-proves there. `Code` proves the certifier's program
-(`certifier_program`, `NetworkAttester`), which the difftest runs against the Python audit, equal to these definitions.
-
-`SampledAuditAccepted` proves that an accepted sampled audit is `Accepted` except at `ε` at `δ` over the selection, at
-any compiled sampled verifier where `Claims.SamplingGeneric.Compiled.KS` holds. `SampledAuditInstance` takes that
-`Compiled.KS` from the compiler at Flock (`Claims.SamplingGeneric.flockKS`), at the assembled records.
-`TapRows` fills an extracted trace in with the network attester's values and reduces a disagreement between the two
-to a collision (`TapProof.certifierColl_of_disagree`): an accepted audit's extracted trace carries the network
-attester's registered rows outside the incorrect proof blocks, unless its openings collide with the network
-attester's. `Checked` proves the leak bound with checked inputs (`SampledLeakChecked`): inputs a check pins cost no
-advice bits, and `WitnessesChecked` gives its nontrivial lemma.
-`MonitoringPeriodChecked` proves the period's bound with the checked inputs left out (`MonitoringPeriodLeakChecked`): each window's bound
-at the network attester's rows with a valid run, and the count of the period's records through `Carried`'s at the
-empty pool. `MonitoringPeriod` proves `MonitoringPeriodLeakAccepted` as its instance at no checked input. `MonitoringPeriodCheckedChecks` checks the
-checked statement: which run its check is held to, and its nontrivial and honest lemmas. `MonitoringPeriodCheckedExclusion` shows
-the read-back is needed: at a placed window the count fails without `RecordFormat.ReadsBy`.
-`MonitoringPeriodFails` proves the period's bounds with each failure charged as it happens (`MonitoringPeriodLeakFails`,
-`MonitoringPeriodLeakFailsAtMost`, `MonitoringPeriodLeakCharged`): `MonitoringPeriodLeakChecked` at each fail pattern, at the pattern's operator and
-registered values, summed over the patterns. `MonitoringPeriodFailsChecks` checks them at a placed window whose operator follows
-the fail pattern: the failures' factor is met, and the charged count fails at weights that sum past one.
-`MonitoringPeriodLengths` shows a record format of each lane's length, released data and fail cell reads back under the link's
-registered parameters (`LengthsRows.readsBy`).
-`Carried` proves the leak bounds over a carried pool (`SampledLeakCarried`, `PooledLeakCarried`): one
-run's relation at the rows its extracted trace holds, and the period's bound, where an opened row costs no advice bits,
-since the chain fixes it unless two rows have one root, and the restarts serving picks cost `log₂` of the patterns it may
-pick where every audit accepts. At the empty pool the period's bound is the bound with checked inputs over windows that
-each hold a pool of their own (`pooledLeakChecked_of_carried`). `WitnessesCarried` gives their nontrivial lemmas and
-`SampledLeakCarried`'s honest one. `PoolRoots` proves the period bound's premise on the opened rows' roots
-(`CarriedRoots`) from each run's in-circuit check of its roots (`CheckedRoots`) and the record rule (`PoolChained`), as
-the lemma `rootsOfChecked`.
-`PooledReg` proves the period's bound at the trace with the registered openings (`PooledLeakRegistered`), where the
-incorrect proof blocks are those of the trace read at each statement with its registered openings: `PooledRegSample`
-bounds each execution phase's verdict by the sample's term and an event, `PooledRegEvent` bounds that event, and
-`PooledRegLeak` proves each accepted phase's leak relation with no error. `WitnessesPooledReg` gives its honest and
-nontrivial lemmas.
--/
+/-! Proofs of the network attester's guarantees, one `NetTiming.SecurityProofs.G : NetTiming.Guarantees.G` per guarantee and lemma. -/
 
 @[expose] public section
 

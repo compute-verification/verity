@@ -33,18 +33,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# A monitoring period of sampled audits: each window's good event
-
-Definitions only. A monitoring period is a list of windows, each audited by the sampled verifier at a statement that its
-registration fixes (`SameRegistration`). A window's good event (`ExecutionPhaseGood`) is the leak relation at the network
-attester's rows (`RLeakCertifier`) at the audit's extracted witness, with the registered inputs pinned (`AsReg`), the trace
-holding the registration's values at the registered inputs, and the observations complete. Which observations the
-relation counts is picked out by the network attester's registration of its rows (`CertifierRegisters`), not by the trace:
-`RLeakCertifier` fails, on an accepted run, only where the extraction fails or the trace's openings collide with the network
-attester's (`Btap`). The registration's values at the prover's registered inputs are the one condition the event holds
-that no statement here bounds.
--/
+/-! A monitoring period of sampled audits and each window's good event, whose registered values at the prover's registered
+inputs no statement here bounds. -/
 
 @[expose] public section
 

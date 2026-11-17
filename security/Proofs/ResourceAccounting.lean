@@ -126,36 +126,6 @@ public import Proofs.ResourceAccounting.Defs.Actual.Source
 public import Proofs.ResourceAccounting.Defs.Localization
 public import Definitions.Pous.P2.Cost
 
-/-!
-# The proofs of resource accounting's guarantees
-
-`Accounting.SecurityProofs.X : Accounting.Guarantees.X` for the guarantees stated under
-`security/Definitions/ResourceAccounting/Guarantees/` (`Bandwidth.SecurityProofs.X` for the bandwidth audit's own), the lemmas
-behind them, and the proofs of resource accounting's properties, the bridges that read each subprotocol's per-period
-guarantee as the joint period's input (`JointBridge/`, such as `Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld`,
-locked in `security/Properties/lean-audit.json`). `Defs` holds the proof-only vocabulary no guarantee reads,
-`Sanity` shows the joint guarantee's hypotheses hold, and `Coverage` proves the inference-only policy's
-`Slowdown.SecurityProofs.CapabilityFloor`. `security/lean-audit.json` pins each guarantee's theorem, so a
-change to the guarantee, or to a definition it reads, changes its record.
-
-## Where the top guarantees are proved
-
-* `Joint`, `CovertResidual`: `Joint.lean`; `JointPerRun`: `PerRunJoint.lean`.
-* `JointPeriodLive`, `JointPooledLive`, `JointPooledBlocksLive`: `JointLive.lean`.
-* `ComputeOfPouw`: `Pouw.lean`; `Compose.CircuitCredit`: `Compose.lean`; `ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod`:
-  `ComposeMonitoringPeriod.lean`.
-* `TS.Sm90SheetHeadline`: `HeadlineDc/Sm90.lean`; `TS.Sm120SheetHeadline`: `Headline/Sm120.lean`.
-* `CapacityOfStateBound`: `Capacity.lean`; `Memory.Adds`: `Memory.lean`.
-* `BandwidthOfAudit`: `BandwidthAudit.lean`; `Bandwidth.SecurityProofs.AuditRO`: `Bandwidth/AuditRO.lean`.
-* `AccelAdditive`: `Additive.lean`.
-* `ServingBlocks.ServingBlockBound`: `ServingBlocks.lean`.
-
-## Where to look
-
-* The statements and the vocabulary they read: `security/Definitions/ResourceAccounting.lean`, whose module docstring lists the
-  top guarantees with one line each.
-* The properties these proofs prove: `security/Properties/ResourceAccounting/`.
-* Which of these statements protocol soundness rests on: `security/README.md`.
--/
+/-! The proofs of resource accounting's guarantees, `Accounting.SecurityProofs.X : Accounting.Guarantees.X` each, and of its properties. -/
 
 @[expose] public section

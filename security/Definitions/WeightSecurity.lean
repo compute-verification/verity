@@ -3,29 +3,7 @@ module
 public import Definitions.Core.RegisteredCircuit
 public import Definitions.Core.Interaction
 
-/-!
-# Model weight security: the setting
-
-The weights `θ` are the values of the declaration's registered inputs, and the circuit serves a function
-`C : Θ → X → Y` (`served`): a query `x` is the values of every other input gate (a prompt, a sampling seed, anything
-that isn't the weights) and the answer `C θ x` the output gates' values. The statements take any `C`, so they hold at
-`served d` for every declaration `d`. The weights come from coins nobody outside the datacenter sees,
-`θ = gen ω` with `ω` uniform (training's randomness), and every other coin of the world, the outsiders' and the
-datacenter's, is one uniform `r` independent of `ω`. Probability is Core's (`Claims.Pr`).
-
-* An `Outsider` is everyone outside the datacenter at once (users, an accomplice, anyone who pools what they saw): it
-  picks each query from its coins and what it has seen so far (adaptively), and at the end outputs a model.
-  `Outsider.view` is what it has seen after `n` rounds against a responder, `Outsider.model` what it outputs.
-* `honest C θ` is honest use: each query is answered with `C θ x`.
-* A `Channel` with covert strings `S` is a way for the datacenter to deviate from honest use that a covert string
-  `s ∈ S` describes, `log₂ |S|` bits: with `s`, after the outsider's view `h` and its query `x`, the datacenter evaluates
-  the served function at the input `ask s r h x` (it may change the query, set the inputs the user doesn't, or ignore
-  it), and the outsider receives `tell s r h x y`, `y` the honest answer there (it may change the answer, add timing,
-  refuse, or append chunks of `s`). Neither reads `θ`: everything about the weights beyond honest answers is in `s`,
-  which the datacenter may choose knowing `θ` and everything else.
-* `Outsider.withString O ch s` is `O` with the covert string `s` written in: an honest-use party that asks the served
-  function what the datacenter would evaluate and feeds `O` what the channel would tell it (`Outsider.rebuild`).
--/
+/-! Model weight security's setting: the served function, outsiders, honest use and covert channels. -/
 
 @[expose] public section
 

@@ -3,19 +3,7 @@ module
 public import Definitions.Pouw.Game.Defs
 public import Definitions.Pouw.PearlC.Game
 
-/-!
-# PoUW's hashless cost models, and Pearl-C's gap property with the budget per coin
-
-A PoUW guarantee bounds its event together with no SHA-512 collision among the inputs the run hashed (`Pouw.Breaks`).
-A model whose programs hash nothing never breaks, and the guarantees that drop the break from their event take it.
-
-`Pouw.PearlC.GGapPerCoin` is the gap property with the budget per coin (claim `pouw-gamma-per-coin`, a named
-conjecture): an adversary is bounded by `T` only on the coins where its cost is at most `T`, and wins there. The gap
-property on a machine that stops a run at its budget (`Pouw.PearlC.CostModel.withStop`) is equivalent to it.
-
-Both are named assumptions under `Definitions.Assumptions`, in a module of their own that reads only PoUW's and
-Pearl-C's games, so the public PoUW proofs import it without the rest of the named assumptions.
--/
+/-! PoUW's hashless cost models, and Pearl-C's gap property with the budget per coin, a named conjecture. -/
 
 @[expose] public section
 

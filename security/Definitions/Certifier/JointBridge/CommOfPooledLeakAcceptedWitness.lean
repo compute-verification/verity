@@ -35,22 +35,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# An honest run of the network attester's monitoring period, pooled (trusted definitions; used only by the
-satisfiability witnesses)
-
-`honestPooled`: a run that realizes the network attester's monitoring period of two execution phases
-(`RealizesCommOfPooledLeakAccepted`), at which the two inputs of
-`ResourceAccounting.Guarantees.Bridge.CommOfPooledLeakAccepted` hold together.
-
-Each execution phase is one step of the circuit that negates its one ingress bit (`negStmt`, on the layout
-`NetTiming.Witness.notLay`). The period's operator sends `false` at every step of every execution phase, whatever the
-phases closed before it observed, and the network attester's record of each phase is the frame that circuit then
-puts on the link (`frameRecord`). The period run (`honestNet`) is idle, on the device with no capacity over the
-circuit with no gate, as `acceptAllNet` is; its network audit accepts when both phases' records meet the leak relation
-with no incorrect proof block, and its claim is the monitoring period's good event at that record. The network
-attester sees no connection and its run is its code's (`honestFmt`), so `trusted-device` holds there by definition.
--/
+/-! An honest run of the network attester's pooled monitoring period, which only the satisfiability witnesses use. -/
 
 @[expose] public section
 

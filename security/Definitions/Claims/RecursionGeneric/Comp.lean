@@ -4,34 +4,7 @@ public import Definitions.Claims.RecursionGeneric.Proto
 public import Definitions.Claims.RecursionGeneric.Plans
 public import Definitions.Claims.Sampling
 
-/-!
-# The composition: a compiled verifier with any outer extraction
-
-`Comp Coin` is what the recursion's knowledge soundness reads of a compiled verifier and the outer proof system: the
-compiled verifier `V`; the inner statement it carries (`xI`) and whether a statement parses into the relation's form
-(`parses`); the outer extraction `E_O` over `V`'s runs with its witnesses `WO`, the relation they are extracted for
-(`RO`) and its errors `κ_O`, `γ_O`; the inner messages a rerun's witnesses give (`msgs`); the SHA-512 evaluations a finder
-searches at a rerun (`calls`: those the witnesses record and those the finder evaluates itself, the inner setup's and the
-inner verifier's on the witnesses' messages) and the compiled verifier's own at a run's staged statements (`own`).
-
-Nothing here fixes the outer proof system: `E_O` is any extractor meeting `Claims.KS` at `RO`. An outer argument embedded
-session by session (`Definitions.Claims.RecursionGeneric.Outer`, `Compiled.toComp`) is one; Flock's `E_O`
-(`Claims.Recursion.EO`) at today's compiled record is another (`Proofs.Flock.RecGeneric.AtFlock`).
-
-`E*` (`Comp.E`) is the inner protocol's `E^rep` at the inner statement, each rerun served by `E_O` at that rerun, the
-inner view read off `E_O`'s witnesses (`Comp.decProg`) as the run of `Open(Π, S)` on the messages they give. `E*` is a
-rerun program that reads no `H`: the inner view's run is an oracle program (`Comp.replayOC`) run through `ofOC`, so
-each of its SHA-512 calls is a `.hash` node, which `RP.eval` charges. Its knowledge error is the inner protocol's,
-`N_I = 1 + m_Π·k_Π` times `E_O`'s, and the inner terms' finders run on the composite's reruns (`Comp.innerModel`,
-`Comp.verModel`), each charged the rerun's calls with the inner view's (`Comp.rerunCost`), plus `E_O`'s witnesses
-outside `R_O` at each rerun the terms read (`Comp.PrOut`, `Comp.reads`).
-
-`Comp.Contract H K IV x` is what the compiled verifier must give at the statement `x`, each a code fact proved per
-compiler (and, for `forks` and `accepts`, per circuit V* proves, where some run accepts `x`); `Comp.OuterKSAt` is
-`E_O`'s knowledge soundness at `x`. The composite's bound at `x` reads both at `x` alone.
-
-Statements only: definitions, no proofs.
--/
+/-! The composition: a compiled verifier with any outer extraction. -/
 
 @[expose] public section
 
@@ -134,8 +107,6 @@ rounds at each rerun the inner `E^rep` makes and each rerun a term's plan reads 
 noncomputable def β (K : Comp Coin) (I : Proto Coin W) (x : Msg) : ℝ :=
   ((K.NI I x : ℝ) + K.reads I x) * I.V.k (K.xI x)
 
-/-! ## The composite's reruns as runs -/
-
 /-- `E_O`'s witnesses at a rerun (the compiled verifier's coins and `E_O`'s). -/
 def wits (K : Comp Coin) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (u : (Fin (K.V.k x) → Coin) × K.EO.C x) : Option K.WO :=
@@ -199,8 +170,6 @@ def verModel (K : Comp Coin) (IV : Verifier Coin) (H : Msg → Msg) {Ω : Type} 
   coins u := coinSeq fun i : Fin (IV.k (K.xI x)) => coinSeq u.1 i.val
   log ω u := K.rerunCalls H P x ω u ++ K.ownAt H P x ω u
   cost := K.rerunCost IV H P x
-
-/-! ## The compiler's contract, at a statement -/
 
 /-- `E_O` gives witnesses at `x` only on accepted runs (it replays the judged run first). -/
 def Replays (H : Msg → Msg) (K : Comp Coin) (x : Msg) : Prop :=

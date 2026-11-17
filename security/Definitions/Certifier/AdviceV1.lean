@@ -7,40 +7,8 @@ public import Mathlib.Tactic.Attr.Core
 public import Mathlib.Tactic.ToAdditive
 import Mathlib.Tactic.Finiteness.Attr
 
-/-!
-# Advice v1's charge: the counted coded length of a decision stream under the registered book
-
-Definitions only. They mirror `verity/protocols/accounting/certifier/verifier/arith_encode.py`'s references one for one, with each
-Python name in its docstring: `ChargeCount_v1{N}`'s charge (`reference_charge`), the bits ENC-CODE's 32-bit
-Witten–Neal–Cleary arithmetic coder (`benchmarks/network_e2e/encodings/code.py`'s `ArithEncoder`) would write for a
-execution phase that sends only decisions, counted rather than written (the counting variant, which the composition charges).
-
-An execution phase codes the number of decisions it sends (n_arrived) as the book's Exp-Golomb bin and its offset in the bin, then
-each decision at the book's KT estimate for its context `min(run, 2)`, then the four counts the execution phase sends as 0, and
-the finish. The execution phase's charge is the scalings the coder takes, one segment bit each, and 2 more at the finish of a
-execution phase that used the coder.
-
-**Scope: decision-only windows.** The windows modelled send decisions only: their four counts are sent as 0 (`zeros`),
-which is `ChargeCount_v1`'s scope. An execution phase that sends a nonzero count is not covered.
-
-**The decision stream.** An execution phase's slots are the scan's asks, and `ChargeCount_v1`'s witness is which slots ask (`en`)
-and their decisions (`bit`). A slot that doesn't ask changes nothing, so the charge is a function of the decisions of the
-slots that ask, in order: the execution phase's decision stream, a `List Bool`. The run's decision stream is one per execution phase. The
-asks themselves are not advice: the compile slice, its charge included, is proved on every advised execution phase and never
-sampled, so `en` is the scan that slice proves, pinned by it. The carry from execution phase to execution phase (the KT counts and the
-run) is committed across windows and chained from the book's priors (`charge_chain.check_chain`), as `charges`
-starts from `priors` and passes each execution phase's carry on.
-
-**What is left.** That `ChargeCount_v1`'s circuit computes `executionPhase` is not proved in Lean. circuit-check holds the circuit
-to the Python reference, and these definitions are held to that reference by the charge difftest: the certifier
-program's `NetworkAttester.AdviceV1`, which `Proofs.Certifier.Code` proves equal to these (`CodeChargesV1`), gives
-what `reference_charge` gives on 4,000 random instances, accepted and refused (`runs` in the certifier program's
-`lean-audit.json`).
-
-**Refusals.** Each reference refuses (ok 0) where the Python does, and then specifies nothing else, so each function here
-returns `none` there. On the states an execution phase reaches (`low ≤ high < 2^32`), the Python's masks `& (HALF − 1)` are
-`% HALF`, as below.
--/
+/-! Advice v1's charge, mirroring `arith_encode.py`'s references: it covers decision-only windows, and that
+`ChargeCount_v1`'s circuit computes `executionPhase` is not proved in Lean. -/
 
 @[expose] public section
 
@@ -49,13 +17,10 @@ namespace NetTiming.AdviceV1
 /-- `HALF`: the coder's ends are 32 bits (`PREC`). -/
 def HALF : ℕ := 2 ^ 31
 
-/-- `Q1`. -/
 def Q1 : ℕ := 2 ^ 30
 
-/-- `Q3`. -/
 def Q3 : ℕ := 3 * 2 ^ 30
 
-/-- `TOP`. -/
 def TOP : ℕ := 2 ^ 32 - 1
 
 /-- `MAX_TOTAL`: a symbol's total. -/
@@ -78,13 +43,10 @@ structure Tally where
   used : Bool
   bits : ℕ
 
-/-- An execution phase's first state (`Tally()`). -/
 def Tally.fresh : Tally := ⟨0, TOP, false, 0⟩
 
-/-- code.py's loop scales the interval: E1 or E2 (`high < HALF or low >= HALF`), or E3. -/
 def scales (lo hi : ℕ) : Bool := decide (hi < HALF ∨ HALF ≤ lo ∨ (Q1 ≤ lo ∧ hi < Q3))
 
-/-- One scaling (`_scale`'s body): E1 and E2 drop the top bit, E3 subtracts `Q1`, then both ends shift up. -/
 def shift (lo hi : ℕ) : ℕ × ℕ :=
   if hi < HALF ∨ HALF ≤ lo then (2 * (lo % HALF), 2 * (hi % HALF) + 1) else (2 * (lo - Q1), 2 * (hi - Q1) + 1)
 
@@ -106,8 +68,6 @@ def countStep (st : Tally) (cum freq total : ℕ) : Option Tally :=
       if st.bits + p.2.2 < 2 ^ CW then some ⟨p.1, p.2.1, st.used || freq != total, st.bits + p.2.2⟩ else none
   else none
 
-/-- **One decision, counted** (`reference_count_step` with `BIN` = 1): the bit `b` at frequencies `f0, f1`, coded as
-`encode(f0 if b else 0, f1 if b else f0, f0 + f1)`. -/
 def bitStep (st : Tally) (f0 f1 : ℕ) (b : Bool) : Option Tally :=
   if 1 ≤ f0 ∧ 1 ≤ f1 ∧ f0 + f1 ≤ MAX_TOTAL then countStep st (if b then f0 else 0) (if b then f1 else f0) (f0 + f1)
   else none
@@ -119,12 +79,10 @@ def ktFreq (counts : List (ℕ × ℕ)) (ctx : ℕ) : Option (ℕ × ℕ) :=
     some (2 * (counts.getD ctx (0, 0)).1 + 1, 2 * (counts.getD ctx (0, 0)).2 + 1)
   else none
 
-/-- The bit `b` raises its count, and once the two reach `2^KW`, both are halved, rounding up. -/
 def ktBump (c : ℕ × ℕ) (b : Bool) : ℕ × ℕ :=
   let m := if b then (c.1, c.2 + 1) else (c.1 + 1, c.2)
   if 2 ^ KW ≤ m.1 + m.2 then ((m.1 + 1) / 2, (m.2 + 1) / 2) else m
 
-/-- **The book's KT counts after a decision** (`reference_book_kt`'s `counts'`). -/
 def ktRaise (counts : List (ℕ × ℕ)) (ctx : ℕ) (b : Bool) : List (ℕ × ℕ) :=
   counts.set ctx (ktBump (counts.getD ctx (0, 0)) b)
 
@@ -134,18 +92,14 @@ structure Carry where
   counts : List (ℕ × ℕ)
   run : ℕ
 
-/-- The run after a decision: an arrival (`b`) resets it, and it stops at 2. -/
 def nextRun (run : ℕ) (b : Bool) : ℕ := if b then 0 else min (run + 1) 2
 
-/-- **The decisions** (`reference_charge`'s loop over the slots that ask): each at the book's estimate for its context
-`min(run, 2)`. -/
 def decisions : Tally → Carry → List Bool → Option (Tally × Carry)
   | st, cy, [] => some (st, cy)
   | st, cy, b :: ds =>
     (ktFreq cy.counts cy.run).bind fun f =>
       (bitStep st f.1 f.2 b).bind fun st' => decisions st' ⟨ktRaise cy.counts cy.run b, nextRun cy.run b⟩ ds
 
-/-- **The counts sent as 0** (`ZERO_COUNTS`), each at its table's bin 0 `(freq, total)`. -/
 def zeros : Tally → List (ℕ × ℕ) → Option Tally
   | st, [] => some st
   | st, z :: zs => (countStep st 0 z.1 z.2).bind fun st' => zeros st' zs
@@ -164,34 +118,26 @@ structure Book where
   zeros : List (ℕ × ℕ)
   priors : List (ℕ × ℕ)
 
-/-- **n_arrived** (`reference_charge`'s first two steps): its Exp-Golomb bin `j = bitlen n` at the book's table, then,
-once `j ≥ 2`, its offset in the bin, uniform. -/
 def arrive (bk : Book) (n : ℕ) : Option Tally :=
   (countStep Tally.fresh (bk.arrived.take n.size).sum (bk.arrived.getD n.size 0) bk.total).bind fun st =>
     if 2 ≤ n.size then countStep st (n - 2 ^ (n.size - 1)) 1 (2 ^ (n.size - 1)) else some st
 
-/-- **One execution phase's charge** (`reference_charge`, `ChargeCount_v1{N}`): of an execution phase of `N` slots whose slots that ask
-decide `ds`, under the book `bk` and the carry `cy`, the charge and the next execution phase's carry. -/
 def executionPhase (bk : Book) (N : ℕ) (cy : Carry) (ds : List Bool) : Option (ℕ × Carry) :=
   if ds.length ≤ N ∧ cy.run < 3 then
     (arrive bk ds.length).bind fun st =>
       (decisions st cy ds).bind fun p => ((zeros p.1 bk.zeros).bind finish).map fun L => (L, p.2)
   else none
 
-/-- **A run's charges**: each execution phase's, the carry passed along. -/
 def chargesFrom (bk : Book) (N : ℕ) : Carry → List (List Bool) → Option (List ℕ)
   | _, [] => some []
   | cy, ds :: ws => (executionPhase bk N cy ds).bind fun p => (chargesFrom bk N p.2 ws).map fun ls => p.1 :: ls
 
-/-- **The run's charges per execution phase**, from the book's priors and run 0, for the decision streams of `W` windows. -/
 def charges (bk : Book) (N : ℕ) {W : ℕ} (a : Fin W → List Bool) : Option (List ℕ) :=
   chargesFrom bk N ⟨bk.priors, 0⟩ (List.ofFn a)
 
-/-- **Advice v1's decision streams**: those of `W` windows whose charge no execution phase refuses. A refused execution phase fails its
-compile slice's proof block, so no accepted run has other advice. -/
+/-- A refused execution phase fails its compile slice's proof block, so no accepted run has other advice. -/
 def Streams (bk : Book) (N W : ℕ) : Type := {a : Fin W → List Bool // (charges bk N a).isSome}
 
-/-- **Advice v1's charge** (I1's `bits(advice, w)`): execution phase `w`'s. -/
 def bits (bk : Book) (N : ℕ) {W : ℕ} (a : Streams bk N W) (w : Fin W) : ℕ :=
   ((charges bk N a.1).getD []).getD w 0
 

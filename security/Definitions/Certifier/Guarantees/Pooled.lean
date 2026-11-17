@@ -33,21 +33,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The incorrect proof blocks over a monitoring period of sampled audits
-
-A monitoring period is `m` windows, each audited on its own live coins: the period's coins are a product `Fin m → Ω`,
-window `i` sampling `k i` of its `n i` proof blocks at `ω i`, a uniform `k i`-subset. The blocks incorrect at window
-`i`'s registration (`W i ω`) are fixed before its sample: they read only the earlier windows' coins. Every incorrect block
-risks detection in its window, and the windows' samples are independent, so the escapes multiply: with `q ≤ k i / n i` in
-every window, every window's audit accepts while the monitoring period holds at least `F` incorrect blocks in total with
-probability at most `(1 - q)^F` plus the windows' soundness errors `ε i`, whatever the number of windows. At
-`F ≥ ln (1/δ) / q` that is at most `δ + Σ_i ε_i`.
-
-The statement is a fact of probability over every sample, acceptance event and error: the sample's sampling design and each window's
-soundness are its hypotheses. A deployment's instances of them (A3 for the sample, `Claims.SamplingGeneric.Compiled.KS`
-for each window) come in where it is applied to the sampled verifier.
--/
+/-! The incorrect proof blocks over a monitoring period of sampled audits, a fact of probability whose sampling design and
+per-window soundness are hypotheses. -/
 
 @[expose] public section
 

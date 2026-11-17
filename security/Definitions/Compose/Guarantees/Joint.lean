@@ -2,25 +2,8 @@ module
 
 public import Definitions.Compose.Joint
 
-/-!
-# The joint guarantee (trusted)
-
-A joint audit runs the compute, bandwidth and capacity audits on one device at once (`ResourceAccounting.Run`). Each audit's
-guarantee, in the shape of PoUW's `Pouw.Guarantees.EndToEnd`, holds against the other two audits' coins as advice
-(`Run.ComputeSound`, `Run.BandwidthSound`, `Run.CapacitySound`). Then the probability that every audit accepts and some
-account is below its certificate (W_cert of work, Q_cert of reads, S_cert of capacity) on every one of its audit's own
-coins is at most the three errors summed (`Joint`). Because every step fits the device (`Step.Fits`), the same bound
-holds for the other accounts being beyond a residual on every one of its audit's own coins: F·T − W_cert of work,
-BW·T − Q_cert of reads and M − S_cert of capacity on average (`CovertResidual`).
-
-Both bound an account's worst case over its audit's own coins, not its charge at the coins flipped. Outside the error, in
-an accepted run, `Joint` says each account reaches its certificate on some coin of its audit, and `CovertResidual` that
-some coin of each audit leaves the other accounts within its residual. A device could do little charged work and a lot
-of covert work on a few of the compute coins. The per-run reading, at the coins flipped, is `JointPerRun` and
-`CovertResidualPerRun` (`Definitions.Pouw.Guarantees.PerRun`).
-
-Each `def G : Prop` is proved by `ResourceAccounting.SecurityProofs.G : ResourceAccounting.Guarantees.G` (`Proofs.Compose.Joint`).
--/
+/-! The joint guarantee of the compute, bandwidth and capacity audits on one device, which bounds each account's worst case
+over its audit's own coins, not its charge at the coins flipped. -/
 
 @[expose] public section
 

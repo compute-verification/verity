@@ -3,24 +3,8 @@ module
 public import Definitions.Claims.RecursionGeneric.Plan
 public import Definitions.Claims.RecursionGeneric.Server
 
-/-!
-# The inner protocol, abstract
-
-`Proto Coin W` is what the recursion asks of an inner proof system: a public-coin verifier over byte strings with its
-relation, readable scope and repetition extractor (`Claims.Recursion.Inner`), the bytes that answer a round (`ans`, its
-coin's), and its knowledge error against provers that may abort after its rounds, stated with run finders
-(`Proto.KSAbortLin`): `κ` plus, per term, a weight times a run finder's success (`Plan.lean`) plus a tail.
-
-`Proto.WF` is what the recursion's proof reads of the terms: the answers decode to their coins, weights and tails are
-nonnegative, and each term's finder meets a bad run at most `d` times as often as one run is bad (`RunFinder.ReadsLe`).
-
-The inner extractor is the repetition extractor `E^rep`: it reruns the whole protocol on fresh coins, waits for accepted
-reruns, and assembles a witness from their opened views. So the recursion covers inner protocols whose knowledge
-soundness `E^rep` shows; an inner extractor that forks at a later round (tree extraction) or extracts straight-line
-is not a `Proto`.
-
-Statements only: definitions, no proofs.
--/
+/-! The inner protocol, abstract: one whose knowledge soundness its repetition extractor shows; one that extracts by tree
+or straight-line is not a `Proto`. -/
 
 @[expose] public section
 

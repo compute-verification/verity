@@ -2,23 +2,7 @@ module
 
 public import Definitions.Claims.RecursionLin
 
-/-!
-# Run finders: an inner protocol's error terms, in a form the recursion carries
-
-A recursion generic in its inner protocol needs the inner protocol's knowledge error stated over collision finders the
-compiler's proof can rebuild at the composite without knowing the inner protocol. A finder that reads a run only
-through whether it accepts and its coins, forks runs at rounds, and searches the calls of the runs it names for a
-collision is such a finder: it is a plan (`Plan`) over runs named by how they were made (`RunExp`), and it runs in any
-model of runs (`RunModel`). Its model at the inner protocol's own runs (`runModel`) is where the inner protocol's KS is
-stated; its models at the composite's reruns (`Claims.RecGeneric.Comp.innerModel`, `Comp.verModel`) are where the
-recursion's bound reads it.
-
-`ReadsLe F d`: in every model and for every predicate `bad` of runs, a run of `F`'s plan asks about a run where `bad`
-holds and the run accepts with probability at most `d · Pr[bad]`. It is a property of the plan alone, Wald's bound for
-gated loops, and it is what bounds the cost of the runs where the two models disagree.
-
-Statements only: definitions, no proofs.
--/
+/-! Run finders: an inner protocol's error terms, in a form the recursion carries. -/
 
 @[expose] public section
 

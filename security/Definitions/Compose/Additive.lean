@@ -2,23 +2,7 @@ module
 
 public import Definitions.Core.Accel.Machine
 
-/-!
-# A device's period on the machine model (trusted)
-
-What compute additivity on the machine model 𝓜 (`Verity.Accel.Machine`) is stated over
-(`ResourceAccounting.Guarantees.AccelRate`, `AccelAdditive`):
-
-* `AccelRun m`: one run of 𝓜, a program, the state it starts from, a schedule and its seconds `T` (the run meets the
-  model when it `Fits` at `T`). A run receives no data once it starts, so a device's period is a list of runs back to
-  back: each datum it receives (a verifier's coins, a request) starts the next run from the state it is written into.
-* `stream es`: the instructions the runs `es` issue, in order; `periodSeconds es`, their seconds summed.
-* `issued iss`: the instructions of `iss`, each an occurrence `k`, the `k`th instruction; `occUse iss r k`, the units
-  of resource `r` occurrence `k` uses. A subprotocol's instructions are a set of occurrences, so subprotocols that share
-  no instruction are disjoint sets.
-
-𝓜 has no time inside a run, only the run's seconds, so a window it measures is a block of a period's runs back to back,
-which is a period itself.
--/
+/-! A device's period on the machine model 𝓜: runs back to back, since a run receives no data once it starts. -/
 
 @[expose] public section
 

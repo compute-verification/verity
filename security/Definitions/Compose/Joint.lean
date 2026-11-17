@@ -3,32 +3,8 @@ module
 public import Definitions.Registration.Device
 public import Definitions.Pouw.Basic.Prob
 
-/-!
-# A joint audit's run, and what each audit's guarantee says about it (trusted)
-
-A joint audit runs three audits on one device at once: the compute audit (PoUW), the bandwidth audit and the capacity
-audit (PoUS). Each flips coins of its own (`ΩW`, `ΩQ`, `ΩS`), uniformly and independently (`Pouw.pr` over the product),
-and has an account and a window of its own. The device sees every coin, so its schedule is a function of all three.
-
-Each audit's guarantee is stated in the shape of PoUW's `Pouw.Guarantees.EndToEnd`, on its own account and its own
-coins: whatever the other two audits' coins are (the device may know them), a run whose account uses at most `B` of
-the audit's resource on every one of its coins passes the audit with `B` below the certificate with probability at
-most its error. So the other audits' coins are advice the bound holds against, and the guarantee is about the
-account's charge alone: what the other accounts use is neither credited to it nor needed by it.
-
-* `ComputeSound p W ε`: the compute account's work at price `p`, certificate W (W_cert).
-* `BandwidthSound Q ε`: the bits the bandwidth account read from device memory, certificate Q (Q_cert).
-* `CapacitySound S ε`: the device memory the capacity account held over its window, in bit-ticks (one bit held for one
-  tick is one bit-tick), certificate `S * len` bit-ticks, which is S bits on average (S_cert).
-
-The events these guarantees bound quantify over the audit's own coins; they are not about the coin flipped. At a value of
-the other audits' coins, an account is short when its charge is below the certificate on every one of the audit's own
-coins, so its worst case over them is below the certificate (`ComputeShort`, `BandwidthShort`, `CapacityShort`). The
-other accounts are covert when their charges are beyond the residual (the device's capacity over the window, less the
-certificate) on every one of the audit's own coins (`ComputeCovert`, `BandwidthCovert`, `CapacityCovert`). A device
-that does little charged work and a lot of covert work on a few of the compute coins is in neither event. The per-run
-reading, at the coins flipped, is `Run.ComputeSoundPerRun` and the two beside it (`Definitions.Pouw.PerRun`).
--/
+/-! A joint audit's run, and what each audit's guarantee says about it, the other audits' coins advice the bound holds
+against. -/
 
 @[expose] public section
 
@@ -36,25 +12,17 @@ namespace ResourceAccounting
 
 /-- The resources a joint audit certifies, each by an audit of its own. -/
 inductive Resource
-  /-- work, which PoUW's compute audit certifies -/
   | compute
-  /-- bits read from device memory, which the bandwidth audit certifies -/
   | bandwidth
-  /-- device memory held, which PoUS's capacity audit certifies -/
   | capacity
 
 /-- A joint audit's run on device `d` with accounts `α`: each resource's account and window, the schedule at each value
 of the compute, bandwidth and capacity audits' coins, which fits the device, and each audit's verdict. -/
 structure Run {ι : Type} (d : Device ι) (α : Type) [Fintype α] (ΩW ΩQ ΩS : Type) where
-  /-- the account a resource is charged to -/
   acct : Resource → α
-  /-- the window a resource's audit measures -/
   win : Resource → Window
-  /-- the schedule at the audits' coins -/
   schedule : ΩW × ΩQ × ΩS → Schedule ι α
-  /-- every schedule fits the device -/
   fits : ∀ ω, (schedule ω).Fits d
-  /-- the verdict of a resource's audit at the audits' coins -/
   accepts : Resource → ΩW × ΩQ × ΩS → Prop
 
 namespace Run

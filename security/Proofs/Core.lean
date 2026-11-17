@@ -60,10 +60,6 @@ public import Proofs.Core.HongKung
 public import Proofs.Core.UnionBound
 public import Definitions.Core.Annotation
 
-/-!
-# Proofs of core's guarantees
-
-One theorem `Verity.SecurityProofs.G : Verity.Guarantees.G` per proved guarantee, and every lemma behind them.
--/
+/-! Proofs of core's guarantees, one `Verity.SecurityProofs.G : Verity.Guarantees.G` per proved guarantee. -/
 
 @[expose] public section

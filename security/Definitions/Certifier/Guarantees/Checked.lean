@@ -34,19 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The leak bound with checked inputs
-
-`SampledLeakAccepted` with each statement's checked inputs `chk` left out of the count: the free inputs a check on the
-whole run pins (`Definitions.Certifier.Checked`). Each statement's check pins its checked inputs
-(`CheckedUnique`), and the trace's run is valid except with probability `εchk` (`CheckedWitness` at `traceRun`), so a
-run whose observations the bound counts is a valid run, whose checked inputs the rest of the run fixes: they cost no
-advice bits. The incorrect proof blocks' committed bits are charged at the most any possible incorrect set commits,
-rather than at a bound the statement takes.
-
-A monitoring period's bound with checked inputs is `PooledLeakCarried` (`Guarantees.Carried`), over runs that carry the
-pool; at the empty pool it bounds windows that each hold a pool of their own.
--/
+/-! The leak bound with checked inputs left out of the count, since a check on the whole run pins them. -/
 
 @[expose] public section
 

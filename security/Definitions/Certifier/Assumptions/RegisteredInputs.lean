@@ -34,19 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The registered inputs hold the registration's values
-
-Definitions only. The sampled leak bounds count the accepted observation sequences at the inputs pinned to given values
-at a statement's registered inputs (`AsReg`). A monitoring period's good event takes those values to be the
-registration's: the extracted trace holds them at every registered input (`RegisteredInputsHeld`).
-
-It is an open premise of a statement that reads it, and the conclusion of none. The registration commits its values
-under the statement's roots (`RegOpens`), and an extracted trace that opens a registered input to another value makes,
-with the registration's opening there, two passing openings of one position to different values: under the
-commitment's binding the calls that check them collide, and `Breg` is that collision's finder. Where no input is
-registered it holds of every trace.
--/
+/-! The registered inputs hold the registration's values (`RegisteredInputsHeld`), an open premise of the statements that read it. -/
 
 @[expose] public section
 

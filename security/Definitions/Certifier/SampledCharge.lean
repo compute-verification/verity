@@ -33,16 +33,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The sampled audit's charge: what the incorrect proof blocks add to the leak
-
-Definitions only. An accepted sampled audit gives `Accepted` by the circuit's Program at `δ`, with the declared advice
-holding values at the incorrect proof blocks' committed gates (`RAcc`, `Definitions.Certifier.SampledAudit`). Those
-values are the prover's to choose, and so is which proof blocks are faulty, so the leak bound of a sampled audit
-charges, beyond the inputs the circuit reads besides the ingress, the incorrect proof blocks' committed bits (`faultyBits`)
-and the choice of incorrect set among the ones `RAcc δ` allows (`incorrectSets`). The sequences it counts are
-`AccSeqsSampled`. Over a monitoring period a window's operator reads the windows before it, `runsBefore`.
--/
+/-! The sampled audit's charge: what the incorrect proof blocks add to the leak. -/
 
 @[expose] public section
 
@@ -75,16 +66,6 @@ def AccSeqsSampled {L K S : ℕ} (C : Prog) (P : Partition) (d : Design) (lay : 
     (As : Set (ℕ → Bool)) (δ : ℝ) (op : ℕ → List (Obs L K S) → List Bool) (D : ℕ) : Set (List (Obs L K S)) :=
   {o | o.length = n ∧ (∀ x ∈ o, x.jitter < D) ∧ ∃ F ∈ incorrectSets d P δ, AcceptedFaulty C P lay n As F op o}
 
-/-! ## The leak relation
-
-`RAcc` gives `Accepted` with the trace's committed values as the inputs besides the ingress. A count over `As`
-(`AccSeqsSampled`) then needs the circuit to accept with inputs among `As` whatever it accepts with the trace's
-(`AdviceIn`). That holds at the inputs pinned to the trace at a set `R` and `false` off the free inputs (`AsReg`),
-whatever the circuit, since the Program reads no other input. With `R` the registered inputs, the count leaves out
-the values the registration commits. -/
-
-/-- **Inputs among `As` suffice** at `δ` for the inputs `ρ`: a sequence accepted with a possible incorrect set and the
-inputs `ρ` besides the ingress is accepted with that set and inputs among `As`. -/
 def AdviceIn {L S : ℕ} (K : ℕ) (C : Prog) (P : Partition) (d : Design) (lay : BoundaryGates L S) (k : ℕ) (ρ : ℕ → Bool)
     (As : Set (ℕ → Bool)) (δ : ℝ) : Prop :=
   ∀ F ∈ incorrectSets d P δ, ∀ (op : ℕ → List (Obs L K S) → List Bool) (o : List (Obs L K S)),

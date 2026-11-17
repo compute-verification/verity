@@ -36,37 +36,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The leak through the network attester over a monitoring period of sampled audits
-
-A monitoring period is `n` windows, each audited by the sampled verifier at a statement it registered (`sw i`, with its
-partition `Pw i` and the values `ρ i` the registration commits at its registered inputs). The network attester is one
-device on the server's uplink, and it functions as an active network attester (`Definitions.Certifier.Tap`): one
-run of its code gives the cells the client receives and the observations the audits read, its record of those cells, so
-on every schedule its record format holds the client's view reads back from the observations. The network attester
-registers its records at the transfer gates: its openings `tops s` under the statement's roots, its signed root for the
-window, so they vary with what the server did
-(`CertifierRegisters`). `MonitoringPeriodLeakAccepted` composes the sampled leak bound at the network attester's rows (`RLeakCertifier`, with the
-prover's registered inputs pinned: `AsReg`) with that read-back, so the content term of the bound comes from the
-audits, not from a premise:
-
-* each window's audit, at a statement in its scope, fails the leak relation at the network attester's rows with
-  probability at most `δ + ε_ks + ε_bind + Pr[B_tap]` at that statement (`Claims.SamplingGeneric.Compiled.KS`'s errors,
-  and `B_tap` the collisions between the extracted trace's openings and the network attester's, under
-  `CommitmentScheme.Binds`);
-* where the network attester registers its observations, the secrets of a covert sender in the server whose every
-  window meets its good event (`ExecutionPhaseGood`) number at most
-  `#Ss · ∏_c (cap_c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #incorrectSets_i(δ) · 2^β_i · Dj^k_i`: the sender moves at most
-  `log2 #Ss + Σ_c log2 (cap_c + 1) + Σ_i (#(freeInputs_i \ reg_i) + log2 #incorrectSets_i(δ) + β_i + k_i·log2 Dj)` bits
-  through the network attester in the monitoring period.
-
-The union of the windows' failures over the monitoring period's live coins is not stated here. `ExecutionPhaseGood` is the
-event the first part bounds, plus one condition no proof here gives: the registration's values at the prover's
-registered inputs, which the registration's commitment binds. The network attester's rows are not pinned: they vary
-with the secret. The first part covers an extracted trace that leaves them outside the incorrect proof blocks, where every
-transfer gate is opened; the count charges an incorrect proof block's rows through the Program, from the free inputs, the
-incorrect sets, their committed bits and the timing. A proof block the sample missed is in the incorrect set.
--/
+/-! The leak through the network attester over a monitoring period of sampled audits; the union of the windows' failures
+over the period's live coins is not stated here. -/
 
 @[expose] public section
 
