@@ -34,3 +34,41 @@ From NAMES2, 6:22 PM PST. #10687 (tiers): the Lean builds and the records update
 - #10703 (threads) after mine: the same two content conflicts, plus security/Proofs/Slowdown/Witnesses.lean (a modify/delete), which resolves as the deletion. Then security/Definitions/Slowdown/Capability/Toy.lean, the one Capability file #10611 keeps, is imported by nothing, so the Lean check fails it as orphan.file. #10703's merge of main must delete Toy.lean and its lock record reads."Definitions.Slowdown.Capability.Toy". Nothing else names it [ran].
 #10703's records are running at 5058ca7762c, which merges #10687's b4d1f4d8b46: security r20261117-020910-2560 and security/Properties r20261117-021001-6997. #10713: r20261117-020728-2db2, running.
 
+[2026-11-17T02:26Z] d394a48d714d
+From PAGE (training). TRN-177, item 1: the benchmarks/nci deletion.
+
+Draft #10731, `cursor/training-delete-nci-4207`, head `40a00eed117`, base #10703's branch (`3438c2ec93a`). Not marked; it is compute-accounting's to read. It is not linked in Linear (no credentials); `research queue link 10731 --issue TRN-177` links it.
+
+- The base needs #10597 too. With #10597 still in, main's `families.py` and three slowdown tests load nci's `algorithms.json`, `bracket.py` and `tiers.py` [ran]. So the branch is #10703, then a local merge of #10597 (commit `d4dec775a3b`), then the deletion (commit `40a00eed117`, 55 files, +34/−11,624). Compute-accounting reads the last commit. In the merge, three files main changed after #10597's base and #10597 deletes are taken as deleted: `envelopes.py`, `operating.py` and `test_envelopes.py`. #10597 meets the same conflict when it merges main.
+- What goes:
+  - `benchmarks/nci` and `tests/benchmarks/nci` (4,091 Python lines with the tests);
+  - `theorem.py` (`multiple_bound`) and `test_theorem.py`;
+  - `hardware.toml`'s `location.rtx-pro-6000-server` and `fleet.tiers-reference`, which restated `tiers.py`'s server and which nothing reads [ran];
+  - two calibrations nothing else reads.
+- Rows that go:
+  - `benchmarks/README.md`'s index row;
+  - compute-accounting's `owns` entry for `benchmarks/nci/` in `registry.json`;
+  - the `artifacts.json` fixture row and its `.gitignore` line;
+  - 26 allowlist rows;
+  - `test_lean_vocabulary.py`'s entry for `theorem.py::Partition`.
+- Metrics removed: none. There is no `metrics.toml` in nci, and none names it.
+- What moves: `benchmarks/nci/calibrations.json` becomes `benchmarks/slowdown/data/calibrations.json`, with the three entries `params.py` reads. The registry's `policy.kimi-k2-1m-raw.{k,gamma}` and the range of `policy.v4-pro-session.k` come from it, so it can't simply go.
+- Readers in other lanes' files. None stops this; tell me if you read any as a stop:
+  - `benchmarks/spot_figures/figure1.py` (proofs') reads `policy.v4-pro-session.k` through the registry. It is unchanged, and the move keeps it working: its nine figure test files gave 112 passed, 1 skipped [ran].
+  - Edited, path lines only: the harness suite's `inputs` (`tests/benchmarks/harness/pyproject.toml`, benchmarks') listed five nci files.
+  - Edited, prose only:
+    - `benchmarks/README.md` (benchmarks') loses its index row;
+    - `.gitignore` (top's) loses one line;
+    - the inference-only verifier README (network-accounting's) loses a sentence and one "older name" that named `benchmarks/nci`.
+  - Not edited: `GLOSSARY.md:510` (top's) names `benchmarks/nci`. It goes to top in the sweep.
+- Ran:
+  - slowdown suite: 96 passed.
+  - `inference_only`: 86 passed, as at the merge commit.
+  - `circuit_properties`: 3 failed and 1 error, the same ones at the merge commit (environment).
+  - Root and lint, 13 files: 185 passed, 2 failed.
+    - `test_every_open_conjecture_names_a_test_that_exists` fails until #10703's lock update removes the three conjectures that name nci tests [inferred].
+    - `test_the_scan_sees_verity` fails at the merge commit too (environment).
+- Not run: `training_slowdown` (its conftest imports `torch`, absent here) and the check's runner. No Lean is touched.
+
+The sweep comes next.
+
