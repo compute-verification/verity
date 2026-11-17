@@ -172,11 +172,6 @@ class FakeLinear:
             page = self.open[start:start + int(re.search(r"issues\(filter: \$f, first: (\d+)", q)[1])]
             more = start + len(page) < len(self.open)
             return {"data": {"issues": {"pageInfo": {"hasNextPage": more, "endCursor": str(start + len(page))}, "nodes": page}}}
-        if "issues(filter" in q:
-            self.listed = v["f"]
-            return {"data": {"issues": {"nodes": [
-                {"identifier": "INF-2", "title": "later", "createdAt": "2026-10-14T02:00Z", "state": {"name": "In Progress"}},
-                {"identifier": "INF-1", "title": "first", "createdAt": "2026-10-14T01:00Z", "state": {"name": "Backlog"}}]}}}
         if "team { key }" in q:
             return {"data": {"issue": {"id": "I1", "identifier": "INF-1", "url": "https://linear.app/x/issue/INF-1",
                                        "team": {"key": self.team_key}, "labels": {"nodes": [{"name": n} for n in self.issue_labels]}}}}
@@ -328,7 +323,7 @@ def test_a_state_is_matched_by_name_before_type_so_in_progress_is_never_the_firs
         lin.move("INF-1", "Doing")
 
 
-def test_the_state_comment_and_list_verbs(fake, registry, capsys, lin, tmp_path):
+def test_the_state_and_comment_verbs(fake, registry, capsys, lin, tmp_path):
     lin.subscribers["I1"] = []                                                                 # an issue filed earlier
     rc, out, _ = run(capsys, "linear", "state", "INF-1", "In Progress")
     assert rc == 0 and out.strip() == "INF-1 In Progress" and lin.moved == [("I1", "S3")]
@@ -350,12 +345,6 @@ def test_the_state_comment_and_list_verbs(fake, registry, capsys, lin, tmp_path)
     rc, out, _ = run(capsys, "linear", "comment", "INF-1", "--file", str(body), "--as", "infra")
     assert rc == 0 and out.strip() == "INF-1 commented"
     assert lin.sent("commentCreate")[-1][1]["i"] == {"issueId": "I1", "body": "@infra: postmortem: a long body\n"}
-    rc, out, _ = run(capsys, "linear", "list", "infra")
-    assert rc == 0 and out.splitlines()[:2] == ["INF-1  Backlog  first", "INF-2  In Progress  later"]   # oldest first
-    assert out.splitlines()[2] == f"states: {slack.LINEAR_STATES}" and "In Progress = someone is on it now" in slack.LINEAR_STATES
-    assert lin.listed == {"team": {"id": {"eq": "T-infra"}}, "state": {"type": {"nin": ["completed", "canceled"]}}}
-    assert run(capsys, "linear", "list", "INF", "--state", "In Progress")[0] == 0
-    assert lin.listed["state"] == {"name": {"eqIgnoreCase": "In Progress"}}
     rc, _, err = run(capsys, "linear", "state", "INF-1")
     assert rc != 0 and "give the STATE" in err
 
@@ -1176,10 +1165,8 @@ def test_a_workers_comment_naming_handles_rings_none_and_says_so_and_how_its_lea
     assert rc == 1 and out.startswith("INF-1 commented as circuits/W\n") and err == ""
     assert ("not rung: @proofs, @compute-accounting. A worker's comment rings no one, and this one is posted: don't post it "
             "again. Return its text to your lead (@circuits) to ring, or have your lead grant this run with `research msg "
-            f"names open --as circuits --poster {me}` and post it with --as circuits. With --quiet-unrung it exits 0.") in out
+            f"names open --as circuits --poster {me}` and post it with --as circuits.") in out
     assert rung() == dict.fromkeys(boxes, 0)
-    rc, out, _ = run(capsys, "linear", "comment", "INF-1", text, "--worker", "circuits/W", "--quiet-unrung")
-    assert rc == 0 and "not rung: @proofs, @compute-accounting" in out and rung() == dict.fromkeys(boxes, 0)
     reg = json.loads(registry.read_text())
     next(h for h in reg["handles"] if h["handle"] == "proofs")["branch_suffixes"] = ["98f5"]
     registry.write_text(json.dumps(reg))
@@ -1188,7 +1175,7 @@ def test_a_workers_comment_naming_handles_rings_none_and_says_so_and_how_its_lea
     assert rc == 1 and "your lead (@proofs)" in out and "--as proofs --poster" in out
     rc, out, err = run(capsys, "linear", "comment", "INF-1", "the trace is up", "--worker", "W")    # names none: unchanged
     assert rc == 0 and out == "INF-1 commented as infra/W\n" and err == ""
-    assert len(lin.sent("commentCreate")) == 4 and rung() == dict.fromkeys(boxes, 0)
+    assert len(lin.sent("commentCreate")) == 3 and rung() == dict.fromkeys(boxes, 0)
     monkeypatch.setattr(slack, "acting_as", ACTING_AS)                               # the holder check, for real
     rc, _, err = run(capsys, "linear", "comment", "INF-1", "@proofs @circuits the trace is up", "--as", "compute-accounting")
     assert rc == 0 and "not rung" not in err and "route @proofs: rang" in err and "route @circuits: rang" in err

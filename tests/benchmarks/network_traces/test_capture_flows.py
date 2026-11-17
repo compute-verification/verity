@@ -1,7 +1,7 @@
 """capture-flows, a packet capture summed by flow and direction and held against the network attester's record. On the
 fixture capture (`fixtures/capture_flows.pcap`, made by `fixtures/capture_flows.py` beside it): the sums of each flow
 and direction, a retransmitted segment on the wire twice and in the stream once, the server's flows beside the
-certifier's listed under names with no address printed or written, and the foreign flow refused, or counted and
+attester's listed under names with no address printed or written, and the foreign flow refused, or counted and
 skipped when told. On captures built from the fixture's packets: a stream counted across the sequence numbers' wrap
 and past 2^32 bytes, a hole and a missing SYN or FIN as bounds and never agreement, the pairing's counts on each side,
 every capture format read to the same sums, a Linux cooked capture's VLAN tags walked where a type names them, and
@@ -86,7 +86,7 @@ def _record(*counts: tuple[int, int | None], **more) -> dict:
                             for n, (t, f) in enumerate(counts)]}
 
 
-#: the fixture's two connections between the certifier and the server, as the reader sums them
+#: the fixture's two connections between the attester and the server, as the reader sums them
 FIRST = {"server": "server:8000", "certifier": "certifier:40001",
          "to_server": _tcp(8, 832, 400, 300), "from_server": _tcp(8, 1132, 700, 700)}
 SECOND = {"server": "server:8000", "certifier": "certifier:40002",
@@ -176,8 +176,8 @@ def test_a_file_holding_a_foreign_flow_is_refused_unless_told_to_skip_it_and_the
 
 
 def test_only_flows_with_a_given_address_are_read_and_a_port_tells_two_sides_of_one_address_apart(tmp_path):
-    """With the server's address alone the certifier is one more machine the server talks to; with the certifier's
-    alone the server's other flows are foreign. Where the server and the certifier share an address, as on one
+    """With the server's address alone the attester is one more machine the server talks to; with the attester's
+    alone the server's other flows are foreign. Where the server and the attester share an address, as on one
     machine's loopback, the server's port says which side of a flow is which, and without it the flow is refused."""
     alone = cf.read_flows([CAPTURE], [cf.endpoint(SERVER[0])], skip_foreign=True)
     assert alone["compared"] == [] and alone["skipped"]["foreign"]["flows"] == 1
@@ -757,7 +757,7 @@ def _sent(writer: _Writer) -> bytes:
 
 def _seen(tmp_path: Path, streams: list[tuple[bytes, bytes]], name: str = "seen.pcap", server: tuple[str, int] = SERVER,
           certifier: str = CERTIFIER[0], **how) -> Path:
-    """A capture of one connection from the certifier to the server for each of `streams`, (the bytes the certifier
+    """A capture of one connection from the attester to the server for each of `streams`, (the bytes the attester
     sent, the bytes the server sent), their packets interleaved, some of their sequence numbers passing the wrap."""
     return _capture(tmp_path, fx.interleaved(*(
         fx.exchange((certifier, 40001 + k), server, sent, answered, isn=(2 ** 32 - 97 * k, 1000 * k), mss=400)

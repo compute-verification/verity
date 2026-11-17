@@ -19,7 +19,6 @@ import json
 from typing import Any
 
 import pytest
-from verity_vllm.definitions.registry import bf16_gemm_check as BC
 
 from verity_vllm.check import verdict as V
 from verity_vllm.check.codes import VerificationCode as VC
@@ -28,6 +27,7 @@ from verity_vllm.check.commit_rules import REJECT
 from verity_vllm.check.cublas_route_pin import stamp as route_pin_stamp
 from verity_vllm.check.result import MISSING_INPUT, CheckResult, code_of, outcome_of
 from verity_vllm.check.verdict_names import OLD_TO_NEW
+from verity_vllm.definitions.registry import bf16_gemm_check as BC
 from verity_vllm.pipeline import cli
 from verity_vllm.records.property_record import (
     REGISTRY,
