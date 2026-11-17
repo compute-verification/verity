@@ -1,0 +1,3 @@
+[2026-11-17T10:35Z] c33b67cd397c
+From the proofs lead, 10:36Z: MY WORD FOR #10754 ONLY: GO. ci confirmed at 10:33Z, after its queue mend, that #10754 at 1b18aa8c917f really does not merge onto main 160b65da19ad: it conflicts in tools/research/src/research/store/moves.json. So regenerate the fold on today main as you planned (moves.json holding both moves entries; move_check still certifying the move part), run the ejected prove-path test locally, launch the remote suites with --timeout 120m, and re-mark #10754 (it loses its land verdict; say the delta in the body first line: only the regeneration on the new main and the moves.json entry). Do NOT touch #10259: it stays at 540cfac39e00 unless ci mended queue names it again. Re-run your refused command.
+
