@@ -372,6 +372,10 @@ AS_WRITTEN = "as the served node wrote it"
 #: ... SPOT's under ``record --sampled-lean`` (`lean_sampled_row`)
 LEAN_HERE = ("recomputed on this host by the Lean verifier (vstar-recursive sampled check) from the proofs and public "
              "files of the window's sampled proofs case, not the served node's answer")
+MEMBERS_COVER = ("each sampled proof block proved in its own kind's statement against the one registration's roots on live "
+                 "coins; members with no sampled proof block were not proved, and no theorem yet covers a sample that "
+                 "misses members; the wires between members are not held; the circuit files' digests are fixed before "
+                 "the coins in the parameters but not signed in the docket")
 #: ... PoUW's where Pearl+'s piece is its verdict of record (`pearlplus_of_record`)
 PEARLPLUS_FROM = (f"{AS_WRITTEN} (its piece files in pouw/): Pearl+'s Lean verdict of record (PouwCheck.PearlPlus), "
                   "the prover side's, run on the served node over the retained passes; no auditor device re-checks it, since "
@@ -1838,6 +1842,20 @@ def spot_row(audit_dir: Path, run: str | None = None) -> dict[str, Any]:
         return {"verdict": "error", "owner": INTEGRITY_OWNER, "reason": f"{type(e).__name__}: {e}"[:2000]}
 
 
+def members_reached(members: Mapping[str, Any], answer: Mapping[str, Any]) -> dict[str, Any]:
+    from verity_e2e_demo import block_record as BR
+
+    drawn, delta = answer["public"].get("drawn") or [], Fraction(answer["profile"]["delta"])
+    by_member = []
+    for name, m in sorted(members.items()):
+        n = sum(hi - lo for lo, hi in m["units"])
+        k = sum(lo <= u < hi for u in drawn for lo, hi in m["units"])
+        if k:
+            by_member.append({"member": name, "of": n, "drawn": k})
+    return {"members": {"sampled": len(by_member), "registered": len(members)},
+            "bounds": BR.member_bounds(by_member, delta), "by_member": by_member}
+
+
 def lean_sampled_row(audit_dir: Path, scratch: Path, exe: str | os.PathLike | None = None,
                      run: str | None = None) -> dict[str, Any]:
     """SPOT's row from this host's own run of remote's SPOT Lean (`served_cases.sampled_case`: the
@@ -1845,9 +1863,11 @@ def lean_sampled_row(audit_dir: Path, scratch: Path, exe: str | os.PathLike | No
     on files in a 0700 directory under ``scratch``, its answer tied to the window's docket (`LEAN_HERE`),
     whatever the audit's summary and record say. An audit that wrote no v2 case (a plain run's, or one a5 refused) leaves
     no proofs to recompute from: its row is `spot_row`'s, its ``answer_from`` saying so. So does a case whose check
-    was not started (`served_cases.NotStarted`: its blob files sum past the limit, the host makes no memory scope, or
-    its proofs are in the per-member form): the row is `spot_row`'s, ``answer_from`` and ``not_started`` naming why,
-    the sum and the limit. A case the Lean doesn't make or answer, or an answer about another record, is the row's error."""
+    was not started (`served_cases.NotStarted`: its blob files sum past the limit, or the host makes no memory scope):
+    the row is `spot_row`'s, ``answer_from`` and ``not_started`` naming why, the sum and the limit. A case the Lean
+    doesn't make or answer, or an answer about another record, is the row's error. An accept of a case in the
+    per-member form carries ``covers`` (`MEMBERS_COVER`), ``members`` (sampled of registered) and each sampled
+    member's bound over its own proof blocks (``bounds``), and no ε over the workload."""
     import served_cases as SC
 
     if not (audit_dir / "window" / "case-v2.json").is_file():
@@ -1858,7 +1878,11 @@ def lean_sampled_row(audit_dir: Path, scratch: Path, exe: str | os.PathLike | No
         case = SC.sampled_case(audit_dir)
         answer, _line = SC.lean_answer(exe or SC.build(*SC.SAMPLED_LEAN), case, scratch, SC.SAMPLED_CMD)
         SC.tie(answer, SC.SAMPLED, SC.record_of(case)[1])
-        return {**row_of(INTEGRITY_OWNER, answer, audit_dir, run), "answer_from": LEAN_HERE}
+        row = {**row_of(INTEGRITY_OWNER, answer, audit_dir, run), "answer_from": LEAN_HERE}
+        proofs = case["params"].get("proofs")
+        if isinstance(proofs, dict) and "members" in proofs and row["verdict"] == "accept":
+            return {**row, "covers": MEMBERS_COVER, "epsilon": None, **members_reached(proofs["members"], answer)}
+        return row
     except SC.NotStarted as e:
         return {**spot_row(audit_dir, run), "not_started": {"reason": str(e), **e.line},
                 "answer_from": f"{AS_WRITTEN} ({WRITTEN['integrity']}): this host's Lean check of the audit's v2 case was "
@@ -2209,6 +2233,8 @@ def error_said(entry: Mapping[str, Any]) -> list[str]:
     named = entry.get("named_terms")
     error = BR.error_form(_ratio(Fraction(entry["error"]), BR.DELTAS), named)
     no = [d for d, x in entry["at"].items() if not x["holds"]]
+    if no and "members" in entry["quantity"]:
+        return [f"at δ = {d}: {entry['at'][d]['why']}" for d in no]
     if no:
         return [f"its quantity is not established at δ = {' or '.join(no)}: the run established it except with {error}"]
     return [f"its error reads {error}"] if named else []

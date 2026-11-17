@@ -221,6 +221,25 @@ def provenance(product: str, exe: Path, tree: Path) -> dict[str, Any]:
     return {"commit": commit, "clean": clean, "verifier_sha512": file_sha512(exe), "cites": cites, "lock": lock}
 
 
+def members_reached(cases: Sequence[dict[str, Any]]) -> tuple[int, int] | None:
+    """Of the sampled-proofs case in the per-member form, the members its accepted sample reached and the members it
+    registers; None for any other case."""
+    for p in cases:
+        proofs = p["params"].get("proofs") if p["id"] == SAMPLED else None
+        if not isinstance(proofs, dict) or not isinstance(proofs.get("members"), dict):
+            continue
+        try:
+            a = json.loads(p["answer"])
+        except ValueError:
+            return None
+        if not isinstance(a, dict) or a.get("verdict") != "accept":
+            return None
+        drawn = (a.get("public") or {}).get("drawn") or []
+        ms = proofs["members"].values()
+        return sum(any(lo <= u < hi for u in drawn for lo, hi in m["units"]) for m in ms), len(ms)
+    return None
+
+
 def uncited(p: dict[str, Any]) -> str | None:
     """Why the lock at provenance `p`'s commit refutes the guarantee its accept cites: it lists no such guarantee."""
     if p["cites"] is not None and p["lock"] is not None and not p["lock"]["listed"]:
@@ -325,6 +344,9 @@ def run(a: argparse.Namespace) -> int:
         rc = p.returncode
         ran = provenance(a.product, Path(shutil.which(a.exe) or a.exe), a.tree)
         lines.append(f"RAN {ran['commit']} clean={ran['clean']} sha512={ran['verifier_sha512']} cites={ran['cites']}")
+        if ran["cites"] is not None and (got := members_reached(cases)) is not None and got[0] < got[1]:
+            ran["not_covered"] = {"id": SAMPLED, "members": {"sampled": got[0], "registered": got[1]}}
+            lines.append(f"NOT_COVERED {SAMPLED} {got[0]} of {got[1]} members sampled: {ran['cites']} does not cover it")
         lines += [f"NOT_ESTABLISHED {why}"] if (why := unestablished(ran)) else []
         if rc == 0 and (why := uncited(ran)) is not None:
             lines.append(f"UNCITED {why}")

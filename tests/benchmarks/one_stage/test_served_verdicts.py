@@ -1518,6 +1518,44 @@ def test_an_edit_to_the_served_nodes_spot_answer_leaves_the_row_recomputed_here_
     assert edited["integrity"] == rows["integrity"] and edited["work"]["verdict"] == "reject"
 
 
+def test_a_spot_row_the_lean_here_accepts_in_the_per_member_form_says_what_it_covers(tmp_path, monkeypatch, capsys):
+    from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+
+    monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-auditor-2")
+    argv, _exe = _lean_handed(tmp_path)
+    answer = {**_accepted()["answer"], "protocol": "verity/sampled-proofs/v1", "commitment": R.digest(LEAN_RECORD)}
+    monkeypatch.setenv("SEEN", str(tmp_path / "seen.json"))
+    monkeypatch.setenv("ANSWER", json.dumps(answer))
+    _rc, _line, rows = _recorded(tmp_path, argv, capsys)
+    assert rows["integrity"]["verdict"] == "accept" and "covers" not in rows["integrity"], rows["integrity"]
+    w = tmp_path / "serve" / "sampled-proofs-served" / "window"
+    case = json.loads((w / "case-v2.json").read_text())
+    members = {"m0": {"units": [[0, 2]]}, "m1": {"units": [[2, 3]]}, "m2": {"units": [[3, 4]]}}
+    (w / "case-v2.json").write_text(json.dumps({**case, "params": {**case["params"], "proofs": {"members": members}}}))
+    _rc, _line, rows = _recorded(tmp_path, argv, capsys)
+    row = rows["integrity"]
+    assert row["verdict"] == "accept" and row["covers"] == S.MEMBERS_COVER and row["epsilon"] is None, row
+    assert row["members"] == {"sampled": 2, "registered": 3}, row
+    assert row["bounds"] == ["at most 1 incorrect of member m0's 2 proof blocks at δ 1/100",
+                             "at most 0 incorrect of member m2's 1 proof block at δ 1/100"], row
+    leg = json.loads((tmp_path / "record" / "block-record.json").read_text())["legs"]["integrity"]
+    why = ("the sample reached 2 of 3 members, so no bound over the workload's 4 proof blocks holds; at most 1 "
+           "incorrect of member m0's 2 proof blocks at δ 1/1000000; at most 0 incorrect of member m2's 1 proof block "
+           "at δ 1/1000000")
+    assert leg["at"]["1/1000000"] == {"holds": False, "why": why} and not leg["at"]["1/100"]["holds"], leg
+    assert leg["quantity"]["value"] is None and leg["quantity"]["members"] == {"sampled": 2, "registered": 3}, leg
+    jsonschema.Draft202012Validator({"$defs": SCHEMA["$defs"], "$ref": "#/$defs/leg"}).validate({**leg, "runs": ["r1"]})
+    assert _line["check"] == {} and f"at δ = 1/1000000: {why}" in _line["reason"], _line
+
+
+def test_the_experiments_per_member_accept_bounds_its_one_sampled_member():
+    answer = {"public": {"bound": 1, "drawn": [1], "proved": [1]}, "profile": {"delta": "1/2"}}
+    got = S.members_reached({"m0": {"units": [[0, 1]]}, "m1": {"units": [[1, 2]]}}, answer)
+    assert got == {"members": {"sampled": 1, "registered": 2},
+                   "bounds": ["at most 0 incorrect of member m1's 1 proof block at δ 1/2"],
+                   "by_member": [{"member": "m1", "of": 1, "drawn": 1}]}
+
+
 @pytest.mark.parametrize("change, verdict, said", [
     ("no-v2", "reject", "refused: \"the node's own verdict\""),
     ("another-record", "error", "commits to"),
@@ -1548,15 +1586,13 @@ def test_a_spot_row_the_lean_here_cant_recompute_says_so_and_never_takes_the_nod
     assert line["answers"]["sampled proofs"] == row["answer_from"]
 
 
-@pytest.mark.parametrize("why", ["past-limit", "no-scope", "per-member"])
+@pytest.mark.parametrize("why", ["past-limit", "no-scope"])
 def test_a_spot_check_that_was_not_started_leaves_the_audits_own_row_naming_the_sum_and_the_limit(
         tmp_path, monkeypatch, capsys, why):
-    """A v2 case whose check this host does not start (its blob files sum past the limit, the host makes no memory
-    scope, or its proofs are in the per-member form, which the Lean is known to refuse) is not handed to the Lean: the
-    row is the audit's own, as the served node wrote it, and its ``not_started`` and ``answer_from`` name the reason,
-    the blob files' count and sum and the limit, in the record and on its line."""
+    """A v2 case whose check this host does not start (its blob files sum past the limit, or the host makes no memory
+    scope) is not handed to the Lean: the row is the audit's own, as the served node wrote it, and its ``not_started``
+    and ``answer_from`` name the reason, the blob files' count and sum and the limit, in the record and on its line."""
     import served_cases as SC
-    from verity.circuits import codec
 
     monkeypatch.setenv("PP_PEER", "vy-auditor-2")
     argv, _exe = _lean_handed(tmp_path)
@@ -1575,11 +1611,6 @@ def test_a_spot_check_that_was_not_started_leaves_the_audits_own_row_naming_the_
         monkeypatch.setattr(SC, "scope_here", lambda: False)
         monkeypatch.setattr(SC, "address_space_here", lambda: False)
         said = SC.NO_SCOPE_HERE
-    if why == "per-member":
-        case = json.loads((w / "case-v2.json").read_text())
-        evidence = {"draw": [0, 3], "proofs": {"statements": []}}
-        (w / "case-v2.json").write_text(json.dumps({**case, "evidence": codec.canonical_json(evidence).hex()}))
-        said = SC.PER_MEMBER
     size = (w / "m0" / "p0.bin").stat().st_size
     _rc, line, rows = _recorded(tmp_path, argv, capsys)
     row = rows["integrity"]

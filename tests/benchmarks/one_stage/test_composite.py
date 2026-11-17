@@ -119,6 +119,39 @@ def test_a_development_composite_says_so_first_and_in_its_public_record(tmp_path
     assert "development" not in json.loads((tmp_path / "public2" / "composite.json").read_text())
 
 
+PUBLIC = "ab" * 80
+PIN = hashlib.sha512(bytes.fromhex(PUBLIC)).hexdigest()
+
+
+@pytest.mark.parametrize("pin", [PIN, None], ids=["live coins", "simulated coins"])
+@pytest.mark.parametrize("drawn", [[1], [0, 1]], ids=["a missed member", "every member"])
+def test_a_per_member_accept_that_missed_a_member_says_the_cite_does_not_cover_it(tmp_path, drawn, pin):
+    """A missed member and simulated coins each qualify the cite, and both stand together in one ``not_covered``."""
+    product = next(iter(C.CITES))
+    tree = git_tree(tmp_path / "tree", [C.CITES[product]])
+    members = {"m0": {"units": [[0, 1]]}, "m1": {"units": [[1, 2]]}}
+    cases = []
+    for n, id in enumerate(C.COMPONENTS[product]):
+        params = {"form": "one-stage", "proofs": {"members": members},
+                  "challenger": {"key": {"H": 5, "W": 4, "public": PUBLIC}}} if id == SAMPLED else {}
+        p = put(tmp_path / f"p{n}", id, params, bytes([n]), b"{}", bytes([n]) * 64, verdict="accept")
+        if id == SAMPLED:
+            a = json.loads((p / "answer.json").read_text())
+            (p / "answer.json").write_text(json.dumps(a | {"public": {"bound": 1, "drawn": drawn}}))
+        cases += ["--cases", str(p)]
+    assert C.main([product, *cases, *outs(tmp_path, tree=tree), "--exe", lean(tmp_path, {"verdict": "accept"}, 0),
+                   *(["--key-sha512", pin] if pin else []), "--coins-on", "cpu-6"]) == 0
+    ran = json.loads((tmp_path / "public" / "composite.json").read_bytes())["ran"]
+    lines = (tmp_path / "public" / "verdicts.txt").read_text().splitlines()
+    assert ran["cites"] == C.CITES[product]
+    missed = {"members": {"sampled": 1, "registered": 2}} if len(drawn) == 1 else {}
+    simulated = {} if pin else {"coins": "simulated", "coins_on": "cpu-6"}
+    said = ([f"NOT_COVERED {SAMPLED} 1 of 2 members sampled: {C.CITES[product]} does not cover it"] if missed else []) + (
+        [f"NOT_COVERED {SAMPLED} coins: simulated on cpu-6: {C.CITES[product]} does not cover it"] if simulated else [])
+    assert ran.get("not_covered") == ({"id": SAMPLED, **missed, **simulated} if missed or simulated else None)
+    assert [ln for ln in lines if ln.startswith("NOT_COVERED")] == said
+
+
 def test_a_cases_dir_of_case_dirs_reads_each(tmp_path):
     put(tmp_path / "cases" / "v1", SAMPLED, {}, b"\x01", b"{}", b"\xaa" * 64)
     put(tmp_path / "cases" / "pouw", POUW, {}, b"\x02", b"{}", b"\xbb" * 64)
@@ -289,10 +322,6 @@ def test_the_check_runs_the_products_executable_on_the_private_files_and_blobs(t
     got = json.loads((priv / "answer.json").read_text())
     assert got["args"] == ["check", str(priv / "params.json"), str(priv / "commitment.bin"),
                            str(priv / "evidence.json"), "/blob"]
-
-
-PUBLIC = "ab" * 80
-PIN = hashlib.sha512(bytes.fromhex(PUBLIC)).hexdigest()
 
 
 def remote_accepted(tmp_path: Path, tree: Path, verdict: str = "accept", rc: int = 0, public: str | None = PUBLIC,
