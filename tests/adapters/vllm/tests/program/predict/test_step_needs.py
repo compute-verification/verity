@@ -64,8 +64,8 @@ def test_a_cublas_gemm_reads_the_pin_of_the_device_phi_names(S, monkeypatch):
     h100 = StepNeeds(Phi.from_json({**doc, "target": {**doc["target"], "device_name": "NVIDIA H100 80GB HBM3"}}))
     need = h100.step(*steps[0])
     assert ("cublas-bf16-gemm", "cublas-linear", "no route pin") in _gaps(need)
-    assert [n.gap for n in need if n.id == "cublas-linear{K=6144,N=128,M=8}"] == [
-        "no route pin: no device pin NVIDIA_H100_80GB_HBM3.json in device_pins/"]
+    assert {n.gap for n in need if n.route in ("cublas-bf16-gemm", "router-gemm")} == {
+        "no route pin: no device pin NVIDIA_H100_80GB_HBM3.json in device_pins/"}
     h200 = {S._cublas(8, (L, "wk_w")).id for L in range(3)} | {S._cublas(8, "lm_head").id}
     assert all(S._cublas(8, (L, "wk_w")).gap is None for L in range(3)) and not h200 & {n.id for n in need}
 

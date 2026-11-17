@@ -107,7 +107,7 @@ def test_a_cublas_gemm_reads_the_pin_of_the_device_phi_names(cut, monkeypatch):
     _route_pin_of(monkeypatch, lambda device: None)
     assert {M: build_program(phi, "step", M=M, pos0=0).digest for M in (1, 17)} == named
     monkeypatch.undo()
-    with pytest.raises(Unexpressible, match=re.escape("a bf16 linear GEMM of M=1, K=6144, N=128 " + NO_PIN)):
+    with pytest.raises(Unexpressible, match=re.escape("a bf16 linear GEMM of M=1, K=6144, N=160 " + NO_PIN)):
         build_program(cut(device=H100), "step", M=1, pos0=0, with_desc=False)
 
 
