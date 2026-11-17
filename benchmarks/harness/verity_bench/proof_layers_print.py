@@ -85,7 +85,7 @@ def document(results: Sequence[Result]) -> dict[str, Any]:
 def measured(results: Sequence[Result], metrics: Mapping[str, str]) -> list[dict[str, Any]]:
     """The writer's measurements: under each of `metrics`' ids (each naming one of `FIGURES`), one a layer of `MEMBERS`,
     in its order, its member the model and card the outputs state and its layer's words; none where no output states
-    them, and outputs that state two are refused. A layer's value is its figure a proof block, or for ``build_s`` its
+    them or no card record holds the card's name (the layer's note says so), and outputs that state two are refused. A layer's value is its figure a proof block, or for ``build_s`` its
     build step's wall where its output states whether the build reused a cache, only where its Lean verdict is an
     accept; else the value is None, with why. Recursion's benchmark result is no member: its seconds are a
     whole recursive run's."""

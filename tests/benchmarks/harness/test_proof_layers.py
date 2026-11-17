@@ -220,9 +220,28 @@ def test_an_a5_run_states_the_model_of_its_row_and_the_name_of_the_card_it_took(
     mixed = MACHINE.replace("GPU 1: NVIDIA H200", "GPU 1: NVIDIA H100 80GB HBM3")
     assert PL.read("sampling", str(a5_out(tmp_path / "h100"))).serves == SERVES
     (tmp_path / "h100" / "out" / "machine.txt").write_text(mixed)
-    assert PL.read("sampling", str(tmp_path / "h100")).serves == "llama-3.2-1b-h100-80gb-hbm3"
+    assert PL.read("sampling", str(tmp_path / "h100")).serves == "llama-3.2-1b-h100"
     (tmp_path / "h100" / "out" / "machine.txt").write_text(mixed.replace("card 1 and", "card any and"))
     assert PL.read("sampling", str(tmp_path / "h100")).serves is None
+
+
+def test_an_h100_s_members_take_its_card_record_s_short_name(tmp_path):
+    out = a5_out(tmp_path)
+    (out / "out" / "machine.txt").write_text(MACHINE.replace("NVIDIA H200", "NVIDIA H100 80GB HBM3"))
+    written = PL.measured([PL.read("flock", None), PL.read("zk", None), PL.read("sampling", str(out))], IDS)
+    assert len(written) == 3 * len(IDS)
+    assert [m["member"] for m in written[:3]] == ["llama-3.2-1b-h100-flock", "llama-3.2-1b-h100-flock-zero-knowledge",
+                                                   "llama-3.2-1b-h100"]
+
+
+def test_a_card_name_no_record_holds_writes_no_measurement_and_says_why(tmp_path):
+    out = a5_out(tmp_path)
+    (out / "out" / "machine.txt").write_text(MACHINE.replace("NVIDIA H200", "NVIDIA H300"))
+    sampling = PL.read("sampling", str(out))
+    assert sampling.serves is None
+    assert PL.measured([PL.read("flock", None), PL.read("zk", None), sampling], IDS) == []
+    assert "- with sampling: no member, so no measurement: 0 card records under " in PL.render([sampling])
+    assert "have 'NVIDIA H300', the card nvidia-smi names here" in PL.render([sampling])
 
 
 def test_the_layers_write_nothing_unless_their_outputs_state_one_model_and_card(tmp_path):
