@@ -1,9 +1,9 @@
-"""The difftest's data: instances, and the Python verifier's answers on each, for `PousCheck/DifftestMain.lean`.
+"""The difftest's data: instances, and the Python verifier's answers on each, for `PousVerifier/DifftestMain.lean`.
 
     python scripts/difftest_vectors.py <verity checkout> --out DIR
 
 Writes `DIR/difftest/instances.jsonl`, one instance per line, and `DIR/difftest/python.jsonl`, the same line's answers
-from the checkout's Python, each line canonical JSON (sorted keys, no whitespace). `PousCheck.Difftest` recomputes every
+from the checkout's Python, each line canonical JSON (sorted keys, no whitespace). `PousVerifier.Difftest` recomputes every
 answer from the instance and fails on any line that differs. The Lean audit runs it (`runs` in `lean-audit.json`, which
 pins both files' SHA-256).
 
@@ -99,7 +99,7 @@ def _merkle_answers(py, inst: dict) -> dict:
 
 
 def check_input(name: str, i: int, a: int, b: int, leaves: list[bytes], p: list[bytes], root: bytes):
-    """A check's index, leaf and path, from its name and arguments (`PousCheck.Difftest.checkInput`)."""
+    """A check's index, leaf and path, from its name and arguments (`PousVerifier.Difftest.checkInput`)."""
     if name == "flipped":
         q = list(p)
         q[a] = bytes([q[a][0] ^ (1 << b)]) + q[a][1:]
@@ -696,7 +696,7 @@ def redteam_audits(py) -> list[dict]:
 
 
 def _pins(py) -> dict:
-    """The SHA-512 pins of the audit files and frames, which `PousCheck` recomputes from the bytes."""
+    """The SHA-512 pins of the audit files and frames, which `PousVerifier` recomputes from the bytes."""
     R = py[0]
     av = json.loads(R.AUDIT_VECTORS.read_bytes())
     small, full = av["small_end_to_end"], av["full_width_response"]
