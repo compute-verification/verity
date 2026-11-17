@@ -1,7 +1,7 @@
-# proof_throughput: the proof system's throughput on GLM-5.3's dot products
+# proof_throughput: the proof system's throughput on a model's dot products
 
 How many proof blocks per second Flock proves and the Lean verifier accepts, as a function of the batch size B,
-for the dot products GLM-5.3 serves. The report is the throughput frontier over B: one row per B with proof blocks per second, the overhead
+for the dot products a model serves (GLM-5.3, Llama 3.2 1B). The report is the throughput frontier over B: one row per B with proof blocks per second, the overhead
 against the H200's native peak, the dominant prover phase, peak memory, proof bytes and the Lean verifier's seconds.
 
 ~~~text
@@ -13,7 +13,7 @@ verity bench proof_throughput table RESULT... | --baseline | --store --workload 
 verity bench proof_throughput baseline [--workload W] [--lock RESULT...]   the pinned hill-climb baseline, or pin one sweep
 verity bench proof_throughput compare BASELINE CANDIDATE [--allow FIELD]   refuses results whose identities differ
 verity bench proof_throughput zk                              configuration 2: what is measured, stood in for, or stubbed
-verity bench proof_throughput record [--B B] [--provers 1,2] --cores C,C   the metric's run: 1 prover, then 2 at once, each verified
+verity bench proof_throughput record [--workload W] [--B B] [--provers 1,2] --cores C,C   the metric's run: 1 prover, then 2 at once, each verified
 ~~~
 
 ## What a point is
@@ -97,11 +97,12 @@ busy.
 
 ## Workloads
 
-`verity_proof_throughput/workloads.py`, one proof-block family each, at GLM-5.3's served K:
+`verity_proof_throughput/workloads.py`, one proof-block family each, at its model's served K:
 
 | workload | proof block | served at | cap B |
 |---|---|---|---|
-| `bf16-k6144` | `GemmCoordinate_v2{K=6144,DOT=HopperBF16WgmmaDot16_v1}` | lm_head, indexer `wk_weights_proj`, MoE router | 1024 |
+| `bf16-k6144` | `GemmCoordinate_v2{K=6144,DOT=HopperBF16WgmmaDot16_v1}` | GLM-5.3's lm_head, indexer `wk_weights_proj`, MoE router | 1024 |
+| `bf16-k2048` | `GemmCoordinate_v2{K=2048,DOT=HopperBF16WgmmaDot16_v1}` | Llama 3.2 1B's q/k/v, o and gate/up projections, lm_head | 1024 |
 | `fp8-coord-k6144`, `-k2048`, `-k256` | `ScaledMmFp8BlockCoordinate_v2{K,G=128}` | the FP8 GEMMs with scale groups | declared |
 
 The bf16 sites are those of `adapters/vllm/verity_vllm/definitions/registry/bf16_gemm_check.py`. The cap is the largest
@@ -148,5 +149,7 @@ research run: one prover point alone, then as many at once as `--provers` names 
 leased with its own `--cores` range and its own sessions lock, then `verify.sh` on each point's bundle once the provers
 are done. Each point's contract results stay in `out/provers-N/prover-I/` (`result.json`, the prover's, and
 `verifier/result.json`, the point's result of record); the run's `result.json` holds the readings, one a prover count:
-the sum of the points' `vu.per_second`, given only when every point's verifier result passed and their leases overlapped. The result's
+the sum of the points' `vu.per_second`, given only when every point's verifier result passed and their leases overlapped, each
+naming its model and its values (`values`: stand-in, the workload's frozen population, not served values). The registered
+command runs `bf16-k2048`, the frozen list's model; `--workload bf16-k6144` gives GLM-5.3's line. The result's
 `software.verifier` names the binary; the run's machine is in its Attempt.
