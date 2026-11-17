@@ -6,8 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-CARD_FILES = Path(__file__).resolve().parents[3] / "hardware/cards"
-NODE_FILES = Path(__file__).resolve().parents[3] / "hardware/nodes"
+CARD_FILES = Path(__file__).resolve().parents[3] / "calibration/hardware/cards"
+NODE_FILES = Path(__file__).resolve().parents[3] / "calibration/hardware/nodes"
 
 READS = """
 import os, sys

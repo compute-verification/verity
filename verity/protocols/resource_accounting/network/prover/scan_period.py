@@ -15,7 +15,7 @@ and its Lean.
   the jitter bound `scan_answer.JITTER_BOUND` (K's jitter term T bits an execution phase, `leak_bounds.JITTER`), and the
   scan that Program's descriptor (``joint/program.json``), off which the period check reads the scan's terms; the
   commitment the audits' registrations and the scan's; the evidence the audits' answers, then the scan's answer, the
-  certificates of W's three records (``certified.jsonl``: requests, responses, fails) and W's two row registrations
+  attestations of W's three records (``certified.jsonl``: requests, responses, fails) and W's two row registrations
   (``cells.jsonl``, as ``answers.json`` carries them, beside W's registration), and the listed entry's session's
   signed start (``deployment.json``'s ``start``, which the period check reads for each listed entry: a run whose
   deployment holds none is refused). The rows form reads the registration of one execution phase, the run's first,
@@ -23,10 +23,10 @@ and its Lean.
   ``window``'s ``empty``), the scan's `prog` must be an audit's `SlotEntry_v1` template's entries
   and its ``scan/state`` that audit's, and that audit must run the class circuit, the parameters' ``circuit``
   (`heldChecks`): the stand-in block audit's own Program here.
-* **tampered** and **chain**: the same rows and certificates with that round's registration
+* **tampered** and **chain**: the same rows and attestations with that round's registration
   (``<round>-<W>/registration.json``, `scan_zk.round_name`) and its refusal as the answer: tampered's an egress-only Program's, a prover's answer
   for another statement than the link's Program; chain's the link's Program's, refused.
-* **forged**: the honest case with the responses record's certificate's signature changed: a certificate the network
+* **forged**: the honest case with the responses record's attestation's signature changed: an attestation the network
   attester didn't sign.
 * **The check**: each case through the mirror (``--mirror``, `period_case.py` loaded by path: `reference`) and
   ``network-period check`` (``--lean``), whose verdicts must agree and be the case's: reject, and where the scan's
@@ -43,7 +43,7 @@ and its Lean.
   and its `SCAN_STATE` the scan's ``scan/state``, held to the class circuit of the verifier's own window-circuit record
   (``--circuit``, `circuit_of_record`): an execution phase whose audit's registration names another Program is refused
   by name, in Lean and in the mirror. The honest case is then accepted at any sample of V3c's (``subset:1``
-  included): the period check is the consistency check, the committed I/O against the certificates, and what a
+  included): the period check is the consistency check, the committed I/O against the attestations, and what a
   sample of one or two proof blocks leaves unproved is covert capacity, which K charges. That is the case of an audit
   whose registration states its `SCAN_STATE` among its ``roots`` or its ``registered``, the two places the check reads
   an audit's state entry (`stateEntries`). A served window's registration, as ``prove_path.py window-commit`` writes
@@ -71,12 +71,12 @@ from verity.protocols.proofs.spot.verifier.one_stage import docket as RG
 from verity.circuits.codec import canonical_json
 from verity.commitments.periods.interface import CIRCUIT
 
-CERTIFICATE_KEYS = ("digest", "direction", "key_id", "link", "signature", "window")
+ATTESTATION_KEYS = ("digest", "direction", "key_id", "link", "signature", "window")
 
 
 def certificates(run: Path, w: int) -> list[dict]:
-    """Execution phase w's three records' certificates in ``certified.jsonl``, in the rows form's order (requests,
-    responses, fails: `relay_check.CERTIFIED`), each the certificate's own fields."""
+    """Execution phase w's three records' attestations in ``certified.jsonl``, in the rows form's order (requests,
+    responses, fails: `relay_check.CERTIFIED`), each the attestation's own fields."""
     docs = [json.loads(x)["certificate"] for x in SA._found(run, "certified.jsonl").read_text().splitlines()
             if "certificate" in json.loads(x)]
     out = []
@@ -85,7 +85,7 @@ def certificates(run: Path, w: int) -> list[dict]:
         got = [c for c in docs if (c["link"], c["direction"], c["window"]) == (link, d.value, w)]
         if len(got) != 1:
             raise SystemExit(f"{run}: execution phase {w}'s {name} record has {len(got)} certificates, not 1")
-        out.append({k: got[0][k] for k in CERTIFICATE_KEYS})
+        out.append({k: got[0][k] for k in ATTESTATION_KEYS})
     return out
 
 
@@ -93,7 +93,7 @@ def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = 
               circuit: str | None = None, answers: Path | None = None) -> dict:
     """The rows form's case (module docstring) of the network attester run ``run``'s execution phase, as scan_zk.py
     proved it into
-    ``scan``: honest, ``answers.json``'s; forged, the honest one with a certificate's signature changed; a refused round
+    ``scan``: honest, ``answers.json``'s; forged, the honest one with an attestation's signature changed; a refused round
     (tampered, chain), that round's registration and its refusal. With ``v3c`` (V3c's ``period.json``,
     ``records_audit.py period``'s, for a scan proved on its trees, ``scan_zk.py --v3c``) the one compute audit is V3c's,
     in place of ``answers.json``'s. With ``v3c``, ``circuit`` is required: the class circuit, the Program digest of the

@@ -33,10 +33,10 @@ On a record `Record.read` accepts:
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
-open InferenceOnlyCheck.Record (Case Front read finish unwhole rolesOf sameSlot isTheta openingHeld)
-open InferenceOnlyCheck.Record.SecurityProofs (read_front finish_text)
+open InferenceOnlyVerifier.Record (Case Front read finish unwhole rolesOf sameSlot isTheta openingHeld)
+open InferenceOnlyVerifier.Record.SecurityProofs (read_front finish_text)
 open Spot.RecordText (Row Tmpl Decl Fill Inputs inputsOf rowWords fillAt tmplIn rowIn rect widthOf)
 open Lean (Json)
 
@@ -357,8 +357,8 @@ theorem held_unwired {j tr : Json} {c : Case} (h : read j tr = .ok c) (r : Row)
       unfold fillAt
       rw [hf]
       rfl
-    unfold InferenceOnlyCheck.Record.Case.heldAt at hh
+    unfold InferenceOnlyVerifier.Record.Case.heldAt at hh
     rw [hfill] at hh
     simp [Spot.RecordText.Inputs.declares] at hh
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs
