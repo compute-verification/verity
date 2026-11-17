@@ -24,8 +24,10 @@ def stub(clean_at: tuple | None = None, idle_at: tuple | None = None, wrong_at: 
 
 
 def run(tmp_path, shapes, timed):
-    ok = units.write(tmp_path / "out", tmp_path / "result.json", shapes, timed, "stub")
-    return ok, json.loads((tmp_path / "result.json").read_text())
+    ok = units.write(tmp_path / "out", tmp_path / "out" / ".." / "result.json", shapes, timed, "stub")
+    doc = json.loads((tmp_path / "result.json").read_text())
+    assert doc["run_id"] == tmp_path.name
+    return ok, doc
 
 
 @pytest.mark.parametrize("shapes", ["decode", "prefill"])

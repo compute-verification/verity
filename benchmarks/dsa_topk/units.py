@@ -68,6 +68,7 @@ def problems(path: Path, shapes: str) -> list[str]:
 def write(out: Path, result: Path, shapes: str, timed: list[dict], device: str) -> bool:
     """Write `out`/units.jsonl and `result`, validation passed only where `problems` finds none."""
     out.mkdir(parents=True, exist_ok=True)
+    result = result.resolve()
     f = out / "units.jsonl"
     f.write_text("".join(json.dumps(r) + "\n" for r in timed))
     bad = problems(f, shapes)
