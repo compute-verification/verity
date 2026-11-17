@@ -15,25 +15,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# V*'s bridge: the recursive audit's open obligation
-
-Obligation: `VBridge` is a fact about our own code (V*'s circuits and the verifier), not about the world, so it is an
-obligation, not a premise. VBridge G (`Proofs.Flock.VBridge`) discharges it, and it stays a hypothesis of
-`RecursiveRanRegistered`, and so in this module, only until that lands.
-
-In the recursive audit (`Proofs.Flock.Recursive.Defs`: `recGame`), the developer's ZK server sends the auditor a salted
-SHA-512 commitment to each inner round message, relays the auditor's live coin for the round, and afterwards proves, in
-Flock `--zk --registered` sessions of the public verifier circuits V* (`Vs j`, one session each, in a row), that
-openings of those commitments exist on which the inner verifier accepts. `VBridge` is what V*'s circuits must compute
-for those sessions to mean it: V* accepts at its public inputs (the ZK server's commitments registered in its public
-files) and at the values it registers itself (the rounds' coins and the comb `coef`, in its record `ZkOuter.rd`) only
-when the inner verifier accepts the inner transcript those commitments open to.
-
-Flock's definitions are still in its proofs package (`Proofs.Flock.Soundness`), and so is the recursion's model
-(`Proofs.Flock.Recursive`), so this module imports `Proofs.Flock.Recursive.Registrants`, and `Definitions.lean`, which
-the `security` package builds without `security_proofs`, does not import it: `Proofs.Flock.Recursive` does.
--/
+/-! V*'s bridge: the recursive audit's open obligation, a fact about V*'s circuits and the verifier rather than a premise. -/
 
 @[expose] public section
 
@@ -106,7 +88,6 @@ def VBridgeC {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Typ
     VDecodesR wmsg (fun i _ a b => i + 1 < I.r → a = b) (fun i j => if i + 1 < I.r then Sk i j else ∅) msg ∧
     VFullR I.r (fun i j => if i + 1 < I.r then Sk i j else ∅)
 
-/-- `VCommits` at the commit strings of the rounds before the last of `r`. -/
 theorem vCommits_masked {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
     {Reg' Reg₂ : Type} {zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv)}
@@ -117,9 +98,7 @@ theorem vCommits_masked {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner
   · exact h i R ω t e he R₂ j R' tr hw hacc pos (by simpa [hc] using hp)
   · exact absurd hp (by simp [hc])
 
-/-- **`VBridge` gives `VBridgeC`** (this direction only), at a decoder that holds a message at the last round, as
-`wmsgOf`'s does at every round: the committed rounds' fields are `VBridge`'s, and at the last round `VBridgeC` asks only
-that message. -/
+/-- This direction only. -/
 theorem vbridgeC_of_vbridge {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
     {Reg' Reg₂ : Type} {zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ} {x : Reg → L.Ω → I.Stmt}
@@ -140,16 +119,8 @@ theorem vbridgeC_of_vbridge {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : I
   · rw [List.getElem?_eq_getElem (by have := hlast Xt; omega)]
     exact Option.Rel.some (by intro h; exact absurd h hc)
 
-/-- Obligation, as `VBridgeC`, off one more bad event `Bad`.
-
-**`v-bridge` at the committed rounds, off `RegColl` and `Bad`**: `VBridgeC` field for field, its first read only where
-neither two sessions' registrant records clash (`RegColl`, `regFinder`'s) nor `Bad` holds. `Bad` reads the history, the
-registration and the record of the sessions' outcomes the bridge is asked at (`VBridgeOffOut`), so that an event one
-outcome's own registration and transcript state, as `Recursion.LeafColl`, is one of its disjuncts. At candidate 3,
-`Bad` is `Recursion.ValueColl` at the verifier's rows (`valueSrcAll`): a registrant's row off a value the verifier registers itself
-(`coef`, `dirs`, `v`), by a SHA-512 collision `valueFinder` outputs, the case `FlockC3.RegLevels.value_tie` leaves. This
-module cannot name it (its module imports this one), so `Bad` is a parameter; RegColl is not widened. `VBridgeC` gives it at
-every `Bad` (`vbridgeCOff_of_vbridgeC`). -/
+/-- Obligation, as `VBridgeC`, off `RegColl` and one more bad event `Bad`. `Bad` is a parameter because the
+module of `Recursion.ValueColl`, the event it is at the verifier's rows, imports this one; `RegColl` is not widened. -/
 def VBridgeCOff {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
     {Reg' Reg₂ : Type}
     (Bad : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ →
@@ -165,7 +136,6 @@ def VBridgeCOff {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : 
     VDecodesR wmsg (fun i _ a b => i + 1 < I.r → a = b) (fun i j => if i + 1 < I.r then Sk i j else ∅) msg ∧
     VFullR I.r (fun i j => if i + 1 < I.r then Sk i j else ∅)
 
-/-- **`VBridgeC` gives `VBridgeCOff` at every `Bad`**: off more, the bridge asks less. -/
 theorem vbridgeCOff_of_vbridgeC {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ}
     {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
     (Bad : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ →

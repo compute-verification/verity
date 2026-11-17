@@ -3,14 +3,7 @@ module
 public import Proofs.Flock.Soundness.Audit.Partitioning.Model
 import Proofs.Flock.Soundness.Audit.SamplingDesign
 
-/-!
-# Exfiltration: the witnesses' facts
-
-The statements of `Partitioning.Witness.exfiltration` and `Partitioning.Witness.refinement`, proved here so that the
-witness file can cite them. `SamplingDesign.subset n n` samples every unit, so only the empty set escapes, and it certifies any
-`ℓ ≥ 0` with the harm bound `0` and the count `0` (`certifies_full`). The rest is arithmetic: `locBits 4 1 = log₂ 5`,
-`locBits 4 2 = log₂ 11`, `(1/2)^{1/2} > 7/10`, and `1/2 ≤ ln 2 ≤ 1`.
--/
+/-! Exfiltration: the facts of the partitioning witnesses, proved here so that the witness file can cite them. -/
 
 @[expose] public section
 
@@ -19,7 +12,6 @@ namespace FlockSoundness.Audit.Partitioning.SecurityProofs.Exfil
 open Finset
 open scoped ENNReal
 
-/-- **Sampling every unit certifies any `ℓ ≥ 0`**, with the harm bound `0` and the count `0`. -/
 theorem certifies_full (n : ℕ) (b : Fin n → ℕ) {δ ℓ : ℝ} (hδ : 0 < δ) (hℓ : 0 ≤ ℓ) :
     CertifiesLeak (SamplingDesign.subset n n le_rfl) b δ ℓ := by
   have hzero : ∀ B : Finset (Fin n), B.Nonempty → (SamplingDesign.subset n n le_rfl).missProb B = 0 := by
@@ -68,7 +60,6 @@ theorem log_two_le_one : Real.log 2 ≤ 1 := by
   have h := Real.log_le_sub_one_of_pos (by norm_num : (0 : ℝ) < 2)
   linarith
 
-/-- `Partitioning.Witness.exfiltration`'s statement. -/
 theorem witness_exfiltration :
     (1 : ℝ) * 1 + locBits 4 1 ≤ 4 ∧ (4 : ℝ) < 1 * (1 + 1) + locBits 4 (1 + 1) ∧
     CertifiesLeak (SamplingDesign.subset 4 4 le_rfl) (fun _ => 1) (1 / 2) 4 ∧
@@ -87,7 +78,6 @@ theorem witness_exfiltration :
   · linarith
   · rw [hlog]; linarith [half_le_log_two]
 
-/-- `Partitioning.Witness.refinement`'s statement. -/
 theorem witness_refinement :
     2 * (1 + 1) ≤ 4 ∧ (16 : ℝ) * 1 + locBits 4 1 ≤ 20 ∧ (20 : ℝ) < 16 * (1 + 1) + locBits 4 (1 + 1) ∧
     (16 : ℝ) + Real.logb 2 (1 + 2) / (1 + 1) ≤ 16 + Real.logb 2 2 ∧

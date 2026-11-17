@@ -6,40 +6,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ
 public import Proofs.Flock.Soundness.Assumptions.Zk
 public import Flock.Desc
 
-/-!
-# The joint stratified bound over sampling blocks of several tables (trusted)
-
-`JointStratified` and `JointStratifiedPooled` (`Joint/Statement.lean`) at sampling blocks proved in `J` tables in
-parallel. A sampling block is one hidden-output `--zk` session of `J` tables over `n` proof blocks, whose units the
-challenger's coins sample by one live stratified sample (`Flock.Draw.drawWith` at `.stratified`, `SamplingDesign.execOS`): stratum
-`s` holds `n_s` of the sampling block's units, `k_s` of them are sampled uniformly without replacement, independently
-across strata, and the strata run over every table's units, so a table's subcircuits are strata of the one sample.
-`verify --zk --session-tables J` proves the sampled proof blocks in `J` equal consecutive parts, table `j` part `j` (`drawJ`,
-`partS`); when the units are laid out table by table and every table's strata sample the same number of units, part `j` is
-table `j`'s own stratified sample. The record's custody is `RecordCustodyZKJS` (`live-verifier` at the stratified sampling design);
-that the parts are proved and set up with the session's link points is verity-verify-proof's own arithmetic
-(`ZkHidden.sampleOkZKHJ_of_accepts_stratified`).
-
-`StratifiedBlockMT` is such a sampling block, with every binder of `EndToEndHidden` but the prover and its sampling design, as
-`Period`'s `SamplingBlock` is. Its incorrect proof blocks are `incorrectRegZ` in the committed transcript fixed at registration
-(`XplurZC`). The bound is `JointStratified`'s, with the same budget and the same confidence set:
-
-* `JointStratifiedMT`, per sampling block: except with probability `δ + ε_ks + ε_bind`, if verity-verify-proof accepts, the
-  sampling block's incorrect proof blocks `B` lie in the confidence set (`SamplingDesign.stratified`'s missProb of `B` is at least `δ`), so they
-  spend at most the one budget, `Σ_s k_s·x_s/n_s ≤ ln(1/δ)` over every stratum of every table, and their ANDs and their
-  output bits are each at most the most any set in the confidence set holds (`StratifiedBlockMT.maxHarm`).
-* `JointStratifiedPooledMT`, pooled: the same over a period of `T` such sampling blocks played by one adaptive prover,
-  with one budget for the whole period: except with probability `δ + Σ_t (ε_ks,t + ε_bind,t)`.
-
-`ε_ks` is the sampling block's knowledge term at the worst registration (`StratifiedBlockMT.epsKs`) and `ε_bind` its
-binding term `ε_bind` (`StratifiedBlockMT.link`). The named assumptions are A3 (`uniform/io-getrandombytes`) for the
-sample's bytes, `live-verifier` (`StratifiedBlockMT.hCust`, `RecordCustodyZKJS`), and `cr/sha-512` (`TableCRZ`) and
-`ecr/sha-512` (`LinkCRZC`) at the strategy each sampling block is played with (in a period, at every strategy it is
-played with on some run, `StratifiedMT.Plays`), stated flat. Their proofs are `Flock.SecurityProofs.JointStratifiedMT`
-and `Flock.SecurityProofs.JointStratifiedPooledMT` (`Joint/MT/Bound.lean`).
-
-Flock's definitions are still in its proofs package, so, like `EndToEndHidden`, this module imports them.
--/
+/-! The joint stratified bound over sampling blocks of several tables (trusted). -/
 
 @[expose] public section
 

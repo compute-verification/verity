@@ -15,15 +15,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# The `--zk` session's record custody at a sampling design's samples
-
-`live-verifier` as `flock_verify_sound`'s claims under `--zk` take it: the record is the live session's, and the sample
-file at every sample of the live sampling design proves the sampled proof blocks and sets the statement up with the outcome's link points.
-`RecordCustodyZKLaw` at one public-output table, `RecordCustodyZKHLaw` at one hidden-output table, `RecordCustodyZKJLaw`
-and `RecordCustodyZKHJLaw` at `J`. `RecordCustodyZK` and `RecordCustodyZKJ` (`Assumptions.Zk`) state the sample fact as
-the sample file being `verity-verify-proof draw`'s instead.
--/
+/-! The `--zk` session's record custody at a sampling design's samples. -/
 
 @[expose] public section
 
@@ -87,12 +79,8 @@ def DrawCustodyZKHJ {n : ℕ} (I : Discharge.Exec.Inputs) (dj : Finset (Fin n) �
     (L : Audit.SamplingDesign n) : Prop :=
   ∀ ω, Discharge.ZkHidden.SampleOkZKHJ I dj mPts (L.draw ω)
 
-/-- **The sample file proves the sampled proof blocks at one sample `S`, at `J` tables** (`live-verifier`'s sample half at one sample,
-`Discharge.Composed.SampleOkZKJ`), as `setupZJ_of_acceptsZK` takes it. -/
 def SampleAtZKJ := @Discharge.Composed.SampleOkZKJ
 
-/-- **The sample file proves the sampled proof blocks at one sample `S`, at `J` hidden-output tables** (`SampleAtZKJ` with
-`Discharge.ZkHidden.SampleOkZKHJ`'s hidden-output setup). -/
 def SampleAtZKHJ := @Discharge.ZkHidden.SampleOkZKHJ
 
 end FlockSoundness.Assumptions.Zk

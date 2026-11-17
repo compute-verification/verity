@@ -5,21 +5,7 @@ import Mathlib.Algebra.Order.Algebra
 import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
 import Proofs.Flock.Soundness.Game
 
-/-!
-# The cumulative harm budget over a lifetime of one-stage audits
-
-`life L Reg session N` is a lifetime of at most `N` one-stage audits (`audit`), round `m` by sampling design
-`L m`: before each, the prover chooses to stop (accepting) or to run it, and a rejected audit ends
-the session. The prover's choices are adaptive, so the number of rounds is a stopping time.
-
-For a prover strategy `s`, `lifePlay A N s` is its run tree (`Adaptive.Play`), each round's incorrect
-proof blocks being those of its committed transcript (`Analysis.committedOf`), which the prover's state at
-registration fixes before the round's sample. It is faithful: its acceptance is the lifetime's
-(`life_accept`). Each round's drawn-unit bound is `audit_sampled` (`sampled_lifePlay`), so `harm_budget`
-gives the lifetime's bound (`life_harm_budget`):
-$$\Pr\Big[\text{accept} \wedge \sum_{t \le T} h(\mathrm{incorrect}(X_t)) \ge H\Big]
-  \le e^{-\lambda H} + \sum_{m < N} (\varepsilon_{ks,m} + \delta_{link,m}).$$
--/
+/-! The cumulative harm budget over a lifetime of one-stage audits. -/
 
 @[expose] public section
 
@@ -174,7 +160,6 @@ theorem prEv_roundPlay (A : Analysis L Reg session) (h : Fin n → ℝ) (Ev : Bo
           (x + ∑ u ∈ A.incorrect (A.committedOf (Strategy.ofBind (afterAudit next) (audit L Reg session) t)), h u) :=
   rfl
 
-/-- One round's drawn-unit term is the audit's drawn-unit event. -/
 theorem sampled_term {next : Game Bool} {N : ℕ} {rest : Strategy next → Play n N}
     (hpass : ∀ t, (rest t).pass = 1) (B D : Finset (Fin n)) (g : Game Bool)
     (s : Strategy ((g.map fun ok => (ok, D)).bind (afterAudit next))) :
@@ -306,7 +291,6 @@ theorem sampled_lifePlay (A : (m : ℕ) → Analysis (L m) (Reg m) (session m)) 
   | 0, _ => trivial
   | N + 1, s => sampled_stagePlay (A N) (hks N) (hlink N) (pass_lifePlay A N) (sampled_lifePlay A hks hlink N) le_rfl s
 
-/-- **The run tree is faithful**: it accepts exactly when the lifetime does. -/
 theorem life_accept (A : (m : ℕ) → Analysis (L m) (Reg m) (session m)) (h : Fin n → ℝ) :
     ∀ (N : ℕ) (s : Strategy (life L Reg session N)) (x : ℝ),
       (lifePlay A N s).prEv h (fun acc _ => acc = true) x = prob (· = true) (life L Reg session N) s

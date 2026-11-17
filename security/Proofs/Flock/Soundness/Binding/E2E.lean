@@ -5,42 +5,7 @@ public import Proofs.Flock.Soundness.ExecStratified
 public import Proofs.Flock.Soundness.Binding.Weights
 public import Proofs.Flock.Soundness.StrictCR
 
-/-!
-# The end-to-end theorem with the value binding of `hm96-sha512/row/v1` rows
-
-`flock_e2e_count` and `flock_e2e_sampled` (`E2E.lean`), and their forms at the executable's sampling design
-(`ExecStratified.lean`), with `vb : ValueBinding` built from the serving rows (`HmRows.binding`). The binding's hash is
-SHA-512 (`Refine.H512`), so `SHA512CRExpected` (`hCR`) is about SHA-512 itself, and what `vb` carried becomes:
-* `HmRowComputes` (`hHm`), the circuit's row hashing, the one gap of the binding;
-* the layout's facts, in `lay : Layout` (`decode_row`: the decoder reads the rows the witness holds) and `rs : HmRows`
-  (`bc_registered`: the `b ‖ c` the witness holds hashes to the registered leaf; `other_registered`: the returned
-  outputs' leaves).
-
-`collide_spec` is proved (`ExplicitLeaf.hm96`): the link finder's collisions are explicit SHA-512 collisions. It is asked
-of the finders built from the prover bounded (`hCR : LinkCR … (reg σ) (cont σ) …`). The other hypotheses (`dp`, `hConst`,
-`hZero`) are the skeleton's, unchanged (`E2E.lean`).
-
-**The two forms of SHA-512's collision resistance.** The binding error `ε_bind` is under `SHA512CRExpected` (`ecr/sha-512`,
-through `hCR`), of SHA-512 itself, since the rows' binding hashes with it. The knowledge term and `δ_tree` are under
-`SHA512CRStrict` (`cr/sha-512`, through `hKS` and `hT`), of the session's hash `H`, which `Prog.flock_headline` takes to
-be SHA-512; each at its finders' budgets:
-* the knowledge term is `ksAvgStrict` (`StrictCR.ksAvgBE_le_strict`), for tables whose rewinding finders satisfy
-  `SHA512CRStrict` at budget `qF` and whose self-clash finders at `qS` (`hKS`);
-* `δ_tree` is `TreeRewind.bound qT = √(N_s·Q_s·qT²/2^513)` (`DESIGN.md` §1), for a rewinding at the serving roots (`tr`)
-  whose finder satisfies `SHA512CRStrict` at budget `qT` (`hT`).
-
-**`δ_tree`.** "Accept" is `execAccept`, read from the registered roots, and the bound counts it with the model's
-acceptance at the registered leaves (`Layout.regLeaf`). Where they differ is `δ_tree`: `tr` covers the event that the
-executable accepts and the model rejects by runs that open a serving root off its plurality (`TreeRewind.covers`). That
-cover is the link from the executable's openings to the model's (the refinement `ExecRefines`), still open, so `tr` is a
-named hypothesis. The skeleton's `hExec` (every accept is the model's) gives a cover with no positions, at `δ_tree = 0`
-(`TreeRewind.ofNever`).
-
-**A3.** None of these forms takes A3 (`uniform/io-getrandombytes`). The generic forms hold at every sampling design `L`, the live
-sample `SamplingDesign.execOS` included, and read it only through their terms. The `_exec` forms are at `SamplingDesign.execStratified`, whose
-outcomes are the byte tapes themselves, uniform by construction. The live verifier's bytes enter through `SamplingDesign.execOS`, and
-A3 compares its count curve with `SamplingDesign.stratified`'s (`SamplingDesign.execOS_miss_le`): `Prog.flock_headline` composes the two.
--/
+/-! The end-to-end theorem with the value binding of `hm96-sha512/row/v1` rows, whose one gap is `HmRowComputes`; none of its forms takes A3. -/
 
 @[expose] public section
 
@@ -52,8 +17,6 @@ open scoped ENNReal
 /-- The executable's field. -/
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- An event on the audit's outcome splits on the model's verdict: the part the model accepts, and the part it
-rejects. -/
 theorem prob_split_accept {n : ℕ} (G : Game (Bool × Finset (Fin n))) (S : Strategy G)
     (A B : Bool × Finset (Fin n) → Prop) :
     prob (fun o => A o ∧ B o) G S ≤
@@ -68,13 +31,8 @@ variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
   {L : SamplingDesign n}
 
-/-- **The end-to-end count curve, with the rows' value binding**: `flock_e2e_count` at `vb := HmRows.binding rs hHm`.
-If `execAccept` holds, the probability that at least `K` units of the committed circuit are incorrect at the committed values
-is at most `miss_L(K) + ε_ks + ε_bind + δ_tree`: `ε_ks` and `δ_tree` under `SHA512CRStrict` of `H` (`cr/sha-512`,
-through `hKS` and `hT`), `ε_bind` under `SHA512CRExpected` of SHA-512 (`ecr/sha-512`, through `hCR`). Beyond the
-skeleton's `dp`, `hConst` and `hZero`, it takes the rows' layout (`lay`, `rs`), `HmRowComputes` (`hHm`) and the serving
-roots' rewinding (`tr`). It takes no A3: `miss_L` is the sampling design's own, and `Prog.flock_headline` bounds the live sample's by
-`SamplingDesign.stratified`'s under A3. -/
+/-- It takes no A3. `tr`, the serving roots' rewinding, is a named hypothesis: the refinement from the
+executable's openings to the model's (`ExecRefines`) is open. -/
 theorem flock_e2e_count_hm96
     {execAccept : Bool × Finset (Fin n) → Prop}
     {unitRows : Fin n → FlockSoundness.Rows} (dp : P.DerivedPlaces plan tab unitRows)
@@ -100,10 +58,8 @@ theorem flock_e2e_count_hm96
       (add_le_add (add_le_add le_rfl (StrictCR.ksAvgBE_le_strict H E plan k (reg σ) (cont σ) hKS)) le_rfl))
     (tr.le hT))
 
-/-- **The end-to-end drawn-unit bound, with the rows' value binding**: `flock_e2e_sampled` at
-`vb := HmRows.binding rs hHm`, at most `ε_ks + ε_bind + δ_tree`, as in `flock_e2e_count_hm96` (`cr/sha-512` through `hKS`
-and `hT`, `ecr/sha-512` through `hCR`). It reads the sampling design only through `ε_ks` and `ε_bind`, both at `L`, so it holds as
-stated at the live sample (`L := SamplingDesign.execOS …`), with no A3. -/
+/-- It reads the sampling design only through `ε_ks` and `ε_bind`, so it holds as stated at the live sample, with no
+A3. -/
 theorem flock_e2e_sampled_hm96
     {execAccept : Bool × Finset (Fin n) → Prop}
     {unitRows : Fin n → FlockSoundness.Rows} (dp : P.DerivedPlaces plan tab unitRows)
@@ -131,10 +87,7 @@ theorem flock_e2e_sampled_hm96
 
 variable {m : ℕ} (St : Fin m → Flock.Draw.Stratum) (Ls : Fin m → ℕ)
 
-/-- **The e2e drawn-unit bound at the executable's sampling design, with the rows' value binding**: `flock_e2e_sampled_exec` at
-`vb := HmRows.binding rs hHm`, at most `ε_ks + ε_bind + δ_tree`, as in `flock_e2e_count_hm96` (`cr/sha-512` through `hKS`
-and `hT`, `ecr/sha-512` through `hCR`). `SamplingDesign.execStratified`'s outcomes are uniform byte tapes, so it takes no A3; the live
-verifier's bytes are `flock_e2e_sampled_hm96`'s at `L := SamplingDesign.execOS …`. -/
+/-- It takes no A3: `SamplingDesign.execStratified`'s outcomes are uniform byte tapes. -/
 theorem flock_e2e_sampled_exec_hm96
     {execAccept : Bool × Finset (Fin n) → Prop}
     {unitRows : Fin n → FlockSoundness.Rows} (dp : P.DerivedPlaces plan tab unitRows)
@@ -162,11 +115,7 @@ theorem flock_e2e_sampled_exec_hm96
       (add_le_add (StrictCR.ksAvgBE_le_strict H E plan k (reg σ) (cont σ) hKS) le_rfl))
     (tr.le hT))
 
-/-- **The e2e count curve at the executable's sampling design, with the rows' value binding**: `flock_e2e_count_exec` at
-`vb := HmRows.binding rs hHm`, its count curve bounded by `SamplingDesign.stratified`'s `miss`, at most
-`miss(K) + ε_ks + ε_bind + δ_tree`, as in `flock_e2e_count_hm96` (`cr/sha-512` through `hKS` and `hT`, `ecr/sha-512`
-through `hCR`). `SamplingDesign.execStratified`'s outcomes are uniform byte tapes, so it takes no A3; at the live verifier's bytes
-the same curve is `Prog.flock_headline`'s, under A3. -/
+/-- It takes no A3: `SamplingDesign.execStratified`'s outcomes are uniform byte tapes. -/
 theorem flock_e2e_count_exec_hm96 (σs : Fin n → Fin m) (ks : Fin m → ℕ)
     (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card) (hS : SamplingDesign.ExecStrata σs ks St)
     {execAccept : Bool × Finset (Fin n) → Prop}

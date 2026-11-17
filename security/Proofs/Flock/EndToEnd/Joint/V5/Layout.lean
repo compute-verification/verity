@@ -2,38 +2,12 @@ module
 
 public import Proofs.Flock.EndToEnd.Joint.V5.Bound
 
-/-!
-# The registered member layout of a window's sample
-
-A window's audit (`JointAuditV5`) samples once over the whole window's population of proof blocks and hands each
-member its part of the sample (`MemberV5.part`, through the member's place `MemberV5.emb` in the population). This
-file states the layout that fixes those places before the sample and proves what the members' samples are under it:
-
-* `MemberLayout.base cnt k`: under the registered counts `cnt`, the members' proof-block counts in order, member `k`'s
-  base is the sum of the counts before it. A unit `u` below the total belongs to exactly one member, the one with
-  `base ≤ u < base + n` (`MemberLayout.exists_member`, `MemberLayout.member_unique`), and
-  `MemberLayout.memberUnits cnt k us` is member `k`'s part of a sampled list `us` in its own indices, in the list's
-  order (`MemberLayout.mem_memberUnits`);
-* `JointAuditV5.Laid`: the window's members are laid out in order: their counts sum to the population and member `k`'s
-  proof block `v` is the population's `base k + v`. Both sides are fixed by the registration, before any coin;
-* under it the members partition the population (`Laid.exists_member`, `Laid.member_unique`, `Laid.mem_iff`), a sample
-  is its members' parts and nothing else (`Laid.parts`, an equivalence; `Laid.card_parts`), and member `k`'s part of the
-  window's sample is read off it by the layout alone (`Laid.mem_design_sample`, `Laid.mem_sample_iff`;
-  `Laid.design_sample_ok` on the sampled list the verifier's bytes give);
-* **the members' sampling designs are the window's marginals**: an event of member `k`'s sample has, under `design k`
-  and under `memberSamplingDesign τ k` (the design its session is played alone at), the probability the window's one sample gives
-  the event at its part (`prCoin_design`, `prCoin_memberDistribution`); the members' samples together are the window's
-  (`Laid.prCoin_parts`); and member `k`'s design misses a set of its proof blocks, or samples one, exactly when the
-  window's misses or samples their places in the population (`design_escape`, `memberSamplingDesign_escape`, `design_incl`), so at
-  most `P_a` of those places under A3 (`design_escape_le`);
-* the window's incorrect proof blocks are its members' (`Laid.part_incorrectSet`).
--/
+/-! The registered member layout of a window's sample, and the members' samples under it. -/
 
 @[expose] public section
 
 namespace MemberLayout
 
-/-- **A member's base** under the registered counts `cnt`: the sum of the counts before it. -/
 def base (cnt : List ℕ) (k : ℕ) : ℕ := (cnt.take k).sum
 
 theorem base_zero (cnt : List ℕ) : base cnt 0 = 0 := by simp [base]
@@ -54,7 +28,6 @@ theorem base_add_le (cnt : List ℕ) {k k' : ℕ} (h : k < k') (hk : k < cnt.len
     base cnt k + cnt[k] ≤ base cnt k' :=
   (base_succ cnt hk).symm.trans_le (base_mono cnt h)
 
-/-- **Every unit below the total belongs to a member**: the one with `base ≤ u < base + n`. -/
 theorem exists_member (cnt : List ℕ) {u : ℕ} (hu : u < cnt.sum) :
     ∃ k, ∃ hk : k < cnt.length, base cnt k ≤ u ∧ u < base cnt k + cnt[k] := by
   have key : ∀ j, j ≤ cnt.length → u < base cnt j →
@@ -72,7 +45,6 @@ theorem exists_member (cnt : List ℕ) {u : ℕ} (hu : u < cnt.sum) :
 theorem base_add_le_sum (cnt : List ℕ) {k : ℕ} (hk : k < cnt.length) : base cnt k + cnt[k] ≤ cnt.sum :=
   (base_succ cnt hk).symm.trans_le (base_le_sum cnt _)
 
-/-- **A unit belongs to one member only.** -/
 theorem member_unique (cnt : List ℕ) {u k k' : ℕ} (hk : k < cnt.length) (hk' : k' < cnt.length)
     (h₁ : base cnt k ≤ u) (h₂ : u < base cnt k + cnt[k]) (h₁' : base cnt k' ≤ u)
     (h₂' : u < base cnt k' + cnt[k']) :
@@ -82,8 +54,6 @@ theorem member_unique (cnt : List ℕ) {u k k' : ℕ} (hk : k < cnt.length) (hk'
   · exact h
   · exact absurd ((base_add_le cnt h hk').trans h₁) (Nat.not_le.2 h₂')
 
-/-- **Member `k`'s part of a sampled list**, in its own indices and the list's order: the units `u` with
-`base ≤ u < base + n`, each less its base. -/
 def memberUnits (cnt : List ℕ) (k : ℕ) (n : ℕ) (us : List ℕ) : List ℕ :=
   (us.filter fun u => base cnt k ≤ u ∧ u < base cnt k + n).map (· - base cnt k)
 
@@ -97,7 +67,6 @@ theorem mem_memberUnits (cnt : List ℕ) (k n : ℕ) (us : List ℕ) (v : ℕ) :
   · rintro ⟨hv, hu⟩
     exact ⟨base cnt k + v, ⟨hu, Nat.le_add_right _ _, Nat.add_lt_add_left hv _⟩, Nat.add_sub_cancel_left ..⟩
 
-/-- A member's part of a sampled list is as long as the list at most. -/
 theorem length_memberUnits_le (cnt : List ℕ) (k n : ℕ) (us : List ℕ) :
     (memberUnits cnt k n us).length ≤ us.length := by
   rw [memberUnits, List.length_map]
@@ -116,7 +85,6 @@ open Classical
 
 variable (w : JointAuditV5)
 
-/-- **The registered counts**: each member's number of proof blocks, in the members' order. -/
 def counts : List ℕ := w.ms.map (·.n)
 
 theorem counts_length : w.counts.length = w.ms.length := List.length_map _
@@ -124,12 +92,9 @@ theorem counts_length : w.counts.length = w.ms.length := List.length_map _
 theorem counts_get (k : Fin w.ms.length) : w.counts[k.1]'(by rw [counts_length]; exact k.2) = (w.ms.get k).n := by
   simp [counts]
 
-/-- **Member `k`'s base**: the sum of the counts of the members before it. -/
 def base (k : Fin w.ms.length) : ℕ := MemberLayout.base w.counts k.1
 
-/-- **The window's members are laid out in order**: their counts sum to the population, and member `k`'s proof block
-`v` is the population's `base k + v`. The counts, the bases and the places are the registration's, fixed before the
-sample. -/
+/-- The counts, the bases and the places are the registration's, fixed before the sample. -/
 structure Laid : Prop where
   total : w.counts.sum = w.nJ
   emb : ∀ (k : Fin w.ms.length) (v : Fin (w.ms.get k).n), ((w.ms.get k).emb v).val = w.base k + v.val
@@ -138,7 +103,6 @@ variable {w}
 
 namespace Laid
 
-/-- **A population unit is member `k`'s** exactly when `base k ≤ u < base k + n_k`. -/
 theorem mem_iff (h : w.Laid) (k : Fin w.ms.length) (u : Fin w.nJ) :
     (∃ v, (w.ms.get k).emb v = u) ↔ w.base k ≤ u.val ∧ u.val < w.base k + (w.ms.get k).n := by
   constructor
@@ -151,7 +115,6 @@ theorem mem_iff (h : w.Laid) (k : Fin w.ms.length) (u : Fin w.nJ) :
     show w.base k + (u.val - w.base k) = u.val
     omega
 
-/-- **Every population unit belongs to a member.** -/
 theorem exists_member (h : w.Laid) (u : Fin w.nJ) :
     ∃ k : Fin w.ms.length, w.base k ≤ u.val ∧ u.val < w.base k + (w.ms.get k).n := by
   obtain ⟨k, hk, h₁, h₂⟩ := MemberLayout.exists_member w.counts (u := u.val) (by rw [h.total]; exact u.2)
@@ -159,7 +122,6 @@ theorem exists_member (h : w.Laid) (u : Fin w.nJ) :
   rw [← w.counts_get ⟨k, w.counts_length ▸ hk⟩]
   exact h₂
 
-/-- **A unit belongs to one member only.** -/
 theorem member_unique (_h : w.Laid) {u : ℕ} {k k' : Fin w.ms.length} (h₁ : w.base k ≤ u)
     (h₂ : u < w.base k + (w.ms.get k).n) (h₁' : w.base k' ≤ u) (h₂' : u < w.base k' + (w.ms.get k').n) :
     k = k' := by
@@ -189,7 +151,6 @@ theorem mem_part (k : Fin w.ms.length) (S : Finset (Fin w.nJ)) (v : Fin (w.ms.ge
     v ∈ (w.ms.get k).part S ↔ (w.ms.get k).emb v ∈ S := by
   simp [MemberV5.part]
 
-/-- **The sample with the parts `T`**: every member's part at its place in the population. -/
 noncomputable def join (T : (k : Fin w.ms.length) → Finset (Fin (w.ms.get k).n)) : Finset (Fin w.nJ) :=
   Finset.univ.biUnion fun k => (T k).image (w.ms.get k).emb
 
@@ -218,8 +179,6 @@ theorem part_join (h : w.Laid) (T : (k : Fin w.ms.length) → Finset (Fin (w.ms.
   · intro hv
     exact ⟨k, v, hv, rfl⟩
 
-/-- **A sample is its members' parts**: under the layout, the samples of the population are the families of one sample
-per member. -/
 noncomputable def parts (h : w.Laid) :
     Finset (Fin w.nJ) ≃ ((k : Fin w.ms.length) → Finset (Fin (w.ms.get k).n)) where
   toFun S k := (w.ms.get k).part S
@@ -227,7 +186,6 @@ noncomputable def parts (h : w.Laid) :
   left_inv := h.join_part
   right_inv T := funext (h.part_join T)
 
-/-- **The members' parts have the sample's units between them.** -/
 theorem card_parts (h : w.Laid) (S : Finset (Fin w.nJ)) : ∑ k, ((w.ms.get k).part S).card = S.card := by
   conv_rhs => rw [← h.join_part S]
   rw [join, Finset.card_biUnion]
@@ -250,12 +208,8 @@ theorem disjoint_part_iff (k : Fin w.ms.length) (S : Finset (Fin w.nJ)) (B : Fin
   · intro h v hv hB
     exact h hv v hB rfl
 
-/-! ### Member `k`'s sample, read off the window's by the layout -/
-
 variable (w)
 
-/-- **The window's sample on the verifier's bytes**: where `sampleUnits` samples the list `r.1`, the units of that
-list. -/
 theorem draw_ok (ω : w.L.Ω) {r : Array ℕ × ℕ}
     (hr : _root_.Spot.Draw.sampleUnits w.samplingDesign w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) = .ok r) (u : Fin w.nJ) :
     u ∈ w.L.draw ω ↔ u.val ∈ r.1 := by
@@ -263,7 +217,6 @@ theorem draw_ok (ω : w.L.Ω) {r : Array ℕ × ℕ}
   rw [hr]
   simp only [Finset.mem_filter, Finset.mem_univ, true_and]
 
-/-- **The window's sample where the verifier's bytes run out**: every unit. -/
 theorem sample_error (ω : w.L.Ω) {e : String}
     (hr : _root_.Spot.Draw.sampleUnits w.samplingDesign w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) = .error e)
     (u : Fin w.nJ) :
@@ -276,15 +229,12 @@ variable {w}
 
 namespace Laid
 
-/-- **Member `k`'s sample is the window's at its place**: its proof block `v` is sampled exactly when the population's
-`base k + v` is. -/
 theorem mem_design_sample (h : w.Laid) (k : Fin w.ms.length) (ω : w.L.Ω) (v : Fin (w.ms.get k).n) (u : Fin w.nJ)
     (hu : u.val = w.base k + v.val) : v ∈ (w.design k).draw ω ↔ u ∈ w.L.draw ω := by
   have e : (w.ms.get k).emb v = u := Fin.ext ((h.emb k v).trans hu.symm)
   rw [← e]
   exact w.mem_part k _ v
 
-/-- **A sampled proof block `u` belongs to the member with `base ≤ u < base + n`**, as its proof block `u - base`. -/
 theorem mem_sample_iff (h : w.Laid) (ω : w.L.Ω) (u : Fin w.nJ) :
     u ∈ w.L.draw ω ↔ ∃ k v, u.val = w.base k + v.val ∧ v ∈ (w.design k).draw ω := by
   constructor
@@ -294,9 +244,6 @@ theorem mem_sample_iff (h : w.Laid) (ω : w.L.Ω) (u : Fin w.nJ) :
   · rintro ⟨k, v, hu, hv⟩
     exact (h.mem_design_sample k ω v u hu).1 hv
 
-/-- **Member `k`'s sample on the verifier's bytes**: where `sampleUnits` samples the list `r.1` over the window's
-population, member `k`'s sample is its part of that list (`MemberLayout.memberUnits`): the members' samples are read
-off the one sampled list in order, by the registered bases and counts. -/
 theorem design_sample_ok (h : w.Laid) (k : Fin w.ms.length) (ω : w.L.Ω) {r : Array ℕ × ℕ}
     (hr : _root_.Spot.Draw.sampleUnits w.samplingDesign w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) = .ok r)
     (v : Fin (w.ms.get k).n) :
@@ -309,7 +256,6 @@ theorem design_sample_ok (h : w.Laid) (k : Fin w.ms.length) (ω : w.L.Ω) {r : A
     Array.mem_toList_iff]
   exact ⟨fun hu => ⟨v.2, hu⟩, fun hu => hu.2⟩
 
-/-- **Member `k`'s sample where the verifier's bytes run out**: every one of its proof blocks. -/
 theorem design_sample_error (k : Fin w.ms.length) (ω : w.L.Ω) {e : String}
     (hr : _root_.Spot.Draw.sampleUnits w.samplingDesign w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) = .error e) :
     (w.design k).draw ω = Finset.univ :=
@@ -317,32 +263,23 @@ theorem design_sample_error (k : Fin w.ms.length) (ω : w.L.Ω) {e : String}
 
 end Laid
 
-/-! ### The members' sampling designs are the window's marginals -/
-
 variable (w)
 
-/-- **Member `k`'s sampling design is the window's marginal**: an event of its sample has the probability the window's
-one sample gives the event at member `k`'s part. -/
 theorem prCoin_design (k : Fin w.ms.length) (E : Finset (Fin (w.ms.get k).n) → Prop) :
     prCoin (fun ω : (w.design k).Ω => E ((w.design k).draw ω)) =
       prCoin (fun ω : w.L.Ω => E ((w.ms.get k).part (w.L.draw ω))) :=
   rfl
 
-/-- **Member `k`'s design misses a set of its proof blocks** exactly when the window's sample misses their places in
-the population. -/
 theorem design_escape (k : Fin w.ms.length) (B : Finset (Fin (w.ms.get k).n)) :
     (w.design k).missProb B = w.L.missProb (B.image (w.ms.get k).emb) :=
   congrArg (fun p : w.L.Ω → Prop => prCoin p) (funext fun ω => propext (w.disjoint_part_iff k (w.L.draw ω) B))
 
-/-- **Member `k`'s design samples its proof block `v`** exactly when the window's samples its place. -/
 theorem design_incl (k : Fin w.ms.length) (v : Fin (w.ms.get k).n) :
     (w.design k).incl v = w.L.incl ((w.ms.get k).emb v) :=
   congrArg (fun p : w.L.Ω → Prop => prCoin p) (funext fun ω => propext (w.mem_part k (w.L.draw ω) v))
 
 variable {w}
 
-/-- **The members' samples together are the window's**: an event of the window's sample is the event of the members'
-samples at the sample they make up. -/
 theorem Laid.prCoin_parts (h : w.Laid) (E : Finset (Fin w.nJ) → Prop) :
     prCoin (fun ω : w.L.Ω => E (w.L.draw ω)) =
       prCoin (fun ω : w.L.Ω => E (w.join fun k => (w.design k).draw ω)) :=
@@ -354,24 +291,17 @@ section Ended
 
 variable [Nonempty w.EndΩ]
 
-/-- **The design member `k`'s session is played alone at is the window's marginal where the sample ended**: the earlier
-sessions' coins it samples with the window's don't move its sample, so the ended share of an event's probability at it
-is at most the probability the window's one sample gives the event at member `k`'s part. -/
 theorem prCoin_memberDistribution (τ : Strategy w.game) (k : Fin w.ms.length) (E : Finset (Fin (w.ms.get k).n) → Prop) :
     w.endShare * prCoin (fun x : (w.memberSamplingDesign τ k).Ω => E ((w.memberSamplingDesign τ k).draw x)) ≤
       prCoin (fun ω : w.L.Ω => E ((w.ms.get k).part (w.L.draw ω))) :=
   w.endShare_mul_avg_le τ k fun S => if E S then 1 else 0
 
-/-- The ended share of the probability that member `k`'s design played alone misses a set of its proof blocks is at most
-the probability that the window's sample misses their places in the population. -/
 theorem memberSamplingDesign_escape (τ : Strategy w.game) (k : Fin w.ms.length) (B : Finset (Fin (w.ms.get k).n)) :
     w.endShare * (w.memberSamplingDesign τ k).missProb B ≤ w.L.missProb (B.image (w.ms.get k).emb) :=
   (w.prCoin_memberDistribution τ k fun S => Disjoint S B).trans_eq (w.design_escape k B)
 
 end Ended
 
-/-- **Member `k`'s design misses a set of its proof blocks** with probability at most the window's sampling design's
-own miss `P_a` of their places in the population, under A3. -/
 theorem design_escape_le (hA3 : Assumptions.UniformRandomBytes w.Lb w.src) (k : Fin w.ms.length)
     (B : Finset (Fin (w.ms.get k).n)) :
     (w.design k).missProb B ≤ ENNReal.ofReal (w.pa (B.image (w.ms.get k).emb)) :=
@@ -381,8 +311,6 @@ section Ended
 
 variable [Nonempty w.EndΩ]
 
-/-! ### The window's incorrect proof blocks are its members' -/
-
 theorem incorrectSet_eq_join (τ : Strategy w.game) : w.incorrectSet τ = w.join (w.memberIncorrect τ) := by
   ext u
   rw [w.incorrectSet_eq τ]
@@ -391,13 +319,11 @@ theorem incorrectSet_eq_join (τ : Strategy w.game) : w.incorrectSet τ = w.join
 
 variable {w}
 
-/-- **Member `k`'s part of the window's incorrect proof blocks is its own incorrect proof blocks.** -/
 theorem Laid.part_incorrectSet (h : w.Laid) (τ : Strategy w.game) (k : Fin w.ms.length) :
     (w.ms.get k).part (w.incorrectSet τ) = w.memberIncorrect τ k := by
   rw [w.incorrectSet_eq_join τ]
   exact h.part_join (w.memberIncorrect τ) k
 
-/-- **A population unit is incorrect** exactly when it is an incorrect proof block of the member it belongs to. -/
 theorem Laid.mem_incorrectSet (h : w.Laid) (τ : Strategy w.game) (u : Fin w.nJ) :
     u ∈ w.incorrectSet τ ↔ ∃ k v, u.val = w.base k + v.val ∧ v ∈ w.memberIncorrect τ k := by
   constructor

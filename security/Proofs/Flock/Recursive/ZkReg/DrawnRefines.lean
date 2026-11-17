@@ -24,24 +24,7 @@ import Proofs.Flock.Soundness.Game
 public import Proofs.Flock.Soundness.Discharge.Composed.Sound
 public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 
-/-!
-# The sampled proof blocks of one `--zk --registered` session
-
-`exec_le_of_refines` and `zk_headline_exec_on` carry a bound on the compiled audit to the live audit only for a fact
-`Q : Prop` the strategies fix. An event about the sample (`o.2.1`) and the registration (`o.1`) carries over too, since in
-both audits the registration is the prover's first message and the sample the verifier's coin after it, and the
-simulation keeps both (`simAuditZKOn`):
-
-* `exec_le_of_refines_sampled`: sample by sample, if the live session's acceptance is at most the compiled session's, then
-  any bound on `Pr[accept ∧ Q R S]` in the compiled audit, `R` its registration and `S` its sample, bounds
-  `Pr[acc ∧ Q o.1 o.2.1]` in the live audit;
-* `zk_headline_exec_sampled`: that at `--zk`, from the decoder at the sampling design's samples; `zk_headline_exec_sampledJ` at sessions
-  of `J` tables, and `simZHJ` the simulation it reads at hidden-output tables;
-* `zk_flock_sampledC_cr`: the compiled audit's sampled bound, `Pr[accept ∧ a drawn unit is incorrect] ≤ ε_ks + ε_bind`
-  (`extraction_audit_sampled` at `analysisZC`), every term on the accepted assumptions;
-* `zk_session_sampledR`: `hwrong` for `verity-verify-proof verify --zk --registered F` sessions: no sampled proof block is incorrect in the
-  committed values `XplurZC` decodes from the rows `rsZAtS` at `simZ … τ`, except with probability `ε_ks + ε_bind`.
--/
+/-! The sampled proof blocks of one `--zk --registered` session. -/
 
 @[expose] public section
 
@@ -55,10 +38,6 @@ section Transfer
 
 variable {n : ℕ} {Reg : Type}
 
-/-- **A bound on the audit carries to the live audit at an event of the registration and the sample.** If after each
-sample the live session's event `acc` is at most as likely as the compiled session's acceptance (`hat`), the registrations
-agreeing (`hreg`), then a bound on the compiled audit's `Pr[accept ∧ Q R S]` (`R` the registration, `S` the sample)
-bounds the live audit's `Pr[acc ∧ Q o.1 o.2.1]`. -/
 theorem exec_le_of_refines_sampled {L : SamplingDesign n} {live : Finset (Fin n) → Reg → Game Exec.Transcript}
     {session : Finset (Fin n) → Reg → Game Bool} (τ : Strategy (auditLive L Reg live))
     (σ : Strategy (audit L Reg session)) (hreg : reg σ = τ.1) (acc : Exec.Transcript → Prop)
@@ -98,9 +77,6 @@ variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] {mPts n : ℕ} {R
   (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
   (capOf : ∀ (_ : Finset (Fin n)) (_ : Reg), ByteArray → Fin 1 → Cap D) (N : ℕ) {L : SamplingDesign n}
 
-/-- **The `--zk` headline at an event of the registration and the sample**: a bound on the compiled batched audit's
-`Pr[accept ∧ Q R S]` at `simZ … τ` bounds verity-verify-proof `--zk`'s `Pr[accept ∧ Q o.1 o.2.1]`
-(`zk_headline_exec_on` for a `Q` that reads the outcome). -/
 theorem zk_headline_exec_sampled (hdec : DecodesOnZK A Hs T I wr opn dec one fin capOf L)
     (τ : Strategy (auditLive L Reg (liveOf dg mPts N wr))) (Q : Reg → Finset (Fin n) → Prop) (B : ℝ≥0∞)
     (hB : prob (fun o => o.1 = true ∧ Q (reg (simZ A Hs T I wr opn dg dec one fin capOf N hdec τ)) o.2)
@@ -153,8 +129,6 @@ variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] {mPts n : ℕ} {R
   (fin : (S : Finset (Fin n)) → (R : Reg) → Fin (planZ S R).length → Fin 2 → Array ByteArray → List Msg)
   (capOf : (S : Finset (Fin n)) → (R : Reg) → Array ByteArray → Fin (planZ S R).length → Cap D) (N : ℕ) {L : SamplingDesign n}
 
-/-- **The `--zk` headline at an event of the registration and the sample, for sessions of `J` tables**
-(`zk_headline_exec_sampled` at `simZJ`). -/
 theorem zk_headline_exec_sampledJ (hdec : DecodesOnZKJ A Hs planZ I wr opn dec one fin capOf L)
     (τ : Strategy (auditLive L Reg (liveOfZJ dg planZ N wr))) (Q : Reg → Finset (Fin n) → Prop) (B : ℝ≥0∞)
     (hB : prob (fun o => o.1 = true ∧ Q (reg (simZJ A Hs planZ I wr opn dg dec one fin capOf N hdec τ)) o.2)
@@ -214,11 +188,6 @@ variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Verity.Boolean.Circuit} {n : 
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
 
-/-- **The compiled `--zk` audit's sampled proof blocks are right, every term on the accepted assumptions**
-(`extraction_audit_sampled` at `analysisZC`, `zk_flock_countC_execOS_cr`'s terms): with each sampled proof block read from its
-table at its place (`place`) and the committed values the plurality value layer of `vb`,
-`Pr[accept ∧ some drawn unit is incorrect] ≤ ε_ks + ε_bind`, `ε_ks = ksAvgStrictZ` under A1 for every table's finders after
-each sample (`hCR`) and `ε_bind = linkBoundZC` under A2 for the link finders. -/
 theorem zk_flock_sampledC_cr (hA : A.Correct) {L : SamplingDesign n}
     (place : ∀ S R u, u ∈ S → UnitPlace P (tabOfZ planZ tab S R u).S u)
     {Dh : Type} {Hc : List UInt8 → Dh}
@@ -244,31 +213,22 @@ end Drawn
 
 variable {mPts n : ℕ} {Reg : Type}
 
-/-- **No sampled proof block of a `--zk --registered` session is incorrect, except with probability `ε_ks + ε_bind`**: in
-`verity-verify-proof verify --zk --registered F` sessions, `own` F's ports, at the committed values `XplurZC` decodes from the
-rows `rsZAtS` (the `--zk` rows without `pub.tables = none`) at `simZ … τ`, `Pr[accept ∧ some drawn unit is incorrect] ≤
-ε_ks + ε_bind`, on `Composed.zk_session_sound`'s assumptions without A3 (the sampling design's count curve is not read). This is the
-`hwrong` a registered-reads core theorem takes. -/
+/-- Needs no A3: the sampling design's count curve is not read. This is the `hwrong` a registered-reads core
+theorem takes. -/
 theorem zk_session_sampledR
     (I : Inputs) (ht : I.tags.typed = false) (own : Array Flock.Registered.Port)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : SampleSetupZK I mPts S₀ (dj S₀))
     (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the session's circuit and public file
     {c : Flock.Circuit} (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     {pub : Public} (hpub : HmRow.loadPublic (zkTags I) c I.publicFile = .ok pub)
     (hscope : Layout.scopeOk c = true)
-    -- the sampling design
     {m : ℕ} (St : Fin m → Flock.Draw.Stratum) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
-    -- the challenger's live-coin part's sample at each of the sampling design's samples
     (hDraw : ∀ ω, SampleOkZK I dj mPts ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω))
-    -- the verify command's tags and the challenger's live-coin part's record of the live session
     (hTags : TagsOk I) (hRec : RecordsLiveZK I dj wr)
-    -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZAt (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
-    -- the live prover, and cr/sha-512 for the knowledge finders of its simulation
     (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)))
     {qF qS : ℝ}
     (hCR : ∀ ω j, TableCRZ execArith hs512 (planZAt dj y₀

@@ -4,20 +4,7 @@ public import Proofs.Flock.Soundness.CROnly.Defs
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Expected time from strict time: a finder stopped at `q`
-
-A finder `(g, s, out, cost)` that stops adaptively has no worst-case budget, so `SHA512CRStrict` doesn't apply to it. Its
-stopped form (`truncOut`, `truncCost`) has one: it runs as the finder does and stops at the `q`-th evaluation. The two
-output the same pair wherever the finder makes at most `q` evaluations, and by Markov's inequality the finder makes more
-with probability at most `T/q`, for `T` its expected cost. So `SHA512CRStrict` of the stopped finder gives
-$$p \le \frac{T}{q} + \frac{q^2}{2^{513}}$$
-(`expected_of_strict`). With `ε = T/q` this is `ε + T²/(ε²·2^513)`. At its best budget, `q³ = T·2^512`, it is
-`(3/2)·q²/2^512 = (3/2)·T^{2/3}/2^{512/3} ≈ T^{2/3}/2^{170.08}` (`trunc_at_cube`).
-
-The stopped finder is built from the finder, so from the prover when the finder is: the hypothesis stays one about the
-finders of the prover bounded, as both forms are.
--/
+/-! Expected time from strict time: a finder stopped at `q`, built from the finder, so the hypothesis stays one about the finders of the prover bounded. -/
 
 @[expose] public section
 
@@ -25,9 +12,6 @@ namespace FlockSoundness.CROnly
 
 open Game
 
-/-- **Expected-time collision resistance from strict-time, for one finder**: if the finder stopped at `q` evaluations
-satisfies `SHA512CRStrict`, the finder finds a collision with probability at most `T/q + q²/2^513`, for `T` its expected
-number of evaluations. -/
 theorem expected_of_strict {Dg β : Type} (H : List UInt8 → Dg) (g : Game β) (s : Strategy g)
     (out : β → Option (List UInt8 × List UInt8)) (cost : β → ℝ) (hc : ∀ b, 0 ≤ cost b) {q : ℝ} (hq : 0 < q)
     (hS : Assumptions.SHA512CRStrict H g s (truncOut out cost q) (truncCost cost q) q) :
@@ -61,8 +45,6 @@ theorem expected_of_strict {Dg β : Type} (H : List UInt8 → Dg) (g : Game β) 
     _ ≤ q ^ 2 / 2 ^ (513 : ℝ) + expect cost g s / q := add_le_add h1 le_rfl
     _ = _ := add_comm _ _
 
-/-- **The stopped finder at its best budget**: at `q³ = T·2^512`, `T/q + q²/2^513 = (3/2)·q²/2^512`, which is
-`(3/2)·T^{2/3}/2^{512/3}`. -/
 theorem trunc_at_cube {T q : ℝ} (hq : 0 < q) (hcube : q ^ 3 = T * 2 ^ (512 : ℝ)) :
     T / q + q ^ 2 / 2 ^ (513 : ℝ) = 3 / 2 * (q ^ 2 / 2 ^ (512 : ℝ)) := by
   have h513 : (2 : ℝ) ^ (513 : ℝ) = 2 * 2 ^ (512 : ℝ) := by

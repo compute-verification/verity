@@ -27,20 +27,7 @@ import Proofs.Flock.Soundness.ZK.Refusal
 import Proofs.Flock.Soundness.ZK.SHVZK
 import Std.Data.TreeMap.Raw.Lemmas
 
-/-!
-# The ZK theorems with hm96 hiding discharged
-
-`Session.session_shvzk_hm96` (Lemma B) and `Session.adaptive_prefinal_hm96_tape` (Lemma C) take
-`Claims.Hm96Hiding My cs δ₁` as a hypothesis. `hm96Hiding_gap` proves it, with no hypothesis, at `δ₁` the hiding gap
-`hidingGap My cs`; here both theorems are restated at that `δ₁` (`session_shvzk_gap`, `adaptive_prefinal_gap`), and at any
-bound `δ` on the gap (`session_shvzk_le`, `adaptive_prefinal_le`). For `hm96-sha512` the gap is at most `2^-193` at all
-but a `2^-64` fraction of the keys (`hm96_sha512_bad_keys`), so what remains is that the pinned key is uniform
-(`hash-derived-key`, a model fact of the common reference string).
-
-These are zero-knowledge statements, about what the prover's messages reveal (at fixed coins for Lemma B, against any
-`V*` for Lemma C), over any tables `T`. None is a soundness statement, so the `--zk` verifier's place for `final_c'`
-is outside them.
--/
+/-! The ZK theorems with hm96 hiding discharged, leaving that the pinned key is uniform (`hash-derived-key`); none is a soundness statement. -/
 
 @[expose] public section
 
@@ -56,9 +43,6 @@ theorem hm96Hiding_le {Y B C : Type} [Fintype Y] [Fintype B] [DecidableEq B] [De
   hm96Hiding_mono (hm96Hiding_gap My c) (ENNReal.ofReal_le_ofReal h)
 
 open Classical in
-/-- **hm96 hides at all but a `2^-e` fraction of its keys**: for `n` output bits, an `l`-bit salt and a salt hash `c`
-with at most `2^m` values, the keys `κ` at which `Hm96Hiding (M(κ)·) c 2^-b` fails are at most a `2^-e` fraction,
-whenever `n + m + 2a ≤ l` and `b + e = a + 1`. -/
 theorem hm96_bad_keys {F : Type} [Field F] [Fintype F] [DecidableEq F] (hF : Fintype.card F = 2) {C : Type}
     [DecidableEq C] {n l m a b e : ℕ} (c : (Fin l → F) → C) (hc : #(univ.image c) ≤ 2 ^ m) (h : n + m + 2 * a ≤ l)
     (hbe : b + e = a + 1) :
@@ -73,8 +57,6 @@ theorem hm96_bad_keys {F : Type} [Field F] [Fintype F] [DecidableEq F] (hF : Fin
   exact_mod_cast card_le_card hsub
 
 open Classical in
-/-- **`hm96-sha512` hides at all but `2^-64` of its keys**: the keys `κ` at which `Hm96Hiding (M(κ)·) c 2^-193` fails
-are at most a `2^-64` fraction, for any salt hash `c` with at most `2^512` values. -/
 theorem hm96_sha512_bad_keys {F : Type} [Field F] [Fintype F] [DecidableEq F] (hF : Fintype.card F = 2) {C : Type}
     [DecidableEq C] (c : (Fin 1536 → F) → C) (hc : #(univ.image c) ≤ 2 ^ 512) :
     (#{κ : Fin (512 + 1536 - 1) → F |
@@ -89,8 +71,6 @@ variable {F K W Salt B D Hi VL : Type} [Field F] [Field K] [AddCommGroup B] {J :
   [AddCommGroup Salt] [AddCommGroup Hi] [Fintype F] [DecidableEq F] [Fintype K] [DecidableEq K]
   [Fintype Salt] [DecidableEq Salt] [Fintype B] [DecidableEq B] [Fintype Hi] [DecidableEq Hi]
 
-/-- **Lemma B with real hm96 leaves, at a bound on the hiding gap**: `Session.session_shvzk_hm96` with every table's leaves
-under one hash `My` of the salt and one salt hash `cs`, and `δ₁` any bound `δ` on their hiding gap. -/
 theorem session_shvzk_le {C : Type} [DecidableEq C] (M : ∀ j, (T j).Hm96 C) (My : Salt → B) (cs : Salt → C)
     (hMy : ∀ j, (M j).My = My) (hcs : ∀ j, (M j).cs = cs) {δ : ℝ} (hδ : hidingGap My cs ≤ δ)
     (hrank : ∀ j, (T j).Rank) (hpad : ∀ j, (T j).PadOnto)
@@ -108,7 +88,6 @@ theorem session_shvzk_le {C : Type} [DecidableEq C] (M : ∀ j, (T j).Hm96 C) (M
   exact ZK.Session.session_shvzk_hm96 T M (fun j => by rw [hMy j, hcs j]; exact hm96Hiding_le hδ) hrank hpad hW hpads
     hβ w hreg hinner w0 E
 
-/-- **Lemma B with real hm96 leaves, with no hiding hypothesis**: `session_shvzk_le` at `δ₁` the hiding gap itself. -/
 theorem session_shvzk_gap {C : Type} [DecidableEq C] (M : ∀ j, (T j).Hm96 C) (My : Salt → B) (cs : Salt → C)
     (hMy : ∀ j, (M j).My = My) (hcs : ∀ j, (M j).cs = cs)
     (hrank : ∀ j, (T j).Rank) (hpad : ∀ j, (T j).PadOnto)
@@ -131,8 +110,6 @@ variable {F K W Salt B D Hi VL : Type} [Field F] [Field K] [CharP F 2] [AddCommG
   [AddCommGroup Hi] [Fintype F] [DecidableEq F] [Fintype Salt] [DecidableEq Salt] [Fintype B] [DecidableEq B]
   [Fintype Hi] [DecidableEq Hi] {J : ℕ}
 
-/-- **Lemma C at a bound on the hiding gap**: `Session.adaptive_prefinal_hm96_tape` with `δ₁` any bound `δ` on the hiding
-gap of the leaves' salt hashes `(My, cs)`. -/
 theorem adaptive_prefinal_le {n : ℕ} {Cn M Cc Ω L Tp : Type} [Inhabited M] [DecidableEq M] [Fintype Ω]
     [Nonempty Ω] [Fintype L] [DecidableEq L] [Fintype Tp] [Nonempty Tp] [DecidableEq Cc]
     (T : (Fin n → Cn) → Fin J → Table F K W Salt (B × Salt) D Hi VL)
@@ -158,7 +135,6 @@ theorem adaptive_prefinal_le {n : ℕ} {Cn M Cc Ω L Tp : Type} [Inhabited M] [D
   exact ZK.Session.adaptive_prefinal_hm96_tape T rep My cs (hm96Hiding_le hδ) H msgs dig P hP e k he out hI w w' hreg
     hreg' V G
 
-/-- **Lemma C with no hiding hypothesis**: `adaptive_prefinal_le` at `δ₁` the hiding gap itself. -/
 theorem adaptive_prefinal_gap {n : ℕ} {Cn M Cc Ω L Tp : Type} [Inhabited M] [DecidableEq M] [Fintype Ω]
     [Nonempty Ω] [Fintype L] [DecidableEq L] [Fintype Tp] [Nonempty Tp] [DecidableEq Cc]
     (T : (Fin n → Cn) → Fin J → Table F K W Salt (B × Salt) D Hi VL)

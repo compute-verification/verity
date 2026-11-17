@@ -9,35 +9,7 @@ public import Proofs.Flock.Soundness.Game
 import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Real
 
-/-!
-# The one-stage audit and its integrity profile
-
-The prover registers `R` (its roots). The verifier samples units from its own randomness, by the sampling design
-`L`, after registration. One batched session proves the sampled proof blocks against `R`. The audit's output
-is the verdict and the sample (`audit`).
-
-**The committed transcript** is an analysis device: a function of the prover's state at
-registration, which is its registration `R` and its session strategy for every sample (`Cont`). In
-the compiled analysis it is the plurality of what the extractor recovers behind each commit string.
-Because it is fixed before the sample, the sample is independent of its incorrect proof blocks. Nobody computes it.
-
-**The per-unit hypotheses** (`Analysis`) charge a sampled incorrect proof block to one of two failures of its
-table, both named:
-
-* `KnowledgeSound ε_ks`: the table accepts while extraction of the unit fails;
-* `BindSound ε_bind`: extraction succeeds, but what it recovers differs from the committed
-  transcript on the unit's wires (consistency across units).
-
-Both are bounds over the whole audit, for every prover and every rule that picks a sampled proof block before
-the session's first coin (the first incorrect sampled proof block, in the proof). That is the form the table
-theorems take once averaged over the prover's state; neither needs to hold state by state.
-
-**The theorem** (`audit_le`): for every event `E` on the committed transcript and the sample,
-$$\Pr[\text{accept} \wedge E(X, S)] \le \Pr_S[E(X, S) \wedge S \cap \mathrm{incorrect}(X) = \emptyset]
-  + \varepsilon_{ks} + \delta_{link}.$$
-Its corollaries are the integrity profile (`audit_profile`), the count curve
-`δ(K) = miss K + ε_ks + ε_bind` (`audit_count`), and the sampled proof blocks (`audit_sampled`).
--/
+/-! The one-stage audit and its integrity profile, over a committed transcript that is an analysis device, fixed at registration and computed by nobody. -/
 
 @[expose] public section
 
@@ -119,9 +91,6 @@ theorem avg_add₃ {C : Type} [Fintype C] (f g h : C → ℝ≥0∞) :
     avg (fun c => f c + g c + h c) = avg f + avg g + avg h := by
   rw [avg_add, avg_add]
 
-/-- **The one-stage audit bound.** For every event `E` on the committed transcript and the sample,
-the audit accepts with `E` with probability at most the probability that the sample satisfies `E`
-and misses every incorrect proof block, plus `ε_ks + ε_bind`. -/
 theorem audit_le (A : Analysis L Reg session) {εks εbind : ℝ≥0∞} (hks : A.KnowledgeSound εks)
     (hlink : A.BindSound εbind) (E : A.Tr → Finset (Fin n) → Prop)
     (σ : Strategy (audit L Reg session)) :
@@ -134,7 +103,6 @@ theorem audit_le (A : Analysis L Reg session) {εks εbind : ℝ≥0∞} (hks : 
   set X := A.committed R τ with hX
   show prob _ (audit L Reg session) ⟨R, τ'⟩ ≤
     prCoin (fun ω => E X (L.draw ω) ∧ Disjoint (L.draw ω) (A.incorrect X)) + εks + εbind
-  -- the target: some incorrect sampled proof block, fixed by the registration and the sample
   let tgt : L.Ω → Option (Fin n) := fun ω =>
     if h : ∃ u, u ∈ L.draw ω ∧ u ∈ A.incorrect X then some (Classical.choose h) else none
   let ksE : L.Ω → Bool → Prop := fun ω ok => ok = true ∧
@@ -188,15 +156,13 @@ theorem audit_profile (A : Analysis L Reg session) {εks εbind : ℝ≥0∞} (h
   · exact (prCoin_mono (q := fun _ => False) fun ω h => absurd h.1 hB).trans (prCoin_false.le.trans
       (zero_le))
 
-/-- **The count curve**: `Pr[accept ∧ at least K incorrect proof blocks] ≤ miss K + ε_ks + ε_bind`. -/
 theorem audit_count (A : Analysis L Reg session) {εks εbind : ℝ≥0∞} (hks : A.KnowledgeSound εks)
     (hlink : A.BindSound εbind) (K : ℕ) (σ : Strategy (audit L Reg session)) :
     prob (fun o => o.1 = true ∧ K ≤ (A.incorrect (A.committedOf σ)).card) (audit L Reg session) σ ≤
       L.miss K + εks + εbind :=
   audit_profile A hks hlink (fun B => K ≤ B.card) σ
 
-/-- **Sampled proof blocks are correct up to `ε_ks + ε_bind`**, even for a consumer who looks after the
-sample. -/
+/-- Holds even for a consumer who looks after the sample. -/
 theorem audit_sampled (A : Analysis L Reg session) {εks εbind : ℝ≥0∞} (hks : A.KnowledgeSound εks)
     (hlink : A.BindSound εbind) (σ : Strategy (audit L Reg session)) :
     prob (fun o => o.1 = true ∧ ¬ Disjoint (A.incorrect (A.committedOf σ)) o.2) (audit L Reg session) σ ≤
@@ -208,10 +174,6 @@ theorem audit_sampled (A : Analysis L Reg session) {εks εbind : ℝ≥0∞} (h
       prCoin_false.le) (zero_le)
   rw [this, zero_add]
 
-/-- **Audits in sequence.** Run `g₁`, then `g₂` from its output. If the first audit fails (`E₁`)
-with probability at most `b₁` for every prover, and the second (`E₂`) with at most `b₂` from every
-history, then either fails with probability at most `b₁ + b₂`. Nesting `g₂` gives the union bound
-over a lifetime of audits, with every term evaluated against a prover that took part in all of them. -/
 theorem audits_seq {α β : Type} (g₁ : Game α) (g₂ : α → Game β) (E₁ : α → Prop) (E₂ : β → Prop)
     (b₁ b₂ : ℝ≥0∞) (h₁ : ∀ s, prob E₁ g₁ s ≤ b₁) (h₂ : ∀ x s, prob E₂ (g₂ x) s ≤ b₂)
     (s : Strategy (g₁.bind fun x => (g₂ x).map fun y => (x, y))) :
@@ -228,8 +190,6 @@ theorem audits_seq {α β : Type} (g₁ : Game α) (g₂ : α → Game β) (E₁
   · refine (prob_bind_le _ _ (fun _ => True) b₂ (fun x _ t => by rw [prob_map]; exact h₂ x _) g₁ s).trans ?_
     rw [(le_antisymm ((prob_mono (q := fun _ => False) (fun _ h => h trivial) _ _).trans
       (prob_false _ _).le) (zero_le)), zero_add]
-
-/-! ## Over a partition: extraction, anchors and the consumer's cone -/
 
 namespace Partition
 
@@ -269,7 +229,6 @@ variable {X : (R : Reg) → Cont L Reg session R → (Fin C.N → Bool)}
   {ext : (S : Finset (Fin n)) → (R : Reg) → Strategy (session S R) → Fin n → Option (Fin C.N → Bool)}
   {a : Fin C.N → Bool} {εks εbind δin : ℝ≥0∞}
 
-/-- Split an accepted event on whether the committed inputs are the anchors'. -/
 theorem prob_split_inputs (X : (R : Reg) → Cont L Reg session R → (Fin C.N → Bool))
     (a : Fin C.N → Bool) (σ : Strategy (audit L Reg session)) (F : Finset (Fin n) → Prop) :
     prob (fun o => o.1 = true ∧ F o.2) (audit L Reg session) σ ≤
@@ -281,9 +240,6 @@ theorem prob_split_inputs (X : (R : Reg) → Cont L Reg session R → (Fin C.N �
     · exact Or.inr ⟨h.1, hi, h.2⟩
     · exact Or.inl ⟨h.1, hi⟩) _ _).trans (prob_or_le _ _ _ _)
 
-/-- **A consumer's value, through its cone.** For wires `T` fixed before the sample, the audit
-accepts while some committed wire of `T` differs from its evaluation with probability at most the
-largest miss probability of a unit in `T`'s cone, plus `ε_ks + ε_bind + δ_in`. -/
 theorem audit_cone (hks : (P.analysis X ext).KnowledgeSound εks)
     (hlink : (P.analysis X ext).BindSound εbind) (hin : AnchorsSound X a δin)
     (T : Finset (Fin C.N)) (σ : Strategy (audit L Reg session)) :
@@ -309,9 +265,6 @@ theorem audit_cone (hks : (P.analysis X ext).KnowledgeSound εks)
           le_iSup₂_of_le (f := fun u (_ : u ∈ P.cone T) => 1 - L.incl u) u huc le_rfl
   · exact (prCoin_mono (q := fun _ => False) fun ω h => hE h.1).trans (prCoin_false.le.trans (zero_le))
 
-/-- **`j` incorrect proof blocks in a cone**: for wires `T` fixed before the sample, the audit accepts with at
-least `j` incorrect proof blocks in `T`'s cone with probability at most the largest missProb of `j` of the
-cone's units, plus `ε_ks + ε_bind`. -/
 theorem audit_cone_count (hks : (P.analysis X ext).KnowledgeSound εks)
     (hlink : (P.analysis X ext).BindSound εbind) (T : Finset (Fin C.N)) (j : ℕ)
     (σ : Strategy (audit L Reg session)) :
@@ -320,9 +273,6 @@ theorem audit_cone_count (hks : (P.analysis X ext).KnowledgeSound εks)
       (⨆ (B : Finset (Fin n)) (_ : j ≤ (B ∩ P.cone T).card), L.missProb B) + εks + εbind :=
   audit_profile (P.analysis X ext) hks hlink (fun B => j ≤ (B ∩ P.cone T).card) σ
 
-/-- **A cone the sample covered**, for wires `T S` chosen even after seeing the sample `S`: the audit
-accepts with `T S`'s cone inside the sample and some committed wire of `T S` incorrect with probability at
-most `ε_ks + ε_bind + δ_in`. -/
 theorem audit_covered (hks : (P.analysis X ext).KnowledgeSound εks)
     (hlink : (P.analysis X ext).BindSound εbind) (hin : AnchorsSound X a δin)
     (T : Finset (Fin n) → Finset (Fin C.N)) (σ : Strategy (audit L Reg session)) :
@@ -345,25 +295,15 @@ theorem audit_covered (hks : (P.analysis X ext).KnowledgeSound εks)
   calc _ ≤ 0 + εks + εbind := add_le_add (add_le_add this.le le_rfl) le_rfl
     _ = εks + εbind := by rw [zero_add]
 
-/-! ### The oracle layer
-
-The prover sends the committed transcript itself, as tables are sent at the oracle layer, so the
-committed transcript is the registration and extraction returns it. Knowledge soundness is then
-soundness of the session (`SessionSound`), the binding error is zero, and the anchors term is the
-session's error on inputs other than the anchors' (`InputsSound`). -/
-
-/-- The oracle-layer analysis: the registration is the transcript. -/
 noncomputable def oracle (session : Finset (Fin n) → (Fin C.N → Bool) → Game Bool) :
     Analysis L (Fin C.N → Bool) session :=
   P.analysis (fun R _ => R) (fun _ R _ _ => some R)
 
-/-- **Any per-unit proof system, batched** (named hypothesis): if a sampled proof block is incorrect, the
-session accepts with probability at most `ε`, for every prover strategy. -/
+/-- Named hypothesis: any per-unit proof system, batched. -/
 def SessionSound (session : Finset (Fin n) → (Fin C.N → Bool) → Game Bool) (ε : ℝ≥0∞) : Prop :=
   ∀ S X u, u ∈ S → u ∈ P.incorrect X → ∀ τ : Strategy (session S X), prob (· = true) (session S X) τ ≤ ε
 
-/-- **The input unit, at the oracle layer** (named hypothesis): the session accepts inputs other
-than the anchors' `a` with probability at most `δ`, for every prover strategy. -/
+/-- Named hypothesis. -/
 def InputsSound (session : Finset (Fin n) → (Fin C.N → Bool) → Game Bool) (a : Fin C.N → Bool)
     (δ : ℝ≥0∞) : Prop :=
   ∀ S X, ¬ C.InputsAgree X a → ∀ τ : Strategy (session S X), prob (· = true) (session S X) τ ≤ δ
@@ -407,14 +347,12 @@ theorem oracle_anchorsSound (hr : InputsSound session' a δ) :
       ((prob_false _ _).le.trans (zero_le))
   · exact (prob_mono (fun ok hok => hok.1) _ _).trans (hr _ R h _)
 
-/-- **The design's one-stage count curve, at the oracle layer**: `δ(K) = miss K + ε`. -/
 theorem oracle_count (hs : P.SessionSound session' ε) (K : ℕ)
     (σ : Strategy (audit L (Fin C.N → Bool) session')) :
     prob (fun o => o.1 = true ∧ K ≤ (P.incorrect (reg σ)).card) (audit L _ session') σ ≤ L.miss K + ε := by
   have := audit_count (P.oracle session') (P.oracle_knowledgeSound hs) P.oracle_linkSound K σ
   rwa [add_zero] at this
 
-/-- **The design's one-stage profile, at the oracle layer.** -/
 theorem oracle_profile (hs : P.SessionSound session' ε) (𝓑 : Finset (Fin n) → Prop)
     (σ : Strategy (audit L (Fin C.N → Bool) session')) :
     prob (fun o => o.1 = true ∧ 𝓑 (P.incorrect (reg σ))) (audit L _ session') σ ≤
@@ -422,13 +360,11 @@ theorem oracle_profile (hs : P.SessionSound session' ε) (𝓑 : Finset (Fin n) 
   have := audit_profile (P.oracle session') (P.oracle_knowledgeSound hs) P.oracle_linkSound 𝓑 σ
   rwa [add_zero] at this
 
-/-- **The design's drawn-unit bound, at the oracle layer.** -/
 theorem oracle_sampled (hs : P.SessionSound session' ε) (σ : Strategy (audit L (Fin C.N → Bool) session')) :
     prob (fun o => o.1 = true ∧ ¬ Disjoint (P.incorrect (reg σ)) o.2) (audit L _ session') σ ≤ ε := by
   have := audit_sampled (P.oracle session') (P.oracle_knowledgeSound hs) P.oracle_linkSound σ
   rwa [add_zero] at this
 
-/-- **The design's cone bound, at the oracle layer.** -/
 theorem oracle_cone (hs : P.SessionSound session' ε) (hr : InputsSound session' a δ)
     (T : Finset (Fin C.N)) (σ : Strategy (audit L (Fin C.N → Bool) session')) :
     prob (fun o => o.1 = true ∧ ∃ t ∈ T, t ∈ P.committed ∧ reg σ t ≠ C.eval a t)

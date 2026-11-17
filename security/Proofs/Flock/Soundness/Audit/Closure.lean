@@ -5,29 +5,7 @@ import Mathlib.Algebra.Order.Algebra
 import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Closure samples
-
-A closure sample proves each sampled proof block together with its closure `cl t`, the units its credit depends on: for a PoUW tile,
-the X and Y strips it reads and the node units on its X strip's path. The closure map is the verifier's own, from its
-program.
-
-* `SamplingDesign.closure L cl`: `L` widened by `cl` on `L`'s coins (`SamplingDesign.widen`). `mem_closure_sample`: a unit is proved when it is
-  sampled or lies in a sampled proof block's closure.
-* `closure_escape`: **the closure sample's missProb is the base sampling design's missProb of `B` with the units it makes unsound**,
-  `(L.closure cl).missProb B = L.missProb (B ∪ unsoundTiles cl B)`, where `unsoundTiles cl B` are the units whose closure
-  meets `B`. So an incorrect proof block that is never sampled on its own is charged to every unit above it.
-* `unsoundWork σ w cl B`, the work of `B ∪ unsoundTiles cl B`: the incorrect proof blocks and the units they make unsound, the set
-  `closure_escape` measures. A closure map need not list a unit in its own closure (a tile's is its strips and path
-  nodes), so the incorrect proof blocks' own work is counted explicitly: `workOf_le_unsoundWork`.
-* `harm σ w cl u`, the work of `u` and of the units whose closure holds it. `harm_le_unsoundWork`: **an incorrect proof block's whole
-  harm is in the unsound work**, whether or not a sample reaches it. `unsoundWork_le_harm`: the unsound work is at most the
-  incorrect proof blocks' harm (coverage), and `unsoundWork_singleton`: exactly, for one incorrect proof block.
-* `audit_work_closure`, `extraction_audit_work_closure`: under the work sampling design's closure sample, at any floors `f_s ≥ 1`, the
-  audit accepts while the unsound units do at least `T` of the work with probability at most
-  `((W − T)/W)^K + ε_ks + ε_bind`. `audit_work_closure_harm`: likewise while some incorrect proof block's harm is at least `T`.
-  `audit_work_closure_of_record`: at `K = 27,713`, unsound work of at least 0.1% with at most `2^-40 + ε_ks + ε_bind`.
--/
+/-! Closure samples: each sampled proof block proved together with its closure, the units its credit depends on. -/
 
 @[expose] public section
 
@@ -48,13 +26,11 @@ def unsoundTiles (cl : Fin n → Finset (Fin n)) (B : Finset (Fin n)) : Finset (
 def closure (L : SamplingDesign n) (cl : Fin n → Finset (Fin n)) : SamplingDesign n :=
   L.widen fun S => S ∪ S.biUnion cl
 
-/-- **What a closure sample proves**: a unit is proved when it is sampled or lies in a sampled proof block's closure. -/
 theorem mem_closure_sample (L : SamplingDesign n) (cl : Fin n → Finset (Fin n)) (ω : (L.closure cl).Ω) (u : Fin n) :
     u ∈ (L.closure cl).draw ω ↔ u ∈ L.draw ω ∨ ∃ t ∈ L.draw ω, u ∈ cl t := by
   show u ∈ L.draw ω ∪ (L.draw ω).biUnion cl ↔ _
   rw [mem_union, mem_biUnion]
 
-/-- **The closure sample's missProb** is the base sampling design's missProb of `B` with the units it makes unsound. -/
 theorem closure_escape (L : SamplingDesign n) (cl : Fin n → Finset (Fin n)) (B : Finset (Fin n)) :
     (L.closure cl).missProb B = L.missProb (B ∪ unsoundTiles cl B) := by
   show prCoin (fun ω : L.Ω => Disjoint (L.draw ω ∪ (L.draw ω).biUnion cl) B) =
@@ -75,17 +51,15 @@ theorem closure_escape (L : SamplingDesign n) (cl : Fin n → Finset (Fin n)) (B
 abbrev unsoundWork (σ : Fin n → Fin m) (w : Fin m → ℕ) (cl : Fin n → Finset (Fin n)) (B : Finset (Fin n)) : ℕ :=
   workOf σ w (B ∪ unsoundTiles cl B)
 
-/-- **The incorrect proof blocks' own work is in the unsound work**, whatever the closure map. -/
+/-- A closure map need not list a unit in its own closure, so the incorrect proof blocks' own work is counted
+explicitly. -/
 theorem workOf_le_unsoundWork (σ : Fin n → Fin m) (w : Fin m → ℕ) (cl : Fin n → Finset (Fin n)) (B : Finset (Fin n)) :
     workOf σ w B ≤ unsoundWork σ w cl B :=
   sum_le_sum_of_subset subset_union_left
 
-/-- **The harm of a unit**: its own work and the work of every unit whose closure holds it, what it spoils when incorrect. -/
 def harm (σ : Fin n → Fin m) (w : Fin m → ℕ) (cl : Fin n → Finset (Fin n)) (u : Fin n) : ℕ :=
   workOf σ w (insert u (univ.filter fun t => u ∈ cl t))
 
-/-- **An incorrect proof block's whole harm is in the unsound work**, whether or not a sample reaches it: it is incorrect itself, and every
-unit whose closure holds it is unsound. -/
 theorem harm_le_unsoundWork (σ : Fin n → Fin m) (w : Fin m → ℕ) (cl : Fin n → Finset (Fin n)) {B : Finset (Fin n)}
     {u : Fin n} (hu : u ∈ B) : harm σ w cl u ≤ unsoundWork σ w cl B := by
   unfold harm unsoundWork unsoundTiles workOf
@@ -94,8 +68,6 @@ theorem harm_le_unsoundWork (σ : Fin n → Fin m) (w : Fin m → ℕ) (cl : Fin
   · exact mem_union_left _ hu
   · exact mem_union_right _ (mem_filter.2 ⟨mem_univ t, not_disjoint_iff.2 ⟨u, (mem_filter.1 ht).2, hu⟩⟩)
 
-/-- **Coverage**: the unsound work is at most the incorrect proof blocks' harm. Each incorrect proof block is charged to itself and each unsound
-unit to an incorrect proof block of its closure; overlaps only overcount. -/
 theorem unsoundWork_le_harm (σ : Fin n → Fin m) (w : Fin m → ℕ) (cl : Fin n → Finset (Fin n)) (B : Finset (Fin n)) :
     unsoundWork σ w cl B ≤ ∑ u ∈ B, harm σ w cl u := by
   classical
@@ -117,7 +89,6 @@ theorem unsoundWork_le_harm (σ : Fin n → Fin m) (w : Fin m → ℕ) (cl : Fin
             (fun _ _ => Nat.zero_le _) hu
   · exact Nat.zero_le _
 
-/-- **The charging is exact for one incorrect proof block.** -/
 theorem unsoundWork_singleton (σ : Fin n → Fin m) (w : Fin m → ℕ) (cl : Fin n → Finset (Fin n)) (u : Fin n) :
     unsoundWork σ w cl {u} = harm σ w cl u := by
   unfold unsoundWork unsoundTiles harm
@@ -125,7 +96,6 @@ theorem unsoundWork_singleton (σ : Fin n → Fin m) (w : Fin m → ℕ) (cl : F
   ext t
   simp [disjoint_singleton_right]
 
-/-- Under the work sampling design's closure sample, a set whose unsound work is at least `T` escapes with at most `((W − T)/W)^K`. -/
 theorem closure_escape_le_work (σ : Fin n → Fin m) (w : Fin m → ℕ) (f : Fin m → ℕ) (K : ℕ) (cl : Fin n → Finset (Fin n))
     (hf : ∀ s, 1 ≤ f s) (hW : 0 < totalWork σ w) {B : Finset (Fin n)} {T : ℕ} (hT : T ≤ unsoundWork σ w cl B) :
     ((work σ w f K).closure cl).missProb B ≤ (((totalWork σ w - T : ℕ) : ℝ≥0∞) / (totalWork σ w : ℝ≥0∞)) ^ K := by
@@ -139,8 +109,6 @@ section Audits
 variable {n m : ℕ} {σ : Fin n → Fin m} {w : Fin m → ℕ} {f : Fin m → ℕ} {K : ℕ} {cl : Fin n → Finset (Fin n)}
   {Reg : Type} {session : Finset (Fin n) → Reg → Game Bool}
 
-/-- **The work audit with closure samples** (oracle layer): the audit accepts while its incorrect proof blocks and the units they make
-unsound do at least `T` of the work with probability at most `((W − T)/W)^K + ε_ks + ε_bind`. -/
 theorem audit_work_closure (A : Analysis ((SamplingDesign.work σ w f K).closure cl) Reg session) {εks εbind : ℝ≥0∞}
     (hks : A.KnowledgeSound εks) (hlink : A.BindSound εbind) (hf : ∀ s, 1 ≤ f s) (hW : 0 < SamplingDesign.totalWork σ w) (T : ℕ)
     (σ' : Strategy (audit ((SamplingDesign.work σ w f K).closure cl) Reg session)) :
@@ -151,8 +119,6 @@ theorem audit_work_closure (A : Analysis ((SamplingDesign.work σ w f K).closure
   gcongr
   exact iSup₂_le fun B hB => SamplingDesign.closure_escape_le_work σ w f K cl hf hW hB
 
-/-- **The work audit with closure samples** (compiled layer, randomized extractor): at most
-`((W − T)/W)^K + ε_ks(σ) + ε_bind(σ)`. -/
 theorem extraction_audit_work_closure (A : ExtractionAnalysis ((SamplingDesign.work σ w f K).closure cl) Reg session)
     {εks εbind : (R : Reg) → Cont ((SamplingDesign.work σ w f K).closure cl) Reg session R → ℝ≥0∞}
     (hks : A.KnowledgeSound εks) (hlink : A.BindSound εbind) (hf : ∀ s, 1 ≤ f s) (hW : 0 < SamplingDesign.totalWork σ w) (T : ℕ)
@@ -167,8 +133,6 @@ theorem extraction_audit_work_closure (A : ExtractionAnalysis ((SamplingDesign.w
   · exact (prCoin_mono fun ω h => h.2).trans (SamplingDesign.closure_escape_le_work σ w f K cl hf hW hB)
   · exact (prCoin_mono (q := fun _ => False) fun ω h => hB h.1).trans (prCoin_false.le.trans zero_le)
 
-/-- **Each incorrect proof block is charged its harm** (oracle layer): the audit accepts while some incorrect proof block, sampled or not, has
-harm at least `T` with probability at most `((W − T)/W)^K + ε_ks + ε_bind`. -/
 theorem audit_work_closure_harm (A : Analysis ((SamplingDesign.work σ w f K).closure cl) Reg session) {εks εbind : ℝ≥0∞}
     (hks : A.KnowledgeSound εks) (hlink : A.BindSound εbind) (hf : ∀ s, 1 ≤ f s) (hW : 0 < SamplingDesign.totalWork σ w) (T : ℕ)
     (σ' : Strategy (audit ((SamplingDesign.work σ w f K).closure cl) Reg session)) :
@@ -179,8 +143,6 @@ theorem audit_work_closure_harm (A : Analysis ((SamplingDesign.work σ w f K).cl
   obtain ⟨u, hu, hT⟩ := ho.2
   exact hT.trans (SamplingDesign.harm_le_unsoundWork σ w cl hu)
 
-/-- **The closure audit at the sizing of record**: with `K = 27,713`, the audit accepts while its incorrect proof blocks and the units
-they make unsound do at least 0.1% of the work with probability at most `2^-40 + ε_ks + ε_bind`. -/
 theorem audit_work_closure_of_record (A : Analysis ((SamplingDesign.work σ w f 27713).closure cl) Reg session) {εks εbind : ℝ≥0∞}
     (hks : A.KnowledgeSound εks) (hlink : A.BindSound εbind) (hf : ∀ s, 1 ≤ f s) (hW : 0 < SamplingDesign.totalWork σ w)
     (σ' : Strategy (audit ((SamplingDesign.work σ w f 27713).closure cl) Reg session)) :

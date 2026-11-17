@@ -2,26 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Audit.FlockLink
 
-/-!
-# The compiled-layer audit with `ε_bind` discharged
-
-The batched Flock audit with the expected-time extractor (`flock_batched_countE`), composed with the link theorem
-(`flock_batched_linkSoundE`) at the plurality value layer (`Xplur`). The count curve and the drawn-unit bound no longer
-carry `ε_bind` as a hypothesis:
-$$\Pr[\text{accept} \wedge \text{at least } K \text{ incorrect}] \le \mathrm{miss}_L(K) + \varepsilon_{ks}(\sigma) +
-\frac{Q_s}{1-\rho}\Big(\frac{2t'(1+k)}{2^{256}} + \frac{1}{eM} + \frac{k}{eR_w}\Big).$$
-
-What it rests on, all named:
-* A2, expected-time collision resistance of SHA-512 for the link theorem's explicit finders of the prover bounded
-  (`hCR : LinkCR … (reg σ) (cont σ) …`);
-* `ValueBinding`, the binding of wires to registered commit strings, which the circuit prover's `hm96-sha512` leaf
-  layout discharges;
-* the lowering, `LoweringSoundB`, or in the `_placed` forms each sampled proof block's place in its table (`UnitPlace`: the row
-  placement).
-
-The numeric side conditions are `N₀/(ek) ≤ ρ < 1` for every table (`hr`, `hρ`) and `t'`, the SHA-512 evaluations of one
-session run.
--/
+/-! The compiled-layer audit with `ε_bind` discharged by the link theorem. -/
 
 @[expose] public section
 
@@ -47,7 +28,6 @@ noncomputable def linkBoundE (k Rw M : ℕ) (ρ t' : ℝ) : ℝ≥0∞ :=
   ENNReal.ofReal ((∑ c : vb.Pos, (Fintype.card (P.Ωc plan tab vb L c) : ℝ) / Fintype.card L.Ω) *
     (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
 
-/-- At a prover whose link finders satisfy A2, the prover-by-prover link bound is `linkBoundE`. -/
 theorem linkBoundCR_eq {k Rw M : ℕ} {ρ t' : ℝ} {R : Reg} {τ : Cont L Reg (batchedSession H E plan) R}
     (hCR : P.LinkCR H E plan tab vb R τ k Rw M t') :
     P.linkBoundCR H E plan tab vb k Rw M ρ t' R τ = P.linkBoundE (L := L) plan tab vb k Rw M ρ t' := by
@@ -55,9 +35,6 @@ theorem linkBoundCR_eq {k Rw M : ℕ} {ρ t' : ℝ} {R : Reg} {τ : Cont L Reg (
   simp only [hCR, ↓reduceIte]
   rfl
 
-/-- **The compiled-layer count curve, with `ε_bind` discharged**: at the plurality value layer,
-`Pr[accept ∧ at least K incorrect proof blocks] ≤ miss K + ε_ks(σ) + linkBoundE`, given A2 for the link finders, `ValueBinding`
-and the lowering. -/
 theorem flock_batched_count_linked (hlow : P.LoweringSoundB plan tab decode)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t')
@@ -71,8 +48,6 @@ theorem flock_batched_count_linked (hlow : P.LoweringSoundB plan tab decode)
     (P.flock_batched_linkSoundE H E plan tab vb hlow hk hRw hM hρ hr ht) K σ).trans_eq
     (by rw [P.linkBoundCR_eq H E plan tab vb hCR])
 
-/-- **Sampled proof blocks of the compiled-layer audit, with `ε_bind` discharged**, are correct at the plurality value layer
-up to `ε_ks(σ) + linkBoundE`. -/
 theorem flock_batched_sampled_linked (hlow : P.LoweringSoundB plan tab decode)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t')

@@ -4,13 +4,7 @@ public import Proofs.Flock.SessionLoop.Concrete.Scope
 public import Proofs.Flock.SessionLoop.Concrete.Regions
 public import Proofs.Flock.Claims.ZK.MaskedTables
 
-/-! # The concrete statement is `Live`
-
-`live_concreteStmt`: where the verifier's two fixed nets build (`FixedNetsBuild`), the concrete statement is in the
-masked session's scope with a witness (`Masked.live_of`), so its session has one table (`jOf_concreteStmt`). The witness
-`wC` is the trace `Trace.zC` bit for bit. The deployed relation reads the statement's one table (`relS_relation`), which
-the trace satisfies, its rows, pin and public regions included (`Trace.satisfies_regions_stW`).
--/
+/-! The concrete statement is `Live` where the verifier's two fixed nets build. -/
 
 @[expose] public section
 
@@ -25,7 +19,6 @@ noncomputable def stC : Stmt :=
     (sparseOf (HmNets.shaLaid ()).rb) (sparseOf (HmNets.hmLaid ()).ra) (sparseOf (HmNets.hmLaid ()).rb) Concrete.s1C
     Concrete.s3C (Concrete.s4Of concreteHash) Concrete.s6C Concrete.helloC
 
-/-- The concrete statement, parsed: its inputs' readable fields and its one table. -/
 noncomputable def pC : _root_.Flock.Readable.Parsed :=
   { Concrete.rC (HmNets.shaLaid ()) (HmNets.hmLaid ()) concreteHash with sts := #[stC] }
 
@@ -50,7 +43,6 @@ theorem zOf_wC : _root_.Flock.Readable.zOf 1 wC 0 stC.m = Concrete.Trace.zC stC.
   simp only [_root_.Flock.Readable.zOf, wC, Nat.mul_one, Nat.add_zero, List.getD_eq_getElem?_getD,
     List.getElem?_ofFn, a.isLt, dite_true, Option.getD_some, _root_.Flock.Readable.toZ, Concrete.Trace.zC]
 
-/-- **The concrete statement is in the deployed relation** with the trace as its witness. -/
 theorem rel_concreteStmt (hn : FixedNetsBuild) :
     _root_.Claims.Flock.R (deployZk _root_.Flock.Readable.relation).parse concreteStmt wC := by
   have ht : Concrete.tz.typed = false := rfl
@@ -79,11 +71,9 @@ theorem rel_concreteStmt (hn : FixedNetsBuild) :
   rw [hz]
   exact (hS : (L.model (Refine.regionsOf stC)).Satisfies (Concrete.Trace.zC stC.m))
 
-/-- **The concrete statement is `Live`** where the fixed nets build. -/
 theorem live_concreteStmt (hn : FixedNetsBuild) : _root_.Claims.ZKMal.Masked.Live concreteStmt :=
   _root_.Claims.ZKMal.Masked.live_of (concreteStmt_scope hn) (rel_concreteStmt hn)
 
-/-- **The concrete statement's masked session has one table.** -/
 theorem jOf_concreteStmt (hn : FixedNetsBuild) : _root_.Claims.ZKMal.Masked.jOf concreteStmt = 1 := by
   unfold _root_.Claims.ZKMal.Masked.jOf
   rw [ite_eq_left (live_concreteStmt hn)]

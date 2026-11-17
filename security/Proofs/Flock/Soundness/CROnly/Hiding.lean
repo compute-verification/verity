@@ -8,18 +8,7 @@ import Mathlib.Algebra.Order.Chebyshev
 import Proofs.Flock.Soundness.Assumptions
 import Proofs.Flock.Soundness.Game
 
-/-!
-# hm96 hiding from the universal hash
-
-`Claims.Hm96Hiding My c δ₁` holds at `δ₁ = hidingGap My c`, with no hypothesis (`hm96Hiding_gap`): every test's
-advantage is at most the statistical distance of the two pairs. So `Hm96Hiding` is no assumption once `δ₁` is the gap,
-and what is left is the gap's size at the pinned key.
-
-The leftover hash lemma bounds it on average over the keys of a universal family (`sum_hidingGap_le`):
-$$\mathbb E_k\,\mathrm{gap}(M_k, c)\le\tfrac12\sqrt{|B|\cdot|c(Y)|/|Y|},$$
-by Cauchy–Schwarz over (key, pair) and the collision count `Σ_k Σ_v μ_k(v)² ≤ |K|/|Y| + |K|·Σ_v ν(v)²`. Markov's inequality
-bounds the fraction of keys whose gap exceeds `ε` (`card_hidingGap_gt`).
--/
+/-! hm96 hiding from the universal hash: `Hm96Hiding` is no assumption once `δ₁` is the hiding gap, which the leftover hash lemma bounds on average over the keys. -/
 
 @[expose] public section
 
@@ -28,7 +17,6 @@ namespace FlockSoundness.CROnly
 open Finset Game
 open scoped ENNReal
 
-/-- Two indicator sums of two distributions on `S` differ by at most half their ℓ¹ distance. -/
 theorem sum_ind_le_tv {V : Type} (S : Finset V) (e : V → Prop) [DecidablePred e] (μ ν : V → ℝ)
     (h : ∑ v ∈ S, μ v = ∑ v ∈ S, ν v) :
     ∑ v ∈ S, (if e v then (1 : ℝ) else 0) * μ v ≤
@@ -78,8 +66,6 @@ theorem card_filter_comp_div (g : Ω → V) (S : Finset V) (hS : ∀ x, g x ∈ 
   refine sum_congr rfl fun v _ => ?_
   ring
 
-/-- **A test's advantage is at most the statistical distance**: for two pushforwards `g`, `g'` of uniform coins into
-`S`, every event's probabilities differ by at most half the ℓ¹ distance of their masses on `S`. -/
 theorem prCoin_comp_le {Ω' : Type} [Fintype Ω'] [Nonempty Ω] [Nonempty Ω'] (g : Ω → V) (g' : Ω' → V) (S : Finset V)
     (hS : ∀ x, g x ∈ S) (hS' : ∀ x, g' x ∈ S) (E : V → Prop) :
     prCoin (fun x => E (g x)) ≤ prCoin (fun x => E (g' x)) + ENNReal.ofReal (1 / 2 * ∑ v ∈ S,
@@ -105,8 +91,6 @@ variable {Y B C : Type} [Fintype Y] [Fintype B] [DecidableEq B] [DecidableEq C]
 theorem hidingGap_nonneg (My : Y → B) (c : Y → C) : 0 ≤ hidingGap My c :=
   mul_nonneg (by norm_num) (sum_nonneg fun _ _ => abs_nonneg _)
 
-/-- **hm96 hiding at its gap**: `Hm96Hiding` holds with `δ₁` the statistical distance of `(My y, c y)` from `(U, c y)`,
-with no hypothesis. -/
 theorem hm96Hiding_gap [Nonempty Y] [Nonempty B] (My : Y → B) (c : Y → C) :
     Claims.Hm96Hiding My c (ENNReal.ofReal (hidingGap My c)) := Assumptions.hm96Hiding_of fun E =>
   prCoin_comp_le (fun y => (My y, c y)) (fun p : B × Y => (p.1, c p.2)) ((univ : Finset B) ×ˢ univ.image c)
@@ -114,7 +98,6 @@ theorem hm96Hiding_gap [Nonempty Y] [Nonempty B] (My : Y → B) (c : Y → C) :
     (fun p => mem_product.2 ⟨mem_univ _, mem_image_of_mem c (mem_univ p.2)⟩) E
 
 omit [DecidableEq B] [DecidableEq C] in
-/-- Hiding is monotone in `δ₁`. -/
 theorem hm96Hiding_mono {My : Y → B} {c : Y → C} {δ δ' : ℝ≥0∞} (h : Claims.Hm96Hiding My c δ) (hδ : δ ≤ δ') :
     Claims.Hm96Hiding My c δ' := fun E => (h E).trans (add_le_add le_rfl hδ)
 
@@ -135,8 +118,6 @@ theorem card_uniform_pair (c : Y → C) (b : B) (z : C) :
 
 variable {K : Type} [Fintype K] [Nonempty Y] [Nonempty B]
 
-/-- **The leftover hash lemma, for one hash `c` of the salt beside the key's**: over a universal family `M`, the hiding
-gap's sum over the keys is at most `|K|·½·√(|B|·|c(Y)|/|Y|)`. -/
 theorem sum_hidingGap_le (M : K → Y → B) (hU : Universal M) (c : Y → C) :
     ∑ k, hidingGap (M k) c ≤
       Fintype.card K * (1 / 2 * Real.sqrt (Fintype.card B * #(univ.image c) / Fintype.card Y)) := by
@@ -166,7 +147,6 @@ theorem sum_hidingGap_le (M : K → Y → B) (hU : Universal M) (c : Y → C) :
     ring
   have hfibc : ∀ f : C → ℝ, ∑ z ∈ univ.image c, m z * f z = ∑ y, f (c y) := fun f =>
     sum_card_fiber_mul c (univ.image c) (fun y => mem_image_of_mem c (mem_univ y)) f
-  -- `Q = Σ_v ν(v)² = Σ_v μ_k(v)·ν(v)`, the uniform pair's collision mass
   set Q : ℝ := (∑ y, m (c y)) / (Fintype.card B * (Fintype.card Y : ℝ) ^ 2) with hQ
   have hμν : ∀ k, ∑ v ∈ (univ : Finset B) ×ˢ univ.image c, μ k v * ν v = Q := by
     intro k
@@ -198,7 +178,6 @@ theorem sum_hidingGap_le (M : K → Y → B) (hU : Universal M) (c : Y → C) :
     simp only [μ]
     rw [← sum_div]
     ring
-  -- the collision count, by universality
   have hpair : ∀ y y' : Y, (#{k | (M k y', c y') = (M k y, c y)} : ℝ) ≤
       (if y' = y then (Fintype.card K : ℝ) else 0) +
         (if c y' = c y then (Fintype.card K : ℝ) / Fintype.card B else 0) := by
@@ -262,7 +241,6 @@ theorem sum_hidingGap_le (M : K → Y → B) (hU : Universal M) (c : Y → C) :
       field_simp
       ring
     linarith
-  -- Cauchy–Schwarz over (key, pair)
   have hCS : (∑ k, ∑ v ∈ (univ : Finset B) ×ˢ univ.image c, |μ k v - ν v|) ^ 2 ≤
       (Fintype.card K * #((univ : Finset B) ×ˢ univ.image c)) *
         ∑ k, ∑ v ∈ (univ : Finset B) ×ˢ univ.image c, (μ k v - ν v) ^ 2 := by
@@ -299,8 +277,6 @@ theorem sum_hidingGap_le (M : K → Y → B) (hU : Universal M) (c : Y → C) :
         mul_le_mul_of_nonneg_left hA (by norm_num)
     _ = _ := by ring
 
-/-- **Markov's inequality for the gap**: the keys whose gap exceeds `ε` number at most `1/ε` times the gap's sum
-bound. -/
 theorem card_hidingGap_gt (M : K → Y → B) (hU : Universal M) (c : Y → C) {ε : ℝ} :
     (#{k | ε < hidingGap (M k) c} : ℝ) * ε ≤
       Fintype.card K * (1 / 2 * Real.sqrt (Fintype.card B * #(univ.image c) / Fintype.card Y)) := by

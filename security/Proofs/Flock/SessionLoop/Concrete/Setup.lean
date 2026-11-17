@@ -55,12 +55,7 @@ import all Init.Data.String.Termination
 import all Init.Data.Array.Attach
 import all Init.WF
 
-/-! # The concrete statement's setup: `Stmt.setupH` and `Stmt.setupTables`
-
-`setup_stW` walks `Stmt.setupH` on the circuit and public files to the statement `stW`, through `parse_cW`,
-`load_pubV` and `checkPublic_cW`, with `HmRow.delta`'s arrays kept as `dA` and `dB` (`Concrete/Delta.lean`), which
-`shapeOk_stW` then checks through `deltaL`. `setupTables_W` is `Stmt.setupTables` at one table, `tabW`.
--/
+/-! The concrete statement's setup: `Stmt.setupH`'s walk to `stW` and `Stmt.setupTables` at one table. -/
 
 @[expose] public section
 open Flock Flock.ZkServer RecDeploy.VStarNets FlockVBridge.Names
