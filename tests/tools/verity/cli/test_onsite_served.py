@@ -616,29 +616,41 @@ def published(state: Path, rows: dict, composed: str = "accept", reason: str = "
                        for k, v in every.items()}, "composed": {"verdict": composed, "reason": reason}}))
 
 
-def written(*components: str) -> str:
-    """The line's reason for a combined accept over these rows as the served node wrote them."""
-    return "not accepted: " + ", ".join(f"{c} {T.AS_WRITTEN}" for c in sorted(components))
+def written(*components: str, composed: bool = False) -> str:
+    """The line's reason for the accepts of a record the serving node composed: its combined one and these rows'."""
+    return "not accepted: " + ", ".join(
+        f"{h} {T.AS_WRITTEN}" for h in ["the composed verdict"] * composed + sorted(components))
 
 
-#: a row's ``answer_from`` that is not the served node's (the auditor's own run of what the row says)
-OWN = "the auditor's own run"
+#: the components of the rows `published` writes by default
+BASE = ("certifier", "pous", "pouw", "sampled-proofs", "wipe")
+#: a row's ``answer_from`` that is not `AS_WRITTEN`, which the serving node may write all the same: served_verdicts.py's
+#: ``LEAN_HERE``, and anything else
+NOT_WRITTEN = ["recomputed on this host by the Lean verifier (vstar-recursive sampled check) from the proofs and public "
+               "files of the window's sampled proofs case, not the served node's answer", "the auditor's own run"]
+
+
+def undecided(components: dict) -> dict:
+    return {c: "undecided" if v == "accept" else v for c, v in components.items()}
 
 
 @pytest.mark.parametrize("rows, composed, verdict, rc, reason", [
-    ({"bandwidth": "missing"}, "pending", "undecided", 2, "missing ['bandwidth']"),
-    ({"bandwidth": "accept"}, "accept", "undecided", 2, "no row for ['inference-only']"),
-    ({"bandwidth": "accept", "inference-only": "accept"}, "accept", "accept", 0, None),
+    ({"bandwidth": "missing"}, "pending", "undecided", 2, "missing ['bandwidth']; " + written(*BASE)),
+    ({"bandwidth": "accept"}, "accept", "undecided", 2,
+     "no row for ['inference-only']; " + written(*BASE, "bandwidth", composed=True)),
+    ({"bandwidth": "accept", "inference-only": "accept"}, "accept", "undecided", 2,
+     written(*BASE, "bandwidth", "inference-only", composed=True)),
     ({"bandwidth": "accept", "inference-only": "accept", "communication": "error"}, "reject", "reject", 1,
      "certifier error"),
     ({"bandwidth": "accept", "communication": "error", "work": "missing"}, "reject", "reject", 1, "certifier error"),
 ])
-def test_the_onsite_check_is_the_published_records_composed_verdict(tmp_path, capsys, rows, composed, verdict, rc,
-                                                                    reason):
-    """The served window publishes its window's number, steps and requests to no one, so the check reads only the
-    published record and the execution phase's seal digest: a check that picked the window again had nothing to pick."""
+def test_the_onsite_line_is_the_published_records_and_takes_none_of_its_accepts(tmp_path, capsys, rows, composed,
+                                                                              verdict, rc, reason):
+    """The serving step publishes its window's number, steps and requests to no one, so the verifier reads only the
+    published record and the execution phase's seal digest; the serving node composed that record, so a reject or an
+    error stands and each accept, a row's or the composed verdict, reads undecided."""
     state = tmp_path / "state"
-    published(state, rows, composed, "the network attester: error", source=OWN)
+    published(state, rows, composed, "the network attester: error")
     assert sorted(p.relative_to(state).as_posix() for p in state.rglob("*") if p.is_file()) == [
         "out/record/verdicts.json", f"out/serve/{T.PHASE}"]
     assert R.run_main([str(CONFIG), "--on", T.AUDITOR_HOST, "--party", "verifier", "--state", str(state)], REG) == rc
@@ -646,31 +658,25 @@ def test_the_onsite_check_is_the_published_records_composed_verdict(tmp_path, ca
     assert {x["party"]: x["refused"] for x in said(out, "PARTY")} == {"verifier": None}
     (line,) = said(out, "VERDICT")
     assert line["verdict"] == verdict and line["block"] == SEAL and line["product"] == T.ONSITE
-    assert line["components"] == {**{c: "accept" for c in T.PROTOCOLS}, "bandwidth": "absent",
-                                  "inference-only": "absent", **{T.RECORD_NAMES[k]: v for k, v in rows.items()}}
+    assert line["components"] == undecided({**{c: "accept" for c in T.PROTOCOLS}, "bandwidth": "absent",
+                                            "inference-only": "absent",
+                                            **{T.RECORD_NAMES[k]: v for k, v in rows.items()}})
     assert line["coins"] == "simulated" and line["reason"] == reason and "combined_by" not in line
     assert line["coins_on"] == {c: T.PROVER_NODE for c in ("pous", "bandwidth", "wipe")}
-
-
-@pytest.mark.parametrize("rows, composed, verdict, rc, reason", [
-    ({"bandwidth": "accept", "inference-only": "accept"}, "accept", "undecided", 2, written(*T.PROTOCOLS)),
-    ({"bandwidth": "accept"}, "accept", "undecided", 2,
-     "no row for ['inference-only']; " + written(*(c for c in T.PROTOCOLS if c != "inference-only"))),
-    ({"bandwidth": "accept", "inference-only": "accept", "communication": "error"}, "reject", "reject", 1,
-     "certifier error"),
-])
-def test_the_onsite_line_never_accepts_on_rows_as_the_served_node_wrote_them(tmp_path, capsys, rows, composed,
-                                                                           verdict, rc, reason):
-    """The published record is the served node's word for each row and for the verdict composed over them: the line
-    names each row's source, a combined accept over a row the served node wrote is undecided and says which, and a
-    reject or an error stands."""
-    state = tmp_path / "state"
-    published(state, rows, composed, "the network attester: error")
-    assert R.run_main([str(CONFIG), "--on", T.AUDITOR_HOST, "--party", "verifier", "--state", str(state)], REG) == rc
-    (line,) = said(capsys.readouterr().out, "VERDICT")
-    assert (line["verdict"], line["reason"]) == (verdict, reason)
     assert line["answer_from"] == {T.RECORD_NAMES[k]: f"{T.AS_WRITTEN} (its piece files in {k}/)"
                                    for k in ("integrity", "work", "space", "communication", "wipe", *rows)}
+
+
+@pytest.mark.parametrize("source", NOT_WRITTEN)
+def test_a_row_the_serving_node_says_came_from_elsewhere_is_no_accept_either(tmp_path, capsys, source):
+    """``answer_from`` is the serving node's word too: a record whose every row says it was recomputed elsewhere, under
+    a composed accept, is still undecided."""
+    state = tmp_path / "state"
+    published(state, {"bandwidth": "accept", "inference-only": "accept"}, source=source)
+    assert R.run_main([str(CONFIG), "--on", T.AUDITOR_HOST, "--party", "verifier", "--state", str(state)], REG) == 2
+    (line,) = said(capsys.readouterr().out, "VERDICT")
+    assert (line["verdict"], line["reason"]) == ("undecided", written(*T.PROTOCOLS, composed=True))
+    assert set(line["components"].values()) == {"undecided"} and set(line["answer_from"].values()) == {source}
 
 
 @pytest.mark.parametrize("left", [T.PHASE, "verdicts.json"])
@@ -963,10 +969,10 @@ def test_the_wipes_run_keys_beside_a_pin_or_an_attester_is_refused_before_the_ca
 
 
 @pytest.mark.parametrize("rows, source, verdict, reason", [
-    ({}, OWN, "accept", None),
     ({}, None, "undecided", written("certifier", "sampled-proofs", "wipe")),
+    ({}, NOT_WRITTEN[0], "undecided", written("certifier", "sampled-proofs", "wipe")),
     ({"communication": "reject"}, None, "reject", "certifier reject"),
-    ({"wipe": "missing"}, OWN, "undecided", "wipe missing"),
+    ({"wipe": "missing"}, None, "undecided", "wipe missing; " + written("certifier", "sampled-proofs")),
 ])
 def test_a_set_no_lean_verifier_takes_is_its_rows_combined_in_python_and_says_so(tmp_path, monkeypatch, rows, source,
                                                                                 verdict, reason):

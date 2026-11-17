@@ -42,8 +42,8 @@ onsite, its id the line's ``product``), printed as a line and written to ``STATE
              "reason": R, "registration": DIGEST, "run": RUN, "simulated": [...], "verdict": V}
 
 onsite's ``block`` is its execution phase's seal digest, the one the served window publishes (`served_table.PHASE`).
-onsite's ``answer_from`` names where each row's answer came from; a combined accept over a row the served node wrote
-(`served_table.AS_WRITTEN`) reads ``undecided``, with the reason.
+onsite's line reads a record the serving node composed, so its accepts, each row's and the combined one, read
+``undecided`` (`served_table.AS_WRITTEN` in the reason); ``answer_from`` names each row's stated source and decides nothing.
 onsite's line also has ``trusted-device``: each memory attester's premise that its device ran on a machine the
 developer doesn't control (`memory_attester.trusted_device`), by component, from the outcome of its run here.
 onsite's has ``coins_on``: the machine each memory attester's key and coins were made on, the attester's where its
