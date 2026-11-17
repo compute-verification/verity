@@ -1,9 +1,9 @@
 """The published form of a network certificate: committed by hash, with padding elided.
 
 A raw record is the whole grid, T·r slots of B bytes: 2.3 GiB per execution phase at r = 1,024, B = 4 KiB and T = 600.
-The certifier publishes instead one digest and the untimed status per execution phase.
+The attester publishes instead one digest and the untimed status per execution phase.
 
-**Padding is elided.** The certifier is left-packed (W4), so a row is fixed by its count n and its n real frames: slots
+**Padding is elided.** The attester is left-packed (W4), so a row is fixed by its count n and its n real frames: slots
 n … r − 1 are padding. A row's digest covers only those:
 
     row(n, f_0 … f_{n−1}) = tagged_sha512("verity-network-certifier/row-sha512/v1", u32be(n) ‖ f_0 ‖ … ‖ f_{n−1})
@@ -18,7 +18,7 @@ Here `h` is the canonical JSON of {link, window, buckets, allocation, frame_byte
 
 **The check.** The verifier recomputes the digest from the Program's grid, with a complete status. It accepts the
 execution phase only if the digests are equal. Under the collision resistance of SHA-512 (`cr/sha-512`), equal digests
-mean equal records, so the audit stays exact. It never needs the certifier's raw grid, since the Program fixes every
+mean equal records, so the audit stays exact. It never needs the attester's raw grid, since the Program fixes every
 egress frame's content. The capacity bounds on accepted runs then hold up to a SHA-512 collision.
 """
 
@@ -60,7 +60,7 @@ def record_digest(link: str, window: int, grid: Grid, status: Status, params: Gr
 
 @dataclass(frozen=True, slots=True)
 class CommittedRecord:
-    """What the certifier publishes per execution phase: the record digest, and the status in the clear so a violation
+    """What the attester publishes per execution phase: the record digest, and the status in the clear so a violation
     can be classified. The digest binds the status too, so a status that disagrees with it is a mismatch."""
 
     link: str

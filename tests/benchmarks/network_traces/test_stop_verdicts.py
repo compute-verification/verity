@@ -220,7 +220,7 @@ def not_one(phases: int, differ: str, how: str = "") -> str:
 
 NO_ONE = "they name no one class of one execution phase on one head"
 A_CLASS, A_PHASE = "the class (`class`)", "the execution phase (`link`, `window`)"
-A_HEAD = "the signed head (`head`) of the network certifier's rows"
+A_HEAD = "the signed head (`head`) of the network attester's rows"
 A_SERVE, A_REGISTRATION = "the serve (`serve`)", "the registration (`registration`)"
 LACK = ("each connection is charged its whole schedule: 1 of the 1 class(es) that hold a row in the 1 execution "
         "phase(s) read lack a verdict, one in each execution phase that holds a row")

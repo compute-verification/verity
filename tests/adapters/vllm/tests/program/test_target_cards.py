@@ -4,12 +4,15 @@ counts stay literals in config: the pipeline's top-level process, which declares
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from verity_vllm.definitions.registry import bf16_gemm_check as BC
 from verity.device import load_card
 
 from verity_vllm.config import TARGET_NUM_SMS, TARGETS
 from verity_vllm.program.predict import compiled
+
+CARD_FILES = Path(__file__).resolve().parents[5] / "hardware/cards"
 
 #: each `config.TARGET_NUM_SMS` class's card: the H200 NVL has the SXM's SM count, and every RTX PRO 6000 edition the Server Edition's
 CARDS = {"rtxpro6000": "rtx-pro-6000-server", "h200": "h200-sxm-141gb"}
@@ -19,13 +22,13 @@ def test_each_row_class_s_sm_count_is_its_card_s():
     """`config.TARGET_NUM_SMS` lists exactly `CARDS`' classes, each at the SM count its card states."""
     assert set(TARGET_NUM_SMS) == set(CARDS)
     for t, sku in CARDS.items():
-        assert TARGET_NUM_SMS[t] == load_card(sku)["sm"]["count"]["value"], f"{t}: config says {TARGET_NUM_SMS[t]}, card {sku}"
+        assert TARGET_NUM_SMS[t] == load_card(sku, directory=CARD_FILES)["sm"]["count"]["value"], f"{t}: config says {TARGET_NUM_SMS[t]}, card {sku}"
 
 
 def test_every_served_pin_s_device_pin_records_its_row_class_s_card_sm_count():
     """The pin of the device a served pin names, at a listed class's compute capability, records the class's card SM count: every
     listed class has such a pin."""
-    cards = {TARGETS[t]: load_card(sku)["sm"]["count"]["value"] for t, sku in CARDS.items()}
+    cards = {TARGETS[t]: load_card(sku, directory=CARD_FILES)["sm"]["count"]["value"] for t, sku in CARDS.items()}
     held = set()
     for path in (p for p in compiled.PINS.iterdir() if p.name.endswith(".json")):
         pin = BC.device_pin(json.loads(path.read_text())["device"])

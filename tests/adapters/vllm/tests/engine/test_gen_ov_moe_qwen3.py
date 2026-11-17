@@ -25,9 +25,9 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation.reference import evaluate_region
 from verity.circuits.layout import resolve
 from verity.circuits.program import Program
+
 from verity_vllm.definitions.registry import moe as MOE
 from verity_vllm.definitions.registry import prims as P
-
 from verity_vllm.observe.events import (
     DispatchEnter,
     DispatchExit,

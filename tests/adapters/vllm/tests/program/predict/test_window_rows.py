@@ -254,7 +254,7 @@ def test_a_standin_scan_state_gives_each_slot_its_row_and_max_tokens(window):
 def _traffic(cls: WC.WindowClass, prompts, arrivals) -> tuple[list[bytes], dict[int, tuple[int, ...]]]:
     """Id requests (`id_form.id_request`, ``max_tokens`` 2) of ``prompts`` arriving at buckets ``arrivals``, request i
     answered ids 100 + i and 200 + i, through the network attester at ``cls``'s scan schedule for the transfer blocks of
-    3 execution phases of its buckets (`scan_traffic.serve`, the certifier tests' driver): its registered ingress rows and each request's outputs by
+    3 execution phases of its buckets (`scan_traffic.serve`, network accounting's tests' driver): its registered ingress rows and each request's outputs by
     ordinal."""
     import importlib.util
     import sys
@@ -301,7 +301,7 @@ def test_the_scans_state_starts_each_request_at_its_anchor_in_its_lane():
         assert got.rows != standin.rows and (got.leaves, got.words) == (standin.leaves, standin.words)
     assert rows[0] != IS.encode(scan, IS.empty(scan))
     assert SS.scan_state(SLOTS_CLASS, ingress, outputs, 0)[0][0] == IS.encode(scan, IS.empty(scan))
-    with pytest.raises(ValueError, match="refuses the network certifier's ingress rows"):
+    with pytest.raises(ValueError, match="refuses the network attester's ingress rows"):
         SS.scan_state(WC.WindowClass(8, 3, 2, lanes=4, every=16), ingress, outputs)
     with pytest.raises(ValueError, match="give the ingress rows to it, 63, not 40"):
         SS.scan_state(SLOTS_CLASS, ingress[:40], outputs, SLOTS_CLASS.buckets)

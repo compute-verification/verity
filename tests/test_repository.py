@@ -413,3 +413,11 @@ def test_fetched_fixtures_are_gitignored() -> None:
                          capture_output=True, text=True).stdout.split("\n")
     unignored = sorted(set(fetched) - {x for x in out if x})
     assert not unignored, "registry entries git does not track must be gitignored (add them to .gitignore):\n" + "\n".join(unignored)
+
+
+def test_the_tree_tracks_no_symbolic_link() -> None:
+    """A tracked link where a build writes (a package's `.lake`, a path dependency) would let the tree choose what the
+    build writes. `sandbox.sh` refuses such a link, which is the protection (a change could edit this test); this keeps
+    the tree from needing one, so the refusal never stops an honest build."""
+    out = subprocess.run(["git", "ls-files", "-s", "-z"], cwd=ROOT, check=True, capture_output=True).stdout
+    assert not (links := [e.split(b"\t", 1)[1].decode() for e in out.split(b"\0") if e.startswith(b"120000 ")]), links

@@ -9,7 +9,8 @@ products.
   weight `b`), and the outputs fan-in is read at are the GEMM coordinates (`GemmCoordinate`). Attention's dot steps are
   `AttnDotStep`s, activation by activation, and are not counted.
 
-`configs` are the served workloads' configurations (b1's `B0_CONFIG`, `B1_CONFIG`, `SMOL360_CONFIG`) and two shapes with
+`configs` are the served workloads' configurations (b1's `B0_CONFIG`, `B1_CONFIG`, `SMOL360_CONFIG`, and Llama 3.2 1B's
+from its pinned config.json, `pinned`) and two shapes with
 no served workload, b1's Definitions bound at Qwen2.5-7B's and Llama-3.1-405B's shapes, which are benchmarks/slowdown's
 (its `data/models.toml`, read through `slowdown.instances`, imported by path).
 """
@@ -59,6 +60,18 @@ def shape(model) -> dict:
             "tie_word_embeddings": model.tied_embeddings}
 
 
+#: the bf16 checkpoint of Llama 3.2 1B the adapter's manifests pin, whose config.json of record its served workload reads
+LLAMA32_1B = "unsloth/Llama-3.2-1B"
+
+
+def pinned(repo: str) -> dict:
+    """The configuration the adapter serves the pinned checkpoint `repo` at, read from its config.json of record."""
+    from verity_vllm.engine.profiles import dense_generic as DG
+    from verity_vllm.program.model import config_of
+    revision = next(str(e["revision"]) for e in DG.checkpoint_entries(DG.MANIFEST) if e.get("repo") == repo)
+    return config_of(DG.pinned_hf_config(repo, revision))[0] | {"model": repo}
+
+
 def configs() -> dict[str, tuple[dict, str]]:
     """name -> (b1 configuration, where its shape comes from)."""
     from verity_vllm.definitions.registry import b1
@@ -70,6 +83,7 @@ def configs() -> dict[str, tuple[dict, str]]:
         "smollm2-135m": (b1.B0_CONFIG, "served: b1.B0_CONFIG"),
         "smollm2-360m": (b1.SMOL360_CONFIG, "served: b1.SMOL360_CONFIG"),
         "qwen25-1b5": (b1.B1_CONFIG, "served: b1.B1_CONFIG"),
+        "llama32-1b": (pinned(LLAMA32_1B), f"served: {LLAMA32_1B}'s config.json of record, as the adapter reads it"),
         "qwen25-7b": (qwen7, "constructed: b1's layer Definitions at Qwen2.5-7B's shapes, the slowdown calculator's models.toml (no served workload)"),
         "llama3-405b": (llama, "constructed: b1's layer Definitions at Llama-3.1-405B's shapes, the slowdown calculator's models.toml (no served workload)"),
     }

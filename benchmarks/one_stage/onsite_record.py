@@ -1,4 +1,4 @@
-"""onsite-record: the onsite demo's record of one served run (``record/onsite.json``, `FORMAT`): every verdict its run of
+"""onsite-record: the onsite application's record of one served run (``record/onsite.json``, `FORMAT`): every verdict its run of
 record needs, the network attester's bound term by term, and that bound over each monitoring period for the serving
 node, a datacenter and the world. It reads only the run's public $OUT and decides nothing:
 
@@ -50,7 +50,7 @@ whose --registered file the audit completed at the window's committed roots and 
 reporting exactly its reads (the audit's published record, `AUDIT`), and lists every other drawn member as not
 credited, by name, with why; ``missing`` where the record states no completion, and where SPOT's verdict is
 not established, which credits none (`UNESTABLISHED_CREDIT`). ``of_record`` holds when every verdict it reads accepted
-and every drawn member is credited, the condition for the demo's run of record, naming its composite of record by id (``composite``), the verdicts not established, the
+and every drawn member is credited, the condition for the application's run of record, naming its composite of record by id (``composite``), the verdicts not established, the
 members not credited and the verdicts it doesn't read (``not_claimed``: PoUW's, `NOT_CLAIMED`, listed as it is, missing
 and development where its row is, and under a composite without PoUW remote's too, `NOT_CLAIMED_WITHOUT_POUW`), and
 the verified compute it credits, none (``verified_compute``, `POUW`); ``placement`` is the network attester's
@@ -118,7 +118,7 @@ notation table's symbols (`TERMS`, `PHASE_TERMS`), each naming the public fields
 the public's ``scans[j]``), ℓ_{a,j} (``free``), k_{skip,j} (``faulty_sets``, ``faulty_bits`` and ``faulty_entries``) and
 the jitter T_j·log2 d_jit, T_j the phase's buckets (``jitter``). They sum to K, by which `NetTiming.Guarantees.MonitoringPeriodLeakAccepted` bounds what the serving node
 sends past its committed program except with δ_net over ``period_s`` seconds, the run's m execution phases of T buckets
-of τ (the certifier's case's ``schedule``). ``delta_net`` gives it term by term, each with its source: the answer's
+of τ (network attestation's case's ``schedule``). ``delta_net`` gives it term by term, each with its source: the answer's
 ``eps``, only its δ part (m · δ and each charged audit's δ, `EPS`), and m times each phase's knowledge, binding and
 collision errors ε_ks, ε_bind and ε_tap (`ERRORS`), which no check computes, so δ_net has no number here (`UNVALUED`);
 ``delta`` splits eps into the scans' δ and the charged audits', with eps a phase and each charged audit's reading at
@@ -229,7 +229,7 @@ ONSITE = "verity/remote-network/v0"
 VERDICTS = ("sampled proofs", "PoUW", "inference-only", "remote", "the network certifier", "onsite")
 #: the window report's rows, by verdict
 ROWS = {"sampled proofs": "integrity", "PoUW": "work", "the network certifier": "communication"}
-#: where the certifier piece leaves its period's case (`certifier_piece.CASE`), whose params carry the schedule and caps
+#: where the network attestation piece leaves its period's case (`certifier_piece.CASE`), whose params carry the schedule and caps
 CASE = Path("pieces") / "certifier" / "case.json"
 #: the run's advice registration as it publishes it (`served_verdicts.py public-registration`), its compiler's cap ℓ_a
 REGISTRATION = "registration.json"
@@ -416,11 +416,11 @@ NO_GATES = ("in AND gates: missing. A proof block's AND gates are its partition'
             "of the monitoring period's proof blocks")
 NOT_POOLED = ("its draw isn't a uniform k-subset of the window's proof blocks, the sampling_design IntegrityHorizon pools, so no "
               "pooled figure is stated for it")
-MULTI = ("a window of more than one member, whatever its draw: its case of verity/sampled-proofs/v1 names each "
-         "member's circuit and registered file (`a5.v2_proof`'s per-member form, proofs.members), and Lean refuses "
-         "that form (MULTI_REFUSED) until a guarantee for a sample over several members' statements under one draw is "
-         "in the lock, so each composite that reads the case rejects naming it. A run of record's window is one "
-         "member, one statement, and this is that window's guarantee")
+MULTI = ("a window of more than one member, whatever its draw: its case of verity/sampled-proofs/v1 is in the "
+         "per-member form (`a5.members_proof`, proofs.members), which Lean's per-member verifier answers "
+         "(OneStageZk.checkMembersAt), and no listed guarantee covers a sample over several members' statements "
+         "under one draw, so this record states none for it. A run of record's window is one member, one "
+         "statement, and this is that window's guarantee")
 #: the network attester's chain report as its piece publishes it (`certifier_piece.PUBLIC`), and its draws by step
 CHAIN_REPORT = CASE.parent / "chain" / "report" / "report.json"
 DRAWS = {"n2": "the period draw", "scan": "the scan's draw"}
@@ -434,7 +434,7 @@ NO_CHAIN_REPORT = f"the run published no chain report ({CHAIN_REPORT}), whose st
 CHARGED = ("MonitoringPeriodLeakAccepted's ℓ_{a,j}: the free inputs of each compute audit tied to execution phase j's scan, those "
            "its Program neither registers at a pinned root nor ties (NetworkCheck.Period's tiedAudits sums the "
            "parameters' audits[].free, #(freeInputs \\ reg); `records_audit.py period`'s free for V3c's window audit). "
-           "It reads no cap and no advice length: the advice is the compile unit's input, not the window Program's "
+           "It reads no cap and no advice length: the advice is the compile slice's proof block's input, not the window Program's "
            "(`records_audit.py declared_count`), so neither the advice registration's width ℓ_a (its compiler's "
            "cap_bits) nor |a_j| is in it. It is the tight form, the figure of record only once the period's check "
            "performs both checks it rests on and none of its premises is open (`CHECKS`, `DISCHARGE`, `OPEN`)")

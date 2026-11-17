@@ -14,8 +14,6 @@ import torch
 
 from verity_vllm.engine import hooks
 
-__models__ = ("zai-org/GLM-5.3",)
-
 
 def _dsa_layers(model) -> list:
     return [m for m in (model.modules() if model is not None else ())

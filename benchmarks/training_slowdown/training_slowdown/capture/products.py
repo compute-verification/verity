@@ -1,4 +1,4 @@
-"""A captured step's matrix products as the products term reads them (training_slowdown.formalism), for a step captured
+"""A captured step's matrix products as the products term reads them (training_slowdown.work), for a step captured
 by capture_step as well as a program recorded from its start (`Capture.region`).
 
 Each GEMM of the measured step is a row (`rows`): its dims and token dims, whether each operand depends on θ′, the
