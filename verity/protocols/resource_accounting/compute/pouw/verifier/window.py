@@ -759,7 +759,7 @@ def instance_ts(registration: Mapping[str, Any], sampled: Sequence[int], sigma: 
         raise ValueError(f"the registration's population {n!r} is not a tile count of at most 2^{T_BITS}")
     k = sampling_design.get("k") if isinstance(sampling_design, Mapping) and sampling_design.get("law") == "subset" else None
     if not _positive(k):
-        raise ValueError(f"the registration's law {sampling_design!r} is not subset:K′")
+        raise ValueError(f"the registration's sampling design {sampling_design!r} is not subset:K′")
     sampled = list(sampled)
     if len(sampled) != k or any(not isinstance(t, int) or isinstance(t, bool) for t in sampled) \
             or sampled != sorted(set(sampled)) or not 0 <= sampled[0] <= sampled[-1] < n:

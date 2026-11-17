@@ -29,8 +29,8 @@
 * `seeds`: the seed and the noise blocks a unit derives (`PouwSeed`, `PouwNoiseBlock`, on words and on bits), and its two
   seeds where its receipt folds take keys (`PouwUnitSeeds`: seed_j and σ_R).
 * `h1tile`: `eps1-sm120-h1fx1` as a compile-pass scheme, H1 + fx1 on a warp's tile under CP-W.
-* `h1device`: H1's device records, one an architecture (sm_120, and sm_90 for the H200): the s8 step and its binding, the
-  contractions its kernels serve, and its data-sheet facts.
+* `h1device`: H1's device records, one an architecture (sm_120, and sm_90 for the H200): the s8 step and its binding, and the
+  contractions its kernels serve.
 * `h1zy`: the H1 tile with its served z/y record checked (`PouwH1TileZy`): the record an input, committed
   before its round's coin, its z the tile's A Bᵀ and its y the served dequant (`PouwZyDequant`, the activation scale
   first, no bias).
@@ -41,9 +41,9 @@
   read.
 * `admit`: an execution phase's admission from its committed request queue (`PouwQueueAdmit`), a call's 16 slots a unit, generic over
   the execution phase.
-* `live`: a round's served rows under rule A (`PouwLiveSlots`), one unit a round: ok iff exactly its slots [0, m) name
+* `live`: a round's served rows under rule A (`PouwLiveSlots_v2`), one unit a round: ok iff exactly its slots [0, m) name
   requests of the gate-signed request table, none more often than it can take in round s (its prompt at its prefill, one
-  row a decode), for the public m that dense credit counts.
+  row a decode), none past its public max_tokens, for the public m that dense credit counts.
 * `window_statement`: an execution phase's statement on its committed entry rows (`PouwWindowStatement`,
   `window.window_problem` in gates), one unit an execution phase: ok iff the P rows are entry rows of the layout, the
   calls, one filler, then empty entries, whose ranges tile [0, N) at the public registered level, every call's -h3 root

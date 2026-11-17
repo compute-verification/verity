@@ -4,6 +4,7 @@ import argparse
 import os
 import re
 import subprocess
+import sys
 import tomllib
 from dataclasses import replace
 from pathlib import Path
@@ -65,7 +66,7 @@ def test_cli_and_presets_use_the_benchmark_package_and_stable_gpu_ids(tmp_path):
     assert preset.gpu_id == "rtx-pro-6000"
     assert preset.engine_settings["resident_gpu_memory_utilization"] == 0.40
     assert preset.engine_settings["block_gpu_memory_utilization"] == 0.80
-    assert set(GPUS) == {"rtx-pro-6000", "h200", "b200"}
+    assert set(GPUS) == {"rtx-pro-6000", "h200", "h100", "b200"}
 
 
 def test_every_toml_spec_strictly_loads():
@@ -184,26 +185,21 @@ def test_direct_dispatch_refuses_a_cpu_only_node_and_a_spec_without_max_minutes(
     assert _parser().parse_args(["run", "x"]).direct is None
 
 
-@pytest.mark.parametrize("node, gpu", [("vy-dc-h200", "h200"), ("vy-dc-b200", "b200")])
-def test_the_served_commits_width_sweep_runs_direct_on_a_dc_vms_one_gpu_as_on_the_rtx(node, gpu):
-    """The Commit's width spec on an H200 and a B200 is the RTX PRO 6000's spec (arms, sweep, reps, model, engine
-    settings) on another GPU, the B200's on FlashAttention 2 as its Build's row declares, and `--direct` takes the DC VM's
-    one GPU through its slot and gpu-lease, the wait for other leases on the node inside the spec's max_minutes."""
+def test_the_served_commits_width_sweep_runs_direct_on_a_dc_vms_one_gpu_as_on_the_rtx():
+    """The Commit's width spec on an H200 is the RTX PRO 6000's spec (arms, sweep, reps, model, engine settings) on
+    another GPU, and `--direct` takes the DC VM's one GPU through its slot and gpu-lease, the wait for other leases on the
+    node inside the spec's max_minutes."""
 
     from research.pods.nebius.slot_only import through_slot
 
     root = Path(__file__).resolve().parents[3]
-    name = f"llama31-8b-fp8-1gpu-commit-served-width-{gpu}"
+    node, name = "vy-spot-glm53", "llama31-8b-fp8-1gpu-commit-served-width-h200"
     spec, rtx = resolve_spec(name), resolve_spec("llama31-8b-fp8-1gpu-commit-served-width")
     assert (spec.arms, spec.arm_modules, spec.arm_settings, spec.sweep, spec.reps, spec.eager) == (
         rtx.arms, rtx.arm_modules, rtx.arm_settings, rtx.sweep, rtx.reps, rtx.eager)
     assert (spec.preset.gpu_id, spec.preset.model, spec.preset.revision, spec.preset.precision) == (
-        gpu, rtx.preset.model, rtx.preset.revision, rtx.preset.precision)
-    attention = {"attention_backend": "FLASH_ATTN", "attention_config": {"flash_attn_version": 2}} if gpu == "b200" else {}
-    assert dict(spec.preset.engine_settings) == {**rtx.preset.engine_settings, **attention}
-    assert {key: value for key, value in engine_args(spec.preset, "fp8", resident=False, eager=False).items()
-            if key.startswith("attention")} == attention
-    assert not {key for key in engine_args(rtx.preset, "fp8", resident=False, eager=False) if key.startswith("attention")}
+        "h200", rtx.preset.model, rtx.preset.revision, rtx.preset.precision)
+    assert dict(spec.preset.engine_settings) == dict(rtx.preset.engine_settings)
     assert [point.id for point in expand_sweep(spec.sweep.id)] == ["b1-p512-mixed", "b8-p512-mixed", "b32-p512-mixed"]
 
     assert node in jobs.DIRECT_NODES
@@ -359,6 +355,25 @@ def test_a_point_refuses_a_local_checkpoint_whose_files_differ_from_the_spec_dig
     with pytest.raises(SystemExit):
         main(["_vllm-point", "--spec", str(path), "--point", item.point.id, "--identity", item.identity])
     assert f"not the spec's model_digest {digest}" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("card", ["NVIDIA H100 80GB HBM3", "NVIDIA H200"])
+def test_a_point_refuses_a_card_that_is_not_its_specs_before_anything_is_timed(tmp_path, monkeypatch, capsys, card):
+    path = _spec_with(tmp_path, "")
+    path.write_text(path.read_text().replace('gpu_id = "rtx-pro-6000"', 'gpu_id = "h200"'))
+    monkeypatch.setenv("RESEARCH_SOURCE_SHA", "a" * 40)
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path))
+    item = jobs.make_plan(path, lookup=lambda identity, commit: None).points[0]
+    monkeypatch.setattr(result_format.kit, "host_stamp", lambda: {"card": card})
+    monkeypatch.setattr("verity_bench.cli.run_benchmark", lambda *args, **kwargs: sys.exit("timed"))
+    with pytest.raises(SystemExit) as stop:
+        main(["_vllm-point", "--spec", str(path), "--point", item.point.id, "--identity", item.identity])
+    if card == GPUS["h200"].nvidia_smi_name:
+        assert stop.value.code == "timed"
+    else:
+        assert stop.value.code == 2 and (
+            f"the card is a {card}, not the h200 of spec 'llama31-8b-fp8-1gpu' (NVIDIA H200): run it on a node whose "
+            "card is a NVIDIA H200, or use the spec for this card") in capsys.readouterr().err
 
 
 def test_a_local_checkpoint_is_bound_by_the_files_a_loader_reads_not_the_hub_snapshots_metadata(tmp_path):

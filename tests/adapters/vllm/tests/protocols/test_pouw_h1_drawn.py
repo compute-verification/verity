@@ -29,6 +29,10 @@ from verity.circuits.types import Value
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1tile as HT
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1window as HW
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1zy as Z
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import prover as PV
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import sampled as SAMPLED
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import sampled_rows as DR
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
 from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as PCC
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
 from verity.protocols.resource_accounting.compute.pouw.verifier import leaf_lanes as LL
@@ -41,10 +45,6 @@ from tests.protocols.test_pouw_h1_commit import ROWS, STEPS, K, Model
 from tests.protocols.test_pouw_h1_served import _unit
 from verity_vllm.pipeline import commit_coins as CC
 from verity_vllm.pipeline import serve_h1 as SH
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import sampled as SAMPLED
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import sampled_rows as DR
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import prover as PV
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
 
 V1 = Value(1)
 J10R_UNIT = HW.tile_unit

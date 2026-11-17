@@ -549,7 +549,7 @@ def test_a_window_received_after_the_epochs_sampling_coin_is_refused(served, tmp
     assert SC.main(["replay", str(tmp_path / "bare.json"), str(log), str(tmp_path / "replay2"), "--python-record"], record=ORL.Record) == 0
 
 
-#: the certifier's run ids, fixed so the prover can name its run in the stream it records
+#: the network attester's run ids, fixed so the prover can name its run in the stream it records
 RUN_ID, OTHER_RUN_ID = CS.RUN_ID, bytes(range(1, 33))
 
 
@@ -560,15 +560,15 @@ def _prover(seed: bytes) -> bytes:
 
 def _certifier(record: bytes, seed: bytes = b"", windows: int = 1, link: str = "requests",
                run: bytes = RUN_ID) -> tuple[CS.Certifier, dict[int, bytes]]:
-    """The certifier's run `run` on ingress link `link`, holding the prover's `record` for PoUW execution phases
-    0 … `windows` − 1, taken before their salts were sampled: the certifier as the challenger reads it
+    """The network attester's run `run` on ingress link `link`, holding the prover's `record` for PoUW execution phases
+    0 … `windows` − 1, taken before their salts were sampled: the network attester as the challenger reads it
     (`certified_salt.Certifier`), and the salt it sampled for each, which the developer's server receives in-band."""
     c = CS.Certifier(CS.salts(windows, seed), dict.fromkeys(range(windows), record), run_id=run, link=link)
     return c, c.salts
 
 
 def _sid(run: str, stream: str = "window", link: str = "requests", run_id: bytes = RUN_ID) -> bytes:
-    """The stream id the prover records with the certifier's run `run_id` on `link` (`stream_id`)."""
+    """The stream id the prover records with the network attester's run `run_id` on `link` (`stream_id`)."""
     return SC.stream_id({"deployment": f"served-zk/{run}"}, stream,
                         {"key_id": CS.KEY_ID.hex(), "link": link, "run_id": run_id.hex()})
 
@@ -576,7 +576,7 @@ def _sid(run: str, stream: str = "window", link: str = "requests", run_id: bytes
 def _certified_window(words, run: str, reveal: bytes, sid: bytes, prover: bytes,
                       p: int = 0) -> tuple[dict, bytes, dict, dict, dict]:
     """An execution phase of two calls from a certified pass of `run` (`MANIFEST_CERTIFIED`) in PoUW execution phase `p`, salted by
-    `Epoch.certified` of the certifier's salt `reveal` under the stream `sid` and `prover`, its rows `words`: its
+    `Epoch.certified` of the network attester's salt `reveal` under the stream `sid` and `prover`, its rows `words`: its
     parameters, which name execution phase `p` and carry no registration_deadline, the manifest's bytes, the execution phase's
     registration, and its advice and private rows (`commit_window`), which open its units."""
     man, roots, work = _pass(run)
@@ -606,7 +606,7 @@ def _deployment(client: CS.Certifier, ck: Ch.ChallengerKey) -> SC.Deployment:
 
 
 def _unasked(monkeypatch) -> list[str]:
-    """What the challenger asks the certifier (`salt.committed`, `salt.revealed`), recorded and never answered."""
+    """What the challenger asks the network attester (`salt.committed`, `salt.revealed`), recorded and never answered."""
     asked: list[str] = []
     monkeypatch.setattr(PS, "committed", lambda *a: asked.append("committed"))
     monkeypatch.setattr(PS, "revealed", lambda *a: asked.append("revealed"))
@@ -618,7 +618,7 @@ def test_rows_formed_before_any_salt_are_refused_in_every_certified_window(serve
     execution phase's salt, and committed twice (matmuls 5 and 9) in PoUW execution phases 0 and 1, each execution phase's pass salted by its own
     certifier reveal under the recorded stream and prover.  A certified execution phase credits only units that read its salt
     (`salt.unit_reason`), and the execution phase's sampled proof block, `Pc8TileSide`, reads two committed rows and no salt, so both are
-    refused (``unsalted``) before the stream receives them and before the certifier is asked for its record or salt:
+    refused (``unsalted``) before the stream receives them and before the network attester is asked for its record or salt:
     nothing is registered, received or sampled."""
     *_, words = served
     run = "r-certified"
@@ -670,10 +670,10 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_sampled_unde
     """What a certified execution phase of salted units runs through after `salt.unit_reason`, which no served-zk execution phase passes
     today (the two tests above): this test lifts that one rule (monkeypatched to accept) and holds the rest end to end
     against the network attester as the challenger reads it (`certified_salt.Certifier`).  The prover records its pass's weights, the
-    execution phase's stream (`stream_id`, naming the certifier's run, (key id, run id, ingress link)) and its prover id
-    (`salt.prover_id`) with the certifier for PoUW execution phase 0 before its salt is
+    execution phase's stream (`stream_id`, naming the network attester's run, (key id, run id, ingress link)) and its prover id
+    (`salt.prover_id`) with the network attester for PoUW execution phase 0 before its salt is
     sampled, signed, and salts its pass from the salt it receives in-band.  `register` reads that record on the execution phase's
-    registration and only then has the certifier reveal execution phase 0's salt, so a challenger whose stream or prover isn't
+    registration and only then has the network attester reveal execution phase 0's salt, so a challenger whose stream or prover isn't
     the recorded one is refused (``coin``) and takes no reveal: the honest one after it passes (``certifier``), holds
     the salt its pass was checked against, and its sample is its sampling session's ``pouw/draw`` coin 0 opened after the
     registration, under the commitment the challenger read itself from its challenger's signed record, which the sample's
@@ -684,10 +684,10 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_sampled_unde
     execution phase 0 (``reregistered``); another run (another run id) is another stream, so a record naming the first run's
     stream is refused (``coin``) and one naming its own registers, though coins that aren't its signed record's
     challenger's are refused at the sample.  A certified challenger opens no salt coin, and is refused parameters with a
-    registration deadline, a certifier that names no run (no key id), no deployment, a
-    certifier of another key or run id than the deployment pins, coins it can't read from a signed record under
+    registration deadline, a network attester that names no run (no key id), no deployment, a
+    network attester of another key or run id than the deployment pins, coins it can't read from a signed record under
     the deployment's challenger key, a prover id that isn't 64 bytes or a context that names no PoUW execution phase; parameters
-    that name one are refused without a certifier.  A deployment is a certifier's public key, a 32-byte run id and a
+    that name one are refused without a network attester.  A deployment is a network attester's public key, a 32-byte run id and a
     challenger key, or it is refused (`DEPLOYMENT_FORM`)."""
     monkeypatch.setattr(PS, "unit_reason", lambda unit: None)
     *_, words = served

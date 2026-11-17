@@ -8,16 +8,16 @@ import json
 
 import numpy as np
 import pytest
-from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
-from verity.protocols.resource_accounting.compute.pouw.verifier import live_reads as LR
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G
-
-from verity_vllm.protocols import pouw
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import live as LV
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import requests as RQ
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.static import graph_pad
+from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
+from verity.protocols.resource_accounting.compute.pouw.verifier import live_reads as LR
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+
+from verity_vllm.protocols import pouw
 
 torch = pytest.importorskip("torch")
 

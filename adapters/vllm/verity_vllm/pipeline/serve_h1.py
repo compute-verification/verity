@@ -100,6 +100,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     window_units as units,
 )
 
+from verity_vllm import messages as M
 from verity_vllm.config import option
 from verity_vllm.log import init_logger
 
@@ -206,7 +207,8 @@ def config_of(value: str | None) -> dict[str, Any]:
     if not value:
         return {}
     try:
-        doc = load_settings(json.loads(value) if value.lstrip().startswith("{") else value)
+        doc = load_settings(json.loads(M.body("PoUWScheme", value.encode()) if value.lstrip().startswith("{")
+                                       else M.read(Path(value), "PoUWScheme")))
     except (OSError, ValueError) as e:
         raise UsageError(f"--protocols-config {value[:80]}: {e}") from None
     if stray := sorted(set(doc) - {"pouw"}):

@@ -1256,8 +1256,6 @@ def test_answer_names_its_schemes_assumption():
         got = VR.assumption_of(scheme)
         assert got == (VR.ASSUMPTION_H100 if scheme.device.name == "h100" else f"{VR.ASSUMPTION_DEV} at {scheme.device.name}")
         assert "pearl_kw" not in got
-    with pytest.raises(ValueError, match="only a v1 scheme"):
-        VR.assumption_of(C.PearlC(forming="v0"))
     run = (root / "verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus/PouwPearlPlus/Run.lean").read_text()
     assert f'def ASSUMPTION : String := "{VR.ASSUMPTION_H100}"' in run
 
@@ -1529,7 +1527,7 @@ def test_served_passes_verify_refuses_a_serve_that_retained_no_pass(tmp_path):
     assert answer["verdict"] == "reject" and answer["reason"].startswith("unretained: the serve retained no pass")
 
 
-def test_a_seeded_serve_flips_the_same_coins_and_salt_key_and_takes_no_retention_or_live_coins(tmp_path, monkeypatch):
+def test_a_seeded_serve_samples_the_same_coins_and_salt_key_and_takes_no_retention_or_live_coins(tmp_path, monkeypatch):
     """`serve --seeded`'s streams (`served_passes.seeded`) give one label's bytes however they are sampled, so two seeded
     installs (`seed_install`) hold challengers of one coin commitment and take one hm96 salt key (`pearl_c.new_salt_key`,
     which the install's weight commitment calls); ``--seeded`` is refused beside retention and beside the challenger gate,

@@ -21,8 +21,9 @@ copy of the whole environment, for code that passes it on.
 `validate_environ` refuses a ``VERITY_*`` variable that neither this registry nor the rest of the tree reads (`ELSEWHERE`), naming
 it: ``verity-vllm`` runs it at startup, so a misspelt or retired setting fails the run instead of being ignored.
 
-The library reads and writes ``os.environ`` here and nowhere else (P7's ``environ`` kind, ``tests/lint/test_p07_declared_inputs.py``,
-whose allowlist holds the sites not yet moved here).  Stdlib only, and nothing from ``verity_vllm``: every layer may import it.
+The library reads and writes ``os.environ`` here and nowhere else (P7's ``environ`` kind,
+``tests/adapters/vllm/tests/lint/test_p07_declared_inputs.py``, whose allowlist holds the sites not yet moved here).
+Stdlib only, and nothing from ``verity_vllm``: every layer may import it.
 """
 from __future__ import annotations
 

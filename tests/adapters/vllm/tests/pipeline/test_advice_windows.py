@@ -422,8 +422,8 @@ def test_a_partition_that_leaves_out_or_samples_a_transfer_gate_template_is_refu
     c = gated_tp
     comp, opening = c["gated"]["compiler"], c["gated"]["opening"]
     for doc, why in (({"templates": [SILU], "law": "work:2"}, "would be left out of the proved set"),
-                     ({"templates": [ROPE, SILU], "law": "stratified:2"}, r"work law's sample \(law work:K\)"),
-                     ({"templates": [ROPE, SILU], "law": "stratified-rate:1/4"}, r"work law's sample \(law work:K\)"),
+                     ({"templates": [ROPE, SILU], "law": "stratified:2"}, r"work sampling design's sample \(law work:K\)"),
+                     ({"templates": [ROPE, SILU], "law": "stratified-rate:1/4"}, r"work sampling design's sample \(law work:K\)"),
                      ({"templates": [ROPE], "law": "work:2"}, "its selection is all")):
         (pf := tmp_path / "partition.json").write_text(json.dumps(doc))
         with pytest.raises(ValueError, match=why):

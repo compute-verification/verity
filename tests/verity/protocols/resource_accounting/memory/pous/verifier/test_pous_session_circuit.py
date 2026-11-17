@@ -1,6 +1,6 @@
 """PoUS's session units (`pous.prover.session_circuit`): the signature's unit agrees with `lms.verify` on a toy key's
 signatures and on each with one thing wrong, the round's unit agrees with its reference on an honest round and on each
-wrong row, record, digest, round and index, and both read the rows the memory challenger writes."""
+wrong row, record, digest, round and index, and both read the rows the memory attester writes."""
 
 from __future__ import annotations
 
@@ -15,8 +15,8 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation.reference import resolve
 from verity.commitments.crypto import lms as R
 from verity.commitments.rowleaf import sha512_row_v2_digest
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
-from verity.protocols.resource_accounting.memory.pous.attester.memory_challenger import Round
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
+from verity.protocols.resource_accounting.memory.pous.attester.memory_attester import Round
 from verity.protocols.resource_accounting.memory.pous.prover import session_circuit as S
 
 RNG = random.Random(11)
@@ -64,7 +64,7 @@ def test_the_signature_unit_agrees_with_lms_verify() -> None:
     p = R.Params(R.TOY_N, 1, H, toy=True)
     key = R.keygen(p, bytes(range(R.TOY_N)))
     pk = R.public_key(key)
-    m = R.memory_challenger_message(key.I, bytes(32), b"records")
+    m = R.memory_attester_message(key.I, bytes(32), b"records")
     sig = R.sign_at(key, 1, m).encode()
     q = lambda v: v.to_bytes(4, "big") + sig[4:]  # noqa: E731
     n = p.N
@@ -107,24 +107,24 @@ def test_a_slot_past_the_row_is_refused() -> None:
 
 
 def _session(K: int, late: int | None = None):
-    """A session of K rounds as the memory challenger signs it: its header length and row, the signed context, the records
-    rows and the digest the signature signs (`lms.memory_challenger_message` of `mc.message`), round
+    """A session of K rounds as the memory attester signs it: its header length and row, the signed context, the records
+    rows and the digest the signature signs (`lms.memory_attester_message` of `mc.message`), round
     ``late``, if any, signed past the limit."""
     c = mc.SessionCommitment(_rand(32), _rand(64), _rand(32), 1 << 20, K, 854_000, 2056, _rand(64))
     rounds = [Round(j, RNG.randrange(1 << 20), 1000 * j, 1000 * j + 500, _rand(64)) for j in range(K)]
     if late is not None:
         rounds[late] = Round(late, rounds[late].index, 0, c.limit_ns + 1, rounds[late].digest)
     I = _rand(16)
-    m = R.memory_challenger_message(I, c.session, mc.message(c, mc.COMPLETE, rounds))
+    m = R.memory_attester_message(I, c.session, mc.message(c, mc.COMPLETE, rounds))
     head = json.dumps({**c.header(), "ended": mc.COMPLETE, "rounds": K}, sort_keys=True, separators=(",", ":")).encode()
     flat = b"".join(r.value() for r in rounds) + bytes(S.RECORD_BYTES * (K % 2))
     rows = [flat[184 * t:184 * (t + 1)] for t in range(S.records_rows(K))]
     return c, len(head), head + bytes(S.head_bytes(len(head)) - len(head)), S.signed_context(I, c.session), rows, m
 
 
-def test_the_signed_digest_reference_is_the_memory_challengers() -> None:
-    """`session_digest` gives the digest the memory challenger's signature signs, at an odd and an even K and at a K
-    past one record per compression, the constant it copies is the memory challenger's, and a late round's ok is 0."""
+def test_the_signed_digest_reference_is_the_memory_attesters() -> None:
+    """`session_digest` gives the digest the memory attester's signature signs, at an odd and an even K and at a K
+    past one record per compression, the constant it copies is the memory attester's, and a late round's ok is 0."""
     assert S.SESSION_TAG == mc.SESSION_TAG and S.RECORD_BYTES == mc.RECORD_BYTES
     for K in (1, 4, 140):
         c, n, head, ctx, rows, m = _session(K)

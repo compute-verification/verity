@@ -4,8 +4,6 @@ every committed output, and the epilogue in two roundings (`eps + mul(scale_a(su
 fixture row the fixture says it misses, by as many words, so the rows keep telling ptxas's FFMA apart from it."""
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 import base64
 import json
 from pathlib import Path

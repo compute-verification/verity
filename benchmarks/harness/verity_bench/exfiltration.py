@@ -25,8 +25,8 @@ machine that reaches the store, with no GPU and no node.
   in β, a least-squares line over the pinned budgets, and ln(bound) is linear in ln β between the two that bracket
   it. The row plans for the weights / λ (`weights_bits / target_bits`), and the part is λ times its bound. The requests
   a row is priced over are its sampled replays over the probability a request is sampled (`replay_sample / q`); its
-  `requests` field is the planner's default scope's count, another request's, and is not read. That part is the
-  headline figure; the planner's driver prints the same rows' bound at the plan's own budget (`headline plan`) and,
+  `requests` field is the planner's default scope's count, another request's, and is not read. The planner's driver
+  prints the same rows' bound at the plan's own budget (`headline plan`) and,
   times λ, at the share between the two pinned budgets that bracket it (`headline rows`), and the print says so.
 * **How that part's proving is priced** is read from the row's plan: each block family's share of the plan's proving
   time, each family priced as the rows say (`split.families`: its share by way, `ways`, else its ways, `priced`); a
@@ -83,13 +83,13 @@ part, and the command sums them per scope and monitoring period under each of th
 `TOGETHER` (`together`): at the jitter bound of record, and under the label at the other. It prices no advice.
 
 * **How the stop class is charged** is the answer of the stop verdicts' reader
-  (`verity/protocols/resource_accounting/network/prover/stop_verdicts.py`'s `of_runs`), which the command hands the calculator (`certifier`'s
+  (`verity/protocols/resource_accounting/network/prover/stop_verdicts.py`'s `of_runs`), which the command hands the calculator (`attester`'s
   ``stop``). The rows the calculator reads from verdict records (its document's `stop`'s `rows`: those that hold
   the lengths by a stop block) are charged below their schedules only on the execution phases the answer holds, and
   their whole schedules on every other. The runs handed to the reader are every run that carries the record
   `VERDICTS`, with those of them another run replaces: `stop_verdicts`' own list, the one the print names. With no
   run carrying the record the reader is not asked, and the rows are the calculator's with no record read. The
-  document keeps the answer as the calculator's document states it, with the runs handed (`certifier`'s `stop`),
+  document keeps the answer as the calculator's document states it, with the runs handed (`attester`'s `stop`),
   and the print says how the stop class is charged and why. A row whose stop class the answer charges its whole
   schedule on some execution phase is called by `WHOLE`, not by `TOGETHER`: nothing holds its lengths there.
 * **The output count.** Until a served audit has sampled a stop block the server chooses a response's output count,
@@ -114,9 +114,9 @@ The command refuses a record nothing carries and a scope two unsuperseded runs b
 A run of record that is superseded, or holds no rows of the case, is left out and listed under "Refused".
 
 Under a research run, a runner that names metric ids for the figures (`benchmarks/exfiltration/run.py`'s `METRICS`)
-has `record` write them through the harness kit (`measurements`): the headline figure, the compute audit's part and
-the network attester's, each over every monitoring period of the document it has a value over at the share (the
-world's year always, and last, the dashboard's headline), each with its `period` and the compute it is `over`, its mark
+has `record` write them through the harness kit (`measurements`): the compute audit's part, the network attester's
+and the two together, each over every monitoring period of the document it has a value over at the share (the
+world's year always, and last), each with its `period` and the compute it is `over`, its mark
 at the head of its first input and its error over that period in the next, the document as `DOCUMENT` and what ran in
 the fingerprint. What it prints is the same in a run as outside one.
 """
@@ -127,7 +127,7 @@ import argparse
 import importlib.util
 import json
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
@@ -182,7 +182,7 @@ from verity_bench.exfiltration_common import (
     _reader,
 )
 from verity_bench.exfiltration_document import _inputs, _row_label, build
-from verity_bench.exfiltration_planner import _sources, at_share, rows_of_record
+from verity_bench.exfiltration_planner import _sources, at_share, record_job, record_run, rows_of_record
 from verity_bench.exfiltration_render import render
 from verity_bench.exfiltration_served import served_share
 from verity_bench.exfiltration_text import _listed, _n, _names, _p, _part, _pct, _table
@@ -263,39 +263,41 @@ def measurements(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> list[dic
     `FIGURES` its value names, over that period at the document's share, in GB. The other periods come in the
     document's order and the world's year last, so a reader that keys a result's measurements by name alone, the last
     of a name winning, reads the world's year. Each has its `mark`, which also heads its first input, then its error
-    over its period (the compute audit's δ; the network attester's ε at its scans' δ; the headline's, the compute
-    audit's part, its δ), then the runs of record it read. The network attester's part is modeled, with the mark its
-    calculator gives the `scan` row where it gives one. A figure with no value over a period (a period no run of record
-    holds, or the network attester's where its ε is 1 or more) is left out, but over the world's year, where it has
-    no value and says why: `NO_BOUND` with that ε."""
+    over its period (the compute audit's δ; the network attester's ε at its scans' δ; the two together's, the two
+    summed, then each part's own), then the runs of record it read.
+    The network attester's part is modeled, with the mark its calculator gives the `scan` row where it gives one. A
+    figure with no value over a period (a period no run of record holds, or one whose error is 1 or more) is left out,
+    but over the world's year, where it has no value and says why: `NO_BOUND` with that error."""
 
     if bad := sorted(set(metrics.values()) - set(FIGURES)):
         raise ValueError(f"no figure of the document is named {', '.join(bad)}: a metric records one of {', '.join(FIGURES)}")
-    share, cert, runs = doc["share"], doc["certifier"], list(doc["runs"])
-    scan = cert["legend"]["scan"].get("mark")
-    term = (f"the network attester's term of record, its `scan` row {TOGETHER['scan']} at D_j = {cert['of_record']}, on "
-            f"an assumed class of at most {_n(cert['response_ids'])} ids a response")
+    share, att, runs = doc["share"], doc["attester"], list(doc["runs"])
+    scan = att["legend"]["scan"].get("mark")
+    term = (f"the network attester's term of record, its `scan` row {TOGETHER['scan']} at D_j = {att['of_record']}, on "
+            f"an assumed class of at most {_n(att['response_ids'])} ids a response")
     out = []
     for p in sorted(doc["periods"], key=lambda p: (p["compute"], p["period"]) == ("world", "year")):
         scope, span, eps = f"{p['compute']} {p['period']}", f"{p['compute']}'s {p['period']}", p["eps"]
-        error = (f"its error: ε = {_p(eps)} over the {span}, at a scan's δ of {_p(cert['scan_delta']['value'])} "
-                 f"({cert['scan_delta']['mark']})")
+        error = (f"its error: ε = {_p(eps)} over the {span}, at a scan's δ of {_p(att['scan_delta']['value'])} "
+                 f"({att['scan_delta']['mark']})")
         figures: dict[str, tuple[Any, str, list[str], str | None]] = {
-            "network_certifier": (p["together"]["scan"]["certifier_GB"], "modeled",
+            "network_attester": (p["together"]["scan"]["attester_GB"], "modeled",
                                          [f"modeled{f' ({scan})' if scan else ''}: {term}", error],
                                          f"{NO_BOUND}: ε = {_n(eps)} over the {span}")}
         head = next((x for x in doc["compute_audit"] if x["scope"] == scope), None)
-        for figure, mark, what in (("headline", doc["status"], "the headline figure"),
-                                   ("compute_audit", "modeled", "the compute audit's part")):
-            if head is None:
-                continue
+        if head is not None:
             label = (_row_label(head) if doc["row"] == ASSUMED_ROW else None) or head.get("note")
-            audit = (f"the planner's row `{doc['row']}`{f', {label}' if label else ''}, read where its total is "
-                     f"{_pct(share)} of compute, β = {_part(head['beta'])}{'' if head['inside'] else ' (extrapolated)'}: "
-                     f"λ = {_n(head['lambda'])} times its bound, {_n(head['bound']['GB'])} GB")
-            figures[figure] = (head["GB"], mark, [f"{mark}: {what}, {audit}",
-                                                  (f"its error: δ = {_n(head['delta'])} over the {span}, the compute "
-                                                  "audit's"), *runs], None)
+            audit = (f"the compute audit's part, the planner's row `{doc['row']}`{f', {label}' if label else ''}, read "
+                     f"where its total is {_pct(share)} of compute, β = {_part(head['beta'])}"
+                     f"{'' if head['inside'] else ' (extrapolated)'}: λ = {_n(head['lambda'])} times its bound, "
+                     f"{_n(head['bound']['GB'])} GB")
+            figures["compute_audit"] = (head["GB"], "modeled", [
+                f"modeled: {audit}", f"its error: δ = {_n(head['delta'])} over the {span}, the compute audit's", *runs], None)
+            figures["total"] = (p["together"]["scan"]["GB"], "modeled", [
+                f"modeled: the two parts together {TOGETHER['scan']}, a link's execution phase carrying K = schedules + "
+                f"cells + jitter + min(entries, advice + the compute audit's part), at D_j = {att['of_record']}, with no "
+                "advice priced", f"its error: at most {_n(p['error'])} over the {span}, the two parts' errors summed",
+                audit, term, *runs], f"{NO_BOUND}: the two parts' errors summed are {_n(p['error'])} over the {span}")
         for name, figure in metrics.items():
             value, mark, inputs, why = figures.get(figure, (None,) * 4)
             if value is None and scope != "world year":
@@ -316,10 +318,10 @@ def record(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> None:
     kept.parent.mkdir(parents=True, exist_ok=True)
     kept.write_text(json.dumps(doc, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
     head = next(p for p in doc["compute_audit"] if p["scope"] == "world year")
-    cert = doc["certifier"]
+    att = doc["attester"]
     writer.fingerprint(benchmark="exfiltration", row=doc["row"], step=head["step"], variant=doc["variant"],
                        share=doc["share"], network_check_share=doc["network_check"]["share"],
-                       response_ids=cert["response_ids"], scan_delta=cert["scan_delta"]["value"],
+                       response_ids=att["response_ids"], scan_delta=att["scan_delta"]["value"],
                        served_run=doc["compute_share"]["run"], runs=list(doc["runs"]))
     writer.measurement_file(DOCUMENT)
     for m in measurements(doc, metrics):
@@ -330,10 +332,29 @@ def record(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> None:
                       "source", [DOCUMENT])
 
 
-def main(argv: Sequence[str] | None = None, metrics: Mapping[str, str] | None = None) -> int:
+class _Commits:
+    """The one call `spot_status.status` makes of a store, answered from a run's record directory: the commit its
+    `job.json` says the run ran (`computation.tree_sha`), where it says one."""
+
+    def __init__(self, record: Path):
+        self.run = record_run(record)
+        self.commit = (record_job(record).get("computation") or {}).get("tree_sha")
+
+    def get_attempt(self, run: str) -> dict | None:
+        return {"source": {"commit": self.commit}} if run == self.run else None
+
+
+def main(argv: Sequence[str] | None = None, metrics: Mapping[str, str] | None = None,
+         report: Callable[..., int] | None = None) -> int:
     """`verity bench exfiltration`: print the two parts (`render`), or with ``--json`` their document (`build`).
     `metrics`: a runner's metric ids, each for the figure of `FIGURES` it names, which under a research run
-    (`RESEARCH_RUN_DIR` set) `record` writes into the run's result; the print is the same."""
+    (`RESEARCH_RUN_DIR` set) `record` writes into the run's result; the print is the same.
+
+    With ``--from`` (a run's record directory, or a run id where research is installed: `kit.record`), the rows of
+    record are that record's, read with no store (`build`'s ``record``), and `report`, the runner's call of
+    `kit.report`, prints and writes them: ``report(doc, text, made_up=..., withdrawn=...)``, its exit code the
+    command's. A record whose `job.json` says it is made up (``made_up``, what it says of itself) is reported as made
+    up, and the print says what it says."""
 
     ap = argparse.ArgumentParser(
         prog="verity bench exfiltration",
@@ -367,12 +388,22 @@ def main(argv: Sequence[str] | None = None, metrics: Mapping[str, str] | None = 
                          "share of compute it measures is printed beside the given share, with the compute audit's part "
                          f"at it (default: none, and the share is \"{NO_RUN}\")")
     ap.add_argument("--local-only", action="store_true", help="read this machine's catalog alone, not the store's remote")
+    ap.add_argument("--from", dest="record", metavar="DIR",
+                    help="read the planner's rows from one run's record directory (its job.json and out/), with no "
+                         "store; a run id is fetched to one first where research is installed")
     a = ap.parse_args(argv)
+    if a.record is not None and (a.json or report is None):
+        ap.error("--from prints the figure and its document through the runner (benchmarks/exfiltration/run.py), "
+                 "without --json: run `verity bench exfiltration --from DIR`")
     try:
+        rec = None if a.record is None else kit.record(a.record)
         served = None if a.served_run is None else json.loads(a.served_run.read_text())
         doc = build(share=a.share, network_check=a.network_check_share, row=a.row, step=a.step, variant=a.variant,
-                    response_ids=a.response_ids, scan_delta=a.scan_delta, served=served, local_only=a.local_only)
-        doc["spot_holes"] = spot_status.status(doc["runs"]) if served is None else spot_status.served(served)
+                    response_ids=a.response_ids, scan_delta=a.scan_delta, served=served, local_only=a.local_only,
+                    record=None if rec is None else rec.path)
+        doc["spot_holes"] = (spot_status.served(served) if served is not None else
+                             spot_status.status(doc["runs"]) if rec is None else
+                             spot_status.status(doc["runs"], store=_Commits(rec.path)))
     except (ValueError, RuntimeError, OSError) as e:
         print(f"verity bench exfiltration: {e}", file=sys.stderr)
         return 2
@@ -383,6 +414,16 @@ def main(argv: Sequence[str] | None = None, metrics: Mapping[str, str] | None = 
         shown = served_row.account(served)
     if shown is not None:
         doc["served_run"] = shown
+    if rec is not None:
+        said = record_job(rec.path).get("made_up")
+        text = render(doc)
+        if said:
+            doc["made_up_says"] = str(said)
+            head, _, rest = text.partition("\n")
+            text = f"{head}\n  what the record says of itself: {said}\n{rest}"
+        text += ("" if shown is None else "\n\n" + served_row.render(shown)) + "\n\n" + spot_status.render(doc["spot_holes"])
+        assert report is not None
+        return report(doc, text, made_up=bool(said), withdrawn=rec.withdrawn)
     if metrics and settings.is_set("RESEARCH_RUN_DIR"):
         try:
             record(doc, metrics)

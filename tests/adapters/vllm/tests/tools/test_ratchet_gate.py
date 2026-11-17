@@ -1810,8 +1810,8 @@ REPO_TERMS_JSON = "tests/lint/allowlists/repo_retired_terms.json"
 TOY_GLOSSARY = '# Glossary\n\n## Older names\n\n| Old name, where it stays | Term |\n|---|---|\n| "teapot" | kettle |\n'
 
 
-def test_a_retired_term_is_counted_as_the_glossary_of_the_tree_the_gate_runs_in_retires_it(repo):
-    """The retired-terms lint, loaded alone from the base, reads the checkout's GLOSSARY.md: a new use in a file the change
+def test_a_retired_term_is_counted_as_the_base_s_glossary_retires_it(repo):
+    """The retired-terms lint, loaded alone from the base, reads the base's GLOSSARY.md: a new use in a file the change
     touches is refused with the term to say, and saying it passes."""
     repo.commit("retired terms", {REPO_TERMS_LINT: (SCRIPT.parents[3] / REPO_TERMS_LINT).read_text(), "GLOSSARY.md": TOY_GLOSSARY,
                                   REPO_TERMS_JSON: _allowlist(DOCS_A), "docs/a.md": "# A\n\nA teapot boils it.\n"})
@@ -1824,6 +1824,18 @@ def test_a_retired_term_is_counted_as_the_glossary_of_the_tree_the_gate_runs_in_
     repo.commit("says the term", {"docs/a.md": "# A\n\nA kettle boils it.\n"})
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["counted"].get("repo_retired_terms")) == ("passed", ["docs/a.md"]), c["why"]
+
+
+def test_a_change_that_renames_a_row_s_old_name_and_its_use_together_adds_no_use(repo):
+    """A rename pass that renames a retired name in GLOSSARY.md's row and in its use: the base's lint counts with the
+    base's row, which retires the old name the base's text used and not the new one, so the change adds no use."""
+    repo.commit("retired terms", {REPO_TERMS_LINT: (SCRIPT.parents[3] / REPO_TERMS_LINT).read_text(), "GLOSSARY.md": TOY_GLOSSARY,
+                                  REPO_TERMS_JSON: _allowlist(DOCS_A), "docs/a.md": "# A\n\nA teapot boils it.\n"})
+    repo.git("checkout", "-q", "-b", "pr")
+    repo.commit("the row's old name and its use renamed", {"GLOSSARY.md": TOY_GLOSSARY.replace("teapot", "samovar"),
+                                                         "docs/a.md": "# A\n\nA samovar boils it.\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["fix"]) == ("passed", []), c["why"]
 
 
 @pytest.fixture
@@ -2148,15 +2160,13 @@ def test_a_renamed_file_s_entry_is_compared_at_its_new_path_so_a_move_buys_no_ro
 C_SITE = "docs/c.md:{} 'teapot' is retired; say kettle (GLOSSARY.md)"
 
 
-def test_a_file_moved_to_where_its_lint_counts_it_is_growth_named_at_the_file_s_key(terms_linted):
+def test_a_file_moved_to_where_its_lint_counts_it_brings_its_uses_but_no_entry_for_them(terms_linted):
     """fixtures/ is data the retired-terms lint leaves unread, so a file moved out of it comes to count by its path alone.
-    The base's lint finds nothing in it where the base holds it, so no list ever held its use: with the entry for it the
-    list grows, named at the file's key, and without the entry the use is a new site, as any other.  Such a move goes by
-    `move_check`'s certificate, or its author rewords the file first."""
+    No list ever held its use, so an entry for it grows the list, named at the file's key: a rename brings the base's
+    entries and no new ones.  Without the entry the use is the base's text where the change puts it, which the move didn't
+    write, so it is no new site."""
     c_md = {"file": "docs/c.md", "count": 1}
-    terms_linted.git("checkout", "-q", "main")
-    terms_linted.commit("data that uses the term", {"fixtures/c.md": "# C\n\nA teapot rests.\n"})
-    terms_linted.git("checkout", "-q", "-B", "pr")
+    _moved_data(terms_linted)
     terms_linted.git("mv", "fixtures/c.md", "docs/c.md")
     terms_linted.commit("fixtures/c.md goes to docs/ as it is, with its entry", {REPO_TERMS_JSON: _allowlist(DOCS_A, c_md)})
     [c] = G.gate("main", "pr")["changes"]
@@ -2166,10 +2176,68 @@ def test_a_file_moved_to_where_its_lint_counts_it_is_growth_named_at_the_file_s_
     terms_linted.git("mv", "fixtures/c.md", "docs/c.md")
     terms_linted.commit("the same move with no entry, beside an edit", {"docs/a.md": "# A\n\nA teapot boils it now.\n"})
     [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["fix"]) == ("passed", []), c["why"]
+    assert c["why"].startswith("no retired-term site is new in the 2 file(s) it changes"), c["why"]
+
+
+C_TEXT = "# C\n\nA teapot rests.\n" + "".join(f"\nLine {i}.\n" for i in range(6))
+
+
+def _moved_data(repo: Repo) -> None:
+    """data under fixtures/ on `main` that uses the term once, on line 3, and `pr` cut from there"""
+    repo.git("checkout", "-q", "main")
+    repo.commit("data that uses the term", {"fixtures/c.md": C_TEXT})
+    repo.git("checkout", "-q", "-B", "pr")
+
+
+def test_a_new_use_in_a_name_is_refused(repo):
+    """A name that says a retired word in one of its humps (``overInertBoundGizmos``) is a new use, refused with the term
+    to say."""
+    repo.commit("retired terms", {REPO_TERMS_LINT: (SCRIPT.parents[3] / REPO_TERMS_LINT).read_text(),
+                                  "GLOSSARY.md": TOY_GLOSSARY + '| "gizmos" | widgets |\n', REPO_TERMS_JSON: _allowlist(),
+                                  "tools/bound.py": "BOUND = 1\n"})
+    repo.git("checkout", "-q", "-b", "pr")
+    repo.commit("a name that says the old word", {"tools/bound.py": "BOUND = 1\noverInertBoundGizmos = 2\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["fix"]) == ("failed", ["tools/bound.py:2 'Gizmos' is retired; say widgets (GLOSSARY.md)"]), c["why"]
+
+
+def test_an_edited_line_of_a_moved_file_that_keeps_its_use_is_no_new_site(terms_linted):
+    """A move into the lint's reach that edits the line a use stands on and keeps the use: the file holds as many uses as
+    the base's text where the change puts it, so the change adds none."""
+    _moved_data(terms_linted)
+    terms_linted.git("mv", "fixtures/c.md", "docs/c.md")
+    terms_linted.commit("moved, and its line edited", {"docs/c.md": C_TEXT.replace("rests.", "rests a while.")})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["fix"]) == ("passed", []), c["why"]
+
+
+def test_a_move_that_adds_a_use_is_refused_for_the_added_one_alone(terms_linted):
+    """The same move with a second use: the file holds one more use than the base's text where the change puts it, so
+    the change fails, naming that one site and not the one the move brought."""
+    _moved_data(terms_linted)
+    terms_linted.git("mv", "fixtures/c.md", "docs/c.md")
+    terms_linted.commit("moved, and a second use", {"docs/c.md": C_TEXT + "\nA teapot naps.\n"})
+    [c] = G.gate("main", "pr")["changes"]
     assert c["verdict"] == "failed" and c["why"].startswith(
         f"adds 1 retired-term site(s) to the files it changes, as the base's {REPO_TERMS_LINT} counts them "
-        f"(docs/c.md 0 -> 1)"), c["why"]
-    assert c["fix"] == [C_SITE.format(3)]
+        f"(docs/c.md 1 -> 2)"), c["why"]
+    assert c["fix"] == [C_SITE.format(C_TEXT.count("\n") + 2)]
+
+
+def test_a_count_at_a_moved_file_is_the_base_s_text_counted_where_the_change_puts_it(terms_linted):
+    """`moved_sites`: the base's lint, run on the change's whole tree, finds a moved file's use the list doesn't hold; the
+    base's own run found nothing where the base held the file, so the base's text is counted at its new path, and the use
+    is the base's: the change passes, the use named where the base holds it.  A second use there is the change's."""
+    _moved_data(terms_linted)
+    terms_linted.git("mv", "fixtures/c.md", "docs/c.md")
+    terms_linted.commit("moved, beside a list that says the term in a.md", SAYS_THE_TERM)
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["lints"]) == ("passed", ["repo_retired_terms"]), c["why"]
+    assert "repo_retired_terms: fixtures/c.md: 1 found, 0 allowed" in c["why"], c["why"]
+    terms_linted.commit("and a second use", {"docs/c.md": C_TEXT + "\nA teapot naps.\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert c["verdict"] == "failed" and "repo_retired_terms: docs/c.md: 2 found, 0 allowed" in c["fix"], c["why"]
 
 
 def test_a_renamed_file_s_ruff_finding_is_the_bases_at_its_new_path_and_a_second_there_is_growth(both_ruffed):
@@ -2249,3 +2317,57 @@ def test_a_moved_site_pays_for_no_new_one_and_only_a_file_whose_count_falls_give
     assert c["verdict"] == "failed" and c["why"].startswith(
         f"adds 1 retired-term site(s) to the files it changes, as the base's {REPO_TERMS_LINT} counts them "
         f"(docs/c.md 0 -> 1)"), c["why"]
+
+
+def test_a_list_moved_out_of_the_lint_directories_is_read_where_the_change_puts_it(linted):
+    """The lint directory and its list leave the lint directories, the lint edited on the way, so no pure move: the base's
+    lint, run in its own place, is given the list's entries from where the change put it, so the two violations it allows
+    stay allowed and the change passes, as it does with a list that stays."""
+    to = "tests/adapters/vllm/lints"
+    lint, listed = linted.git("show", f"HEAD:{LINT}"), linted.git("show", f"HEAD:{P01}") + "\n"
+    linted.commit("the lint and its list move", {LINT: None, P01: None, f"{to}/{Path(LINT).name}": lint + "\n# moved\n",
+                                                 f"{to}/allowlists/{Path(P01).name}": listed})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["before"], c["after"]) == ("passed", 2, 2), c["why"]
+    assert c["lints"] == ["p01_core"] and "the base's lint code finds nothing uncovered" in c["why"], c["why"]
+
+
+def test_a_lint_directory_moved_into_the_lint_directories_brings_its_lists_and_public_table(repo):
+    """The tests move: the lint directory stood elsewhere at the base, and the change moves it, its list and P16's list in,
+    the lint edited on the way.  The base's list is read where the base holds it, so its two entries are the head's two,
+    and P16's public table is the base's, its caller moved with the rest, so no command is new and no caller is checked."""
+    old = "adapters/vllm/tests/lint"
+    lint, listed = f"{old}/{Path(LINT).name}", f"{old}/allowlists/{Path(P01).name}"
+    callers = f"{old}/allowlists/{Path(G.CALLERS_LIST).name}"
+    repo.commit("the lints where they stood", {
+        P01: None, lint: TOY_LINT, listed: repo.git("show", f"HEAD:{P01}") + "\n", callers: _callers({"row": f"{old}/row.sh"}),
+        f"{old}/row.sh": "verity-vllm row --x 1\n", "adapters/vllm/verity_vllm/a.py": "A = 'BAD'\n",
+        "adapters/vllm/verity_vllm/b.py": "B = 'BAD'\n"})
+    repo.git("checkout", "-q", "-b", "pr")
+    row = f"{G.TESTS}row.sh"
+    repo.commit("the lints move in", {lint: None, listed: None, callers: None, f"{old}/row.sh": None,
+                                      LINT: TOY_LINT + "\n# moved\n", P01: repo.git("show", f"HEAD:{listed}") + "\n",
+                                      G.CALLERS_LIST: _callers({"row": row}), row: "verity-vllm row --x 1\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["before"], c["after"]) == ("passed", 2, 2), c["why"]
+
+
+def test_a_moved_file_a_lint_counts_anew_by_its_path_holds_the_base_s_uses(repo):
+    """A lint that keeps a key in the files it names (`HELD_KEYS`) counts it in a file moved away from them.  The change
+    moves the file and the lint's name for it together, so the base's lint, which names the old path, counts one more use
+    in the file where the change puts it than at its old path, where the list, behind its tree, allows none; that use is
+    the base's text, which the move didn't write, so the change passes.  A second use the change adds is its own."""
+    lint = (SCRIPT.parents[3] / REPO_TERMS_LINT).read_text()
+    held = lint.replace("HELD_KEYS = {\n", "HELD_KEYS = {\n    \"teapot\": ((\"docs/held.md\",), \"a stored record's key\"),\n", 1)
+    text = '# Held\n\nThe record\'s key is "teapot".\n\nA teapot boils.\n'
+    repo.commit("retired terms, one key held", {REPO_TERMS_LINT: held, "GLOSSARY.md": TOY_GLOSSARY, "docs/held.md": text,
+                                                REPO_TERMS_JSON: _allowlist()})
+    repo.git("checkout", "-q", "-b", "pr")
+    moved = {"docs/held.md": None, REPO_TERMS_LINT: held.replace('(("docs/held.md",)', '(("docs/c/held.md",)')}
+    repo.commit("docs/held.md moves to docs/c/, with the lint's name for it", {**moved, "docs/c/held.md": text})
+    [c] = G.gate("main", "pr")["changes"]
+    assert c["verdict"] == "passed", c["why"]
+    repo.commit("and a second use", {"docs/c/held.md": text + "\nA teapot naps.\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert c["verdict"] == "failed" and "repo_retired_terms: docs/c/held.md:7 'teapot' is retired; say kettle (GLOSSARY.md)" \
+        in c["fix"], c["why"]

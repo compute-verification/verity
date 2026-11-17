@@ -21,7 +21,6 @@ n = `weights.chunks`(K), chunk indices in and out of range, and fixed at the ser
 from __future__ import annotations
 
 import json
-import os
 import random
 import shutil
 from pathlib import Path
@@ -30,6 +29,7 @@ from typing import Any
 import pytest
 import verity_difftest as D
 from hypothesis import strategies as st
+from verity_config.verity_settings import REGISTRY as SETTINGS
 from verity_flock import class_statement as CS
 
 from verity.protocols.resource_accounting.compute.pouw.verifier import leaf_lanes as LL
@@ -544,7 +544,7 @@ def test_the_sidecar_combine_has_no_circuit_file() -> None:
 
 
 @pytest.mark.slow
-@pytest.mark.skipif(not os.environ.get("VERITY_POUW_WINDOW_LOWERED_LANES"),
+@pytest.mark.skipif(not SETTINGS.VERITY_POUW_WINDOW_LOWERED_LANES,
                     reason="a lane's lowering is about 2M ANDs: about 150 s at 16 × 16 and 460 s at the served leaf, "
                            "32 GB at most; set VERITY_POUW_WINDOW_LOWERED_LANES=1")
 @pytest.mark.parametrize("r,c,k,lane", LOWERED_LANES, ids=lambda v: str(v))

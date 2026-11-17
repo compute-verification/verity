@@ -61,7 +61,7 @@ requires the arrival order to be release order, so there are no order entries. T
 (`TICK_CAPS`, and a registered book's caps must too), so every window's segment codes nothing, in 0 bits: a window is
 charged its length terms alone, and 0 bits where the registration sends no lengths.
 
-**The windows** (the certifier PROTOCOL's A5: no later than the first window whose rows the value changes). Step s's
+**The windows** (network attestation's PROTOCOL.md, A5: no later than the first window whose rows the value changes). Step s's
 window is the earliest window an output at step s or later is released in (the last window where none follows). An
 arrival's ingress window is the earliest release window of it and every later arrival, so that it never decreases
 where the arrivals deviate from release order. A decision about arrival i at step k goes to the earlier of step k's

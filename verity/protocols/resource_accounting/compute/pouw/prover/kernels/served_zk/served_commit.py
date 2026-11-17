@@ -797,7 +797,7 @@ def sample_key(coin: bytes, stream: S.Stream, reg: S.WindowCommitmentRecord) -> 
 def sample_bytes(key: Key, sampling_design: Mapping[str, Any], n: int) -> bytes:
     """The bytes a subset:k sample over N reads (Lean's ``2 k · width(N) + 64``)."""
     if sampling_design.get("law") != "subset":
-        raise _refused("law", f"the window's sample is a subset law's, not {dict(sampling_design)}")
+        raise _refused("law", f"the window's sample is a subset sampling design's, not {dict(sampling_design)}")
     return key.stream("draw", 2 * sampling_design["k"] * CC.width(n) + 64)
 
 

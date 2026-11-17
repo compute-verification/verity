@@ -183,7 +183,9 @@ def test_spot_prints_the_prover_gpus_a_serving_gpu_at_the_exfiltration_run_of_re
     bare = R.build("spot", "glm53", store=s.fresh("bare"), root=REPO)
     assert bare["at_record"]["gpus_per_serving_gpu"] is None and bare["at_record"]["run"] is None
     nothing = (f"no planner rows of record: nothing in the store carries `{R.RUN_OF_RECORD}={E.RECORD}` (label each run "
-               f"that holds them: `research data label RUN {R.RUN_OF_RECORD} {E.RECORD} --by LANE`)")
+               f"that holds them: `research data label RUN {R.RUN_OF_RECORD} {E.RECORD} --by LANE`); with only a clone, "
+               "run `uv run verity bench exfiltration --from benchmarks/exfiltration/made_up`, a made-up record, printed "
+               "as made up")
     assert bare["at_record"]["why"] == nothing
     text = R.render(bare)
     assert (f"- prover GPUs per serving GPU at the sampling plan of record ({arts[R.SAMPLING]}): 0.542, modeled\n"

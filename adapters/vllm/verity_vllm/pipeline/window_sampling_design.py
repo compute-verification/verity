@@ -28,12 +28,12 @@ def work_table_of(sampling_design: Mapping[str, Any], counts: Mapping[str, int],
     if sampling_design.get("law") != "work":
         if tg:
             raise ValueError(f"the compiler lists transfer-gate templates {tg}: every unit of theirs is proved beside the sampled rest, "
-                             f"which is the work law's sample (law work:K), not {dict(sampling_design)}")
+                             f"which is the work sampling design's sample (law work:K), not {dict(sampling_design)}")
         return None
     if missing := [t for t in tg if t not in counts]:
         raise ValueError(f"the compiler's transfer-gate template {missing[0]} is not among the partition's templates {list(counts)}: "
                          "its units would be left out of the proved set")
     if all(t in tg for t in counts):
         raise ValueError(f"every template of the window ({list(counts)}) holds transfer gates: nothing is sampled, so its selection is "
-                         "all, not a work law")
+                         "all, not a work sampling design")
     return {t: {"work": 0, "floor": int(n)} if t in tg else {"work": 1, "floor": 1} for t, n in counts.items()}

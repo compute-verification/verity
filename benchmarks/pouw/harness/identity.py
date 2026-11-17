@@ -5,6 +5,9 @@ bus id, so CUDA and NVML agree. NVML is addressed by that UUID, never by an inde
 from __future__ import annotations
 
 import re
+from pathlib import Path
+
+CARD_FILES = Path(__file__).resolve().parents[3] / "hardware/cards"
 
 #: what `bench.py`, `characterize.py`, `native.py` and the tests read
 __all__ = ["IdentityError", "check", "check_card", "expected_for", "parse_server_md", "resolve_gpu", "uuid_string"]
@@ -97,7 +100,7 @@ def check_card(name: str, capability: str, sms: int, driver: str) -> dict:
     from verity.device import load_card, number  # here: loading the harness needs the standard library alone
 
     want_capability, sku, min_driver, arch = CARDS[known]
-    want_sms = int(number(load_card(sku)["sm"]["count"]))
+    want_sms = int(number(load_card(sku, directory=CARD_FILES)["sm"]["count"]))
     problems = []
     if capability != want_capability:
         problems.append(f"compute capability {capability}, not {want_capability}")

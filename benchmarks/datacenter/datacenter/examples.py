@@ -21,15 +21,19 @@ the outside world over a WAN. `two_sites` is a fleet: two leaf-spines joined by 
 from __future__ import annotations
 
 import math
+from pathlib import Path
 
 from verity.device import load_card, load_node, number
 from verity.protocols.resource_accounting.memory.poub.verifier import timing as T
 
 from .physical import Assumption, Cadence, Datacenter, DeviceEntry, Fleet, LinkEntry, Zone
 
-NODE = load_node("rtx-pro-6000-server-x8")
-GPU_CARD = load_card(NODE["device"]["sku"])
-HOST_CARD = load_card(NODE["host"]["sku"])
+CARD_FILES = Path(__file__).resolve().parents[3] / "hardware/cards"
+NODE_FILES = Path(__file__).resolve().parents[3] / "hardware/nodes"
+
+NODE = load_node("rtx-pro-6000-server-x8", directory=NODE_FILES, cards_directory=CARD_FILES)
+GPU_CARD = load_card(NODE["device"]["sku"], directory=CARD_FILES)
+HOST_CARD = load_card(NODE["host"]["sku"], directory=CARD_FILES)
 UPLINK_GBPS = int(number(NODE["interface"]["eth0"]["rate"]) / 10 ** 9)
 
 GB = 8e9
@@ -110,11 +114,11 @@ def leaf_spine(blocks: int, *, leaves: int = 1, spines: int = 0, outside: tuple[
                uplink_gbps: int = UPLINK_GBPS, spine_gbps: int = 400, fabric_latency: float = 2e-6, uplink_latency: float = 1e-6,
                outside_latency: float | None = None, cadence: Cadence | None = None) -> Datacenter:
     """`blocks` nodes (`rtx_node`, named `{prefix}0`, `{prefix}1`, …, each `with_dpu` when `dpus`) behind a leaf-spine
-    fabric: each node's way out (its NIC, or its DPU) to its own certifier (`{prefix}I.cert`), the certifier to a leaf
+    fabric: each node's way out (its NIC, or its DPU) to its own certifier (`{prefix}I.cert`), the attester to a leaf
     switch (round-robin over `leaves`), every leaf to every spine, and the hosts `outside` every block (kind `outside`)
     and the `challengers` on the leaves too. With one leaf, `spines` may be 0. Latencies are one way, in seconds:
     `uplink_latency` from a node to its certifier, `fabric_latency` a fabric hop, and an outside host's link a WAN of
-    `outside_latency` when it is given, else a fabric hop. `cadence` is the certifiers' (`Cadence`'s default when None)."""
+    `outside_latency` when it is given, else a fabric hop. `cadence` is the attesters' (`Cadence`'s default when None)."""
     if blocks < 1 or leaves < 1 or (leaves > 1 and spines < 1):
         raise ValueError("at least one block and one leaf, and spines to join more than one leaf")
     up = Assumption("fabric/uplink", uplink_gbps * 1_000_000_000, "bit/s", "declared")

@@ -1,0 +1,9 @@
+[[metric]]
+id = "compute-research/largest-facet-load"
+title = "Largest load on a facet"
+owner = "compute-research"
+unit = "load"
+axis = "The largest load any program facet_break timed puts on any row of the machine model, where a load above 1 is a program running faster than its row allows, each point naming its card."
+better = "lower"
+command = "research run --on NODE --project verity --source . --cwd source --custody-ttl 12h -- env GPU_LEASE_WHO=compute-research gpu-lease 1 --wait --on CARD --cores CORES --max-min 45 -- bash benchmarks/pouw/facet_break/run.sh"
+every = "7d"

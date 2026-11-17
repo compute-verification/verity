@@ -14,8 +14,6 @@ names it found empty, are not what its positions give.  A step one row short is 
 no compressed slot, `dsv4_model.step_metadata`'s `unslotted`), which the pinned vLLM does not give."""
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 import sys
 import types
 from collections import Counter
