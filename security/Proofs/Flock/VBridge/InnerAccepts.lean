@@ -6,23 +6,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Discharge.Exec.Tables
 import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
 
-/-!
-# VBridge G: the compiled inner verifier accepts from both reps' accepting runs
-
-`inner_accepts_of_reps`, the last step of `StagesAccept` (`Compiled.lean`): when both reps' checks accept with one cap
-(`verifyRep`, `Tables.lean`), the compiled inner protocol `flockInnerCL` accepts the inner transcript `t` whose steps on
-the schedule are the level-0 cap, the link points, both reps' tapes in `Plays.interleave_first`'s order, and the
-openings with their salts (`tableTape`).
-
-* `playsT_bind`, `playsT_interleave_first`: `Plays.bind` and `Plays.interleave_first` on one tape. The tape says where
-  the prover's choices fall: before each of rep 0's steps, `true` (rep 0 moves); none for rep 1's.
-* `RepTape`: what the transcript holds for one rep: steps of the kinds of the rep's spine (`repShape`), the proof file's
-  messages (`repMsgs`) and the stream's coin arrays (`coinArr`). A rep's messages and coins alone do not fix its tape;
-  the spine places the coins among the messages (`Spine.tape`).
-* `playsT_of_tape`: a rep's run on its messages and coins (`Plays`) is a run on any such tape (`PlaysT`).
-* `flockInnerCL_rejects_short`: `flockInnerCL` accepts no transcript of at most `r` rounds, the rounds `Inner.game`
-  plays: each of them ends with a coin, and the table ends with the openings' message.
--/
+/-! The compiled inner verifier `flockInnerCL` accepts from both reps' accepting checks with one cap (`inner_accepts_of_reps`). -/
 
 @[expose] public section
 
@@ -35,13 +19,10 @@ open Flock FlockLevel3
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
-/-! ## Runs on one tape compose -/
-
 section game
 
 variable {α β : Type}
 
-/-- **Runs on one tape compose.** A run of `g` to `a`, then a run of `f a`, is a run of `g.bind f`. -/
 theorem playsT_bind {g : Game α} {f : α → Game β} {ts₁ ts₂ : List Game.Step} {a : α} {b : β}
     (h₁ : PlaysT g ts₁ a) (h₂ : PlaysT (f a) ts₂ b) : PlaysT (g.bind f) (ts₁ ++ ts₂) b := by
   induction h₁ with
@@ -55,11 +36,8 @@ theorem playsT_map {g : Game α} {ts : List Game.Step} {a : α} (f : α → β) 
   rw [List.append_nil] at h'
   exact h'
 
-/-- The steps `ts`, each after the prover's choice `true`: the first of two interleaved interactions moves. -/
 def firstSteps (ts : List Game.Step) : List Game.Step := ts.flatMap fun s => [.inl ⟨Bool, true⟩, s]
 
-/-- **The first interaction first, on one tape** (`Plays.interleave_first`): while the second interaction has not
-returned, the prover chooses the first at each of its steps; then the second runs alone. -/
 theorem playsT_interleave_first {g₁ : Game α} {g₂ : Game β} {ts₁ ts₂ : List Game.Step} {a : α} {b : β}
     (h₁ : PlaysT g₁ ts₁ a) (h₂ : PlaysT g₂ ts₂ b) (hg₂ : ∀ b', g₂ ≠ .ret b') :
     PlaysT (interleave g₁ g₂) (firstSteps ts₁ ++ ts₂) (a, b) := by
@@ -76,7 +54,6 @@ theorem playsT_interleave_first {g₁ : Game α} {g₂ : Game β} {ts₁ ts₂ :
       | send M k => exact .send true (.coin x ih)
       | coin C k => exact .send true (.coin x ih)
 
-/-- A game of a nonempty exact shape, then anything, does not return at once. -/
 theorem exact_bind_ne_ret {g : Game α} {σ : List Exec.Kind} (h : Exact g σ) (hσ : σ ≠ []) (f : α → Game β) (b : β) :
     g >>= f ≠ .ret b := by
   cases h with
@@ -99,25 +76,17 @@ theorem length_eq_lefts_rights (l : List Game.Step) :
 
 end game
 
-/-! ## A rep's tape -/
-
-/-- A compiled rep starts with the zerocheck's first coin, so it never returns at once. -/
 theorem repC_ne_ret (r : ℕ) (S : Model.Statement) (sch : FlockSoundness.Accounting.Schedule) (hm : 13 ≤ S.m)
     (extra : List (Claim 𝔽 S.m)) (p : PendL 𝔽 Dig) : repC (D := Dig) execArith r S sch hm extra ≠ .ret p := by
   unfold repC
   exact exact_bind_ne_ret (zerocheck_exact execArith S.m) (by simp [zcShape]) _ _
 
-/-- **Rep `r`'s tape in the inner transcript**: steps whose kinds, in order, are a prefix of the rep's spine
-(`repShape`, at the statement's dimensions, `n` extra claims and the schedule), whose messages are the proof file's
-(`repMsgs`) and whose coin steps are the stream's coin arrays, as `coinArr` reads them. -/
 def RepTape (st : Setup) (S : Model.Statement) (sch : Flock.Schedule) (n : ℕ) (p : Proof) (s : StreamRec)
     (ts : List Game.Step) : Prop :=
   ts.map kindOf <+: repShape 𝔽 𝕂 Dig S.m S.kLog n (schedOf sch) ∧
     ts.filterMap Sum.getLeft? = repMsgs st sch (2 + n) p capDig ∧
     ts.filterMap Sum.getRight? = (s.rounds.toList.map (·.coins)).map (coinArr fOf)
 
-/-- **A rep's run on its messages and coins is a run on one tape** that takes steps of its spine's kinds, with those
-messages and coin steps: `repShape` places the coins among the messages. -/
 theorem playsT_of_tape (r : ℕ) (S : Model.Statement) (sch : FlockSoundness.Accounting.Schedule) (hm : 13 ≤ S.m)
     (extra : List (Claim 𝔽 S.m)) {ms : List Game.Msg} {cs : List (Array F128)} {pend : PendL 𝔽 Dig}
     {ts : List Game.Step} (h : Plays fOf (repC execArith r S sch hm extra) ms cs pend)
@@ -138,17 +107,9 @@ theorem playsT_of_tape (r : ℕ) (S : Model.Statement) (sch : FlockSoundness.Acc
   rw [e]
   exact hp
 
-/-! ## The inner transcript -/
-
-/-! ## The inner statement's leaf -/
-
-/-- **The inner statement's leaf**, `Refine.leafPlain`: SHA-512 of the row's encoding, its salt ignored (a recursive
-session's inner statement has `flock-leaf/sha512-unsalted` leaves, `Tags.withPlainLeaves`; `MerkleScheme.sha512`'s
-`leaf`, `Refine.leafPlain_leaf`). -/
+/-- A recursive session's inner statement has `flock-leaf/sha512-unsalted` leaves, so its leaf ignores the salt. -/
 abbrev leafPlain : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512 := Refine.leafPlain
 
-/-- **The table's steps after the link points**, as `Plays.interleave_first` schedules them: rep 0's steps, each after
-the prover's choice `true`; then rep 1's; then the openings with their salts. -/
 def tableTape (ts₀ ts₁ : List Game.Step) (os : Opens 𝔽 Dig × Salts (List UInt8)) : List Game.Step :=
   firstSteps ts₀ ++ ts₁ ++ [.inl ⟨Opens 𝔽 Dig × Salts (List UInt8), os⟩]
 
@@ -157,12 +118,6 @@ section target
 variable {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
 
 open Classical in
-/-- **The compiled inner verifier accepts from both reps' accepting checks** (the last step of `StagesAccept`).
-When both reps of table `i` accept with one cap (`verifyRep`, with `table_tableAfterL`'s side conditions) on the
-class's hidden statement `S`, and the inner transcript `t`'s steps on the schedule are the level-0 cap of rep 0's proof
-file, the link points `pts`, the reps' tapes (`RepTape`, at the proof files `p₀ p₁` and the streams `s₀ s₁` the checks
-read) in `tableTape`'s order, and the proof files' openings and salts, then `flockInnerCL` at the verifier's own
-definitions accepts `t`. -/
 theorem inner_accepts_of_reps (cls : HClass) (regs : List (Region cls.kLog (cls.m - cls.kLog))) (M : Hidden cls)
     (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hS : M.toStatement regs = S)
     (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S)
@@ -208,13 +163,10 @@ theorem inner_accepts_of_reps (cls : HClass) (regs : List (Region cls.kLog (cls.
 
 end target
 
-/-! ## The round count -/
-
 section rounds
 
 variable {α β : Type}
 
-/-- A run of `g.bind f` is a run of `g`, then a run of `f` at its output. -/
 theorem playsT_bind_inv {g : Game α} {f : α → Game β} {ts : List Game.Step} {b : β} (h : PlaysT (g.bind f) ts b) :
     ∃ ts₁ ts₂ a, ts = ts₁ ++ ts₂ ∧ PlaysT g ts₁ a ∧ PlaysT (f a) ts₂ b := by
   induction g generalizing ts with
@@ -237,7 +189,6 @@ theorem playsT_bind_inv {g : Game α} {f : α → Game β} {ts : List Game.Step}
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {D Sl : Type}
 
 omit [Fintype K] in
-/-- Every run of `tableAfterL` ends with the openings' message. -/
 theorem tableAfterL_last (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (Lf : Merkle.Leaf (List F) Sl D H) (S : Model.Statement) (sch : FlockSoundness.Accounting.Schedule) (hm : 13 ≤ S.m)
     (ptLocal mPts : ℕ) (cap₀ : Cap D) (pts : Fin 2 → Fin mPts → F) {ts : List Game.Step} {out : OutCL F D Sl}
@@ -255,7 +206,6 @@ theorem tableAfterL_last (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc 
 variable {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
 
 omit [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)] in
-/-- On a nonempty transcript of rounds `j, …` that all sampling coins, the schedule's last step is a coin. -/
 theorem schedSteps_last : ∀ (j : ℕ) (t : List (List (SMsg T) × ((k : Fin r) → CT k))), t ≠ [] →
     j + t.length ≤ r → ∃ l x, schedSteps T CT j t = l ++ [.inr x]
   | _, [], h, _ => absurd rfl h
@@ -269,8 +219,6 @@ theorem schedSteps_last : ∀ (j : ℕ) (t : List (List (SMsg T) × ((k : Fin r)
       rw [schedSteps, hx]
       simp [hj]
 
-/-- **`flockInnerCL` accepts no transcript of at most `r` rounds.** On such a transcript the schedule's last step is a
-coin, and every run of the table after the link points ends with the openings' message. -/
 theorem flockInnerCL_rejects_short (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (Lf : Merkle.Leaf (List F) Sl D H) (cls : HClass) (regs : List (Region cls.kLog (cls.m - cls.kLog)))
     (sch : FlockSoundness.Accounting.Schedule) (M : Hidden cls) (t : List (List (SMsg T) × ((k : Fin r) → CT k)))

@@ -2,12 +2,7 @@ module
 
 public import Flock.Transcript
 
-/-!
-Level 3, L3-S (`Flock.Transcript`, `verity/protocols/proofs/flock/prover/agreement/README.md` stage 1c's slot): session binding at the transcript. A squeeze that succeeds
-returns exactly the recorded coins of the next round, and only after the framed bytes it answers are that round's retained
-bytes (or hash to its recorded digest when the server kept none). So every coin the verifier reads came after, and is bound
-to, the prover's messages before it.
--/
+/-! Level 3 session binding at the transcript: a squeeze that succeeds returns the next round's recorded coins only after the prover's framed bytes for that round. -/
 
 @[expose] public section
 

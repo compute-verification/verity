@@ -21,24 +21,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import VCVio.Prelude.Core
 
-/-!
-# The bridge over V*'s circuits as core code
-
-`VStar` (`verity/protocols/proofs/recursion/verifier/vstar_cli`) is the executable Lean that writes V*'s circuit files: each
-`RecOpen{LANES, H}` statement and each `InnerRepCheck{S}` part, byte for byte as `verity_flock`'s builders write them.
-This file proves that its builders are the ones this bridge reasons about, and restates the bridge's theorems over
-`VStar`'s definitions, so that they are about the code that writes the circuit files and not about a copy of it.
-
-* The gadgets. `VStar` reads its ports and operands from arrays where the bridge reads lists, and computes each operand
-  once, before the residuals; the forms and the rows are the same. `residualForms_eq`, at an S whose products' operands
-  are among its operands (`OpsInRange`, which `VStar.checkS` asks of every S), `climbRow_eq` and `recOpen_eq`.
-* The unit. `VStar.recOpenUnit` takes one input of all the ports' words and cuts it into the five ports; it is
-  `recOpenNet` at `ports LANES H` (`recOpenUnit_ok`). Its layout, ports of 16 bits, has `recOpenLaid`'s rows, constant and
-  output columns (`laidRows_recOpenUnit`, `outStart_recOpenUnit`): `layout` reads the input ports only through their total.
-* The theorems. `sound_residualForms`, `sound_climbRow`, `sound_recOpen` (rows hold, so the outputs are the
-  verifier's), `laid_recOpenUnit` (the laid-out unit's rows hold, so its output columns are) and `unit_recOpenUnit` (a copy
-  of the unit in a unit of any partition), each over `VStar`'s definitions.
--/
+/-! The bridge's builders are those of `VStar`, the executable Lean that writes V*'s circuit files, and the bridge's theorems restated over `VStar`'s definitions. -/
 
 @[expose] public section
 
@@ -50,8 +33,6 @@ open Flock FlockSoundness.Discharge.Hm
 theorem getD_toArray {α : Type} (l : List α) (i : ℕ) (d : α) : l.toArray.getD i d = l.getD i d := by
   simp only [Array.getD, List.size_toArray, List.getD]
   split <;> simp_all
-
-/-! ## SHA-512 and the climb -/
 
 theorem lenBytes_eq : VStar.lenBytes = lenBytes := rfl
 theorem zeroPad_eq : VStar.zeroPad = zeroPad := rfl
@@ -87,13 +68,9 @@ theorem climbFrom_eq (d : List Lin) : ∀ (h : ℕ) (cur : List Lin) (ss : List 
 
 theorem sibForms_eq : VStar.sibForms = sibForms := rfl
 
-/-- **V*'s climb is the bridge's.** -/
 theorem climbRow_eq (H : ℕ) (row aux d : List Lin) : VStar.climbRow H row aux d = climbRow H row aux d := by
   simp only [VStar.climbRow, climbRow, shaFrom_eq, iv_eq, sibForms_eq, climbFrom_eq]
 
-/-! ## The residuals -/
-
-/-- `VStar`'s S read as the bridge's. -/
 def term : VStar.Term → Term
   | .w i => .w i
   | .v i => .v i
@@ -103,7 +80,7 @@ def res (r : VStar.Res) : Res := ⟨r.mul, r.add.map term⟩
 
 def gfS (S : VStar.GfS) : GfS := ⟨S.ops.map (·.map term), S.res.map res⟩
 
-/-- Every product's operands are among `S.ops` (`VStar.checkS`'s last check). -/
+/-- `VStar.checkS`'s last check. -/
 def OpsInRange (S : VStar.GfS) (r : VStar.Res) : Prop := ∀ p ∈ r.mul, p.1 < S.ops.length ∧ p.2 < S.ops.length
 
 theorem addL_eq : ∀ f g : List Lin, VStar.addL f g = addL f g
@@ -163,7 +140,6 @@ theorem residualsGo_eq (S : VStar.GfS) (W V : List Lin) : ∀ rs : List VStar.Re
     simp only [VStar.residualsGo, residualsGo, List.map_cons, residual_eq S W V r (h r List.mem_cons_self),
       residualsGo_eq S W V rs fun r' hr' => h r' (List.mem_cons_of_mem _ hr')]
 
-/-- **V*'s residuals are the bridge's**, at an S whose products' operands are among its operands. -/
 theorem residualForms_eq (S : VStar.GfS) (W V : List Lin) (hS : ∀ r ∈ S.res, OpsInRange S r) :
     VStar.residualForms S W.toArray V.toArray = residualForms (gfS S) W V := by
   simp only [VStar.residualForms, residualForms, residualsGo_eq S W V S.res hS, gfS]
@@ -185,16 +161,11 @@ theorem consStructure_inRange (LANES : ℕ) :
     omega
   · omega
 
-/-- **V*'s opening is the bridge's.** -/
 theorem recOpen_eq (LANES H : ℕ) (row aux acc coef dirs : List Lin) :
     VStar.recOpen LANES H row aux acc coef dirs = recOpen LANES H row aux acc coef dirs := by
   simp only [VStar.recOpen, recOpen, residualForms_eq _ _ _ (consStructure_inRange LANES), consStructure_eq,
     climbRow_eq]
 
-/-! ## The gadgets' guarantees over `VStar` -/
-
-/-- **V*'s residual gadget computes the residuals** (`FlockVBridge.sound_residualForms`), at an S whose products'
-operands are among its operands. -/
 theorem sound_residualForms (S : VStar.GfS) (W V : List Lin) (hS : ∀ r ∈ S.res, OpsInRange S r) :
     Sound (VStar.residualForms S W.toArray V.toArray) fun z out => out.length = 128 * S.res.length ∧
       ∀ w v : ℕ → F128, (∀ q, bit z W q = wbit w q) → (∀ q, bit z V q = wbit v q) →
@@ -210,7 +181,6 @@ theorem sound_residualForms (S : VStar.GfS) (W V : List Lin) (hS : ∀ r ∈ S.r
     simp only [gfS, List.getElem_map] at h'
     exact h'
 
-/-- **V*'s opening climbs the row's leaf to the node `out` names** (`FlockVBridge.sound_climbRow`). -/
 theorem sound_climbRow (ms : MerkleScheme) (hms : ∀ l r, ms.node l r = Sha512.hash (l ++ r)) (H : ℕ)
     (row aux d : List Lin) :
     Sound (VStar.climbRow H row aux d) fun z out => ∀ (rb : ByteArray) (idx : ℕ) (ss : List ByteArray),
@@ -220,7 +190,6 @@ theorem sound_climbRow (ms : MerkleScheme) (hms : ∀ l r, ms.node l r = Sha512.
   rw [climbRow_eq, sibForms_eq]
   exact FlockVBridge.sound_climbRow ms hms H row aux d
 
-/-- **V*'s opening computes the climb and the consistency term** (`FlockVBridge.sound_recOpen`). -/
 theorem sound_recOpen (ms : MerkleScheme) (hms : ∀ l r, ms.node l r = Sha512.hash (l ++ r)) (LANES H : ℕ) (hH : H ≤ 32)
     (row aux acc coef dirs : List Lin) :
     Sound (VStar.recOpen LANES H row aux acc coef dirs) fun z o =>
@@ -235,9 +204,6 @@ theorem sound_recOpen (ms : MerkleScheme) (hms : ∀ l r, ms.node l r = Sha512.h
   rw [recOpen_eq, sibForms_eq]
   exact FlockVBridge.sound_recOpen ms hms LANES H hH row aux acc coef dirs
 
-/-! ## V*'s `RecOpen` unit -/
-
-/-- `RecOpen{LANES, H}`'s ports in bits as V*'s unit takes them (`VStar.recOpenPorts`, 16 bits a word). -/
 def ports (LANES H : ℕ) : Ports :=
   ⟨16 * VStar.rowWords LANES, 16 * VStar.auxWords H, 16 * VStar.ACC_WORDS, 16 * VStar.coefWords LANES,
     16 * VStar.DIRS_WORDS⟩
@@ -251,7 +217,6 @@ theorem vars_drop (k a b : ℕ) : (vars k (a + b)).drop a = vars (k + a) b := by
   · intro i _ _
     simp [vars, Nat.add_assoc]
 
-/-- Consecutive slices of `16 w` variables from `k`, one for each `w` of `ws`. -/
 def varSlices : ℕ → List ℕ → List (List Lin)
   | _, [] => []
   | k, w :: ws => vars k (16 * w) :: varSlices (k + 16 * w) ws
@@ -267,8 +232,6 @@ theorem run_input_bind {β : Type} (n : ℕ) (f : List Lin → M β) :
   simp only [StateT.run, StateT.bind, input, vars, St.empty, Nat.zero_add]
   rfl
 
-/-- **V*'s unit is the bridge's net**: its builder's state is `recOpenNet`'s at `ports LANES H`, its outputs
-`recOpenOuts`, its input ports `VStar.recOpenPorts` and its output ports `out ‖ acc_out`. -/
 theorem recOpenUnit_ok {LANES H : ℕ} {U : VStar.UnitC} (h : VStar.recOpenUnit LANES H = .ok U) :
     U.st = ((recOpenNet LANES H (ports LANES H)).run St.empty).2 ∧
       U.outs = (recOpenOuts LANES H (ports LANES H)).toArray ∧
@@ -310,7 +273,6 @@ theorem recOpenUnit_H {LANES H : ℕ} {U : VStar.UnitC} (h : VStar.recOpenUnit L
   | error e => simp [hc, bind, Except.bind] at h
   | ok x => exact checkRecOpen_ok hc
 
-/-- A unit's layout, when `VStar.UnitC.laid` gives one: `layout` with ports of 16 bits. -/
 theorem laid_ok {U : VStar.UnitC} {l : Laid} (h : U.laid = .ok l) :
     l = layout U.st (Array.replicate U.inWords 16) (Array.replicate U.outWords 16) U.outs := by
   unfold VStar.UnitC.laid at h
@@ -334,7 +296,6 @@ theorem foldl_add_replicate (k : ℕ) : ∀ (n a : ℕ), (List.replicate n k).fo
 theorem foldl_replicate (n k : ℕ) : (Array.replicate n k).foldl (· + ·) 0 = n * k := by
   rw [← Array.foldl_toList, Array.toList_replicate, foldl_add_replicate, Nat.zero_add]
 
-/-- `layout`'s rows and constant read the input ports only through their total. -/
 theorem layout_rows (st : St) {b₁ b₂ : Array ℕ} (outBits : Array ℕ) (outs : Array Lin)
     (h : b₁.foldl (· + ·) 0 = b₂.foldl (· + ·) 0) :
     (layout st b₁ outBits outs).ra = (layout st b₂ outBits outs).ra ∧
@@ -353,7 +314,6 @@ theorem outWords_recOpenUnit {LANES H : ℕ} {U : VStar.UnitC} (hU : VStar.recOp
   rw [foldl_replicate, VStar.UnitC.outWords, (recOpenUnit_ok hU).2.2.2]
   rfl
 
-/-- The rows of V*'s laid-out unit, where they hold, are `recOpenLaid`'s at `ports LANES H`. -/
 theorem laidRows_recOpenUnit {LANES H : ℕ} {U : VStar.UnitC} {l : Laid} (hU : VStar.recOpenUnit LANES H = .ok U)
     (hl : U.laid = .ok l) {v : ℕ → Bool} (h : LaidRows l (inRowsOf (Array.replicate U.inWords 16)) v) :
     LaidRows (recOpenLaid LANES H (ports LANES H) (Array.replicate U.outWords 16)) (inRowsOf (ports LANES H).bits) v := by
@@ -374,10 +334,6 @@ theorem outStart_recOpenUnit {LANES H : ℕ} {U : VStar.UnitC} (hU : VStar.recOp
   rw [← (recOpenUnit_ok hU).1]
   simp only [outStart, inRowsOf, inWords_recOpenUnit hU]
 
-/-- **V*'s laid-out `RecOpen` unit computes the climb and the consistency term** (`laid_recOpen`): whenever its rows hold
-at `v`, if its input columns hold the row, `acc`, the coefficients, the siblings and the position's bits, its output
-columns hold the verifier's climb and 64 zero bytes, then the consistency term at `k = 0, 1` and the rest of
-`acc`. -/
 theorem laid_recOpenUnit (ms : MerkleScheme) (hms : ∀ l r, ms.node l r = Sha512.hash (l ++ r)) {LANES H : ℕ}
     {U : VStar.UnitC} (hU : VStar.recOpenUnit LANES H = .ok U) {l : Laid} (hl : U.laid = .ok l) (v : ℕ → Bool)
     (hout : U.outs.size ≤ 2048) (h : LaidRows l (inRowsOf (Array.replicate U.inWords 16)) v)
@@ -415,10 +371,6 @@ section Unit
 
 open FlockSoundness FlockSoundness.Audit
 
-/-- **A copy of V*'s laid-out `RecOpen` unit, in a unit of any partition, computes the climb and the consistency term**
-(`unit_recOpen`). Let the verifier build `net` from the layout of `VStar.recOpenUnit LANES H` (`netOf`), and let unit `u`
-be an instance of `k` stacked copies of the net's rows, the transcript `X` carrying 1 at the stack's constant. Then at
-copy `j`'s column values (`copyVal`), `laid_recOpenUnit` holds. -/
 theorem unit_recOpenUnit {C : Verity.Boolean.Circuit} {n : ℕ} {P : Partition C n} {u : Fin n} {net : Flock.Net} (hB : Built net)
     {k : ℕ} (I : P.IsRowsUnit u ((Rows.ofNet hB).stack k)) (X : Fin C.N → Bool) {j : ℕ} (hj : j < k)
     (hone : X (I.wire ((Rows.ofNet hB).stack k).one) = true)

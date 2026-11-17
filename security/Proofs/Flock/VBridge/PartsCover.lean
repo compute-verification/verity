@@ -21,17 +21,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.ExecSample
 import VCVio.Prelude.Core
 
-/-!
-# The parts' residuals cover S's
-
-The verifier cuts V*'s algebra S into parts (`RecResiduals.groups`) and pins each part's unit (`RecResiduals.check`).
-When every part's residuals are zero, so is every residual of S, and `GfResiduals`' semantics on S (`residuals`, which
-E's stage theorems read) returns them:
-
-* `groups_cover`: `groups` refuses unless its parts hold each of S's residuals, so every residual is some part's.
-* `residuals_zero_of_parts`: a part's residual `k` is S's residual `R[k]` (`PartS.res_partS`), at part ports reading S's
-  ports where the part's index says; with `groups_cover`, every residual of S is zero.
--/
+/-! When every part's residuals are zero, so is every residual of S (`residuals_zero_of_parts`). -/
 
 @[expose] public section
 
@@ -40,8 +30,6 @@ namespace FlockVBridge.Parts
 open Flock FlockVBridge.OfVStar FlockVBridge.PartS
 open Flock.RecResiduals (groups partS)
 open Flock.RecAlgebra (residuals resValue el resValue_toV)
-
-/-! ## Every residual is some part's -/
 
 theorem mem_foldl_append {α : Type} (x : ℕ) :
     ∀ (gs : List (Array ℕ × α)) (acc : Array ℕ),
@@ -52,7 +40,6 @@ theorem mem_foldl_append {α : Type} (x : ℕ) :
     simp only [Array.mem_append, List.mem_cons, exists_eq_or_imp]
     tauto
 
-/-- **Every residual of S is in a part**: `groups` refuses unless the parts' residuals, sorted, are `0 … n - 1`. -/
 theorem groups_cover {S : RecAlgebra.GfS} {sizes : Array ℕ} {gs : Array (Array ℕ × Array ℕ × Array ℕ)}
     (h : groups S sizes = .ok gs) {i : ℕ} (hi : i < S.res.size) :
     ∃ j, ∃ hj : j < gs.size, ∃ k, ∃ hk : k < gs[j].1.size, gs[j].1[k] = i := by
@@ -75,14 +62,8 @@ theorem groups_cover {S : RecAlgebra.GfS} {sizes : Array ℕ} {gs : Array (Array
       obtain ⟨k, hk, hk'⟩ := Array.getElem_of_mem hx
       exact ⟨j, hj, k, hk, hk'⟩
 
-/-! ## S's residuals from its parts' -/
-
 theorem vS_eq (S : RecAlgebra.GfS) : vS S = S.toV := rfl
 
-/-- **Every residual of S is zero when every part's is**: at S's parts (`groups`), when each part's S (`partS`) has
-every residual zero on the part's ports, which read S's ports `w`, `v` where the part's index says (its `w` element `k`
-is `w`'s element `wIdx[k]`, its `v` element `k` is `v`'s `V[k]`), `GfResiduals` on S returns residuals that are all
-zero. -/
 theorem residuals_zero_of_parts {S : RecAlgebra.GfS} (hS : S.BitsOk) {sizes : Array ℕ}
     {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hg : groups S sizes = .ok gs) {w v : Array F128}
     (hw : w.size = S.nw) (hv : v.size = S.nv)

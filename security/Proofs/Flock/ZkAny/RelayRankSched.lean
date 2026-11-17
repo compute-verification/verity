@@ -9,22 +9,7 @@ public import Proofs.Flock.Claims.Complete.ZkTables.Scope
 public import Proofs.Flock.Claims.Complete.ZkTables.Table
 public import Proofs.Flock.Claims.ZK.FrameBeta
 
-/-!
-# The scheduled round where the model's rank stop fails
-
-Where the coins after the loop's state at a rep's round leave a state at which the rank stop fails, the round is the
-algebraic phase's last plus one (`Ranked.repState_rankFails`), and the model's scheduled round there, on the loop's own
-table, is the opening's first, or the empty round where that table or its schedule is refused:
-
-* `Bind.sched_open`: on as many rounds' coins as the algebraic phase has, a rep's schedule so far holds one round past
-  them (`Count.openStep_end`, `feed_part`).
-* `Loop.tabs_of_live`: each table of a `Live` statement has `m ≥ 14`, `k_log ≥ 6` and the `hm96Sha512` scheme.
-* **`LeanRelease.ofLoop_rank_sched`**: at the loop's own frames, after `e0 :: h1`, whose next round is rep stream
-  `k`'s round `j + 1`, where the coin step leaves a state at which the rank stop fails, the scheduled round is the
-  empty round or the opening's first, at some count: the placeholder's algebraic phase has `j + 1` rounds, the loop's
-  own table's as many (`Ranked.alg_cnt`, `Sched.TabAlike`), and its schedule's round `j + 1` is the opening's first
-  (`Bind.sched_open`, `Bind.sched_pcs`).
--/
+/-! Where the model's rank stop fails, its scheduled round is the empty round or the opening's first (`LeanRelease.ofLoop_rank_sched`). -/
 
 @[expose] public section
 
@@ -38,9 +23,6 @@ namespace Bind
 open FlockComplete.LigLock.Fed (feedR sentQ)
 open Loop
 
-/-- **Past the algebraic phase a rep's schedule has a next round**: on as many rounds' coins as the algebraic phase
-has, the schedule so far holds a round past them, the opening's driver asking for its first (`Count.openStep_end`,
-`feed_part`). -/
 theorem sched_open {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray} {cr : Array (Array F128)} {alg sched : Array (ByteArray × ℕ)}
     (hal : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) dom =
@@ -63,8 +45,6 @@ end Bind
 
 namespace Loop
 
-/-- **The tables of a `Live` statement** have `m ≥ 14`, `k_log ≥ 6` and the `hm96Sha512` scheme
-(`FlockComplete.ZkTables.tables_of_setup`, each table's `ZkTab`). -/
 theorem tabs_of_live {x : Msg} (hx : ZKMal.Masked.Live x) {s0 : _} {spec : SessionSpec} {sts : Array Stmt}
     (hs : FlockDeploy.setupOf true x = some (s0, spec, sts)) {j : ℕ} (hj : j < sts.size) :
     14 ≤ sts[j]!.m ∧ 6 ≤ sts[j]!.c.kLog ∧ sts[j]!.merkle = _root_.Flock.MerkleScheme.hm96Sha512 := by
@@ -83,16 +63,6 @@ namespace LeanRelease
 
 open Loop
 
-/-- **Where the model's rank stop fails, its scheduled round is the empty round or the opening's first**: at the
-loop's own frames on the tables `real`, the loop's own where they answer (`Count.RealTabs`), after `e0 :: h1`, whose
-next round is rep stream `k`'s round `j + 1`, at a setup passing `sizesOk` whose table `k / 2` has `m ≥ 14`,
-`k_log ≥ 6` and the `hm96Sha512` scheme, where the coin step leaves `m` and the rank stop fails at `m`, the model's
-scheduled round is the empty round, where the loop's own table or its schedule is refused, or the opening's first, at
-some count. The coin step is the loop's state at the round (`progOf_at`) taking the coins, so `j + 1` is the
-placeholder's algebraic phase's round count (`Ranked.repState_rankFails`); the loop's own table is of the placeholder's
-setup (`Count.real_tabAlike`), so its algebraic phase has as many rounds (`Ranked.alg_cnt`), and its schedule so far on
-the rep's `j + 1` rounds' coins has the opening's first at round `j + 1` (`Bind.sched_open`, `Bind.sched_pcs`), which
-`schedOf` schedules (`schedOf_at`). -/
 theorem ofLoop_rank_sched (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))

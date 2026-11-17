@@ -19,72 +19,15 @@ public import Proofs.Flock.Claims.Complete.ZkTables.Count
 public import Proofs.Flock.SessionLoop.Tables
 import Proofs.Flock.Claims.ZK.Reference
 
-/-!
-# What the loop's frames and the model hold at a frame round
-
-At a frame round's slot `slotCase_round` and `loopKept_round` read `RoundFacts`. Here it is from the relay's invariant
-at the deployed loop (`LoopFacts`, `LoopJ`) and what the loop read for the round (`LoopRead`'s round clause), the
-model's release being the loop's own frames':
-
-* `LoopModel.Deployed`: the model's release is `LeanRelease.ofLoop` on the statement's setup, whose rep streams' names
-  are distinct and two a table statement (`helloOf_some`), with a message past its last round.
-* `RealAt`: the model's tables and salts (`real`) are the loop's. **`realAt_of`**: at the loop's own tables
-  (`Loop.realOf src`), the loop handed `src`'s bytes (`M.src`), it holds where the table each of the session's level 0s
-  gives is `src`'s and the salts the loop keeps are the ones it was handed (`SaltsSrc`, `LoopRead`'s round clause).
-  **`realAt_slot`**: it holds at a frame round's slot, from `LoopJ` (`realAt_h0`) and `SaltsSrc`.
-* `roundPlace_find`: the frame `roundPlace` readies a round on is one the loop's frames hold.
-  `roundPlace_prior_size`: at rep 1's first round, rep 0's frame holds the rep's algebraic phase's coins.
-* `PlaceFacts`: what the model holds at the place `roundPlace` readies a round at: its scheduled round, its masking
-  state but for `stopped`, and where `v` fails the crossing. `placeSt_seen`: its masking state at a round of a stream
-  seen, from the rep's `SameInv`. **`placeSched_later`**: its scheduled round past a stream's first round, from
-  `StreamAt` and `RealAt`, or `placeOf` places the round at the inner proof's own. **`placeSched_seen`**: the same at
-  a round of a stream seen, from `LoopJ`. **`placeFacts_seen`**: `PlaceFacts` at a round of a stream seen, given the
-  inner proof's own place and the crossing. **`placeSched_first`**: `PlaceFacts.sched` at a stream's first round, from
-  `LoopJ`, `RealAt` and the model's answer there. **`placeSt_first0`**: `PlaceFacts.st` at a rep 0 stream's first
-  round, the fresh frame's start (`roundPlace_switch0`). **`placeSt_first1`**: the same at rep 1, the frame's run on
-  rep 0's algebraic-phase words (`roundPlace_switch1`), rep 0's stream being seen (`roundPlace_prior_size`).
-  **`placeFacts_slot`**: `PlaceFacts` at a frame round's slot, given the crossing and, at a stream seen, the inner
-  proof's own place.
-* `roundPlace_scheduled_later`: past a stream's first round, on a frame keeping its schedule so far on the loop's
-  table, extras and salts, which are the model's, the round's place is the model's scheduled round, or the schedule
-  has no round there (the inner proof's own).
-* `slot_masked`: a frame round's slot is the model's masked round below the `Finish`.
-* `rep_seen`: at a frame round's slot, the stream is seen exactly where the model's last round was the same rep's.
-* **`answered_of_round`**: the model answers a frame round's slot's history where the loop took the coins so far
-  (`LoopModel.TookAt`), given the next rep's start at a stream's first round and, at a stream seen, the round's place
-  the model's scheduled round, the empty round or the opening's first wherever the rank stop fails
-  (`rank_of_release`).
-* **`rank_sched_deployed`**: at a round of a stream seen of the deployed loop on a `Live` statement, wherever the rank
-  stop fails at the model's coin-step state, the model's scheduled round is the empty round or the opening's first
-  (`LeanRelease.ofLoop_rank_sched`): `answered_of_round`'s `hal`.
-* **`roundFacts_loop`**: `RoundFacts` at a frame round's slot of the deployed loop, given the model's answer there and
-  `PlaceFacts` at the round's place.
-* `LeanRelease.CrossPasses`: the named hypothesis on the Rust release that its checks (`cross`) fail no frame round
-  below the `Finish` that the Lean frame passes. It becomes provable once the Rust crossing check is mirrored into the
-  Lean ZK server code, which would fix `cross`. `OwnSched`: the inner proof's own place at a round of a stream seen is
-  the model's scheduled round, at each slot. `FreshStart`: at a stream's first round that goes out, the model's
-  next-rep state is a masking state, at each slot.
-* **`answered_deployed`**: the model answers each frame round's slot's history of the deployed loop where the loop
-  took the coins so far, given `CrossPasses`, `OwnSched` and `FreshStart`.
-* **`roundFacts_deployed`**: `RoundFacts` at each frame round's slot of the deployed loop (`loopKept_round`'s `hA`),
-  given `CrossPasses`, `OwnSched` and `FreshStart`, the model's answer there by `answered_deployed` at what the loop
-  took (`LoopJ.took`).
--/
+/-! What the loop's frames and the model hold at a frame round of the deployed loop (`roundFacts_deployed`), under the named hypotheses `CrossPasses`, `OwnSched` and `FreshStart`. -/
 
 @[expose] public section
 
 namespace Claims.ZKServer.LeanRelease
 
-/-- **Rust's checks fail no frame round the Lean frame passes**: at every frame round below the `Finish` (masked, before
-`last`), at every statement, witness, tape, history and worker's value, where Rust's own checks on the worker's rep
-(`cross`: the worker failing, the device's level-0 root, the constraints on the pads, the end check on the returned
-proof and Rust's masking cross-checks) fail the value, the Lean frame's pass decision (`pass`) fails it too. A named
-hypothesis on the Rust release: at the deployed loop's release (`ofLoop`) `cross` is the release's own, which no Lean
-code fixes, and `cross`'s contract (each check can only fail a round more) does not give it. It is stated at every
-history, with no guard on the rounds before it: Rust stops a session at its first failing round, so a history with an
-earlier failing round is never run, and the Lean model of the release is free there. The unguarded form constrains the
-real Rust release no more than a guarded one. It becomes provable once the Rust crossing check is mirrored into the
-Lean ZK server code, which would fix `cross`. -/
+/-- A named hypothesis on the Rust release: no Lean code fixes `cross`, and `cross`'s contract (each check can only fail a
+round more) does not give it. It is stated at every history, unguarded: Rust stops a session at its first failing
+round, so the unguarded form constrains the Rust release no more than a guarded one. -/
 def CrossPasses {W R : Type} (L : LeanRelease W R) : Prop :=
   ∀ (x : Msg) (w : W) (ρ : R) (h : List (Msg × Msg)) (v : Msg), L.kindAt x h.length = .masked →
     h.length < L.last x → L.cross x h.length w ρ h v = false → L.pass x w ρ h v = false
@@ -98,10 +41,6 @@ open _root_.Flock (V SessionSpec Stmt)
 open _root_.Flock.ZkServer.Frames (Sessions Rep)
 open _root_.Flock.ZkServer.Frame (Masker Place)
 
-/-- **The model's run is the deployed loop's**: its release is the loop's own frames' (`LeanRelease.ofLoop`) at the
-tables `T`, the release `L₀` and the tables' samples `real`, the statement sets up as `(s0, spec, sts)`, the setup's rep
-streams' names are distinct and two a table statement (what `helloOf_some` reads off a session's `Hello`), and the run
-has a message past its last round. -/
 structure LoopModel.Deployed {T : ZKMal.CoinLayer.TableData}
     (M : LoopModel Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand))
@@ -117,7 +56,6 @@ structure LoopModel.Deployed {T : ZKMal.CoinLayer.TableData}
   sizes : spec.repStreams.size = 2 * sts.size
   next : M.L.last M.x < M.nN M.x
 
-/-- **The frame `roundPlace` readies a round on is one the loop's frames hold.** -/
 theorem roundPlace_find {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r : Nat}
     {dom content : ByteArray} {n : Nat} {q : Rep} {pc : Place} {f : Bool} {nd : Option String}
     (h : _root_.Flock.ZkServer.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pc, f, nd)) :
@@ -129,8 +67,6 @@ theorem roundPlace_find {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots}
   · exact ⟨j, p, rfl⟩
 
 set_option maxHeartbeats 1000000 in
-/-- **At rep 1's first round rep 0's frame holds the rep's algebraic phase's coins**: `roundPlace` refuses rep 1's
-first round before rep 0's algebraic phase ended. -/
 theorem roundPlace_prior_size {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i j j0 : Nat}
     {dom content : ByteArray} {n : Nat} {p p0 p' q : Rep} {pl : Place} {f : Bool} {nd : Option String}
     (hf : R.find sid i 1 = some (j, p))
@@ -153,9 +89,6 @@ theorem roundPlace_prior_size {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.
       | exact absurd (by assumption) throw_ne_ok
   · exact hge
 
-/-- **The model's tables and salts are the loop's**, at the loop `σ` for session `sid`: at each rep `r` of each table
-`i` of the session's entry, the model's samples for rep stream `2 * i + r` (`real`) are the table the loop's level 0 for
-the table gives, with the salts for levels ≥ 1 the loop holds for the rep wherever it holds some. -/
 def RealAt {T : ZKMal.CoinLayer.TableData}
     (M : LoopModel Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand))
@@ -170,8 +103,6 @@ def RealAt {T : ZKMal.CoinLayer.TableData}
     ∃ hi, real M.x M.w M.ρ (2 * i + r) = .ok (t, hi) ∧ ∀ r0 q0 hi',
       σ.R.salts.find? (fun x => x.1 == l0.root && x.2.1 == r) = some (r0, q0, hi') → hi' = hi
 
-/-- **The loop's own tables' salts are the source's**: where `Loop.realOf src` gives a rep stream a table and salts,
-the salts are the ones `src` gives it. -/
 theorem realOf_hi {R : Type}
     {src : Msg → Claims.Flock.Wit → R → Nat → V (Array _root_.Flock.F128 × ByteArray × Array ByteArray)}
     {x : Msg} {w : Claims.Flock.Wit} {ρ : R} {k : Nat} {t : _root_.Flock.ZkServer.Finish.Tab}
@@ -192,10 +123,6 @@ theorem realOf_hi {R : Type}
           rw [h.2]
   · cases h
 
-/-- **`RealAt` at the loop's own tables** (`Loop.realOf src`), where the loop's host and operating system hand it
-`src`'s bytes at the model's statement, witness and tapes (`M.src`): where each table of the session's entry that its
-level 0 gives is the one `Loop.realOf src` gives the table's reps (the level-0 half), and the salts the loop keeps are
-the ones it was handed (`SaltsSrc`), the model's tables and salts are the loop's (`realOf_hi`). -/
 theorem realAt_of {T : ZKMal.CoinLayer.TableData}
     {M : LoopModel Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
@@ -220,13 +147,6 @@ theorem realAt_of {T : ZKMal.CoinLayer.TableData}
   simp only [Except.ok.injEq, Prod.mk.injEq] at hs'
   exact hs'.2.2
 
-/-- **Past a stream's first round, the round's place is the model's scheduled round**, or the schedule so far has no
-round there (the inner proof's own): at the loop's own frames, after the history `e0 :: h1` whose next round is table
-`i`'s rep `r`'s `j + 2`-th, where the rep's frame keeps its schedule so far (`Loop.RepInv`) on the loop's table, the
-session's extras at the model's link and the salts the loop holds where `placeOf` reads them, which are the model's
-(`real`), and holds the history's words for the rep's rounds so far, `roundPlace`'s place is the schedule's at the
-frame's next round (`Loop.placeOf_sched`, `roundPlace_later_of`), the model's scheduled round there
-(`scheduled_bytes`). -/
 theorem roundPlace_scheduled_later (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand))
@@ -301,12 +221,6 @@ theorem roundPlace_scheduled_later (T : ZKMal.CoinLayer.TableData)
       rw [hpc, hb]
     · cases hpc
 
-/-- **At a stream's first round, the round's place is the model's scheduled round**, or the schedule so far has no
-round there: after the history `e0 :: h1` whose next round is table `i`'s rep `r`'s first, on the rep's fresh frame,
-which `withAlg` gives its algebraic phase on the loop's level 0, whose root is its table's commitment's cap, at the
-loop's table, the session's extras at the model's link and the salts the loop holds where `placeOf` reads them, which
-are the model's (`real`), `roundPlace`'s place is the schedule's first (`roundPlace_first_of`, `repInv_withAlg`,
-`Loop.placeOf_sched`), the model's scheduled round there (`scheduled_bytes`). -/
 theorem roundPlace_scheduled_first (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand))
@@ -406,11 +320,6 @@ theorem roundPlace_scheduled_first (T : ZKMal.CoinLayer.TableData)
       rw [hpc, hb]
     · cases hpc
 
-/-- **What the model holds at the place a frame round is readied at**, for the frame `q` and the place `pc` and
-no-device reason `nd` `roundPlace` returns, the worker's value `v` at the model's history so far, the loop at `σ`: the
-place is the model's scheduled round there, `q`'s masking state the model's before the rank stop (`answeredR`) but for
-`stopped`, where the round takes a device round exactly where the frames haven't stopped session `sid`, `v` fails the
-crossing only where it fails to pass. -/
 structure PlaceFacts {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (v : Claims.Msg) (σ : LoopAt) (q : Rep)
     (pc : Place) (nd : Option String) : Prop where
   sched : pc = .sched ⟨(M.L.scheduled M.x M.w M.ρ (M.hist σ.c)
@@ -419,9 +328,6 @@ structure PlaceFacts {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (v : Claims.
   cross : nd.isSome = σ.R.stopped sid → M.L.cross M.x (M.hist σ.c).length M.w M.ρ (M.hist σ.c) v = false →
     M.L.pass M.x M.w M.ρ (M.hist σ.c) v = false
 
-/-- **`PlaceFacts.st` at a round of a stream seen**: at the slot of a round of `stream`, table `i`'s rep `r`, where
-`LoopFacts` and `LoopJ` hold and `seen` has a round of `stream`, the frame `roundPlace` readies is at the model's
-masking state but for `stopped`, by the rep's `SameInv` (`round_rep`, `sameInv_place`). -/
 theorem placeSt_seen {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
     {seen : List String} {st : State} {pl : Placed} {σ : LoopAt} {stream : String} {n i r : Nat}
     (hsl : slot st pl = some (.round stream n)) (hF : LoopFacts sid spec seen st pl σ)
@@ -435,13 +341,6 @@ theorem placeSt_seen {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Sess
   obtain ⟨j, c, stm, t, xs, hi, pre, ev, -, -, -, -, -, -, hI, -⟩ := hA.1 hk.symm
   exact (sameInv_place hI hfa hrp).2.2.2.1
 
-/-- **`PlaceFacts.sched` past a stream's first round**: at table `i`'s rep `r`'s frame `p`, on the session's entry
-`rel`, its table `name` and level 0 `l0`, keeping `StreamAt` at the model's history `e0 :: h1` whose next round is the
-rep's `j + 2`-th, where the entry is the model's setup at the model's link and the model's tables and salts are the
-loop's (`RealAt`), the round's place is the model's scheduled round, or `placeOf` places it at the inner proof's own.
-The frame keeps its schedule so far at `real`'s salts: before its opening begins only the opening's first round reads
-them, where `placeOf` found the loop's (`roundPlace_salts`, `repInv_hi`); once it began they are the loop's
-(`StreamAt`). `roundPlace_scheduled_later` places the round on that schedule (`sched_of_placeOf`). -/
 theorem placeSched_later {T : ZKMal.CoinLayer.TableData}
     {M : LoopModel Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
@@ -538,12 +437,6 @@ theorem placeSched_later {T : ZKMal.CoinLayer.TableData}
     rw [hsz, h] at hq'
     exact ⟨_, q', hq'⟩
 
-/-- **`PlaceFacts.sched` at a round of a stream seen**: at the slot of a round of `stream`, table `i`'s rep `r`, where
-`LoopFacts` and `LoopJ` hold, `seen` has a round of `stream` and the model's tables and salts are the loop's (`RealAt`),
-the round's place is the model's scheduled round, or `placeOf` places it at the inner proof's own on the rep's frame,
-the session's entry, the table's name and its level 0 (`placeSched_later`): `RepJ` gives the rep's `StreamAt`,
-`SessOn` the entry's setup, `LinkOn` the model's link on it past the `Commit` (`LoopJ.link`, at the rep's level 0),
-and `SeenAt` the round past the stream's first. -/
 theorem placeSched_seen {T : ZKMal.CoinLayer.TableData}
     {M : LoopModel Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
@@ -599,13 +492,6 @@ theorem placeSched_seen {T : ZKMal.CoinLayer.TableData}
   · exact .inl h
   · exact .inr ⟨p, rel, name, l0, hfa, hss, hn, hl0, h⟩
 
-/-- **`PlaceFacts.sched` at a stream's first round**: at the slot of a round of `stream`, table `i`'s rep `r`, where
-`LoopFacts` and `LoopJ` hold, `seen` has no round of `stream`, the model's tables and salts are the loop's (`RealAt`)
-and the model answers the round, the round's place is the model's scheduled round (`roundPlace_scheduled_first`). The
-rep's frame is fresh (`FreshAt`); `roundPlace` read the session's entry, the table's statement, name and level 0 and
-`withAlg`'s frame (`roundPlace_first_ok`); the level 0 is the one the loop drew (`BuiltAt`), so it gives a table as the
-model's placeholder for the round does (`tab_of_placeholder`), whose commitment's cap is its root (`cap_of_sampled`); and
-the algebraic phase has a round (`Loop.rounds_pos`), so the round reads no salts and is not the inner proof's own. -/
 theorem placeSched_first {T : ZKMal.CoinLayer.TableData}
     {M : LoopModel Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
@@ -724,10 +610,6 @@ theorem placeSched_first {T : ZKMal.CoinLayer.TableData}
     rw [hpa] at h
     cases h
 
-/-- **`PlaceFacts.st` at a rep 0 stream's first round**: at the slot of a round of `stream`, table `i`'s rep 0, where
-`LoopFacts` and `LoopJ` hold and `seen` has no round of `stream`, the frame `roundPlace` readies is at the model's
-masking state: the rep's frame is fresh (`FreshAt`), its run on no requests, and the model's state there is the next
-rep's start (`ofLoop_answeredR_switch`), the frame's start at rep 0 (`roundPlace_switch0`). -/
 theorem placeSt_first0 {T : ZKMal.CoinLayer.TableData}
     {M : LoopModel Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
@@ -796,12 +678,6 @@ theorem placeSt_first0 {T : ZKMal.CoinLayer.TableData}
   rw [roundPlace_switch0 hfd hrp (fresh_repRun hp) M.x _ hD.setup hcs (by rw [hk1]; omega)
     (ofLoop_answeredR_switch T L₀ real M.x M.ρ e0 h1 hsw hA₁)]
 
-/-- **`PlaceFacts.st` at a rep 1 stream's first round**: at the slot of a round of `stream`, table `i`'s rep 1, where
-`LoopFacts` and `LoopJ` hold, `seen` has no round of `stream` and the rep's frame is at the model's configuration, the
-frame `roundPlace` readies is at the model's masking state: its run on rep 0's algebraic-phase words
-(`roundPlace_switch1`). The algebraic phase has as many scheduled rounds as the placeholder's (`withAlg_size`), at
-least one, so rep 0's frame, which holds as many coins (`roundPlace_prior_size`), is not fresh, and rep 0's stream is
-seen (`LoopFacts.fresh`): its `RepJ` gives its coins as the history's words for its rounds (`StreamAt`). -/
 theorem placeSt_first1 {T : ZKMal.CoinLayer.TableData}
     {M : LoopModel Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
@@ -924,11 +800,6 @@ theorem placeSt_first1 {T : ZKMal.CoinLayer.TableData}
     hc hsz hco hm
   rw [hqm]
 
-/-- **`RealAt` at a frame round's slot of the deployed loop**: at the slot of a round, where `LoopFacts` and `LoopJ`
-hold for the run of the loop's own tables on `src` (`Loop.realOf src`), the loop handed `src`'s bytes (`M.src`), and
-the salts the loop keeps are the ones it was handed (`SaltsSrc`, `LoopRead`'s round clause), the model's tables and
-salts are the loop's (`realAt_of`): past the `Commit` each level 0 bound to the session is the one the loop drew
-(`LoopJ.built`) on the setup's entry (`LoopJ.sess`), so its table is `src`'s (`realAt_h0`). -/
 theorem realAt_slot {M : LoopModel Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Nonce ×
         (ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Rand)}
@@ -952,11 +823,6 @@ theorem realAt_slot {M : LoopModel Claims.Flock.Wit
     omega
   exact realAt_of hsrc (realAt_h0 hsrc hD.setup (hJ.sess hsent) hD.names (hJ.built hc2) hS hlive) hsal
 
-/-- **`PlaceFacts` at a round of a stream seen**: at the slot of a round of `stream`, table `i`'s rep `r`, where
-`LoopFacts` and `LoopJ` hold, `seen` has a round of `stream` and the model's tables and salts are the loop's (`RealAt`),
-the round's place is the model's scheduled round (`placeSched_seen`; where `placeOf` places it at the inner proof's own,
-by `hown`), the frame `roundPlace` readies is at the model's masking state but for `stopped` (`placeSt_seen`), and `v`
-fails the crossing only where it fails to pass (`hcr`). -/
 theorem placeFacts_seen {T : ZKMal.CoinLayer.TableData}
     {M : LoopModel Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
@@ -986,11 +852,6 @@ theorem placeFacts_seen {T : ZKMal.CoinLayer.TableData}
   · exact h
   · exact hown p rel name l0 n' q' hfa hss hn hl0 ho
 
-/-- **`PlaceFacts` at a frame round's slot of the deployed loop**: at the slot of a round of `stream`, table `i`'s rep
-`r`, where `LoopFacts` and `LoopJ` hold, the model's tables and salts are the loop's (`RealAt`), the rep's frame is at
-the model's configuration and the model answers the round, `PlaceFacts` holds at the place `roundPlace` readies, given
-the crossing and, at a round of a stream seen, the inner proof's own place: there by `placeFacts_seen`, and at a
-stream's first round by `placeSched_first`, with `placeSt_first0` at rep 0 and `placeSt_first1` at rep 1. -/
 theorem placeFacts_slot {T : ZKMal.CoinLayer.TableData}
     {M : LoopModel Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
@@ -1027,8 +888,6 @@ theorem placeFacts_slot {T : ZKMal.CoinLayer.TableData}
     · exact placeSt_first1 hD hsl hF hJ hrep hlt hsn hpc hrp
   · exact placeFacts_seen hD hsl hF hJ hrep hlt hsn hR hcr hrp (hown hsn)
 
-/-- **A frame round's slot is the model's masked round below the `Finish`**: where `LoopFacts` and `LoopJ` hold at the
-deployed loop, the model's history so far is past the `Hello` and the `Commit` and its rounds fill the setup's plan. -/
 theorem slot_masked {T : ZKMal.CoinLayer.TableData}
     {M : LoopModel Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
@@ -1061,11 +920,6 @@ theorem slot_masked {T : ZKMal.CoinLayer.TableData}
   unfold LeanRelease.kindAt
   rw [ite_eq_right h0, ite_eq_right h1]
 
-/-- **A stream is seen exactly where the model's last round was its rep's**: at the slot of a round of `stream`,
-table `i`'s rep `r`, where `LoopFacts` and `LoopJ` hold at the deployed loop, the model's history so far is past the
-`Hello` and the `Commit`, and `seen` has a round of `stream` exactly where it is past a later one whose last round was
-of the same rep: the model's next round is the stream's past its first exactly there (`SeenAt`), and each round's rep
-is its stream's (`LeanRelease.repOf_add_two`, `Loop.locate_pred`, `Loop.locate_first`). -/
 theorem rep_seen {T : ZKMal.CoinLayer.TableData}
     {M : LoopModel Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
@@ -1120,14 +974,6 @@ theorem rep_seen {T : ZKMal.CoinLayer.TableData}
       exact absurd h0 (Loop.locate_first _ 0 q₁ he)
     · rfl
 
-/-- **The model takes the coins after a frame round's slot's history**: at the slot of a round of `stream`, table
-`i`'s rep `r`, where `LoopFacts` and `LoopJ` hold at the deployed loop, the loop took the coins so far
-(`LoopModel.TookAt`) and the round goes out, the model answers its history so far, given the next rep's start at a
-stream's first round (`hfr`) and, at a round of a stream seen, the round's place the model's scheduled round (`hsc`),
-the empty round or the opening's first, at any count, wherever the rank stop fails at the model's coin-step state
-(`hal`). The transport's check, the frame's earlier takings and its coin step are the loop's
-(`LeanRelease.answered_of_took`); at a round of a stream seen the frame is at that state but for `stopped`
-(`placeSt_seen`) and releases the round (`roundStep_out`), so the rank stop passes (`rank_of_release`). -/
 theorem answered_of_round {T : ZKMal.CoinLayer.TableData}
     {M : LoopModel Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
@@ -1176,14 +1022,6 @@ theorem answered_of_round {T : ZKMal.CoinLayer.TableData}
       (fun m' hm' hrk => ⟨_, hsc hsn q pc f nd hrp,
         (hal hsn m' hm' hrk).imp_left fun he => by rw [he]; rfl⟩) m hm
 
-/-- **Where the rank stop fails at a round of a stream seen, the model's scheduled round is the empty round or the
-opening's first** (`answered_of_round`'s `hal`): at the slot of a round of `stream`, table `i`'s rep `r`, where
-`LoopFacts` and `LoopJ` hold at the deployed loop on the loop's own tables (`Loop.realOf src`) at a `Live` statement,
-and `seen` has a round of `stream`, wherever the coin step after the history so far leaves `m` and the rank stop fails
-at `m`, the model's scheduled round is the empty round or the opening's first, at some count. The history is past a
-round of the same rep (`rep_seen`), so its next round is the rep's round past its first (`Loop.locate_first`), on a
-table of the setup (`rep_lt_size`), which passes `sizesOk` (`LoopJ.sizes`) and whose tables are `Live`'s
-(`Loop.tabs_of_live`): `LeanRelease.ofLoop_rank_sched`. -/
 theorem rank_sched_deployed {T : ZKMal.CoinLayer.TableData}
     {M : LoopModel Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
@@ -1231,13 +1069,6 @@ theorem rank_sched_deployed {T : ZKMal.CoinLayer.TableData}
   exact LeanRelease.ofLoop_rank_sched T L₀ (Loop.realOf src) M.x M.w M.ρ e0 h1 vals hD.setup (hJ.sizes hsent)
     (Loop.realTabs_realOf src M.x M.w M.ρ hD.setup) hq hki hks hm14 hk6 hmk hA hr
 
-/-- **`RoundFacts` at a frame round's slot of the deployed loop**: at the slot of a round of `n` coins of `stream`,
-where `LoopFacts` and `LoopJ` hold, the session's slots took fewer than the run's messages, and the loop ran the round
-on table `i`'s rep `r` (`RoundRun`), the rep's frame at the model's configuration and the round out, the model's answer
-at its history so far a masking state, and `PlaceFacts` at the place `roundPlace` readied the round at: the model's
-coin count there is the slot's, its round masked, not its last, with a next message (`LoopModel.Deployed`); the round's
-mark is whether `seen` has no round of `stream` (`FreshAt`, or `SameInv` at the rep's `RepJ`, `round_rep`); and the
-frames stopped the session where the model's run has (`LoopJ.stop`). -/
 theorem roundFacts_loop {T : ZKMal.CoinLayer.TableData}
     {M : LoopModel Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
@@ -1294,10 +1125,6 @@ theorem roundFacts_loop {T : ZKMal.CoinLayer.TableData}
       exact (sameInv_place hI hf' hrp).1
   · rw [hJ.stop, hsent, Bool.true_and]
 
-/-- **The inner proof's own place at a round of a stream seen is the model's scheduled round**: at each frame round's
-slot of `stream` as `loopKept_round` reads it, `seen` having a round of `stream`, where `roundPlace` readies the round
-and `placeOf` places it at the inner proof's own, the place `roundPlace` readies is the model's scheduled round
-(`placeFacts_slot`'s `hown`, at each slot). -/
 def OwnSched {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSpec) (sts : Array Stmt) (stream : String)
     (n : Nat) : Prop :=
   ∀ (seen : List String) (st : State) (pl : Placed) (e : Env) (σ σ' : LoopAt) (i r : Nat) (dom : ByteArray)
@@ -1315,9 +1142,6 @@ def OwnSched {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSpec)
         pc = .sched ⟨(M.L.scheduled M.x M.w M.ρ (M.hist σ.c)
           (computedOf (M.L.computed M.x M.w M.ρ (M.hist σ.c)))).toArray⟩
 
-/-- **The next rep's start at a stream's first round** (`answered_of_round`'s `hfr`): at each frame round's slot of
-`stream` as `loopKept_round` reads it, the round going out and `seen` having no round of `stream`, the model's next-rep
-state after its history so far (`LeanRelease.fresh`) is a masking state, not a refusal. -/
 def FreshStart {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSpec) (sts : Array Stmt)
     (stream : String) (n : Nat) : Prop :=
   ∀ (seen : List String) (st : State) (pl : Placed) (e : Env) (σ σ' : LoopAt) (i r : Nat) (dom : ByteArray)
@@ -1328,12 +1152,6 @@ def FreshStart {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSpe
     InnerSrc M sid i r σ → StartOk sts sid i r σ → (∃ o, e.round = .ok o) → seen.contains stream = false →
     ∃ m, M.L.fresh M.x (M.hist σ.c) = .ok m
 
-/-- **The model answers a frame round's slot's history of the deployed loop**, where the loop took the coins so far
-(`LoopModel.TookAt`): at the loop's own tables on `src` (`Loop.realOf src`), whose bytes the loop handed (`M.src`), at
-each frame round's slot as `roundFacts_deployed` reads it, `answered_of_round` with the next rep's start by
-`FreshStart`, the round's place at a stream seen the model's scheduled round by `placeFacts_seen` (the tables and
-salts the loop's by `realAt_slot`, the crossing by `LeanRelease.CrossPasses`, the inner proof's own place by
-`OwnSched`), and the empty round or the opening's first wherever the rank stop fails by `rank_sched_deployed`. -/
 theorem answered_deployed {M : LoopModel Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Nonce ×
         (ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Rand)}
@@ -1364,11 +1182,6 @@ theorem answered_deployed {M : LoopModel Claims.Flock.Wit
       (hown seen st pl e σ σ' i r dom v hsl hF hJ hlt hv hr hpc hsal hin hsk ho hsn q pc f nd hrp)).sched)
     (fun hsn _ hm hrk => rank_sched_deployed hD hlive hsl hF hJ hr.rep_eq hlt hsn hm hrk _)
 
-/-- **`RoundFacts` at each frame round's slot of the deployed loop** (`loopKept_round`'s `hA`): at the loop's own tables
-on `src` (`Loop.realOf src`), whose bytes the loop handed (`M.src`), `roundFacts_loop` at the model's answer, which
-`answered_deployed` gives from what the loop took (`LoopJ.took`) and the next rep's start (`FreshStart`), and
-`PlaceFacts` by `placeFacts_slot`, at the loop's tables and salts (`realAt_slot`), the crossing at the slot's masked
-round below the `Finish` (`LeanRelease.CrossPasses`, `slot_masked`) and the inner proof's own place (`OwnSched`). -/
 theorem roundFacts_deployed {M : LoopModel Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Nonce ×
         (ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Rand)}

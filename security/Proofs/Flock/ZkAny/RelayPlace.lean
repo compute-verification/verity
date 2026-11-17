@@ -2,18 +2,7 @@ module
 
 public import Proofs.Flock.ZkAny.RelayFollow
 
-/-!
-# A rep's frame past its stream's first round keeps its schedule so far
-
-`Loop.placeOf_sched` places a rep's next round at its schedule so far on its coins where the frame keeps that schedule
-(`Loop.RepInv`), and the frame after the round's coins keeps it. Here the loop's round reads it so:
-
-* `roundPlace_later_of`: past the stream's first round, the frame `roundPlace` readies is `placeOf`'s on the found
-  frame, in `placeOf`'s place unless that is the inner proof's own.
-* **`roundRun_repInv`**: so at a `RoundRun` past the stream's first round whose round releases and whose coins the
-  rep's frame took, where the found frame keeps its schedule so far, the round is in the place that schedule gives the
-  frame's next round (unless that is the inner proof's own), and the frame the session's next round finds keeps it.
--/
+/-! Past its stream's first round a rep's frame keeps its schedule so far (`roundRun_repInv`). -/
 
 @[expose] public section
 
@@ -25,9 +14,6 @@ open _root_.Flock.ZkServer.Frames (Sessions Rep)
 open _root_.Flock.ZkServer.Frame (Req Place)
 
 set_option maxHeartbeats 1000000 in
-/-- **Past the stream's first round the readied frame is `placeOf`'s**: at the session `s`, its table `name` and its
-level 0 `l0`, the frame `roundPlace` readies is the one `placeOf` returns on the found frame, in `placeOf`'s place
-unless that is the inner proof's own. -/
 theorem roundPlace_later_of {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r j : Nat}
     {dom content : ByteArray} {n : Nat} {p q : Rep} {pl : Place} {f : Bool} {nd : Option String}
     (hf : R.find sid i r = some (j, p))
@@ -52,11 +38,6 @@ theorem roundPlace_later_of {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Sl
     | (cases h; exact ⟨rfl, Or.inl rfl⟩)
     | (cases h; exact ⟨rfl, Or.inr (by assumption)⟩)
 
-/-- **A rep's frame past its stream's first round keeps its schedule so far**: at a `RoundRun` past the stream's first
-round whose round releases and whose coins the rep's frame took off the auditor's answer, where the found frame keeps
-its schedule so far (`Loop.RepInv`) on the table and extras the session gives it and the salts the loop's salts give
-it at the opening's first round (`hsalt`, where `placeOf` reads them), the round is in the place that schedule gives
-the frame's next round, unless that is the inner proof's own, and the frame the session's next round finds keeps it. -/
 theorem roundRun_repInv {sid : Nat} {st : State} {pl : Placed} {stream : String} {n i r : Nat}
     {dom content : ByteArray} {e : Env} {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {R₃ : Sessions}
     (hr : RoundRun sid st pl stream n i r dom content e R L0 R₃) (hreq : st.request pl (.round stream n) = none)

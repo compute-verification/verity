@@ -3,20 +3,7 @@ module
 public import Proofs.Flock.ZkAny.RelayCount
 public import Proofs.Flock.Claims.ZK.FramePlan
 
-/-!
-# A rep's algebraic phase as the loop schedules it, beside the placeholder's
-
-At a rep's first round the loop schedules the rep's algebraic phase on its table's statement (`Frames.withAlg`,
-`Frames.algOf`); the placeholder (`Loop.placeholder`) schedules it on its stream's table's statement. The rounds' counts
-are the PIOP's for the statement (`Count.rounds_counts`), whatever the level-0 root and the domain, so where the two
-statements are one, the two phases have as many scheduled rounds:
-
-* `withAlg_alg`: on a frame with no scheduled rounds yet, `withAlg` schedules them by `Skeleton.rounds` on the table's
-  statement, at its `--zk` schedule.
-* **`withAlg_size`**: so on a frame with none yet, the frame `withAlg` gives has as many scheduled rounds as the
-  placeholder's algebraic phase, where the placeholder's stream's table's statement is the frame's table's
-  (`roundPlace_switch1`'s count).
--/
+/-! On a frame with no scheduled rounds yet, the algebraic phase the loop schedules has as many rounds as the placeholder's (`withAlg_size`). -/
 
 @[expose] public section
 
@@ -26,8 +13,6 @@ open _root_.Flock (F128 SessionSpec Stmt)
 open _root_.Flock.ZkServer.Frames (Rep Release)
 open _root_.Flock.ZkServer.Frame (Cfg)
 
-/-- **`withAlg` on a frame with no scheduled rounds yet** schedules the algebraic phase by `Skeleton.rounds` on the
-frame's table's statement, at its `--zk` schedule, on the level-0 root and the stream's domain. -/
 theorem withAlg_alg {s : Release} {l0 : _root_.Flock.ZkServer.Level0.Level0} {name : String} {p q : Rep} {stm : Stmt}
     (h : _root_.Flock.ZkServer.Frames.withAlg s l0 name p = .ok q) (hp : p.alg.isEmpty = true)
     (hst : s.sts[p.table]? = some stm) :
@@ -47,9 +32,6 @@ theorem withAlg_alg {s : Release} {l0 : _root_.Flock.ZkServer.Level0.Level0} {na
     · rename_i a ha
       exact ⟨a.1, a.2, ha, hal⟩
 
-/-- **The algebraic phase `withAlg` schedules has the placeholder's count of rounds**: on a frame with no scheduled
-rounds yet, whose table's statement is the placeholder's stream's table's, the frame `withAlg` gives has as many
-scheduled rounds as the placeholder's algebraic phase. -/
 theorem withAlg_size {s : Release} {l0 : _root_.Flock.ZkServer.Level0.Level0} {name : String} {p p' : Rep}
     {stm : Stmt} (hw : _root_.Flock.ZkServer.Frames.withAlg s l0 name p = .ok p') (hp : p.alg.isEmpty = true)
     (hst : s.sts[p.table]? = some stm) {spec : SessionSpec} {sts : Array Stmt} {k : Nat} {link : Array F128}

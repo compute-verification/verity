@@ -5,22 +5,7 @@ public import Proofs.Flock.Claims.ZK.FrameStop
 import all Init.Data.String.Defs
 import all Init.Data.Array.Basic
 
-/-!
-# The inner proof's `ε` and `β` at the model's state
-
-Past a rep's schedule the loop's frame releases the inner proof's rounds itself (`Frame.innerSched`), its round 1
-reading the frame's `ε` and its round 3 its `β`, which `Masker.answer` sets from the coins of the inner proof's rounds 0
-and 2. The model's own round there (`Loop.innerOf`) reads them off the history's coins instead. Here the two meet at
-the model's masking state:
-
-* `roundFree_keeps`: a round keeps whatever its labels, masked values and squeeze keep. `label_eb`, `absorb_eb`: a
-  label and a masked value keep `ε` and `β`, and so a round does (`roundFree_eb`).
-* `answer_eb`: coins inside the inner proof set `ε` at its round 0 and `β` at its round 2 (`INNER_BETA`) to their first
-  word, and keep them otherwise.
-* `run_ownReqs_eb`: along a rep's requests up to the inner proof's round `i`, once past its round 0 `ε` is the first
-  word of that round's coins, and once past its round 2 `β` is the first word of that round's.
-* **`repState_own_eb`**: so where the frame takes the coins of the inner proof's round `i` at the rep's state after it.
--/
+/-! The inner proof's `ε` and `β` that the loop's frame reads are those at the model's masking state (`repState_own_eb`, `innerSched_congr`). -/
 
 @[expose] public section
 
@@ -30,8 +15,6 @@ open _root_.Flock (V F128)
 open _root_.Flock.ZkServer.Frame (Cfg Masker isLabel LABEL_PCS LABEL_ZC claimPoints roundFree INNER_ROUNDS INNER_BETA)
 open Ranked
 
-/-- **A round keeps what its labels, masked values and squeeze keep**: where `Masker.label`, `Masker.absorb` and the
-squeeze's `owed` keep `g`, a round the frame takes keeps it, whatever its bytes. -/
 theorem roundFree_keeps {α : Type} (g : Masker → α) {c : Cfg}
     (hl : ∀ {s : Masker} {l : ByteArray} {q : Masker × ByteArray}, s.label c l = .ok q → g q.1 = g s)
     (ha : ∀ {s : Masker} {v : F128} {q : Masker × F128}, s.absorb c v = .ok q → g q.1 = g s)
@@ -126,7 +109,6 @@ theorem roundFree_keeps {α : Type} (g : Masker → α) {c : Cfg}
       exact ⟨hk, fun _ hv => by cases hv⟩
     · cases hy
 
-/-- **A masked value keeps `ε` and `β`.** -/
 theorem absorb_eb {c : Cfg} {s : Masker} {v : F128} {q : Masker × F128} (h : s.absorb c v = .ok q) :
     (q.1.eps, q.1.beta) = (s.eps, s.beta) := by
   unfold Masker.absorb at h
@@ -145,7 +127,6 @@ theorem absorb_eb {c : Cfg} {s : Masker} {v : F128} {q : Masker × F128} (h : s.
         subst h
         rfl
 
-/-- **A label keeps `ε` and `β`.** -/
 theorem label_eb {c : Cfg} {s : Masker} {l : ByteArray} {q : Masker × ByteArray} (h : s.label c l = .ok q) :
     (q.1.eps, q.1.beta) = (s.eps, s.beta) := by
   by_cases hP : isLabel l LABEL_PCS = true
@@ -237,14 +218,11 @@ theorem label_eb {c : Cfg} {s : Masker} {l : ByteArray} {q : Masker × ByteArray
   cases h
   rfl
 
-/-- **A round keeps `ε` and `β`**, whatever its bytes. -/
 theorem roundFree_eb {c : Cfg} {s : Masker} {content : ByteArray} {n : Nat} {q : ByteArray × Masker × Array Nat}
     (h : roundFree c s content n = .ok q) : q.2.1.eps = s.eps ∧ q.2.1.beta = s.beta := by
   have e := roundFree_keeps (fun m : Masker => (m.eps, m.beta)) label_eb absorb_eb (fun _ _ => rfl) h
   exact ⟨congrArg Prod.fst e, congrArg Prod.snd e⟩
 
-/-- **Coins inside the inner proof set `ε` at its round 0 and `β` at its round 2**, each to the coins' first word, and
-keep them otherwise. -/
 theorem answer_eb {c : Cfg} {s s' : Masker} {cs : Array F128} {k : Nat} (hs : s.inner = some k)
     (h : s.answer c cs = .ok s') :
     s'.eps = (if k = 0 then cs[0]! else s.eps) ∧ s'.beta = (if k = INNER_BETA then cs[0]! else s.beta) := by
@@ -262,9 +240,6 @@ theorem answer_eb {c : Cfg} {s s' : Masker} {cs : Array F128} {k : Nat} (hs : s.
       · simp_all [INNER_BETA]
 
 open _root_.Flock.ZkServer.Frame (ownRound) in
-/-- **`ε` and `β` along a rep's requests up to the inner proof's round `i`**: where they neither end the rep nor leave
-it owing no coins, once past the inner proof's round 0 `ε` is the first word of its coins (`cr`'s past the schedule),
-and once past its round 2 `β` is the first word of its coins (`answer_eb`; each round keeps both, `roundFree_eb`). -/
 theorem run_ownReqs_eb (c : Cfg) (prior : Array F128) (sched own : Array (ByteArray × Nat))
     (cr : Array (Array F128))
     (h0 : ∃ s w t n, w.size = 16 ∧ t.size = 64 ∧ own.getD 0 (.empty, 0) = (ownRound c s w t n 0, n)) :
@@ -299,10 +274,6 @@ theorem run_ownReqs_eb (c : Cfg) (prior : Array F128) (sched own : Array (ByteAr
       · rw [if_neg hi2]
         exact ih.2 (by unfold INNER_BETA at hlt hi2 ⊢; omega)
 
-/-- **`ε` and `β` where the frame takes the inner proof's round `i`'s coins `cs`** at the rep's state after it
-(`repState`, past the schedule `sched` on the rep's coins before the last): `ε` is `cs`'s first word at round 0 and the
-first word of round 0's coins past it, and from round 2 on `β` is `cs`'s first word at round 2 and the first word of
-round 2's coins past it (`run_ownReqs_eb`, `answer_eb`). -/
 theorem repState_own_eb (c c' : Cfg) (t : _root_.Flock.ZkServer.Finish.Tab) (rep : Nat) (dom : ByteArray)
     (xs : Array (Array F128)) (hi : Array ByteArray) (cr0 cr : Array (Array F128)) (ns : Nat → Nat) {i : Nat}
     {alg sched : Array (ByteArray × Nat)}
@@ -347,14 +318,11 @@ theorem repState_own_eb (c c' : Cfg) (t : _root_.Flock.ZkServer.Finish.Tab) (rep
       · rw [if_neg hi2, if_neg hi2]
         exact hE.2 (by omega)
 
-/-- A coin array's first word, `0` where it has none. -/
 theorem getElem!_zero_getD (a : Array F128) : a[0]! = a.getD 0 0 := by
   rw [getElem!_def, Array.getD_eq_getD_getElem?]
   cases a[0]? <;> first | rfl | decide
 
 open _root_.Flock.ZkServer.Frame (innerSched ownRound) in
-/-- **The frame's own inner round reads `ε` only at round 1 and `β` only at round 3**: at two states alike there,
-it is one round. -/
 theorem innerSched_congr (c : Cfg) {s s' : Masker} (fin : Array ByteArray) (n : Nat) :
     ∀ {k : Nat}, k < INNER_ROUNDS → (k = 1 → s.eps = s'.eps) → (k = 3 → s.beta = s'.beta) →
       innerSched c s fin n k = innerSched c s' fin n k

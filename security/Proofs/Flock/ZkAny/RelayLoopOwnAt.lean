@@ -5,30 +5,7 @@ public import Proofs.Flock.ZkAny.RelayLoopOwn
 public import Proofs.Flock.ZkAny.RelayLoopFacts
 public import Proofs.Flock.SessionLoop.LiveInner
 
-/-!
-# The frame's own inner round is the model's scheduled round
-
-Past a rep's schedule so far `placeOf` places the frame's next round at the inner proof's own, and `roundPlace` readies
-it at `Frame.innerSched` on the frame's configuration, masking state and the rounds the loop's finish computed. At the
-deployed model, whose release has the session loop's own rounds of the inner proof (`LeanRelease.withInner` at the
-finish's rounds `fin`), the model's scheduled round there is `Loop.innerOf`'s, `Frame.innerSched` at the model's
-configuration and `ε` and `β` the first words of the coins of the inner proof's rounds 0 and 2. They are one round:
-
-* `innerSched_fin_congr`: the frame's own inner round reads the finish's rounds only at round 0's (at round 0) and
-  round 2's (at round 2). `roundPlace_own_bounds`: `roundPlace` readies an inner round only within the inner proof and
-  where the loop's finish computed it.
-* `ofLoop_answered_own`: past the rep's schedule on its own table and salts the model's masking state has begun no
-  inner round where the schedule ends at the round, and is at the inner proof's round past the last it took coins at
-  otherwise, `ε` and `β` the first words of the coins of its rounds 0 and 2 (`repState_own_inner`, `repState_own_eb`).
-* `roundPlace_scheduled_own`: at the deployed model, where `placeOf` places the frame's round at the inner proof's own,
-  the frame at the model's configuration and masking state but for `stopped`, and each round of the inner proof the
-  loop's finish computed so far the model's finish's, the round's place is the model's scheduled round
-  (`Loop.innerOf_eq`, `scheduled_innerAt`, `innerSched_congr`, `innerSched_fin_congr`).
-* **`placeSched_own`**: so at a round of a stream seen, where `LoopFacts` and `LoopJ` hold, the model's tables and
-  salts are the loop's (`RealAt`) and the rep's rounds of the inner proof the model's finish's (`InnerSrc`, the
-  model's `fin` the release's), the round's place is the model's scheduled round wherever `placeOf` places it at the
-  inner proof's own: `placeFacts_seen`'s `hown`.
--/
+/-! Past a rep's schedule, the frame's own inner round is the deployed model's scheduled round (`roundPlace_scheduled_own`, `placeSched_own`). -/
 
 @[expose] public section
 
@@ -42,16 +19,13 @@ open _root_.Flock.ZkServer.Frame (Cfg Masker Place INNER_ROUNDS INNER_BETA)
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
-/-- An extract's `k`-th entry is the array's `s + k`-th, within the extract. -/
 theorem extract_getD {α : Type} {a : Array α} {s e k : Nat} (d : α) (h : s + k < e) (he : e ≤ a.size) :
     (a.extract s e).getD k d = a.getD (s + k) d := by
   rw [Array.getD_eq_getD_getElem?, Array.getD_eq_getD_getElem?, Array.getElem?_extract, if_pos (by omega)]
 
-/-- A byte array is its bytes' list read back. -/
 theorem bytes_toList_toArray (b : ByteArray) : (⟨b.data.toList.toArray⟩ : ByteArray) = b := by
   rfl
 
-/-- Where each entry `a` holds is `b`'s, `a` and `b` read alike within `a`. -/
 theorem getD_of_agree {a b : Array ByteArray} (h : ∀ (k : Nat) (x : ByteArray), a[k]? = some x → b[k]? = some x)
     {k : Nat}
     (hk : k < a.size) (d : ByteArray) : a.getD k d = b.getD k d := by
@@ -59,8 +33,6 @@ theorem getD_of_agree {a b : Array ByteArray} (h : ∀ (k : Nat) (x : ByteArray)
   rw [Array.getD_eq_getD_getElem?, Array.getD_eq_getD_getElem?, h k _ ha, ha]
 
 open _root_.Flock.ZkServer.Frame (innerSched ownRound) in
-/-- **The frame's own inner round reads the finish's rounds only at round 0's and round 2's**, the first at round 0
-and the second at round 2: on rounds alike there, it is one round. -/
 theorem innerSched_fin_congr (c : Cfg) (s : Masker) {fin fin' : Array ByteArray} (n : Nat) :
     ∀ {k : Nat}, k < INNER_ROUNDS → (k = 0 → fin.getD 0 .empty = fin'.getD 0 .empty) →
       (k = 2 → fin.getD 2 .empty = fin'.getD 2 .empty) → innerSched c s fin n k = innerSched c s fin' n k
@@ -71,9 +43,6 @@ theorem innerSched_fin_congr (c : Cfg) (s : Masker) {fin fin' : Array ByteArray}
   | k + 4, h, _, _ => absurd h (by unfold INNER_ROUNDS; omega)
 
 set_option maxHeartbeats 1000000 in
-/-- **At the inner proof's own place `roundPlace` readies only a round the loop's finish computed**: where `placeOf`
-places the found frame's next round at the inner proof's own, the readied frame is at an inner round within the inner
-proof that the rounds the loop's finish computed so far hold; at any other it refuses. -/
 theorem roundPlace_own_bounds {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r j : Nat}
     {dom content : ByteArray} {n : Nat} {p q : Rep} {pl : Place} {f : Bool} {nd : Option String}
     (hf : R.find sid i r = some (j, p))
@@ -95,13 +64,6 @@ theorem roundPlace_own_bounds {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.
     | (cases h; exact ⟨by omega, by omega⟩)
 
 open Loop LeanRelease in
-/-- **The model's masking state past a rep's schedule**: where the frame's coin step takes the coins after `e0 :: h1`
-at `m`, before the rank stop (`answeredR`), the next round is rep stream `k`'s round `j + 1`, at a setup passing
-`sizesOk`, and the schedule so far on its own table and salts (`rsched`, `Count.RealTabs`) ends at or before the
-round: where it ends at the round, `m` has begun no inner round (`repState_inner`); before it, `m` is at the inner
-proof's round `j - rsched.size + 1`, within the inner proof (`repState_own_inner`; past its last round the rep's state
-owes no coins, `repState_past`), its `ε` the first word of the coins of the inner proof's round 0 and, past its round
-2, its `β` the first word of that round's (`repState_own_eb`). -/
 theorem ofLoop_answered_own (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -217,19 +179,6 @@ theorem ofLoop_answered_own (T : ZKMal.CoinLayer.TableData)
     · exact absurd hF (answer_owed_none _ (repState_past c' t (k % 2) dom xs hi _ _ _ hal hs (by omega)))
 
 open Loop LeanRelease in
-/-- **The frame's own inner round is the deployed model's scheduled round**: at the deployed model, whose release
-has the session loop's own rounds of the inner proof (`withInner` at the finish's rounds `fin`), after the history
-`e0 :: h1` whose next round is table `i`'s rep `r`'s `j + 2`-th, where the rep's frame keeps its schedule so far
-(`Loop.RepInv`) on the loop's table, the session's extras at the model's link and the salts the loop holds where
-`placeOf` reads them, which are the model's (`real`), holds the history's words for the rep's rounds so far, and
-`placeOf` places its round at the inner proof's own (`hown`), where the readied frame is at the model's configuration
-and masking state but for `stopped`, the round squeezes the model's coin count and each round of the inner proof the
-loop's finish computed so far is the model's finish's (`hfin`): the round's place is the model's scheduled round
-there. `roundPlace_own_of` gives the place, `Frame.innerSched` at the frame's state on the inner proof's round the frame
-is at, which is within the inner proof and one the loop's finish computed (`roundPlace_own_bounds`);
-`ofLoop_answered_own` that round, the model's (`Loop.innerOf_eq`, `scheduled_innerAt`), its `ε` and `β`, the model's
-where the round reads them (`innerSched_congr`), and the finish's rounds it reads, the model's (`innerSched_fin_congr`).
--/
 theorem roundPlace_scheduled_own
     (L₁ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session loopNr ZKMal.Masked.dataE).refP.Nonce ×
@@ -381,17 +330,6 @@ theorem roundPlace_scheduled_own
     rw [hb h3, getElem!_zero_getD, extract_getD (k := 2) _ (by omega) (by simp)]
     rfl
 
-/-- **`placeFacts_seen`'s `hown`**: at the slot of a round of `stream`, table `i`'s rep `r`, of the deployed loop whose
-release has the session loop's own rounds of the inner proof (`withInner` at the finish's rounds `fin`), where
-`LoopFacts` and `LoopJ` hold, the model's tables and salts are the loop's (`RealAt`), its coin step takes the coins
-before the round (`answeredR`), and each round of the inner proof the loop's finish computed so far for the rep is the
-model's finish's (`InnerSrc`, at the model's `fin` the release's), wherever `seen` has a round of `stream` and
-`placeOf` places it at the inner proof's own, the round's place is the model's scheduled round. `RepJ` gives the rep's
-`StreamAt` on the frame, entry, name and level 0 `hown` reads (`Option.some.inj`), `SessOn` the entry's setup,
-`LinkOn` the model's link and `SeenAt` the round past the stream's first; the frame keeps its schedule so far at
-`real`'s salts as in `placeSched_later`, and `SameInv` puts the readied frame at the model's configuration and masking
-state but for `stopped` (`sameInv_place`); the round's coin count is the model's (`Loop.reqOf_eq`, `LoopJ.plan`), so
-`roundPlace_scheduled_own` places it. -/
 theorem placeSched_own
     {L₁ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Nonce ×

@@ -2,27 +2,7 @@ module
 
 public import Proofs.Flock.ZkAny.RelayRound
 
-/-!
-# A rep's frame is its frame run on the loop's requests to it
-
-Between its start and each round, a rep's frame in the loop's frames is the frame's run from its start (`Frame.run`
-from `{}`) on the requests the loop handed it: at rep 1, rep 0's algebraic-phase coins (`prior`), then each round it
-took, in its place, and that round's coins (`RepRun`). A round that releases and its coins extend the run by those two
-requests:
-
-* `run_snoc`: `Frame.run` on one more request, where the run so far has not ended, is the step on it.
-* `evReqs`, `RepRun`: the loop's requests for the rounds a rep took, and the frame its run on them.
-* `placeOf_run`, `withAlg_run`, `RepRun.of_eq`: `placeOf` and `withAlg` keep what `RepRun` reads (the frame's
-  configuration, state and coins).
-* `repRun_start`, `repRun_first0`, `repRun_first1`, `repRun_later`: the frame `roundPlace` readies keeps `RepRun`: on
-  no requests at the rep's start and at rep 0's first round, on rep 0's algebraic-phase coins (`repRun_prior`) at rep
-  1's, and on the rep's requests so far at a later round.
-* `roundStep_out`, `roundStep_check`: a round that releases is the frame's release of it in its place, at a scheduled
-  place its check against the scheduled round, after the stream's domain frame at its first round.
-* `repRun_round_coins`: where the frame `roundPlace` readies keeps `RepRun` and only updates that keep the rep's frame
-  come between the round's read, its put and its coins' read, the round that releases and its coins leave the frame
-  their run.
--/
+/-! A rep's frame is its frame run on the loop's requests to it (`RepRun`, `repRun_round_coins`). -/
 
 @[expose] public section
 
@@ -37,7 +17,6 @@ theorem run_cons (c : Cfg) (st : _root_.Flock.ZkServer.Frame.State) (q : Req) (l
       if (_root_.Flock.ZkServer.Frame.step c st q).1.ends then ((_root_.Flock.ZkServer.Frame.step c st q).2, true)
       else _root_.Flock.ZkServer.Frame.run c (_root_.Flock.ZkServer.Frame.step c st q).2 l := rfl
 
-/-- **`Frame.run` on one more request**, where the run so far has not ended: the step on it at the run's state. -/
 theorem run_snoc (c : Cfg) (q : Req) : ∀ (st : _root_.Flock.ZkServer.Frame.State) (l : List Req),
     (_root_.Flock.ZkServer.Frame.run c st l).2 = false →
     _root_.Flock.ZkServer.Frame.run c st (l ++ [q]) =
@@ -56,8 +35,6 @@ theorem run_snoc (c : Cfg) (q : Req) : ∀ (st : _root_.Flock.ZkServer.Frame.Sta
     · revert h
       simp [he]
 
-/-- **The loop's requests for the rounds `ev`** a rep took: each its coin count, the device round the frame took, its
-place, and its coins. -/
 def evReqs (ev : List (Nat × ByteArray × Place × Array F128)) : List Req :=
   ev.flatMap fun e => [.round e.1 e.2.1 e.2.2.1, .coins (.ok e.2.2.2)]
 
@@ -65,8 +42,6 @@ theorem evReqs_snoc (ev : List (Nat × ByteArray × Place × Array F128)) (e : N
     evReqs (ev ++ [e]) = evReqs ev ++ [.round e.1 e.2.1 e.2.2.1, .coins (.ok e.2.2.2)] := by
   simp [evReqs, List.flatMap_append]
 
-/-- **The rep `p`'s frame is its run on the loop's requests**: `pre` (rep 0's algebraic-phase coins at rep 1, else
-none), then the rounds `ev`, whose coins are the rep's, from the frame's start, not ended. -/
 def RepRun (pre : List Req) (ev : List (Nat × ByteArray × Place × Array F128)) (p : Rep) : Prop :=
   _root_.Flock.ZkServer.Frame.run p.cfg {} (pre ++ evReqs ev) = (p.st, false) ∧ p.coins.toList = ev.map (·.2.2.2)
 
@@ -75,7 +50,6 @@ theorem RepRun.of_eq {pre : List Req} {ev : List (Nat × ByteArray × Place × A
   obtain ⟨h1, h2⟩ := h
   exact ⟨by rw [hc, hs]; exact h1, by rw [hk]; exact h2⟩
 
-/-- `placeOf` keeps a rep's frame configuration, state and coins. -/
 theorem placeOf_run {salts : Array (ByteArray × Nat × Array ByteArray)} {l0 : _root_.Flock.ZkServer.Level0.Level0}
     {s : Release} {p : Rep} {dom : ByteArray} {pl : Place} {n : Nat} {q : Rep}
     (h : _root_.Flock.ZkServer.Frames.placeOf salts l0 s p dom = .ok (pl, n, q)) :
@@ -87,7 +61,6 @@ theorem placeOf_run {salts : Array (ByteArray × Nat × Array ByteArray)} {l0 : 
     | (cases h; done)
     | (cases h; exact ⟨rfl, rfl, rfl⟩)
 
-/-- `withAlg` keeps a rep's frame configuration, state and coins. -/
 theorem withAlg_run {s : Release} {l0 : _root_.Flock.ZkServer.Level0.Level0} {name : String} {p q : Rep}
     (h : _root_.Flock.ZkServer.Frames.withAlg s l0 name p = .ok q) :
     q.cfg = p.cfg ∧ q.st = p.st ∧ q.coins = p.coins := by
@@ -98,12 +71,9 @@ theorem withAlg_run {s : Release} {l0 : _root_.Flock.ZkServer.Level0.Level0} {na
     | (cases h; done)
     | (cases h; exact ⟨rfl, rfl, rfl⟩)
 
-/-- **At a rep's start** its frame is its run on no requests. -/
 theorem repRun_start {p : Rep} (hs : p.st = {}) (hk : p.coins = #[]) : RepRun [] [] p :=
   ⟨by rw [hs]; all_goals rfl, by rw [hk]; all_goals rfl⟩
 
-/-- **Rep 0's algebraic-phase coins at rep 1's first round** (`Frame.step`'s `prior`, answered `ok`): the frame after
-them is its run on them. -/
 theorem repRun_prior {p : Rep} {k : Nat} {b : ByteArray} {st₁ : _root_.Flock.ZkServer.Frame.State}
     (h : RepRun [] [] p) (hpr : _root_.Flock.ZkServer.Frame.step p.cfg p.st (.prior k b) = (.ok, st₁)) :
     RepRun [.prior k b] [] { p with st := st₁ } := by
@@ -117,7 +87,6 @@ theorem repRun_prior {p : Rep} {k : Nat} {b : ByteArray} {st₁ : _root_.Flock.Z
   rw [run_cons, hpr']
   all_goals rfl
 
-/-- **At a stream's first round at rep 0**, the frame `roundPlace` readies is its run on no requests. -/
 theorem repRun_first0 {salts : Array (ByteArray × Nat × Array ByteArray)} {l0 : _root_.Flock.ZkServer.Level0.Level0}
     {s : Release} {name : String} {dom : ByteArray} {pl : Place} {n : Nat} {p p' q : Rep} (h : RepRun [] [] p)
     (hw : _root_.Flock.ZkServer.Frames.withAlg s l0 name p = .ok p')
@@ -126,8 +95,6 @@ theorem repRun_first0 {salts : Array (ByteArray × Nat × Array ByteArray)} {l0 
   obtain ⟨c2, s2, k2⟩ := placeOf_run hp
   exact (h.of_eq c1 s1 k1).of_eq c2 s2 k2
 
-/-- **At a stream's first round at rep 1**, the frame `roundPlace` readies is its run on rep 0's algebraic-phase
-coins. -/
 theorem repRun_first1 {salts : Array (ByteArray × Nat × Array ByteArray)} {l0 : _root_.Flock.ZkServer.Level0.Level0}
     {s : Release} {name : String} {dom : ByteArray} {pl : Place} {n k : Nat} {b : ByteArray}
     {st₁ : _root_.Flock.ZkServer.Frame.State} {p p' q : Rep} (h : RepRun [] [] p)
@@ -139,7 +106,6 @@ theorem repRun_first1 {salts : Array (ByteArray × Nat × Array ByteArray)} {l0 
   obtain ⟨c2, s2, k2⟩ := placeOf_run hp
   exact (repRun_prior (h.of_eq c1 s1 k1) hpr).of_eq c2 s2 k2
 
-/-- **At a later round**, the frame `roundPlace` readies is the rep's run. -/
 theorem repRun_later {salts : Array (ByteArray × Nat × Array ByteArray)} {l0 : _root_.Flock.ZkServer.Level0.Level0}
     {s : Release} {dom : ByteArray} {pl : Place} {n : Nat} {pre : List Req}
     {ev : List (Nat × ByteArray × Place × Array F128)} {p q : Rep} (h : RepRun pre ev p)
@@ -147,8 +113,6 @@ theorem repRun_later {salts : Array (ByteArray × Nat × Array ByteArray)} {l0 :
   obtain ⟨c2, s2, k2⟩ := placeOf_run hp
   exact h.of_eq c2 s2 k2
 
-/-- **A round that releases** is the frame's release of the round in its place (the device's, or none where
-`roundPlace` takes none), after the stream's domain frame at its first round. -/
 theorem roundStep_out {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r : Nat}
     {dom content : ByteArray} {n : Nat} {q : Rep} {pl : Place} {f : Bool} {nd : Option String} {o : ByteArray}
     (h : _root_.Flock.ZkServer.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, f, nd))
@@ -168,8 +132,6 @@ theorem roundStep_out {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {
     | (cases ho; done)
     | (cases ho; exact ⟨_, _, rfl, rfl⟩)
 
-/-- **A round released at a scheduled place is the frame's check** of the device round (none where `roundPlace` takes
-none) against the scheduled round, at the frame's masking state, after the stream's domain frame at its first round. -/
 theorem roundStep_check {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r : Nat}
     {dom content : ByteArray} {n : Nat} {q : Rep} {rr : ByteArray} {f : Bool} {nd : Option String} {o : ByteArray}
     (h : _root_.Flock.ZkServer.Frames.roundPlace R L0 sid i r dom content n = .ok (q, .sched rr, f, nd))
@@ -186,10 +148,6 @@ theorem roundStep_check {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots}
       exact ⟨_, _, by assumption, rfl⟩
     · split at hre <;> cases hre
 
-/-- **A round that releases and its coins extend the rep's run**: where the frame `q` that `roundPlace` readies is its
-run on the requests `pre` and the rounds `ev` (`RepRun`), the round releases, and only updates that keep the rep's
-frame come between the round's read (`R`), its put (on `R₁`) and the coins' read (`R₂`), `Frames.coinsStep` puts back
-`Loop.coinsOf` of the frame the round put back, which is its run on `ev` and the round in its place with its coins. -/
 theorem repRun_round_coins {R R₁ R₂ : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r : Nat}
     {dom content : ByteArray} {n : Nat} {q p₁ : Rep} {pl : Place} {f : Bool} {nd : Option String} {o : ByteArray}
     {pre : List Req} {ev : List (Nat × ByteArray × Place × Array F128)} (hR : RepRun pre ev q)

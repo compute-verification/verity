@@ -5,30 +5,7 @@ import Proofs.Flock.Claims.ZK.Reference
 public import Proofs.Flock.ZkAny.RelayAuditor
 public import Proofs.Flock.ZkAny.RelayWorker
 
-/-!
-# The relay's model frames at the model's run, from the session's first request
-
-`envPre_withInner` gives `EnvPre` wherever `LoopP` at `LoopJ` holds, given that each of the run's messages is the
-deferred release's (`LoopModel.Own`), its first the `Hello` at the relay's nonce and the worker's link the ZK server's
-own. Here `LoopP` holds at the session's first request, the first two are read off the model's run of the deferred
-server against `V*`, and the link off the deployed worker (`LoopModel.link_deployed`):
-
-* `loopP_start`: at the session's first request, where the loop's frames hold no rep of the session yet and the
-  session's slots took none of the model's messages, `LoopP` at `LoopJ` holds wherever the relay's requests to come are
-  read as the loop answers them (`LoopReads`) and each reads the setup.
-* `pick_setup`: each request that reaches a slot (`pick`) is one the relay read, so reads the relay's setup.
-* `LoopModel.own_of_runStar`: the model's messages of a run of the deferred server against `V*` are its own.
-* `LoopModel.Deployed.head_hello`: at the deployed loop, such a run's first message is the `Hello` at the tape's nonce
-  (`frameD_own`, `loop_helloIs`).
-* **`envPre_run`**: `EnvPre` at the relay's requests from its start, at the release with the session loop's own rounds
-  of the inner proof over `withoutCross` (Rust's checks are the worker's, so `CrossPasses` holds by definition), at the
-  model's run of the deferred server against the relay's auditor as `V*` (`auditorV`, with at least the schedule's
-  model slots as rounds) whose worker is the deployed worker (`deployedWk`), which answers the link and the `Finish`
-  with the ZK server's own message, where the relay's nonce is the tape's, the relay serves its requests as its IO code
-  reads with the auditor's answers (`RelayServes`) and the model's worker gives the worker's round values
-  (`WorkerDeterministic`): what `relay_zkOut_env` reads at each randomness.
-* **`relayPre_run`**: so the relay's model frames are the model's messages, encoded (`relayPre_of_env`).
--/
+/-! The relay's model frames are the model's messages, encoded, at the model's run from the session's first request, over `withoutCross`, where `CrossPasses` holds by definition (`envPre_run`, `relayPre_run`). -/
 
 @[expose] public section
 
@@ -37,10 +14,6 @@ namespace Claims.ZKServer.Relay
 open _root_.Flock.ZkServer.Session (State Placed)
 open _root_.Flock (V SessionSpec Stmt)
 
-/-- **`LoopP` at `LoopJ` at the session's first request**: with no session state, no placement and no stream seen,
-where the loop's frames hold no rep of the session yet (so it is not stopped and each of its reps' frames is absent)
-and the session's slots took none of the model's messages, the relay's requests to come read as the loop answers them
-and each reading the setup. -/
 theorem loopP_start {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
     {nonce : ByteArray} {σ : LoopAt} {es : List Env} (hc : σ.c = 0) (hnew : ∀ p ∈ σ.R.reps, p.sid ≠ sid)
     (hR : LoopReads M sid spec sts nonce σ {} {} es) (hes : ∀ e ∈ es, e.setup = .ok (spec, sts)) :
@@ -77,7 +50,6 @@ theorem loopP_start {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Sessi
         exact LoopModel.TookAt.zero M rfl }
   exact ⟨σ, by rw [hc, List.drop_zero], hF, hJ, hR, hes⟩
 
-/-- **Each request that reaches a slot reads the relay's setup**: it is one the relay read (`out_sched`). -/
 theorem pick_setup {spec : SessionSpec} {sts : Array Stmt} {ins : List (ByteArray × Env)}
     (hs : ∀ p ∈ ins, p.2.setup = .ok (spec, sts)) (hb : ∀ p ∈ ins, ∀ why, (p.2.barrier (some why)).isSome) :
     ∀ e ∈ pick true {} {} ins, e.setup = .ok (spec, sts) := by
@@ -87,9 +59,6 @@ theorem pick_setup {spec : SessionSpec} {sts : Array Stmt} {ins : List (ByteArra
   exact hs p hp
 
 open Claims.ZKMal in
-/-- **A run of the deferred server against `V*` is its own**: where the model's run is the transcript of the deferred
-server with the model's worker, statement, witness, tape and check coins against `V*` (`ZkServer.proverD`), each of its
-messages is the deferred release's at the history before it (`interact_getElem_fst`). -/
 theorem LoopModel.own_of_runStar {W Rr Θ : Type} {M : LoopModel W Rr} {H : Msg → Msg} {Vs : VStar Θ} {θ : Θ}
     (hτ : M.τ = (runStar H (M.L.toSrv.proverD M.L.fillOf M.nN M.wk M.w) Vs M.x (M.ρ, M.κ) θ).msgs) : M.Own := by
   intro j hj
@@ -101,10 +70,6 @@ theorem LoopModel.own_of_runStar {W Rr Θ : Type} {M : LoopModel W Rr} {H : Msg 
   simp only [List.getElem?_eq_getElem hj, Option.map_some, List.nil_append, Option.some.injEq] at h
   exact h
 
-/-- **At the deployed loop the run's first message is the `Hello` at the tape's nonce**: where each of the run's
-messages is the deferred release's and it has one, the first is the server's own `Hello` (`frameD_own`; the run has a
-message past the `Hello`, so the release defers no stop there), the loop's `flock-zk-server hello` message
-(`loop_helloIs`) at the statement's setup. -/
 theorem LoopModel.Deployed.head_hello {T : ZKMal.CoinLayer.TableData}
     {M : LoopModel Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
@@ -131,18 +96,6 @@ theorem LoopModel.Deployed.head_hello {T : ZKMal.CoinLayer.TableData}
   unfold ZKMal.CoinLayer.helloMsg
   rw [Claims.ZKMal.sessOf_flock hD.setup]
 
-/-- **`EnvPre` at the relay's requests from its start, at the model's run**: at the release
-`withFiles (withLink (withInner Masked.dataE L₁.withoutCross (Loop.realOf src) fin) src) src` on the loop's own tables
-on `src`, whose `cross` passes every value as Rust's checks are the worker's (`LoopModel.Deployed.crossPasses`), with
-`envPre_withInner`'s premises on the loop (`hsrc`, `hfin`, `hS`, `hlive`), where the model's run is the deferred
-server's against the relay's auditor `A` as `V*` (`auditorV`, `hτ`), of at least as many rounds as the schedule has
-model slots (`hK`; `audK`'s rounds are those), its worker the deployed worker (`hdw`, `LeanRelease.deployedWk`), which
-answers the link and the `Finish` with the ZK server's own message, giving the worker's round values `rv`
-(`WorkerDeterministic`), and the relay's nonce is the tape's (`hn`): at every requests the worker sends and
-every answer of the auditor at the setup `spec`, `sts` (`hs`, `hb`), where at the session's first request the loop's
-frames hold no rep of the session and the session's slots took none of the model's messages, and the relay serves its
-requests as its IO code reads with `A`'s answers at its tape `θ` (`RelayServes`), they are read as the loop answers
-them (`loopReads_auditorV`), what the relay read at each model slot is the model's message there. -/
 theorem envPre_run
     {L₁ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Nonce ×
@@ -191,8 +144,6 @@ theorem envPre_run
       (fun _ _ _ _ _ _ hv hp => loopRead_of_serve hv hwd (LoopModel.finish_deployed hdw) hp)
       (fun _ _ _ _ _ _ hv => hv.ans_none) hc hF (pick_setup hs hb) (pick_barrier hb) hR.2 hR.1)
 
-/-- **The relay's model frames are the model's messages, encoded, at the model's run**: `envPre_run`'s premises give
-`EnvPre`, so `relayPre_of_env` gives `RelayPre` at `encOf`. -/
 theorem relayPre_run
     {L₁ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Nonce ×

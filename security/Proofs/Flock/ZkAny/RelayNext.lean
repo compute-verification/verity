@@ -2,16 +2,7 @@ module
 
 public import Proofs.Flock.ZkAny.RelayRun
 
-/-!
-# A rep's frame at the session's next round
-
-At a frame round as the loop ran it (`RoundRun`) that releases, where the auditor answered coins the rep's frame took,
-the session's next round reads the rep's frame the coins put back:
-
-* **`roundRun_next`**: there the rep's frame is `Loop.coinsOf` of the frame the round put, on the coins
-  `Frames.feedOf` reads off the auditor's answer, and where the frame `roundPlace` readied was its run on the rep's
-  requests so far (`RepRun`), it is its run on them and the round in its place with its coins (`repRun_round_coins`).
--/
+/-! At the session's next round a rep's frame is its run one round on, with the coins the auditor answered (`roundRun_next`). -/
 
 @[expose] public section
 
@@ -22,9 +13,6 @@ open _root_.Flock.ZkServer.Session (State Placed byte?)
 open _root_.Flock.ZkServer.Frames (Sessions Rep)
 open _root_.Flock.ZkServer.Frame (Req Place)
 
-/-- **The rep's frame at the session's next round, and its run**: at a `RoundRun` whose round releases and whose
-coins the rep's frame took, the frame the session's next round finds is `Loop.coinsOf` of the round's put on the coins
-`Frames.feedOf` reads off the auditor's answer, and it is the run of the frame `roundPlace` readied one round on. -/
 theorem roundRun_next {sid : Nat} {st : State} {pl : Placed} {stream : String} {n i r : Nat}
     {dom content : ByteArray} {e : Env} {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {R₃ : Sessions}
     (hr : RoundRun sid st pl stream n i r dom content e R L0 R₃) (hreq : st.request pl (.round stream n) = none)

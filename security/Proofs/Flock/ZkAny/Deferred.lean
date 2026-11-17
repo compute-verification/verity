@@ -4,21 +4,7 @@ public import Definitions.Claims.ZKOut
 public import Proofs.Flock.Claims.ZK.GKOneSided
 public import Proofs.Flock.ZkAny.Unswitched
 
-/-!
-# The deferred release per outcome: the `Finish` verdict
-
-The server that defers every stop (`ZkServer.proverD`) releases, at its last round `n x - 1`, its frame or the stop.
-The verdict read off the release (`goesOnAt`: it reaches its last round and its message there is not the stop) is its
-public outcome, and on each outcome the release is one prover's run:
-
-* `release_stopped`: where the release doesn't go on at its last round (it shows the stop there, or ended before it),
-  it is the stop prover's run cut there, for any prover whose messages are the deferred server's frames below its last
-  round (`RefDBelow`).
-* `zk_deferred_out`: so the deferred release is zero knowledge per outcome (`ZKOut`) at the verdict, from the stop
-  prover's zero knowledge (`ZKmalR`) read through the cut (`cutSim`), and, where the release goes on, its being a go
-  prover's run and that prover simulated where its own run goes on: no guess of the outcome, each outcome's simulator
-  its own (`verdictSim`), fixed before the witness.
--/
+/-! The deferred release is zero knowledge per outcome at its `Finish` verdict, each outcome's simulator its own, so no outcome is guessed (`zk_deferred_out`). -/
 
 @[expose] public section
 
@@ -58,8 +44,6 @@ private theorem pr_snd {α β : Type} [Fintype α] [Fintype β] [Nonempty α] (p
 
 namespace ZkServer
 
-/-- **The deferred release's prefixes below its last round are its own runs** (`OwnHist`): below the last round it
-releases its frame. -/
 theorem ownHist_release {W R : Type} (S : ZkServer W R) (fill : Msg → ℕ → ℕ → W → R → List (Msg × Msg) → S.Val)
     (n : Msg → ℕ) (wk : S.Worker) (x : Msg) (w : W) (ask : List Msg → Out) (ρ : R) (κ : S.Chk) (i : ℕ)
     (hi : i + 1 ≤ n x) :
@@ -76,9 +60,6 @@ theorem ownHist_release {W R : Type} (S : ZkServer W R) (fill : Msg → ℕ → 
   unfold nextD
   rw [ite_eq_left (Or.inl (by rw [length_histOf_take]; omega))]
 
-/-- **Where the release doesn't go on at its last round, it is the stop prover's run cut there**: for every worker,
-check coins and tape, if `P`'s messages are the deferred server's frames below its last round (`RefDBelow`), a release
-whose message at round `n x - 1` is the stop, or that ended before it, is `P`'s run with that message the stop. -/
 theorem release_stopped {W R : Type} (S : ZkServer W R) (H : Msg → Msg) (P : W → Prover R)
     (fill : Msg → ℕ → ℕ → W → R → List (Msg × Msg) → S.Val) (n : Msg → ℕ) (x : Msg) (w : W) (wk : S.Worker)
     (hRef : S.RefDBelow H P fill n wk x w) (ask : List Msg → Out) (ρ : R) (κ : S.Chk)
@@ -112,12 +93,6 @@ theorem release_stopped {W R : Type} (S : ZkServer W R) (H : Msg → Msg) (P : W
     have hs' : (τ[i]'hi).1 = S.stop := by simpa using hs
     rw [← hg', hs']
 
-/-- **The deferred release is zero knowledge per outcome at its `Finish` verdict**: for every worker, if the release
-that goes on at its last round is the go prover `Pg`'s run and `Pg` is simulated where its own run goes on there, and
-the stop prover `Ps`'s messages are the deferred server's frames below its last round (`RefDBelow`) and `Ps` meets
-`ZKmalR`, the release meets `ZKOut` at the verdict: where it goes on at `Pg`'s simulator with `Pg`'s error, otherwise
-at `Ps`'s simulator cut at the last round with `Ps`'s error. The verdict is read off the release, so no outcome is
-guessed. -/
 theorem zk_deferred_out {W N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (S : ZkServer W (N × Ω))
     (fill : Msg → ℕ → ℕ → W → N × Ω → List (Msg × Msg) → S.Val) (H : Msg → Msg)
     (n : Msg → ℕ) (wk : S.Worker) (Pg Ps : W → Prover (N × Ω)) (Rl : Rel W)

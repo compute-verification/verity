@@ -3,22 +3,7 @@ module
 public import Proofs.Flock.ZkAny.RelaySame
 public import Proofs.Flock.ZkAny.RelayFresh
 
-/-!
-# A rep's salts for levels ≥ 1 where the loop's round reads them
-
-The round lemmas take the rep's salts for levels ≥ 1 in the loop's salts at the opening's first round, where `placeOf`
-reads them (`hsalt`). `placeOf` begins the opening only on salts it found there, so a round `roundPlace` readied had
-them in the frames it read, and a frame keeping its schedule so far before its opening begins keeps it at any salts:
-
-* `placeOf_salts`: where `placeOf` places the opening's first round, it found the rep's salts among the loop's.
-* `roundPlace_placeOf`: past the stream's first round, `placeOf` placed the found frame's round.
-* `roundPlace_of_out`: a round that releases is one `roundPlace` readied.
-* **`roundPlace_salts`**: so past the stream's first round the frames the round read hold the rep's salts wherever
-  `placeOf` reads them. **`roundPlace_salts_first`**: at the stream's first round, where `withAlg` scheduled no rounds.
-* `repInv_hi`: before its opening begins, a frame keeps its schedule so far at any salts.
-* **`sameInv_salts`**: so a frame keeping `SameInv` at a round past its stream's first keeps it at salts the frames
-  the round read hold wherever `placeOf` reads them, the round lemmas' `hsalt`.
--/
+/-! A rep's salts for levels ≥ 1 are in the loop's salts wherever the loop's round reads them (`roundPlace_salts`, `sameInv_salts`). -/
 
 @[expose] public section
 
@@ -28,8 +13,6 @@ open _root_.Flock (F128 Stmt)
 open _root_.Flock.ZkServer.Frames (Sessions Rep Release)
 open _root_.Flock.ZkServer.Frame (Req Place)
 
-/-- **Where `placeOf` places the opening's first round, it found the rep's salts** among the loop's salts `salts`: it
-begins the opening only on them. -/
 theorem placeOf_salts {salts : Array (ByteArray × Nat × Array ByteArray)} {l0 : _root_.Flock.ZkServer.Level0.Level0}
     {s : Release} {p : Rep} {dom : ByteArray} {v : Place × Nat × Rep}
     (h : _root_.Flock.ZkServer.Frames.placeOf salts l0 s p dom = .ok v) (hle : p.alg.size ≤ p.coins.size)
@@ -45,8 +28,6 @@ theorem placeOf_salts {salts : Array (ByteArray × Nat × Array ByteArray)} {l0 
     | exact ⟨_, _, _, by assumption⟩
 
 set_option maxHeartbeats 1000000 in
-/-- **Past the stream's first round `placeOf` placed the found frame's round**, at the session `s`, its table `name`
-and its level 0 `l0`. -/
 theorem roundPlace_placeOf {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r j : Nat}
     {dom content : ByteArray} {n : Nat} {p q : Rep} {pl : Place} {f : Bool} {nd : Option String}
     (hf : R.find sid i r = some (j, p))
@@ -64,7 +45,6 @@ theorem roundPlace_placeOf {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slo
     all_goals cases h
   · exact ⟨v, rfl⟩
 
-/-- **A round that releases is one `roundPlace` readied.** -/
 theorem roundPlace_of_out {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r : Nat}
     {dom content : ByteArray} {n : Nat} {o : ByteArray}
     (ho : (_root_.Flock.ZkServer.Frames.roundStep R L0 sid i r dom content n).out = .ok o) :
@@ -77,8 +57,6 @@ theorem roundPlace_of_out {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slot
     cases ho
   · exact ⟨q, pl, f, nd, rfl⟩
 
-/-- **Past the stream's first round the frames the round read hold the rep's salts wherever `placeOf` reads them**:
-at the opening's first round, `placeOf` found them. -/
 theorem roundPlace_salts {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r : Nat}
     {dom content : ByteArray} {n : Nat} {p q : Rep} {pl : Place} {f : Bool} {nd : Option String}
     (hfa : frameAt R sid i r = some p) (hk : p.coins.isEmpty = false)
@@ -95,9 +73,6 @@ theorem roundPlace_salts {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots
     exact ⟨r0, q0, hi, fun _ _ _ => hs⟩
   · exact ⟨.empty, 0, #[], fun a b c => absurd ⟨a, b, c⟩ hc⟩
 
-/-- **At the stream's first round the frames the round read hold the rep's salts where `withAlg` scheduled no
-rounds**: there the round is the opening's first, which `placeOf` places on the frame `withAlg` gave, after rep 0's
-algebraic-phase coins at rep 1. -/
 theorem roundPlace_salts_first {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r j : Nat}
     {dom content : ByteArray} {n : Nat} {p q : Rep} {pl : Place} {f : Bool} {nd : Option String}
     (hf : R.find sid i r = some (j, p)) (hp : FreshRep p)
@@ -125,7 +100,6 @@ theorem roundPlace_salts_first {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0
       exact ⟨r0, q0, hi, fun _ => hs⟩
   · exact ⟨.empty, 0, #[], fun h => absurd h h0⟩
 
-/-- **Before its opening begins, a frame keeps its schedule so far at any salts**: only the opening reads them. -/
 theorem repInv_hi {t : _root_.Flock.ZkServer.Finish.Tab} {dom : ByteArray} {xs : Array (Array F128)}
     {hi hi' : Array ByteArray} {p : Rep} (h : Loop.RepInv t dom xs hi p) (hop : p.opening = none)
     (ho : p.opened = false) : Loop.RepInv t dom xs hi' p := by
@@ -137,9 +111,6 @@ theorem repInv_hi {t : _root_.Flock.ZkServer.Finish.Tab} {dom : ByteArray} {xs :
   · rw [ho] at h3
     cases h3
 
-/-- **A frame keeping `SameInv` at a round past its stream's first keeps it at salts the round lemmas read**: at
-salts the frames the round read hold wherever `placeOf` reads them (`hsalt`), the found ones at the opening's first
-round, before which nothing reads the salts. -/
 theorem sameInv_salts {W Rr : Type} {L : LeanRelease W Rr} {x : Msg} {ρ : Rr} {h : List (Msg × Msg)}
     {cs : List FlockDeploy.Coin} {q₀ j : Nat} {t : _root_.Flock.ZkServer.Finish.Tab} {dom' : ByteArray}
     {xs : Array (Array F128)} {hi : Array ByteArray} {pre : List Req}

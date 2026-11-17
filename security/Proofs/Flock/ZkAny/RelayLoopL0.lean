@@ -3,20 +3,7 @@ module
 public import Proofs.Flock.ZkAny.RelayLoopKept
 public import Proofs.Flock.SessionLoop.Statement
 
-/-!
-# The level-0 half of the model's tables being the loop's
-
-`RealAt`'s level-0 half, at the loop's own tables (`Loop.realOf src`): each table the level 0 the loop holds for the
-session gives is the one `Loop.realOf src` gives the table's reps.
-
-* `tab_of_toIn`: two level 0s `Level0.ofSamples` gave at one `m` with one input (`toIn`) give one table.
-* **`real_of_builtAt`**: where every level 0 bound to the session is the one the loop drew for its table from
-  `src`'s rep 0 (`BuiltAt`), the rep streams' names distinct, and rep 1's level 0 has rep 0's inputs, at each rep of
-  each table the level 0 gives table `t`, `Loop.realOf src` gives `t`.
-* `level0Src_rep1`: where the loop's host and operating system hand it the tape's level-0 inputs (`Loop.Level0Src`)
-  at a statement the masked session proves (`Masked.Live`), rep 1's level 0 has rep 0's inputs. **`realAt_h0`**: so
-  `real_of_builtAt` holds there.
--/
+/-! The level-0 half of `RealAt` at the loop's own tables (`real_of_builtAt`, `realAt_h0`). -/
 
 @[expose] public section
 
@@ -27,8 +14,6 @@ open _root_.Flock.ZkServer.Frames (Release)
 
 variable {wideLeaf : Bool}
 
-/-- **Two level 0s `Level0.ofSamples` gave at one `m` with one input give one table**: `Finish.tabOfLevel0` reads a level
-0's `m`, `t_pad`, input and commitment, which its `m` and input fix (`Level0.ofSamples_ok`). -/
 theorem tab_of_toIn {m : Nat} {g g' : Array F128} {d d' : ByteArray} {l l' : _root_.Flock.ZkServer.Level0.Level0}
     (hl : _root_.Flock.ZkServer.Level0.ofSamples wideLeaf m g d = .ok l)
     (hl' : _root_.Flock.ZkServer.Level0.ofSamples wideLeaf m g' d' = .ok l') (he : l.toIn = l'.toIn) (st : _root_.Flock.Setup) :
@@ -46,12 +31,6 @@ theorem tab_of_toIn {m : Nat} {g g' : Array F128} {d d' : ByteArray} {l l' : _ro
   rw [hm.trans hm'.symm, show l.wideLeaf = l'.wideLeaf from congrArg _root_.Flock.ZkServer.Link.In.wideLeaf he, htp,
     show l.g = l'.g from congrArg _root_.Flock.ZkServer.Link.In.g he, he, hc]
 
-/-- **The level-0 half of `RealAt` at the loop's own tables**, at the loop `σ` for session `sid`, where the model's
-samples are `src`'s at its statement, witness and tapes (`hsrc`), the session's entry is the setup's (`SessOn`), the
-rep streams' names are distinct (`hnd`), every level 0 bound to the session is the one the loop drew for its table from
-rep stream `2j`'s samples (`BuiltAt`), and rep stream `2j + 1`'s samples give a level 0 with its inputs (`h1`): at each
-rep `r` of each table `i` of the session's entry, where the level 0 the loop holds for the table gives table `t`,
-`Loop.realOf src` gives `t` at rep stream `2i + r` (`tables_inj`, `tab_of_toIn`). -/
 theorem real_of_builtAt {Rr : Type} {M : LoopModel Claims.Flock.Wit Rr}
     {src : Msg → Claims.Flock.Wit → Rr → Nat → V (Array F128 × ByteArray × Array ByteArray)} {sid : Nat}
     {σ : LoopAt} {s0 : _} {spec : SessionSpec} {sts : Array Stmt}
@@ -95,10 +74,6 @@ theorem real_of_builtAt {Rr : Type} {M : LoopModel Claims.Flock.Wit Rr}
   · obtain ⟨g', d', hi', l', hs', hd', he⟩ := h1 i g d hi l0 (by rw [← hsts]; exact hlt) hsj hdj
     exact ⟨hi', key (2 * i + 1) g' d' hi' l' (by omega) hs' hd' ((tab_of_toIn hd' hdj he _).trans ht)⟩
 
-/-- **Rep 1's level 0 has rep 0's inputs** where the loop's host and operating system hand it the tape's level-0
-inputs (`Loop.Level0Src`), at a statement the masked session proves (`Masked.Live`): at table `j` of the setup, where
-rep stream `2j`'s samples give level 0 `l`, rep stream `2j + 1`'s give one with `l`'s inputs, both being
-`Masked.linkIn`'s. -/
 theorem level0Src_rep1 {src : Msg → Claims.Flock.Wit →
       (ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Nonce ×
         (ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Rand →
@@ -134,8 +109,6 @@ theorem level0Src_rep1 {src : Msg → Claims.Flock.Wit →
     simp only [bind, Except.bind] at h₁'
     exact ⟨g', d', hi', l₁, rfl, h₁', by rw [hi₁, ← hi₀, e0]⟩
 
-/-- **The level-0 half of `RealAt` where the loop samples the tape's level 0**: `real_of_builtAt`, rep 1's level 0
-having rep 0's inputs by `level0Src_rep1`, at a statement the masked session proves. -/
 theorem realAt_h0 {M : LoopModel Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Nonce ×
         (ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Rand)}

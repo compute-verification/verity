@@ -2,21 +2,7 @@ module
 
 public import Proofs.Flock.ZkAny.RelayFollow
 
-/-!
-# A rep's first round after another rep's, at the model's state
-
-At the session's first frame round, and at a round after another rep's round, the model checks the round at the next
-rep's start (`Loop.freshOf`), which at rep 0 is the frame's start, and the loop's frame of rep 0 starts there:
-
-* `ofLoop_answered_switch`: where the round after a history is the session's first frame round or another rep's than
-  the round before it, the model's state for it is `freshOf`'s (`takeAt`'s first or third case);
-  `ofLoop_answeredR_switch`: so is its state before the rank stop.
-* `freshOf_rep0`: at a rep 0 stream's first round, `freshOf`'s state is the frame's start.
-* `roundPlace_st`: at any rep but rep 1, the frame `roundPlace` readies is at the found frame's state: `withAlg` and
-  `placeOf` keep it, and only rep 1's first round adds rep 0's algebraic-phase coins.
-* **`roundPlace_switch0`**: so at rep 0's first round, on its frame's run on no requests (`RepRun [] []`), the frame
-  `roundPlace` readies is at the model's state for a rep 0 stream's first round.
--/
+/-! At a rep's first round after another rep's, the readied frame is at the model's state (`ofLoop_answered_switch`, `roundPlace_switch0`). -/
 
 @[expose] public section
 
@@ -27,9 +13,6 @@ open _root_.Flock.ZkServer.Frames (Sessions Rep)
 open _root_.Flock.ZkServer.Frame (Masker Place)
 
 open Loop LeanRelease in
-/-- **At a rep switch the model's state is the next rep's start**: where the round after `e0 :: h1` is the session's
-first frame round, or another rep's than the round before it, the model checks it at `freshOf`'s state (past the link,
-after the last rep's frame took the coins). -/
 theorem ofLoop_answered_switch (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -55,8 +38,6 @@ theorem ofLoop_answered_switch (T : ZKMal.CoinLayer.TableData)
   · exact hf
 
 open Loop LeanRelease in
-/-- **At a rep switch the model's state before the rank stop is the next rep's start**, as `ofLoop_answered_switch`:
-there is no rank stop at a rep's first round. -/
 theorem ofLoop_answeredR_switch (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -73,7 +54,6 @@ theorem ofLoop_answeredR_switch (T : ZKMal.CoinLayer.TableData)
     exact absurd he (hs (by omega)))
 
 open Loop in
-/-- **At a rep 0 stream's first round the loop starts the frame at its start.** -/
 theorem freshOf_rep0 (x : Msg) (cs : List FlockDeploy.Coin) {s0 : _} {spec : SessionSpec} {sts : Array Stmt}
     {q : Nat} (hx : FlockDeploy.setupOf true x = some (s0, spec, sts)) (hq : cs.length = q + 1)
     (hk : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 % 2 = 0) {m : Masker} (hm : freshOf x cs = .ok m) :
@@ -83,7 +63,6 @@ theorem freshOf_rep0 (x : Msg) (cs : List FlockDeploy.Coin) {s0 : _} {spec : Ses
   · exact absurd hk h.1
 
 set_option maxHeartbeats 1000000 in
-/-- **At any rep but rep 1 the readied frame is at the found frame's state**: `withAlg` and `placeOf` keep it. -/
 theorem roundPlace_st {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r j : Nat}
     {dom content : ByteArray} {n : Nat} {p q : Rep} {pl : Place} {f : Bool} {nd : Option String}
     (hf : R.find sid i r = some (j, p))
@@ -106,8 +85,6 @@ theorem roundPlace_st {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {
          | exact (placeOf_run' (by assumption)).2.1.trans (withAlg_run (by assumption)).2.1
          | exact absurd (by assumption : (r == 1) = true) (by simpa using hr))
 
-/-- **At rep 0's first round the readied frame is at the model's state**: on its frame's run on no requests, where
-the model's state for the round is `freshOf`'s at a rep 0 stream's first round. -/
 theorem roundPlace_switch0 {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i j : Nat}
     {dom content : ByteArray} {n : Nat} {p q : Rep} {pl : Place} {f : Bool} {nd : Option String}
     (hf : R.find sid i 0 = some (j, p))

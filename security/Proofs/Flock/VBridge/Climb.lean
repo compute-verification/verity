@@ -20,18 +20,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# V*'s climb through the tree's nodes
-
-The loop of `verity_flock.rec_open._climb`, as the verifier's builder (`Flock.HmNets`) states it: at level `h` the
-direction bit `d[h]` swaps the current digest and the sibling (`_Forms.swap`: `t = d ∧ (cur ⊕ sib)` bit by bit, then
-`(cur ⊕ t, sib ⊕ t)`), and the node is SHA-512 of the pair from the IV (`_sha(ops, IV, left + right, 0)`).
-
-`sound_climbFrom`: whenever the rows hold, if the forms carry the bytes of a 64-byte digest and of 64-byte siblings
-(`Carries`) and the direction bits are the position's low bits, the output carries the verifier's climb,
-`Flock.climb ms` of the digest at the position through the siblings, for any scheme `ms` whose node is `SHA-512(l ‖ r)`
-(`MerkleScheme.hm96Sha512`, and `MerkleScheme.sha512`'s unsalted leaves).
--/
+/-! V*'s climb through the tree's nodes is the verifier's (`sound_climbFrom`), for any scheme whose node is `SHA-512(l ‖ r)`. -/
 
 @[expose] public section
 
@@ -40,16 +29,10 @@ namespace FlockVBridge
 open Flock.HmNets hiding and
 open Flock FlockSoundness.Discharge.Hm
 
-/-! ## The builder -/
-
-/-- `_Forms.swap`: `t = d ∧ (a ⊕ s)` bit by bit, then `(a ⊕ t, s ⊕ t)`, which is `(a, s)` when `d` is 0 and `(s, a)`
-when it is 1. -/
 def swap (d : Lin) (a s : List Lin) : M (List Lin × List Lin) := do
   let t ← (a.zip s).mapM fun x => Flock.HmNets.and d (x.1 ^^^ x.2)
   pure (List.zipWith (· ^^^ ·) a t, List.zipWith (· ^^^ ·) s t)
 
-/-- `_climb`'s loop from level `h`: the digest `cur` climbs through the siblings `sibs`, the direction at level `h + j`
-being `d[h + j]`, each node SHA-512 of the pair from the IV. -/
 def climbFrom (d : List Lin) : ℕ → List Lin → List (List Lin) → M (List Lin)
   | _, cur, [] => pure cur
   | h, cur, s :: rest => do
@@ -57,11 +40,8 @@ def climbFrom (d : List Lin) : ℕ → List Lin → List (List Lin) → M (List 
     let cur ← shaFrom (preCv [] 0) (lr.1 ++ lr.2) 0
     climbFrom d (h + 1) cur rest
 
-/-- The forms `w` carry the bytes `b`: one form a bit, bit `t % 8` of byte `t / 8`. -/
 def Carries (z : Var → Bool) (w : List Lin) (b : ByteArray) : Prop :=
   w.length = 8 * b.size ∧ ∀ t < w.length, bit z w t = bitL b.data.toList t
-
-/-! ## What the rows force -/
 
 theorem carries_append {z : Var → Bool} {w w' : List Lin} {b b' : ByteArray} (h : Carries z w b)
     (h' : Carries z w' b') : Carries z (w ++ w') (b ++ b') := by
@@ -76,7 +56,6 @@ theorem carries_append {z : Var → Bool} {w w' : List Lin} {b b' : ByteArray} (
   · rw [bitL_append_right _ (by omega), bit, List.getElem?_append_right (by omega),
       show t - w.length = t - 8 * b.data.toList.length by omega, ← bit, hb' _ (by omega)]
 
-/-- SHA-512 from the IV of forms that carry `x` carries `SHA-512(x)`. -/
 theorem sound_shaIv (bits : List Lin) : Sound (shaFrom (preCv [] 0) bits 0) fun z out =>
     ∀ x : ByteArray, Carries z bits x → Carries z out (Sha512.hash x) :=
   Sound.mono (sound_shaFrom (preCv [] 0) bits 0) fun z out h x hx => by
@@ -115,10 +94,6 @@ theorem sound_swap (d : Lin) (a s : List Lin) : Sound (swap d a s) fun z lr => �
   · rw [hlen2]; cases ev z d <;> simp [hx.1, hxy]
   · rw [(hbit i (by omega)).2]; cases ev z d <;> simp [hx.2 i (by omega), hy.2 i (by omega)]
 
-/-- **V*'s climb is the verifier's.** For a Merkle scheme `ms` whose node is `SHA-512(l ‖ r)`, whenever the
-rows of `climbFrom d h cur sibs` hold under `z`: if `cur` carries a 64-byte digest `acc`, each sibling's forms carry a
-64-byte sibling of `ss`, and the direction bit at level `h + j` is bit `j` of the position `idx`, the output carries
-`Flock.climb ms acc idx ss`. -/
 theorem sound_climbFrom (ms : MerkleScheme) (hms : ∀ l r, ms.node l r = Sha512.hash (l ++ r)) (d : List Lin) :
     ∀ (h : ℕ) (cur : List Lin) (sibs : List (List Lin)),
     Sound (climbFrom d h cur sibs) fun z out => ∀ (acc : ByteArray) (idx : ℕ) (ss : List ByteArray),

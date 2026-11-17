@@ -19,16 +19,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import VCVio.Prelude.Core
 
-/-!
-# The verifier's part of S keeps S's residuals
-
-`RecResiduals.partS` builds a part's S from the whole S's terms, every lookup checked (`pos`). When it succeeds, the
-part's residual `k` is the whole S's residual `R[k]` (`res_partS`), at part ports that read the whole ports where the
-part's index says: its `w` element `k` is the whole `w`'s element `wIdx[k]`, its `v` element `k` is the whole `v`'s `V[k]`.
-
-The maps `renS` renumbers by are the verifier's own lookups (`fw`, `fv`, `fo`), and `PartAgrees` follows from their
-checks alone: the grouping that chose `R`, `P` and `V` is not read.
--/
+/-! The verifier's part of S keeps S's residuals (`res_partS`), from its own lookups' checks alone: the grouping that chose the part is not read. -/
 
 @[expose] public section
 
@@ -37,8 +28,6 @@ namespace FlockVBridge.PartS
 open Flock FlockVBridge.OfVStar
 open Flock.RecResiduals (positions pos partS starts)
 
-/-! ## The verifier's S read as V*'s -/
-
 def vTerm : RecAlgebra.Term → VStar.Term
   | .w i => .w i
   | .v j => .v j
@@ -46,7 +35,6 @@ def vTerm : RecAlgebra.Term → VStar.Term
 
 def vRes (r : RecAlgebra.Res) : VStar.Res := ⟨r.mul.toList, r.add.toList.map vTerm⟩
 
-/-- The verifier's whole S (`RecAlgebra.structureOf`'s) read as V*'s. -/
 def vS (S : RecAlgebra.GfS) : VStar.GfS :=
   ⟨S.nw, S.nv, S.ops.toList.map (·.toList.map vTerm), S.res.toList.map vRes⟩
 
@@ -58,13 +46,9 @@ theorem vS_res_getD (S : RecAlgebra.GfS) {r : ℕ} (hr : r < S.res.size) :
     (vS S).res.getD r default = vRes S.res[r] := by
   simp [vS, List.getD_eq_getElem?_getD, hr]
 
-/-! ## `partS`' pieces -/
-
-/-- The part's `w` index: its row ports' elements of the whole `w`, in order. -/
 def wIdx (sizes P : Array Nat) : Array Nat :=
   P.flatMap fun p => (Array.range sizes[p]!).map ((starts sizes)[p]! + ·)
 
-/-- `partS`' lookup of one term into the part's ports. -/
 def termE (S : RecAlgebra.GfS) (wI V : Array Nat) (t : RecAlgebra.Term) : Except String RecOpen.Term :=
   match t with
   | .w i => match pos wI (positions S.nw wI) i with
@@ -79,11 +63,9 @@ def termE (S : RecAlgebra.GfS) (wI V : Array Nat) (t : RecAlgebra.Term) : Except
       else throw s!"[\"wt\", {i}, {u}]: a transposed block over row ports the part does not read in a run"
     | none => throw s!"[\"wt\", {i}, {u}]: an element of a row port the part does not read"
 
-/-- `partS`' operand `k`: S's operand, its terms looked up. -/
 def opE (S : RecAlgebra.GfS) (wI V : Array Nat) (k : Nat) : Except String (List RecOpen.Term) :=
   if h : k < S.ops.size then S.ops[k].toList.mapM (termE S wI V) else throw s!"product operand {k} of {S.ops.size} operands"
 
-/-- `partS`' residual `r`: S's residual, its operands and terms looked up. -/
 def resE (S : RecAlgebra.GfS) (wI V used : Array Nat) (r : Nat) : Except String RecOpen.Res := do
   let some rr := S.res[r]? | throw s!"residual {r} of {S.res.size}"
   let mul ← rr.mul.toList.mapM fun (a, b) =>
@@ -92,12 +74,9 @@ def resE (S : RecAlgebra.GfS) (wI V used : Array Nat) (r : Nat) : Except String 
     | _, _ => throw s!"product [{a}, {b}]: an operand the part does not hold"
   pure ({ mul, add := ← rr.add.toList.mapM (termE S wI V) } : RecOpen.Res)
 
-/-- The maps the lookups define. -/
 def fw (S : RecAlgebra.GfS) (wI : Array Nat) (i : ℕ) : ℕ := (pos wI (positions S.nw wI) i).getD 0
 def fv (S : RecAlgebra.GfS) (V : Array Nat) (j : ℕ) : ℕ := (pos V (positions S.nv V) j).getD 0
 def fo (S : RecAlgebra.GfS) (used : Array Nat) (k : ℕ) : ℕ := (pos used (positions S.ops.size used) k).getD 0
-
-/-! ## Lemmas about `Except` -/
 
 theorem bind_ok {α β : Type} {x : Except String α} {f : α → Except String β} {b : β}
     (h : (x >>= f) = .ok b) : ∃ a, x = .ok a ∧ f a = .ok b := by
@@ -143,8 +122,6 @@ theorem getElem_of_forall₂ {α β : Type} {P : α → β → Prop} :
   | _, _, .cons h t, 0, _ => h
   | _, _, .cons _ t, k + 1, hk => getElem_of_forall₂ t k (by simpa using hk)
 
-/-! ## The checked lookups -/
-
 theorem pos_some {xs : Array Nat} {ps : Array (Option Nat)} {k p : Nat} (h : pos xs ps k = some p) :
     ∃ hp : p < xs.size, xs[p] = k := by
   unfold pos at h
@@ -160,8 +137,6 @@ section ports
 
 variable {w v w' v' : ℕ → F128} {S : RecAlgebra.GfS} {wI V : Array Nat}
 
-/-- **A looked-up term reads what S's term read**, at part ports `w'`, `v'` that hold the whole ports' elements at `wI`
-and `V`. -/
 theorem termE_ok (hw : ∀ k (hk : k < wI.size), w' k = w wI[k]) (hv : ∀ k (hk : k < V.size), v' k = v V[k])
     {t : RecAlgebra.Term} {b : RecOpen.Term} (h : termE S wI V t = .ok b) :
     termOf b = term (renTerm (fw S wI) (fv S V) (vTerm t)) ∧ TermAgrees w v w' v' (fw S wI) (fv S V) (vTerm t) := by
@@ -215,8 +190,6 @@ theorem termsE_ok (hw : ∀ k (hk : k < wI.size), w' k = w wI[k]) (hv : ∀ k (h
   obtain ⟨b, hb⟩ := exists_of_forall₂ h2 t ht
   exact (termE_ok hw hv hb).2
 
-/-- What a looked-up residual says: `r` is one of S's, it is S's renumbered by the lookups, every operand of its products
-is held where `fo` says, and each added term reads what S's read. -/
 theorem resE_ok (hw : ∀ k (hk : k < wI.size), w' k = w wI[k]) (hv : ∀ k (hk : k < V.size), v' k = v V[k])
     {used : Array Nat} {r : ℕ} {b : RecOpen.Res} (h : resE S wI V used r = .ok b) :
     ∃ hr : r < S.res.size,
@@ -263,11 +236,6 @@ theorem resE_ok (hw : ∀ k (hk : k < wI.size), w' k = w wI[k]) (hv : ∀ k (hk 
 
 end ports
 
-/-! ## The part -/
-
-/-- **The verifier's part keeps S's residuals.** When `partS` builds a part `S'` from S's residuals `R` and the ports
-`P` and `V`, `S'` has a residual for each of `R`, and at part ports `w'`, `v'` holding the whole ports' elements where
-the part's index says (`wIdx`, `V`), the part's residual `k` has S's residual `R[k]`'s value at `w`, `v`. -/
 theorem res_partS {S : RecAlgebra.GfS} {sizes R P V : Array Nat} {S' : RecOpen.GfS}
     (h : partS S sizes R P V = .ok S') {w v w' v' : ℕ → F128}
     (hw : ∀ k (hk : k < (wIdx sizes P).size), w' k = w (wIdx sizes P)[k])
@@ -285,7 +253,6 @@ theorem res_partS {S : RecAlgebra.GfS} {sizes R P V : Array Nat} {S' : RecOpen.G
   have ho := mapM_forall₂ hops'
   have hr := mapM_forall₂ hrs'
   have hn : rs.length = R.size := by simpa using length_of_forall₂ hr
-  -- every operand `partS` holds is one of S's, its terms looked up
   have hop : ∀ k ∈ used.toList, ∃ hk : k < S.ops.size, ∃ o,
       S.ops[k].toList.mapM (termE S (wIdx sizes P) V) = .ok o := by
     intro k hk

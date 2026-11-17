@@ -5,23 +5,7 @@ public import Proofs.Flock.SpotFlock.UnitRows
 
 @[expose] public section
 
-/-!
-# A placed unit, read off its session's block circuit
-
-`valueAt_unitPlace`: at a column of a unit placed in table `j` of a parsed statement at block `o` (`unitPlace`), under
-a witness of the deployed relation, the block circuit's value at that column's input gate (`valueAt_relation`) is the
-value the unit's block decodes at the column's wire.
-
-`embeds_unitPlace`: so at any wire map that sends each wire the unit computes or reads to the input gate of one of its
-columns, the block circuit's values hold each of the unit's gates (`UnitPlace.apply_decode`) and carry the lowering's
-constants (`decode_consts`). That is what `Embeds` asks of a checked unit (`unitVals`), where the layout's wires are
-such a map.
-
-`shape_of_checked`: a checked proof block, replayed in request `ρ`, is member `t`'s unit `k` (`member_of_replayOf`),
-and in Bridge's terms it is the key program's block `k`, `Bits.base` later, whose lowering sits in the statement's
-program (`sitsAt_member`): the shape half of `Embeds`. `parsed_of_stmtOkAt`: a checked session's statement is the
-readable form of a parsed statement that passes its check with hidden outputs, the session `embeds_unitPlace` reads.
--/
+/-! A unit placed in a session's table, read off the block circuit's values: the two halves of `Embeds` at a checked unit (`embeds_unitPlace`, `shape_of_checked`). -/
 
 namespace SpotFlock
 
@@ -32,10 +16,6 @@ variable {c : _root_.Flock.Circuit} (hU : Built c.unit) {n : ℕ}
   {T : Model.Statement} (a : HiddenExec.AcceptedH T) (hparse : HmOut.unrolled a.st.c = c)
 
 include hparse in
-/-- **The session's value at a placed unit's column is the unit's decoded value**: for a unit placed in table `j` of
-a parsed statement at block `o` (`unitPlace`), under a witness of the deployed relation whose table-`j` share the
-accepted statement's block R1CS holds, the block circuit's value at the input gate of the unit's column `cc` is the
-value the unit's block decodes at `cc`'s wire. -/
 theorem valueAt_unitPlace {p : Parsed} {j : ℕ} (hj : j < p.sts.size) (hk : T.kLog = p.sts[j].c.kLog) (u : Fin n)
     {g : ℕ} (hg : g < a.st.c.g) (o : Fin (2 ^ T.nbl)) {w : Claims.Flock.Wit}
     (hR : Claims.Flock.RelS (toReadable relation p) w) (hz : T.Satisfies (zOf p.sts.size w j T.m))
@@ -58,11 +38,6 @@ theorem valueAt_unitPlace {p : Parsed} {j : ℕ} (hj : j < p.sts.size) (hk : T.k
   exact hb.symm
 
 include hparse in
-/-- **A placed unit's gates hold at its session's values**: for a unit placed in table `j` of a parsed statement at
-block `o`, under a witness of the deployed relation whose table-`j` share the accepted statement's block R1CS holds,
-and a wire map `W` that sends each wire the unit computes or reads to the input gate of one of its columns, the block
-circuit's values at `W` hold each of the unit's gates and carry the lowering's constants (`Bridge.constsOf`) wherever
-the unit reads them. -/
 theorem embeds_unitPlace {p : Parsed} {j : ℕ} (hj : j < p.sts.size) (hk : T.kLog = p.sts[j].c.kLog) (u : Fin n)
     {g : ℕ} (hg : g < a.st.c.g) (o : Fin (2 ^ T.nbl)) {w : Claims.Flock.Wit}
     (hR : Claims.Flock.RelS (toReadable relation p) w) (hz : T.Satisfies (zOf p.sts.size w j T.m))
@@ -96,11 +71,6 @@ theorem embeds_unitPlace {p : Parsed} {j : ℕ} (hj : j < p.sts.size) (hk : T.kL
   · rw [hval x (Or.inr hr)]
     exact decode_consts hU a hparse u hg o hz x b hb hr
 
-/-! ## A checked proof block is a member's unit -/
-
-/-- **Member `t`'s unit `k`, in Bridge's terms, sits in the members' program**: its proof block in the members'
-partition is its circuit file's proof block `k` of the key program's partition at the circuit's constants,
-`Bits.base ms t` later, and that key program's lowering sits in `bitsProgs ms` from `Bits.base ms t`. -/
 theorem sitsAt_member (ms : Spot.Bits.Members)
     (htop : ∀ ci ∈ ms, (Properties.Spot.memberProg ci.1 ci.2.size).Topological) {t : ℕ} (ht : t < ms.length)
     (hU : Built ms[t].1.unit) (hu : ms[t].1.unit.unitLog ≤ 32) (k : Fin ms[t].2.size) {b : List ℕ}
@@ -120,9 +90,6 @@ theorem sitsAt_member (ms : Spot.Bits.Members)
 
 variable (h : Held)
 
-/-- **A checked proof block is a member's unit**: at a statement whose partition and two-stage design evaluate, in
-the two-stage scope, proof block `u`, replayed in request `ρ`, is member `t`'s unit `ρ·n_t + p` for some `p < n_t`,
-which member `t` has (`filesOk`). -/
 theorem member_of_replayOf {s : Claims.Sampling.AuditStatement} {Pt : Claims.Sampling.Partition}
     {d : Claims.Sampling.Design.Two} {u ρ : ℕ} (hP : SpotFlock.partition h s = some Pt)
     (hd : SpotFlock.two h s = some d) (hin : Claims.Sampling.InScopeTwo Pt d s) (hu : u < Pt.blocks.length)
@@ -144,10 +111,6 @@ theorem member_of_replayOf {s : Claims.Sampling.AuditStatement} {Pt : Claims.Sam
   exact ⟨t, ht, p, hp,
     lt_of_lt_of_le (_root_.Flock.Bridge.Members.rank_mul_add_lt (Nat.lt_add_one ρ) hp) (hroom t ht), rfl⟩
 
-/-- **A checked proof block, in Bridge's terms**: at a statement whose partition and two-stage design evaluate, in the
-two-stage scope, where each member's unit net is built with `unitLog ≤ 32`, a checked proof block `b`, replayed in
-request `ρ`, is member `t`'s unit `k`: Bridge's proof block `k` of the member's key program, `Bits.base h.ms t` later,
-whose lowering sits in the statement's program from `Bits.base h.ms t`. -/
 theorem shape_of_checked
     (hmem : ∀ t (ht : t < h.ms.length), Built h.ms[t].1.unit ∧ h.ms[t].1.unit.unitLog ≤ 32) {x}
     {s : Claims.Sampling.AuditStatement} {Pt : Claims.Sampling.Partition} {d : Claims.Sampling.Design.Two}
@@ -172,9 +135,6 @@ theorem shape_of_checked
   rw [← SpotFlock.parse_prog h hx] at hsit
   exact ⟨t, ht, ⟨_, hk⟩, rfl, hsit, hbeq⟩
 
-/-- **A checked session statement, parsed**: at a run that passed round 2, the session statement the claims' parser
-reads is the readable form of the statement the verifier's parser returns (`parsed_setupOf`), whose statement check
-passes and whose outputs are hidden (`sessionScoped`), as `accepted_check` reads it. -/
 theorem parsed_of_stmtOkAt {x m₁ xS c₀ c₁ t} {S : Claims.Flock.Stmt}
     (hok : SpotFlock.stmtOkAt h x m₁ xS c₀ c₁ t = true) (hS : FlockDeploy.parse true relation xS = some S) :
     ∃ p : Parsed, parseBytes (FlockDeploy.readOf true) xS = some p ∧ S = toReadable relation p ∧ Parses p ∧

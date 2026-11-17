@@ -23,21 +23,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Tactic.ReduceModChar
 
-/-!
-# V*'s gadgets: Karatsuba multiplication in GF(2^128)
-
-A GF(2^128) product of two hidden elements as rows of the verifier's builder (`Flock.HmNets`), each element 128 forms,
-bit `k` being bit `k` of `2^64·hi + lo` (`Flock.F128`):
-
-* `kara n`: Karatsuba on two polynomials of `2^n` coefficients (`gf2k.karatsuba`). One row for `n = 0`; otherwise three
-  half-size products (the low halves, the high halves, the halves' sums, in that order) recombined by XOR, which costs no
-  row. `kara 7` is `3^7 = 2,187` rows.
-* `reduceG`: the reduction modulo `G = X^128 + X^7 + X^2 + X + 1` (`gf2k.reduce_forms`), linear, no row: `lo + X^128·hi`
-  becomes `lo + (X^7 + X^2 + X + 1)·hi`, twice (`foldG`).
-
-`sound_mul128`: whenever every row holds and the input forms carry the bits of `x` and `y`, the output forms carry the
-bits of `x * y`, the executable's product, which is level 3's GF(2^128) product (`F128.poly_mul`).
--/
+/-! Karatsuba multiplication in GF(2^128) as rows of the verifier's builder computes the executable's product (`sound_mul128`). -/
 
 @[expose] public section
 
@@ -47,18 +33,13 @@ open Flock.HmNets hiding and
 open FlockSoundness.Discharge.Hm Polynomial
 open FlockLevel3 (P b2 b2_true b2_false b2_xor b2_and w128 w128_lt coeff_natPoly G_monic G_degree two_eq_zero_P)
 
-/-! ### Forms as polynomials -/
-
-/-- Coefficient-wise XOR of two lists of forms, the shorter padded with zero. -/
 def addL : List Lin → List Lin → List Lin
   | [], g => g
   | f :: fs, [] => f :: fs
   | f :: fs, g :: gs => (f ^^^ g) :: addL fs gs
 
-/-- Multiplication by `X^k`. -/
 def shiftL (k : ℕ) (f : List Lin) : List Lin := List.replicate k Lin.zero ++ f
 
-/-- The polynomial over GF(2) whose coefficient `i` is form `i`'s value under `z`. -/
 noncomputable def polyOf (z : Var → Bool) : List Lin → P
   | [] => 0
   | f :: fs => C (b2 (ev z f)) + X * polyOf z fs
@@ -112,10 +93,6 @@ theorem degree_polyOf_lt (z : Var → Bool) (f : List Lin) {n : ℕ} (h : f.leng
   rw [degree_lt_iff_coeff_zero]
   exact fun m hm => coeff_polyOf_ge z f m (h.trans hm)
 
-/-! ### Karatsuba -/
-
-/-- **Karatsuba** on two polynomials of at most `2^n` coefficients each: the product's coefficients. One row for
-`n = 0`; otherwise the products of the low halves, of the high halves and of the halves' sums, in that order, and XORs. -/
 def kara : ℕ → List Lin → List Lin → M (List Lin)
   | 0, a, b => do
       let c ← fresh (a.headD Lin.zero) (b.headD Lin.zero)
@@ -126,8 +103,6 @@ def kara : ℕ → List Lin → List Lin → M (List Lin)
       let p1 ← kara n (addL (a.take (2 ^ n)) (a.drop (2 ^ n))) (addL (b.take (2 ^ n)) (b.drop (2 ^ n)))
       pure (addL (addL p0 (shiftL (2 ^ n) (addL (addL p1 p0) p2))) (shiftL (2 ^ n * 2) p2))
 
-/-- **Karatsuba is the product.** Whenever every row holds, the result has at most `2·2^n − 1` coefficients and is the
-product of the inputs' polynomials. -/
 theorem sound_kara : ∀ (n : ℕ) (a b : List Lin), a.length ≤ 2 ^ n → b.length ≤ 2 ^ n →
     Sound (kara n a b) fun z c => c.length ≤ 2 * 2 ^ n - 1 ∧ polyOf z c = polyOf z a * polyOf z b
   | 0, a, b, ha, hb => by
@@ -163,15 +138,11 @@ theorem sound_kara : ∀ (n : ℕ) (a b : List Lin), a.length ≤ 2 ^ n → b.le
           (X ^ h * (polyOf z (a.take h) * polyOf z (b.take h) + polyOf z (a.drop h) * polyOf z (b.drop h))) *
             two_eq_zero_P
 
-/-! ### The reduction modulo `G` -/
-
-/-- Multiplication by `S = X^7 + X^2 + X + 1`. -/
 def mulS (g : List Lin) : List Lin := addL (addL (addL g (shiftL 1 g)) (shiftL 2 g)) (shiftL 7 g)
 
-/-- One fold modulo `G`: `lo + X^128·hi` becomes `lo + S·hi`, since `X^128 = S` modulo `G` over GF(2). -/
+/-- `X^128 = X^7 + X^2 + X + 1` modulo `G` over GF(2), so `lo + X^128·hi` becomes `lo + (X^7 + X^2 + X + 1)·hi`. -/
 def foldG (f : List Lin) : List Lin := addL (f.take 128) (mulS (f.drop 128))
 
-/-- The reduction of a product of two elements (at most 255 coefficients): two folds. -/
 def reduceG (f : List Lin) : List Lin := foldG (foldG f)
 
 theorem polyOf_mulS (z : Var → Bool) (g : List Lin) : polyOf z (mulS g) = FlockLevel3.S * polyOf z g := by
@@ -195,7 +166,6 @@ theorem length_reduceG (f : List Lin) (h : f.length ≤ 255) : (reduceG f).lengt
   simp only [reduceG, length_foldG]
   omega
 
-/-- **The reduction is `%ₘ G`.** -/
 theorem polyOf_reduceG (z : Var → Bool) (f : List Lin) (h : f.length ≤ 255) :
     polyOf z (reduceG f) = polyOf z f %ₘ FlockLevel3.G := by
   have hdeg := degree_polyOf_lt z _ (length_reduceG f h)
@@ -208,14 +178,10 @@ theorem polyOf_reduceG (z : Var → Bool) (f : List Lin) (h : f.length ≤ 255) 
     _ = polyOf z f %ₘ FlockLevel3.G := modByMonic_eq_of_dvd_sub G_monic
       ⟨polyOf z (f.drop 128) + polyOf z ((foldG f).drop 128), by rw [hr]; ring⟩
 
-/-! ### GF(2^128) multiplication -/
-
-/-- **GF(2^128) multiplication**: Karatsuba, then the reduction. -/
 def mul128 (a b : List Lin) : M (List Lin) := do
   let p ← kara 7 a b
   pure (reduceG p)
 
-/-- Bit `k` of an element of `F128`: bit `k` of `2^64·hi + lo`. -/
 def bitOf (x : Flock.F128) (k : ℕ) : Bool := (w128 x.lo x.hi).testBit k
 
 theorem b2_inj {x y : Bool} (h : b2 x = b2 y) : x = y := by
@@ -230,8 +196,6 @@ theorem polyOf_eq_poly (z : Var → Bool) (a : List Lin) (ha : a.length = 128) (
   · rw [List.getD_eq_default _ _ (by omega), ev_zero,
       Nat.testBit_lt_two_pow (lt_of_lt_of_le (w128_lt _ _) (Nat.pow_le_pow_right (by norm_num) (by omega)))]
 
-/-- **The Karatsuba circuit is GF(2^128) multiplication.** Whenever every row holds and the input forms carry the bits of
-`x` and `y`, the output forms carry the bits of `x * y` (`Flock.F128.mul`, level 3's product by `F128.poly_mul`). -/
 theorem sound_mul128 (a b : List Lin) (ha : a.length = 128) (hb : b.length = 128) :
     Sound (mul128 a b) fun z c => ∀ x y : Flock.F128, (∀ k < 128, ev z (a.getD k Lin.zero) = bitOf x k) →
       (∀ k < 128, ev z (b.getD k Lin.zero) = bitOf y k) → ∀ k < 128, ev z (c.getD k Lin.zero) = bitOf (x * y) k := by

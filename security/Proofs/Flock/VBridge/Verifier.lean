@@ -21,24 +21,7 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.ExecCircuit
 import VCVio.Prelude.Core
 
-/-!
-# The verifier's opening unit is V*'s laid-out opening
-
-`Flock.RecOpen` is the verifier's copy of V*'s opening builder, the net `HmRow.parse` checks a `rec-open/l<L>-h<H>` unit
-against (`RecOpen.check`). It is this package's builder word for word, over its own `Term`, `Res` and `GfS` (`termOf`,
-`resOf`, `gfsOf`), its own byte helpers (`byteBit` is `bitL`) and SHA-512's IV as words (`ivW = preCv [] 0`):
-`recOpenNet_eq`.
-
-The verifier lays the net out as M0 does, one 16-bit port per word (`RecOpen.unitLaid`), where `recOpenLaid` takes the
-ports as given. `layout` reads its ports only through their sums, except in the groups it records, which `LaidRows`
-does not read (`laidRows_layout_congr`), so `laid_recOpen` holds at `unitLaid` (`laid_unit`); its outputs are 2,048 bits,
-its 128 output words (`length_recOpenOuts`).
-
-`unit_check`: a unit the verifier accepted (`RecOpen.check`) under the name `rec-open/l<L>-h<H>` has `H ≤ 32` and is the
-verifier's net at `L` and `H` (`RecOpen.check_ok`), so a copy of it in a unit of any partition computes the climb and the
-consistency term; `keyProg_parse` is the same for a unit of `Placed.keyProg` of a circuit `HmRow.parse` accepted, which
-ran the check (`ParseFacts.recNet`).
--/
+/-! The verifier's opening builder `Flock.RecOpen` is V*'s (`recOpenNet_eq`), so a unit it accepts computes the climb and the consistency term (`unit_check`, `keyProg_parse`). -/
 
 @[expose] public section
 
@@ -46,8 +29,6 @@ namespace FlockVBridge
 
 open Flock.HmNets hiding and
 open FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge FlockSoundness.Discharge.Hm
-
-/-! ## The builders are equal -/
 
 theorem bitsOf_eq : Flock.RecOpen.bitsOf = bitsOf := rfl
 theorem shaMsg_eq : Flock.RecOpen.shaMsg = shaMsg := rfl
@@ -64,7 +45,6 @@ theorem shaFrom_eq (cv : List (BitVec 64)) (bits : List Lin) (pre : ℕ) :
     Flock.RecOpen.shaFrom cv bits pre = shaFrom cv bits pre := by
   simp only [Flock.RecOpen.shaFrom, shaFrom, shaMsg_eq, shaBlocks_eq]
 
-/-- SHA-512's IV as words is the chaining value after no block. -/
 theorem ivW_eq : Flock.RecOpen.ivW = preCv [] 0 := rfl
 
 theorem swap_eq : Flock.RecOpen.swap = swap := rfl
@@ -110,16 +90,13 @@ theorem leafSums_eq (ps : List (List Lin × List Lin)) : ∀ sums, Flock.RecOpen
   | nil => intro sums; rfl
   | cons p ps ih => intro sums; simp only [Flock.RecOpen.leafSums, leafSums, leaves_eq, xorL_eq, ih]
 
-/-- The verifier's term as this package's. -/
 def termOf : Flock.RecOpen.Term → Term
   | .w i => .w i
   | .v i => .v i
   | .wt i u => .wt i u
 
-/-- The verifier's residual as this package's. -/
 def resOf (r : Flock.RecOpen.Res) : Res := ⟨r.mul, r.add.map termOf⟩
 
-/-- The verifier's S as this package's. -/
 def gfsOf (S : Flock.RecOpen.GfS) : GfS := ⟨S.ops.map (·.map termOf), S.res.map resOf⟩
 
 theorem termForms_eq (W V : List Lin) (t : Flock.RecOpen.Term) :
@@ -162,10 +139,8 @@ theorem recOpen_eq (LANES H : ℕ) (row aux acc coef dirs : List Lin) :
     Flock.RecOpen.recOpen LANES H row aux acc coef dirs = recOpen LANES H row aux acc coef dirs := by
   simp only [Flock.RecOpen.recOpen, recOpen, residualForms_eq, consStructure_eq, climbRow_eq]
 
-/-- The verifier's ports as this package's. -/
 def portsOf (p : Flock.RecOpen.Ports) : Ports := ⟨p.row, p.aux, p.acc, p.coef, p.dirs⟩
 
-/-- **The verifier's opening builder is V*'s**, at the same ports. -/
 theorem recOpenNet_eq (LANES H : ℕ) (p : Flock.RecOpen.Ports) :
     Flock.RecOpen.recOpenNet LANES H p = recOpenNet LANES H (portsOf p) := by
   simp only [Flock.RecOpen.recOpenNet, recOpenNet, portsOf, recOpen_eq]
@@ -174,15 +149,12 @@ theorem recOpenOuts_eq (LANES H : ℕ) (p : Flock.RecOpen.Ports) :
     Flock.RecOpen.recOpenOuts LANES H p = recOpenOuts LANES H (portsOf p) := by
   simp only [Flock.RecOpen.recOpenOuts, recOpenOuts, recOpenNet_eq]
 
-/-! ## `layout` reads its ports through their sums -/
-
 theorem layout_congr (st : St) {i i' o o' : Array ℕ} (outs : Array Lin) (hi : i.foldl (· + ·) 0 = i'.foldl (· + ·) 0)
     (ho : o.foldl (· + ·) 0 = o'.foldl (· + ·) 0) :
     (layout st i o outs).constPos = (layout st i' o' outs).constPos ∧ (layout st i o outs).ra = (layout st i' o' outs).ra ∧
       (layout st i o outs).rb = (layout st i' o' outs).rb := by
   simp only [layout, hi, ho, and_self]
 
-/-- **`LaidRows` reads `layout`'s ports only through their sums.** -/
 theorem laidRows_layout_congr (st : St) {i i' o o' : Array ℕ} (outs : Array Lin)
     (hi : i.foldl (· + ·) 0 = i'.foldl (· + ·) 0) (ho : o.foldl (· + ·) 0 = o'.foldl (· + ·) 0) (n : ℕ) (v : ℕ → Bool) :
     LaidRows (layout st i o outs) n v ↔ LaidRows (layout st i' o' outs) n v := by
@@ -203,7 +175,6 @@ theorem foldl_replicate16 : ∀ m a : ℕ, (List.replicate m 16).foldl (· + ·)
 theorem foldl_wordPorts (N : ℕ) : (Flock.RecOpen.wordPorts N).foldl (· + ·) 0 = 16 * (N / 16) := by
   rw [Flock.RecOpen.wordPorts, ← Array.foldl_toList, Array.toList_replicate, foldl_replicate16, Nat.zero_add]
 
-/-- The verifier's unit's input bits. -/
 abbrev unitIn (LANES H : ℕ) : ℕ := (Flock.RecOpen.ports LANES H).bits.foldl (· + ·) 0
 
 theorem unitIn_eq (LANES H : ℕ) :
@@ -212,15 +183,12 @@ theorem unitIn_eq (LANES H : ℕ) :
   show 0 + 128 * LANES + 1024 * max 1 ((H + 1) / 2) + 1024 + 256 * LANES + 1024 = _
   rw [Nat.zero_add]
 
-/-- One 16-bit port per word has as many bits as the ports. -/
 theorem foldl_unitIn (LANES H : ℕ) :
     (Flock.RecOpen.wordPorts (unitIn LANES H)).foldl (· + ·) 0 =
       (portsOf (Flock.RecOpen.ports LANES H)).bits.foldl (· + ·) 0 := by
   rw [foldl_wordPorts, foldl_bits, unitIn_eq]
   simp only [portsOf, Flock.RecOpen.ports]
   omega
-
-/-! ## The outputs' length -/
 
 theorem run_bind {α β : Type} (x : M α) (f : α → M β) (s : St) : (x >>= f).run s = (f (x.run s).1).run (x.run s).2 :=
   rfl
@@ -263,21 +231,10 @@ theorem length_residualsGo (S : GfS) (W V : List Lin) (rs : List Res) :
     simp only [residualsGo, run_bind, run_pure, List.length_append, length_residual, ih, List.length_cons]
     ring
 
-/-- **The opening's outputs are 2,048 bits** when `acc` is 1,024: the climb's 1,024, the consistency term's 256, the rest
-of `acc`. -/
 theorem length_recOpenOuts (LANES H : ℕ) (p : Ports) (hacc : p.acc = 1024) : (recOpenOuts LANES H p).length = 2048 := by
   simp only [recOpenOuts, recOpenNet_run, recOpen, run_bind, run_pure, List.length_append, List.length_drop,
     residualForms, length_residualsGo, length_climbRow, length_consStructure_res, length_vars, hacc]
 
-/-! ## The verifier's unit -/
-
-/-- **The verifier's laid-out opening computes the verifier's climb and the opening's consistency term**:
-`laid_recOpen` at `RecOpen.unitLaid`, M0's ports one 16-bit port per word. Whenever its rows hold at the column values
-`v`, if the `row` columns hold the bytes of the `LANES` elements `r`, the `aux` columns the 64-byte siblings `ss` one after
-another (`64 max(1, ⌈H / 2⌉)` words), the `acc` columns two elements `a` and then 96 bytes `rest`, the `coef` columns
-the `2 LANES` elements `c`, and direction column `h < H` bit `h` of the position `idx`, the output columns from
-`outStart` hold `Flock.climb ms (SHA-512(rowBytes r)) idx ss` and 64 zero bytes, then the bytes of `consTerm` at
-`k = 0, 1` and `rest`. -/
 theorem laid_unit (ms : Flock.MerkleScheme) (hms : ∀ l r, ms.node l r = Flock.Sha512.hash (l ++ r)) (LANES H : ℕ)
     (hH : H ≤ 32) (v : ℕ → Bool)
     (h : LaidRows (Flock.RecOpen.unitLaid LANES H) (inRowsOf (Flock.RecOpen.wordPorts (unitIn LANES H))) v)
@@ -321,11 +278,6 @@ theorem inWords_unit {LANES H : ℕ} {name : String} {net : Flock.Net}
   simp only [Flock.RecOpen.unitLaid, layout_inGroups]
   simp [inRowsOf]
 
-/-- **A copy of a unit the verifier accepted as `rec-open/l<L>-h<H>`, in a unit of any partition, computes the climb
-and the consistency term.** If `RecOpen.check` accepted `c` and its unit's name gives `L` and `H`, then `H ≤ 32` and
-the unit is the verifier's net (`RecOpen.check_ok`). Let unit `u` be an instance of `k` stacked copies of the unit's rows
-(`Rows.ofNet`), the transcript `X` carrying 1 at the stack's constant. Then at copy `j`'s column values (`copyVal`),
-`laid_unit` holds. -/
 theorem unit_check {C : Verity.Boolean.Circuit} {n : ℕ} {P : Partition C n} {u : Fin n} {c : Flock.Circuit} (hB : Built c.unit)
     {k : ℕ} (I : P.IsRowsUnit u ((Rows.ofNet hB).stack k)) (X : Fin C.N → Bool) {j : ℕ} (hj : j < k)
     (hone : X (I.wire ((Rows.ofNet hB).stack k).one) = true)
@@ -356,9 +308,6 @@ theorem unit_check {C : Verity.Boolean.Circuit} {n : ℕ} {P : Partition C n} {u
   rw [inWords_unit hl] at hL
   exact laid_unit ms hms LANES H hH _ hL r a cf rest idx ss hr ha hcf hrest hss hrow haux hacc hcoef hdir
 
-/-- **A copy of the unit of a circuit `HmRow.parse` accepted, in the circuit's program on Δ's keys, computes the climb
-and the consistency term**, when the unit is named `rec-open/l<L>-h<H>`: `parse` ran `RecOpen.check`
-(`ParseFacts.recNet`), and `unit_check` holds at `keyInst`, the transcript carrying 1 on unit `u`'s constant gate. -/
 theorem keyProg_parse {tags : Flock.Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Flock.Circuit}
     (hc : Flock.HmRow.parse tags bytes tables = .ok c) (hU : Built c.unit) (n : ℕ)
     (outs : Finset (Fin (keyGates hU n))) (X : Fin (keyGates hU n) → Bool) (u : Fin n) {j : ℕ}

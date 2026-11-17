@@ -6,38 +6,7 @@ public import Proofs.Flock.SpotFlock.WiringRows
 public import Proofs.Flock.SpotFlock.KS
 import all Lean.Data.Json.Basic
 
-/-!
-# SPOT[Flock]'s two-stage code at the connected program
-
-`code h` (`Code`) reads the members' programs side by side (`bitsProgs h.ms`), where no gate of one proof block's
-circuit reads a gate of another. This file defines the same code at the members' programs wired by a map `ω`
-(`Prog.wired`): in the statement's program every gate reads wire `ω i` where it read wire `i`, so a gate `ω` moves
-stays in the program, an input gate that no gate reads and no proof block holds; each proof block and replay block
-is without the gates `ω` moves; and a session reveals each opening at the gate `ω` sends it to, under the roots the
-wired program opens that gate under (`partitionWired`, `twoWired`, `revealWired`, `rootsAtWired`, `RevealsWired`). The
-verifier, the sessions, their rounds, the samples and the frame are `code h`'s.
-
-* `parseWired`, `baseWired`, `codeWired`, `rsWired`: `parse h`, `base h`, `code h` and `rs h` at the wired program.
-* `codeConnected h`, `twoConnected h`, `rsConnected h`: the code, the design and the replay sample at the code's own
-  wiring map (`wireMap h`, `returned h`). The replay sample reads the registration and the first stage's coins only,
-  so `rsConnected h` is `rs h` itself.
-* `WiresFirst h`, `WiresMove h`, `SourcesNamed h`: three conditions on the code's own wiring, each decided on what the
-  verifier holds, which the design's evaluation decides (`wiresFirst_of_two`, `sourcesNamed_of_two`, and
-  `wiresMove_of_two` in `WiresMoveRows`).
-* `rows_of_two`: where the design evaluates, every member with a unit has a computed row.
-* `rewires_of_two`: where the design evaluates and each wire's writer's part is before its reader's, the code's
-  wiring map rewires the members' programs (`Prog.Rewires`).
-* `named_port_of_stmtOk`: in an accepted run, each port a wire or a link names for a template is a port of that
-  template's session circuit, by that name. A run whose session statement's circuit has that port's rows under other
-  names is refused; the lemma's docstring says what ties that circuit's ports to the member's.
-
-The verifier is `V h` itself. Its check of the session statements (`stmtOk`) holds each session's reads to the
-links and wires the verifier holds and runs round 2's check of the design on the run (`readsOk`,
-`SecondStage.designOk`). A statement about the connected code reads the three conditions wherever the design
-evaluates, at a statement no run accepted too (`rewires_of_two`), and the design's evaluation (`two h`) decides each
-of them (`wiringOk`). So a held code that fails one has no accepted run, and no statement about the connected code
-takes one as a premise.
--/
+/-! SPOT[Flock]'s two-stage code at the members' programs wired by a map (`codeWired`) and at the code's own wiring (`codeConnected`); its verifier is `V h`. -/
 
 @[expose] public section
 
@@ -90,8 +59,6 @@ noncomputable def rsWired : (x : Msg) → (Fin ((codeWired h ω keep).V.k x) →
   replayTwo ((baseWired h ω keep).atOrder (orderWired h ω keep)) (reg h) (fun _ => L)
     (bytesFirst (baseWired h ω keep) (fun _ => L) (orderWired h ω keep) fun _ => coinByte)
 
-/-! ## The code's own wiring -/
-
 /-- **SPOT[Flock]'s two-stage code at the connected program**: `codeWired` at the code's own wiring map and the
 gates the boundary record holds. Its verifier is `V h`. -/
 noncomputable abbrev codeConnected : Code := codeWired h (wireMap h) (returned h)
@@ -104,38 +71,20 @@ def twoConnected : AuditStatement → Option Design.Two := twoWired h (wireMap h
 noncomputable def rsConnected : (x : Msg) → (Fin ((codeConnected h).V.k x) → FlockDeploy.Coin) → List ℕ :=
   rsWired h (wireMap h) (returned h)
 
-/-! ## What the design's evaluation decides of the code's own wiring -/
-
-/-- **Each wire's writer's part is before its reader's** (`writersFirst`). A wire whose writer names no template
-fails it. The design's evaluation decides it on the auditor's copies (`wiringOk`), and the second stage's check at
-a run's parts (`SecondStage.wiresOk`, fourth clause, refused as `second-wires`). With no wires held it holds, where
-`wiresOk` fails. -/
+/-- With no wires held it holds, where `SecondStage.wiresOk` fails. -/
 def WiresFirst : Prop := writersFirst h = true
 
-/-- **Every wired source bit has a gate to go to** (`wiresMove`), which the design's evaluation decides once per
-template (`wiringOk`, `wiresMoveRows`; `wiresMove_of_two` in `WiresMoveRows`). Under it and `SourcesNamed`, a source
-bit at a port no link names is sent to its writer's output (`wireTarget_of_sourcesNamed`), so only the source bits at
-a port a link names stay inputs of the connected program. -/
 def WiresMove : Prop := wiresMove h = true
 
-/-- **Every source bit is at a port a link or a wire names** (`sourcesNamed`), which the design's evaluation decides
-once per template (`wiringOk`, `sourceRowsNamed`, `sourcesNamed_of_rows`). It is what `AddressesConnected h` asks
-before it says where a gate's value sits. A held code with a source bit at a port neither names (an input the
-developer supplies, or a row the second stage's check opens off the interior record) has no accepted run. -/
+/-- A held code with a source bit at a port neither a link nor a wire names has no accepted run. -/
 def SourcesNamed : Prop := sourcesNamed h = true
 
-/-- **Where the design evaluates, each wire's writer's part is before its reader's.** -/
 theorem wiresFirst_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) : WiresFirst h :=
   (wiring_of_two h hd).2.1
 
-/-- **Where the design evaluates, every source bit is at a port a link or a wire names.** -/
 theorem sourcesNamed_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) : SourcesNamed h :=
   sourcesNamed_of_rows h (wiring_of_two h hd).2.2.1
 
-/-! ## The wiring map rewires the members' programs -/
-
-/-- **A unit of a key program whose units have no row has an empty proof block**: no gate is in a unit, so no
-input has an owner. -/
 theorem blockOf_of_perUnit_zero {kp : Spot.Bits.KeyProg} (h0 : kp.perUnit = 0) (κ : ℕ → Option Bool) (u : ℕ) :
     Spot.Bits.blockOf kp κ u = [] := by
   have hu : ∀ g, Spot.Bits.unitOf kp g = none := fun g => by simp [Spot.Bits.unitOf, h0]
@@ -143,9 +92,6 @@ theorem blockOf_of_perUnit_zero {kp : Spot.Bits.KeyProg} (h0 : kp.perUnit = 0) (
   simp [Spot.Bits.blockOf, Spot.Bits.unitGates, Spot.Bits.insOf, hu, ho]
 
 variable {h} in
-/-- **Where the design evaluates, every member with a unit has a computed row**: the two-stage scope refuses an
-empty proof block (`partitionsOk`), and a unit of a member with no computed row has one
-(`blockOf_of_perUnit_zero`). -/
 theorem rows_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) :
     ∀ ci ∈ h.ms, 0 < ci.2.size → 0 < (Flock.Bridge.bitsRows ci.1).nComp := by
   intro ci hci hn
@@ -165,10 +111,6 @@ theorem rows_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d
   exact hne _ hb (by rw [blockOf_of_perUnit_zero h0', List.map_nil])
 
 variable {h} in
-/-- **Where the design evaluates and each wire's writer's part is before its reader's, the code's wiring map
-rewires the members' programs** (`rewires_wireMap`): each member's unit is built by its template's check
-(`templateOk_facts`), which the design asks of every template, and each member with a unit has a computed row
-(`rows_of_two`). -/
 theorem rewires_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) (hF : WiresFirst h) :
     (bitsProgs h.ms).Rewires (membersPart h.ms) (wireMap h) (returned h) := by
   have hT : ∀ ci ∈ h.ms, FlockSoundness.Built ci.1.unit ∧ ci.1.unit.unitLog ≤ 32 := fun ci hci => by
@@ -176,19 +118,8 @@ theorem rewires_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = som
     exact (templateOk_facts h (templateOk_of_two h hd hlt) hlt).2
   exact rewires_wireMap h (fun ci hci => (hT ci hci).1) (fun ci hci => (hT ci hci).2) (rows_of_two hd) hF
 
-/-! ## What the verifier refuses of a design -/
-
-/-- **In an accepted run, a port a wire or a link names is a port of its template's session circuit.** Template
-`t`'s session statement sets up, and each port a wire or a link of the auditor's copies names for the template is the
-name of one of the session's registered reads and of a port of each of its statement circuits. So a run whose session
-statement's circuit has no port of that name is refused: its session's registered reads either leave the port out,
-which round 2's statement check refuses (`SecondStage.wiredRead`, `linkedRead`, the code `second-read`), or name a
-port the circuit doesn't have, which the session's verifier refuses (`Flock.Registered.checkPort`). The circuits here
-are the session statement's, not the member's, and no lemma states that the member's circuit has their ports. The step
-is made inside the proof of `CheckedRun.v2Row_port`, for the first table of an accepted run's checked unit's session:
-the table's circuit unrolls, ports and all (`FlockSoundness.unrolled_ports`), to its template's reference statement's
-statement circuit (`pin_of_stmtOkAt`, `stmt_of_pin`), which is the member's (`templateOk_facts`). The refusal is the
-run's and not the registration's: the design still evaluates. -/
+/-- The circuits here are the session statement's, not the member's: no lemma states that the member's circuit has
+these ports. The refusal is the run's and not the registration's: the design still evaluates. -/
 theorem named_port_of_stmtOk {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h}
     (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) {t : ℕ} (ht : t < h.ms.length) :
     ∃ ins spec sts, FlockDeploy.setupOf true (stmtAt h m₂ t) = some (ins, spec, sts) ∧

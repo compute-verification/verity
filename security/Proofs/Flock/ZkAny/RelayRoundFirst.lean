@@ -3,26 +3,7 @@ module
 public import Proofs.Flock.ZkAny.RelayGap
 public import Proofs.Flock.ZkAny.RelayFresh
 
-/-!
-# A rep's frame after its stream's first round, whichever rep's round comes next
-
-`roundRun_last` carries a rep's frame past a round after the rep's first. At the stream's first round the frame the
-round finds is as `Frames.startRep` pushed it (`FreshRep`), and the round leaves it the same three things: its run, the
-history's words for the rep's rounds so far and its schedule so far. So a stream of one round hands its rep's frame to
-the next stream's first round as a stream of more does:
-
-* **`roundRun_last_first`**: at a `RoundRun` of a stream's first round on a fresh frame, whose round releases and
-  whose coins the rep's frame took, the frame the session's next request finds is its run one round on, holds the
-  history's words for the rep's one round and keeps its schedule so far, whichever rep's round comes next.
-* `count_first`: where the round after a stream's first is the next stream's, the stream has one round.
-* **`roundRun_handoff_first`**: so after a stream of one round, until the next stream's first, the frames hold the
-  rep's frame with the history's words for its one round, as many as its count (`roundRun_handoff` at one round).
-* `roundRun_step_first`: `roundRun_step` at a stream's first round, from the loop's start of the rep (`freshOf`,
-  `round_progOf_first`).
-* **`roundRun_same_first`**: so where the found frame has the model's configuration the model's coin step takes the
-  round's coins, and where the next round is the same rep's the frame the session's next request finds keeps
-  `SameInv` (`roundRun_same` from the stream's first).
--/
+/-! After its stream's first round a rep's frame keeps its run, words and schedule so far, whichever rep's round comes next (`roundRun_last_first`, `roundRun_same_first`). -/
 
 @[expose] public section
 
@@ -34,13 +15,6 @@ open _root_.Flock.ZkServer.Frames (Sessions Rep)
 open _root_.Flock.ZkServer.Frame (Cfg Masker Req Place)
 
 open Loop in
-/-- **A rep's frame keeps its run, words and schedule so far after its stream's first round**, whichever rep's round
-comes next: at a `RoundRun` at the loop's count whose content is the worker's message `v`, on the rep's frame `p` as
-`Frames.startRep` pushed it, whose round releases and whose coins the rep's frame took off the auditor's answer `a`,
-where the frame `roundPlace` readied is its run on `pre` and no rounds, at the table and extras its session gives it
-and the salts the loop's salts give it where `withAlg` scheduled no rounds (`hsalt`, where `placeOf` reads them), the
-table's commitment's cap the level-0 root, the frame the session's next request finds is its run one round on, holds
-the history's words with `(v, a)` for the rep's one round, and keeps its schedule so far. -/
 theorem roundRun_last_first (x : Msg) (e0 : Msg × Msg) (h1 : List (Msg × Msg)) (v : Msg) {q₀ : Nat}
     (hq : h1.length = q₀ + 1) {sid : Nat} {st : State} {pl : Placed} {stream : String} {i r : Nat} {dm : ByteArray}
     {e : Env} {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {R₃ : Sessions}
@@ -94,8 +68,6 @@ theorem roundRun_last_first (x : Msg) (e0 : Msg × Msg) (h1 : List (Msg × Msg))
   rw [hq0, feedOf_words x e0 h1 v a.data.toList hq, hr1, Array.map_push, Array.range_eq_empty_iff.mpr rfl,
     Array.map_empty, show q₀ + 1 - 1 + 0 + 1 = q₀ + 1 by omega]
 
-/-- **A stream of one round**: where the round after the `q`th is the next stream's and the `q`th is its stream's
-first, the stream before the next one has one round. -/
 theorem count_first {rs : List Nat} {q : Nat} (hj : (ZKMal.CoinLayer.locate rs 0 q).2 = 0)
     (hnext : (ZKMal.CoinLayer.locate rs 0 (q + 1)).1 = (ZKMal.CoinLayer.locate rs 0 q).1 + 1) :
     rs.getD ((ZKMal.CoinLayer.locate rs 0 (q + 1)).1 - 1) 0 = 1 := by
@@ -105,10 +77,6 @@ theorem count_first {rs : List Nat} {q : Nat} (hj : (ZKMal.CoinLayer.locate rs 0
   omega
 
 open Loop in
-/-- **A rep's frame from a stream of one round to the next stream's first**: at `roundRun_last_first`'s `RoundRun`, the
-round its stream's first (`hj₀`), where the round after it is the next stream's (`hnext`), after updates from the
-frames the session's next round reads that keep the rep's frame, the frames find the rep's frame holding the history's
-words with `(v, a)` for the stream's one round, as many as the stream's count. -/
 theorem roundRun_handoff_first (x : Msg) (e0 : Msg × Msg) (h1 : List (Msg × Msg)) (v : Msg) {rs : List Nat}
     {q₀ : Nat} (hq : h1.length = q₀ + 1) (hj₀ : (ZKMal.CoinLayer.locate rs 0 q₀).2 = 0)
     (hnext : (ZKMal.CoinLayer.locate rs 0 (q₀ + 1)).1 = (ZKMal.CoinLayer.locate rs 0 q₀).1 + 1)
@@ -148,10 +116,6 @@ theorem roundRun_handoff_first (x : Msg) (e0 : Msg × Msg) (h1 : List (Msg × Ms
   exact ⟨j0, p₃, hj0, count_first hj₀ hnext, hcw⟩
 
 open Loop LeanRelease in
-/-- **A rep's frame at the session's next round, at the model's state, from its stream's first round**: as
-`roundRun_step`, at the rep's stream's first round (`hj₀`), where the frame `roundPlace` readied is at the loop's start
-of the rep (`freshOf`) but for `stopped`, in the place of the rep's first scheduled round with its count: the model's
-coin step takes the round's coins, and where the next round is the same rep's (`hj`) the frame is at its state. -/
 theorem roundRun_step_first (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -211,14 +175,6 @@ theorem roundRun_step_first (T : ZKMal.CoinLayer.TableData)
   exact roundRun_carry T L₀ real x ρ e0 h1 hx hj hr hreq hfr hrp ho hput ha hb hs hco hR hcfg hu hA
 
 open Loop LeanRelease in
-/-- **A rep's frame keeps `SameInv` from its stream's first round to the rep's next**: at `roundRun_last_first`'s
-`RoundRun` of the stream's first round (`hj₀`), where the found frame has the model's configuration (`hcf`), the frame
-`roundPlace` readied is at the loop's start of the rep (`freshOf`) but for `stopped` (`hm`, `hu₀`:
-`roundPlace_switch0` at rep 0, `roundPlace_switch1` at rep 1), the frame's schedule on no coins holds the round
-(`hlt`) and is of one shape with the placeholder's (`hrs`), whose count is the round's (`hn'`), the model's coin step
-takes the round's coins, and where the next round is the same rep's (`hj`) the round is in the place of the frame's
-first scheduled round and the frame the session's next request finds keeps `SameInv` at the history with `(v, a)`,
-one round of the rep. -/
 theorem roundRun_same_first (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))

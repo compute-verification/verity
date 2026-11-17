@@ -6,25 +6,7 @@ import Proofs.Flock.SamplingGeneric
 import Proofs.Flock.Claims.Sampling.Assembled
 import Proofs.Flock.Claims.Sampling.Deployed
 
-/-!
-# What an accepted session reveals at the wired program holds the classes of its key whole
-
-At the members' programs wired by `ω` (`codeWired`), a session reveals, for each gate `i` a proof block needs side by
-side (`needsSide`), the frame's opening of `i` at the gate `ω i`, under the roots the wired program opens `ω i` under
-(`revealWired`). This file proves that such a reveal holds the classes of a key of the gates whole, as `code h`'s does
-(`reveal_key_of_passes`), without asking that every opening it holds passes:
-
-* `needsWired`, `gateKeyWired`: the gates a proof block needs at the wired program (the `ω` image of `needsSide`), and
-  a gate's key there (the proof blocks that need it, the replay block that holds it and whether it is on that block's
-  boundary in the wired program);
-* `mem_revealWired_pos`: each opening of the reveal is at a gate the proof block needs, under that gate's roots;
-* `opens_of_needsWired`: at an accepted session of a checked unit, under `BuiltWired` and `AddressesWired`, every gate
-  the proof block needs has an opening in the reveal that passes the commitment's check (`CheckedRun.reveals_wired`);
-* `rootsAtWired_key`: gates with one key open under the same roots;
-* `reveal_key_wired`: the three together. An opening of the reveal has, at every gate with its gate's key, an opening
-  of the same reveal at that gate, under the same roots, that passes;
-* `revealsLe_wired`: the wired code's reveal count bounds what a session reveals.
--/
+/-! An accepted session's reveal at the wired program holds the classes of its key whole (`reveal_key_wired`), without asking that every opening it holds passes. -/
 
 @[expose] public section
 
@@ -47,8 +29,6 @@ noncomputable def gateKeyWired (s : AuditStatement) (Pt : Partition) (d : Design
   ((Finset.range Pt.blocks.length).filter fun v => g ∈ needsWired h ω s v, gateBlock d.part g,
     (gateBlock d.part g).any fun ρ => ((bitsProgs h.ms).wired ω keep).Boundary (d.part.blocks.getD ρ []) g)
 
-/-- **Each opening the reveal at the wired program holds is at a gate the proof block needs there, under the roots
-the wired program opens that gate under.** -/
 theorem mem_revealWired_pos {f : Code} {s : AuditStatement} {u : ℕ} {v : Seen} {wF : Claims.Flock.Wit}
     {q : List Msg × Opening Bool} (hq : q ∈ revealWired h ω keep f s u v wF) :
     q.2.pos ∈ needsWired h ω s u ∧ q.1 = rootsAtWired h ω keep s u v q.2.pos := by
@@ -56,13 +36,11 @@ theorem mem_revealWired_pos {f : Code} {s : AuditStatement} {u : ℕ} {v : Seen}
   obtain ⟨⟨i, o⟩, hio, rfl⟩ := List.mem_map.1 hq
   exact ⟨List.mem_toFinset.2 (List.mem_map.2 ⟨i, (List.of_mem_zip hio).1, rfl⟩), rfl⟩
 
-/-- A unit that needs a gate opened at the wired program is one of the members' partition's. -/
 theorem lt_of_mem_needsWired {s : AuditStatement} {u g : ℕ} (hg : g ∈ needsWired h ω s u) :
     u < (membersPart h.ms).blocks.length := by
   obtain ⟨i, hi, -⟩ := List.mem_map.1 (List.mem_toFinset.1 hg)
   exact Reveal.lt_of_mem_needs (partition h) (s := { s with prog := bitsProgs h.ms }) rfl hi
 
-/-- Gates with one key at the wired program are needed by the same units there. -/
 theorem gateKeyWired_needs {s : AuditStatement} {Pt : Partition} {d : Design.Two}
     (hlen : Pt.blocks.length = (membersPart h.ms).blocks.length) {g g' : ℕ}
     (hk : gateKeyWired h ω keep s Pt d g = gateKeyWired h ω keep s Pt d g') {u : ℕ}
@@ -75,14 +53,11 @@ theorem gateKeyWired_needs {s : AuditStatement} {Pt : Partition} {d : Design.Two
   rw [h1] at hmem
   exact (Finset.mem_filter.1 hmem).2
 
-/-- Gates with one key at the wired program lie in one replay block. -/
 theorem gateKeyWired_block {s : AuditStatement} {Pt : Partition} {d : Design.Two} {g g' : ℕ}
     (hk : gateKeyWired h ω keep s Pt d g = gateKeyWired h ω keep s Pt d g') :
     gateBlock d.part g = gateBlock d.part g' :=
   congrArg (fun k : Finset ℕ × Option ℕ × Bool => k.2.1) hk
 
-/-- **Gates with one key at the wired program lie on one side of each replay block's boundary there**, where the
-replay blocks are disjoint. -/
 theorem gateKeyWired_side {s : AuditStatement} {Pt : Partition} {d : Design.Two} (hnd : d.part.gates.Nodup)
     {g g' : ℕ} (hk : gateKeyWired h ω keep s Pt d g = gateKeyWired h ω keep s Pt d g') {ρ : ℕ} {rb : List ℕ}
     (hrb : d.part.blocks[ρ]? = some rb) (hg : g ∈ rb ∧ ((bitsProgs h.ms).wired ω keep).Boundary rb g = false) :
@@ -98,8 +73,6 @@ theorem gateKeyWired_side {s : AuditStatement} {Pt : Partition} {d : Design.Two}
   rw [hrbeq] at h3 hg'
   exact ⟨hg', h3.symm.trans hg.2⟩
 
-/-- **Gates with one key at the wired program open under the same roots there**, at a unit of the wired partition
-whose replay block the wired design names. -/
 theorem rootsAtWired_key {s : AuditStatement} {Pt : Partition} {d : Design.Two}
     (hP : partitionWired h ω s = some Pt) (hd : twoWired h ω s = some d) (hnd : d.part.gates.Nodup)
     (hrep : ∀ v < Pt.blocks.length, (replayOf Pt d.part v).isSome) {u : ℕ} (hu : u < Pt.blocks.length) (v : Seen)
@@ -112,8 +85,6 @@ theorem rootsAtWired_key {s : AuditStatement} {Pt : Partition} {d : Design.Two}
   exact Reveal.rootsAt_same_side (partitionWired h ω) (twoWired h ω) (iroots []) hP' hd' hρ hrb
     ⟨gateKeyWired_side h ω keep hnd hk hrb, gateKeyWired_side h ω keep hnd hk.symm hrb⟩
 
-/-- **The reveal at the wired program, at SPOT's own frame there**: for each gate `i` the proof block needs side by
-side, the address's opening of `i` at position `ω i`, under the roots the wired program opens `ω i` under. -/
 theorem revealWired_eq (hB : BuiltWired h ω keep) (s : AuditStatement) (u : ℕ) (v : Seen) (wF : Claims.Flock.Wit) :
     revealWired h ω keep h.frame s u v wF = (needsSide h s u).map fun i =>
       (rootsAtWired h ω keep s u v (ω i),
@@ -129,7 +100,6 @@ theorem revealWired_eq (hB : BuiltWired h ω keep) (s : AuditStatement) (u : ℕ
   unfold revealWired
   rw [hG, map_zip_map_self] <;> rfl
 
-/-- **The reveal at the wired program reads only a transcript's messages**, at SPOT's own frame there. -/
 theorem revealWired_out (hB : BuiltWired h ω keep) (s : AuditStatement) (u : ℕ) (ms : List (Msg × Out))
     (o o' : Out) (wF : Claims.Flock.Wit) :
     revealWired h ω keep h.frame s u ⟨ms, o⟩ wF = revealWired h ω keep h.frame s u ⟨ms, o'⟩ wF := by
@@ -138,10 +108,6 @@ theorem revealWired_out (hB : BuiltWired h ω keep) (s : AuditStatement) (u : �
       addressOp h (addressMapWired h ω keep) { s with prog := bitsProgs h.ms } u ⟨ms, o'⟩ wF i [] := fun _ => rfl
   rw [revealWired_eq h ω keep hB, revealWired_eq h ω keep hB] <;> simp only [hroots, hop]
 
-/-- **Every gate a checked unit's proof block needs at the wired program has an opening in the reveal that passes**,
-at every run: under `BuiltWired` and `AddressesWired`, where `ω` rewires the members' programs, at a statement in the
-two-stage scope, a unit `u` the two stages check, whose session's view at the run accepted, and a witness the proof
-system's check accepts at the session's statement (`CheckedRun.reveals_wired`). -/
 theorem opens_of_needsWired (hB : BuiltWired h ω keep) (hA : AddressesWired h ω keep)
     (hW : (bitsProgs h.ms).Rewires (membersPart h.ms) ω keep) {x : Msg} {s : AuditStatement} {Pt : Partition}
     {d : Design.Two} (hx : parse h x = some s) (hP : partition h s = some Pt) (hd : two h s = some d)
@@ -185,12 +151,6 @@ theorem opens_of_needsWired (hB : BuiltWired h ω keep) (hA : AddressesWired h �
   rw [hseen, revealWired_out h ω keep hB s u _ _ .acc wF]
   exact hq
 
-/-- **An accepted session's reveal at the wired program holds the classes of the wired key whole**: under
-`BuiltWired` and `AddressesWired`, where `ω` rewires the members' programs, at a statement in the two-stage scope with
-its design `d`, a unit `u` the two stages check, whose session's view at the run accepted, and a witness the proof
-system's check accepts at the session's statement, an opening of the reveal at the wired program has, at every gate
-`g'` with its gate's key there (at the wired partition and design), an opening of the same reveal at `g'`, under the
-same roots, that passes the commitment's check. -/
 theorem reveal_key_wired (hB : BuiltWired h ω keep) (hA : AddressesWired h ω keep)
     (hW : (bitsProgs h.ms).Rewires (membersPart h.ms) ω keep) {x : Msg} {s : AuditStatement} {d : Design.Two}
     (hx : parse h x = some s) (hd : two h s = some d) (hin : InScopeTwo (membersPart h.ms) d s)
@@ -222,9 +182,6 @@ theorem reveal_key_wired (hB : BuiltWired h ω keep) (hA : AddressesWired h ω k
   exact (rootsAtWired_key h ω keep hPw hdw hnd hrep (lt_of_lt_of_eq (lt_of_mem_needsWired h ω hpn) hlen.symm) _
     hk).symm
 
-/-- **The wired code's reveal count bounds what a session reveals**: the reveal at the wired program is no longer
-than the list of gates the proof block needs side by side (`length_revealWired_le`), which the side-by-side count
-bounds (`Reveal.length_needs_le`). -/
 theorem revealsLe_wired : RevealsLe (codeWired h ω keep) := by
   intro x s hx u v wF
   have hx' : (parse h x).map

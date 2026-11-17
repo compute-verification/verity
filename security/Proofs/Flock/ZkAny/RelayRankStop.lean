@@ -4,24 +4,7 @@ public import Proofs.Flock.Claims.ZK.FrameRankFault
 public import Proofs.Flock.ZkAny.RelayRank
 public import Proofs.Flock.Claims.ZK.FrameOuter
 
-/-!
-# Where the model's rank stop falls in a rep
-
-The model's rank stop (`LeanRelease.rankFails`) fails only at a state in the algebraic phase holding all its coins, as
-many as the claim points read (`2m + k_log − 15` at the rep's layout). The loop's state at a rep's round `j + 1`
-holds rounds `0 … j − 1`'s coins at the algebraic phase's counts and owes round `j`'s, so the coins after it leave such
-a state only where `j + 1` is the algebraic phase's round count:
-
-* `Ranked.answer_done`: coins the frame takes keep whether it is past the opening's label.
-* `Ranked.rankFails_coins`: where the rank stop fails, the state is in the algebraic phase and holds the claim points'
-  coins.
-* `Ranked.answer_ite`, `Ranked.repState_pairs`, `Ranked.run_head_zero`: the loop's state at a rep's round `j + 1` is the
-  frame's along the rep's first round, then each round's coins and the next; after the first round alone it owes the
-  zerocheck head's `6` coins and holds none, or owes none.
-* **`Ranked.repState_rankFails`**: where the coins after the loop's state at a rep's round `j + 1`, below the inner
-  proof's end, leave a state at which the rank stop fails, at a configuration of the rep's layout, `j + 1` is the
-  algebraic phase's round count.
--/
+/-! The model's rank stop fails after a rep's round only at the algebraic phase's end (`Ranked.repState_rankFails`). -/
 
 @[expose] public section
 
@@ -36,7 +19,6 @@ namespace Ranked
 
 open Loop
 
-/-- **Coins the frame takes keep whether it is past the opening's label.** -/
 theorem answer_done {c : Cfg} {s m : Masker} {cs : Array F128} (h : s.answer c cs = .ok m) : m.done = s.done := by
   cases hi : s.inner with
   | some k => exact (answer_proj (Or.inl (by simp [hi])) h).1
@@ -48,8 +30,6 @@ theorem answer_done {c : Cfg} {s m : Masker} {cs : Array F128} (h : s.answer c c
       rfl
     | true => exact (answer_proj (Or.inr hl) h).1
 
-/-- **Where the rank stop fails, the state is in the algebraic phase and holds the claim points' coins**: at the rep's
-layout, `2m + k_log − 15` of them. -/
 theorem rankFails_coins {c : Cfg} {s : Masker} (hr : LeanRelease.rankFails c s = true) {m kLog k0 : ℕ}
     (hlay : c.lay = _root_.Flock.Zk.PadLayout.new m kLog k0) (hm : 14 ≤ m) (hk : 6 ≤ kLog) :
     s.done = false ∧ s.on = true ∧ s.coins.toList.length = 2 * m + kLog - 15 := by
@@ -72,15 +52,12 @@ theorem rankFails_coins {c : Cfg} {s : Masker} (hr : LeanRelease.rankFails c s =
       simp only [_root_.Flock.Zk.PadLayout.new, K_SKIP, N_INNER]
       omega
 
-/-- Coins answered at the loop's empty state fail; elsewhere they are the state's. -/
 theorem answer_ite {c : Cfg} {b : Bool} {s m : Masker} {cs : Array F128}
     (h : (if b = true then ({} : Masker) else s).answer c cs = .ok m) : b = false ∧ s.answer c cs = .ok m := by
   cases b
   · exact ⟨rfl, h⟩
   · exact absurd h (answer_owed_none _ rfl)
 
-/-- **The loop's state at a rep's round `j + 1`**, below the inner proof's end, is the frame's along the rep's first
-round, then each round's coins and the next (`qOf`), after an earlier rep's coins. -/
 theorem repState_pairs (c : Cfg) {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray}
     {xs : Array (Array F128)} {hi : Array ByteArray} {cr0 cr : Array (Array F128)} {ns : ℕ → ℕ}
     {alg sched : Array (ByteArray × ℕ)}
@@ -101,8 +78,6 @@ theorem repState_pairs (c : Cfg) {t : _root_.Flock.ZkServer.Finish.Tab} {rep : �
       if rep = 0 then #[] else (cr0.extract 0 alg.size).foldl (· ++ ·) #[], ?_⟩
     rw [repState_own_at c t rep dom xs hi cr0 cr ns e hal hs (by omega), ownReqs_pairs _ sched _ cr hS e]
 
-/-- **After a rep's first round alone** the frame owes the zerocheck head's `6` coins, holding none, in the algebraic
-phase, or owes none. -/
 theorem run_head_zero {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size) (p : Array (Array F128))
     {digest cap dom : ByteArray} (hdg : digest.size < 2 ^ 64) (hcap : cap.size < 2 ^ 64) (hdom : dom.size < 2 ^ 64)
     {R : ByteArray} (hR : R = ByteArray.mk (encs [.dom dom, .label "flock-r1cs-v0".toUTF8, .bytes digest,
@@ -135,9 +110,6 @@ theorem run_head_zero {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < 
   · rw [he]
     exact Or.inl rfl
 
-/-- **The rank stop fails after a rep's round only at the algebraic phase's end**: where the coins after the loop's
-state at a rep's round `j + 1`, below the inner proof's end, leave a state at which the rank stop fails, at a
-configuration of the rep's layout, `j + 1` is the algebraic phase's round count. -/
 theorem repState_rankFails {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size)
     {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray} {cr0 cr : Array (Array F128)} {ns : ℕ → ℕ} {alg sched : Array (ByteArray × ℕ)}
