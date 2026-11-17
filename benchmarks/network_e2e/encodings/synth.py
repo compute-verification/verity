@@ -3,7 +3,7 @@ them).
 
 A vLLM-V1-like engine on the bucket clock:
 - **Arrivals**: Poisson at `rate` requests per second. Request j arrives in bucket `b_j` (its certified anchor), and the
-  ingress certifier delivers it at the bucket's end, `(b_j + 1)·τ`.
+  ingress attester delivers it at the bucket's end, `(b_j + 1)·τ`.
 - **Admission**: before each step the engine admits every delivered request (its admission step is that step's index);
   an idle engine starts a step at the next delivery.
 - **The scheduler**, per step, under a token budget (`max_num_batched_tokens`) and a sequence cap (`max_num_seqs`): the

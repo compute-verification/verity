@@ -1,4 +1,4 @@
-"""Advice v1 measured over the trace corpus: each trace's v1 bits per certifier window under a book fit on the other
+"""Advice v1 measured over the trace corpus: each trace's v1 bits per attester window under a book fit on the other
 traces.
 
 The codec is `verity_vllm.pipeline.advice_code.codec` (`encode`, `decode`, `bits_by_window`; its docstring states what

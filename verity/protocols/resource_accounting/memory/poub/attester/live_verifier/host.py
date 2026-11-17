@@ -186,7 +186,7 @@ SAMPLED_EXE = Path("verity/protocols/proofs/spot_flock_recursion/verifier/lean/.
 """Sampled proofs' Lean verifier in the pinned tree, as its pin built it: the record runs it rather than building one."""
 SUM_LINE = re.compile(r"([0-9a-f]{64})  (\S.*)")
 WITNESS_DIRS = {"values": "a committed value file", "prover": "a prover's input file (its rows and salts)",
-                "served_rows": "a window's committed rows and salts", "certifier-front": "the network attester front's group (its prompts)"}
+                "served_rows": "a window's committed rows and salts", "attester-front": "the network attester front's group (its prompts)"}
 """A served run's witness, by a directory part of its path (`witness`): what the compose gate takes from no hand-off, each
 with why. The three tables and `witness` are the rule the sender holds its list to (`served_verdicts.py witness`), in the
 same order and word for word, which `tests/test_host.py` holds them to."""

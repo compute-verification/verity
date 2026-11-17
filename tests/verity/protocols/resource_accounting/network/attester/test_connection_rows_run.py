@@ -6,7 +6,7 @@ check holds to the records' own reading of the same cells and refuses when a reg
 record isn't the run's; the registrations' file, which a check that found no problem writes when it is handed the
 SHA-512 of the network attester's public key and its session: a first line that names the two, then a line for
 each registration it held and each the publisher's own bytes, which the reader of the stop verdicts takes its
-heads from (its side: `certifier/prover/tests/test_network_attester_serve.py`), so that a deployment record of
+heads from (its side: `attester/prover/tests/test_network_attester_serve.py`), so that a deployment record of
 another session or a registration with tables that aren't its records' leaves no file, and a check handed neither
 is refused the file; an execution phase that isn't handed has no line; under the lengths rows' form 2
 every execution phase has one line, its registration or the network attester's word that it has no head, the run's

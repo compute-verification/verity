@@ -190,9 +190,9 @@ def test_markdown_over_cap_says_by_how_much_and_where_detail_goes(monkeypatch) -
     for p in (soundness + "ASSUMPTIONS.md", soundness + "assumption-notes/e2e-checklist.md"):
         assert markdown_over_cap(p, MD_SIZE_CAP + 7).endswith(f", 7 bytes over; move detail to one file per entry under {soundness}assumption-notes/")
     assert markdown_over_cap(soundness + "README.md", MD_SIZE_CAP + 1).endswith("the notes store (cite it by note:<id>)")
-    certifier = "verity/protocols/resource_accounting/network/verifier/"
-    assert markdown_over_cap(certifier + "PROTOCOL.md", PROTOCOL_SIZE_CAP + 1).endswith(f"one file per entry under {certifier}protocol/")
-    assert markdown_over_cap(certifier + "protocol/calibration.md", MD_SIZE_CAP + 1).endswith(f"{certifier}protocol/")
+    attester = "verity/protocols/resource_accounting/network/verifier/"
+    assert markdown_over_cap(attester + "PROTOCOL.md", PROTOCOL_SIZE_CAP + 1).endswith(f"one file per entry under {attester}protocol/")
+    assert markdown_over_cap(attester + "protocol/calibration.md", MD_SIZE_CAP + 1).endswith(f"{attester}protocol/")
     assert markdown_over_cap(".agents/skills/x/SKILL.md", SKILL_SIZE_CAP) is None
     assert markdown_over_cap(".agents/skills/x/SKILL.md", SKILL_SIZE_CAP + 5).startswith(
         ".agents/skills/x/SKILL.md: 16 KB > 16 KB, 5 bytes over; compact it")

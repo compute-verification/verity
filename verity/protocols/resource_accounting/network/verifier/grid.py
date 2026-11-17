@@ -2,7 +2,7 @@
 
 A grid is one link's record for one window: `buckets` rows of `allocation` slots. A slot holds either a real frame
 (`bytes` of the fixed frame size) or padding (`None`). Every bucket emits exactly `allocation` frames on the wire: the
-real frames first, in queue order (left-packed), then certifier padding. The **occupancy** is the number of real frames in
+real frames first, in queue order (left-packed), then attester padding. The **occupancy** is the number of real frames in
 each bucket. Once the Program fixes the frames' content and their order, occupancy is the only thing the sender still
 controls: it is the timing channel.
 """
@@ -117,7 +117,7 @@ class BlockGrid:
 
 
 class Certifier:
-    """One link's active certifier (W1–W6): constant-rate, left-packed, FIFO and fail-closed.
+    """One link's active attester (W1–W6): constant-rate, left-packed, FIFO and fail-closed.
 
     - **Enqueue.** The sender hands frames with `enqueue`. A frame handed during bucket t, before its cutoff, is eligible
       for bucket t. With `first`, it goes to the head of the queue, ahead of every frame queued: the ingress

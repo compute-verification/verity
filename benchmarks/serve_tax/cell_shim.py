@@ -1,4 +1,4 @@
-"""vLLM's benchmark client's shim to the network attester (`serve_tax`'s ``tick-certifier`` arm).
+"""vLLM's benchmark client's shim to the network attester (`serve_tax`'s ``tick-attester`` arm).
 
 vLLM's client (``vllm bench serve``) speaks HTTP: a streamed ``POST /v1/completions`` whose prompt is text or token ids.
 The network attester (the module this one imports `cells` from) speaks fixed-size cells, one request a connection, and
@@ -305,10 +305,10 @@ def address(text: str) -> tuple[str, int]:
 
 async def serve(a: argparse.Namespace) -> None:
     dep = json.loads(Path(a.deployment).read_text())
-    certifier = tuple(json.loads((Path(a.deployment).parent / ENDPOINTS).read_text())["listen"])
+    attester = tuple(json.loads((Path(a.deployment).parent / ENDPOINTS).read_text())["listen"])
     cell_bytes = dep["params"]["cell_bytes"]
     with open(a.log, "a", buffering=1) as fh:
-        shim = HttpShim(lambda: asyncio.open_connection(*certifier), cell_bytes, tokenizer(a.tokenizer),
+        shim = HttpShim(lambda: asyncio.open_connection(*attester), cell_bytes, tokenizer(a.tokenizer),
                         lambda record: fh.write(json.dumps(record) + "\n"), origin=dep["origin_unix"])
         server = await asyncio.start_server(shim.handle, *a.listen, limit=1 << 20, backlog=4096)
         print(json.dumps({"listening": list(server.sockets[0].getsockname()[:2])}), flush=True)
