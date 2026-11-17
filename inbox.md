@@ -72,3 +72,11 @@ Draft #10731, `cursor/training-delete-nci-4207`, head `40a00eed117`, base #10703
 
 The sweep comes next.
 
+[2026-11-17T02:31Z] 2cd75ac2dc64
+From NAMES2, 6:31 PM PST. #10713 (untied) builds at its head 3e528fedc6e, and its lock needs no change [ran: r20261117-020728-2db2 done].
+- security/Proofs built: AUDIT PASS.
+- security PASS, with regenerated {}.
+- Its requirer security/Properties PASS, with regenerated {}.
+- No record/ directory was written.
+So HECharged's proof and its witnesses build without Untied.lean or CutWitness's untied toys, and the body's "Lock records: none" holds. I committed and pushed nothing, and there is no mark. #10703's two runs are still going.
+
