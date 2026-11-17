@@ -1,8 +1,8 @@
 """The batched rows split into slices (`pipeline.serving_rows`' ``slice`` layout, ``SLICES``): a row of extents a_0, a_1, .. along
 its family's axes is a_0 a_1 .. units of its Definition at every axis 1, unit (i_0, i_1, ..) reading element i_k along axis k of
 each parameter that carries it and the others whole, and returning the row's output element (i_0, i_1, ..): the router GEMM, the
-LM head and cuBLAS's split-K (at a bf16 and an f32 output) into W's rows, torch.bmm into its members' coordinates, DSA's logits into keys, the embedding
-and the vocabulary shard's embedding into columns (every unit reads the token) and the all-gather into its ranks' shards.  The units cover the
+LM head and cuBLAS's split-K (at a bf16 and an f32 output) into W's rows, torch.bmm into its members' coordinates, DSA's logits into keys, the vocabulary
+shard's embedding into columns (every unit reads the token) and the all-gather into its ranks' shards.  The units cover the
 row's outputs with nothing left over (one index entry per row, the units' outputs the row's output in order), each reads its
 own elements of the row's operands (an independent gather by index), and the Definition at every axis 1 on each unit's rows is
 the row's Definition's element; in a window the units are chunks of the stager's bit rows, read once."""
@@ -20,7 +20,7 @@ from verity.circuits.ops.prims import HopperBF16WgmmaDot16
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity_flock.class_statement import UnitStager
 
-from verity_vllm.definitions.registry import b1, b1_tp2 as T2
+from verity_vllm.definitions.registry import b1_tp2 as T2
 from verity_vllm.definitions.registry import cublas_bf16 as CB
 from verity_vllm.definitions.registry import dsa as DSA
 from verity_vllm.definitions.registry import ll_bf16 as LL
@@ -29,7 +29,7 @@ from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.pipeline import slice_rows as SL
 
 H = HopperBF16WgmmaDot16
-#: each family at small statics; the token of the embeddings inside each (2 <= 4 < 2 + 5, 4 < 5)
+#: each family at small statics; the token of the embedding shard inside it (2 <= 4 < 2 + 5)
 ROWS = {"LlBf16DotprodGemm_v1": (LL.LlBf16DotprodGemmWord, {"N": 3, "K": 64, "BS": 32, "VEC": 2, "FMA": 1}),
         "Gemm_v2": (G.Gemm, {"K": 32, "N": 3, "DOT": H}),
         "CublasSplitKGemm_v1": (CB.CublasSplitKGemmWord, {"K": 128, "N": 3, "SPLIT_K": 2, "DOT": H}),
@@ -37,7 +37,7 @@ ROWS = {"LlBf16DotprodGemm_v1": (LL.LlBf16DotprodGemmWord, {"N": 3, "K": 64, "BS
         "GemmF32Out_v1": (CB.GemmF32OutWord, {"K": 32, "N": 3, "DOT": H}),
         "BatchedGemm_v1": (CB.BatchedGemmWord, {"B": 2, "K": 32, "N": 3, "DOT": H}),
         "DsaMqaLogits_v3": (DSA.DsaMqaLogitsV3, {"N": 3, "H": 8, "D": 32}),
-        "EmbeddingShard_v1": (T2.EmbeddingShard, {"VS": 5, "H": 4, "START": 2}), "Embedding_v1": (b1.Embedding, {"V": 5, "H": 4}),
+        "EmbeddingShard_v1": (T2.EmbeddingShard, {"VS": 5, "H": 4, "START": 2}),
         "AllGather_v1": (T2.AllGather, {"WORLD": 4, "N": 3})}
 OP = "model.layers.3.mlp.gate"
 CAP = 4
@@ -61,7 +61,7 @@ def operands(family: str, seed: int) -> list[np.ndarray]:
     out = []
     for name, ty in defn(family).signature()[0]:
         n, w = len(ty.leaf_widths()), ty.leaf_widths()[0]
-        if family in ("EmbeddingShard_v1", "Embedding_v1") and name == "tok":
+        if family == "EmbeddingShard_v1" and name == "tok":
             out.append(np.array([4], dtype=np.int32))
         elif w == 16:
             out.append((rng.standard_normal(n).astype(np.float32).view(np.uint32) >> 16).astype(np.uint16))
