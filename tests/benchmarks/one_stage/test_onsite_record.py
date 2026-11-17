@@ -1012,9 +1012,9 @@ def with_state_held(lock: Path, digests: dict[str, str | None], reader: str = OR
     ("its proof stands over the activations entry", {}),
     ("not in the lock", {g: None for g in STATE_TOY}),
     ("restated", {OR.STATE_HELD: "ab" * 32}),
-    ("over the registered entries alone", {"NetworkCheck.Period.auditStateEntries": None}),
-    ("over another stateHeldIn", {"NetworkCheck.Period.stateHeldIn": "cd" * 32}),
-    ("over another stateEntries", {"NetworkCheck.Period.stateEntries": "ef" * 32}),
+    ("over the registered entries alone", {"NetworkVerifier.Period.auditStateEntries": None}),
+    ("over another stateHeldIn", {"NetworkVerifier.Period.stateHeldIn": "cd" * 32}),
+    ("over another stateEntries", {"NetworkVerifier.Period.stateEntries": "ef" * 32}),
     ("its definitions another guarantee's", {g: None for g in STATE_TOY if g != OR.STATE_HELD}),
 ])
 def test_the_figure_says_its_charge_was_state_free_only_where_rows_state_held_stands_over_the_activations_entry(
@@ -1499,7 +1499,7 @@ def test_the_published_form_which_drops_windows_gives_the_same_record(tmp_path):
 
 @pytest.mark.parametrize("public, why", [
     (dict(PUBLIC, K=K + 1), f"K is {K + 1}, and its terms sum to {K}"),
-    ({k: v for k, v in PUBLIC.items() if k != "scans"}, "not NetworkCheck.Period's rows form"),
+    ({k: v for k, v in PUBLIC.items() if k != "scans"}, "not NetworkVerifier.Period's rows form"),
     (dict(PUBLIC, scans=[{k: v for k, v in SCAN.items() if k != "faulty_entries"}]),
      "the rows form's public lacks a term: KeyError: 'faulty_entries'"),
     (dict(PUBLIC, windows=2), "1 scans for the period's 2 execution phases"),

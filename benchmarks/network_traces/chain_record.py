@@ -113,7 +113,7 @@ SCAN_ONLY = "scan only, N2 not given"
 #: nor a K, since `block_entry` writes none (`ROWS_FORM`)
 RESTS = "accepted on the period check"
 RESTS_WHY = ("the honest round's registration names {tied} tied: its acceptance rests on the network period check "
-             "(NetworkCheck.Period's wired), which ties their rows to the audit that registered them and refuses "
+             "(NetworkVerifier.Period's wired), which ties their rows to the audit that registered them and refuses "
              "scan_zk's stand-in block (period_case.UNWIRED)")
 #: what a report on the certifier-only path stands on that isn't the chain's own
 STUBBED = (
@@ -777,7 +777,7 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
                 "the generator reading of the scan's statement (each proof block's registered rows its boundary "
                 "values): a claim, not yet a locked guarantee",
                 "each connection's cap is its lane's egress_cells, which the network certifier holds a lane to and "
-                "NetworkCheck.Period doesn't check; the schedules and the fail cells are charged at that cap, "
+                "NetworkVerifier.Period doesn't check; the schedules and the fail cells are charged at that cap, "
                 "⌈log2(cap + 1)⌉ each a request, as its rows form charges them",
                 f"the jitter term is T bits a sampling block, one a bucket: {LB.JITTER}",
                 "the scan proves sampling block 0 of the network certifier run; a monitoring period's terms are its "
@@ -788,11 +788,11 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
                 "composition, which no Lean statement covers. Each link certifies the run's rate; a scope's requests "
                 "past its links' rate are uncertified, and no row counts them, so these rows are not the scope's K "
                 "(leak_bounds.table counts the network certifier's terms over every request a scope serves)",
-                "ε is the scans' δ summed over the period's sampling blocks and the links (NetworkCheck.Period's "
+                "ε is the scans' δ summed over the period's sampling blocks and the links (NetworkVerifier.Period's "
                 "eps, m·δ), each scan at the scan's δ",
                 "the loop's (an untied compute audit's) free inputs don't enter K: its δ goes into JointPeriodLive's "
                 "sum",
-                "the scan's prog is a compute audit's output (NetworkCheck.Period's progTied), so its slot entries' "
+                "the scan's prog is a compute audit's output (NetworkVerifier.Period's progTied), so its slot entries' "
                 "bits are the tied audit's free inputs, which Lean's rows-form K charges to the sampling block's term "
                 "(tiedAudits), as this K does",
                 f"a share is of one copy of the weights, {weights.label}, whatever the links"]}

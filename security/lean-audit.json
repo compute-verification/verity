@@ -3615,7 +3615,7 @@
   "InferenceOnlyVerifier.Desc",
   "InferenceOnlyVerifier.Protocol",
   "InferenceOnlyVerifier.DefinitionDigest",
-  "NetworkCheck",
+  "NetworkVerifier",
   "NetworkAttester",
   "Poub",
   "CircuitRequirement",

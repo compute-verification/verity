@@ -245,7 +245,7 @@ def _key(i: int, seed: int = 0, same_id: bool = False) -> lms.PrivateKey:
     """KEYS[i]'s key from `seed`; `same_id`: the identifier of seed 0's key with another seed's one-time keys."""
     N, W, H, toy = KEYS[i]
     p = lms.Params(N, W, H, toy=toy)
-    s = hashlib.sha512(b"network-check %d %d" % (i, seed)).digest()[:N]
+    s = hashlib.sha512(b"network-verifier %d %d" % (i, seed)).digest()[:N]
     return lms.key(p, _key(i).I, s) if same_id else lms.keygen(p, s)
 
 
@@ -642,7 +642,7 @@ def counted(case) -> dict:
     return out
 
 
-PORT = D.ProtocolPort("network-check", counted, cases(), package=LEAN)
+PORT = D.ProtocolPort("network-verifier", counted, cases(), package=LEAN)
 server = D.server_fixture(PORT)
 
 
@@ -678,7 +678,7 @@ def test_a_reference_wrong_on_one_path_is_caught(server):
             return "accept", {}, {}
         return out
 
-    port = D.ProtocolPort("network-check", lambda case: reference(case, own_clock), cases(), package=LEAN)
+    port = D.ProtocolPort("network-verifier", lambda case: reference(case, own_clock), cases(), package=LEAN)
     with pytest.raises(D.Mismatch) as x:
         D.run(port, examples=1200, server=server)
     assert (x.value.lean[0], x.value.python[0]) == ("reject", "accept")

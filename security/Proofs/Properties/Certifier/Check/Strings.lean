@@ -12,8 +12,8 @@ is a string of the list the claims search (`headStrings`, `saltedStrings`, `fram
 
 @[expose] public section
 
-open NetworkCheck hiding Params
-open NetworkCheck.Check
+open NetworkVerifier hiding Params
+open NetworkVerifier.Check
 open NetworkAttester (ClockSync)
 
 namespace Properties.Certifier

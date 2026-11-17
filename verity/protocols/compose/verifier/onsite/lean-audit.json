@@ -18,8 +18,8 @@
     "MemoryAttester.WipeCount",
     "MemoryAttester.WipeProtocol",
     "InferenceOnlyVerifier.Protocol",
-    "NetworkCheck.Period",
-    "NetworkCheck.Span",
+    "NetworkVerifier.Period",
+    "NetworkVerifier.Span",
     "PousCheck.RunProtocol",
     "PouwVerifier.Period",
     "Poub.P2Protocol",
@@ -36,7 +36,7 @@
    "why": "the composite a deployment's listed subprotocols make, onsite or remote: code over the two composites and the Site's named lists (the plain sibling's, refused by name), no Mathlib and nothing of Security"
   },
   "CoreRemoteNetwork": {
-   "imports": ["CoreComposition.Cases", "CoreComposition.Stubs", "CoreRemote", "NetworkCheck.Period"],
+   "imports": ["CoreComposition.Cases", "CoreComposition.Stubs", "CoreRemote", "NetworkVerifier.Period"],
    "except": [],
    "why": "remote with the network certifier, development: code over remote's composite and the network certifier's period, no Mathlib and nothing of Security"
   },

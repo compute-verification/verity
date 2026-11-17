@@ -247,11 +247,11 @@ OVERCOUNT = ("a known overcount, proved and larger than necessary: k_sched and k
              "k_sched (its lane's length, #S_s ≤ ∏_c (cap_c + 1)) and in k_fail (its fail cell's position), which in a "
              "run coincide; K is MonitoringPeriodLeakAccepted's count as it states it")
 CONNECTIONS = ("the caps of the certifier's case's params (``cells``), one a connection: the period's check refuses any "
-               "but its schedule's (`NetworkCheck.Period.Schedule.rowsCells`), egress_cells for each of the lanes · m · T "
+               "but its schedule's (`NetworkVerifier.Period.Schedule.rowsCells`), egress_cells for each of the lanes · m · T "
                "connections the network certifier can carry over the period's m execution phases, so this counts the "
                "connections the schedule can carry, not those served")
 EPS = {"is": "δ_net's δ part alone: m · δ and each charged audit's δ",
-       "source": "the network-period check's public eps (NetworkCheck.Period)"}
+       "source": "the network-period check's public eps (NetworkVerifier.Period)"}
 #: δ_net's terms that eps doesn't count, each once an execution phase: `MonitoringPeriodLeakAccepted` bounds each phase's audit's
 #: failure by δ + ε_ks + ε_bind + ε_tap
 ERRORS = {
@@ -277,7 +277,7 @@ COMPOSITE_UNVALUED = ("each subprotocol's ε_forge(t, Q) and its loss at its fin
 NO_NCI_DELTA = "no published file states it: each composite publishes each case's params by their SHA-512 alone"
 DELTA = ("what sets eps: m · δ_scan, every phase's scan at one δ, its one-stage answer's stated δ (its integrity "
          "profile's, a sampling-design parameter in (0, 1) and not Flock's soundness error, which is in ε_ks), plus "
-         "δ_i for each tied audit drawn in part (NetworkCheck.Period's chargedOf). Where the public lists those "
+         "δ_i for each tied audit drawn in part (NetworkVerifier.Period's chargedOf). Where the public lists those "
          "readings (`charged`: each audit's draw read at δ_i, with its bound b there), δ_i is the period check's own "
          "constant, fixed before any coin, and the same draw read at its answer's δ stays sampled proofs' term of the "
          "composite's error; where it lists none, δ_i is the audit's answer's δ, and the charged part is what eps holds "
@@ -288,7 +288,7 @@ DELTA = ("what sets eps: m · δ_scan, every phase's scan at one δ, its one-sta
          "whole, it leaves eps and its entries leave K, at the cost of proving each of its proof blocks")
 NO_READINGS = ("the period's public lists no reading at δ_i (`charged`): its check reads each charged audit at its "
                "answer's δ, and the charged part is eps − m · δ_scan")
-TIED_READ = ("the tied audits the period's check reads at δ_i (NetworkCheck.Period's chargedOf: each tied to an "
+TIED_READ = ("the tied audits the period's check reads at δ_i (NetworkVerifier.Period's chargedOf: each tied to an "
              "execution phase's scan and drawn in part), each once, at the check's own constant δ_i (tiedDelta, "
              "2^-64), fixed before any coin and set by no params, evidence or answer; each adds its δ_i to eps, Σ_i δ_i "
              "by the union bound. A tied audit drawn whole is read at no δ_i, and adds nothing to eps")
@@ -432,7 +432,7 @@ CHAIN_DRAWS = (f"the network certifier's chain draws on no live coins. Its perio
                "the coins")
 NO_CHAIN_REPORT = f"the run published no chain report ({CHAIN_REPORT}), whose steps state each draw's sampling_design"
 CHARGED = ("MonitoringPeriodLeakAccepted's ℓ_{a,j}: the free inputs of each compute audit tied to execution phase j's scan, those "
-           "its Program neither registers at a pinned root nor ties (NetworkCheck.Period's tiedAudits sums the "
+           "its Program neither registers at a pinned root nor ties (NetworkVerifier.Period's tiedAudits sums the "
            "parameters' audits[].free, #(freeInputs \\ reg); `records_audit.py period`'s free for V3c's window audit). "
            "It reads no cap and no advice length: the advice is the compile unit's input, not the window Program's "
            "(`records_audit.py declared_count`), so neither the advice registration's width ℓ_a (its compiler's "
@@ -441,7 +441,7 @@ CHARGED = ("MonitoringPeriodLeakAccepted's ℓ_{a,j}: the free inputs of each co
 SKIP = ("MonitoringPeriodLeakAccepted's k_{skip,j}: what execution phase j's draws didn't take whole. The scan's incorrect proof "
         "blocks' term (``faulty_sets``, ``faulty_bits``: none where every one of its proof blocks is drawn), and "
         "``faulty_entries``, every slot-entry bit E_w of each audit tied to j's scan that is drawn in part (charged, "
-        "NetworkCheck.Period's chargedOf) with a bound of at least one incorrect proof block. Drawn whole, a tied "
+        "NetworkVerifier.Period's chargedOf) with a bound of at least one incorrect proof block. Drawn whole, a tied "
         "audit adds no entries and its δ leaves eps, at the cost of proving every one of its proof blocks")
 #: the checks the tight ℓ_{a,j} rests on, each by the name the period's public lists it under in ``held`` once its Lean
 #: check performs it
@@ -479,7 +479,7 @@ NO_KEYS = (f"the period's parameters ({CASE}'s params) state no LMS parameters, 
 #: why auditor-record doesn't hold where no listed entry's stretch holds the period's execution phase
 NO_ENTRY = (f"no listed entry's stretch holds the period's execution phase ({CASE}'s params' first is below every "
             "entry's start), so it has no key and session to hold to the auditor's record; the period check refuses "
-            "such a period (NetworkCheck.Period.entryAt, rowsCheck)")
+            "such a period (NetworkVerifier.Period.entryAt, rowsCheck)")
 #: remote's SPOT case (`served_cases.SAMPLED`), whose params θ the remote theorem's registered-files condition
 #: reads (`registered_files`)
 SAMPLED_ID = "verity/sampled-proofs/v1"
@@ -496,7 +496,7 @@ CHECKED = {
                      "checks: the auditor's registration A parses from its record (Core.Site.Registration.Auditor.ofJson "
                      "of the registration's params' auditor), the period's LMS parameters, and the key and session of "
                      "the listed entry whose stretch holds its one execution phase (its params' first, the entry "
-                     "NetworkCheck.Period.entryAt picks), are the auditor's record of its network certifier "
+                     "NetworkVerifier.Period.entryAt picks), are the auditor's record of its network certifier "
                      "(certifier-key/v1), and A holds that key for a network "
                      "certifier its log places (A.key cert.id = some (hexOf key)). It reads only the auditor's inputs, "
                      "its certifier-key record (--certifier-key) and its registration (--site-registration: the "
@@ -547,7 +547,7 @@ CHECKED = {
                       "neither is the verdict of a composite that reads the case, nor sampled proofs', its subprotocol there"),
     SCAN_STATE_PINNED: (f"that V3c's audit opened its reads of the scan's state where the period ties them: for each "
                         f"audit of the case's commitment whose window commits {SCAN_STATE} in its activations "
-                        "(window.activations.values, the entry NetworkCheck.Period's auditStateEntries reads and "
+                        "(window.activations.values, the entry NetworkVerifier.Period's auditStateEntries reads and "
                         "stateTied and stateHeldIn hold to the scan's state), the entry the audit's registered reads "
                         "opened it at (`AUDIT_SUMMARY`'s registered.own: records_audit's window_pins pins it from the "
                         "registration, and each --registered file takes every port's root and domain from that pin) is "
@@ -840,12 +840,12 @@ STATE_HELD = "Properties.NetworkPeriod.rowsStateHeld"
 #: window's activations commit it, each by its digest in `LOCKS`: None is no pin, under which the charge is free
 STATE_PINS: dict[str, str | None] = {
     STATE_HELD: "201c7e14cff40c3f649f09173ee7e1824cd0e00f9d5c18a1cef22d6ee09aa309",
-    "NetworkCheck.Period.stateHeldIn": "f034cfeb8082ba6a91f8d2d851c0f4aeda7145051f564a8312d76276b964925d",
-    "NetworkCheck.Period.auditStateEntries": "e3e53a0ba614ba12360f3cf8e073412a146c1ba7eb144be53810be7027644996",
-    "NetworkCheck.Period.stateEntries": "a7c8123beed3f6e036818652a4c5bca16f9b8a994fb5b074d052d5a8f55469e4"}
+    "NetworkVerifier.Period.stateHeldIn": "f034cfeb8082ba6a91f8d2d851c0f4aeda7145051f564a8312d76276b964925d",
+    "NetworkVerifier.Period.auditStateEntries": "e3e53a0ba614ba12360f3cf8e073412a146c1ba7eb144be53810be7027644996",
+    "NetworkVerifier.Period.stateEntries": "a7c8123beed3f6e036818652a4c5bca16f9b8a994fb5b074d052d5a8f55469e4"}
 STATE_CHARGE = ("which charge the rows form's K applied to each audit tied to an execution phase's scan. The tree's "
                 "period check charges each its whole free inputs, the parameters' `free` of each audit the scan's "
-                "`prog` is an output of, once (`NetworkCheck.Period.rowsExecutionPhaseCheck`'s `tiedAudits` sum), and "
+                "`prog` is an output of, once (`NetworkVerifier.Period.rowsExecutionPhaseCheck`'s `tiedAudits` sum), and "
                 "refuses an execution phase whose scan's state is not its wired audit's SCAN_STATE "
                 "(`Properties.NetworkPeriod.RowsStateTied`), so at its locks, which hold no RowsStateHeld, the record "
                 "states free. It states stateFree, a tied audit's free inputs with its reads of the scan's state held, "
@@ -1055,7 +1055,7 @@ def bound(public: Mapping[str, Any]) -> dict[str, Any]:
     """K and its terms (module docstring) from a rows-form public; ValueError naming why for any other. m is its scans'
     count, held to its ``windows`` where the public keeps it (a run's published form drops it)."""
     if not isinstance(public, Mapping) or not isinstance(public.get("scans"), list):
-        raise ValueError("not NetworkCheck.Period's rows form, whose public has scans: the demo's network verdict is "
+        raise ValueError("not NetworkVerifier.Period's rows form, whose public has scans: the demo's network verdict is "
                          "the rows form's")
     try:
         terms = [{"symbol": s, "bits": sum(int(public[f]) for f in fs), "lean": list(fs)} for s, fs in TERMS.items()]

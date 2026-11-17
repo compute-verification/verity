@@ -1,9 +1,9 @@
 module
 
-public import NetworkCheck.ScanOk
-public import NetworkCheck.Check
-meta import NetworkCheck.ScanOk
-meta import NetworkCheck.Check
+public import NetworkVerifier.ScanOk
+public import NetworkVerifier.Check
+meta import NetworkVerifier.ScanOk
+meta import NetworkVerifier.Check
 
 /-!
 # The scan's start
@@ -14,7 +14,7 @@ start unit reads (`startName`), its opening to the empty state (`startEmpty`), a
 
 @[expose] public section
 
-namespace NetworkCheck.Period
+namespace NetworkVerifier.Period
 
 open Lean (Json toJson)
 
@@ -103,4 +103,4 @@ def scanStartCheck (w i : Nat) (reg : Json) : Option (Core.Verdict × String) :=
     (scanStartCheck 1 1 (startProbe [one] 1)).map (·.2) == some s!"window 1: {startCarriedRefusal}" &&
     (scanStartCheck 4 1 (startProbe [one] 1)).map (·.2) == some s!"window 4: {startCarriedRefusal}"
 
-end NetworkCheck.Period
+end NetworkVerifier.Period

@@ -1104,7 +1104,7 @@
   "Circuits",
   "Commitments",
   "NetworkAttester",
-  "NetworkCheck",
+  "NetworkVerifier",
   "Lms",
   "Properties.Hash.Identity",
   "Properties.Certifier.Check",
@@ -2390,7 +2390,7 @@
    "why": "the ε a credit reports is stated against the code's strata, law and epsAt (`Properties.Pouw.Strata`, on Lean core), its draw as `Properties.Spot.bytesOf` reads uniform streams and its probability `Pouw.RelativeSecurity.prob` (`Definitions.Pouw.RelativeSecurity`), never a proof"
   },
   "Properties.NetworkPeriod": {
-   "imports": ["NetworkCheck.Period", "Mathlib.Algebra.BigOperators.Fin", "Spot.OneStage", "Lms.Sign"],
+   "imports": ["NetworkVerifier.Period", "Mathlib.Algebra.BigOperators.Fin", "Spot.OneStage", "Lms.Sign"],
    "except": [],
    "why": "what the period check's rows-form K counts is stated against its own terms (`rowsTerms`) and Mathlib's finite products, never a proof"
   },
@@ -2424,7 +2424,7 @@
    "why": "the served protocol's onsite freed compute is stated over its remote work guarantee (`Properties.Pouw.ServedWork`) and the accelerator model's period and freed compute (`Definitions.Pouw.Dither`), never a proof"
   },
   "Properties.NetworkScan": {
-   "imports": ["NetworkCheck.Period", "Definitions.Certifier.SampledAudit", "Properties.NetworkScan"],
+   "imports": ["NetworkVerifier.Period", "Definitions.Certifier.SampledAudit", "Properties.NetworkScan"],
    "except": [],
    "why": "the scan's layout and its fit are stated against the period check's `scanOf`, C-Flock's decoder and resolution, the sampled audit's scope (`NetTiming.ScopeAcc`, `NetTiming.BoundaryGates.Fits`) and its own flattening and named deployment premises (`Properties.NetworkScan.Flattens`, `Properties.NetworkScan.Assumptions`), never a proof"
   },
@@ -2642,12 +2642,12 @@
    "why": "whose ledger the period's check reads is stated against the check's own reader (`Spot.MonitoringPeriod.read`), the vocabulary of the period's statements (`Properties.Spot.MonitoringPeriod`) and the challenger's model of the device's log (`Properties.Challenger`: `History`, `Break`), on Lean core: nothing of Mathlib or of `security`, never a proof"
   },
   "Properties.Certifier.Check": {
-   "imports": ["NetworkCheck.Check", "NetworkCheck.TransferBlocks", "Properties.Hash.Identity", "Lms.Sign"],
+   "imports": ["NetworkVerifier.Check", "NetworkVerifier.TransferBlocks", "Properties.Hash.Identity", "Lms.Sign"],
    "except": [],
    "why": "the properties are stated against the code's own functions, the check's and N2's execution phase verdict of record's, and the certificates the certifier's device signs against LMS's own signer (`CertifierSigned`), never a proof"
   },
   "Properties.Certifier.Records": {
-   "imports": ["NetworkCheck.RecordsGrid", "Properties.Certifier.Check"],
+   "imports": ["NetworkVerifier.RecordsGrid", "Properties.Certifier.Check"],
    "except": [],
    "why": "what the records check's acceptance means is stated against its own functions and the reference Program's grid, with v2's statements of the evidence, the syncs and the heads, never a proof"
   },
@@ -2717,9 +2717,9 @@
    "sealed": true
   },
   "Properties.Ties": {
-   "imports": ["Properties.Verity.Game", "Definitions.Registration.View", "Flock.ProvedScope", "NetworkCheck.Check"],
+   "imports": ["Properties.Verity.Game", "Definitions.Registration.View", "Flock.ProvedScope", "NetworkVerifier.Check"],
    "except": [],
-   "why": "the ties between the registration and the protocols that name what it registers join two protocols, so they are the composition's, under a prefix of their own because they read a protocol's code: the game's reading of the committed files (`Properties.Verity.Game`), the registration's view and prefix heads (`Definitions.Registration.View`), the Program Flock's verifier binds a circuit file to (`Flock.ProvedScope`) and the network certifier's parameters (`NetworkCheck.Check`); never a proof"
+   "why": "the ties between the registration and the protocols that name what it registers join two protocols, so they are the composition's, under a prefix of their own because they read a protocol's code: the game's reading of the committed files (`Properties.Verity.Game`), the registration's view and prefix heads (`Definitions.Registration.View`), the Program Flock's verifier binds a circuit file to (`Flock.ProvedScope`) and the network certifier's parameters (`NetworkVerifier.Check`); never a proof"
   },
   "Properties.Registration": {
    "imports": [
@@ -13743,11 +13743,11 @@
     "outcome": "none"
    },
    "Properties.NetworkRecords.acceptMeans": {
-    "function": "NetworkCheck.Records.protocol.check",
+    "function": "NetworkVerifier.Records.protocol.check",
     "outcome": "accept"
    },
    "Properties.NetworkRecords.answerAcceptMeans": {
-    "function": "NetworkCheck.Records.protocol.answer",
+    "function": "NetworkVerifier.Records.protocol.answer",
     "outcome": "accept"
    },
    "Properties.Pouw.Check.acceptMeans": {
@@ -14113,11 +14113,11 @@
     "outcome": "accept"
    },
    "Properties.NetworkRecords.noGridAcceptsMore": {
-    "function": "NetworkCheck.Records.evaluate",
+    "function": "NetworkVerifier.Records.evaluate",
     "outcome": "accept"
    },
    "Properties.NetworkRecords.noGridMeans": {
-    "function": "NetworkCheck.Records.evaluateNoGrid",
+    "function": "NetworkVerifier.Records.evaluateNoGrid",
     "outcome": "accept"
    },
    "Properties.Pouw.LiveSalt.oneRoot": {
@@ -14161,7 +14161,7 @@
     "outcome": "accept"
    },
    "Properties.NetworkPeriod.rowsKBoundsCount": {
-    "function": "NetworkCheck.Period.rowsTerms",
+    "function": "NetworkVerifier.Period.rowsTerms",
     "outcome": "none"
    },
    "Properties.Composition.acceptMeans": {
@@ -14221,11 +14221,11 @@
     "outcome": "none"
    },
    "Properties.NetworkPeriod.rowsProgWired": {
-    "function": "NetworkCheck.Period.check",
+    "function": "NetworkVerifier.Period.check",
     "outcome": "accept"
    },
    "Properties.NetworkPeriod.rowsStateTied": {
-    "function": "NetworkCheck.Period.check",
+    "function": "NetworkVerifier.Period.check",
     "outcome": "accept"
    },
    "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses": {
@@ -14373,7 +14373,7 @@
     ]
    },
    "Properties.NetworkPeriod.rowsCapPublished": {
-    "function": "NetworkCheck.Period.check",
+    "function": "NetworkVerifier.Period.check",
     "outcome": "accept"
    },
    "Properties.Pouw.PearlPlus.acceptMeans": {
@@ -14409,7 +14409,7 @@
     ]
    },
    "Properties.NetworkPeriod.rowsTiedCharged": {
-    "function": "NetworkCheck.Period.check",
+    "function": "NetworkVerifier.Period.check",
     "outcome": "accept"
    },
    "Properties.Period.monitoringPeriodIsSpec": {
@@ -14453,11 +14453,11 @@
     ]
    },
    "Properties.NetworkScan.scanFits": {
-    "function": ["NetworkCheck.Period.scanOf", "Flock.canon", "Flock.Program.decode"],
+    "function": ["NetworkVerifier.Period.scanOf", "Flock.canon", "Flock.Program.decode"],
     "outcome": "accept"
    },
    "Properties.NetworkScan.scanScopeAcc": {
-    "function": ["NetworkCheck.Period.scanOf", "Flock.canon"],
+    "function": ["NetworkVerifier.Period.scanOf", "Flock.canon"],
     "outcome": "accept"
    },
    "Properties.Pouw.PearlPlus.openingBinds": {
@@ -14485,35 +14485,35 @@
     "outcome": "none"
    },
    "Properties.Certifier.acceptsOneRecordEach": {
-    "function": "NetworkCheck.Check.protocol.check",
+    "function": "NetworkVerifier.Check.protocol.check",
     "outcome": "accept"
    },
    "Properties.Certifier.answerAccepts": {
-    "function": "NetworkCheck.Check.protocol.answer",
+    "function": "NetworkVerifier.Check.protocol.answer",
     "outcome": "accept"
    },
    "Properties.Certifier.decodeRefusals": {
-    "function": "NetworkCheck.Check.protocol.answer",
+    "function": "NetworkVerifier.Check.protocol.answer",
     "outcome": "accept"
    },
    "Properties.Certifier.malformedEvidenceRejects": {
-    "function": "NetworkCheck.Check.protocol.check",
+    "function": "NetworkVerifier.Check.protocol.check",
     "outcome": "accept"
    },
    "Properties.Certifier.undigestedParamsReject": {
-    "function": "NetworkCheck.Check.protocol.check",
+    "function": "NetworkVerifier.Check.protocol.check",
     "outcome": "accept"
    },
    "Properties.Certifier.acceptsTransferBlocks": {
-    "function": "NetworkCheck.Check.protocol.check",
+    "function": "NetworkVerifier.Check.protocol.check",
     "outcome": "accept"
    },
    "Properties.Certifier.undecidedPending": {
-    "function": "NetworkCheck.Check.protocol.check",
+    "function": "NetworkVerifier.Check.protocol.check",
     "outcome": "undecided"
    },
    "Properties.Certifier.transferBlocksAcceptMeans": {
-    "function": "NetworkCheck.TransferBlocks.verdict",
+    "function": "NetworkVerifier.TransferBlocks.verdict",
     "outcome": "accept"
    },
    "Properties.ZkServer.admitNext": {
@@ -14565,19 +14565,19 @@
     "outcome": "accept"
    },
    "Properties.NetworkPeriod.rowsTiedInputWired": {
-    "function": "NetworkCheck.Period.check",
+    "function": "NetworkVerifier.Period.check",
     "outcome": "accept"
    },
    "Properties.NetworkPeriod.rowsOkHeld": {
-    "function": "NetworkCheck.Period.check",
+    "function": "NetworkVerifier.Period.check",
     "outcome": "accept"
    },
    "Properties.NetworkPeriod.rowsCircuitHeld": {
-    "function": "NetworkCheck.Period.check",
+    "function": "NetworkVerifier.Period.check",
     "outcome": "accept"
    },
    "Properties.NetworkPeriod.rowsStateEmpty": {
-    "function": "NetworkCheck.Period.check",
+    "function": "NetworkVerifier.Period.check",
     "outcome": "accept"
    },
    "MemoryAttester.Session.Properties.SecurityProofs.auditorSeesDigests": {
@@ -14849,15 +14849,15 @@
     "outcome": "accept"
    },
    "Properties.NetworkPeriod.registeredSampleHeld": {
-    "function": "NetworkCheck.Period.check",
+    "function": "NetworkVerifier.Period.check",
     "outcome": "accept"
    },
    "Properties.NetworkPeriod.sampleBoundCharged": {
-    "function": "NetworkCheck.Period.check",
+    "function": "NetworkVerifier.Period.check",
     "outcome": "accept"
    },
    "Properties.NetworkPeriod.rowsStartCharged": {
-    "function": "NetworkCheck.Period.check",
+    "function": "NetworkVerifier.Period.check",
     "outcome": "accept"
    }
   },

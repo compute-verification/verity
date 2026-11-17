@@ -1,18 +1,18 @@
 module
 
-public import NetworkCheck.Certificate
-public import NetworkCheck.Check
-public import NetworkCheck.Registered
-public import NetworkCheck.Difftest
-public import NetworkCheck.Records
-public import NetworkCheck.RecordsGrid
-public import NetworkCheck.RecordsBytes
-public import NetworkCheck.ScanOk
-public import NetworkCheck.Period
-public import NetworkCheck.ConnectionRowsGuards
-public import NetworkCheck.TransferBlocks
-public import NetworkCheck.RowsAudit
-public import NetworkCheck.Span
+public import NetworkVerifier.Certificate
+public import NetworkVerifier.Check
+public import NetworkVerifier.Registered
+public import NetworkVerifier.Difftest
+public import NetworkVerifier.Records
+public import NetworkVerifier.RecordsGrid
+public import NetworkVerifier.RecordsBytes
+public import NetworkVerifier.ScanOk
+public import NetworkVerifier.Period
+public import NetworkVerifier.ConnectionRowsGuards
+public import NetworkVerifier.TransferBlocks
+public import NetworkVerifier.RowsAudit
+public import NetworkVerifier.Span
 
 /-!
 # The network certificate's checks
