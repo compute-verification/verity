@@ -945,7 +945,7 @@ v3c_period() {  # V3c's audit as one compute audit of the network certifier's pe
   say "V3C-PERIOD (records_audit.py period exit $rc): $(tail -1 "$OUT/v3c-audit/period.log" | cut -c1-800)"
   return $rc
 }
-certifier_step() {  # $1 chain|period: the split network certifier's step on V3c's window (step 6), if its command is set
+certifier_step() {  # $1 chain|period: network attestation's split step on V3c's window (step 6), if its command is set
   local cmd lim dir=$OUT/pieces/certifier rc
   if [ "$1" = chain ]; then cmd=${CERTIFIER_CHAIN_CMD:-} lim=${CERTIFIER_TIMEOUT:-4h}
   else cmd=${CERTIFIER_PERIOD_CMD:-} lim=${CERTIFIER_PERIOD_TIMEOUT:-60m}; fi
@@ -956,7 +956,7 @@ certifier_step() {  # $1 chain|period: the split network certifier's step on V3c
   say "CERTIFIER-${1^^} (exit $rc): $(tail -1 "$dir/$1.log" | cut -c1-600)"
   return $rc
 }
-v3c_proved() {  # V3c's window committed, the build done: the certifier's chain beside V3c's audit, then its period check
+v3c_proved() {  # V3c's window committed, the build done: network attestation's chain beside V3c's audit, then its period check
   local rc prc chain
   certifier_step chain & chain=$!
   v3c_audit; rc=$?
@@ -1143,7 +1143,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
       >> "$D/private/certifier-front.log" 2>&1
     closed=$?
     say "CERTIFIER-FRONT (exit $closed): $("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" front-line "$D/private/certifier-front/session.json" 2>&1 | cut -c1-600)"
-    rc=$sent_rc  # the step's exit is the load's, as under the run's own loads: the close's is the certifier's verdict
+    rc=$sent_rc  # the step's exit is the load's, as under the run's own loads: the close's is the network attester's verdict
   elif [ "$LOAD" != front ]; then
     release=$("$PY" -c 'import uuid; print(uuid.uuid4().hex)')
     local load=(--varied "$REQUESTS" --rate "$RATE" --max-tokens "$MAX_TOKENS")
@@ -1176,7 +1176,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   else say "SERVE stopped (exit $stopped): not every closed window sealed (the serve dir's private/verdicts.txt)"; fi
   [ "$period" = 1 ] && say "$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" period close "$D" --gate "$H1_GATE" 2>&1 | tail -1)"
   pearl_period close
-  # a front's exit is the certifier's verdict (CERTIFIER-FRONT, and its piece reads the session), not the load's
+  # a front's exit is the network attester's verdict (CERTIFIER-FRONT, and its piece reads the session), not the load's
   { [ "$LOAD" = front ] || [ "$rc" = 0 ]; } && [ "$c" -gt 0 ] && [ "$s" -ge "$c" ]
 }
 
@@ -1377,7 +1377,7 @@ front_ok() {  # preflight: LOAD=front has a front, LOAD=session its three comman
   fi
   case ${CERTIFIER_FRONT:-} in *"certifier_piece.py front"*) ;; *) return 0 ;; esac
   case " ${SERVE_ARGS:-} " in *" --protocol ids "*) ;; *)
-    say "PREFLIGHT: the certifier front sends id-form requests, which serve-openai answers only under" \
+    say "PREFLIGHT: the network attester front sends id-form requests, which serve-openai answers only under" \
         "SERVE_ARGS='--protocol ids --id-payload 503'"; return 3 ;; esac
   local help f script
   script=$(grep -oE "[^[:space:]\"']*certifier_piece\.py front" <<< "$CERTIFIER_FRONT" | head -1)
@@ -1388,7 +1388,7 @@ front_ok() {  # preflight: LOAD=front has a front, LOAD=session its three comman
       || { say "PREFLIGHT: CERTIFIER_FRONT passes $f, which this tree's certifier front doesn't take"; return 3; }
   done
 }
-# the certifier's chain files list and count the window's requests (its certs, its tie's prompt lengths, its N2 network certifier's
+# network attestation's chain files list and count the window's requests (its certs, its tie's prompt lengths, its N2 network attester's
 # counts, its report and the piece's log, or the split's two logs); once the record has read them, or
 # `served_verdicts.sh v3c` is done, they move to the serve dir's private/
 CERTIFIER_PRIVATE="chain/certs.json chain/report chain/tie/summary.json chain/n2/summary.json piece.log chain.log period.log"
@@ -1840,7 +1840,7 @@ front_ok || exit 3
 SPLIT= DEFER=
 if [ -n "${CERTIFIER_CHAIN_CMD:-}${CERTIFIER_PERIOD_CMD:-}" ]; then  # the split certifier: its period check writes its answer
   [ -z "${CERTIFIER_CMD:-}" ] || { say "PREFLIGHT: CERTIFIER_CMD or the split's CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD, not both"; exit 3; }
-  [ -n "$V3C" ] || { say "PREFLIGHT: the split certifier's period check reads V3c's period.json, and V3C_CLASS is empty"; exit 3; }
+  [ -n "$V3C" ] || { say "PREFLIGHT: the split attestation period check reads V3c's period.json, and V3C_CLASS is empty"; exit 3; }
   SPLIT=1
 fi
 case ${V3C_COMPOSE_CACHE:-/} in  # a kept compose cache: outside TREE, where the warm and the audit would put a relative path
@@ -1889,7 +1889,7 @@ if [ -n "$PEARLPLUS_TIE" ] && [ -z "$COMPOSE" ]; then  # the window served under
   [ "$POUW" = pearlplus ] || { say "PREFLIGHT: PEARLPLUS_TIE ties the window to Pearl+'s W, which POUW=pearlplus's piece writes: POUW is $POUW"; exit 3; }
   [ -z "${H1_TIE:-}" ] || { say "PREFLIGHT: PEARLPLUS_TIE or H1_TIE, not both: the window is tied to one W"; exit 3; }
   [ -n "$V3C" ] || { say "PREFLIGHT: PEARLPLUS_TIE commits the window at V3C_CLASS, and it is empty"; exit 3; }
-  [ -z "$SPLIT" ] || { say "PREFLIGHT: under PEARLPLUS_TIE V3c runs once Pearl+'s piece wrote W, after step 4, and the split certifier's period check needs it before: set CERTIFIER_CMD instead"; exit 3; }
+  [ -z "$SPLIT" ] || { say "PREFLIGHT: under PEARLPLUS_TIE V3c runs once Pearl+'s piece wrote W, after step 4, and the split attestation period check needs it before: set CERTIFIER_CMD instead"; exit 3; }
   if [ -z "$FOLLOW" ] && [ "${1:-}" != v3c ]; then  # the serve's run, whose piece commits the window tied to W
     outs=$(cut -d, -f3 <<< "$V3C")
     [ "$LOAD" = fixed ] && [ "$WINDOW_STEPS" = "$outs" ] \
@@ -2206,9 +2206,9 @@ PICK=$("$PY" benchmarks/one_stage/served_verdicts.py window "$D" --slots "$SLOTS
 (umask 077; echo "$PICK" > "$D/private/window.json")
 K=$(echo "$PICK" | "$PY" -c 'import json, sys; print(json.load(sys.stdin)["window"])')
 say "WINDOW: $([ -n "${WINDOW:-}" ] && echo "the one WINDOW names" || echo "the sealed one with the most requests"), none carried across windows, at the class's $SLOTS slots (the pick in the serve dir's private/window.json)"
-say "CLASSES: the window circuit's ${CLASSES}; the certifier's scan ${CERTIFIER_SCAN:-W63}, the one class the gate serves"
+say "CLASSES: the window circuit's ${CLASSES}; network attestation's scan ${CERTIFIER_SCAN:-W63}, the one class the gate serves"
 CERT=
-if [ -n "${CERTIFIER_CMD:-}" ]; then  # the certifier's chain is the longest piece, so it starts once the window is picked
+if [ -n "${CERTIFIER_CMD:-}" ]; then  # network attestation's chain is the longest piece, so it starts once the window is picked
   # kept off CPUs 0 and 1 (CERT_CPUS), which PoUS's answers need idle: the chain's load stretches a round past Δ + RTT
   CERT_TASKSET=(); NCPU=$(nproc)
   command -v taskset > /dev/null && [ "$NCPU" -gt 2 ] && CERT_TASKSET=(taskset -c "${CERT_CPUS:-2-$((NCPU - 1))}")

@@ -197,7 +197,7 @@ def test_a_node_whose_interface_reads_no_rate_says_why_no_certifier_splits_it(ki
     assert refusal(Registration("onsite"), entry, keys) == "challenger-reach"
     assert not check(Registration("onsite", (reached(entry),)), keys).mediated
     for composite in ("remote", "onsite"):
-        with pytest.raises(Malformed, match=rf"network certifier '{CERTIFIER[0]}': the interfaces \['{HOST}/eth0'\].*"
+        with pytest.raises(Malformed, match=rf"network attester '{CERTIFIER[0]}': the interfaces \['{HOST}/eth0'\].*"
                                             "takes no certifier"):
             log_of(kind, composite, CERTIFIER)
 

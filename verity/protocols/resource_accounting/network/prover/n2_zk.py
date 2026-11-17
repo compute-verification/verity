@@ -92,7 +92,7 @@ ROUNDS = ("honest", "tampered")
 ONE_SESSION = "outer proofs go through the ZK server one at a time (AGENTS.md, 'Live coins only')"
 #: what the verifier receives per execution phase, by file (`member`)
 RECEIVED = {"registration.json": "the registration record", "draw.json": "the stream's sample",
-            "certificates.json": "the certificates' public fields (the certifier's)", "syncs.json": "the declared syncs",
+            "certificates.json": "the certificates' public fields (the network attester's)", "syncs.json": "the declared syncs",
             "pub-1.bin": "the statement's public file", "session-*": "the session's files",
             "delivered.json": "the pub and o0 rows' salts and the output word", "outcome.json": "the outcome record"}
 
