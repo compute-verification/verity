@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-SHIP_NVCC = Path(__file__).resolve().parents[4] / "benchmarks" / "kernels" / "ship_nvcc.sh"
+SHIP_NVCC = Path(__file__).resolve().parents[3] / "benchmarks" / "kernels" / "ship_nvcc.sh"
 JOB_NVCC = SHIP_NVCC.with_name("job_nvcc.sh")
 SHIP_PROBE = SHIP_NVCC.with_name("ship_probe.sh")
 TEMP = "tmpxft_0000aaaa_00000000"
