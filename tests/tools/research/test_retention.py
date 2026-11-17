@@ -939,8 +939,8 @@ def test_rm_cli_reads_the_registry_for_the_unheld_rule_and_says_when_it_cannot(t
     assert research_main([*argv, "--registry", str(reg)]) == 0
     assert "would delete" in capsys.readouterr().out and unheld.exists(), "a dry run"
     assert research_main([*argv, "--registry", str(tmp_path / "absent.json")]) == 1
-    cap = capsys.readouterr()
-    assert "the registry can't be read" in cap.err and "--registry FILE" in cap.err and "REFUSED" in cap.out
+    said = capsys.readouterr()
+    assert "the registry can't be read" in said.err and "--registry FILE" in said.err and "REFUSED" in said.out
 
 
 @pytest.mark.skipif(os.geteuid() == 0, reason="root writes into a read-only directory")
