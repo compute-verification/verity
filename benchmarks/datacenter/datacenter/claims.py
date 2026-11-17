@@ -22,7 +22,7 @@ trusted clock:
 - `Refused(on, why)`: something didn't check, and `on` says what: a port's window, a store, a part, an input (a
   registered one whose bytes aren't the registration's), the occupancy profile.
 
-A record must exist for every certifier port and every window of the epoch: a missing one is refused, never silence.
+A record must exist for every attester port and every window of the epoch: a missing one is refused, never silence.
 The one exception is a block the verifier's plan has out for maintenance, whose ports owe no records then; the account
 charges what that costs.
 """

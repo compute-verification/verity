@@ -24,7 +24,7 @@ where the torch op materialises a `DT` tensor.  With `DT="f32"` the widen/narrow
       digits (`_DEC_PREC`); this coincides with correct rounding unless the exact value lies within 10^-90 relative of a
       rounding boundary — no binary32 argument is known to (Lefèvre/Muller worst cases for exp are ~2^-60), and the
       evaluator, not the mathematical function, is the registered definition.  `F32LogRn`'s is MPFR's correctly rounded
-      log on all 2^32 words (`benchmarks/f32_exhaustive/run.py log`, which takes `exp` too).
+      log on all 2^32 words (`calibration/f32_exhaustive/run.py log`, which takes `exp` too).
   `GatherF32x{V}` the f32 twin of `prims.gather_bf16` (out-of-range token -> 0x7FC00000, documented extension).
   `I64ToI32`    range-checked int64 -> int32 (out of range -> 0x80000000 sentinel, torch wraps).
 
