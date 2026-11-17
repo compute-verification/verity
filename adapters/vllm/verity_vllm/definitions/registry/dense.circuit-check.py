@@ -10,6 +10,7 @@ def _boolean_roots() -> list[Any]:
     frontend's `attention_softcap` instance (T = 5, two query heads on one KV head, D = 16, its one block at FA2's kBlockN of
     128), and one head over 17 keys in blocks of 16, whose second block is the first that isn't `FIRST`; with the two primitives."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import b1
     from verity_vllm.definitions.registry import dense as DN
 

@@ -13,6 +13,7 @@ from verity.circuits.constants import program_data
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.program import Program
+
 from verity_vllm.definitions.registry import b1, hopper
 from verity_vllm.definitions.registry import dense as DN
 from verity_vllm.definitions.registry import fa2_softcap as F2S
