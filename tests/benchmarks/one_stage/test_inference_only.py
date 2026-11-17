@@ -311,6 +311,7 @@ def test_a_run_within_its_policy_is_accepted_and_its_public_form_holds_no_count(
 @pytest.mark.parametrize(("split", "why"), [
     (None, None),
     (KINDED, None),
+    ({"linears": 16_383, "scan_state": 2_049, "openings": 0}, "is not the run's circuit's"),
     ({"linears": 16_384, "scan_state": 2_047, "openings": 0}, "doesn't sum to its k = 18432"),
 ])
 def test_a_policys_k_by_kind_is_the_run_circuits_and_sums_to_its_k(kinded, tmp_path, split, why, lean):

@@ -12,10 +12,12 @@
   bits are the rows it reads of registered parameters outside θ, once a row, and the output rows it reads of units in
   another block, once a row. A division's policy is its largest block's `c` and `k`.
 * **The verdict** (`lean_count`) is the Lean verifier's, the package's check executable with `--count --detail`
-  (`EXECUTABLE`, built with `lake`), on the session Program the integration gives it: the session Definition activated
-  once a slot, its held weights registered and in θ (one-stage `inference_only.held_inputs`), and no wire between
-  units, since the record's wires are declarations the Definition doesn't carry. The record's count
-  (`inference_only.record_count`) is carried beside it.
+  (`EXECUTABLE`, built with `lake`), on the session Program: the session Definition activated once a slot, its held
+  weights registered and in θ (one-stage `inference_only.held_inputs`), and the record's wires left out. So its count
+  reads a wired row as fresh where the record's count does not, unlike the served verdict, which hands the Lean verifier
+  the slot-grouped wired Program (one-stage `inference_only.wired_program`): this class's int8 checkpoint doesn't build
+  wired, and stays so until it does or moves to BF16. The record's count (`inference_only.record_count`) is carried
+  beside it.
 """
 from __future__ import annotations
 

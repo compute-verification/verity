@@ -536,14 +536,24 @@ def wired_row(doc: Mapping[str, Any], pins: Mapping[str, str] | None, roots: Map
     if any(rows[s][0] != g for s, g in w["rows"]):
         raise Undecided(f"the count's gates a slot Definition {[rows[s][0] for s in slots]} are not the table's "
                         f"{[g for _, g in w['rows']]}")
-    worst = max(slots, key=lambda s: rows[s][1])
-    k = rows[worst][1]
-    kinds = {p: wired_kind(p, doc) for p in w["root"] if p not in held}
-    by_kind = {}
+    fresh = {s: rows[s][1] for s in slots}
+    return {**w, "rows": [[s, *rows[s][:2]] for s in slots], "fresh": max(fresh.values()),
+            "k_by_kind": kind_split(w, doc, fresh, lean)}
+
+
+def kind_split(w: Mapping[str, Any], doc: Mapping[str, Any], fresh: Mapping[str, int],
+               lean: Path | None = None) -> dict[str, int]:
+    """The worst slot's ``fresh`` bits (by key, at `wired_blocks` ``w``'s θ) by kind (`WIRED_KINDS`): what they drop by
+    when that kind's root parameters are held too, one count a kind with any (`wired_rows`). `--detail` gives a slot's
+    fresh bits, not a parameter's, so no one count splits them."""
+    worst = max(w["blocks"], key=lambda s: fresh[s])
+    kinds = {p: wired_kind(p, doc) for p in w["root"] if p not in w["held"]}
+    out = {}
     for kind in WIRED_KINDS:
         mine = [p for p, x in kinds.items() if x == kind]
-        by_kind[kind] = k - wired_rows(fn, slots, table, (*held, *mine), lean)[worst][1] if mine else 0
-    return {**w, "rows": [[s, *rows[s][:2]] for s in slots], "fresh": k, "k_by_kind": by_kind}
+        out[kind] = (fresh[worst] - wired_rows(w["fn"], w["blocks"], w["table"], (*w["held"], *mine), lean)[worst][1]
+                     if mine else 0)
+    return out
 
 
 def count_instance(doc: Mapping[str, Any], table: Mapping[str, int], c: int, k: int, n: int,
@@ -708,6 +718,14 @@ def verdict(pol: Mapping[str, Any] | None, doc: Mapping[str, Any] | None, serve_
             raise Undecided(f"the Lean verifier counts {said['rows']} (key, gates, fresh) a slot Definition, and the gate "
                             f"table {row['rows']}")
         private["blocks"] = [[key, g, x, sealed * row["calls"][key]] for key, g, x in said["rows"]]
+        stated = (pol.get("session") or {}).get("rows")
+        if stated is not None and sorted([key, g] for key, g, *_ in stated) != sorted(row["rows"]):
+            raise Undecided("the policy's slot Definitions and their gates (session.rows) are not the run's circuit's")
+        if "k_by_kind" in pol:
+            run = kind_split(row, doc, {key: x for key, _, x in said["rows"]}, lean)
+            if dict(pol["k_by_kind"]) != run:
+                raise Undecided(f"the policy's k_by_kind {dict(pol['k_by_kind'])} is not the run's circuit's {run}, by "
+                                "the same count")
         if not said["complies"] and said["failed"] not in ("gates", "fresh", "count"):
             raise Undecided("the Lean verifier refuses and names no rule of gates, fresh and count that failed")
         worst = next((i for i, (_, g, x) in enumerate(said["rows"]) if g > c or x > k), 0)
