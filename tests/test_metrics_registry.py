@@ -1,10 +1,9 @@
-"""Each benchmark or loop declares its numbers in a `metrics.toml` beside the script its command runs
+"""Each benchmark or loop declares its numbers in a `metrics.toml` beside the code that records them
 (`benchmarks/README.md`'s "Metrics"): every metric once across all those files, with an id no other row has, under its
 owner's prefix, an owner the handle registry knows and whose `owns` there covers the declaring file, the dashboard's
 words (a headline `title`, a short `unit` and a one-sentence `axis`), a direction, an `every` in minutes, hours or days,
-and a command whose first script sits under the declaring file's directory and whose
-script's directory records the metric under its id. A whole-tree invariant, since it reads the handle registry and the
-benchmarks and loops the commands run."""
+and a command naming scripts that exist, with the declaring file's directory recording the metric under its id. A
+whole-tree invariant, since it reads the handle registry and the benchmarks and loops the commands run."""
 from __future__ import annotations
 
 import json
@@ -96,19 +95,15 @@ def _problems(m: dict, handles: set[str], where: str) -> list[str]:
         out.append(f"floor is {m['floor']!r}, not a number")
     if "tags" in m and not (isinstance(m["tags"], list) and all(isinstance(t, str) for t in m["tags"])):
         out.append("tags is not a list of words")
-    scripts = _SCRIPT.findall(str(m.get("command", "")))
+    scripts, home = _SCRIPT.findall(str(m.get("command", ""))), ROOT / where
+    missing = [f"its command's script {s} doesn't exist" for s in scripts if not (ROOT / s).is_file()]
     if not scripts:
         out.append(f"its command names no script under {_UNDER}")
-    elif not scripts[0].startswith(f"{where}/"):
-        out.append(f"its command's script {scripts[0]} is not under {where}/: move the row to "
-                   f"{scripts[0].rsplit('/', 1)[0]}/{NAME}, beside its script")
-    for s in scripts:
-        path = ROOT / s
-        if not path.is_file():
-            out.append(f"its command's script {s} doesn't exist")
-        elif not any(i in p.read_text(encoding="utf-8", errors="replace") for p in path.parent.rglob("*")
-                     if p.is_file() and p.suffix in (".py", ".sh") and "tests" not in p.relative_to(path.parent).parts):
-            out.append(f"nothing under {s.rsplit('/', 1)[0]}/ records a measurement named {i!r}")
+    elif missing:
+        out += missing
+    elif not any(i in p.read_text(encoding="utf-8", errors="replace") for p in home.rglob("*")
+                 if p.is_file() and p.suffix in (".py", ".sh") and "tests" not in p.relative_to(home).parts):
+        out.append(f"nothing under {where}/ records a measurement named {i!r}")
     return out
 
 
@@ -142,8 +137,8 @@ def test_every_metric_is_declared_once_by_a_known_owner_beside_its_producing_scr
 
 def test_no_row_sits_in_the_retired_shared_file() -> None:
     assert not (ROOT / RETIRED).exists(), (
-        f"{RETIRED} is retired: move each of its rows, unchanged, into the {NAME} beside the first script its command "
-        f"names (benchmarks/README.md's \"Metrics\"), then delete {RETIRED}")
+        f"{RETIRED} is retired: move each of its rows, unchanged, into the {NAME} beside the code that records it "
+        f"(benchmarks/README.md's \"Metrics\"), then delete {RETIRED}")
 
 
 def test_a_row_that_breaks_a_rule_is_refused() -> None:
@@ -164,8 +159,7 @@ def test_a_row_that_breaks_a_rule_is_refused() -> None:
         f"owner 'nobody' is no handle in {HANDLES}",
         "its command names no script under benchmarks/, demos/, infra/ or tools/"]
     assert _problems({**good, "id": "vllm/serving-cost-glm53"}, {"vllm"}, "benchmarks/landing") == [
-        "its command's script benchmarks/serve_tax/run.sh is not under benchmarks/landing/: move the row to "
-        "benchmarks/serve_tax/metrics.toml, beside its script"]
+        "nothing under benchmarks/landing/ records a measurement named 'vllm/serving-cost-glm53'"]
 
 
 WORDS = {"title": "Prover GPUs per serving GPU", "unit": "prover GPUs a serving GPU",
@@ -212,14 +206,13 @@ def test_an_axis_is_one_sentence() -> None:
             f"axis {axis!r} is not one sentence: write one line saying what the y axis is, ending with a period"], axis
 
 
-def test_a_row_sits_beside_its_script() -> None:
+def test_a_row_sits_beside_the_code_that_records_it() -> None:
     row = {"id": "vllm/remote-demo-minutes", "title": "Remote demo run time", "owner": "vllm", "unit": "minutes",
            "axis": "Minutes from the first command to the verdict.", "better": "lower",
            "command": "research run --cwd source -- python3 benchmarks/demo_minutes/minutes.py FIRST_RUN VERDICT_RUN", "every": "7d"}
     assert _problems(row, {"vllm"}, "benchmarks/demo_minutes") == []
     assert _problems(row, {"vllm"}, "benchmarks/serve_tax") == [
-        "its command's script benchmarks/demo_minutes/minutes.py is not under benchmarks/serve_tax/: move the row to "
-        "benchmarks/demo_minutes/metrics.toml, beside its script"]
+        "nothing under benchmarks/serve_tax/ records a measurement named 'vllm/remote-demo-minutes'"]
 
 
 def test_a_row_a_loop_sends_sits_beside_the_loop_and_may_be_due_in_minutes() -> None:
@@ -228,9 +221,8 @@ def test_a_row_a_loop_sends_sits_beside_the_loop_and_may_be_due_in_minutes() -> 
            "command": "sh infra/control/store_index.sh", "every": "5m"}
     assert _problems(row, {"infra"}, "infra/control") == [
         "nothing under infra/control/ records a measurement named 'infra/no-such-loop-number'"]
-    assert _problems(row, {"infra"}, "benchmarks/landing")[0] == (
-        "its command's script infra/control/store_index.sh is not under benchmarks/landing/: move the row to "
-        "infra/control/metrics.toml, beside its script")
+    assert _problems(row, {"infra"}, "benchmarks/landing") == [
+        "nothing under benchmarks/landing/ records a measurement named 'infra/no-such-loop-number'"]
     assert _problems({**row, "every": "30s"}, {"infra"}, "infra/control")[0] == (
         "every is '30s', not a count of minutes, hours or days such as 5m, 12h or 7d")
 
@@ -247,8 +239,6 @@ def test_a_row_under_demos_is_found_and_held_to_the_same_rules(tmp_path: Path, m
     assert _problems({**row, "title": "Remote demo", "every": "weekly"}, {"vllm"}, "benchmarks/serve_tax") == [
         "title 'Remote demo' is 2 words, not 3 to 6: make it a plain headline and say the rest in axis",
         "every is 'weekly', not a count of minutes, hours or days such as 5m, 12h or 7d",
-        ("its command's script demos/remote/no-such-run.sh is not under benchmarks/serve_tax/: move the row to "
-         "demos/remote/metrics.toml, beside its script"),
         "its command's script demos/remote/no-such-run.sh doesn't exist"]
 
 

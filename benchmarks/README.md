@@ -167,9 +167,8 @@ directory and its README among its inputs, which the test checks too.
 
 ## Metrics
 
-Each benchmark or loop declares the numbers a lead is held to in a `metrics.toml` beside the script its command runs
-(the first `.py` or `.sh` under `benchmarks/`, `demos/`, `infra/` or `tools/` the command names:
-`benchmarks/serve_tax/run.sh`'s in `benchmarks/serve_tax/metrics.toml`, and a loop's, such as
+Each benchmark or loop declares the numbers a lead is held to in a `metrics.toml` beside the code that records them
+(`benchmarks/serve_tax/run.sh`'s in `benchmarks/serve_tax/metrics.toml`, and a loop's, such as
 `infra/control/store_index.sh`, beside the loop), one `[[metric]]` table per number. Each metric's `owner` owns its
 file: the longest `owns` entry in `.agents/skills/using-slack/registry.json` covering the file names that handle, so a
 lead's numbers in another lead's directory take a file entry of their own there. The console's Metrics tab reads every
@@ -200,7 +199,7 @@ metric's keys:
   not the unit.
 - `axis`: one sentence, on one line and ending with a period, saying what the chart's y axis is.
 - `better`: `lower` or `higher`.
-- `command`: the one command that measures it, whose script's directory records it under `id`.
+- `command`: the one command that measures it, naming a script under `benchmarks/`, `demos/`, `infra/` or `tools/`.
 - `every`: how often its owner measures it, in minutes, hours or days (`5m`, `12h`, `7d`); a value older than that is
   stale, so a number that reaches the tab through the index needs an `every` well over the index's hour.
 - Optional: `floor`, the number it must not cross; `goal`, the narrowest goal on the Goals page it serves; `tags`, a
@@ -233,9 +232,8 @@ that nothing waits on, other than `top/parked`. A number whose goal sits under `
 `tests/test_metrics_registry.py` refuses a metric that lacks a key the list above doesn't mark optional or holds one it
 doesn't list, an id declared twice across all the files, an unknown owner, an owner who doesn't own the metric's file,
 an id outside its owner's prefix, a `title`, `unit` or `axis` that breaks its rule above, a `better` other than `lower`
-or `higher`, an `every` that isn't a count of minutes, hours or days, a command whose script is missing or whose
-directory never names the id, a metric whose command's first script is outside the directory of the file declaring it,
-and a shared `metrics.toml` directly under `benchmarks/`.
+or `higher`, an `every` that isn't a count of minutes, hours or days, a command whose script is missing, a metric
+the directory of the file declaring it never names, and a shared `metrics.toml` directly under `benchmarks/`.
 
 ## Index
 
