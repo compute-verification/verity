@@ -8,8 +8,8 @@
 # Steps, each kept under $OUT and read by the report:
 #   custody  each gate run's files against its end.json (chain_record.py custody)
 #   certs    the network attester's own offline check on its witness, and the public certificates.jsonl held to the
-#            certified lines (chain_record.py certs --warden-run)
-#   endpoint with CR_ENDPOINT, the endpoint's own advice bound to the certified I/O off the network attester's cells
+#            attested lines (chain_record.py certs --warden-run)
+#   endpoint with CR_ENDPOINT, the endpoint's own advice bound to the attested I/O off the network attester's cells
 #            (chain_record.py endpoint), or the served node's endpoint report
 #   n2       N2's units proved by Flock --zk and decided by its verifier, Lean included: n2_zk.py prove --warden-run,
 #            or CR_N2_CMD
@@ -51,10 +51,10 @@
 # Kept in $OUT: the steps' records and logs, the public files and everything each verifier received; never a prover's
 # file (inst-*, prover-instances.bin, instances.bin) nor a circuit (its pin is kept), a session's archive, a signer's
 # state, a gate run's witness/ (custody uploads all of $OUT; a network attester run's witness is its lane key's only)
-# nor a rehearsal's request values (plan.json's and probe.json's requests, io.json's certified I/O, out-witness.jsonl's rows),
+# nor a rehearsal's request values (plan.json's and probe.json's requests, io.json's attested I/O, out-witness.jsonl's rows),
 # nor a file that holds a row registration whole, its wiring's digest with it: the registrations a verifier takes
-# (warden-registration*.json) and the scan's answers, which carry them (answers.json), nor what the certificates step
-# found of the traffic (which execution phases were certified or refused, and how many problems: network_attester_chain's
+# (warden-registration*.json) and the scan's answers, which carry them (answers.json), nor what the attestations step
+# found of the traffic (which execution phases were attested or refused, and how many problems: network_attester_chain's
 # WITNESS_KEYS), nor what n2's public summary leaves out (n2_zk.py --witness: its timings, values in the clear and
 # which execution phases its members' signer refused, and its log of them with its stderr and its children's, n2.log),
 # nor a child's log in a step's output (a session's prove.log and serve.log). Those are witness,
