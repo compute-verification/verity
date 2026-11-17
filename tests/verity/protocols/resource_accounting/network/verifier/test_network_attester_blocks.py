@@ -2,7 +2,7 @@
 row of NP + 1 = 16 words, and O = 2 output steps. `AmpereBF16TcDot16_v3`'s unit j·O + k reads slot j's row of the scan's
 state (its ``a``, the circuit's external input), the loaded weights' row k (``b``) and the loaded bias (``acc``);
 `F32ToBf16Rn_v2`'s unit u is wired to its output, and its ``o0`` is the circuit's external output. The network attester
-on the host's uplink commits and signs each load (`transfer_rows`), and the verifier pins the loads from its certificates
+on the host's uplink commits and signs each load (`transfer_rows`), and the verifier pins the loads from its attestations
 alone (`blocks.pins`) and the scan's state beside them: with both, held to the roots the registrations record, the
 circuit's free inputs are 0. A record names no server and no transfer."""
 
@@ -77,7 +77,7 @@ class Certifier:
 
     def register(self, doc: dict, data: dict | None = None, *, at: dict | None = None) -> list[dict]:
         """Each load committed and signed as it crosses; ``at`` overrides the (link, direction, window) a value's
-        certificate signs for, its head the load's own."""
+        attestation signs for, its head the load's own."""
         out = []
         for v, rows in (data or values()).items():
             tr = TR.Transfer.commit(self.link, Direction.INGRESS, BK.SESSION_WINDOW, "load", doc["program"], v, rows)

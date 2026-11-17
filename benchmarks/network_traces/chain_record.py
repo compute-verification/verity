@@ -13,8 +13,8 @@
   writes it) holds the files its ``end.json`` names, each with the SHA-512 it records. In the clear, of public
   files; it proves nothing about what the gate ran.
 * **certs** (``--warden-run``): the network attester's own offline check rerun on its witness, and the public
-  ``certificates.jsonl`` held to the certified lines (`network_attester_chain.checked`). ``--deployed`` refuses a key that
-  isn't LMS at `lms.DEPLOYED`. Which execution phases were certified or refused, and how many problems the check
+  ``certificates.jsonl`` held to the attested lines (`network_attester_chain.checked`). ``--deployed`` refuses a key that
+  isn't LMS at `lms.DEPLOYED`. Which execution phases were attested or refused, and how many problems the check
   found, are the step's private side (`network_attester_chain.WITNESS_KEYS`), written to ``--witness`` and never to ``--out``.
 * **report**: one JSON and one Markdown report, per step its verdict, its run ids, its ε at δ and what it computed in
   the clear, and the period's terms for `NetTiming.Guarantees.MonitoringPeriodLeakAccepted` summed by
@@ -43,14 +43,14 @@
 * **The network attester path** (``--job``'s ``path``, `NETWORK_ATTESTER`): every step reads an active network attester's own
   run (the gate's ``warden-rehearse``, or `network_attester_serve.py`'s directory; `network_attester_chain`) and no attester rehearsal's,
   whose input is refused by name (`network_attester_chain.PROXY`). ``certs --warden-run`` reruns the network attester's own
-  offline check on its witness and holds the public ``certificates.jsonl`` to the certified lines
-  (`network_attester_chain.certificates`; no clock certificate: the network attester signs none). That check requires the
-  session's certified start, so a gate run made by a device that certifies no start is refused here. ``endpoint`` binds
-  the endpoint's own advice to the certified I/O read off the network attester's cells (`network_attester_endpoint`); where the
+  offline check on its witness and holds the public ``certificates.jsonl`` to the attested lines
+  (`network_attester_chain.certificates`; no clock attestation: the network attester signs none). That check requires the
+  session's attested start, so a gate run made by a device that certifies no start is refused here. ``endpoint`` binds
+  the endpoint's own advice to the attested I/O read off the network attester's cells (`network_attester_endpoint`); where the
   endpoint's records stay on the served node, that node runs it (`served_endpoint`, `served_session.py endpoint`) and
   the chain reads its report. N2 is `n2_zk.py prove --warden-run`'s, on the network attester link; the I/O tie is
   `n2_tie_zk.py prove --class warden`'s, proved (``--tie``, `tie_step`); the scan is `scan_zk.py prove
-  --warden-run`'s. Each is held to the network attester run the certificates step read (`on_network_attester`), every one is
+  --warden-run`'s. Each is held to the network attester run the attestations step read (`on_network_attester`), every one is
   required, and the report names what the path stands on (`NETWORK_ATTESTER_STUBBED`, or `NETWORK_ATTESTER_SERVED_STUBBED` on the served node's
   endpoint report).
 * **leak**: K per monitoring period (week, month, year) on the attester's gate run, pooled at δ = 1% and 10⁻⁶ and in the
@@ -205,13 +205,13 @@ def custody(gates: Path) -> dict:
     return {"verdict": "accepted" if ok else "refused", "gate_runs": runs, "in_the_clear": CLEAR["custody"]}
 
 
-# --- certificates -----------------------------------------------------------------------------------------------------
+# --- attestations -----------------------------------------------------------------------------------------------------
 
 # --- report -----------------------------------------------------------------------------------------------------------
 
 def endpoint_step(e: dict | None) -> dict:
     """network-e2e's ``--no-prove`` report on the run and the endpoint's records: the endpoint's own advice bound to the
-    run's certified I/O and rebuilt from it (`chain.served_advice`), and the I/O tie's verdict on the honest run
+    run's attested I/O and rebuilt from it (`chain.served_advice`), and the I/O tie's verdict on the honest run
     (`chain.tie`), both in the clear. The tie decides a tampered run only where the rehearsal's own check let it
     through (no ``own_code`` in the report's ``negatives``: token), and must refuse it at exactly the execution phases
     its changes fall in (``ok``); a run the check refused (late, extra) is the rehearsal's negative, not the tie's."""
@@ -237,7 +237,7 @@ def endpoint_step(e: dict | None) -> dict:
 
 def advice_bits(b: dict) -> dict:
     """The advice's bits over the run's windows (`chain.bits`): v0's encoding, and the residual's (what the advice says
-    beyond what the walk derives from the certified I/O), None unless the advice was rebuilt from it."""
+    beyond what the walk derives from the attested I/O), None unless the advice was rebuilt from it."""
     runs = [w for w in b.get("windows") or [] if w.get("in_run")]
     derived = [w.get("derived_bits") for w in runs]
     return {"v0_total": b.get("v0_total"), "T": b.get("T"),
@@ -249,7 +249,7 @@ ADVICE_CLI = [sys.executable, "-m", "verity_vllm.pipeline.cli", "advice"]
 
 
 def network_attester_endpoint(run: Path, ep: Path, eos: list[int]) -> dict:
-    """The endpoint's own advice for a network attester run (`served_endpoint`), on the certified I/O read off its
+    """The endpoint's own advice for a network attester run (`served_endpoint`), on the attested I/O read off its
     cells (`network_attester_chain.io`)."""
     from benchmarks.network_traces import network_attester_chain as WC
 
@@ -260,7 +260,7 @@ def served_endpoint(dep: dict, io: dict, ep: Path, eos: list[int]) -> dict:
     """The endpoint's own advice for the network attester run of ``dep`` (its ``deployment.json``), as network-e2e's
     `endpoint_advice` makes it for a network attester rehearsal's: `verity-vllm advice` over the endpoint's records ``ep``
     (network-e2e's ``chain.ENDPOINT``) into ``ep/advice`` at the network attester's bucket unless an index is there,
-    then ``chain.served_advice`` on the certified I/O ``io`` (`network_attester_chain.io`'s) over the network attester's
+    then ``chain.served_advice`` on the attested I/O ``io`` (`network_attester_chain.io`'s) over the network attester's
     execution phases, with the model's EOS ids ``eos`` (a network attester run records none)."""
     import subprocess
 
@@ -287,7 +287,7 @@ def served_endpoint(dep: dict, io: dict, ep: Path, eos: list[int]) -> dict:
 
 
 def network_attester_endpoint_step(e: dict | None) -> dict:
-    """`network_attester_endpoint`'s report: accepted when the network attester's certified I/O reads whole off its cells and the
+    """`network_attester_endpoint`'s report: accepted when the network attester's attested I/O reads whole off its cells and the
     endpoint's own advice is bound to it and rebuilt from it, in the clear."""
     if e is None:
         return {"verdict": "not run", "why": "no endpoint records (CR_ENDPOINT)",
@@ -327,7 +327,7 @@ def tie_step(t: dict | None, job: dict | None = None) -> dict:
 
 
 def on_network_attester(step: dict, doc: dict | None, run_id: str | None, what: str) -> dict:
-    """A network-certifier-path step held to the network attester run the certificates step read (``run_id``): refused
+    """A network-certifier-path step held to the network attester run the attestations step read (``run_id``): refused
     by name (`network_attester_chain.PROXY`) when its input is a network attester rehearsal's (it names no active network attester run),
     and when it is another network attester run's."""
     from benchmarks.network_traces.network_attester_chain import PROXY
@@ -639,7 +639,7 @@ def pooled_k(audits: list[dict], delta: Fraction, network: dict) -> dict:
 
 def network_terms(cert: dict, endpoint: dict) -> dict:
     """The network's own terms of K, charged once a period: the advice's residual bits (`advice_bits`; its v0 bits
-    when it wasn't rebuilt from the certified I/O), each window's declared sync, log2 #Σ_sync,
+    when it wasn't rebuilt from the attested I/O), each window's declared sync, log2 #Σ_sync,
     and no cell: no connection passes the attester but the link, whose counts the advice fixes."""
     bits, syncs = endpoint.get("advice_bits") or {}, cert.get("sync_bits")
     advice = bits.get("derived") if bits.get("derived") is not None else bits.get("v0_total")
@@ -650,7 +650,7 @@ def network_terms(cert: dict, endpoint: dict) -> dict:
 def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict | None = None,
              audits: list[dict] | None = None) -> dict:
     import leak_bounds as LB
-    # each window certified is the certificates step's accept alone: which ones its signer refused is the private side's
+    # each window attested is the attestations step's accept alone: which ones its signer refused is the private side's
     windows = cert.get("windows") or 0
     honest = (n2.get("members") or {}).get("honest") or {}
     acc = [cert.get("verdict") == "accepted" and bool(honest.get("network_accepted"))] * windows
