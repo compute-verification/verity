@@ -39,7 +39,7 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
     its circuit, its o0 at the registration's root for it (the start's, the scan's state's leaf 0), as Lean's `Registered.checkComplete` requires. The round
     names each lane's ``prog<j>`` (`scan_zk.lane_kinds`), the slot entries `EVERY` units each read, tied, so R8 lets
     them through and both verifiers' registration verdict publishes them (``rests_on_period_check``): this round's
-    acceptance rests on a period check (`NetworkCheck.Period`'s `wired`), which refuses its stand-in block
+    acceptance rests on a period check (`NetworkVerifier.Period`'s `wired`), which refuses its stand-in block
     (`period_case.UNWIRED`).
 
     Runs 4 to 10 minutes on a node, about 4 alone: the synthetic run, lowering and staging the scan's three templates,

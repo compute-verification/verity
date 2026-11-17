@@ -113,7 +113,7 @@ SCAN_ONLY = "scan only, N2 not given"
 #: nor a K, since `block_entry` writes none (`ROWS_FORM`)
 RESTS = "accepted on the period check"
 RESTS_WHY = ("the honest round's registration names {tied} tied: its acceptance rests on the network period check "
-             "(NetworkCheck.Period's wired), which ties their rows to the audit that registered them and refuses "
+             "(NetworkVerifier.Period's wired), which ties their rows to the audit that registered them and refuses "
              "scan_zk's stand-in block (period_case.UNWIRED)")
 #: what a report on the network attester-only path stands on that isn't the chain's own
 STUBBED = (
@@ -151,7 +151,7 @@ NO_PERIOD_ANSWER = "no --period-answer: no certifier/v0 answer on the period"
 #: why a report writes no block entry for any answer the period check gives
 ROWS_FORM = ("the rows form's execution phases are the scan's registrations, which this chain does not hold, so no K is "
              "written")
-#: certifier/v0's commitment digest: tagged_sha512(PERIOD_TAG, the commitment's bytes) (`NetworkCheck.Period`'s)
+#: certifier/v0's commitment digest: tagged_sha512(PERIOD_TAG, the commitment's bytes) (`NetworkVerifier.Period`'s)
 PERIOD_TAG = "verity-network-certifier/period/v0"
 
 
@@ -469,14 +469,14 @@ def scan_exit(s: dict | None, job: dict) -> str | None:
 
 
 #: the value a window circuit registers the scan's state rows as, which no pin holds: the verifier fixes it before no run,
-#: so its reads stay free (`NetworkCheck.Period.stateValue`)
+#: so its reads stay free (`NetworkVerifier.Period.stateValue`)
 SCAN_STATE = "verity/certifier/scan-state/v1"
 
 
 def input_terms(circuit: dict, pins: dict | None = None, roots: dict | None = None) -> dict:
     """A compute audit window's input bits by what fills them, from its ``circuit.json`` alone (its templates, its
     statements' ``in_rows`` and its declarations; work per template, wire and declaration, never per unit, and no
-    Definition looked up), as `NetworkCheck.Circuit.countsOf` counts them (`interface.input_count`):
+    Definition looked up), as `NetworkVerifier.Circuit.countsOf` counts them (`interface.input_count`):
 
     * ``inputs``: every unit's input rows;
     * ``wired``: each wire's reader rows times one row of its port, a cut port's row its words over its cuts
@@ -557,18 +557,18 @@ def free_inputs(circuit: dict, pins: dict | None = None, roots: dict | None = No
 
 def registered_bits(circuit: dict, pins: dict | None = None, roots: dict | None = None) -> int:
     """The bits of a window circuit's input rows its registration registers at the verifier's ``pins``, as
-    `NetworkCheck.Circuit.countsOf` counts them (`input_terms`' ``registered``)."""
+    `NetworkVerifier.Circuit.countsOf` counts them (`input_terms`' ``registered``)."""
     return input_terms(circuit, pins, roots)["registered"]
 
 
 def audit_of(d: Path, pins: dict | None = None) -> dict:
     """A compute audit's window as one-stage registers it (``registration.json`` and ``circuit.json``): its proof
     blocks, the proof blocks its sampling design samples (a subset design's ``k``, a stratified design's ``Σ k``, as
-    `NetworkCheck.Period` counts them), the
+    `NetworkVerifier.Period` counts them), the
     least rate it samples a unit at (``q``: ``k/n``, or the least stratum's ``k/n``) and its free inputs with the terms
     taken out of them (`input_terms`, the registered rows at the verifier's ``pins`` the registration's window records as
     its ``registered_roots``). Its jitter term is the link's steps over the period, which `d1_terms` charges. A window
-    holding a pin must bind ``circuit.json`` by its SHA-512 (``window.circuit``), as `NetworkCheck.Period.auditCheck`
+    holding a pin must bind ``circuit.json`` by its SHA-512 (``window.circuit``), as `NetworkVerifier.Period.auditCheck`
     refuses a count on a circuit its registration doesn't bind."""
     from verity.commitments.periods import interface as IF
     reg = json.loads((d / "registration.json").read_text())
@@ -777,7 +777,7 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
                 "the generator reading of the scan's statement (each proof block's registered rows its boundary "
                 "values): a claim, not yet a locked guarantee",
                 "each connection's cap is its lane's egress_cells, which the network certifier holds a lane to and "
-                "NetworkCheck.Period doesn't check; the schedules and the fail cells are charged at that cap, "
+                "NetworkVerifier.Period doesn't check; the schedules and the fail cells are charged at that cap, "
                 "⌈log2(cap + 1)⌉ each a request, as its rows form charges them",
                 f"the jitter term is T bits a sampling block, one a bucket: {LB.JITTER}",
                 "the scan proves sampling block 0 of the network certifier run; a monitoring period's terms are its "
@@ -788,11 +788,11 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
                 "composition, which no Lean statement covers. Each link certifies the run's rate; a scope's requests "
                 "past its links' rate are uncertified, and no row counts them, so these rows are not the scope's K "
                 "(leak_bounds.table counts the network certifier's terms over every request a scope serves)",
-                "ε is the scans' δ summed over the period's sampling blocks and the links (NetworkCheck.Period's "
+                "ε is the scans' δ summed over the period's sampling blocks and the links (NetworkVerifier.Period's "
                 "eps, m·δ), each scan at the scan's δ",
                 "the loop's (an untied compute audit's) free inputs don't enter K: its δ goes into JointPeriodLive's "
                 "sum",
-                "the scan's prog is a compute audit's output (NetworkCheck.Period's progTied), so its slot entries' "
+                "the scan's prog is a compute audit's output (NetworkVerifier.Period's progTied), so its slot entries' "
                 "bits are the tied audit's free inputs, which Lean's rows-form K charges to the sampling block's term "
                 "(tiedAudits), as this K does",
                 f"a share is of one copy of the weights, {weights.label}, whatever the links"]}

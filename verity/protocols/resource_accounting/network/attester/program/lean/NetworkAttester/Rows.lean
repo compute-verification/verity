@@ -37,7 +37,7 @@ It accepts two kinds of run the reference refuses, because it holds two things l
   every cell; a caller that runs no io tie holds it itself.
 * **No response limit.** It holds no response to its request's `max_tokens`, as the reference does under a schedule
   with a `max_tokens_cap`, so it doesn't cover such a schedule; its caller refuses one
-  (`NetworkCheck.RowsAudit.paramsOf`).
+  (`NetworkVerifier.RowsAudit.paramsOf`).
 -/
 
 @[expose] public section

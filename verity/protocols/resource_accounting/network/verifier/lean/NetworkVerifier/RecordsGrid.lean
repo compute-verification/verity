@@ -1,6 +1,6 @@
 module
 
-public import NetworkCheck.Records
+public import NetworkVerifier.Records
 
 /-!
 # `Records.expectedGrids` is `Check.expectedGrid`, window by window
@@ -13,9 +13,9 @@ window `w < W`, the two are equal, so every egress verdict of the records check 
 
 @[expose] public section
 
-namespace NetworkCheck.RecordsGrid
+namespace NetworkVerifier.RecordsGrid
 
-open NetworkCheck.Records
+open NetworkVerifier.Records
 open NetworkAttester (ClockSync LogicalFrame)
 
 theorem handingRev_eq (T W : Nat) (syncs : Fin W → ClockSync) (last : Nat) (fs : List LogicalFrame) (acc : List Nat) :
@@ -140,4 +140,4 @@ theorem expectedGrids_eq (g : Check.Grid) (W : Nat) (l : Check.LinkOpening) (w :
     have hm : min (w * g.buckets + i) (W * g.buckets) = w * g.buckets + i := Nat.min_eq_left (by omega)
     simp [List.getElem_map, ← List.range_eq_range', ← List.map_take, List.take_range, hm]
 
-end NetworkCheck.RecordsGrid
+end NetworkVerifier.RecordsGrid
