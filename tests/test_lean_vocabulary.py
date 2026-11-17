@@ -814,17 +814,17 @@ KNOWN: dict[str, str] = {
     "verity/protocols/resource_accounting/memory/pous/verifier/audit.py::Answer": "homonym, a challenge's answer: rename (memory-accounting)",
     "verity/protocols/resource_accounting/memory/pous/attester/challenger_party.py::Challenger":
         "duplicate of `parties.Challenger`: becomes a reading of it (memory-accounting)",
-    "verity/protocols/resource_accounting/memory/pous/verifier/check/PousCheck/Certificate.lean::PousCheck.Certificate.Certificate":
+    "verity/protocols/resource_accounting/memory/pous/verifier/check/PousVerifier/Certificate.lean::PousVerifier.Certificate.Certificate":
         "homonym, what a PoUS audit establishes: rename (memory-accounting)",
-    "verity/protocols/resource_accounting/memory/pous/verifier/check/PousCheck/Certificate.lean::PousCheck.Certificate.Store":
-        "duplicate of `CircuitRequirement.Store`: becomes `PousCheck.P2.Params` (deleted) (memory-accounting)",
-    "verity/protocols/resource_accounting/memory/pous/verifier/check/PousCheck/Run.lean::PousCheck.Run.Session":
+    "verity/protocols/resource_accounting/memory/pous/verifier/check/PousVerifier/Certificate.lean::PousVerifier.Certificate.Store":
+        "duplicate of `CircuitRequirement.Store`: becomes `PousVerifier.P2.Params` (deleted) (memory-accounting)",
+    "verity/protocols/resource_accounting/memory/pous/verifier/check/PousVerifier/Run.lean::PousVerifier.Run.Session":
         "homonym, the old word for a run, kept as one protocol's run type: rename (memory-accounting)",
-    "verity/protocols/resource_accounting/memory/pous/verifier/check/PousCheck/Verdict.lean::PousCheck.Verdict.Gate":
+    "verity/protocols/resource_accounting/memory/pous/verifier/check/PousVerifier/Verdict.lean::PousVerifier.Verdict.Gate":
         "duplicate of `Flock.Program`: becomes `Flock.Program` (deleted) (memory-accounting)",
-    "verity/protocols/resource_accounting/memory/pous/verifier/check/PousCheck/Verdict.lean::PousCheck.Verdict.Opening":
+    "verity/protocols/resource_accounting/memory/pous/verifier/check/PousVerifier/Verdict.lean::PousVerifier.Verdict.Opening":
         "duplicate of `Hash.RowLeaf.Opening` (`merkle.Opening` in Python): becomes a reading of it (memory-accounting)",
-    "verity/protocols/resource_accounting/memory/pous/verifier/check/PousCheck/Verdict.lean::PousCheck.Verdict.Prog":
+    "verity/protocols/resource_accounting/memory/pous/verifier/check/PousVerifier/Verdict.lean::PousVerifier.Verdict.Prog":
         "duplicate of `Flock.Program`: becomes `Flock.Program` (deleted) (memory-accounting)",
     "verity/protocols/resource_accounting/memory/pous/verifier/check/timed_audit.py::Store":
         "duplicate of `CircuitRequirement.Store`: becomes a reading of it (memory-accounting)",

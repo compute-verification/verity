@@ -18,7 +18,7 @@ harness's `ControlResponder`) and `verity.protocols.resource_accounting.memory.p
   the memory attester refuses a `k` or limit the certificate does not cover, sends no challenge and records `refused`.
 - **The record** keeps what re-derives every number: each audit's challenge source (with `vk` it gives every index), and each
   answer's block, its time, the responder's reported device and server time, and its verdicts.  Every document is judged
-  from that record twice (`judge`), by the Lean's verdict (`pous-timed-audit`: `--lean-exe`, else `pous_check`'s) and by
+  from that record twice (`judge`), by the Lean's verdict (`pous-timed-audit`: `--lean-exe`, else `pous_verifier`'s) and by
   `verdict`, which replays `protocol.TimedAudit` on it and stays the reference; both are kept (`verdicts`), and the record's
   is the Lean's (`VERDICT`).  Where the Lean can't run, the document is undecided and accepts nothing; where the two
   disagree it accepts nothing (`DISAGREE`).  A scheme no Lean judges (any but P2 v4: the band, dense) keeps the Python's
@@ -425,7 +425,7 @@ def verdict(ready: Any, leaves: bytes, doc: Any) -> dict[str, Any]:
 
 
 def pous_check() -> Any:
-    """`pous_check`'s `timed_audit.py`, which runs `pous-timed-audit` through `verity_difftest`, loaded by path: the Lean
+    """`pous_verifier`'s `timed_audit.py`, which runs `pous-timed-audit` through `verity_difftest`, loaded by path: the Lean
     check is a distribution of its own (`tests/import_order.toml`'s `distribution`)."""
     path = Path(__file__).resolve().parents[6] / "verity/protocols/resource_accounting/memory/pous/verifier/check/timed_audit.py"
     spec = importlib.util.spec_from_file_location("pous_check_timed_audit", path)
@@ -448,7 +448,7 @@ def run_lean(exe: str | os.PathLike, ready: Any, leaves: bytes, doc: Any) -> dic
 
 
 def lean_verdict(ready: Any, leaves: bytes, doc: Any, exe: str | os.PathLike | None = None) -> dict[str, Any]:
-    """`verdict`, by `pous-timed-audit`: the built one at `exe`, else `pous_check`'s, which builds it."""
+    """`verdict`, by `pous-timed-audit`: the built one at `exe`, else `pous_verifier`'s, which builds it."""
     if exe is not None:
         return run_lean(exe, ready, leaves, doc)
     return pous_check().lean_verdict(ready, leaves, doc)
@@ -459,7 +459,7 @@ VERDICTS = {"python": verdict, "lean": lean_verdict}
 
 def lean_unavailable(exe: str | os.PathLike | None = None) -> str | None:
     """Why the Lean verdict can't run in this process, or None: `exe` given and not an executable file; else no `lake`
-    on the PATH, or `pous_check`'s `timed_audit.py`, which serves it, not loadable beside this Python, which it is where
+    on the PATH, or `pous_verifier`'s `timed_audit.py`, which serves it, not loadable beside this Python, which it is where
     `verity_difftest` isn't importable."""
     if exe is not None:
         return None if Path(exe).is_file() and os.access(exe, os.X_OK) else f"{exe} is not an executable file"
@@ -490,7 +490,7 @@ def accepted(doc: dict[str, Any]) -> bool:
 
 
 def judge(ready: Any, leaves: bytes, doc: dict[str, Any], exe: str | os.PathLike | None = None) -> dict[str, Any]:
-    """`doc` under the Lean's verdict (`VERDICT`; `pous-timed-audit` at `exe`, else `pous_check`'s): its answers' verdicts,
+    """`doc` under the Lean's verdict (`VERDICT`; `pous-timed-audit` at `exe`, else `pous_verifier`'s): its answers' verdicts,
     the counts, the audit of record's acceptance and the profile are the Lean's, kept as `verdict` (with `by`).  The
     Python's verdict runs beside it as a veto, and both are kept as `verdicts` (the Lean's `{"unavailable": why}` where it
     can't run here, `{"failed": why}` where it should and raises).  Where the Lean can't run, the record is
@@ -564,7 +564,7 @@ def main(argv: list[str] | None = None) -> int:
                          "it as a research audit; the refusal is recorded and the exit is 1")
     ap.add_argument("--seed", default=None, help="derive each audit's challenge source from this hex seed (--clock logical only)")
     ap.add_argument("--lean-exe", default=None,
-                    help="a built pous-timed-audit, the verdict of record (default: pous_check's, built with lake, where "
+                    help="a built pous-timed-audit, the verdict of record (default: pous_verifier's, built with lake, where "
                          "lake and verity_difftest are here; where neither is, the audit is undecided and the exit is 1)")
     a = ap.parse_args(argv)
     if a.seed is not None and a.clock != "logical":

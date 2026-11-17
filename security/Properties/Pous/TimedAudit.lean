@@ -1,12 +1,12 @@
 module
 
-public import PousCheck.TimedAudit
+public import PousVerifier.TimedAudit
 public import Properties.Pous
 
 /-!
 # The timed audit's property, stated against the Lean code
 
-What `PousCheck.TimedAudit.verdict` (package `pous_check`, `memory_challenger.verdict` driving `protocol.TimedAudit`)
+What `PousVerifier.TimedAudit.verdict` (package `pous_verifier`, `memory_challenger.verdict` driving `protocol.TimedAudit`)
 accepts, stated over its three inputs, `READY.json`, `LEAVES.bin` and the audit document, and over the store `C*` whose
 leaves (`leaves`, as setup publishes them: `PublishesRoot`) have the document's root.
 
@@ -26,7 +26,7 @@ computes). Proved (`Proofs.Properties.Pous.TimedAudit`).
 
 @[expose] public section
 
-namespace PousCheck.Properties
+namespace PousVerifier.Properties
 
 open Lean (Json)
 open Flock
@@ -103,4 +103,4 @@ def TimedAuditAccepts : Prop :=
     TimedAuditAnswers ready leafBytes doc C ∨
       ∃ x ∈ runStrings ready leafBytes C, ∃ y ∈ runStrings ready leafBytes C, x ≠ y ∧ Sha512.hash x = Sha512.hash y
 
-end PousCheck.Properties
+end PousVerifier.Properties
