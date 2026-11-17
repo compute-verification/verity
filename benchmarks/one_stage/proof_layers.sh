@@ -18,6 +18,9 @@
 #                  partition file's scope.steps; unset, the file's own), so the proof blocks each layer's Flock statement
 #                  holds; set, the zero-knowledge layer proves every proof block by rate:1/1 in place of subset:880, and
 #                  the sampling layer still samples 256 of them
+#   A5_KEEP        optional, a new directory outside WORK: the sampling run's served window (its serving-rows, the
+#                  prover's files included) copied there before WORK is removed, for `benchmarks/recursion_e2e/stage.sh
+#                  WINDOW=`; it stays on the machine
 #   --out DIR      where the results go (default $RESEARCH_RUN_DIR/out in a research run, else ./out): the three runs'
 #                  records (out-flock, out-zk, out-sampling), the bootstrap's (bootstrap), the printer's table
 #                  (proof-layers.txt, and proof-layers.json in a research run), each step's output (STEP.log) and GNU
@@ -41,7 +44,7 @@ while [ $# -gt 0 ]; do
   case $1 in
     --dry-run) DRY=1; shift ;;
     --out) [ $# -ge 2 ] || refuse "--out needs a directory"; RESULTS=$2; shift 2 ;;
-    *) refuse "$1: the settings are A5_CARD, A5_CORES, WORK, GPU_LEASE_WHO and A5_STEPS in the environment, then --out DIR and --dry-run" ;;
+    *) refuse "$1: the settings are A5_CARD, A5_CORES, WORK, GPU_LEASE_WHO, A5_STEPS and A5_KEEP in the environment, then --out DIR and --dry-run" ;;
   esac
 done
 for s in A5_CARD A5_CORES WORK; do
@@ -53,6 +56,9 @@ LEASE=; command -v gpu-lease >/dev/null && LEASE=1
 A5_STEPS=${A5_STEPS:-}
 [ -z "$A5_STEPS" ] || { [[ $A5_STEPS =~ ^([0-9]+)-([0-9]+)$ ]] && [ "${BASH_REMATCH[1]}" -lt "${BASH_REMATCH[2]}" ]; } \
   || refuse "A5_STEPS=$A5_STEPS: LO-HI, the request steps [LO, HI) the window holds, LO below HI, e.g. 1-8; or unset for the partition file's"
+A5_KEEP=${A5_KEEP:-}
+[ -z "$A5_KEEP" ] || { [[ $A5_KEEP = /* ]] && [ ! -e "$A5_KEEP" ] && [[ $A5_KEEP/ != "${WORK%/}"/* ]]; } \
+  || refuse "A5_KEEP=$A5_KEEP: an absolute path that doesn't exist yet and is not under WORK, which is removed at the end"
 [ -f "$ME" ] || refuse "run from the tree's root: cd to the clone, then bash $ME"
 for t in nvidia-smi taskset python3; do
   command -v "$t" >/dev/null || refuse "no $t on PATH: the runs need it; install it and rerun"
@@ -104,7 +110,7 @@ declare -A CMD=(
   [partition-sampling]=$(part subset:256 sampling)
   [flock]=$(run "A5_PLAIN=1 " flock)
   [zk]=$(run "" zk)
-  [sampling]=$(run "" sampling)
+  [sampling]=$(run "${A5_KEEP:+A5_KEEP=1 }" sampling)
   [layers]="PATH=\$HOME/.local/bin:\$PATH uv run verity bench prove layers --flock $(q "$WORK/out-flock") --zk $(q "$WORK/out-zk") --sampling $(q "$WORK/out-sampling") | tee $(q "$RESULTS/proof-layers.txt")"
 )
 HOW="card $A5_CARD taken directly (no gpu-lease)"; [ -z "$LEASE" ] || HOW="leases recorded for $GPU_LEASE_WHO"
@@ -129,9 +135,14 @@ peak() { tail -n +"$((from + 1))" "$MEM" | awk -v c="$1" '$c > m {m = $c} END {p
 ( while :; do sample; sleep 10; done ) &
 SAMPLER=$!
 finish() {  # at exit, success or failure: the records copied to --out, then WORK removed
-  local rc=$? o
+  local rc=$? o w
   kill "$SAMPLER" 2>/dev/null
   for o in out-flock out-zk out-sampling bootstrap; do [ ! -e "$WORK/$o" ] || cp -a "$WORK/$o" "$RESULTS/"; done
+  if [ -n "$A5_KEEP" ]; then
+    w=("$WORK"/a5-llama1b/*/serving-rows)
+    if [ ${#w[@]} = 1 ] && [ -d "${w[0]}" ] && cp -a "${w[0]}" "$A5_KEEP"; then log "kept: the sampling run's window in $A5_KEEP"
+    else log "A5_KEEP=$A5_KEEP: no one sampling window under $WORK/a5-llama1b to keep (${#w[@]} found)"; [ "$rc" != 0 ] || rc=3; fi
+  fi
   log "WORK=$WORK at the end: $(du -sh "$WORK" 2>/dev/null | cut -f1); removing it"
   rm -rf "$WORK" && log "removed: $WORK"
   rm -f "$MEM"
