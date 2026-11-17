@@ -896,7 +896,7 @@ class Registration:
         way's kind): an interface that reads no line rate, whose link states no capacity (`NO_LINE_RATE`), and the
         storage path, which no certifier can sit on (`STORAGE_PATH`). A site with either is not mediated, and `onsite`
         takes their reasons. An interface with a rate says none, so `onsite` refuses it by `uncertified` until a
-        certifier splits it. `ways` is held to the file: an entry for each `interface.NAME`, in the file's order, with
+        network attester splits it. `ways` is held to the file: an entry for each `interface.NAME`, in the file's order, with
         a rate exactly where its table states one, then the storage path's, with its rate, exactly where the file has a
         `storage` table. `leaves` is held to it too: each `memory.NAME` by id, tier and bytes, in the file's order. The
         rates' values are the caller's, read by `ways_out` and `leaves`.
