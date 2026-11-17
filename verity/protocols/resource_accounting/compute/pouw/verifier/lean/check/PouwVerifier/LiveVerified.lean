@@ -6,7 +6,7 @@ public import PouwVerifier.Verified
 # A served window's live statements verified (`credit._live_verified`)
 
 The verifier of a window's live@<s> statements, which `credit.window` and `credit.period_credit` take each
-round's live proof outcome from (`credit._lean_live_verified`, through `pouw-verifier-difftest`'s `credit-live-verified`),
+round's live proof outcome from (`credit._lean_live_verified`, through `pouw-check-difftest`'s `credit-live-verified`),
 with `credit._live_verified` the Python reference the difftest (`tests/test_live_verified_difftest.py`) holds to it,
 string for string. `Credit.Internal.live` then holds those outcomes to the window, as `credit._live` does.
 
@@ -84,7 +84,7 @@ def knownPort (program window v : String) (rows : Array (Array Nat × ByteArray)
 `<pre>slots@<s>` and its header ports `req_<i>` at `<pre>requests@0` (a `row-seg/v1` value), at the roots `roots` gives
 them, each under the registered domain of the window Program's digest `program`, the slot table bound to the window's
 open root `window` and the request table to its session `session`; `m` and `s` at their known content
-(`live_reads.m_table`, `round_table`: one row of two 16-bit words under `PouwVerifier.publicRowSalt` of `window` and s),
+(`live_reads.m_table`, `round_table`: one row of two 16-bit words under `PouwCheck.publicRowSalt` of `window` and s),
 each `cap_<i>` at row i of the known `<pre>caps` of the period's committed `maxTokens` (`live_reads.caps_table`, as
 `Credit.capsRoot` reads it: row q request q's max_tokens, 0 past them, under `publicRowSalt` of `window` and q) and the
 output row `o0` at the known `live-ok` rows (`ok_table`: row s' the one word 1 under `okSalt` of `window` and s').

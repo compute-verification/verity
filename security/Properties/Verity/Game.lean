@@ -41,8 +41,8 @@ states either, and the code refuses the plain sibling's list (`Core.Composites.o
 | subprotocol | `Audit` | its compiled check | onsite | remote | plain |
 | --- | --- | --- | --- | --- | --- |
 | SPOT | `.sampled` | `VStar.Recursive.Sampled.protocol` (`verity/sampled-proofs/v1`: one-stage v2's audit; one-stage v1 and the recursive audit refused) | yes | yes | yes |
-| PoUW | `.pouw` | `PouwVerifier.Period.protocol` (`verity/pouw/period/v1`, its period credit) | yes | | |
-| | | `PouwVerifier.PearlPlus.Protocol.protocol` (`verity/pouw/pearl-plus/v1`: Pearl+'s run verdict, its credit at Pearl's assumption) | | yes | yes |
+| PoUW | `.pouw` | `PouwCheck.Period.protocol` (`verity/pouw/period/v1`, its period credit) | yes | | |
+| | | `PouwCheck.PearlPlus.Protocol.protocol` (`verity/pouw/pearl-plus/v1`: Pearl+'s run verdict, its credit at Pearl's assumption) | | yes | yes |
 | the inference-only policy | | `InferenceOnlyCheck.Protocol.protocol` (`verity/inference-only/v0`) | yes | yes | |
 | | | `rowsCheck` (`verity/inference-only/rows/v1`, the rows check, not yet compiled) | | | yes |
 | PoUS | `.pous` | `PousCheck.RunProtocol.protocol` (`verity/pous/p2/v4/run`) | yes | | |
@@ -315,7 +315,7 @@ def ComponentAccepts (k : Verity.Registration.Composite) (a : Subprotocol) (s : 
 
 /-- **The credit Pearl+'s check publishes in what the prover sent composite `k`**: the three byte strings decode,
 Pearl+'s case decodes under the parameters `k` names for it, and Pearl+'s check on the blobs sent accepts it with the
-credit `w` (`PouwVerifier.PearlPlus.Protocol.checkBlobs`), whose `macs`, `rho` and `epsilon` its answer publishes. -/
+credit `w` (`PouwCheck.PearlPlus.Protocol.checkBlobs`), whose `macs`, `rho` and `epsilon` its answer publishes. -/
 def PearlPlusCredits (k : Verity.Registration.Composite) (s : Sent) (w : PouwVerifier.PearlPlus.Credit) : Prop :=
   ∃ ps c ev, Decoded s ps c ev ∧ ∃ x ∈ Properties.Composition.triples (s.components k) ps ev,
     x.2.2.id = PouwVerifier.PearlPlus.Protocol.protocolId ∧ ∃ p cm e prof,

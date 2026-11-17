@@ -1,5 +1,5 @@
 """On the certified served window (`served_commit.Challenger(certifier=…)`), a sampled proof block's proof is
-held to the window's certified salt at its opening of record (`core_check.opening_twin`'s ``salt``, Lean `PouwVerifier.opening`'s).
+held to the window's certified salt at its opening of record (`core_check.opening_twin`'s ``salt``, Lean `PouwCheck.opening`'s).
 
 A witness that lifted `salt.unit_reason` and passed rows formed before any certifier salt through every certified
 check, the opening included. The opening now opens a certified window's unit only when its template is salted

@@ -1,5 +1,5 @@
 """PoUW's check of one audit execution phase as a core protocol (`verity/protocols/interface`): the Python
-reference beside the Lean `pouw_verifier` (`verity/protocols/resource_accounting/compute/pouw/verifier/lean/check`), the served execution phase's verifier
+reference beside the Lean `pouw_check` (`verity/protocols/resource_accounting/compute/pouw/verifier/lean/check`), the served execution phase's verifier
 (`verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/of_record.py`), held to it answer for answer by the difftest.
 
 The proof system registers the execution phase, samples, proves and verifies; PoUW states what it registers and what the outcome
@@ -11,7 +11,7 @@ must show, and publishes `window.PUBLIC` from it.  This is that composition in o
   strings, the grid's bits, the declared range of tile counts, the execution phase's context, the check query's SHA-512
   (one-stage's `query_digest` of the tile template's instance query) and the rows' fixed length
   ``{"stop": "fixed", "max_tokens": [...]}``, each slot's max_tokens.  The template is one the verifier pins (`TILES`,
-  Lean's `PouwVerifier.tiles`), with that template's tile work and query.  A live execution phase's parameters (``coins`` live)
+  Lean's `PouwCheck.tiles`), with that template's tile work and query.  A live execution phase's parameters (``coins`` live)
   also hold ``live``, the inputs of its salt session as the verifier holds them (`LIVE`), and no other execution phase's do.
 * **Commitment**: the execution phase's registration, one-stage's record (`registration.record`) as canonical JSON, its execution phase
   ``{"kind": "served", "context", "public"}`` holding exactly `window.REGISTERED`, and optionally ``activations``, the
@@ -150,7 +150,7 @@ class Tile(NamedTuple):
     salted: Salted | None = None
 
 
-#: the tile templates the verifier pins (Lean's `PouwVerifier.tiles`, of record): each one's work per tile, its check query's
+#: the tile templates the verifier pins (Lean's `PouwCheck.tiles`, of record): each one's work per tile, its check query's
 #: SHA-512, and the SHA-512 of the one circuit a unit's tile proof of it is over (its public file's ``circuit_sha512``)
 TILES = {
     "Pc8TileSide_v1{K=4096,TM=1,TN=1,DEV='sm120'}": Tile(
@@ -635,12 +635,12 @@ def _registered(p: dict, c: dict) -> tuple[str | None, Any]:
 
 
 def registered_twin(p: dict, c: dict) -> str | None:
-    """PoUW's rule over the registration (`PouwVerifier.registered`): why it fails, or None."""
+    """PoUW's rule over the registration (`PouwCheck.registered`): why it fails, or None."""
     return _registered(p, c)[0]
 
 
 def check_twin(p: dict, c: dict, e: dict) -> tuple[str, Any, Any]:
-    """The Python twin of `PouwVerifier.check`, for the difftest: (verdict, reason, (public, profile) on acceptance)."""
+    """The Python twin of `PouwCheck.check`, for the difftest: (verdict, reason, (public, profile) on acceptance)."""
     rec = c["record"]
     why, fixed = _registered(p, c)
     if why is not None:
@@ -1773,7 +1773,7 @@ def salt_twin(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session:
 
 def salt_of_record(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, weights_root: Any,
                    requests_root: Any, opening: Any, verify: Ch.Verify) -> tuple[str, str] | None:
-    """`salt`'s verdict of record: the Lean `PouwVerifier.saltCheck`'s (`verifier.of_record`, which checks the challenger's
+    """`salt`'s verdict of record: the Lean `PouwCheck.saltCheck`'s (`verifier.of_record`, which checks the challenger's
     signatures itself), with `salt_twin` its Python twin; a disagreement is the refusal ``verifier.DISAGREE``."""
     python = salt_twin(key, ledger, pins, main, window, session, weights_root, requests_root, opening, verify)
     got = V.of_record("salt", {"key": key, "ledger": ledger, "pins": pins, "main": main, "window": window,
@@ -1822,7 +1822,7 @@ def rounds_twin(key: Any, ledger: Any, pins: Any, main: Any, window: Any, sessio
 
 def live_salt(key: Any, ledger: Any, pins: Any, main: Any, session: Any, manifest: Any, verify: Ch.Verify
               ) -> tuple[bytes | None, tuple[str, str] | None]:
-    """A live Pearl-C pass's salt of record and None, or None and the refusal: the Lean `PouwVerifier.liveSaltCheck`'s
+    """A live Pearl-C pass's salt of record and None, or None and the refusal: the Lean `PouwCheck.liveSaltCheck`'s
     (`verifier.of_record` on ``live-salt``, which checks the challenger's signatures itself), with `live_salt_twin` its
     Python twin; a disagreement is the refusal ``verifier.DISAGREE``."""
     salt, why = live_salt_twin(key, ledger, pins, main, session, manifest, verify)
@@ -1836,7 +1836,7 @@ def live_salt(key: Any, ledger: Any, pins: Any, main: Any, session: Any, manifes
 
 def rounds(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, roots: Any, openings: Any,
            verify: Ch.Verify) -> tuple[str, str] | None:
-    """A live execution phase's round coins' verdict of record, None or the refusal: the Lean `PouwVerifier.roundsCheck`'s
+    """A live execution phase's round coins' verdict of record, None or the refusal: the Lean `PouwCheck.roundsCheck`'s
     (`verifier.of_record` on ``rounds``, which checks the challenger's signatures itself), with `rounds_twin` its Python
     twin; a disagreement is the refusal ``verifier.DISAGREE``."""
     python = rounds_twin(key, ledger, pins, main, window, session, roots, openings, verify)
@@ -1883,14 +1883,14 @@ def case_twin(j: Any) -> dict:
 
 
 def answer(params_b: bytes, commitment_b: bytes, evidence_b: bytes) -> dict:
-    """`Core.Protocol.answer`, the Lean's (`pouw-verifier serve`, through `verifier.serve_of_record`) on the case of these
+    """`Core.Protocol.answer`, the Lean's (`pouw-check serve`, through `verifier.serve_of_record`) on the case of these
     bytes, with `answer_twin` its twin: a disagreement is a rejection."""
     return V.serve_of_record(EXE, serve_case(params_b, commitment_b, evidence_b),
                              answer_twin(params_b, commitment_b, evidence_b))
 
 
 def case(j: Any) -> dict:
-    """`Core.Protocol.case` on one `serve` case, the Lean's (`pouw-verifier serve`, through `verifier.serve_of_record`),
+    """`Core.Protocol.case` on one `serve` case, the Lean's (`pouw-check serve`, through `verifier.serve_of_record`),
     with `case_twin` its twin: a disagreement is a rejection."""
     return V.serve_of_record(EXE, j, case_twin(j))
 

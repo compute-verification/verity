@@ -39,7 +39,7 @@ It needs no GPU.
 | --- | --- | --- |
 | Prover | The developer's machines | Serves, commits, and proves the sampled proof blocks through Flock behind the ZK server. Nothing it runs is trusted. |
 | Challenger | The auditor's device | Commits each execution phase's challenges before it begins, and opens each one once. |
-| Verifier | The auditor's own check | The Lean `pouw-verifier`: decides each execution phase on its proofs. |
+| Verifier | The auditor's own check | The Lean `pouw-check`: decides each execution phase on its proofs. |
 
 | Scheme | What it is |
 | --- | --- |
@@ -73,13 +73,13 @@ It needs no GPU.
 ## PoUW in the remote protocol
 
 The remote protocol, for an auditor with no devices at the datacenter, composes three subprotocols: SPOT's
-one-stage audit, PoUW as Pearl+'s run verdict, `PouwVerifier.PearlPlus.Protocol.protocol` (`verity/pouw/pearl-plus/v1`,
+one-stage audit, PoUW as Pearl+'s run verdict, `PouwCheck.PearlPlus.Protocol.protocol` (`verity/pouw/pearl-plus/v1`,
 `lean/pearlplus`), and the inference-only policy's check (`Core.Remote.V1.components` in
 `verity/protocols/compose/verifier/remote/CoreRemote.lean`, id `verity/remote/v1`). It accepts only when every subprotocol accepts
 its own case, its commitment binds the subprotocols' commitments, the policy and the one-stage audit committed to one
 record, and Pearl+'s run commitment names that record (`Core.Remote.V1.run`); any one's rejection rejects it
 (`Core.Composition.tiedSameB`, `verity/protocols/compose/verifier/lean/README.md`). H1's development executable
-(`Core.Remote.protocol`, `verity/remote/v0`, which no configuration names) has PoUW's credit period check, `PouwVerifier.Period.protocol`
+(`Core.Remote.protocol`, `verity/remote/v0`, which no configuration names) has PoUW's credit period check, `PouwCheck.Period.protocol`
 (`verity/pouw/period/v1`), as onsite does, in Pearl+'s place, every execution phase of the credit period naming the record as its
 Commit record (`Core.Remote.executionPhases`). In the vLLM served run, on that development executable
 (`adapters/vllm/tools/served_run/`), PoUW runs on the served model as H1, under the challenger's development key, so its verdict
@@ -91,10 +91,10 @@ protocol's front door is
 
 The verifier is Lean, the source of truth for what PoUW checks: four Lake packages under `lean/`: the three below and `lean/pearlplus` (`pouw_pearlplus`).
 
-- `lean/check` (`pouw_verifier`): `PouwVerifier.Period.protocol` (`verity/pouw/period/v1`), the `Core.Protocol` both the
-  onsite and the remote protocol compose, and `PouwVerifier.protocol` (`verity/pouw/v1`), one execution phase's check,
-  which neither composes. `PouwVerifier.check` decides one execution phase from its registration (the commitment) and the proof
-  system's answer to it (the evidence); `PouwVerifier.Credit` decides what a served execution phase, and a credit period, credits. Its executable is `pouw-verifier` (`id | check | serve`, the core interface's commands).
+- `lean/check` (`pouw_check`): `PouwCheck.Period.protocol` (`verity/pouw/period/v1`), the `Core.Protocol` both the
+  onsite and the remote protocol compose, and `PouwCheck.protocol` (`verity/pouw/v1`), one execution phase's check,
+  which neither composes. `PouwCheck.check` decides one execution phase from its registration (the commitment) and the proof
+  system's answer to it (the evidence); `PouwCheck.Credit` decides what a served execution phase, and a credit period, credits. Its executable is `pouw-check` (`id | check | serve`, the core interface's commands).
 - `lean/window` (`pouw_window`): what an execution phase registers and makes public: its grid level, its sample size K′, its
   fixed length, its committed entries and side trees, and its round coins (`PouwWindow.Grid`, `PouwWindow.Sample`,
   `PouwWindow.Length`, `PouwWindow.Public`, `PouwWindow.Entry`, `PouwWindow.Side`, `PouwWindow.Rounds`).
@@ -109,7 +109,7 @@ setting it to `"python"` is the one line that undoes it.
 ### Verdicts of record
 
 No function here returns a verdict of its own. Each verdict PoUW acts on comes from one of two places. Some come from
-its Lean check: `verifier.of_record` for a `pouw-verifier-difftest` function, or `verifier.serve_of_record` for a core
+its Lean check: `verifier.of_record` for a `pouw-check-difftest` function, or `verifier.serve_of_record` for a core
 protocol's `serve`. The Python computes its answer beside the Lean as the twin (`*_twin`), and a disagreement, or no
 answer from the Lean, is a refusal. The rest refuse until their Lean is reached: the public entry raises
 `NotImplementedError("compute-accounting/pouw-verdict-from-main")` (`verifier.not_written`), and its twin answers the
@@ -117,7 +117,7 @@ difftest only.
 
 | Verdict | Entry | Lean of record | Twin |
 | --- | --- | --- | --- |
-| An execution phase | `core_check.case`, `answer` | `pouw-verifier serve` | `case_twin`, `answer_twin`, `check_twin` |
+| An execution phase | `core_check.case`, `answer` | `pouw-check serve` | `case_twin`, `answer_twin`, `check_twin` |
 | A credit period | `period_check.case`, `answer` | `pouw-period serve` | `case_twin`, `answer_twin`, `check_twin` |
 | A served execution phase's credit | `credit.window` | `Credit.window` (`window`) | `credit._window` |
 | A credit period's credit | `credit.period_credit` | `Credit.periodCredit` (`period`) | `credit._period_of` |

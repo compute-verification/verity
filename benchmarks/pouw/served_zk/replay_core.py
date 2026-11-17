@@ -1,5 +1,5 @@
 """Replay recorded served_zk windows through PoUW's check: the Python reference (`core_check`) and its Lean port
-(`pouw-verifier serve`, and `pouw-verifier-difftest`'s `opening`), each case against the verdict the run recorded.
+(`pouw-check serve`, and `pouw-check-difftest`'s `opening`), each case against the verdict the run recorded.
 
   python replay_core.py OUT [--runs DIR ...] [--add DIR ...] [--v2 DIR|TAR]    OUT/replay.json and one line on stdout
 
@@ -7,7 +7,7 @@ Without ``--runs`` it selects every `job.sh` attempt in the evidence store and f
 (``--add`` names more, such as runs the store has not indexed yet); without
 ``--v2`` (A4's tree, or a tarball of it) it fetches A4's v2 run (`V2_ART`).  For each run with a summary:
 
-* **core cases** are the checks `pouw-verifier serve` decides (`core_check.case`, its twin `case_twin`), mapped to (params, registration, the service's answer):
+* **core cases** are the checks `pouw-check serve` decides (`core_check.case`, its twin `case_twin`), mapped to (params, registration, the service's answer):
   ``receive-honest`` and the registration controls ``receive-foreign``, ``receive-extra``, ``receive-raised`` and
   ``register-extra`` (the request's registration with the calls' shapes added, as `job.sh` asks the committer), each paired
   with the honest outcome's answer (in a window stopped before its outcome, the controls with `NO_OUTCOME` and
@@ -162,7 +162,7 @@ def core_cases(out: Path, checks: dict) -> list[tuple[str, dict, str, Any]]:
 
 
 def opening_inputs(out: Path, checks: dict, summary: dict) -> list[tuple[str, dict]]:
-    """The openings `job.sh`'s ``opencheck`` judged, as `pouw-verifier-difftest`'s ``opening`` inputs."""
+    """The openings `job.sh`'s ``opencheck`` judged, as `pouw-check-difftest`'s ``opening`` inputs."""
     regs = {s: load(out / s / "registration.json") for s in ("request", "other")}
     sampled = summary.get("units") or []
     u0 = sampled[0] if sampled else None
