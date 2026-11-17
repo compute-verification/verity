@@ -67,7 +67,7 @@ untraced = [
 # tests/regression/test_attempt_resolution.py resolves. Test-only: tests/pipeline checks the fixtures
 # this package registers and the demo's stored workload (adapters/vllm/tools/served_run/workloads/SHA256SUMS); tests/program/test_fp8_moe.py replays the Hopper e4m3 k32 step's pinned vectors (under `verity`);
 # tests/engine's int8 tests run benchmarks/ppl's int8 steps as their oracle;
-# tests/store/test_remote_session.py runs the remote session's prover and verifier (`store.remote`), and the verifier
+# tests/store/test_poub_session.py runs the remote session's prover and verifier (`store.remote`), and the verifier
 # imports lean_verifier.py, challengers.py and store_layout.py; tests/protocol_options/test_pouw_h1_circuits.py parses a
 # period-open's --circuit-files with infra's gate (verity/protocols/compose/verifier/live_challenger/auditor.py), and the in-process gate
 # (tests/protocol_options/challenger_host.py) runs infra's model registry (verity/protocols/compose/verifier/live_challenger/models.py);
@@ -78,7 +78,7 @@ untraced = [
 # reference decode it imports) and imports the store's load (load.py, with the library's wrapper gpu.py); tests/tools/test_ratchet_gate.py commits the repository's lints (tests/lint/test_repo_env_reads.py,
 # test_repo_ruff.py, test_repo_silent_excepts.py, test_repo_lane_text.py and test_repo_retired_terms.py) into the repositories it gates.
 # The tests build and run the Lake packages whose lakefiles they list: tests/pipeline/test_row_tables_stream.py
-# `spot-verifier`, tests/protocol_options/test_pouw_h1.py `pouw-check-difftest` and test_remote_session.py
+# `spot-verifier`, tests/protocol_options/test_pouw_h1.py `pouw-check-difftest` and test_poub_session.py
 # `poub-verifier`.
 # The root ruff.toml is what ruff.toml extends, and tests/lint/test_ruff_vllm.py reads its selection.
 # verity_vllm/definitions is a suite of its own, which this suite's directory leaves out; the package imports it throughout.
@@ -88,7 +88,7 @@ untraced = [
 # difftest harness's Lean (tools/difftest), and loads that package's test_requirement_difftest.py by its path.
 # tests/tools/test_served_run.py reads `run.sh bindings`' output for the demos' configurations with `verity run`'s reader.
 # tests/pipeline/test_serve_h1.py loads adapters/torch's test_pouw_h1_receipts.py by its path, for its lanes-form Window;
-# tests/protocols/test_pous_option.py runs the memory challenger, which reads the configuration hashes the verity command
+# tests/protocols/test_pous_option.py runs the memory attester, which reads the configuration hashes the verity command
 # commits (tools/verity/cli/verity_cli/configurations.toml).
 inputs_only = true
 inputs = ["adapters/vllm", "verity", "adapters/vllm/verity_vllm/definitions", "adapters/torch/verity_torch", "hardware/cards", "verity/README.md",
@@ -99,12 +99,12 @@ inputs = ["adapters/vllm", "verity", "adapters/vllm/verity_vllm/definitions", "a
           "verity/protocols/resource_accounting/memory/poub/verifier/lean/lakefile.toml",
           "benchmarks/ppl/steps.py", "benchmarks/ppl/matmul.py", "benchmarks/ppl/gates.py", "benchmarks/ppl/spec.py", "benchmarks/ppl/methodology.py", "benchmarks/ppl/model.py",
           "benchmarks/ppl/windows.py", "benchmarks/ppl/datasets.json",
-          "verity/protocols/resource_accounting/memory/poub/prover/remote_session/prover.py",
+          "verity/protocols/resource_accounting/memory/poub/prover/poub_session/prover.py",
           "verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/fattn_ref.py",
           "verity/protocols/resource_accounting/memory/poub/verifier/session/verifier.py",
           "verity/protocols/resource_accounting/memory/poub/verifier/session/wire.py",
           "verity/protocols/resource_accounting/memory/poub/verifier/session/checks.py", "verity/protocols/resource_accounting/memory/poub/verifier/session/lean_verifier.py", "verity/protocols/resource_accounting/memory/poub/verifier/session/challengers.py",
-          "benchmarks/remote_session/store_layout.py", "verity/protocols/compose/verifier/live_challenger/auditor.py", "verity/protocols/compose/verifier/live_challenger/host.json",
+          "benchmarks/poub_session/store_layout.py", "verity/protocols/compose/verifier/live_challenger/auditor.py", "verity/protocols/compose/verifier/live_challenger/host.json",
           "verity/protocols/compose/verifier/live_challenger/models.py", "verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py",
           "benchmarks/pous/p2_v1/__init__.py", "verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/load.py", "verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/gpu.py",
           "verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/store.py", "verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/tensors.py", "verity/protocols/resource_accounting/memory/pous/verifier/p2_v1/reference.py",
@@ -255,7 +255,7 @@ paths = ["tests/adapters/vllm/tests", "adapters/vllm/verity_vllm", "verity"]
 
 [[tool.verity.tests.reads]]
 tests = ["pipeline/test_row.py"]
-paths = ["benchmarks/remote_session", "verity/protocols/resource_accounting/memory/poub/prover/remote_session/prover.py", "adapters/vllm", "verity"]
+paths = ["benchmarks/poub_session", "verity/protocols/resource_accounting/memory/poub/prover/poub_session/prover.py", "adapters/vllm", "verity"]
 
 [[tool.verity.tests.reads]]
 tests = [
@@ -269,10 +269,10 @@ paths = ["adapters/vllm/verity_vllm", "verity"]
 
 [[tool.verity.tests.reads]]
 tests = [
-    "pipeline/test_serve_remote.py",
+    "pipeline/test_serve_poub.py",
     "protocols/poub/test_commit_session.py",
 ]
-paths = ["benchmarks/remote_session", "verity/protocols/resource_accounting/memory/poub/prover/remote_session/prover.py", "verity/protocols/resource_accounting/memory/poub/prover/remote_session/device.py",
+paths = ["benchmarks/poub_session", "verity/protocols/resource_accounting/memory/poub/prover/poub_session/prover.py", "verity/protocols/resource_accounting/memory/poub/prover/poub_session/device.py",
          "verity/protocols/resource_accounting/memory/poub/verifier"]
 
 [[tool.verity.tests.reads]]
