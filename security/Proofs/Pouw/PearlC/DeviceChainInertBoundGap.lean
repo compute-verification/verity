@@ -10,25 +10,8 @@ import Proofs.Pouw.PearlC.TileGap
 import Proofs.Pouw.Prob
 public import Proofs.Pouw.PearlC.Records
 
-/-!
-# The cap on the chain's share: what it admits, that it asserts less, and g
-
-Staged; nothing pinned.
-* **What it admits:** `chainInertBound_flagged_le`. A debit within `ρ·chainCreditDev` has at most `ρ·m·k·n/32` flagged
-  atom-words, a `ρ` share of the unit's atom-words, at every shape and every G, for a non-negative add price. So a family
-  whose flagged share exceeds `ρ` is rejected at every unit width. The per-unit cap bounds it only by
-  `ρ·creditDev/(m·k·n)`.
-* **It asserts less than the per-unit cap at the same `ρ`,** per unit (`ttOutPearlCDevChainInertBound_of_inert_bound`) and per tile
-  (`ttOutTilePearlCDevChainInertBound_of_inert_bound`), for non-negative prices and `0 ≤ ρ ≤ 1`. `chainCreditDev ≤ creditDev`, so a unit
-  or tile within the chain cap is within the per-unit one, and the credit is the same.
-* **The gap at any record:** per unit at `g = 1 − (399/400)/ω` with `wrefDev = ω·(creditDev − ρ·chainCreditDev)`
-  (`pearlCGapDevChainInertBoundAt`). That is a little better than the per-unit cap's, since an admitted unit's debit is at most
-  `ρ` times the chain, not the whole credit. Per tile, with the same fixed credit as `pearlCTilesDev`, it is the per-unit
-  cap's gap (`pearlCSampledDevChainInertBoundAt`).
-* **v2 at the chain cap 1/1,000**, at any record with `G = 0` and `Prices.sm120`:
-  - per unit, `26921/7493750` (0.35925%) at 8192³ and `367519/103656250` (0.35456%) at 16384³;
-  - per audit tile, `216793/59950000` (0.36162%) and `2950127/829250000` (0.35576%), as the 1/1,000 row.
--/
+/-! The cap on the chain's share: what it admits, that it asserts less than the per-unit cap, and g (staged,
+nothing pinned). -/
 
 @[expose] public section
 
@@ -45,8 +28,6 @@ theorem chainCreditDev_le (d : PearlCDevice) (hbf : 0 ≤ d.prices.bf16) (s : Sh
   simp only
   linarith
 
-/-- **An admitted unit has at most a `ρ` share of its atom-words flagged**, at every shape: a debit within
-`ρ·chainCreditDev` has `32·atoms ≤ ρ·m·k·n`. -/
 theorem chainInertBound_flagged_le (d : PearlCDevice) (hadd : 0 ≤ d.prices.add) (ρ : ℚ) (s : Shape) (x : InertWork)
     (h : inertWorkDev d x ≤ ρ * chainCreditDev d s) : 32 * (x.atoms : ℚ) ≤ ρ * ((s.m : ℚ) * s.k * s.n) := by
   unfold inertWorkDev chainCreditDev at h
@@ -99,7 +80,6 @@ theorem chainInertBound_credit_sum_le (d : PearlCDevice) (sem : PearlCSem Q R S)
   have : (0 : ℚ) ≤ creditDev d (U.layout.shape u) - inertWorkDev d (sem.unitInertWorkDev d H s U u c.act) := by nlinarith
   exact_mod_cast this
 
-/-- **The chain cap asserts less than the per-unit cap at the same `ρ`.** -/
 theorem ttOutPearlCDevChainInertBound_of_inert_bound [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
     (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16)
     (hρ0 : 0 ≤ ρ) (hρ1 : ρ ≤ 1) (h : TTOutPearlCDev CM d sem ρ) : TTOutPearlCDevChainInertBound CM d sem ρ := by
@@ -147,7 +127,6 @@ theorem chainInertBound_tile_credit_sum_le (d : PearlCDevice) (sem : PearlCSem Q
     mul_nonneg (mul_nonneg (by linarith) h2) hsh
   exact_mod_cast this
 
-/-- **The chain cap per tile asserts less than the per-unit cap per tile at the same `ρ`.** -/
 theorem ttOutTilePearlCDevChainInertBound_of_inert_bound [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
     (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16)
     (hρ0 : 0 ≤ ρ) (hρ1 : ρ ≤ 1) (h : TTOutTilePearlCDev CM d sem ρ) : TTOutTilePearlCDevChainInertBound CM d sem ρ := by
@@ -157,8 +136,6 @@ theorem ttOutTilePearlCDevChainInertBound_of_inert_bound [Fintype Q] [DecidableE
 
 end
 
-/-- TT_OUT with the chain cap gives `G_g` on the one-shape domain at `g = 1 − (399/400)/ω`, where
-`wrefDev = ω·(creditDev − ρ·chainCreditDev)`: an admitted unit's debit is at most `ρ·chainCreditDev`. -/
 theorem pearlCGapDevChainInertBoundAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) (s : Shape) (ω g : ℚ) (hω0 : 0 < ω)
     (hω : wrefDev d s = ω * (creditDev d s - ρ * chainCreditDev d s)) (hg : g = 1 - (1 - 1 / 400) / ω)
@@ -187,8 +164,6 @@ theorem pearlCGapDevChainInertBoundAt {Q R S : Type} [Fintype Q] [DecidableEq Q]
   rw [e]
   exact key
 
-/-- TT_OUT per tile with the chain cap gives `GGapSampled` on the one-shape domain at `γ = 1 − (399/400)/ω`, where
-`wrefDev = ω·(1 − ρ)·creditDev ≥ 0`: the tiles' credit and `W_ref` are `pearlCTilesDev`'s. -/
 theorem pearlCSampledDevChainInertBoundAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) (s : Shape) (ω γ : ℚ) (hω0 : 0 < ω)
     (hw0 : 0 ≤ wrefDev d s) (hω : wrefDev d s = ω * ((1 - ρ) * creditDev d s)) (hγ : γ = 1 - (1 - 1 / 400) / ω)
@@ -223,8 +198,6 @@ theorem pearlCSampledDevChainInertBoundAt {Q R S : Type} [Fintype Q] [DecidableE
   rw [e]
   exact key
 
-/-- **v2 at the chain cap 1/1,000, 8192³**, per unit, at a record with no promotion and sm_120's prices:
-`g = 26921/7493750`. -/
 theorem pearlCGapUnpromotedChainInertShare1000_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 0) (hp : d.prices = Prices.sm120)
     (hTT : TTOutPearlCDevChainInertBound CM d sem (1 / 1000)) :
@@ -233,8 +206,6 @@ theorem pearlCGapUnpromotedChainInertShare1000_8192 {Q R S : Type} [Fintype Q] [
   pearlCGapDevChainInertBoundAt CM d sem _ _ (1049125 / 1047976) _ (by norm_num)
     (by rw [wrefDev, creditDev, chainCreditDev, hG, hp]; norm_num [Prices.sm120, Params.pi, sh8192]) (by norm_num) hTT
 
-/-- **v2 at the chain cap 1/1,000, 16384³**, per unit, at a record with no promotion and sm_120's prices:
-`g = 367519/103656250`. -/
 theorem pearlCGapUnpromotedChainInertShare1000_16384 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 0) (hp : d.prices = Prices.sm120)
     (hTT : TTOutPearlCDevChainInertBound CM d sem (1 / 1000)) :
@@ -243,7 +214,6 @@ theorem pearlCGapUnpromotedChainInertShare1000_16384 {Q R S : Type} [Fintype Q] 
   pearlCGapDevChainInertBoundAt CM d sem _ _ (2073125 / 2070952) _ (by norm_num)
     (by rw [wrefDev, creditDev, chainCreditDev, hG, hp]; norm_num [Prices.sm120, Params.pi, sh16384]) (by norm_num) hTT
 
-/-- **v2 at the chain cap 1/1,000 per audit tile, 8192³**: `GGapSampled` at `g = 216793/59950000`. -/
 theorem pearlCSampledUnpromotedChainInertShare1000_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 0) (hp : d.prices = Prices.sm120)
     (hTT : TTOutTilePearlCDevChainInertBound CM d sem (1 / 1000)) :
@@ -253,7 +223,6 @@ theorem pearlCSampledUnpromotedChainInertShare1000_8192 {Q R S : Type} [Fintype 
     (by rw [wrefDev, creditDev, hG, hp]; norm_num [Prices.sm120, Params.pi, sh8192])
     (by rw [wrefDev, creditDev, hG, hp]; norm_num [Prices.sm120, Params.pi, sh8192]) (by norm_num) hTT
 
-/-- **v2 at the chain cap 1/1,000 per audit tile, 16384³**: `GGapSampled` at `g = 2950127/829250000`. -/
 theorem pearlCSampledUnpromotedChainInertShare1000_16384 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 0) (hp : d.prices = Prices.sm120)
     (hTT : TTOutTilePearlCDevChainInertBound CM d sem (1 / 1000)) :

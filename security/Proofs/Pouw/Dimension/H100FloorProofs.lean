@@ -7,17 +7,12 @@ import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Dimension.H100LoopFreeProofs
 import Proofs.Pouw.Dimension.H100WProofs
 
-/-!
-# `MH100`'s floor table and the hardware citations: proofs
-
-`h32Floor` is by `decide`. The two bounds are `distinctWritesMH100On` with `h32LoopFree` and `h32Floor`.
--/
+/-! `MH100`'s floor table satisfies `H32`. -/
 
 @[expose] public section
 
 namespace Pouw.Dimension.H100
 
-/-- **`H32` holds at the floor table.** -/
 theorem h32Floor : H32 h100Floor :=
   ⟨fun s => by cases s <;> decide, by decide⟩
 

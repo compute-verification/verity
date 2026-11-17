@@ -13,37 +13,14 @@ import Proofs.Pouw.PearlC.FreezePPure
 import Proofs.Pouw.PearlC.RowStats
 import Proofs.Pouw.PearlC.TileCircuit
 
-/-!
-# Core's primitives at `pc8`'s and `pc4`'s rows (proofs)
-
-`Pc8OpsAgree` and `Pc4OpsAgree` name what the row units need of their primitives. At core's instance `coreOps` they
-follow from core's definitions (`Verity.Fp32`, `Verity.Scalar`, `Verity.Prims`) and nothing else (`pc8OpsAgree_coreOps`,
-`pc4OpsAgree_coreOps`).
-
-From the definitions alone: `F32Neg` flips and `F32Fabs` clears the sign bit, `SelectI32` reads its condition's low bit,
-the BF16 narrowing of a finite word is `rnBf16?`'s rounding, the E4M3 widening of every code is its value's word (by
-evaluation), and the FMA of `−0` by `−0` is that of `+0` by `+0` (both products decode to `+0`). `decode` reads a
-finite word as its sign and its magnitude in units of `2⁻¹⁴⁹` (`decode_fin`), so a zero product of opposite signs is
-`−0`, a finite word over `+inf` is the zero of its sign, and a product or quotient with a non-finite first operand is a
-NaN or an infinity. `order` is the value order of finite words (`order_cmp`), which gives both `F32Fmaxf` rows; and the
-`E2M1_UP` boundaries are the words of `e2m1Mids`, so `F32ToE2m1Sat`'s count of the boundaries a magnitude passes is
-`e2m1Mag`'s count of the midpoints its value passes (`count_eq`).
-
-The rest is core's rounding and E4M3 cast against the protocol's: `roundRn` of a positive magnitude (`n / d` units of
-`2⁻¹⁴⁹`) is `f32Word` of its value (`roundRn_f32Word`), and `F32ToE4m3Sat` of a word is `e4m3Word`'s code
-(`cast_e4m3Word`). Core's package gives each as its integer round's grid and nearest-even rounding
-(`Verity.Fp32.Round.roundRn_eq`, `Verity.Prims.Round.f32ToE4m3Sat_fin`), which here read as `binade` and `roundEven` of
-the value (`roundEven_eq`). With the first, the multiply, divide and FMA rows follow, the FMA's `roundSum` and its
-signed zeros included (`roundSum_eq`).
--/
+/-! Core's primitives agree with `pc8`'s and `pc4`'s rows at core's instance `coreOps`, from core's definitions
+alone. -/
 
 @[expose] public section
 
 namespace Pouw.PearlC.CoreOps
 
 open Pouw.Fp8Atom Pouw.PearlC Pouw.PearlC.Fp4Dev Pouw.PearlC.TileCircuit Pouw.PearlC.RowCircuit Pouw.PearlC.PeelExact
-
-/-! ## Bit fields -/
 
 theorem and_ff (u : ℕ) : u &&& 0xFF = u % 256 := Nat.and_two_pow_sub_one_eq_mod u 8
 theorem and_ffff (u : ℕ) : u &&& 0xFFFF = u % 65536 := Nat.and_two_pow_sub_one_eq_mod u 16
@@ -83,8 +60,6 @@ theorem mag_lt {u : ℕ} (he : (u >>> 23) % 256 ≠ 255) : u % 2 ^ 31 < 0x7F8000
 theorem mag_inf {u : ℕ} (he : (u >>> 23) % 256 = 255) (hm : u % 2 ^ 23 = 0) : u % 2 ^ 31 = 0x7F800000 := by omega
 
 theorem mag_le {u : ℕ} (h : (u >>> 23) % 256 = 255 → u % 2 ^ 23 = 0) : u % 2 ^ 31 ≤ 0x7F800000 := by omega
-
-/-! ## Words as values -/
 
 theorem wordQ_zero : wordQ 0 = some 0 := by decide +kernel
 
@@ -134,7 +109,6 @@ theorem val_fields (E m : ℕ) :
   have h1 : (((max E 1 : ℕ) : ℤ) - 150) = ((max E 1 - 1 : ℕ) : ℤ) - ((149 : ℕ) : ℤ) := by omega
   rw [h1, zpow_sub₀ two_ne_zero, zpow_natCast, zpow_natCast]; push_cast; ring
 
-/-- A finite word's value is its magnitude's, signed. -/
 theorem wordQ_abs {u : ℕ} {x : ℚ} (hx : wordQ u = some x) :
     wordQ (u % 2 ^ 31) = some (if (u >>> 31) % 2 = 1 then -x else x) := by
   have he := wordQ_exp hx
@@ -182,8 +156,6 @@ theorem wordQ_eq_iff {a b : ℕ} {x y : ℚ} (ha : a < 2 ^ 31) (hb : b < 2 ^ 31)
     exact FreezePPure.word_eq_of_wordQ (by omega) (by omega) (by omega) (by omega) hx hy
   · intro hab; subst hab; rw [hx] at hy; exact Option.some.inj hy
 
-/-! ## `decode` -/
-
 theorem decode_sign (u : ℕ) : ((u >>> 31) &&& 1 == 1) = signBit u := by
   unfold signBit; rw [Nat.and_one_is_mod]
 
@@ -194,7 +166,6 @@ theorem decode_fields (u : ℕ) : Verity.Fp32.decode u =
     else Verity.Fp32.Decoded.fin (signBit u) ((u % 2 ^ 23 ||| 0x800000) <<< ((u >>> 23) % 256 - 1)) := by
   unfold Verity.Fp32.decode; rw [and_ff, and_7fffff, decode_sign]
 
-/-- `decode` reads a finite word as its sign and its value in units of `2⁻¹⁴⁹`. -/
 theorem decode_fin {u : ℕ} {x : ℚ} (hx : wordQ u = some x) :
     ∃ M : ℕ, Verity.Fp32.decode u = .fin (signBit u) M ∧
       x = (if signBit u = true then (-1 : ℚ) else 1) * ((M : ℚ) / 2 ^ 149) := by
@@ -217,8 +188,6 @@ theorem decode_nonfin {u : ℕ} (he : (u >>> 23) % 256 = 255) :
   · right; exact ⟨_, ite_eq_left hm⟩
   · left; exact ite_eq_right hm
 
-/-! ## NaN tests -/
-
 theorem isNan_false {u : ℕ} (h : (u >>> 23) % 256 = 255 → u % 2 ^ 23 = 0) : Verity.Scalar.f32IsNan u = false := by
   unfold Verity.Scalar.f32IsNan; rw [and_exp, and_7fffff]
   by_cases he : (u >>> 23) % 256 = 255
@@ -236,9 +205,6 @@ theorem gpuNan_eq {w : ℕ} (h : Verity.Scalar.f32IsNan w = false) : Verity.Fp32
   have h' : Verity.Fp32.f32IsNan w = false := h
   unfold Verity.Fp32.f32GpuNan; rw [h']; exact ite_eq_right (by decide)
 
-/-! ## Core's rounding and E4M3 cast are the protocol's -/
-
-/-- Core's rounding to nearest even is `roundEven`. -/
 theorem roundEven_eq {x : ℚ} {q : ℕ} (h : Verity.Round.RoundsEven x q) : roundEven x = q := by
   by_cases ht : 2 * |(q : ℚ) - x| = 1
   · have he := h.tie ht
@@ -261,9 +227,6 @@ theorem binade_div_pow {x : ℚ} (hx : 0 < x) (k : ℕ) : binade (x / 2 ^ k) = b
   · rw [div_lt_iff₀ hk, ← zpow_natCast, ← zpow_add₀ two_ne_zero, show binade x - k + 1 + k = binade x + 1 by ring]
     exact h2
 
-/-- **`roundRn` is `f32Word`**: the word core rounds `(-1)^s · n / d` units of `2⁻¹⁴⁹` to, `n, d > 0`, is `f32Word` of
-that value (`Verity.Fp32.Round.roundRn_eq`: the same binade exponent, clamped at the subnormals, and the same
-significand rounded to nearest even). -/
 theorem roundRn_f32Word (s : Bool) {n d : ℕ} (hn : 0 < n) (hd : 0 < d) :
     Verity.Fp32.roundRn s n d = f32Word ((if s = true then -1 else 1) * ((n : ℚ) / d / 2 ^ 149)) := by
   obtain ⟨j, q, hj, hlt, hq, heq⟩ := Verity.Fp32.Round.roundRn_eq s n hd
@@ -316,8 +279,6 @@ theorem roundRn_f32Word (s : Bool) {n d : ℕ} (hn : 0 < n) (hd : 0 < d) :
   simp only [f32Word, habs, hneg, ha.ne', ↓reduceIte, hE, hr]
   split_ifs <;> omega
 
-/-- `e4m3Mag` of `M > 0` units of `2⁻¹⁴⁹` below 464: `8 · (max(⌊log₂ M⌋, 143) - 143) + q`, `q` the magnitude on the
-grid `2^(max(⌊log₂ M⌋, 143) - 3)` units rounded to nearest even. -/
 theorem e4m3Mag_units {M q : ℕ} (hM : 0 < M) (hlt : M < 464 * 2 ^ 149)
     (hq : Verity.Round.RoundsEven ((M : ℚ) / 2 ^ (max M.log2 143 - 3)) q) :
     e4m3Mag ((M : ℚ) / 2 ^ 149) = 8 * (max M.log2 143 - 143) + q := by
@@ -340,9 +301,6 @@ theorem e4m3Mag_units {M q : ℕ} (hM : 0 < M) (hlt : M < 464 * 2 ^ 149)
 theorem sign_ite (u : ℕ) : (if signBit u = true then 0x80 else 0) = (if (u >>> 31) % 2 = 1 then 128 else 0) := by
   unfold signBit; rcases Nat.mod_two_eq_zero_or_one (u >>> 31) with h | h <;> rw [h] <;> decide
 
-/-- **`F32ToE4m3Sat` is `e4m3Word`**: core's cast of a 32-bit word is the protocol's code (`Verity.Prims.Round`: NaN to
-`0x7F`, `±inf` and every magnitude from 464 to `±0x7E`, and below it the code of the magnitude rounded to nearest even
-on the E4M3 grid). -/
 theorem cast_e4m3Word {u : ℕ} (hu : u < 2 ^ 32) : Verity.Prims.f32ToE4m3Sat u = (e4m3Word u).val := by
   have hS' : (if signBit u = true then 0x80 else 0) = 0 ∨ (if signBit u = true then 0x80 else 0) = 0x80 := by
     cases signBit u; exacts [.inl rfl, .inr rfl]
@@ -418,8 +376,6 @@ theorem rnWord_round (s : Bool) (n : ℕ) {d : ℕ} (hd : 0 < d) :
   · rw [Verity.Fp32.Round.roundRn_zero s hd]; cases s <;> simp [rnWord, Verity.Fp32.zeroWord]
   · rw [roundRn_f32Word s hn hd, rnWord_of_ne (val_ne_zero s hn hd)]
 
-/-- `roundSum` is one rounding of the exact sum, an exact zero being `−0` only when both addends are zeros of negative
-sign. -/
 theorem roundSum_eq (s₁ s₂ : Bool) (n₁ n₂ : ℕ) {d : ℕ} (hd : 0 < d) :
     Verity.Fp32.roundSum s₁ n₁ s₂ n₂ d = rnWord ((if s₁ = true then -1 else 1) * ((n₁ : ℚ) / d / 2 ^ 149) +
       (if s₂ = true then -1 else 1) * ((n₂ : ℚ) / d / 2 ^ 149)) (decide (n₁ = 0) && decide (n₂ = 0) && s₁ && s₂) := by
@@ -451,8 +407,6 @@ theorem roundSum_eq (s₁ s₂ : Bool) (n₁ n₂ : ℕ) {d : ℕ} (hd : 0 < d) 
       · rw [ite_eq_right h21]
         have he : n₁ = n₂ := by omega
         subst he; symm; apply rnWord_cancel; cases s₁ <;> simp
-
-/-! ## Core's arithmetic on decoded words -/
 
 theorem mulV2_eq {a b : ℕ} {sa sb : Bool} {ma mb : ℕ} (ha : Verity.Fp32.decode a = .fin sa ma)
     (hb : Verity.Fp32.decode b = .fin sb mb) :
@@ -502,8 +456,6 @@ theorem div_val (sa sb : Bool) (ma mb : ℕ) :
   have hB : ∀ t : ℚ, t / (if sb = true then (-1 : ℚ) else 1) = t * (if sb = true then (-1 : ℚ) else 1) := by
     intro t; split_ifs <;> ring
   rw [Nat.shiftLeft_eq, sgn_xor, div_mul_eq_div_div, hB]; push_cast; ring
-
-/-! ## `Pc8OpsAgree` at `coreOps` -/
 
 theorem coreOps_fabs : ∀ w, coreOps.f32Fabs w = w % 2 ^ 31 := fun w => and_7fffffff w
 
@@ -676,8 +628,6 @@ theorem coreOps_cast : ∀ u, coreOps.f32ToE4m3Sat u = (e4m3Word u).val := by
   show Verity.Prims.f32ToE4m3Sat u = _
   rw [cast_mod, cast_e4m3Word (Nat.mod_lt _ (by norm_num)), e4m3Word_mod]
 
-/-! ## `order` and `F32Fmaxf` -/
-
 theorem order_eq {u : ℕ} (hu : u < 2 ^ 32) : Verity.Scalar.order u 32 =
     if (u >>> 31) % 2 = 1 then -((u % 2 ^ 31 : ℕ) : ℤ) else ((u % 2 ^ 31 : ℕ) : ℤ) := by
   show (if (u &&& 0xFFFFFFFF) &&& 0x80000000 ≠ 0 then -(((u &&& 0xFFFFFFFF) &&& 0x7FFFFFFF : ℕ) : ℤ)
@@ -720,7 +670,6 @@ theorem cmp_signs {A B : ℕ} {va vb : ℚ} (h0a : 0 ≤ va) (h0b : 0 ≤ vb) (h
       have := hza.1 h1; have := hzb.1 h2; omega
   · exact ⟨by rw [hlt]; omega, by rw [heq]; omega⟩
 
-/-- `order` is the value order of finite words. -/
 theorem order_cmp {a b : ℕ} {x y : ℚ} (ha : a < 2 ^ 32) (hb : b < 2 ^ 32) (hx : wordQ a = some x)
     (hy : wordQ b = some y) :
     (Verity.Scalar.order a 32 < Verity.Scalar.order b 32 ↔ x < y) ∧
@@ -798,8 +747,6 @@ theorem coreOps_fmaxfAny : ∀ a b : ℕ, ∀ y : ℚ, a < 2 ^ 32 → b < 2 ^ 32
       rw [ite_eq_right hR]
       split_ifs <;> omega
 
-/-! ## `F32ToE2m1Sat` -/
-
 theorem takeWhile_length {α : Type} (p : α → Bool) :
     ∀ l : List α, l.Pairwise (fun a b => p b = true → p a = true) → (l.takeWhile p).length = l.countP p
   | [], _ => rfl
@@ -811,7 +758,6 @@ theorem takeWhile_length {α : Type} (p : α → Bool) :
       symm; rw [List.countP_eq_zero]
       intro b hb hpb; exact ha (h.1 b hb hpb)
 
-/-- `E2M1_UP`'s boundaries, the words of `e2m1Mids`. -/
 def e2m1Bnds : List ℕ := [0x3E800000, 0x3F400000, 0x3FA00000, 0x3FE00000, 0x40200000, 0x40600000, 0x40A00000]
 
 theorem e2m1Up_eq :
@@ -839,8 +785,6 @@ theorem e2m1_pairwise (v : ℚ) : (List.range 7).Pairwise (fun i j =>
   · exact lt_trans hm h
   · rw [← h]; exact hm
 
-/-- `F32ToE2m1Sat`'s count of the boundaries a magnitude passes is `e2m1Mag`'s count of the midpoints its value
-passes. -/
 theorem count_eq {m : ℕ} {v : ℚ} (hm : m < 2 ^ 31) (hv : wordQ m = some v) {q : ℕ × Bool → Bool}
     (hq : ∀ b up, q (b, up) = (decide (m > b) || (up && m == b))) :
     Verity.Prims.E2M1_UP.countP q = e2m1Mag v := by
@@ -902,9 +846,6 @@ theorem coreOps_fmaxf : ∀ a b : ℕ, ∀ x y : ℚ, a < 2 ^ 32 → b < 2 ^ 32 
     split_ifs <;> omega
   · rw [ite_eq_right (not_lt.2 hxy.le)]; have h1 := hgt.2 hxy; split_ifs <;> omega
 
-/-! ## The agreements -/
-
-/-- **Core's instance agrees with `pc8`'s rows.** -/
 theorem pc8OpsAgree_coreOps : WholeCircuit.Pc8OpsAgree coreOps :=
   { cast := coreOps_cast, widen := coreOps_widen, mul := coreOps_mul, mulZero := coreOps_mulZero,
     fma := coreOps_fma, neg := coreOps_neg, bf16 := coreOps_bf16, widenNeg0 := coreOps_widenNeg0,
@@ -912,7 +853,6 @@ theorem pc8OpsAgree_coreOps : WholeCircuit.Pc8OpsAgree coreOps :=
     mulNonfin := coreOps_mulNonfin, fmaxfAny := coreOps_fmaxfAny, sel := coreOps_sel, fmaOvf := coreOps_fmaOvf,
     divNonfin := coreOps_divNonfin }
 
-/-- **Core's instance agrees with `pc4`'s rows.** -/
 theorem pc4OpsAgree_coreOps : RowCircuit.Pc4OpsAgree coreOps :=
   { pc8OpsAgree_coreOps with
     fmaxf := coreOps_fmaxf, e2m1 := coreOps_e2m1, bf16w := coreOps_bf16w, le := coreOps_le }

@@ -7,19 +7,7 @@ public import Mathlib.Tactic.LinearCombination
 public import Mathlib.Tactic.Linarith
 public import Mathlib.Tactic.Ring
 
-/-!
-# The lane's pieces on bits compute their word views, and so does their composition
-
-* **The multiply** (`immaS8Bits_bv`): an s8 × s8 product is its Baugh–Wooley array's weighted sum plus `_BW_CONSTANT`
-  (`bw_sum`, a polynomial identity in the operands' bits), and the accumulator's 33-bit sign extension is its s32 value
-  plus `2^33` times its sign (`acc_sum`), so the columns' sum is the exact sum mod `2^33` (`colSum_emod`). That sum lies in
-  `[-2^32, 2^32)` (`dot_bounds`), so bits 31 and 32 of its 33 bits differ exactly when it leaves s32, bit 32 then its
-  sign, and the clamp is `satS32`'s. Through the steps, `gemmAccS8Bits_bv`.
-* **The record check, the picks and the partials**: `zyCellBits_bv`, `zyCheckBits_bv`, `muxCand_bv` with `pickBy_map`,
-  `mask32Bits_bv`, and `eq32Bits_bitsOf`.
-* **The lane** (`laneBits_bv`): on any lane's inputs' bits, at the dequant's and the chain's word views on bits,
-  `laneBits` is `laneOk`.
--/
+/-! The lane's pieces on bits compute their word views, and so does their composition. -/
 
 @[expose] public section
 
@@ -70,7 +58,6 @@ theorem toInt8 (x : BitVec 8) : x.toInt = (∑ i : Fin 7, 2 ^ i.val * (bval (bv 
     · exfalso; omega
     · push_cast; ring
 
-/-- **Baugh–Wooley**: an s8 × s8 product is its array's weighted sum plus `bwConst`. -/
 theorem bw_sum (x y : BitVec 8) :
     ((∑ i : Fin 8, ∑ j : Fin 8, 2 ^ (i.val + j.val) * bval (bwBit (bv x) (bv y) i j) : ℕ) : ℤ) + bwConst =
       x.toInt * y.toInt := by
@@ -90,7 +77,6 @@ theorem bit31 (acc : BitVec 32) : (bval (bv acc 31) : ℤ) = if acc.toNat < 2 ^ 
   simp only [Fin.coe_ofNat_eq_mod, Nat.reduceMod, Nat.reducePow] at h ⊢
   split_ifs with h1 h2 h2 <;> simp_all <;> omega
 
-/-- The accumulator sign-extended to 33 bits is its s32 value plus `2^33` times its sign. -/
 theorem acc_sum (acc : BitVec 32) :
     ((∑ i : Fin 32, 2 ^ i.val * bval (bv acc i) : ℕ) : ℤ) + 2 ^ 32 * bval (bv acc 31) =
       acc.toInt + 2 ^ 33 * bval (bv acc 31) := by
@@ -142,7 +128,6 @@ theorem dot_bounds (a b : Fin 32 → BitVec 8) :
 theorem satMax : ∀ i : Fin 32, (BitVec.ofInt 32 (2 ^ 31 - 1)).getLsbD i.val = decide (i.val < 31) := by decide
 theorem satMin : ∀ i : Fin 32, (BitVec.ofInt 32 (-2 ^ 31)).getLsbD i.val = decide (i.val = 31) := by decide
 
-/-- **`BlackwellS8ImmaDot32_v2`'s lowering computes `BlackwellS8ImmaDot32_v1`**, given `compress_columns`' contract. -/
 theorem immaS8Bits_bv (acc : BitVec 32) (a b : Fin 32 → BitVec 8) :
     immaS8Bits (bv acc) (fun k => bv (a k)) (fun k => bv (b k)) = bv (immaS8 acc a b) := by
   set T := acc.toInt + ∑ k, (a k).toInt * (b k).toInt with hT
@@ -291,8 +276,6 @@ theorem zyCheckBits_bv {R C : ℕ} (dqW : BitVec 32 → BitVec 32 → BitVec 32 
       (fun i => bv (sa i)) (fun j => bv (sw j)) = zyCheck dqW zr yr z sa sw := by
   simp only [zyCheckBits, zyCheck, liftDq_bv, zyCellBits_bv]
 
-/-- **The lane's body on bits computes it on words**: on the bits of any lane inputs, at the dequant's and the chain's
-word views on bits, `laneBits` is `laneOk`. -/
 theorem laneBits_bv {K nw : ℕ} {P : Type}
     (chain : P → Fin 32 → (Fin 4 → Fin K → BitVec 8) → (Fin 8 → Fin K → BitVec 8) → Fin nw → BitVec 32)
     (dqW : BitVec 32 → BitVec 32 → BitVec 32 → BitVec 16) (x : LaneIn K nw P) :

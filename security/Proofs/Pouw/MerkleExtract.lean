@@ -39,25 +39,7 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Merkle extraction: the deterministic core and the fresh-answer count
-
-* `extract_sound` (Lemma 1, for every hash function): an opening that verifies against `d` equals the extractor's
-  word, or the hash collides on a queried point and a verified point, or a verified point outside `L` hashes to a
-  target (`d` or a child digest `L` names).
-* `card_hit_le`: a uniformly random answer stream puts coordinate `t` in a set of at most `m` values that doesn't
-  read `t` on at most a `m / |D|` share of streams. Both random-oracle bad events of `extract_of_ro` are of this form.
-* `extract_of_ro` (Lemma 2): against a `q`-query prover that commits after `τ` queries, extraction from the
-  pre-commitment log fails on at most a `(q² + q (2τ + 1)) / |D|` share of the oracle's answer streams: a collision
-  among the answers (`q²`), or a post-commitment answer hitting the root or a child digest the log names
-  (`q (2τ + 1)`).
-* `extract_of_ro_roots`: the same for `R` roots over one stream, `(q² + ∑_w q (2τ_w + 1)) / |D|`, with one
-  repeated-answer event for all the roots, which the bound also counts on its own (`mem_repeats_of_not_injective`).
-* Lazy sampling (`exists_consistent`, `card_consistent_le`): every oracle `h : X → D` gives an adaptive querier an
-  answer stream, and a querier with distinct queries sees each stream on a `1/|D|^q` share of the oracles.
-* `card_fails_oracle_le`: `extract_of_ro_roots` over a uniform oracle `X → D` instead of the stream.
-* `opens_congr`: an opening's check reads the hash only at the points it hashes.
--/
+/-! Merkle extraction: the deterministic core (Lemma 1) and the fresh-answer count (Lemma 2). -/
 
 @[expose] public section
 
@@ -65,10 +47,6 @@ namespace Pouw.MerkleExtract
 
 variable {X D W : Type}
 
-/-- **Lemma 1 (deterministic).** For every hash `h` and every set `L` of points queried before the commitment, an
-opening of `w` that verifies against `d` is the extractor's word, or `h` collides on a point of `L` and a point the
-verification hashes, or a point the verification hashes lies outside `L` and hashes to `d` or a child digest `L`
-names. -/
 theorem extract_sound (h : X → D) (E : Enc X D W) (L : Set X) :
     ∀ (p : List (Bool × D × D)) (d : D) (w : W), Opens h E d p w →
       ext h E L d (p.map Prod.fst) = some w ∨
@@ -125,8 +103,6 @@ theorem extract_sound (h : X → D) (E : Enc X D W) (L : Set X) :
           · exact ⟨(s, c), by simpa [Enc.pt] using hm, by simpa [Enc.pt] using hd⟩
         · rw [hd]; exact Set.mem_insert _ _
 
-/-- **Fresh-answer hits**: if the set `S u` doesn't read coordinate `t` and has at most `m` elements, then at most a
-`m / |D|` share of the answer streams `u` put `u t` in `S u`. -/
 theorem card_hit_le {q : ℕ} {D : Type} [Fintype D] [DecidableEq D] (t : Fin q)
     (S : (Fin q → D) → Finset D) (m : ℕ)
     (hS : ∀ u a, S (Function.update u t a) = S u) (hm : ∀ u, (S u).card ≤ m) :
@@ -159,20 +135,16 @@ theorem card_hit_le {q : ℕ} {D : Type} [Fintype D] [DecidableEq D] (t : Fin q)
     _ = m * (Fintype.card D * Fintype.card ({j // j ≠ t} → D)) := by
         rw [Finset.sum_const, Finset.card_univ, smul_eq_mul]; ring
 
-/-! ### `extract_of_ro` -/
-
 namespace Prover
 
 variable {q τ : ℕ} (A : Prover X D q τ)
 
-/-- A prover's queries are distinct. -/
 theorem qry_inj (u : Fin q → D) {i j : Fin q} (h : A.qry i u = A.qry j u) : i = j := by
   rcases lt_trichotomy i j with hij | hij | hij
   · exact absurd h.symm (A.fresh u j i hij)
   · exact hij
   · exact absurd h (A.fresh u i j hij)
 
-/-- The oracle answers the prover's `i`-th query with `u i`. -/
 theorem oracle_qry [Inhabited D] (u : Fin q → D) (i : Fin q) : A.oracle u (A.qry i u) = u i := by
   have hx : ∃ j, A.qry j u = A.qry i u := ⟨i, rfl⟩
   simp only [oracle, dif_pos hx]
@@ -180,30 +152,23 @@ theorem oracle_qry [Inhabited D] (u : Fin q → D) (i : Fin q) : A.oracle u (A.q
 
 end Prover
 
-/-! ### The two bad events, `extract_of_ro` and its `R`-root form -/
-
 section RandomOracle
 
 variable [Fintype D] [DecidableEq D]
 
-/-- The answer streams on which answer `t` repeats an earlier answer. -/
 def repeats (q : ℕ) (t : Fin q) : Finset (Fin q → D) :=
   Finset.univ.filter fun u => u t ∈ (Finset.univ.filter fun j : Fin q => j < t).image u
 
-/-- The targets the commitment fixes: the root and the child digests of the queries before it. -/
 noncomputable def targets {q τ : ℕ} (E : Enc X D W) (A : Prover X D q τ) (u : Fin q → D) : Finset D :=
   insert (A.root u) ((Finset.univ.filter fun i : Fin q => (i : ℕ) < τ).biUnion fun i => children E (A.qry i u))
 
-/-- The targets answer `b` can hit: the commitment's, if `b` is answered after it. -/
 noncomputable def targetsAt {q τ : ℕ} (E : Enc X D W) (A : Prover X D q τ) (b : Fin q) (u : Fin q → D) :
     Finset D :=
   if τ ≤ (b : ℕ) then targets E A u else ∅
 
-/-- The answer streams on which an answer after the commitment hits one of its targets. -/
 noncomputable def hits {q τ : ℕ} (E : Enc X D W) (A : Prover X D q τ) : Finset (Fin q → D) :=
   Finset.univ.biUnion fun b => Finset.univ.filter fun u => u b ∈ targetsAt E A b u
 
-/-- A repeated answer: on at most a `q² / |D|` share of the streams. -/
 theorem card_repeats_le (q : ℕ) :
     (Finset.univ.biUnion fun t : Fin q => (repeats q t : Finset (Fin q → D))).card * Fintype.card D ≤
       q * q * Fintype.card (Fin q → D) := by
@@ -226,7 +191,6 @@ theorem card_repeats_le (q : ℕ) :
     _ = q * q * Fintype.card (Fin q → D) := by
         simp only [Finset.sum_const, Finset.card_univ, Fintype.card_fin, smul_eq_mul]; ring
 
-/-- A stream that gives two queries one answer repeats an answer. -/
 theorem mem_repeats_of_not_injective {q : ℕ} {u : Fin q → D} (hu : ¬ Function.Injective u) :
     u ∈ Finset.univ.biUnion fun t : Fin q => (repeats q t : Finset (Fin q → D)) := by
   simp only [Function.Injective, not_forall] at hu
@@ -241,7 +205,6 @@ theorem mem_repeats_of_not_injective {q : ℕ} {u : Fin q → D} (hu : ¬ Functi
     exact ⟨b, hlt, hab.symm⟩
 
 omit [Fintype D] in
-/-- The targets answer `b` can hit don't read answer `b`. -/
 theorem targetsAt_update {q τ : ℕ} (E : Enc X D W) (A : Prover X D q τ) (b : Fin q) (u : Fin q → D) (a : D) :
     targetsAt E A b (Function.update u b a) = targetsAt E A b u := by
   unfold targetsAt
@@ -257,7 +220,6 @@ theorem targetsAt_update {q τ : ℕ} (E : Enc X D W) (A : Prover X D q τ) (b :
     rw [A.qry_dep i _ u fun j hj => hagree j (lt_trans (Fin.lt_def.mp hj) hi')]
   · rw [if_neg hb, if_neg hb]
 
-/-- At most `2τ + 1` targets: the root and two children of each query before the commitment. -/
 theorem card_targetsAt_le {q τ : ℕ} (E : Enc X D W) (A : Prover X D q τ) (b : Fin q) (u : Fin q → D) :
     (targetsAt E A b u).card ≤ 2 * τ + 1 := by
   unfold targetsAt
@@ -284,7 +246,6 @@ theorem card_targetsAt_le {q τ : ℕ} (E : Enc X D W) (A : Prover X D q τ) (b 
       _ ≤ 2 * τ + 1 := by rw [Finset.sum_const, smul_eq_mul]; omega
   · simp
 
-/-- An answer after the commitment hitting a target: on at most a `q (2τ + 1) / |D|` share of the streams. -/
 theorem card_hits_le {q τ : ℕ} (E : Enc X D W) (A : Prover X D q τ) :
     (hits E A).card * Fintype.card D ≤ q * (2 * τ + 1) * Fintype.card (Fin q → D) := by
   calc (hits E A).card * Fintype.card D
@@ -299,7 +260,6 @@ theorem card_hits_le {q τ : ℕ} (E : Enc X D W) (A : Prover X D q τ) :
         simp only [Finset.sum_const, Finset.card_univ, Fintype.card_fin, smul_eq_mul]; ring
 
 open Classical in
-/-- Every stream on which extraction fails repeats an answer or hits a target (Lemma 1 at the prover's log). -/
 theorem fails_sub [Inhabited D] {q τ : ℕ} (E : Enc X D W) (A : Prover X D q τ) :
     (Finset.univ.filter fun u => ExtractFails E A u) ⊆
       (Finset.univ.biUnion fun t => repeats q t) ∪ hits E A := by
@@ -345,8 +305,6 @@ theorem fails_sub [Inhabited D] {q τ : ℕ} (E : Enc X D W) (A : Prover X D q �
       · simp [hc, hlr.2]
 
 open Classical in
-/-- **`extract_of_ro`**: over the uniform answer streams, extraction fails on at most a `(q² + q (2τ + 1)) / |D|`
-share. -/
 theorem extract_of_ro [Inhabited D] {q τ : ℕ} (E : Enc X D W) (A : Prover X D q τ) :
     (Finset.univ.filter fun u => ExtractFails E A u).card * Fintype.card D ≤
       (q * q + q * (2 * τ + 1)) * Fintype.card (Fin q → D) := by
@@ -362,10 +320,6 @@ theorem extract_of_ro [Inhabited D] {q τ : ℕ} (E : Enc X D W) (A : Prover X D
     _ = (q * q + q * (2 * τ + 1)) * Fintype.card (Fin q → D) := (add_mul _ _ _).symm
 
 open Classical in
-/-- **`extract_of_ro_roots`, the `R`-root form**: `R` roots over one answer stream, root `w` sent after the first
-`τ w` answers (`A w` is the prover with that root; in a period the `A w` share their queries). Extraction fails at some
-root, or two answers repeat, on at most a `(q² + ∑_w q (2 τ_w + 1)) / |D|` share of the streams: the repeated-answer
-event is one for all the roots, and each root adds its own targets. -/
 theorem extract_of_ro_roots [Inhabited D] {q R : ℕ} {τ : Fin R → ℕ} (E : Enc X D W)
     (A : ∀ w, Prover X D q (τ w)) :
     (Finset.univ.filter fun u => (∃ w, ExtractFails E (A w) u) ∨ ¬ Function.Injective u).card * Fintype.card D ≤
@@ -394,16 +348,12 @@ theorem extract_of_ro_roots [Inhabited D] {q R : ℕ} {τ : Fin R → ℕ} (E : 
 
 end RandomOracle
 
-/-! ### Lazy sampling: from a uniform oracle `X → D` to the uniform answer stream -/
-
 section LazySampling
 
-/-- The oracle's answers to the querier, iterated `n` times from `default`. -/
 def iterAns [Inhabited D] {q : ℕ} (qry : Fin q → (Fin q → D) → X) (h : X → D) : ℕ → Fin q → D
   | 0 => fun _ => default
   | n + 1 => fun i => h (qry i (iterAns qry h n))
 
-/-- Iterating once more changes none of the first `n` answers, as query `j` reads only the answers before it. -/
 theorem iterAns_succ [Inhabited D] {q : ℕ} (qry : Fin q → (Fin q → D) → X)
     (hdep : ∀ i u u', (∀ j : Fin q, j < i → u j = u' j) → qry i u = qry i u') (h : X → D) :
     ∀ n (j : Fin q), (j : ℕ) < n → iterAns qry h (n + 1) j = iterAns qry h n j := by
@@ -415,14 +365,12 @@ theorem iterAns_succ [Inhabited D] {q : ℕ} (qry : Fin q → (Fin q → D) → 
     show h (qry j (iterAns qry h (n + 1))) = h (qry j (iterAns qry h n))
     rw [hdep j (iterAns qry h (n + 1)) (iterAns qry h n) fun l hl => ih l (by rw [Fin.lt_def] at hl; omega)]
 
-/-- **Every oracle gives an adaptive querier an answer stream.** -/
 theorem exists_consistent [Inhabited D] {q : ℕ} (qry : Fin q → (Fin q → D) → X)
     (hdep : ∀ i u u', (∀ j : Fin q, j < i → u j = u' j) → qry i u = qry i u') (h : X → D) :
     ∃ u, Consistent qry h u :=
   ⟨iterAns qry h q, fun i => (iterAns_succ qry hdep h q i i.isLt).symm⟩
 
 open Classical in
-/-- `h` with its values at the points `p i` replaced by `v i`. -/
 noncomputable def overwrite {q : ℕ} (p : Fin q → X) (h : X → D) (v : Fin q → D) : X → D :=
   fun x => if hx : ∃ i, p i = x then v (Classical.choose hx) else h x
 
@@ -453,7 +401,6 @@ theorem overwrite_self {q : ℕ} {p : Fin q → X} (hp : Function.Injective p) (
 variable [Fintype D]
 
 open Classical in
-/-- The oracles that answer `u i` at `q` distinct points `p i` are a `1/|D|^q` share of all oracles. -/
 theorem card_agree [Fintype X] [DecidableEq X] {q : ℕ} {p : Fin q → X} (hp : Function.Injective p)
     (u : Fin q → D) :
     (Finset.univ.filter fun h : X → D => ∀ i, h (p i) = u i).card * Fintype.card D ^ q = Fintype.card (X → D) := by
@@ -471,8 +418,6 @@ theorem card_agree [Fintype X] [DecidableEq X] {q : ℕ} {p : Fin q → X} (hp :
   rw [← Fintype.card_congr e, Fintype.card_prod, Fintype.card_subtype, Fintype.card_fun, Fintype.card_fin]
 
 open Classical in
-/-- **Lazy sampling.** Over a uniform oracle `h : X → D`, a querier with adaptive, distinct queries sees each answer
-stream on a `1/|D|^q` share of the oracles, so it sees a stream in `S` on at most an `|S|/|D|^q` share. -/
 theorem card_consistent_le [Fintype X] [DecidableEq X] {q : ℕ} (qry : Fin q → (Fin q → D) → X)
     (hfresh : ∀ u (i j : Fin q), j < i → qry i u ≠ qry j u) (S : Finset (Fin q → D)) :
     (Finset.univ.filter fun h : X → D => ∃ u ∈ S, Consistent qry h u).card * Fintype.card D ^ q ≤
@@ -497,9 +442,6 @@ theorem card_consistent_le [Fintype X] [DecidableEq X] {q : ℕ} (qry : Fin q �
     _ = S.card * Fintype.card (X → D) := by rw [Finset.sum_const, smul_eq_mul]
 
 open Classical in
-/-- **`extract_of_ro_roots` over a uniform oracle.** `R` roots over one querier `qry` (adaptive, distinct queries),
-root `w` sent after the first `τ w` answers: the oracles `h : X → D` on whose answer stream extraction fails at some
-root, or two answers repeat, are at most a `(q² + ∑_w q (2 τ_w + 1)) / |D|` share of all oracles. -/
 theorem card_fails_oracle_le [DecidableEq D] [Fintype X] [DecidableEq X] [Inhabited D] {q R : ℕ} {τ : Fin R → ℕ}
     (E : Enc X D W) (qry : Fin q → (Fin q → D) → X) (hfresh : ∀ u (i j : Fin q), j < i → qry i u ≠ qry j u)
     (A : ∀ w, Prover X D q (τ w)) :
@@ -533,7 +475,6 @@ theorem card_fails_oracle_le [DecidableEq D] [Fintype X] [DecidableEq X] [Inhabi
 
 end LazySampling
 
-/-- An opening that verifies under `h` verifies under every `h'` that agrees with `h` on the points it hashes. -/
 theorem opens_congr {h h' : X → D} (E : Enc X D W) :
     ∀ {d : D} {p : List (Bool × D × D)} {w : W}, (∀ y ∈ pts E p w, h y = h' y) → Opens h E d p w → Opens h' E d p w
   | d, [], w, hag, hO => by

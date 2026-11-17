@@ -18,13 +18,10 @@ theorem chainP_hopper (G : Nat) : chainP hopperE4m3K32 G = chain G := rfl
 
 theorem ctChainP_hopper (G : Nat) : @ctChainP m n k hopperE4m3K32 G = @ctChain m n k G := rfl
 
-/-- Π's chain (`G = 4`) is the chain twin at `hopperE4m3K32`. -/
 theorem chainP_hopper_four : chainP hopperE4m3K32 4 = chain 4 := rfl
 
-/-- Π's `C̃` (`G = 4`) is the chain twin's at `hopperE4m3K32`. -/
 theorem ctChainP_hopper_four : @ctChainP m n k hopperE4m3K32 4 = @ctChain m n k 4 := rfl
 
-/-- The H100 record's ticket chain is Π's `C̃`. -/
 theorem chainAt_hopper : @chainAt m n k hopperE4m3K32 4 = @ctChain m n k 4 := rfl
 
 end Pouw.PearlC.Accum
@@ -60,9 +57,8 @@ theorem ctChainP_zero_eq_pure (p : Pipeline) : @ctChainP m n k p 0 = @ctPureChai
 
 theorem chainAt_zero_eq_pure (p : Pipeline) : @chainAt m n k p 0 = @ctPureChain m n k p := ctChainP_zero_eq_pure p
 
-/-! ## The words a step writes -/
+/-! Π's chain at the Hopper step, and the words a step writes. -/
 
-/-- A term as FP32 carries it: zero, or a magnitude below `2^24` at exponent `−126` or more. -/
 def NormT (t : Term) : Prop := t.mag = 0 ∨ (t.mag < 2 ^ 24 ∧ -126 ≤ t.exp)
 
 theorem bitLength_spec (a : Nat) : a < 2 ^ bitLength a := by
@@ -206,16 +202,12 @@ theorem step_lt (p : Pipeline) (acc : Nat) (a b : List Code) : p.step acc a b < 
 theorem step_ne_negZero (p : Pipeline) (acc : Nat) (a b : List Code) : p.step acc a b ≠ 0x80000000 :=
   packValue_ne_negZero _ (fold_normT p _ _ _ (fp32Value_normT acc))
 
-/-! ## `f32Word` of a word's value -/
-
 theorem word_split {w : Nat} (hw : w < 2 ^ 32) :
     w = (w >>> 31) % 2 * 2 ^ 31 + (w >>> 23) % 256 * 2 ^ 23 + w % 2 ^ 23 := by
   rw [Nat.shiftRight_eq_div_pow, Nat.shiftRight_eq_div_pow]
   norm_num at hw ⊢
   omega
 
-/-- **`f32Word` of a finite nonzero FP32 value is its word**, on the fields: sign `s`, biased exponent `e < 255`,
-mantissa `mm`. -/
 theorem f32Word_fields {s e mm : ℕ} (hs : s < 2) (he : e < 255) (hm : mm < 2 ^ 23)
     (h0 : (if e = 0 then 0 else 2 ^ 23) + mm ≠ 0) :
     f32Word ((if s = 1 then (-1 : ℚ) else 1) *
@@ -265,7 +257,6 @@ theorem finite?_exp {w : Nat} (hf : finite? w = some w) : (w >>> 23) % 256 ≠ 2
   split_ifs at hf with h
   exact h
 
-/-- **`f32Word` of a finite nonzero word's value is the word.** -/
 theorem f32Word_word {w : Nat} (hw : w < 2 ^ 32) (he : (w >>> 23) % 256 ≠ 255) {y : ℚ} (hy : wordQ w = some y)
     (h0 : y ≠ 0) : f32Word y = w := by
   rw [PeelExactProofs.wordQ_fields he] at hy
@@ -276,9 +267,6 @@ theorem f32Word_word {w : Nat} (hw : w < 2 ^ 32) (he : (w >>> 23) % 256 ≠ 255)
   rw [f32Word_fields (Nat.mod_lt _ (by norm_num)) he' (Nat.mod_lt _ (by norm_num)) hN]
   exact (word_split hw).symm
 
-/-! ## `G = 0` on words -/
-
-/-- A word as a step leaves it: below `2^32`, not `−0`, and finite. -/
 def StepWord (w : Nat) : Prop := w < 2 ^ 32 ∧ w ≠ 0x80000000 ∧ finite? w = some w
 
 theorem wordQ_zero_word {w : Nat} (hw : StepWord w) (h : wordQ w = some 0) : w = 0 := by
@@ -325,7 +313,6 @@ theorem pureWordP?_step (p : Pipeline) :
     obtain ⟨rfl, -⟩ := PeelExactProofs.finite?_eq_some hc'
     exact ⟨step_lt _ _ _ _, step_ne_negZero _ _ _ _, hc'⟩
 
-/-- **`G = 0` on words**: the chain promoted once from `+0` is the pure chain, since that promotion returns the word. -/
 theorem chainWordP?_zero (p : Pipeline) (atoms : List AtomIn) : chainWordP? p 0 atoms = pureWordP? p atoms := by
   cases atoms with
   | nil => rfl
@@ -338,7 +325,6 @@ theorem chainWordP?_zero (p : Pipeline) (atoms : List AtomIn) : chainWordP? p 0 
       simp only [Option.bind_some, promoteWord_zero hw]
       rfl
 
-/-- **U at `G = 0`** is U with pure chains. -/
 theorem peelExactP_zero_eq_pure (p : Pipeline) : @peelExactP m n k p 0 = @peelExactPureP m n k p := by
   funext Aq Bq FA FB beA beB i j
   unfold peelExactP peelExactPureP

@@ -8,22 +8,7 @@ import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Dimension.ForestProofs
 import Proofs.Pouw.Dimension.PipeProofs
 
-/-!
-# M4090 and the embedding theorem: proofs
-
-* **One translation, two targets.** `tr fpSem hi` maps an `M4090` program instruction by instruction: `mma outs p`
-  to `len(outs)` instructions at 16, a quadratic `fp32` to one at 8 and any other `fp32` to one at `hi`, `int`, `dd`
-  and `subword` to one at 16, and `move`, `presalt` and `operand` to nothing. `GOK C` is a pipe whose priced
-  instructions satisfy `C`; `OpenOK 16 8` and `FpOK fpSem` are instances (`openOK_iff`, `fpOK_iff`).
-* **The invariant** (`tr_spec`): every register is in `V₀` or an earlier value of the translation. A `QuadStep` over
-  the registers is then one over the translation's values (`quadStep_transfer`: a multiple of a `V₀` value is in `V₀`),
-  and an `fp32` value is an `FpStep` over them (`fpVal_step`).
-* **The count** (`perWordM4090`): a checked word is not in `V₀`, so it is a slot of the translation, and `theorem1Open`
-  pays 16 per word.
-* **The range gap** (`a1fpOnRangeGap`): a checked word that takes a value `fpSem` never outputs
-  cannot be an FP32 step, so each is a distinct instruction at 16 (`count16`); `perWordM4090Gap` composes it with
-  `embedFp`.
--/
+/-! M4090's embedding theorem and its per-word cost, with and without a range gap. -/
 
 @[expose] public section
 
@@ -33,8 +18,6 @@ open Finset Pouw.NCP Pouw.NCP.Relation Pouw.Dimension Pouw.Dimension.Assumptions
   Pouw.Dimension.Forest
 
 variable {N m n k : ℕ}
-
-/-! ## Registers -/
 
 theorem getD_mem_or {G : Type} (Rs : List (G → ℚ)) (i : ℕ) : Rs.getD i 0 ∈ Rs ∨ Rs.getD i 0 = 0 := by
   by_cases h : i < Rs.length
@@ -50,8 +33,6 @@ theorem getD_inv {Rs Vs : List (Noise N m n k → ℚ)} (h : ∀ r ∈ Rs, r ∈
   · exact h _ hi
   · rw [hi]
     exact Or.inl (Submodule.zero_mem _)
-
-/-! ## Transfer of steps from registers to values -/
 
 theorem pipeOpnd_transfer {Rs Vs : List (Noise N m n k → ℚ)} (h : ∀ r ∈ Rs, r ∈ V0 N m n k ∨ r ∈ Vs)
     {x : Noise N m n k → ℚ} (hx : PipeOpnd Rs x) : PipeOpnd Vs x := by
@@ -73,9 +54,6 @@ theorem fpVal_step (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) {Rs Vs : List (
     (h : ∀ r ∈ Rs, r ∈ V0 N m n k ∨ r ∈ Vs) (κ i j l : ℕ) : FpStep fpSem Vs (fpVal fpSem κ i j l Rs) :=
   ⟨κ, Rs.getD i 0, Rs.getD j 0, Rs.getD l 0, getD_inv h i, getD_inv h j, getD_inv h l, rfl⟩
 
-/-! ## A pipe with an arbitrary admission rule -/
-
-/-- A pipe whose priced instructions satisfy `C` (given the earlier values), with no free instruction. -/
 def GOK {G : Type} (C : List (G → ℚ) → ℕ → (G → ℚ) → Prop) : List (G → ℚ) → List (Instr G) → Prop
   | _, [] => True
   | _, .free _ _ :: _ => False
@@ -154,10 +132,7 @@ theorem mem_slots_of_vals {G : Type} {P : List (Instr G)} (hP : ∀ c w, Instr.f
 theorem cost_append {G : Type} (P Q : List (Instr G)) : cost (P ++ Q) = cost P + cost Q := by
   simp [cost]
 
-/-! ## The translation -/
-
 open Classical in
-/-- One instruction's translation; a non-quadratic FP32 instruction is priced `hi`. -/
 noncomputable def M4090Instr.tr (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (hi : ℕ) :
     M4090Instr (Noise N m n k) → List (Noise N m n k → ℚ) → List (Instr (Noise N m n k))
   | .mma outs _, _ => outs.map (Instr.priced 16)
@@ -170,7 +145,6 @@ noncomputable def M4090Instr.tr (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (h
   | .presalt _, _ => []
   | .operand _, _ => []
 
-/-- A program's translation. -/
 noncomputable def tr (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (hi : ℕ) :
     List (M4090Instr (Noise N m n k)) → List (Noise N m n k → ℚ) → List (Instr (Noise N m n k))
   | [], _ => []
@@ -304,9 +278,6 @@ theorem embed_gen (L : List (Noise N m n k → ℚ)) (P : List (M4090Instr (Nois
 
 end Spec
 
-/-! ## The guarantees -/
-
-/-- **The embedding theorem.** -/
 theorem embedM4090 : EmbedM4090 := by
   intro N m n k fpSem L P hL hwf
   obtain ⟨h1, h2, h3⟩ := embed_gen fpSem 16 (fun Vs p f => 16 ≤ p ∨ (8 ≤ p ∧ QuadStep Vs f))
@@ -317,7 +288,6 @@ theorem embedM4090 : EmbedM4090 := by
   rw [e] at h3
   exact h3
 
-/-- **The exact embedding into the FP32 pipe.** -/
 theorem embedFp : EmbedFp := by
   intro N m n k fpSem L P hL hwf
   obtain ⟨h1, h2, h3⟩ := embed_gen fpSem 8 (fun Vs p f => 16 ≤ p ∨ (8 ≤ p ∧ FpStep fpSem Vs f))
@@ -332,7 +302,6 @@ theorem word_slot {k m n N : ℕ} {R : Mat} (A : (Fin k → Fin n → Fin 64) �
     word k m n N R A B x.1 x.2 ∈ slots P L :=
   h.resolve_left (pipe_word_nmem A B hind hU hx)
 
-/-- **The per-word cost in `M4090`, less the non-quadratic FP32 instructions.** -/
 theorem perWordM4090 : PerWordM4090 := by
   intro k m n N R A B U fpSem L P hind hMR hU hL hwf S hS hSw
   obtain ⟨P', hP', hreg, hcost⟩ := embedM4090 N m n k fpSem L P hL hwf
@@ -344,9 +313,6 @@ theorem perWordM4090 : PerWordM4090 := by
   rw [hmin] at h
   omega
 
-/-! ## The converse: the FP32 pipe inside `M4090` -/
-
-/-- **`A1_fp` at `γ = 1/2` for every FP32 semantics.** -/
 theorem a1fpHalf : A1fpHalf := by
   intro fpSem k m n N R A B U hind hMR hU L P hL hP S hS hSw
   classical
@@ -380,7 +346,6 @@ theorem gok_mono {G : Type} (C C' : List (G → ℚ) → ℕ → (G → ℚ) →
     | free c w => exact hP.elim
     | priced p f => exact ⟨h _ _ _ hP.1, ih _ hP.2⟩
 
-/-- An FADD step `x + y` is a `QuadStep`: `1·x + y`. -/
 theorem fadd_quad {Vs : List (Noise N m n k → ℚ)} {f : Noise N m n k → ℚ} (h : FpStep faddSem Vs f) :
     QuadStep Vs f := by
   obtain ⟨κ, x, y, z, hx, hy, -, rfl⟩ := h
@@ -390,7 +355,6 @@ theorem fadd_quad {Vs : List (Noise N m n k → ℚ)} {f : Noise N m n k → ℚ
   funext ω
   simp [faddSem]
 
-/-- **`A1_fp` at `γ = 0` for the FADD-only semantics.** -/
 theorem a1fpFadd : A1fpFadd := by
   intro k m n N R A B U hind hMR hU L P hL hP S hS hSw
   have hP' : OpenQuadPipe 16 8 P := (openOK_iff P []).2
@@ -404,9 +368,6 @@ theorem a1fpFadd : A1fpFadd := by
   rw [sub_zero, one_mul]
   exact h'
 
-/-! ## The range gap -/
-
-/-- **`CanonicalNaN` is satisfiable.** -/
 theorem canonicalNaNSat : CanonicalNaNSat := by
   intro fpSem κ a b c h
   unfold canonNaN at h
@@ -431,8 +392,6 @@ theorem gok_mem {G : Type} (C : List (G → ℚ) → ℕ → (G → ℚ) → Pro
       · exact ih _ hP.2 p f h
 
 open Classical in
-/-- If every `w ∈ W` is the value of a priced instruction of `P`, and every priced instruction whose value is in `W`
-costs at least 16, then `16·|W| ≤ cost P`. -/
 theorem count16 {G : Type} : ∀ (P : List (Instr G)) (W : Finset (G → ℚ)),
     (∀ w ∈ W, ∃ p, Instr.priced p w ∈ P) → (∀ p f, Instr.priced p f ∈ P → f ∈ W → 16 ≤ p) →
     16 * W.card ≤ cost P := by
@@ -483,7 +442,6 @@ theorem count16 {G : Type} : ∀ (P : List (Instr G)) (W : Finset (G → ℚ)),
         simp only [cost, List.map_cons, List.sum_cons] at h ⊢
         omega
 
-/-- **`A1_fp` at `γ = 0` from a range gap** (`a1fpOn_of_rangeGap`). -/
 theorem a1fpOnRangeGap : A1fpOnRangeGap := by
   intro fpSem k m n N R A B U hind hU hgap L P hL hP S hS hSw
   classical
@@ -519,7 +477,6 @@ theorem a1fpOnRangeGap : A1fpOnRangeGap := by
   rw [sub_zero, one_mul]
   exact h'
 
-/-- **The per-word cost of every `M4090` program from a range gap.** -/
 theorem perWordM4090Gap : PerWordM4090Gap := by
   intro fpSem k m n N R A B U L P hind hU hL hwf hgap S hS hSw
   obtain ⟨P', hP', hreg, hcost⟩ := embedFp N m n k fpSem L P hL hwf

@@ -8,18 +8,7 @@ import Proofs.Pouw.PearlC.KernelWrefGap
 import Proofs.Pouw.PearlC.TTOutW1
 public import Proofs.Pouw.PearlC.Records
 
-/-!
-# v1 under rev1 at a stricter cap, FP32 at the issue-bound add (FP8 security's file)
-
-The FADD-8.00 price twin of v1's restatement at the cap 1/1,000 (`DeviceInertBoundRev1Gap`, at the in-loop FP32 add 8.376).
-* **The gap at v1's record with FP32 at 8.00 at any cap `ρ < 1`**: `DeviceSm120KernelGap`'s v1 under rev1 at
-  `devSm120v1 Prices.sm120`, against `W_ref` with the honest cast at 8.72 (`wrefDevRev1K` at `c = 8.72 − 8`), at
-  `g = 1 − (1 − ρ)·221844/222443` at 8192³ and `1 − (1 − ρ)·146300/146681` at 16384³, per unit and per audit tile. At
-  `ρ = 1/400` these are that file's `115361/22244300` (0.51861%) and `2987/586724` (0.50910%).
-* **At the cap 1/1,000** (`tt-out/pearl-c-sm120-rev1-inert_share1000` and its tile twin): `205211/55610750` (0.36901%) at
-  8192³ and `5273/1466810` (0.35949%) at 16384³, per unit and per audit tile. The in-loop twins are larger (0.36949%,
-  0.35973%), so the price-twin ledger publishes those.
--/
+/-! v1 under rev1 at a stricter cap, with FP32 at the issue-bound add 8.00. -/
 
 @[expose] public section
 
@@ -62,10 +51,6 @@ theorem wrefDevRev1K_sm120v1Cast8p72_16384_nonneg :
     show (devSm120v1 Prices.sm120).prices = Prices.sm120 from rfl]
   norm_num [Prices.sm120, Params.pi, sh16384]
 
-/-! ## v1 under rev1 at a cap `ρ < 1` -/
-
-/-- **v1 under rev1 at a cap `ρ < 1`, 8192³**, FP32 at 8.00, the honest cast at 8.72:
-`g = 1 − (1 − ρ)·221844/222443`. -/
 theorem pearlCGapSm120v1Cast8p72Rev1InertShare_8192 (ρ : ℚ) (hρ : ρ < 1)
     (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120) sem ρ) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem ρ (218 / 25 - 8))
@@ -79,8 +64,6 @@ theorem pearlCGapSm120v1Cast8p72Rev1InertShare_8192 (ρ : ℚ) (hρ : ρ < 1)
   · field_simp
     ring
 
-/-- **v1 under rev1 per audit tile at a cap `ρ < 1`, 8192³**, FP32 at 8.00, the honest cast at 8.72:
-`g = 1 − (1 − ρ)·221844/222443`. -/
 theorem pearlCSampledSm120v1Cast8p72Rev1InertShare_8192 (ρ : ℚ) (hρ : ρ < 1)
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120) sem ρ) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem ρ (218 / 25 - 8))
@@ -95,8 +78,6 @@ theorem pearlCSampledSm120v1Cast8p72Rev1InertShare_8192 (ρ : ℚ) (hρ : ρ < 1
   · field_simp
     ring
 
-/-- **v1 under rev1 at a cap `ρ < 1`, 16384³**, FP32 at 8.00, the honest cast at 8.72:
-`g = 1 − (1 − ρ)·146300/146681`. -/
 theorem pearlCGapSm120v1Cast8p72Rev1InertShare_16384 (ρ : ℚ) (hρ : ρ < 1)
     (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120) sem ρ) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem ρ (218 / 25 - 8))
@@ -110,8 +91,6 @@ theorem pearlCGapSm120v1Cast8p72Rev1InertShare_16384 (ρ : ℚ) (hρ : ρ < 1)
   · field_simp
     ring
 
-/-- **v1 under rev1 per audit tile at a cap `ρ < 1`, 16384³**, FP32 at 8.00, the honest cast at 8.72:
-`g = 1 − (1 − ρ)·146300/146681`. -/
 theorem pearlCSampledSm120v1Cast8p72Rev1InertShare_16384 (ρ : ℚ) (hρ : ρ < 1)
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120) sem ρ) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem ρ (218 / 25 - 8))
@@ -126,10 +105,6 @@ theorem pearlCSampledSm120v1Cast8p72Rev1InertShare_16384 (ρ : ℚ) (hρ : ρ < 
   · field_simp
     ring
 
-/-! ## v1 under rev1 at the cap 1/1,000 -/
-
-/-- **v1 under rev1 at the cap 1/1,000, 8192³**, FP32 at 8.00, the honest cast at 8.72:
-`g = 205211/55610750` (0.36901%). -/
 theorem pearlCGapSm120v1Cast8p72Rev1InertShare1000_8192
     (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 1000) (218 / 25 - 8))
@@ -138,8 +113,6 @@ theorem pearlCGapSm120v1Cast8p72Rev1InertShare1000_8192
   rw [show (205211 / 55610750 : ℚ) = 1 - (1 - 1 / 1000) * (221844 / 222443) by norm_num]
   exact pearlCGapSm120v1Cast8p72Rev1InertShare_8192 CM sem (1 / 1000) (by norm_num) hTT
 
-/-- **v1 under rev1 per audit tile at the cap 1/1,000, 8192³**, FP32 at 8.00, the honest cast at 8.72:
-`g = 205211/55610750` (0.36901%). -/
 theorem pearlCSampledSm120v1Cast8p72Rev1InertShare1000_8192
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 1000) (218 / 25 - 8))
@@ -149,8 +122,6 @@ theorem pearlCSampledSm120v1Cast8p72Rev1InertShare1000_8192
   rw [show (205211 / 55610750 : ℚ) = 1 - (1 - 1 / 1000) * (221844 / 222443) by norm_num]
   exact pearlCSampledSm120v1Cast8p72Rev1InertShare_8192 CM sem (1 / 1000) (by norm_num) hTT
 
-/-- **v1 under rev1 at the cap 1/1,000, 16384³**, FP32 at 8.00, the honest cast at 8.72:
-`g = 5273/1466810` (0.35949%). -/
 theorem pearlCGapSm120v1Cast8p72Rev1InertShare1000_16384
     (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 1000)) :
     GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 1000) (218 / 25 - 8))
@@ -159,8 +130,6 @@ theorem pearlCGapSm120v1Cast8p72Rev1InertShare1000_16384
   rw [show (5273 / 1466810 : ℚ) = 1 - (1 - 1 / 1000) * (146300 / 146681) by norm_num]
   exact pearlCGapSm120v1Cast8p72Rev1InertShare_16384 CM sem (1 / 1000) (by norm_num) hTT
 
-/-- **v1 under rev1 per audit tile at the cap 1/1,000, 16384³**, FP32 at 8.00, the honest cast at 8.72:
-`g = 5273/1466810` (0.35949%). -/
 theorem pearlCSampledSm120v1Cast8p72Rev1InertShare1000_16384
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120) sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120) sem (1 / 1000) (218 / 25 - 8))

@@ -36,14 +36,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# `ε_jl` at `p = 7/8` with `ln(8/7) ≥ 2/15`
-
-`epsJl_le` bounds the fold luck's term `ε_jl` at `p = 7/8`, `48,000` rounds and `δ′ ≥ 2^-41` by
-`κ·41·0.6931471808/6400`, from `ln 2 < 0.6931471808` and `ln(8/7) ≥ 2/15`, the first term of
-`ln(1 + 1/a) = Σ_k 2/(2k + 1)·(2a + 1)^-(2k+1)` at `a = 7`. sm_120's measured headline (`Headline/Sm120Measured.lean`)
-and the data-centre headlines' folded branch (`HeadlineDc/Branches.lean`) read it.
--/
+/-! `ε_jl` at `p = 7/8` with `ln(8/7) ≥ 2/15`. -/
 
 @[expose] public section
 
@@ -51,8 +44,6 @@ namespace ResourceAccounting.SecurityProofs.TS.Headline
 
 open ResourceAccounting.TS ResourceAccounting.Assumptions.TS Pouw.RelativeSecurity ResourceAccounting.SecurityProofs.TS
 
-/-- `ε_jl ≤ κ·41·0.6931471808/6400` at `p = 7/8`, `48,000` rounds and `δ′ ≥ 2^-41`, from `ln 2 < 0.6931471808` and
-`ln(8/7) ≥ 2/15`, the first term of `ln(1 + 1/a) = Σ_k 2/(2k + 1)·(2a + 1)^-(2k+1)` at `a = 7`. -/
 theorem epsJl_le {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U] [Fintype F]
     [Fintype X] (Z : Model K R T L U F X) (Fl : Labelled K) (lam : R → ℝ) (hκ : 0 ≤ Z.kappa Fl lam) (S : ℕ)
     (hS : (S : ℝ) = 48000) (δ' : ℝ) (hδ' : (1 / 2 : ℝ) ^ 41 ≤ δ') :

@@ -42,37 +42,7 @@ import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.BitVec
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# An honest live-salt period meets `H1CheckedCreditMonitoringPeriod`'s premises
-
-The positive twin of `Properties.Pouw.MonitoringPeriod.H1CheckedCreditMonitoringPeriod`, as
-`ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod.Honest` is of `CircuitWorkMonitoringPeriod`: a period of `n ≥ 1` executionPhases at H1's
-instance's own numbers, whose every window the deployed check (`PouwCheck.protocol.check`) accepts at the
-parameters `Accept.h1Params`, and which meets every premise of the instance
-(`h1_meets`). The instance itself is `Properties.Pouw.MonitoringPeriod.Witnesses`', where the witnesses' statements read it.
-
-The check takes these numbers at `h1Params`: `verity/pouw/v1` accepts the loop's honest window with 128 real tiles of `N = 144`,
-all 24 sampled tiles proved, at `ε = 1/2` and `δ = 10⁻⁶`. So the `N_p = 144` and `K_d = 24` that `SampleIsCoin` and this
-witness use are the deployed check's own.
-
-* The circuit (`circuit`): 128 committed words, one a unit (H1's 128 real tiles a window), no operands, so no unit
-  writes another late (`reaches_iff`) and each real tile's late cone is its own word; one round, live. The
-  population is the grid's `N_p = 144`: tiles `128 … 143` are fillers of no words. So every real tile's share is
-  `1/128` (`shareCone_eq`) and `ρ = 8/9` meets `ρ·N_p·share ≤ 1` with equality.
-* The scheme is the ComposeMonitoringPeriod twin's (operand luck pinned, `r_B = ½`, guess `½`), so the lucks are `½ ≤ 7/8` and
-  `½ ≤ ½`.
-* The executionPhases (`executionPhases`): every window registers the loop's honest registration (`Accept.h1Reg`) and the service
-  answers it with the units of the model's sample at the window's sampling coin, ascending (`unitsOf`), so the check accepts
-  every window on every path (`accepted_all`, from `Accept.check_h1`), publishes `N = 144`, `K′ = 24` and exactly
-  those units (`sampleIsCoin`), and its registration doesn't read the coins (`RegisteredBeforeDraw`).
-* The salt is the window's round coin (`SaltIsLiveCoin` by definition), every tile is live and paid with its words
-  right, and the openings are in `Unit`, so binding holds at `δ_bind = 0`, the service's soundness at `δ_ks = 0`, and
-  the staged and flat relations are `True` (`StagedPins`).
-
-The conclusion then speaks of the whole period: its accepted prefix is all `n` executionPhases (`prefixLen_all`) and its
-credited live words are `128·n` (`checkedLive_all`), so `h1_credit` is `H1CheckedCreditMonitoringPeriod`'s bound at `128·n` live
-words, not at none.
--/
+/-! An honest live-salt period meets `H1CheckedCreditMonitoringPeriod`'s premises. -/
 
 @[expose] public section
 
@@ -82,8 +52,6 @@ open Properties.Pouw.MonitoringPeriod Properties.Pouw.MonitoringPeriod.SecurityP
 open PouwCheck (Params UnitsOk Ascending)
 open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
 open ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod
-
-/-! ## The circuit -/
 
 theorem length_dag : circuit.dag.length = 128 := List.length_replicate
 
@@ -117,7 +85,6 @@ theorem not_reads (j i : ℕ) : ¬ circuit.Reads j i := by
   rw [List.getElem?_replicate]
   split <;> simp [Honest.word]
 
-/-- **No unit writes another late**: the circuit's late cones are its units. -/
 theorem reaches_iff (u v : ℕ) : circuit.Reaches u v ↔ u = v := by
   constructor
   · intro h
@@ -150,7 +117,6 @@ theorem shareCone_nonneg (t : Fin 144) : 0 ≤ shareCone Honest.scheme circuit 1
   rw [shareCone_eq]
   split_ifs <;> norm_num
 
-/-- The real tiles' sum: tiles `0 … 127` of the 144. -/
 theorem sum_ite_lt (c : ℝ) : ∑ t : Fin 144, (if t.val < 128 then c else 0) = 128 * c := by
   have h := Fin.sum_univ_add (a := 128) (b := 16) (fun t => if t.val < 128 then c else 0)
   have h1 : ∀ i : Fin 128, (if (Fin.castAdd 16 i).val < 128 then c else 0) = c := fun i => if_pos i.isLt
@@ -180,8 +146,6 @@ theorem scope {δs : ℝ} (hδs : 0 < δs) : Scope Honest.scheme circuit δs :=
   ⟨circuit_wf, fun _ _ _ => rfl, hδs, fun _ => by norm_num [Honest.scheme, LuckForm.value],
     fun _ _ => Or.inl (Nat.zero_le _)⟩
 
-/-! ## The check accepts every window, and its sample is the coin's -/
-
 theorem ascending_of_pairwise : ∀ (l : List ℕ), l.Pairwise (· < ·) → Ascending l
   | [], _ => trivial
   | [_], _ => trivial
@@ -190,7 +154,6 @@ theorem ascending_of_pairwise : ∀ (l : List ℕ), l.Pairwise (· < ·) → Asc
 theorem draw_inj (β : Equiv.Perm (Fin 144) × Unit) : Function.Injective fun i : Fin 24 => (drawOf hK24 β i).val :=
   fun _ _ h => Fin.castLE_injective hK24 (β.1.injective (Fin.ext h))
 
-/-- **The sample's units are 24 ascending distinct units below 144.** -/
 theorem unitsOk (β : Equiv.Perm (Fin 144) × Unit) : UnitsOk (unitsOf β) 24 144 := by
   refine ⟨?_, ?_, fun u hu => ?_⟩
   · simp only [unitsOf, List.size_toArray, Finset.length_sort]
@@ -204,7 +167,6 @@ theorem unitsOk (β : Equiv.Perm (Fin 144) × Unit) : UnitsOk (unitsOf β) 24 14
     obtain ⟨i, -, rfl⟩ := hu
     exact (drawOf hK24 β i).isLt
 
-/-- **The deployed check accepts every window on every path.** -/
 theorem accepted_all (n : ℕ) (x : Paths Ω1 n) (w : Fin n) :
     Accepts prm ((executionPhases n).reg x w) ((executionPhases n).ev x w) :=
   ⟨_, _, check_h1 "" "" "" "" ByteArray.empty (unitsOf (coinAt x w).2) (unitsOk _)⟩
@@ -212,7 +174,6 @@ theorem accepted_all (n : ℕ) (x : Paths Ω1 n) (w : Fin n) :
 theorem acceptedUpTo_all (n : ℕ) (x : Paths Ω1 n) (w : Fin n) : (executionPhases n).AcceptedUpTo prm x w :=
   fun w' _ => accepted_all n x w'
 
-/-- **The check's sample is the period's sampling coin**: it publishes `N = 144`, `K′ = 24` and the sample's units. -/
 theorem sampleIsCoin (n : ℕ) : SampleIsCoin hK24 prm (executionPhases n) := by
   intro x w pub prof hc
   have he := hc.symm.trans (check_h1 "" "" "" "" ByteArray.empty (unitsOf (coinAt x w).2) (unitsOk _))
@@ -229,8 +190,6 @@ theorem prefixLen_all (n : ℕ) (x : Paths Ω1 n) : (executionPhases n).prefixLe
   classical
   unfold Executions.prefixLen
   rw [Finset.filter_true_of_mem fun w _ => acceptedUpTo_all n x w, Finset.card_univ, Fintype.card_fin]
-
-/-! ## The honest executionPhases' claims -/
 
 theorem period_every {P : (Fin 144 → Bool) → SplitStages Bool (Fin 144) 1 → Prop} (h : P (fun _ => true) stages) :
     ∀ n, (period n).EveryExecutionPhase P
@@ -249,7 +208,6 @@ theorem liveWords_true (t : Fin 144) :
   unfold liveWords
   exact if_pos rfl
 
-/-- **The accepted prefix's live words are `128·n`.** -/
 theorem checkedLive_all (n : ℕ) (x : Paths Ω1 n) :
     checkedLive Honest.scheme circuit (period n) prm (executionPhases n) x = 128 * n := by
   unfold checkedLive
@@ -270,7 +228,6 @@ theorem every_perLiveTile {P : Kind → ReceiptGame Bool 1 → ReceiptGame Bool 
   period_every (P := fun live W => PerLiveTile Honest.scheme circuit live W P)
     ⟨fun t _ _ k _ _ => h k t, fun _ => trivial⟩ n
 
-/-- **The honest period passes every prefix of its game**, at any weights and costs. -/
 theorem acceptsUpTo_period (wt : (Fin 144 → Bool) → Fin 144 → ℝ) (a b : ℝ) :
     ∀ (n j : ℕ) (x : Paths Ω1 n),
       RoundGame.acceptsUpTo (monitoringPeriodGame (tileStage circuit 144) wt a b 24 (period n)) j x
@@ -296,12 +253,6 @@ theorem sum_div_le {n : ℕ} (hn : 0 < n) (f : Fin n → Fin 144 → ℝ)
         Finset.sum_le_sum fun w _ => (Finset.sum_le_sum fun j _ => hf w j).trans_eq sum_tileWords
     _ = 128 * n := by simp [mul_comm]
 
-/-! ## Every premise -/
-
-/-- **An honest live-salt period meets every premise of `H1CheckedCreditMonitoringPeriod`**, in its order, at its numbers
-(`N_p = 144`, `K_d = 24`, one round, `ρ = 8/9`, `w_max = 1`, lucks `7/8` and `½`), any `δ_s > 0`,
-`δ_bind = δ_ks = 0` and 128 fixed and folded words a window; the deployed check accepts every window on every path,
-the accepted prefix is the whole period and its live words are `128·n`. -/
 theorem h1_meets (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
     circuit.units ≤ 144 ∧ circuit.rounds = 1 ∧ Scope Honest.scheme circuit δs ∧
     (∀ t : Fin 144, (8 / 9 : ℝ) * (144 : ℕ) * shareCone Honest.scheme circuit 144 t ≤ 1) ∧
@@ -367,8 +318,6 @@ theorem h1_meets (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
   · exact ite_words_le _ j
   · exact ite_zero_le _ j
 
-/-- **`H1CheckedCreditMonitoringPeriod`'s conclusion at the honest live-salt period**: `h1_meets` gives the instance every
-premise, so except with probability `δ_s` its fixed words are at least `(1 − ε(n))₊` of its `128·n` live words. -/
 theorem h1_credit (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
     prob (fun x => (play n).accepts x ∧ n * ((play n).run x).fixed <
       creditPrefix Honest.scheme circuit 144 ((executionPhases n).prefixLen prm x)

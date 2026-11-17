@@ -3,17 +3,7 @@ module
 public import Definitions.Pouw.Assumptions.Dimension.H100
 public import Proofs.Pouw.Dimension.EmbedProofs
 
-/-!
-# `MH100` and its per-word bound: proofs
-
-* **The translation** (`tr100`): a `wgmma` or other tensor-core instruction to one priced instruction per accumulator
-  register, at `regPrice` or `tc`; `fp32`, `int`, `fp64` and `other` to one priced instruction at their price; `move`
-  and `operand` to nothing. Under `Floor c` every priced instruction costs at least `c` (`GOK` with `c ≤ p`).
-* **The invariant** (`tr100_spec`): every register is in `V₀` or a value of the translation, as in `tr_spec`.
-* **The count** (`perWordMH100`): a target independent modulo `V₀` is not in `V₀`, so it is a slot of the
-  translation; `count_le` gives one priced instruction per target, and `hc_cost` `c` per priced instruction
-  (`perWordMH100Floor`; `perWordMH100` is `c = 32`).
--/
+/-! `MH100`'s translation into the priced model and its per-word bound. -/
 
 @[expose] public section
 
@@ -23,8 +13,6 @@ open Finset Pouw.NCP Pouw.NCP.Relation Pouw.Dimension Pouw.Dimension.Assumptions
   Pouw.Dimension.OpenPipe
 
 variable {N m n k : ℕ}
-
-/-! ## Registers and the priced model -/
 
 theorem mem_regs100_of_mem {G : Type} (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) :
     ∀ (P : List (Op100 G)) (L : List (G → ℚ)), ∀ r ∈ L, r ∈ regs100 fpSem P L := by
@@ -49,7 +37,6 @@ theorem hc_cost {G : Type} {c : ℕ} {P : List (Instr G)} (h : Hc c P) : c * nPr
       rw [Nat.mul_add, Nat.mul_one]
       omega
 
-/-- The admission rule of AlgM_c as a pipe: every instruction priced at `c` or more. -/
 abbrev Cc {G : Type} (c : ℕ) : List (G → ℚ) → ℕ → (G → ℚ) → Prop := fun _ p _ => c ≤ p
 
 theorem hc_of_gok {G : Type} {c : ℕ} {P : List (Instr G)} {Vs : List (G → ℚ)} (h : GOK (Cc c) Vs P) : Hc c P := by
@@ -80,9 +67,6 @@ theorem cost_map {G : Type} (p : ℕ) (fs : List (G → ℚ)) : cost (fs.map (In
     rw [ih, Nat.mul_succ]
     ring
 
-/-! ## The translation -/
-
-/-- One instruction's translation into the priced model. -/
 def Op100.tr {G : Type} (pr : Prices100) (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) :
     Op100 G → List (G → ℚ) → List (Instr G)
   | .wgmma s outs, _ => outs.map (Instr.priced (s.regPrice pr))
@@ -94,7 +78,6 @@ def Op100.tr {G : Type} (pr : Prices100) (fpSem : ℕ → ℚ → ℚ → ℚ �
   | .move _, _ => []
   | .operand _, _ => []
 
-/-- A program's translation. -/
 def tr100 {G : Type} (pr : Prices100) (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) :
     List (Op100 G) → List (G → ℚ) → List (Instr G)
   | [], _ => []
@@ -179,9 +162,6 @@ theorem tr100_spec : ∀ (P : List (Op100 G)) (Rs Vs : List (G → ℚ)),
 
 end Spec
 
-/-! ## The guarantees -/
-
-/-- The embedding at any floor `c`: into AlgM_c. -/
 theorem embedFloor (c : ℕ) (pr : Prices100) (hpr : Floor c pr) (G : Type) (V : Submodule ℚ (G → ℚ))
     (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (L : List (G → ℚ)) (P : List (Op100 G)) (hL : ∀ f ∈ L, f ∈ V)
     (hwf : ∀ o ∈ P, o.WF pr V) :
@@ -206,7 +186,6 @@ theorem nmem_of_indep {G : Type} {V : Submodule ℚ (G → ℚ)} {ι : Type} [Fi
   have := hind (fun j => if j = i then 1 else 0) (by simpa [ite_smul] using h) i
   simp at this
 
-/-- **The per-word cost in `MH100` at any floor.** -/
 theorem perWordMH100Floor : PerWordMH100Floor := by
   intro c pr hpr G _ V h1 fpSem ι _ t L P hind hL hwf hout
   obtain ⟨P', hP', hreg, hcost⟩ := embedFloor c pr hpr G V fpSem L P hL hwf
@@ -214,12 +193,8 @@ theorem perWordMH100Floor : PerWordMH100Floor := by
     (fun i => (hreg _ (hout i)).resolve_left (nmem_of_indep hind i))
   exact le_trans (Nat.mul_le_mul_left c hcount) (le_trans (hc_cost hP') hcost)
 
-/-- **The per-word cost in `MH100`.** -/
 theorem perWordMH100 : PerWordMH100 := fun pr hpr => perWordMH100Floor 32 pr hpr
 
-/-! ## The honest split-K schedule -/
-
-/-- The registers `splitK` appends: `R 0`, then `I τ` and `R (τ + 1)` for each step. -/
 def hist {G : Type} (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (κ : ℕ) (I : ℕ → G → ℚ) : ℕ → List (G → ℚ)
   | 0 => [0]
   | τ + 1 => hist fpSem κ I τ ++ [I τ, runWords fpSem κ I (τ + 1)]

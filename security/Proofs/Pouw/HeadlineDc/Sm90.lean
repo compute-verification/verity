@@ -4,22 +4,7 @@ public import Proofs.Pouw.HeadlineDc.Branches
 public import Definitions.Pouw.Guarantees.HeadlineDc
 public import Proofs.ResourceAccounting.Lemmas.TS
 
-/-!
-# The H200's headline at the data sheet
-
-`Sm90SheetHeadline` is `Whole.sheetDIdealFloor_whole` at DS-90 and `dither-2s-licpw-redux-p1-l32`
-(`Definitions.Pouw.HeadlineDc.Sm90`), at the data's certificate `π* = Sm90.lamStar`, DS_issue alone
-(`sm90_lamStar`), `p = 7/8`, `p₀ = ½` and `Λ = max(κ/ln(8/7), (κ + f)/ln 2)`:
-
-* the data, by `decide`: issue is ♭'s largest facet (`sm90_max`), so `B_♭` is its issue load (`sm90_bnd`); every
-  writer kind's `ω ≤ 4096` (`sm90_omega`), so each word route costs at least `1/4096` on issue and `w* ≥ 1/4096`
-  (`sm90_wStar`); each of the 56 fold routes costs at least the cheapest one's load there (`sm90_fold`,
-  `sm90_phiStar`);
-* the folded branch from those bounds (`folded_of_lower`): below `944/100000` by `decide` (`sm90_folded_q`);
-* the unfolded branch (`unfolded_of_lower`): below `944/100000` by `decide` (`sm90_unfolded_q`), and it binds;
-* FILL-OPT holds since there is no filler (`fillOpt_of_zero`), and (I7) at `7/8` is the receipt split's
-  (`luck_of_receipt_half`).
--/
+/-! The H200's headline at the data sheet. -/
 
 @[expose] public section
 
@@ -28,16 +13,12 @@ namespace ResourceAccounting.SecurityProofs.TS.HeadlineDc
 open ResourceAccounting.TS ResourceAccounting.TS.Headline ResourceAccounting.Assumptions.TS Pouw.RelativeSecurity ResourceAccounting.SecurityProofs.TS
   ResourceAccounting.SecurityProofs.TS.Headline
 
-/-- ♭'s counts on DS-90, its four lists in `labelled`'s order. -/
 def flat90 : Sparse := Sm90.flatWords ++ Sm90.flatFold ++ Sm90.flatFill ++ Sm90.flatSkip
 
-/-- `B_♭` on DS-90 as a rational: ♭'s load on issue. -/
 def B90 : ℚ := dot (sheetCoefQ Sm90.ds90 .issue) 50 flat90
 
-/-- Fold route `i`'s load on issue as a rational. -/
 def load90 (i : ℕ) : ℚ := dot (sheetCoefQ Sm90.ds90 .issue) 50 (Sm90.d2s.folds.getD i [])
 
-/-- The cheapest fold route's load on issue. -/
 def phi90 : ℚ := ((List.range 56).map load90).foldr min (load90 0)
 
 theorem sm90_max (r : SheetRow Sm90.Pipe) : dot (sheetCoefQ Sm90.ds90 r) 50 flat90 ≤ B90 := by
@@ -93,7 +74,6 @@ theorem sm90_S : ((Sm90.checks : ℕ) : ℝ) = 48000 := by
   show ((48000 : ℕ) : ℝ) = 48000
   norm_num
 
-/-- The data's certificate is DS_issue's. -/
 theorem sm90_lamStar : Sm90.lamStar = onFacet .issue := by
   funext r
   cases r with
@@ -138,8 +118,6 @@ theorem sm90_vecMin : 1 ≤ Sm90.model.vecMin .issue := by
   rw [sm90_hG]
   simp [sheetCoefQ]
 
-/-- Every word route costs at least `1/4096` on issue: a writer kind's instruction `1/ω` with `ω ≤ 4096`, a vector
-or table word `½/32` an instruction. -/
 theorem sm90_demand_issue : ∀ hd, (1 : ℝ) / 4096 ≤ Sm90.model.demand hd .issue := by
   intro h
   cases h with
@@ -165,12 +143,10 @@ theorem sm90_one : Sm90.lamStar .issue = 1 := by
   rw [sm90_lamStar]
   exact ite_eq_left rfl
 
-/-- `w* ≥ 1/4096` at π*. -/
 theorem sm90_wStar : (1 : ℝ) / 4096 ≤ Sm90.model.wStar Sm90.lamStar := by
   have h := wStar_ge Sm90.model Sm90.flat Sm90.lamStar sm90_isCert sm90_wf .issue _ sm90_demand_issue
   rwa [sm90_one, one_mul] at h
 
-/-- `φ* ≥` the cheapest fold route's load on issue. -/
 theorem sm90_phiStar : (phi90 : ℝ) ≤ Sm90.model.phiStar Sm90.lamStar := by
   refine phiStar_ge_facet Sm90.model Sm90.flat Sm90.lamStar sm90_isCert sm90_wf .issue _ fun φ => ?_
   rw [sm90_one, one_mul]
@@ -182,7 +158,6 @@ theorem sm90_fillOpt {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm90.checks (Fin 50)
     (hSplit : ∀ x, (Pl.run x).Split) : ∀ x, FillOpt Sm90.model (Pl.run x) := fun x =>
   fillOpt_of_zero Sm90.model sm90_a_nonneg (fun _ _ => rfl) rfl (Pl.run x) (hSplit x)
 
-/-- The folded branch at π*, `p = 7/8` and `δ′ ≥ 2^-41` is at least `1 − 944/100000`. -/
 theorem sm90_folded (δ' : ℝ) (hδ' : (1 / 2 : ℝ) ^ 41 ≤ δ') :
     1 - 944 / 100000 ≤ 1 - Sm90.model.epsSkip Sm90.flat Sm90.lamStar - Sm90.model.epsCert Sm90.flat Sm90.lamStar -
       Sm90.model.epsRoute Sm90.flat Sm90.lamStar - Sm90.model.epsMand Sm90.flat Sm90.lamStar -
@@ -195,7 +170,6 @@ theorem sm90_folded (δ' : ℝ) (hδ' : (1 / 2 : ℝ) ^ 41 ≤ δ') :
   rw [sm90_Nw, sm90_bnd, le_div_iff₀ hB]
   linarith
 
-/-- The unfolded branch's floor at π* is at least `1 − 944/100000`. -/
 theorem sm90_unfolded :
     1 - 944 / 100000 ≤ (Sm90.model.Nw * Sm90.model.wStar Sm90.lamStar +
       (1 - Sm90.model.muF) * Sm90.model.Nw * Sm90.model.phiStar Sm90.lamStar) /

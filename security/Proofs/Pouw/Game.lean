@@ -6,12 +6,7 @@ public import Proofs.Pouw.Theorem1
 public import Proofs.Pouw.Reduction
 public import Proofs.Pouw.Lemmas.Game
 
-/-!
-# Proofs of the game's guarantees
-
-One theorem `Pouw.SecurityProofs.G : Pouw.Guarantees.G` per guarantee, which is the theorem in `Pouw.Proofs` (`Sampling`
-and `Theorem1`) that proves the same statement under its old name.
--/
+/-! One theorem `Pouw.SecurityProofs.G : Pouw.Guarantees.G` per guarantee of the game. -/
 
 @[expose] public section
 

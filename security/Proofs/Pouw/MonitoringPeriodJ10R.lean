@@ -6,17 +6,7 @@ public import Proofs.Compose.Compose.SplitRateClosed
 public import Proofs.Pouw.RelativeSecurity
 public import Proofs.ResourceAccounting.Lemmas.Compose
 
-/-!
-# Proof of `H1J10RCheckedCreditMonitoringPeriod`
-
-`ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod` at `tileRun`, as `Proofs.Pouw.MonitoringPeriod` proves
-`CheckedCreditMonitoringPeriod`: a window is credited exactly when it and every earlier one are accepted by `Credit.window`
-(`credited_iff`, at `k s_T > 0`), so the run's accepted prefix and live words are `Credit.window`'s (`prefixLen_eq`,
-`creditedLive_eq`), and `JointSound` at `tileLayer` follows from `TileSampleIsCoin` and `TileServiceSound` by
-monotonicity (`jointSound_tile`). The rate is `SplitRateClosed`'s at H1's lucks (`rate_j10r`: its first term,
-`8(1 + Kρ)/(ρK)`), and `Pins` comes from the window's salt being its live coin (`pins_j10r`): the relation is
-`j10r_reference`'s at the unit's place, one description.
--/
+/-! Proof of `H1J10RCheckedCreditMonitoringPeriod`. -/
 
 @[expose] public section
 
@@ -25,8 +15,6 @@ namespace Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs
 open Properties.Pouw.MonitoringPeriodJ10R
 open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
 
-/-- **A window is credited under `Credit.window` exactly when it and every earlier one are accepted**, at
-`k s_T > 0`. -/
 theorem credited_iff {C Ξ V : Type} {m nB mB n : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
     (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB) (unitOf : Fin nB → ℕ) (hKd : 0 < k sT)
     (ws : CreditExecutionPhases (Coin C Ξ m σ sT) n) (opened : Paths (Coin C Ξ m σ sT) n → Fin n → ℕ → ℕ → V)
@@ -35,7 +23,6 @@ theorem credited_iff {C Ξ V : Type} {m nB mB n : ℕ} (σ : Fin nB → Fin mB) 
     (tileRun σ k hk sT unitOf ws opened rel right).Credited x w ↔ ws.AcceptedUpTo x w :=
   ⟨fun h w' hw => h w' hw ⟨0, hKd⟩, fun h w' hw _ => h w' hw⟩
 
-/-- **The run's accepted prefix is `Credit.window`'s.** -/
 theorem prefixLen_eq {C Ξ V : Type} {m nB mB n : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
     (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB) (unitOf : Fin nB → ℕ) (hKd : 0 < k sT)
     (ws : CreditExecutionPhases (Coin C Ξ m σ sT) n) (opened : Paths (Coin C Ξ m σ sT) n → Fin n → ℕ → ℕ → V)
@@ -47,7 +34,6 @@ theorem prefixLen_eq {C Ξ V : Type} {m nB mB n : ℕ} (σ : Fin nB → Fin mB) 
   congr 1
   exact Finset.filter_congr fun w _ => credited_iff σ k hk sT unitOf hKd ws opened rel right x w
 
-/-- **The run's credited live words are `Credit.window`'s accepted prefix's.** -/
 theorem creditedLive_eq {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : Declared ι) {nB mB n : ℕ} (σ : Fin nB → Fin mB)
     (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB) (unitOf : Fin nB → ℕ) (hKd : 0 < k sT)
     (ws : CreditExecutionPhases (Coin C Ξ Cd.rounds σ sT) n)
@@ -61,9 +47,6 @@ theorem creditedLive_eq {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : Declared ι) 
   exact Finset.sum_congr rfl fun w _ =>
     if_congr (credited_iff σ k hk sT unitOf hKd ws opened rel right x w) rfl rfl
 
-/-- **Joint soundness at `Credit.window`'s run from the service's**: in each window, an accepted window with a sampled
-tile whose opening fails its relation is one `Credit.window` credits with that tile's window unit among the units its
-sample demanded (`TileSampleIsCoin`), whose opening fails its relation, which `TileServiceSound` bounds at `δ_ks`. -/
 theorem jointSound_tile {ι C Ξ V : Type} [Fintype C] [Fintype Ξ] (Cd : Declared ι) {nB mB n : ℕ}
     (hr : 0 < Cd.rounds) (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB)
     (unitOf : Fin nB → ℕ) (ws : CreditExecutionPhases (Coin C Ξ Cd.rounds σ sT) n)
@@ -77,15 +60,12 @@ theorem jointSound_tile {ι C Ξ V : Type} [Fintype C] [Fintype Ξ] (Cd : Declar
   obtain ⟨d, hd, hmem⟩ := hD x w hacc
   exact ⟨hacc, d, hd, drawOf (hk sT) (coinAt x w).2 i, (hmem _).2 ⟨i, rfl⟩, hrel⟩
 
-/-- `j10rRate` is positive at `K ≥ 1` and `ρ > 0`. -/
 theorem j10rRate_pos {K : ℕ} {ρ : ℝ} (hK : 1 ≤ K) (hρ : 0 < ρ) : 0 < j10rRate K ρ := by
   have hK0 : (0 : ℝ) < K := by exact_mod_cast hK
   unfold j10rRate
   have := mul_pos hK0 hρ
   exact div_pos (by nlinarith) (mul_pos hρ hK0)
 
-/-- `SplitRateClosed` at H1's lucks, `w_max = 1`, `a = b = 1`, any `K ≥ 1` and `0 < ρ ≤ 1`: its first term,
-`j10rRate K ρ = 8(1 + Kρ)/(ρK)`, is the larger. -/
 theorem rate_j10r {K : ℕ} {ρ : ℝ} (hK : 1 ≤ K) (hρ : 0 < ρ) (hρ1 : ρ ≤ 1) :
     SplitRate K ρ (7 / 8) (1 / 2) 1 1 1 (j10rRate K ρ) := by
   have h := ResourceAccounting.SecurityProofs.Compose.Rates.splitRateClosed K ρ (7 / 8) (1 / 2) 1 1 1 hK hρ zero_le_one
@@ -104,9 +84,6 @@ theorem rate_j10r {K : ℕ} {ρ : ℝ} (hK : 1 ≤ K) (hρ : 0 < ρ) (hρ1 : ρ 
   unfold j10rRate
   ring
 
-/-- **J10-R's unit relation pins its tile's rightness**: the relation, `j10r_reference`'s at the unit's place under the
-window's salt, is its rightness, the same at the window's round-0 coin, because the salt is that coin
-(`SaltIsLiveCoin`). -/
 theorem pins_j10r {C B V : Type} {m n Np : ℕ} (hm : 0 < m) {salt : Paths (Paths C m × B) n → Fin n → ByteArray}
     {enc : C → ByteArray} {place : Paths (Paths C m × B) n → Fin n → Fin Np → Place}
     {tile : Noise → List (List ℕ) → Fin Np → (ℕ → V) → Prop}
@@ -156,8 +133,6 @@ private theorem find_getD_nDigitsFrom (ks : ℕ) :
       simp only [hb, if_neg h]
       rw [← ih (m + 1), show m + (f + 1) = m + 1 + f by omega]
 
-/-- The verifier's digit count is H1's (`J10R.nDigits`): both search `m = 1, …, KS + 1` for the same least `m`, and
-`m = KS + 1` always qualifies, so their different fallbacks are never read. -/
 theorem nDigits_eq (k : ℕ) : PouwCheck.Credit.nDigits k = J10R.nDigits k := by
   unfold PouwCheck.Credit.nDigits J10R.nDigits
   dsimp only
@@ -178,8 +153,6 @@ theorem nDigits_eq (k : ℕ) : PouwCheck.Credit.nDigits k = J10R.nDigits k := by
     · rw [Nat.mul_comm 127]
       exact Nat.mul_le_mul hk le_rfl
 
-/-- **The verifier's blocks are J10-R's** (witness W1): `Credit.j10rBlocks`, which the statement's `Place.blocks`
-reads, is `J10R.unitBlocks` at every slot, contraction, tile and place. -/
 theorem j10rBlocks_eq (M k R C I J : ℕ) :
     PouwCheck.Credit.j10rBlocks M k (R, C) I J = J10R.unitBlocks M k R C I J := by
   simp only [PouwCheck.Credit.j10rBlocks, J10R.unitBlocks, J10R.NoiseLayout.row, J10R.NoiseLayout.col, J10R.rb, J10R.cb,

@@ -43,25 +43,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Pouw.Headline.Whole
 import Proofs.Pouw.TS
 
-/-!
-# The data-centre headlines' shared steps
-
-`Whole.headline_of_branches` takes the folded branch's and the unfolded branch's floors at the proof's certificate.
-On a model with `μ_f = μ_x = 0` both floors only grow with `w*` and `φ*`, so a lower bound on each is enough:
-
-* `sheetCoefQ`, `sheet_aQ`, `sheetCoefQ_nonneg`: `sheetCoef` and its two facts for a `SheetDataQ` sheet (rational pipe
-  widths, the DS sheets' uniform datapath);
-* `price_ge_facet`, `price_ge_pair`, `price_ge_triple`: a certificate prices a demand `≥ 0` at least at one facet's
-  term, or two's, or three's;
-* `wStar_ge`, `wStar_ge_triple`: `λ_{r₀}·w₀ ≤ w*` when every word route's demand on `r₀` is at least `w₀`, and
-  `w₀ ≤ w*` when every word route's price on three facets is (DC-90-ri's certificate);
-* `phiStar_ge_facet`, `phiStar_ge_pair`, `phiStar_ge_triple`: `φ₀ ≤ φ*` when every fold route's price on one facet,
-  two (DS-100's certificate) or three is at least `φ₀`;
-* `folded_of_lower_at`, `folded_of_lower`: the folded branch's floor at `p = 7/8` is at least
-  `(N_w w (1 − t) + N_w φ)/B_♭` for any `t` from `41·0.6931471808/6400` (`ln(8/7) ≥ 2/15`) to 1, from `identity` at
-  `d̄ = ā = 0`, `χ* ≥ 0` and `Headline.epsJl_le`; `folded_of_lower` is `t = 41·0.6931471808/6000` (`ln(8/7) ≥ 1/8`);
-* `unfolded_of_lower`: the unfolded branch's floor is at least `(N_w w + N_w φ)/B_♭ · (1 − 41/48000)`.
--/
+/-! The data-centre headlines' shared steps. -/
 
 @[expose] public section
 
@@ -70,7 +52,6 @@ namespace ResourceAccounting.SecurityProofs.TS.HeadlineDc
 open ResourceAccounting.TS ResourceAccounting.TS.Headline ResourceAccounting.Assumptions.TS ResourceAccounting.SecurityProofs.TS
   ResourceAccounting.SecurityProofs.TS.Headline
 
-/-- A `SheetDataQ` sheet's rows as rationals, by class index: `Sheet.machine`'s, at `SheetDataQ.sheet`'s lists. -/
 def sheetCoefQ {P : Type} [DecidableEq P] (D : SheetDataQ P) : SheetRow P → ℕ → ℚ
   | .issue, _ => 1
   | .tensor, i => (D.macs.getD i 0 : ℚ) / ((D.peak.getD i 0 : ℚ) / 4)
@@ -118,7 +99,6 @@ theorem price_ge_triple {R : Type} [Fintype R] [DecidableEq R] (lam d : R → �
   rw [← e]
   exact Finset.sum_le_univ_sum_of_nonneg fun r => mul_nonneg (hlam r) (hd r)
 
-/-- `w* ≥ λ_{r₀}·w₀` when every word route's demand on facet `r₀` is at least `w₀`. -/
 theorem wStar_ge {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U] [Fintype F]
     [Fintype X] [Nonempty F] [Nonempty X] (Z : Model K R T L U F X) (Fl : Labelled K) (lam : R → ℝ)
     (h : IsCert lam) (hZ : Z.Wf Fl) (r0 : R) (w0 : ℝ) (hw : ∀ hd, w0 ≤ Z.demand hd r0) :
@@ -129,7 +109,6 @@ theorem wStar_ge {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fin
   exact le_ciInf fun hd =>
     (mul_le_mul_of_nonneg_left (hw hd) (h.1 r0)).trans (price_ge_facet lam _ h.1 (hd0 hd) r0)
 
-/-- `φ* ≥ φ₀` when every fold route's price on facet `r₀` is at least `φ₀`. -/
 theorem phiStar_ge_facet {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U]
     [Fintype F] [Fintype X] [Nonempty F] (Z : Model K R T L U F X) (Fl : Labelled K) (lam : R → ℝ)
     (h : IsCert lam) (hZ : Z.Wf Fl) (r0 : R) (φ0 : ℝ) (hφ : ∀ φ, φ0 ≤ lam r0 * Z.fold φ r0) :
@@ -138,7 +117,6 @@ theorem phiStar_ge_facet {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype
   unfold Model.phiStar
   exact le_ciInf fun φ => (hφ φ).trans (price_ge_facet lam _ h.1 (hfold φ) r0)
 
-/-- `φ* ≥ φ₀` when every fold route's price on facets `a` and `b` is at least `φ₀`. -/
 theorem phiStar_ge_pair {K R T L U F X : Type} [Fintype K] [Fintype R] [DecidableEq R] [Fintype T] [Fintype L]
     [Fintype U] [Fintype F] [Fintype X] [Nonempty F] (Z : Model K R T L U F X) (Fl : Labelled K) (lam : R → ℝ)
     (h : IsCert lam) (hZ : Z.Wf Fl) (a b : R) (hab : a ≠ b) (φ0 : ℝ)
@@ -147,7 +125,6 @@ theorem phiStar_ge_pair {K R T L U F X : Type} [Fintype K] [Fintype R] [Decidabl
   unfold Model.phiStar
   exact le_ciInf fun φ => (hφ φ).trans (price_ge_pair lam _ h.1 (hfold φ) a b hab)
 
-/-- `w* ≥ w₀` when every word route's price on facets `a`, `b` and `c` is at least `w₀` (DC-90-ri's certificate). -/
 theorem wStar_ge_triple {K R T L U F X : Type} [Fintype K] [Fintype R] [DecidableEq R] [Fintype T] [Fintype L]
     [Fintype U] [Fintype F] [Fintype X] [Nonempty F] [Nonempty X] (Z : Model K R T L U F X) (Fl : Labelled K)
     (lam : R → ℝ) (h : IsCert lam) (hZ : Z.Wf Fl) (a b c : R) (hab : a ≠ b) (hac : a ≠ c) (hbc : b ≠ c) (w0 : ℝ)
@@ -158,7 +135,6 @@ theorem wStar_ge_triple {K R T L U F X : Type} [Fintype K] [Fintype R] [Decidabl
   unfold Model.wStar
   exact le_ciInf fun hd => (hw hd).trans (price_ge_triple lam _ h.1 (hd0 hd) a b c hab hac hbc)
 
-/-- `φ* ≥ φ₀` when every fold route's price on facets `a`, `b` and `c` is at least `φ₀`. -/
 theorem phiStar_ge_triple {K R T L U F X : Type} [Fintype K] [Fintype R] [DecidableEq R] [Fintype T] [Fintype L]
     [Fintype U] [Fintype F] [Fintype X] [Nonempty F] (Z : Model K R T L U F X) (Fl : Labelled K) (lam : R → ℝ)
     (h : IsCert lam) (hZ : Z.Wf Fl) (a b c : R) (hab : a ≠ b) (hac : a ≠ c) (hbc : b ≠ c) (φ0 : ℝ)
@@ -167,9 +143,6 @@ theorem phiStar_ge_triple {K R T L U F X : Type} [Fintype K] [Fintype R] [Decida
   unfold Model.phiStar
   exact le_ciInf fun φ => (hφ φ).trans (price_ge_triple lam _ h.1 (hfold φ) a b c hab hac hbc)
 
-/-- The folded branch's floor at `p = 7/8`, `S = 48,000` and `δ′ ≥ 2^-41` from lower bounds `w ≤ w*`, `φ ≤ φ*` on
-a model with `μ_f = μ_x = 0`, at any `t ≤ 1` at least `41·0.6931471808/6400`: `ε_jl ≤ κ·t` (`Headline.epsJl_le`),
-so the floor is at least `(N_w w (1 − t) + N_w φ)/B_♭`. -/
 theorem folded_of_lower_at {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U]
     [Fintype F] [Fintype X] [Nonempty F] [Nonempty X] (Z : Model K R T L U F X) (Fl : Labelled K) (lam : R → ℝ)
     (h : IsCert lam) (hZ : Z.Wf Fl) (hμF : Z.muF = 0) (hμX : Z.muX = 0) (S : ℕ) (hS : (S : ℝ) = 48000)
@@ -205,8 +178,6 @@ theorem folded_of_lower_at {K R T L U F X : Type} [Fintype K] [Fintype R] [Finty
     exact div_le_div_of_nonneg_right hnum hB0.le
   linarith
 
-/-- `folded_of_lower_at` at `t = 41·0.6931471808/6000`, `ln(8/7) ≥ 1/8`'s: the floor is at least
-`(N_w w (1 − 41·0.6931471808/6000) + N_w φ)/B_♭`. -/
 theorem folded_of_lower {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U]
     [Fintype F] [Fintype X] [Nonempty F] [Nonempty X] (Z : Model K R T L U F X) (Fl : Labelled K) (lam : R → ℝ)
     (h : IsCert lam) (hZ : Z.Wf Fl) (hμF : Z.muF = 0) (hμX : Z.muX = 0) (S : ℕ) (hS : (S : ℝ) = 48000)
@@ -216,7 +187,6 @@ theorem folded_of_lower {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype 
       Z.epsJl Fl lam (7 / 8) δ' S :=
   folded_of_lower_at Z Fl lam h hZ hμF hμX S hS δ' hδ' w φ ε hw hφ _ (by norm_num) (by norm_num) hε
 
-/-- The unfolded branch's floor from lower bounds `w ≤ w*`, `φ ≤ φ*` on a model with `μ_f = 0`. -/
 theorem unfolded_of_lower {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U]
     [Fintype F] [Fintype X] (Z : Model K R T L U F X) (Fl : Labelled K) (lam : R → ℝ) (hZ : Z.Wf Fl)
     (hμF : Z.muF = 0) (w φ ε : ℝ) (hw : w ≤ Z.wStar lam) (hφ : φ ≤ Z.phiStar lam)
@@ -228,7 +198,6 @@ theorem unfolded_of_lower {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintyp
     exact add_le_add (mul_le_mul_of_nonneg_left hw hNw.le) (mul_le_mul_of_nonneg_left hφ hNw.le)
   exact hε.trans (mul_le_mul_of_nonneg_right (div_le_div_of_nonneg_right hnum hB0.le) (by norm_num))
 
-/-- FILL-OPT on any run of a model with no filler: `χ* ≤ 0` and the run's filler is priced `≥ 0`. -/
 theorem fillOpt_of_zero {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U]
     [Fintype F] [Fintype X] [Nonempty X] (Z : Model K R T L U F X) (ha : ∀ r k, 0 ≤ Z.G.a r k)
     (hfill : ∀ ψ r, Z.fill ψ r = 0) (hμX : Z.muX = 0) (A : Anatomy K T L U) (hA : A.Split) : FillOpt Z A := by

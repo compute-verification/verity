@@ -39,32 +39,8 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Presheaf
 import Proofs.Pouw.Headline.Encoding
 
-/-!
-# An honest play meets every premise of the five data-centre int8 headlines
-
-The non-vacuity witnesses of `Sm90SheetHeadline`, `Sm90MeasuredHeadline`, `Sm90MeasuredI3Headline`,
-`Sm100SheetHeadline` and `Sm100MeasuredHeadline` (`Definitions.Pouw.Guarantees.HeadlineDc`): on one-bit coins
-(`Ω = Bool`) over the window's 48,000 rounds, one honest play meets every hypothesis of each statement at once and is
-accepted on every path (`sm90Sheet_meets`, `sm90Measured_meets`, `sm90MeasuredI3_meets`, `sm100Sheet_meets`,
-`sm100Measured_meets`).
-
-* **The run** (`hAnat`): honest's MMA form makes every committed word, `N_w/ω` instructions of its class (IGMMA s8
-  m64n256k32 on the H200, UTCIMMA m128n256 on the B200), the design's own fold (route 0, li) folds every word, there is
-  no filler, and all `N_w` words are owned, right and fixed. Its counts are those parts' sum, its clock `f_max`, and its
-  cycles `Σ_k n_k·Σ_r |a_{r,k}|`, at least every facet's load, so A1–A5 (on the sheets) and (I1) (`FacetCeilings`, on
-  the measured rows) hold. A6 holds at `ω` words an instruction, A7 with no side unit and every word writer-headed.
-  (I3) `ScalarRoute` holds at any floors (`hAnat_scalarRoute`): the run heads no vector or table word.
-* **FOLD-OPT at `π*`** holds because the run folds by a route on the menu, which `φ*` prices at most (`honest_foldOpt`,
-  at any certificate).
-* **The game** (`honestGame`, `honestUf`): no round deficient or unfolded, every check passing, every value right and
-  kept, so the openings are pinned and the three luck premises hold in their deficient cases vacuously.
-* **The proofs** (`honestLayer`): one proof a round, always accepted, opening one value, its relation and rightness
-  true, so the fork form of binding and proof soundness hold at `0`, the relations pin, the play is the proofs', and
-  the budget `S·(√δ_fork + n_π·δ_ZK)` is `0`. E1(c) (`RightFixed`) holds with no deficiency and every word fixed.
-
-The run's cycles are a ceiling, not honest's measured time: the witness shows that the premises hold together at an
-honest play, not where honest's own kernel reads against the bound.
--/
+/-! An honest play meets every premise of the five data-centre int8 headlines; its cycles are a ceiling, not
+honest's measured time, so it shows that the premises hold together and not where honest's kernel reads. -/
 
 @[expose] public section
 
@@ -78,20 +54,14 @@ theorem prob_none {Ω : Type*} [Fintype Ω] {p : Ω → Prop} (h : ∀ ω, ¬ p 
   unfold prob Claims.prUniform
   simp
 
-/-! ## The honest game -/
-
-/-- **The honest receipt game** over `n` rounds: no round deficient, every check passing, every value right and the
-honest committed value kept. -/
 noncomputable def honestGame (Ω : Type) : (n : ℕ) → ReceiptGame Ω n
   | 0 => .done
   | n + 1 => .round (fun _ => 0) (fun _ => True) (fun _ => True) (fun _ => True) (fun _ => honestGame Ω n)
 
-/-- **The honest unfolded share**: no round skips a fold. -/
 noncomputable def honestUf (Ω : Type) : (n : ℕ) → Unfolded Ω n
   | 0 => .done
   | n + 1 => .round 0 (fun _ => honestUf Ω n)
 
-/-- The honest round at its receipt: nothing skipped, nothing deficient. -/
 noncomputable def noSkip (Ω : Type) : ResourceAccounting.HMu.SkipRound Ω Unit Unit Unit where
   view _ := ()
   skipped _ := ()
@@ -151,9 +121,6 @@ theorem honest_wholeLuck (Ω : Type) [Fintype Ω] (p0 : ℝ) (n : ℕ) :
   | succ n ih =>
     exact And.intro ⟨le_rfl, zero_le_one⟩ (And.intro (fun h => absurd h (lt_irrefl 0)) (fun _ => ih))
 
-/-! ## The honest proofs -/
-
-/-- **An honest proof layer**: one proof a round, always accepted, opening `()`, its relation and rightness true. -/
 def honestLayer (Ω : Type) (S : ℕ) : ProofLayer Ω S 1 Unit where
   accepted _ _ _ := True
   opened _ _ _ := ()
@@ -179,44 +146,35 @@ theorem budget_zero (n : ℕ) : (n : ℝ) * (Real.sqrt 0 + ((1 : ℕ) : ℝ) * 0
   simp only [Real.sqrt_zero, mul_zero, add_zero]
   positivity
 
-/-! ## The honest run -/
-
 section Run
 
 variable {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U] [Fintype F]
   [Fintype X]
 
 open Classical in
-/-- The honest run's word production: writer kind `t0`'s class, `N_w/ω_{t0}` instructions of it. -/
 noncomputable def hNword (Z : Model K R T L U F X) (t0 : T) : Head T L U → K → ℝ
   | .writer t, k => if t = t0 ∧ k = Z.cls t0 then Z.Nw / Z.omega t0 else 0
   | .vector, _ => 0
   | .table _, _ => 0
   | .side _, _ => 0
 
-/-- The honest run's fold: route counts `c` a word, for each of the `N_w` words. -/
 noncomputable def hNfold (Z : Model K R T L U F X) (c : K → ℝ) : K → ℝ := fun k => Z.Nw * c k
 
-/-- The honest run's counts: its word production, its fold and no filler. -/
 noncomputable def hN (Z : Model K R T L U F X) (t0 : T) (c : K → ℝ) : K → ℝ :=
   fun k => ∑ h, hNword Z t0 h k + hNfold Z c k + 0
 
 open Classical in
-/-- The honest run's words: all `N_w` headed by writer kind `t0`. -/
 noncomputable def hWords (Z : Model K R T L U F X) (t0 : T) : Head T L U → ℝ
   | .writer t => if t = t0 then Z.Nw else 0
   | .vector => 0
   | .table _ => 0
   | .side _ => 0
 
-/-- A run of counts `n` at `M`'s `f_max`, its cycles `Σ_k n_k·Σ_r |a_{r,k}|`, at least every facet's load. -/
 noncomputable def runOf {R' : Type} [Fintype R'] (n : K → ℝ) (M : Machine K R') : Run K where
   n := n
   cycles := ∑ k, n k * ∑ r, |M.a r k|
   clock := M.fmax
 
-/-- **The honest run's labelling**: writer kind `t0` heads every word, route counts `c` fold every word, no filler,
-every word owned, right and fixed; the run at `M`'s ceilings. -/
 noncomputable def hAnat {R' : Type} [Fintype R'] (Z : Model K R T L U F X) (t0 : T) (c : K → ℝ)
     (M : Machine K R') : Anatomy K T L U where
   run := runOf (hN Z t0 c) M
@@ -226,7 +184,6 @@ noncomputable def hAnat {R' : Type} [Fintype R'] (Z : Model K R T L U F X) (t0 :
   words := hWords Z t0
   fixed := Z.Nw
 
-/-- **The honest play**: the honest game, accepted on every path, the run `A` on each. -/
 noncomputable def honestPlay (Ω : Type) (n : ℕ) (A : Anatomy K T L U) : Play Ω n K T L U where
   game := (honestGame Ω n).game
   accepts _ := True
@@ -310,7 +267,6 @@ theorem hAnat_sheetWords {R' : Type} [Fintype R'] (Z : Model K R T L U F X) (t0 
     simp [hWords, hNword]
 
 omit [Fintype R] [Fintype F] [Fintype X] in
-/-- (I3) at any floors: the honest run heads no vector or table word. -/
 theorem hAnat_scalarRoute {R' : Type} [Fintype R'] (Z : Model K R T L U F X) (t0 : T) (c : K → ℝ)
     (M : Machine K R') : ScalarRoute Z (hAnat Z t0 c M) := by
   refine And.intro ?_ (fun l => And.intro ?_ ?_)
@@ -341,7 +297,6 @@ theorem hAnat_semantics {R' : Type} [Fintype R'] (Z : Model K R T L U F X) (t0 :
   And.intro (hAnat_noSum Z t0 c M hNw) (hAnat_sideUnits Z t0 c M)
 
 omit [Fintype X] in
-/-- **FOLD-OPT at any certificate**: the run folds every word by route `φ0`, which `φ*` prices at most. -/
 theorem hAnat_foldOpt {R' : Type} [Fintype R'] (Z : Model K R T L U F X) (t0 : T) (c : K → ℝ) (M : Machine K R')
     (hNw : 0 ≤ Z.Nw) (hmu : Z.muF = 0) (φ0 : F) (hφ : Z.fold φ0 = Z.G.load c) (lam : R → ℝ) :
     FoldOptFoldedAt Z (hAnat Z t0 c M) Z.Nw lam := by
@@ -369,8 +324,6 @@ theorem honest_rightFixed (Ω : Type) [Fintype Ω] (n : ℕ) (A : Anatomy K T L 
   show (1 - (honestGame Ω n).game.deficiency x / n) * Nw ≤ A.fixed
   rw [honest_deficiency, zero_div, sub_zero, one_mul]
   exact hA
-
-/-! ## The sheets' ceilings and the measured rows' -/
 
 section Sheet
 
@@ -434,9 +387,6 @@ theorem facetCeilings_of {R' : Type} [Fintype R'] (M : Machine K R') (hf : 0 < M
   rw [e]
   exact load_le M n hn r
 
-/-! ## The witnesses, generic -/
-
-/-- **A sheet headline's premises at an honest play**, on any data sheet `S` and TS model `Z` over its rows. -/
 theorem sheet_meets {P : Type} [Fintype P] [DecidableEq P] (S : Sheet K P) (Z : Model K (SheetRow P) T L U F X)
     (n : ℕ) (t0 : T) (φ0 : F) (c : K → ℝ) (lam : SheetRow P → ℝ) (hf : 0 < S.fmax) (hw : ∀ p, 0 < S.width p)
     (hNw : 0 ≤ Z.Nw) (hω : 0 < Z.omega t0) (hc : ∀ k, 0 ≤ c k) (hmu : Z.muF = 0)
@@ -463,7 +413,6 @@ theorem sheet_meets {P : Type} [Fintype P] [DecidableEq P] (S : Sheet K P) (Z : 
     honestLayer_of Bool n _ (honest_accepts Bool n), honestLayer_fork Bool n, honestLayer_sound Bool n,
     honestLayer_pins Bool n, honest_rightFixed Bool n _ _ Z.Nw le_rfl, fun _ => trivial⟩
 
-/-- **A measured headline's premises at an honest play**, on any measured machine `M` and TS model `Z` on it. -/
 theorem measured_meets (M : Machine K R) (Z : Model K R T L U F X) (n : ℕ) (t0 : T) (φ0 : F) (c : K → ℝ)
     (lam : R → ℝ) (hf : 0 < M.fmax) (hNw : 0 ≤ Z.Nw) (hω : 0 < Z.omega t0) (hc : ∀ k, 0 ≤ c k) (hmu : Z.muF = 0)
     (hφ : Z.fold φ0 = Z.G.load c) :
@@ -485,8 +434,6 @@ theorem measured_meets (M : Machine K R) (Z : Model K R T L U F X) (n : ℕ) (t0
     honestLayer_of Bool n _ (honest_accepts Bool n), honestLayer_fork Bool n, honestLayer_sound Bool n,
     honestLayer_pins Bool n, honest_rightFixed Bool n _ _ Z.Nw le_rfl, fun _ => trivial⟩
 
-/-- **A measured headline's premises at an honest play under (I3)**: `measured_meets` with (I2)/(I4)
-`WordsWritten` and (I3) `ScalarRoute` in A6's place, at any floors. -/
 theorem measured_meets_i3 (M : Machine K R) (Z : Model K R T L U F X) (n : ℕ) (t0 : T) (φ0 : F) (c : K → ℝ)
     (lam : R → ℝ) (hf : 0 < M.fmax) (hNw : 0 ≤ Z.Nw) (hω : 0 < Z.omega t0) (hc : ∀ k, 0 ≤ c k) (hmu : Z.muF = 0)
     (hφ : Z.fold φ0 = Z.G.load c) :
@@ -511,13 +458,9 @@ theorem measured_meets_i3 (M : Machine K R) (Z : Model K R T L U F X) (n : ℕ) 
 
 end Run
 
-/-! ## The five witnesses -/
-
 theorem counts_nonneg {n : ℕ} (v : Sparse) (k : Fin n) : 0 ≤ Sparse.counts v k :=
   Rat.cast_nonneg.mpr (ResourceAccounting.SecurityProofs.TS.Headline.coeff_nonneg v k.val)
 
-/-- **`Sm90SheetHeadline`'s hypotheses hold together at an honest play** on one-bit coins: honest's IGMMA s8
-m64n256k32 (writer kind 19) heads every word and the design's li (route 0) folds every one. -/
 theorem sm90Sheet_meets :
     ∃ (Pl : Play Bool Sm90.checks (Fin 50) (Fin 34) Unit Empty) (G : ReceiptGame Bool Sm90.checks)
       (Uf : Unfolded Bool Sm90.checks) (pf : ProofLayer Bool Sm90.checks 1 Unit) (δfork δzk : ℝ),
@@ -535,8 +478,6 @@ theorem sm90Sheet_meets :
     (fun p => by cases p <;> norm_num [Sm90.sheet, SheetDataQ.sheet, Sm90.ds90, Sm90.Pipe.width])
     (Nat.cast_nonneg _) (Nat.cast_pos.mpr (by decide)) (counts_nonneg _) rfl rfl
 
-/-- **`Sm90MeasuredHeadline`'s hypotheses hold together at an honest play** on one-bit coins: honest's IGMMA s8
-m64n256k32 (writer kind 0) heads every word and the design's li (route 0) folds every one, within DC-90-ri's rows. -/
 theorem sm90Measured_meets :
     ∃ (Pl : Play Bool Sm90.checks (Fin 50) (Fin 2) Unit Empty) (G : ReceiptGame Bool Sm90.checks)
       (Uf : Unfolded Bool Sm90.checks) (pf : ProofLayer Bool Sm90.checks 1 Unit) (δfork δzk : ℝ),
@@ -552,8 +493,6 @@ theorem sm90Measured_meets :
     (Sparse.counts (Sm90Measured.d2s.folds.getD (0 : Fin 56).val [])) Sm90Measured.lamStar
     (Nat.cast_pos.mpr (by decide)) (Nat.cast_nonneg _) (Nat.cast_pos.mpr (by decide)) (counts_nonneg _) rfl rfl
 
-/-- **`Sm90MeasuredI3Headline`'s hypotheses hold together at an honest play** on one-bit coins: as
-`sm90Measured_meets`, at (I3)'s floors `q = q_T = 3/5`, which the run meets since it heads no vector or table word. -/
 theorem sm90MeasuredI3_meets :
     ∃ (Pl : Play Bool Sm90.checks (Fin 50) (Fin 2) Unit Empty) (G : ReceiptGame Bool Sm90.checks)
       (Uf : Unfolded Bool Sm90.checks) (pf : ProofLayer Bool Sm90.checks 1 Unit) (δfork δzk : ℝ),
@@ -570,8 +509,6 @@ theorem sm90MeasuredI3_meets :
     (Sparse.counts (Sm90MeasuredI3.d2s.folds.getD (0 : Fin 56).val [])) Sm90MeasuredI3.lamStar
     (Nat.cast_pos.mpr (by decide)) (Nat.cast_nonneg _) (Nat.cast_pos.mpr (by decide)) (counts_nonneg _) rfl rfl
 
-/-- **`Sm100SheetHeadline`'s hypotheses hold together at an honest play** on one-bit coins: honest's UTCIMMA
-m128n256 (writer kind 10) heads every word and the design's li (route 0) folds every one. -/
 theorem sm100Sheet_meets :
     ∃ (Pl : Play Bool Sm100.checks (Fin 52) (Fin 27) Unit Empty) (G : ReceiptGame Bool Sm100.checks)
       (Uf : Unfolded Bool Sm100.checks) (pf : ProofLayer Bool Sm100.checks 1 Unit) (δfork δzk : ℝ),
@@ -590,8 +527,6 @@ theorem sm100Sheet_meets :
     (fun p => by cases p <;> norm_num [Sm100.sheet, SheetDataQ.sheet, Sm100.ds100, Sm100.Pipe.width])
     (Nat.cast_nonneg _) (Nat.cast_pos.mpr (by decide)) (counts_nonneg _) rfl rfl
 
-/-- **`Sm100MeasuredHeadline`'s hypotheses hold together at an honest play** on one-bit coins: honest's UTCIMMA
-m128n256 (writer kind 4) heads every word and the design's li (route 0) folds every one, within DC-100-ri's rows. -/
 theorem sm100Measured_meets :
     ∃ (Pl : Play Bool Sm100.checks (Fin 52) (Fin 13) Unit Empty) (G : ReceiptGame Bool Sm100.checks)
       (Uf : Unfolded Bool Sm100.checks) (pf : ProofLayer Bool Sm100.checks 1 Unit) (δfork δzk : ℝ),

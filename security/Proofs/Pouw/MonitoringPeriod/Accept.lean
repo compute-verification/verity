@@ -10,22 +10,7 @@ import all Init.Data.Array.DecidableEq
 import all Init.Data.Ord.String
 import all Lean.Data.Json.Basic
 
-/-!
-# PoUW's deployed check accepts H1's honest window at the subprotocol's parameters
-
-The all-protocols runner's PoUW subprotocol (`benchmarks/all_protocols/legs/pouw.py`) checks its H1 window at `h1_params`: the
-pinned H1 tile's check item with the entries bound 1024 and no coin mode, ε = 1/2, δ = 10⁻⁶, the 3-bit grid, the range
-`[1, 2^16]` and the loop's fixed length, 4 requests of 2 decode steps (`h1Params`). A window registering the loop's
-128 real tiles is at level 39, which pads to `N = 144`, and its sample is `K′ = 24` (`kPrime_h1`:
-`q = 1 − (1/2)·128/144 = 5/9`, `q^23 > 10⁻⁶ ≥ q^24`).
-
-`check_h1`: `protocol.check` accepts the honest registration of that window (`h1Reg`: its items the verifier's own,
-`N = 144` sampled `subset:24`) with any service answer citing it that accepted 24 ascending distinct units below 144 at
-the profile the rule fixes (`h1Evidence`), and publishes level 39's work, `K′ = 24` and those units. `numbers_h1`: every
-window the check accepts at those parameters, registered at level 39, publishes `N = 144` and `K′ = 24`, the population
-and sample size `SampleIsCoin` reads at H1's instance. The numbers themselves (`h1Params`, `h1Reg`, `h1Evidence`) are
-`Properties.Pouw.MonitoringPeriod.Witnesses`'.
--/
+/-! PoUW's deployed check accepts H1's honest window at the subprotocol's parameters. -/
 
 @[expose] public section
 
@@ -35,8 +20,6 @@ open PouwCheck
 open Lean (Json)
 open PouwWindow (Work Sampling)
 open Properties.Pouw.MonitoringPeriod.SecurityProofs.Sort
-
-/-! ## The registration's keys -/
 
 theorem keys_of {kvs : Std.TreeMap.Raw String Json compare} {l : List String} (hs : l.Pairwise (· < ·))
     (h : kvs.toArray.map (·.1) = l.toArray) : keys (.obj kvs) = some l := by
@@ -84,10 +67,6 @@ theorem grid_h1 : 39 + 1 ≤ PouwWindow.level PouwWindow.gridBits (PouwWindow.fl
 
 theorem work_h1 : Work.at 3 39 = ⟨39, 128, 144⟩ := by decide
 
-/-! ## The sample: `K′ = 24` -/
-
-/-- **`K′ = 24` at the subprotocol's ε, δ and level**: `p = (1/2)·(128·2048)/(144·2048) = 4/9`, so `q = 5/9`, and
-`q^23 ≈ 1.34·10⁻⁶ > 10⁻⁶ ≥ q^24 ≈ 7.45·10⁻⁷`. -/
 theorem kPrime_h1 (E D : Rat) (C N W : Int) (hE : E = 1 / 2) (hD : D = 1 / 1000000) (hC : C = 128 * 2048)
     (hN : N = 144) (hW : W = 2048) : PouwWindow.kPrime E D C N W = .ok 24 := by
   subst hE hD hC hN hW
@@ -109,9 +88,6 @@ theorem sampling_h1 : PouwWindow.sampling (toRat ⟨1, 2⟩) (toRat ⟨1, 100000
   unfold PouwWindow.sampling
   rw [kPrime_h1] <;> first | decide +kernel | rfl
 
-/-! ## The check accepts -/
-
-/-- **The loop's honest registration keeps PoUW's rule** at the subprotocol's parameters, fixing level 39 and `K′ = 24`. -/
 theorem keeps_h1 (context format program partition : String) (bytes : ByteArray) :
     Properties.Pouw.Check.RecordKeeps (h1Params context) (h1Reg context format program partition bytes)
       h1Fixed := by
@@ -126,14 +102,9 @@ theorem keeps_h1 (context format program partition : String) (bytes : ByteArray)
   · exact cs_work_h1
   · cases h
 
-/-- **The window's salt is kept**: the subprotocol's check item names no coin mode, so the window is seeded, and the honest
-answer carries no salt. -/
 theorem saltKept_h1 (context : String) (r c : ExecutionPhaseCommitmentRecord) (units : Array Nat) :
     Properties.Pouw.Check.SaltKept (h1Params context) r (h1Evidence c units) := rfl
 
-/-- **The deployed check accepts H1's honest window at the subprotocol's parameters**: on the loop's honest registration and
-any one-stage answer citing it that accepted 24 ascending distinct units below 144 at the rule's profile, with no salt
-(the window is seeded), it publishes level 39's work (`N = 144`), `K′ = 24` and those units. -/
 theorem check_h1 (context format program partition : String) (bytes : ByteArray) (units : Array Nat)
     (hu : UnitsOk units 24 144) :
     protocol.check (h1Params context) (h1Reg context format program partition bytes)
@@ -143,8 +114,6 @@ theorem check_h1 (context format program partition : String) (bytes : ByteArray)
     (keeps_h1 context format program partition bytes)
     ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, hu.1, hu.2.1, hu.2.2⟩ (saltKept_h1 _ _ _ _)
 
-/-- **`SampleIsCoin`'s numbers at the subprotocol's parameters**: every window the check accepts at them, registered at level 39
-(the loop's 128 real tiles), publishes the population `N = 144` and the sample size `K′ = 24`. -/
 theorem numbers_h1 (context : String) (c : ExecutionPhaseCommitmentRecord) (e : Evidence) (pub : Public) (prof : Core.Integrity)
     (hc : protocol.check (h1Params context) c e = .accept pub prof) (hl : levelOf c.window.items = some 39) :
     pub.work.n = 144 ∧ pub.sampling.k = 24 := by

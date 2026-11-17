@@ -4,47 +4,8 @@ public import Definitions.Pouw.Witness
 public import Proofs.Pouw.Dither
 public import Proofs.Pouw.ShaRealize
 
-/-!
-# `WorkSound`'s premises hold together
-
-The headline isn't vacuous: on `Definitions.Pouw.Witness`'s machine `tw`, protocol `twRound` and period `twPd`, every
-premise of `Definitions.Pouw.Guarantees.Dither.WorkSound` holds at once, at `k = 2` sampling blocks and the non-uniform
-prices `μ = (2, 1, 1)`, and the conclusion's bounds say something: `ε_A = 1/7 + ln 2 / 2 < 1` and `κ_A = 1/2 < 1` for
-every prover (`witness`). `witness_freed` is the headline's conclusion there, from `WorkSound`.
-
-* The machine's premises: G1–G3 (`tw_G1`, `tw_G2`, `tw_G3`), and a program's cost at `μ` at least each resource's
-  part (`cost_ge`).
-* The period: `μ` is its dual price (`twDual`), the cap `Q = 8` is its capacity of the hash units, which each call
-  uses (`twCap`), and the blocks' honest costs sum to `C = 14` (`twCost`).
-* The verdict reads every block's answer within the period, so `AnswersFit` holds with every check coin selected
-  (`twAnswersFit`), and the answers' calls are under the cap.
-
-**The rate and free guesses.** A words program charged for `j` varying words costs at least `2 j` at `μ`, falls
-short of `pub_mm = 4` by at most `4 − 2 j`, and passes the check with probability at most `(j + (2 − j) p)/2`. At rate
-`η_mm` a unit of priced cost its moment is at most 1 for every `j` iff `e^{2 η_mm} (1 + p)/2 ≤ 1` (`j = 1`) and
-`e^{4 η_mm} p ≤ 1` (`j = 0`), so `η_mm ≤ ln(2/(1 + p))/2`: about `0.316` at `p = 1/16`, and `ln(4/3)/2` for one-bit
-words (`p = 1/2`). A commitment program charged for `j` varying root cells falls short of `pub_sha = 2` by at most
-`2 − j`, with the same pass probability, so `η_sha ≤ ln(2/(1 + p))`. `WorkSound` reads them at `η_mm = η H/H_mm = 7η/4`
-and `η_sha = η H/H_sha = 7η/2`, and the witness proves them at `η = 1/7` (`η_mm = 1/4`, `η_sha = 1/2`), where both
-moments are at most `e^{(2 − j)/2} (32 + 240 j)/512 ≤ 1` (`exp_mul_le`). The luck term is `ln(1/δ)/(η C) = ln 2 / 2`
-at `δ = 1/2`.
-
-**What the witness doesn't show.**
-* Its laws are global: a program is charged for a cell that varies anywhere on its inputs, so a cell that varies with
-  the advice but not with the dither is charged too. The moment bounds use only that an uncharged cell is constant in
-  the dither at fixed advice.
-* No dither is degenerate (`κ_dmm = κ_dsha = 0` at every advice size): the noise is the whole word, so no advice
-  predicts it (the degenerate set is empty here).
-* `ExtractAdv` holds at `ξ = 0`, `κ_x = 0` and advice of `|Adv|` bits for every prover because the commitment is
-  transparent; that is not `ShaRealize` on a random oracle.
-* No program exchanges bits (`ext = 0`), so `β = K = 0`, and the verdict implies the checks (`κ_S = 0`).
-* The commit phase is free: no sampling design reads an instance, so a commit phase that adapts its instance to the earlier
-  blocks' coins is charged nothing, and the instance changes no check (the noise reads none).
-* The oracle is trivial (`Orc = Unit`), so the calls are counted and priced but read nothing, and `ShaRealize`'s
-  `OracleCalls` and realization over a random oracle aren't exercised here. Any table `eo : Unit ≃ (X → D)` is a
-  single point, so at `D = Unit` the realization's walk clause is vacuous and `WorkSoundNoFold`'s `κ`, with its
-  `(q² + …)/|D|`, is at least 1; that guarantee has no witness here.
--/
+/-! `WorkSound`'s premises hold together on the witness machine `tw`; the witness exercises no degenerate dither,
+no exchange, no random oracle (`Orc = Unit`) and no `ShaRealize`, and `WorkSoundNoFold` has no witness here. -/
 
 @[expose] public section
 
@@ -160,7 +121,6 @@ theorem word_inj {a b : Fin 16} (h : ((a : ℕ) : Word) = ((b : ℕ) : Word)) : 
     Nat.mod_eq_of_lt (lt_trans b.isLt (by norm_num))] at this
   exact Fin.ext this
 
-/-- A free guess: a word constant in the dither is the dither's word at a cell on at most 16 of the 256 dithers. -/
 theorem card_match_le (F : TDraw → Word) (hF : ∀ d d', F d = F d') (c : Fin 2) :
     (univ.filter fun d : TDraw => F d = ((d c : ℕ) : Word)).card ≤ 16 := by
   have key : ∀ d ∈ univ.filter (fun d : TDraw => F d = ((d c : ℕ) : Word)),
@@ -180,7 +140,6 @@ theorem exp_half_lt : Real.exp (1 / 2) < 32 / 17 := by
   have h : Real.exp (1 / 2) * Real.exp (1 / 2) = Real.exp 1 := by rw [← Real.exp_add]; norm_num
   nlinarith [Real.exp_one_lt_d9, Real.exp_pos (1 / 2)]
 
-/-- The sampling bound's arithmetic: `e^{(2 − j)/2} (32 + 240 j) ≤ 512` for `j ≤ 2`. -/
 theorem exp_mul_le (j : ℕ) (hj : j ≤ 2) : Real.exp ((2 - j) / 2) * (32 + 240 * j) ≤ 512 := by
   obtain rfl | rfl | rfl : j = 0 ∨ j = 1 ∨ j = 2 := by omega
   · have := Real.exp_one_lt_d9
@@ -194,9 +153,6 @@ theorem exp_mul_le (j : ℕ) (hj : j ≤ 2) : Real.exp ((2 - j) / 2) * (32 + 240
     push_cast
     norm_num
 
-/-- **The moment bound both public-best premises reduce to on the witness round.** A test on the round's coins that
-passes only where `F d c` is the dither's word at the checked cell `c`, with `F` constant in the dither outside the
-cells `σ`, and weighs a pass at most `e^{(2 − |σ|)/2}`, averages at most 1. -/
 theorem moment_le_one (F : TDraw → Fin 2 → Word) (σ : Finset (Fin 2))
     (hσ : ∀ c ∉ σ, ∀ d d', F d c = F d' c) (g : TDraw × Fin 2 → ℝ)
     (hg : ∀ x, g x ≤ if F x.1 x.2 = ((x.1 x.2 : ℕ) : Word) then Real.exp ((2 - σ.card) / 2) else 0) :
@@ -245,8 +201,6 @@ theorem twμ_nonneg (r : Fin 3) : 0 ≤ twμ r := by
   unfold twμ
   split_ifs <;> norm_num
 
-/-- `μ` is the witness period's dual price at one credited unit: the honest strategy fills what the credited rounds
-leave with the other jobs. -/
 theorem twDual : twPd.DualOpt twμ 1 := by
   refine ⟨twμ_nonneg, fun (j r : Fin 3) => ?_, fun (j : Fin 3) => ?_, fun j => 8 - twHon j, ⟨fun j => ?_, fun r => ?_⟩, ?_⟩
   · show (0 : ℝ) ≤ if j = r then 1 else 0
@@ -340,10 +294,8 @@ theorem twImport : ImportWithinCertifier tw twRound 2 twVerdict twDev 0 := fun _
 
 theorem twAnswersFit : AnswersFit tw twRound 2 twVerdict twDev twSel twPd := fun _ _ _ hv b _ r => hv.2 b r
 
-/-- The advice at round `w`: the earlier rounds' coins. -/
 def past (_ : Unit) (x : Fin 2 → TDraw × Fin 2) (w : Fin 2) : twAdv := fun v => if v < w then some (x v) else none
 
-/-- The coins the advice records, the later ones filled in arbitrarily. -/
 def fill (p : twAdv) : Fin 2 → TDraw × Fin 2 := fun v => (p v).getD default
 
 theorem adv_inj : ∃ e : twAdv → Fin (2 ^ Fintype.card twAdv), Function.Injective e :=
@@ -354,11 +306,9 @@ theorem fill_past (o : Unit) (x : Fin 2 → TDraw × Fin 2) (w v : Fin 2) (hv : 
     fill (past o x w) v = x v := by
   simp [fill, past, show v < w from hv]
 
-/-- The state sampling block `w`'s work starts from, recomputed from the advice: the prover's own commit phase. -/
 noncomputable def stOf (A : Prover tw twRound 2) (w : Fin 2) (p : twAdv) : A.St :=
   (TAlg.run (A.commit w) ((), A.state () (fill p) w)).1
 
-/-- Sampling block `w`'s root, recomputed from the advice and the dither: the prover's own commit phase and work. -/
 noncomputable def rootOf (A : Prover tw twRound 2) (w : Fin 2) (p : twAdv × TDraw) : TRoot :=
   (TAlg.run (A.work w) ((), stOf A w p.1, p.2)).2
 
@@ -369,7 +319,6 @@ theorem rootOf_past (A : Prover tw twRound 2) (o : Unit) (x : Fin 2 → TDraw ×
     (TAlg.run (A.work w) ((), (TAlg.run (A.commit w) ((), A.state () x w)).1, (x w).1)).2
   rw [Pouw.SecurityProofs.ShaRealize.state_congr A () w fun v hv => fill_past () x w v hv]
 
-/-- The root cells round `w`'s work varies: the MAC and hash units the machine charges it. -/
 noncomputable def cw (A : Prover tw twRound 2) (w : Fin 2) : ℕ :=
   (nonconst fun y => (TAlg.run (A.work w) y).2).card
 
@@ -392,8 +341,6 @@ theorem mh_shape (S : Type) (hI : (Unit × (twAdv × TDraw) × TTr) = (Unit × (
   rw [Nat.card_prod, card_troot] at h2
   omega
 
-/-- **The extraction's words program** at round `w`: the words read off the prover's own root, which its work
-computes from the advice and the dither. It is charged a MAC unit for each root cell the work varies. -/
 noncomputable def mwX (A : Prover tw twRound 2) (w : Fin 2) : TAlg (twAdv × TDraw) TTr where
   run p i _ _ := enc (rootOf A w p i 0 0)
   use _ r := if r = 0 then (cw A w : ℝ) else 0
@@ -408,8 +355,6 @@ noncomputable def mwX (A : Prover tw twRound 2) (w : Fin 2) : TAlg (twAdv × TDr
   roots h _ := absurd h ttr_ne_troot
   work S _ h _ := absurd h (ttr_ne_prod S)
 
-/-- **The extraction's commitment program** at round `w`: the prover's own root, from the advice and the dither. It
-is charged a hash unit for each root cell the work varies. -/
 noncomputable def mhX (A : Prover tw twRound 2) (w : Fin 2) : TAlg (Unit × (twAdv × TDraw) × TTr) TRoot where
   run p := rootOf A w p.2.1
   use _ r := if r = 1 then (cw A w : ℝ) else 0
@@ -499,13 +444,6 @@ theorem twε_lt (A : Prover tw twRound 2) : twε A < 1 := by
 theorem twκ_lt (A : Prover tw twRound 2) : twκ A < 1 := by
   norm_num [twκ, twδ]
 
-/-- **The witness statement**: every premise of `WorkSound`, in its order, at the witness
-machine `tw`, protocol `twRound` and period `twPd`, with `k = 2` sampling blocks, every instance registrable for each
-(`twReg`), `μ = (2, 1, 1)`, `H_mm = pub_mm = 4`, `H_sha = pub_sha = 2`, `H_o = 1` a block, `η = 1/7`, `δ = 1/2`,
-`β = K = κ_S = 0`, the cap `Q = 8`, every check coin selected (`twSel`), `κ_dmm = κ_dsha = 0`, and for every prover
-`B_adv = |Adv|`, `ξ = 0`, `κ_x = 0` and `κ_sha = 0`; then the conclusion's bounds are nontrivial for every prover,
-`ε_A < 1` and `κ_A < 1`; and the honest prover passes on every oracle and coins, its sampling blocks' timed use is the
-period's whole honest use, and its run is within the cap, its answers' calls included. -/
 def WitnessHolds : Prop :=
   twPd.DualOpt twμ 1 ∧
     (∀ w, 0 < twHmm w ∧ 0 < twHsha w ∧ 0 ≤ twHo w ∧ twHmm w ≤ twHmm w ∧ twHsha w ≤ twHsha w) ∧
@@ -530,7 +468,6 @@ theorem witness : WitnessHolds :=
     twService, twImport, twAnswersFit, twExtract, fun A => ⟨twε_lt A, twκ_lt A⟩,
     fun o x => ⟨honest_passes o x, honest_timedUse o x, honest_withinCap o x⟩⟩
 
-/-- **The headline at the witness**: `WorkSound`'s conclusion from `witness`. -/
 theorem witness_freed :
     FreedSound tw twRound 2 twVerdict twDev twPd 1 twε (∑ r, twμ r * (1 * twPd.hon r)) twκ := by
   obtain ⟨hdual, hinst, hC, hη, hδ, hδ1, hβ, hK, hξ, hdeg, hcap, hG1, hG2, hG3, hP1, hP2, hsak, hsha, hout,

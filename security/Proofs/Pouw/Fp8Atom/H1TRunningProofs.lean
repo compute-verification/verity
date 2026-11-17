@@ -11,15 +11,7 @@ import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Fp8Atom.H1TProofs
 public import Proofs.Pouw.Fp8Atom.H1TGapProofs
 
-/-!
-# `DistinctLiveH1T` from the one-flip clauses and `H1TRunningWords`
-
-A credited word reads only its own row's salt (`word_row`). So two equal words of different rows are both constant,
-and within a row the pairs split into those `H1TOneFlip` separates on half of the salts, and the `Hard` ones, which
-`H1TRunningWords` separates. A word is not constant by `H1TOneFlip` (not `Stuck`) or `H1TRunningWords` (`Stuck`), and
-not a raw XOF word by `h1tNotRawWord`. Conversely `DistinctLiveH1T` gives `H1TRunningWords` at once, so the two are
-equivalent, and `h1tGap` holds under `H1TRunningWords`.
--/
+/-! `DistinctLiveH1T` from the one-flip clauses and `H1TRunningWords`, which are equivalent. -/
 
 @[expose] public section
 

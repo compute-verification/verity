@@ -9,35 +9,8 @@ import Proofs.Pouw.Fp8Atom.H1TAtomProofs
 import Proofs.Pouw.Fp8Atom.H1TFlipProofs
 import Proofs.Pouw.Fp8Atom.H1TSliceProofs
 
-/-!
-# H-1T: `H1TCrossLate` in the exact-512 regime (proofs)
-
-`H1TCrossLate` (`H1TGapStaging`) is a running word of one column against another column's at a position from `T − 1`
-on. This file proves it in one regime, `Exact512` (its statements are in `H1TCrossLate`, which imports no proofs):
-the row and both columns' real codes are 0 on the last two slices, the tag values are multiples of 32, and at the
-zero salt `R_(T−3)` lies in `[2^32 + 2^18, 2^33 − 2^18]` and every block-2 word of slices `0..T−3` is a multiple of
-512. There every block-2 add is exact on the 512 grid, and slices
-`T − 2` and `T − 1` read only their tag fields. So from `R_(T−1)` on, a running word is a salt-dependent constant
-plus `512·two512 p (q32 c σ₁) (q32 c σ₂)`: the number of 512-steps two roundings add to `512·a` (`p` the parity
-of `a`) for the two slices' block-1 words `32·q32 c σ` (tag values `32·c`, tag fields `σ₁`, `σ₂`).
-
-* **`CrossLateResidue512`** is the finite lemma over those 24 salt bits (signs and mantissas of both slices' three
-  tag lanes): for `c ≠ c'` with `|c_k| ≤ 14` and either parities, the two columns' 512-steps do not differ by a
-  constant. It holds at the function level for every pair (`crossLateResidue512`). Pairs whose tags differ by at
-  least 2 in total are separated by the salt with mantissa 7 and signs against the difference, against all its signs
-  flipped (a gap of at least 30 in `q32`, past two roundings' slack of 16). The other pairs, whose tag sums differ by
-  1, are separated by signs `+` and mantissa 7 or 1 against the flip: a kernel `decide` over the 1,032 cases of the
-  sum and the parities.
-* **`H1TCrossLate512`** is the unit statement: on a legal unit, running words of two different columns at positions
-  from `T − 1` on, both columns in the regime, are different functions of the salt (`h1tCrossLate512`).
-  `crossLate_of_exact512` is `H1TCrossLate`'s conclusion for pairs in the regime, without its `¬ OppLater`.
-* **`absorb_distinct`**: the regime holds for the unit of `H1TGapStaging`'s last section (`absorb_exact512`), and its
-  pair `R_2257` of columns 21 and 22, equal on every salt with `absorbSalt`'s tag fields, is two different functions.
-
-`RnMonoChainGap` and `H1TLastSliceSplit` are not needed here: block 2 adds exactly in the regime. The regime is empty
-for `k ≤ 19,430`: there `|R_(T−3)| < 2^32 + 2^18`. The five theorems named above are granted, not pinned (pin when
-used); the rest is lemmas.
--/
+/-! `H1TCrossLate` in the exact-512 regime, which is empty for `k ≤ 19,430`; its theorems are granted, not
+pinned. -/
 
 @[expose] public section
 
@@ -45,9 +18,6 @@ namespace Pouw.Fp8Atom.H1T.CrossLate
 
 open Pouw.Fp8Atom Pouw.Fp8Atom.H1T Pouw.Fp8Atom.Proofs Pouw.Fp8Atom.H1T.Proofs
 
-/-! ## The finite lemma -/
-
-/-- All three tag signs flipped. -/
 def negAll (σ : TagSalt) : TagSalt := (fun k => !σ.1 k, σ.2)
 
 theorem tagMul_not (n : Bool) (m : Fin 8) : tagMul (!n) m = -tagMul n m := by
@@ -159,8 +129,6 @@ theorem crossLateResidue512 : CrossLateResidue512 := by
   intro c c' hc hne p p'
   obtain ⟨σ, h⟩ := crossLate512 hc hne p p'
   exact ⟨_, _, h⟩
-
-/-! ## The quiet slices -/
 
 theorem roundEven_16 (a u : ℤ) : roundEven ((a : ℚ) + (u : ℚ) / 16) = a + rnd512 (a % 2 == 1) u := by
   have hdm := Int.mul_ediv_add_emod u 16
@@ -283,7 +251,6 @@ theorem tag_bound {j : ℕ} {c : Fin 3 → ℤ} (hc : ∀ k, val (tuple j k) = 3
   have : ((|c k| : ℤ) : ℚ) ≤ 14 := by linarith
   exact_mod_cast this
 
-/-- A slice whose row and column real lanes are 0 writes `32·q32 c` in block 1, for tag values `32·c`. -/
 theorem quiet_word {xs : Fin 29 → Code} (hx : ∀ l, val (xs l) = 0) (hxn : ∀ l, (xs l).isNaN = false)
     {b : ℕ → Code} {τ : ℕ} (hb : ∀ l : Fin 29, val (b (29 * τ + l.val)) = 0)
     (hbn : ∀ r, (b r).isNaN = false) {j : ℕ} {c : Fin 3 → ℤ} (hc : ∀ k, val (tuple j k) = 32 * c k)
@@ -342,7 +309,6 @@ theorem rnd512_abs (p : Bool) {u : ℤ} (hu : |u| ≤ 630) : |rnd512 p u| ≤ 40
   have := abs_le.1 hu
   rw [abs_le]; constructor <;> omega
 
-/-- Two roundings on the 512 grid from `512·a` inside `[2^32, 2^33)`. -/
 theorem two_round {a u1 u2 : ℤ} (ha : 2 ^ 23 + 2 ^ 9 ≤ a) (ha' : a + 2 ^ 9 ≤ 2 ^ 24) (h1 : |u1| ≤ 630)
     (h2 : |u2| ≤ 630) :
     rnAdd (rnAdd (512 * (a : ℚ)) (32 * (u1 : ℚ))) (32 * (u2 : ℚ)) =
@@ -351,8 +317,6 @@ theorem two_round {a u1 u2 : ℤ} (ha : 2 ^ 23 + 2 ^ 9 ≤ a) (ha' : a + 2 ^ 9 �
   rw [rnAdd_512 (by omega) (by omega) (by rw [abs_le] at h1 ⊢; omega)]
   rw [rnAdd_512 (by omega) (by omega) (by rw [abs_le] at h2 ⊢; omega)]
   unfold two512; rw [parity_add]; push_cast; ring
-
-/-! ## The chain in the regime -/
 
 section Chain
 
@@ -394,7 +358,6 @@ theorem rnAdd_512_exact {r i : ℚ} {m n : ℤ} (hr : r = 512 * m) (hi : i = 512
     rw [← Int.cast_abs] at this; exact_mod_cast this
   · rw [hr, hi]; push_cast; ring
 
-/-- A block-2 step of the regime is exact and stays on the 512 grid. -/
 theorem step_exact {σ : ℕ → SliceSalt}
     (h512 : ∀ q, T ≤ q → q + 3 ≤ 2 * T → ∃ n : ℤ, freshVal T x b j σ q = 512 * n)
     (hR : ∀ p, p < 2 * T → |runVal T x b j σ p| < 2 ^ 33) {p : ℕ} (hp1 : T ≤ p + 1) (hp2 : p + 1 + 3 ≤ 2 * T)
@@ -409,8 +372,6 @@ theorem step_exact {σ : ℕ → SliceSalt}
     rnAdd_512_exact hm hn hlt
   exact ⟨e, m + n, by rw [e, hm, hn]; push_cast; ring⟩
 
-/-- In the regime, two salts that agree on slices `0..T−3` keep the difference of their running words from `T − 1`
-to `2T − 3`. -/
 theorem tail_diff {σ σ' : ℕ → SliceSalt} (hag : ∀ τ, τ + 2 < T → σ τ = σ' τ)
     (h512 : ∀ q, T ≤ q → q + 3 ≤ 2 * T → ∃ n : ℤ, freshVal T x b j σ q = 512 * n)
     (h512' : ∀ q, T ≤ q → q + 3 ≤ 2 * T → ∃ n : ℤ, freshVal T x b j σ' q = 512 * n)
@@ -434,8 +395,6 @@ theorem tail_diff {σ σ' : ℕ → SliceSalt} (hag : ∀ τ, τ + 2 < T → σ 
     rw [show T - 1 + (d + 1) = T - 1 + d + 1 by omega, e, e', hf]
     linarith
 
-/-- The two quiet slices of the regime: from `R_(T−3) = 512·a`, `R_(T−1)` is `512·(a + two512 …)` of the two
-slices' closed-form words. -/
 theorem quiet_two {σ : ℕ → SliceSalt} (hT : 3 ≤ T) (hx : ∀ r, 29 * (T - 2) ≤ r → val (x r) = 0)
     (hb : ∀ r, 29 * (T - 2) ≤ r → val (b r) = 0) (hxn : ∀ r, (x r).isNaN = false)
     (hbn : ∀ r, (b r).isNaN = false)
@@ -463,9 +422,6 @@ theorem quiet_two {σ : ℕ → SliceSalt} (hT : 3 ≤ T) (hx : ∀ r, 29 * (T -
 
 end Chain
 
-/-! ## On a unit -/
-
-/-- The raw words of a slice whose tag fields are `w` (signs `w.1`, mantissas `w.2`) and every other bit 0. -/
 def rawTag (w : TagSalt) : RawSlice := fun ℓ =>
   if ℓ.val = 17 then
     ⟨(if w.1 0 then 2147483648 else 0) + (w.2 0).val * 8388608, by have := (w.2 0).isLt; split <;> omega⟩
@@ -514,7 +470,6 @@ theorem extract_rawTag (w : TagSalt) : ((extract (rawTag w)).neg, (extract (rawT
       rw [h16]; apply tag_bits3
       norm_num; split_ifs <;> omega
 
-/-- The unit's salt with tag fields `s.1` on slice `T − 2`, `s.2` on slice `T − 1`, and every other raw word 0. -/
 def tagSalt (U : Unit) (s : TagSalt × TagSalt) : U.Salt := fun _ τ =>
   if τ.val + 2 = U.T then rawTag s.1 else if τ.val + 1 = U.T then rawTag s.2 else rawZero
 
@@ -530,7 +485,6 @@ theorem rowSalt_T1 (U : Unit) (s : TagSalt × TagSalt) (i : Fin U.m) (hT : 2 ≤
     U.rowSalt (tagSalt U s) i (U.T - 1) = extract (rawTag s.2) := by
   unfold Unit.rowSalt tagSalt; rw [dif_pos (by omega)]; simp only; rw [if_neg (by omega), if_pos (by omega)]
 
-/-- In the regime, the change of a running word from `T − 1` on between two tag salts is its two quiet slices'. -/
 theorem col_gap {U : Unit} (hU : U.Legal) {i : Fin U.m} {j : Fin U.n} (hE : Exact512 U i j)
     {c : Fin 3 → ℤ} (hc : ∀ k, val (tuple j.val k) = 32 * c k) {a : ℤ}
     (ha : runVal U.T (U.row i) (U.col j) j.val (fun _ => extract rawZero) (U.T - 3) = 512 * a)
@@ -599,22 +553,16 @@ theorem h1tCrossLate512_of (hF : CrossLateResidue512) : H1TCrossLate512 := by
 
 theorem h1tCrossLate512 : H1TCrossLate512 := h1tCrossLate512_of crossLateResidue512
 
-/-- `H1TCrossLate`'s conclusion for its pairs in the regime, without its `¬ OppLater` hypothesis. -/
 theorem crossLate_of_exact512 {U : Unit} (hU : U.Legal) (i : Fin U.m) {a a' : Fin U.n × Pos U.T}
     (hj : a.1 ≠ a'.1) (ha : Run2 a.2) (ha' : a'.2.isRight = true) (hp' : U.T ≤ posIdx a'.2 + 1)
     (hE : Exact512 U i a.1) (hE' : Exact512 U i a'.1) : U.word (i, a) ≠ U.word (i, a') :=
   h1tCrossLate512 U hU i a a' hj ha.1 ha' (by have := ha.2; omega) hp' hE hE'
 
 
-/-! ## The regime is not empty -/
-
-/-- The E4M3 code of 448. -/
 def code448 : Code := ⟨0x7E, by norm_num⟩
 
-/-- The instance's operands on slices `0..1127` at the zero salt. -/
 def absorbOps : (Fin 32 → Code) × (Fin 32 → Code) := formSlice (fun _ => code448) (extract rawZero)
 
-/-- Column `j`'s lanes on slices `0..1127` of the instance. -/
 def absorbCol (j : ℕ) : Fin 32 → Code := colLanes (fun _ => code448) j 0
 
 theorem absorbUnit_T : absorbUnit.T = 1130 := by decide
@@ -654,8 +602,6 @@ theorem absorb_fresh2 (i : Fin absorbUnit.m) (j : Fin absorbUnit.n) {q : ℕ} (h
       wordVal (hopperStep 0 absorbOps.2 (absorbCol j.val)) := by
   unfold freshVal freshWord; rw [if_neg (by omega), absorb_row i (by omega), absorb_col j (by omega)]; rfl
 
-/-- The instance's words at the zero salt: block 1 is `2669·2^11` (column 21) or `2671·2^11` (column 22) on every
-slice `0..1127`, block 2 is `512·692` or `512·684`. -/
 theorem absorb_words0 :
     wordVal (hopperStep 0 absorbOps.1 (absorbCol 21)) = 2669 * 2 ^ 11 ∧
       wordVal (hopperStep 0 absorbOps.1 (absorbCol 22)) = 2671 * 2 ^ 11 ∧
@@ -663,7 +609,6 @@ theorem absorb_words0 :
       wordVal (hopperStep 0 absorbOps.2 (absorbCol 22)) = 512 * 684 := by
   refine ⟨?_, ?_, ?_, ?_⟩ <;> decide +kernel
 
-/-- A chain of equal increments `m·2^e` is exact while `(p + 1)·|m| < 2^24`. -/
 theorem chain_exact {T : ℕ} {x b : ℕ → Code} {j : ℕ} {σ : ℕ → SliceSalt} {N : ℕ} {m : ℤ} {e : ℕ}
     (hf : ∀ p ≤ N, freshVal T x b j σ p = m * 2 ^ e) (hm : ((N + 1 : ℕ) : ℤ) * |m| < 2 ^ 24) :
     ∀ p ≤ N, runVal T x b j σ p = ((p + 1 : ℕ) : ℚ) * m * 2 ^ e
@@ -678,8 +623,6 @@ theorem chain_exact {T : ℕ} {x b : ℕ → Code} {j : ℕ} {σ : ℕ → Slice
         nlinarith [abs_nonneg m]
       · rw [zpow_natCast]; push_cast; ring
 
-/-- A column of the instance is in the regime when its block-1 word is `m·2^11` with `R_1127 = 1128·m·2^11` in range,
-its block-2 word is a multiple of 512, and its tag values are multiples of 32. -/
 theorem absorb_regime (j : Fin absorbUnit.n) {m n : ℤ} {c : Fin 3 → ℤ}
     (h1 : wordVal (hopperStep 0 absorbOps.1 (absorbCol j.val)) = m * 2 ^ 11) (hm0 : 0 ≤ m)
     (hm1 : 2 ^ 23 + 2 ^ 9 ≤ 4512 * m) (hm2 : 4512 * m + 2 ^ 9 ≤ 2 ^ 24)
@@ -710,8 +653,6 @@ theorem absorb_exact512 : Exact512 absorbUnit ⟨0, by decide⟩ ⟨21, by decid
   · exact absorb_regime ⟨22, by decide⟩ w2 (by norm_num) (by norm_num) (by norm_num) w4 (c := pick3 14 1 1)
       (by decide +kernel)
 
-/-- The pair that `absorb_words` and `absorb_rounds` make equal at every salt with `absorbSalt`'s tag fields on slices
-1128 and 1129 (`R_2257` of columns 21 and 22) is two different functions of the salt. -/
 theorem absorb_distinct :
     absorbUnit.word (⟨0, by decide⟩, ⟨21, by decide⟩, .inr ⟨⟨2257, by rw [absorbUnit_T]; norm_num⟩, by
       simp only [absorbUnit_T]; norm_num⟩) ≠

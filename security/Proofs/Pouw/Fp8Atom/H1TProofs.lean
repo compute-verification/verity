@@ -8,23 +8,13 @@ public import Definitions.Pouw.Fp8Atom.H1TPinned
 public import Proofs.Pouw.Fp8Atom.H1TChecks
 public import Proofs.Pouw.Fp8Atom.Fp32Proofs
 
-/-!
-# Proofs of H-1T's guarantees
-
-The conformance statements assemble the kernel-evaluated parts of `Pouw.Fp8Atom.H1TChecks`; the chain's running words
-follow by induction from its local checks. The structural statements unfold the definitions. `RnErr` is
-`roundEven`'s half-unit error scaled by the ulp. `RnAddMovesHalf` follows from it: an absorbed summand below one ulp
-of `r` leaves `r + i` in `r`'s binade or below, so `|i| ≤ ulp (r + i) / 2 ≤ ulp r / 2`; a summand of an ulp or more
-is `RnAddMoves`.
--/
+/-! Proofs of H-1T's guarantees. -/
 
 @[expose] public section
 
 namespace Pouw.Fp8Atom.H1T.Proofs
 
 open Pouw.Fp8Atom Pouw.Fp8Atom.Proofs Pouw.Fp8Atom.H1T
-
-/-! ## Conformance -/
 
 theorem h1tFormTable : H1TFormTable := by
   refine ⟨by decide +kernel, fun v hv => ?_⟩
@@ -35,8 +25,6 @@ theorem h1tTagTable : H1TTagTable := by
   refine ⟨by decide +kernel, fun v hv => ?_⟩
   have h := List.all_eq_true.mp Checks.tagTable_all v hv
   simpa [TagVec.holds, and_assoc] using h
-
-/-! ## The salt fields -/
 
 theorem h1tReadsFields : H1TReadsFields := by
   intro U g g' h c
@@ -55,7 +43,6 @@ theorem shiftRight_small {w b : ℕ} (hw : w < 128) (hb : 7 ≤ b) : w >>> b = 0
   calc w < 2 ^ 7 := by norm_num; exact hw
     _ ≤ 2 ^ b := Nat.pow_le_pow_right (by norm_num) hb
 
-/-- Raw words below `2^7` have the fields of the zero salt: every bit `extract` reads is bit 7 or above. -/
 theorem extract_small {r : RawSlice} (h : ∀ ℓ, (r ℓ).val < 128) : extract r = extract rawZero := by
   have hb : ∀ ℓ b, 7 ≤ b → (r ℓ).val >>> b = 0 := fun ℓ b hb => shiftRight_small (h ℓ) hb
   have hz : ∀ ℓ b, (rawZero ℓ).val >>> b = 0 := fun _ _ => by simp [rawZero]
@@ -90,8 +77,6 @@ theorem h1tNotRawWord : H1TNotRawWord := by
   rw [hw, e1] at e0
   simp [g0, g1, one, rawZero] at e0
 
-/-! ## The tag tuples -/
-
 theorem h1tTupleInjective : H1TTupleInjective := by
   intro j j' hj hj' e
   have e0 := congrFun e 0
@@ -100,8 +85,6 @@ theorem h1tTupleInjective : H1TTupleInjective := by
   simp only [tuple, pick3, A0, A1, Fin.isValue, Fin.val_zero, Fin.val_one, Fin.val_two] at e0 e1 e2
   norm_num at e0 e1 e2
   split_ifs at e1 e2 <;> omega
-
-/-! ## Counting -/
 
 theorem halfOfInvolution : HalfOfInvolution := by
   intro α _ ψ P hψ hP
@@ -118,8 +101,6 @@ theorem halfOfInvolution : HalfOfInvolution := by
   have hu := Finset.card_union_of_disjoint hdisj
   have hle : (A ∪ A.image ψ).card ≤ Fintype.card α := Finset.card_le_univ _
   omega
-
-/-! ## The FP32 add -/
 
 theorem roundEven_err (m : ℚ) : |(roundEven m : ℚ) - m| ≤ 1 / 2 := by
   have h1 := Int.floor_le m

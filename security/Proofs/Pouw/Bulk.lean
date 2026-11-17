@@ -3,24 +3,13 @@ module
 public import Definitions.Pouw.Fp8Atom.Fp32
 meta import Definitions.Pouw.Fp8Atom.Fp32
 
-/-!
-# The bulk conformance test (compiled evaluation: a test, not a proof)
-
-The Lean audit runs it (`runs` in `lean-audit.json`): `verity/protocols/accounting/pouw/verifier/lean/scripts/fp8atom_vectors.py` writes `conformance/steps.txt.gz`
-and `conformance/adds.txt.gz`, the audit checks each decompressed file against the SHA-256 the record holds, and runs
-`lake env lean --run Proofs/Pouw/Bulk.lean <steps.txt> <n> <adds.txt> <n>` in its sandbox.
-
-On every line it evaluates the predicates of the kernel pins: `Vec.holds hopperStep` for the steps and `AddVec.holds`
-for the adds. It fails unless every line parses and holds and the line counts are the expected ones. The kernel does
-not check this evaluation. The kernel-pinned subsets are `Pouw.Fp8Atom.Proofs.conformance` and `addConformance`. The
-file is not part of the `Pouw` library and is exempt in `lean-audit.json`.
--/
+/-! The bulk conformance test of the kernel pins' predicates, which the Lean audit runs: compiled evaluation the
+kernel does not check, so a test and not a proof. -/
 
 @[expose] public section
 
 open Pouw.Fp8Atom
 
-/-- A hexadecimal numeral, or `none`. -/
 def hexNat? (s : String) : Option Nat :=
   if s.isEmpty then none else
     s.foldl (fun acc c => acc.bind fun n =>
