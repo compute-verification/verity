@@ -51,4 +51,7 @@ inputs = ["benchmarks/serve_tax", "verity/errors.py",
     "adapters/vllm/verity_vllm/pipeline/serve_admit.py",
     # the record of the value settings in force that an arm's meta.json and a replay's replay.json hold
     "adapters/vllm/verity_vllm/settings.py",
+    # a point's member carries its card's record's `short`, the record found by the name nvidia-smi gives the card
+    "verity/device.py",
+    "hardware/cards",
 ]

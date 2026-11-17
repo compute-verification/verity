@@ -7,6 +7,8 @@
 kind = "gpu"
 sku = "b200-sxm-180gb"
 name = "NVIDIA B200 SXM 180 GB (HGX B200, 1000 W)"
+driver = "NVIDIA B200"
+short = "b200"
 die = "GB100 x 2"
 arch = "sm_100a"
 board = "692-2G525-0220-000"

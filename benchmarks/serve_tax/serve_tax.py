@@ -3739,11 +3739,25 @@ def hardware(model: Model) -> str:
     return f"{tp_size(model)} × {card()}"
 
 
+def card_record(name: str) -> dict:
+    """The card record (``verity.device.load_card``) whose ``driver`` is ``name``, the name nvidia-smi gives the card;
+    refused, naming what to add, unless exactly one record has it and the ``short`` a point's member carries."""
+    from verity.device import CARDS, load_card, skus
+
+    found = [c for c in map(load_card, skus("gpu")) if name and c.get("driver") == name]
+    if len(found) != 1 or not found[0].get("short"):
+        raise SystemExit(
+            f"{len(found)} card records under {CARDS} have driver {name!r}, the card nvidia-smi names here: give its "
+            f"one record `driver = {json.dumps(name)}` and `short`, the card's name in a point's member, adding its "
+            "<sku>.toml there if it has none")
+    return found[0]
+
+
 def member(model: Model, arm: str, reference: str | None = None) -> str:
     """A point's ``member``, what tells its line from the lines of the metric's other configurations: the model's
     served name, this host's card and the arm, over its reference where it has one, lower-case words joined by hyphens
     (``llama-3.2-1b-h200-record-over-compiled``)."""
-    kind = card().removeprefix("NVIDIA ").lower().replace(" ", "-")
+    kind = card_record(card())["short"]
     return "-".join((model.served, kind, arm, *(("over", reference) if reference else ())))
 
 

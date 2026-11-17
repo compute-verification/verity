@@ -7,6 +7,8 @@
 kind = "gpu"
 sku = "rtx-pro-6000-server"
 name = "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+driver = "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+short = "rtx-pro-6000-blackwell-server-edition"
 die = "GB202"
 arch = "sm_120a"
 board = "900-2G153-0000-000"
