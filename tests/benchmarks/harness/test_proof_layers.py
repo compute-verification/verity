@@ -290,6 +290,8 @@ def test_an_a5_runs_build_step_gives_its_wall_and_its_cache_and_its_prover_log_t
     assert "| 89 s a build, wall (steps.txt's build step" in table_lines(PL.render([result]))["with sampling"]
     late = PL.read("sampling", str(a5_out(tmp_path / "b", steps="23:59:30Z build: x\n00:00:40Z build rc=0\n")))
     assert (late.build_s, late.build_cache) == (70.0, PL.NOT_STATED)
+    (unstated,) = PL.measured([*none, late], {"benchmarks/proof-layer-build-seconds": "build_s"})[2:]
+    assert unstated["value"] is None and "no build cache: line" in unstated["why"]
 
 
 @pytest.mark.parametrize("steps", ["10:00:00Z build: x\n10:01:00Z build rc=10\n", "10:00:00Z build: x\n", ""])

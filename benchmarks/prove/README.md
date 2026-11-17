@@ -386,7 +386,7 @@ kit's writer, the first three a figure a sampled proof block and the last a buil
 | `benchmarks/proof-layer-prover-seconds` | Flock's `prove_total_s`, the mean over the sampled proof blocks |
 | `benchmarks/proof-layer-lean-seconds` | Lean's verify seconds, the mean over the sampled proof blocks |
 | `benchmarks/proof-layer-proof-bytes` | one proof's bytes over its sampled proof blocks: an a5, `layers.sh` or prove_path result's one rep's (its reps are timed repeats of one proof, and differing reps give none). prove_path's own `per_unit` sums the reps, so its benchmark result reads them from the arm's rank or window `summary.json`, and prints `every rep's` only where no such file states them |
-| `benchmarks/proof-layer-build-seconds` | the build step's wall seconds, a5's only, with its `build_cache` |
+| `benchmarks/proof-layer-build-seconds` | the build step's wall seconds, a5's only, with its `build_cache`; null where `steps.txt` has no `build cache:` line |
 
 Each measurement's fields name its `prover_batch`, and the build's its `build_cache`. Under each id it writes three
 measurements, in this order:

@@ -84,8 +84,8 @@ def document(results: Sequence[Result]) -> dict[str, Any]:
 
 def measured(results: Sequence[Result], metrics: Mapping[str, str]) -> list[dict[str, Any]]:
     """The writer's measurements: under each of `metrics`' ids (each naming one of `FIGURES`), one a layer of `MEMBERS`,
-    in its order. A layer's value is its figure a proof block, or its build step's wall for ``build_s``, only where its Lean
-    verdict is an accept; else the value is None, with why. Recursion's benchmark result is no member: its seconds are a
+    in its order. A layer's value is its figure a proof block, or for ``build_s`` its build step's wall where its output
+    states whether the build reused a cache, only where its Lean verdict is an accept; else the value is None, with why. Recursion's benchmark result is no member: its seconds are a
     whole recursive run's."""
 
     if bad := sorted(set(metrics.values()) - set(FIGURES)):
@@ -95,9 +95,11 @@ def measured(results: Sequence[Result], metrics: Mapping[str, str]) -> list[dict
     for name, figure in metrics.items():
         for layer, member in MEMBERS.items():
             r = by_layer[layer]
-            value = getattr(r, figure) if r.accepted and (r.per_block or figure == "build_s") else None
+            build = figure == "build_s"
+            value = getattr(r, figure) if r.accepted and (r.build_cache != NOT_STATED if build else r.per_block) else None
             why = None if value is not None else r.why or (
-                "its output gives no build step's wall (steps.txt)" if figure == "build_s" else
+                "its output gives no build step's wall (steps.txt)" if build and r.build_s is None else
+                "its steps.txt states no build cache: line, so not whether the build reused a cache" if build else
                 f"{r.workload.split(':')[0]}: its figures are a statement's, not a proof block's" if r.statements else
                 f"its output gives no {figure} a proof block" if r.per_block else "its output gives no figure a proof block")
             out.append({"name": name, "value": value, "unit": FIGURES[figure], "member": member, "why": why,
@@ -105,5 +107,5 @@ def measured(results: Sequence[Result], metrics: Mapping[str, str]) -> list[dict
                         "extra": {"layer": LAYERS[layer], "status": r.status, "format": r.format, "workload": r.workload,
                                   "lean": r.lean, "ran_with": r.ran_with, "detail": r.detail, "proof": r.proof,
                                   "prover_batch": r.prover_batch,
-                                  **({"build_cache": r.build_cache} if figure == "build_s" else {})}})
+                                  **({"build_cache": r.build_cache} if build else {})}})
     return out
