@@ -237,8 +237,8 @@ def test_a_two_window_chain_carries_the_replays_clock(name: str, asy: bool, monk
     """The replay of the plan under the rule, its executed steps cut into two windows at a step that starts mid-bucket:
     the first window loads every arrival its steps see (the next A at each step's cursor), the second the rest. Each step
     is `tick_step.reference` on the state row and the front at its head, with the replay's prefix counts, and gives the
-    replay's arrivals, rows and T: the chain's T after each step with rows is `Replay.clock`. The units and the chain
-    hold (`held`)."""
+    replay's arrivals, rows and T: the chain's T after each step with rows is `Replay.clock`. The proof blocks and the
+    chain hold (`held`)."""
     rule = TC.RULES[name]
     e = TT.engine(asy)
     ios, released = TT.plan()
