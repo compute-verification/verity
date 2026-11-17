@@ -798,7 +798,7 @@ KNOWN: dict[str, str] = {
     "verity/protocols/resource_accounting/network/verifier/lean/NetworkVerifier/TransferBlocks.lean::NetworkVerifier.TransferBlocks.Verdict":
         "duplicate of `Core.Verdict`: becomes a reading of it (proofs)",
     "verity/protocols/resource_accounting/network/verifier/lean/NetworkVerifier/Period.lean::NetworkVerifier.Period.Layout":
-        "homonym, the certifier's bucket and slot schedule: rename (proofs)",
+        "homonym, the network attester's bucket and slot schedule: rename (proofs)",
     "verity/protocols/resource_accounting/network/verifier/lean/NetworkVerifier/Period.lean::NetworkVerifier.Period.Registration":
         "duplicate of the registration log (`Verity.Registration`): becomes the log's projection (deleted) (proofs)",
     "verity/protocols/resource_accounting/network/verifier/lean/NetworkVerifier/Period.lean::NetworkVerifier.Period.Window":

@@ -301,7 +301,7 @@ PUBLIC = (
     S.Public(VALUE, "commitment", "the link-window's certified records under one salted root"),
     S.Public("parameters", "structure", "the parameters digests (W1) the certificates sign, fixed before the run"),
     S.Public("verdict", "output", "the link-window's verdict, accept or reject; a violation's kind stays hidden"),
-    S.Public("deadline", "output", "the certifier settled both records by the verdict deadline"),
+    S.Public("deadline", "output", "the network attester settled both records by the verdict deadline"),
     S.Public("warden", "structure", "the active warden's schedule (`warden.WardenParams`, the digest both ends' heads "
              "bind) and the link's windows, fixed before the run: the device's code puts every bucket's cells (r for "
              "each live connection), so its counts are the schedule's, which the period's schedule terms charge"),
