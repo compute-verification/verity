@@ -204,6 +204,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 TRACES = ROOT / "benchmarks/network_e2e/traces"
+CARD_FILES = ROOT / "hardware/cards"
 sys.path.insert(0, str(ROOT / "tools" / "config"))
 sys.path.append(str(ROOT))
 from verity_config.settings import SHARED  # noqa: E402 (from the tree's tools/config, put on sys.path above)
@@ -3742,12 +3743,13 @@ def hardware(model: Model) -> str:
 def card_record(name: str) -> dict:
     """The card record (``verity.device.load_card``) whose ``driver`` has ``name`` as a value, the name nvidia-smi gives the
     card; refused, naming what to add, unless exactly one record holds it and has the ``short`` a point's member carries."""
-    from verity.device import CARDS, load_card, skus
+    from verity.device import load_card, skus
 
-    found = [c for c in map(load_card, skus("gpu")) if name and name in {d["value"] for d in c.get("driver", ())}]
+    cards = [load_card(sku, directory=CARD_FILES) for sku in skus("gpu", directory=CARD_FILES)]
+    found = [c for c in cards if name and name in {d["value"] for d in c.get("driver", ())}]
     if len(found) != 1 or not found[0].get("short"):
         raise SystemExit(
-            f"{len(found)} card records under {CARDS} have {name!r}, the card nvidia-smi names here, in `driver`: add "
+            f"{len(found)} card records under {CARD_FILES} have {name!r}, the card nvidia-smi names here, in `driver`: add "
             f"{{ value = {json.dumps(name)}, source = ... }} to its one record's `driver` and give it a `short`, the "
             "card's name in a point's member, adding its <sku>.toml there if it has none")
     return found[0]
