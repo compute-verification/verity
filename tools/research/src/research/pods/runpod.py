@@ -5,9 +5,10 @@ GraphQL calls the budgets guard and `research notes` make. Nebius runs every nod
 Reads the API key from ``~/.runpod/config.toml`` and never prints it.  Talks to
 GraphQL (``https://api.runpod.io/graphql``): RunPod's REST host no longer
 resolves.  The two reads, one pod (``get``) and every pod (``pods``), hand back
-the shape RunPod's REST API gave, with the fields ``_as_rest`` lists.  Creating
-and terminating a pod have no GraphQL form here yet and are refused by name
-(``_request``); the control machine's helper does both meanwhile.
+the shape RunPod's REST API gave, with the fields ``_as_rest`` lists, and
+``terminate`` is GraphQL's ``podTerminate``.  Creating a pod has no GraphQL
+form here yet and is refused by name (``_request``); the control machine's
+helper creates one meanwhile.
 
 Every call that reaches RunPod is one line of ``api-calls.log`` under
 ``$XDG_STATE_HOME/research/runpod/`` (default ``~/.local/state``): the time, the
@@ -178,7 +179,7 @@ def _struck(text: str, cfg: dict[str, Any]) -> str:
 
 def _request(method: str, path: str, body: dict[str, Any] | None = None) -> Any:
     """RunPod's pod call `method path` (`GET /pods`, `GET /pods/ID`, `POST /pods`, `DELETE /pods/ID`), answered in the shape
-    RunPod's REST API gave.  With a key here the reads ask GraphQL and the writes are refused; with none the control pod's gate
+    RunPod's REST API gave.  With a key here GraphQL is asked, and a create is refused; with none the control pod's gate
     is asked, and makes this same call there with the account's key."""
     try:
         _config()
@@ -194,8 +195,10 @@ def _request(method: str, path: str, body: dict[str, Any] | None = None) -> Any:
         return _graphql_pods()
     if method == "GET" and pod:
         return _graphql_pod(pod[1])
+    if method == "DELETE" and pod:
+        return _graphql_terminate(pod[1])
     raise PodError(f"{method} {path}: refused, since RunPod's REST host (rest.runpod.io) no longer resolves and this call has no "
-                   "GraphQL form here yet (INF-896); create or terminate a pod with the control machine's helper meanwhile",
+                   "GraphQL form here yet (INF-896); create a pod with the control machine's helper meanwhile",
                    pod_id=pod[1] if pod else None)
 
 
@@ -312,6 +315,13 @@ def _graphql_pod(pod_id: str) -> dict[str, Any]:
     if not pod:
         raise PodError(f"GraphQL pod {pod_id}: not found (terminated, or never existed)", code=404, pod_id=pod_id)
     return _as_rest(pod)
+
+
+def _graphql_terminate(pod_id: str) -> None:
+    """`podTerminate`, the mutation the pod's own lease ends it with (`sh/lease.sh`).  A pod GraphQL does not know is gone, a
+    `PodError` with code 404, as REST's DELETE gave."""
+    _graphql_pod(pod_id)
+    _graphql_data(f'mutation {{ podTerminate(input: {{podId: "{pod_id}"}}) }}', pod_id)
 
 
 def _graphql_pods() -> list[dict[str, Any]]:

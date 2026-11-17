@@ -211,13 +211,48 @@ def test_a_pod_graphql_does_not_know_is_gone_and_an_id_that_is_not_one_is_put_in
     assert len(wire.sent) == 1
 
 
-@pytest.mark.parametrize(("method", "path", "pod_id"), [("POST", "/pods", None), ("DELETE", f"/pods/{POD}", POD)])
-def test_a_write_is_refused_by_name_and_sends_nothing(wire, method, path, pod_id):
-    with pytest.raises(runpod.PodError, match=rf"^{method} {path}: refused, .*rest\.runpod\.io.*INF-896.*control machine's helper") as refused:
-        runpod._request(method, path, {"name": "x"} if method == "POST" else None)
-    assert refused.value.pod_id == pod_id and wire.sent == []
-    with pytest.raises(runpod.PodError, match="INF-896"):
+def test_a_create_is_refused_by_name_and_sends_nothing(wire):
+    with pytest.raises(runpod.PodError, match=r"^POST /pods: refused, .*rest\.runpod\.io.*INF-896.*control machine's helper") as refused:
+        runpod._request("POST", "/pods", {"name": "x"})
+    assert refused.value.pod_id is None and wire.sent == []
+
+
+TERMINATE = f'mutation {{ podTerminate(input: {{podId: "{POD}"}}) }}'
+
+
+def test_terminate_reads_the_pod_then_sends_one_pod_terminate_for_it(wire, capsys):
+    wire.graphql += [(200, {"data": {"pod": GRAPHQL_POD}}, GRAPHQL_LEFT), (200, {"data": {"podTerminate": None}}, GRAPHQL_LEFT)]
+    runpod.terminate(POD)
+    assert wire.sent == [f'{{ pod(input: {{podId: "{POD}"}}) {{ {runpod.POD_FIELDS} }} }}', TERMINATE]
+    assert capsys.readouterr().out == f"terminated {POD}\n"
+    assert [ln.split()[1:5] for ln in log_lines()] == [["graphql", "POST", "pod.input", "200"],
+                                                         ["graphql", "POST", "mutation.podTerminate", "200"]]
+
+
+def test_the_guard_terminates_through_pod_terminate(wire):
+    wire.graphql += [(200, {"data": {"pod": GRAPHQL_POD}}, GRAPHQL_LEFT), (200, {"data": {"podTerminate": None}}, GRAPHQL_LEFT)]
+    assert guard.RunPodAPI().terminate(POD) is None and wire.sent[-1] == TERMINATE and wire.sent.count(TERMINATE) == 1
+
+
+def test_terminating_a_pod_that_is_gone_reads_as_gone_and_sends_no_mutation(wire):
+    wire.graphql += [(200, {"data": {"pod": None}}, GRAPHQL_LEFT)]
+    with pytest.raises(runpod.PodError, match=f"GraphQL pod {POD}: not found") as gone:
         runpod.terminate(POD)
+    assert (gone.value.code, gone.value.pod_id) == (404, POD) and TERMINATE not in wire.sent
+    with pytest.raises(runpod.PodError, match="not a pod id"):
+        runpod.terminate('x") { id } } mutation { podTerminate(input: {podId: "y')
+    assert len(wire.sent) == 1, "an id that is not one is put in no query"
+
+
+def test_a_pod_terminate_runpod_refuses_is_a_pod_error(wire):
+    wire.graphql += [(200, {"data": {"pod": GRAPHQL_POD}}, GRAPHQL_LEFT), (200, {"errors": [{"message": "pod is locked"}]}, GRAPHQL_LEFT),
+                     (200, {"data": {"pod": GRAPHQL_POD}}, GRAPHQL_LEFT), (500, {"error": "upstream"}, {})]
+    with pytest.raises(runpod.PodError, match="GraphQL: .*pod is locked") as refused:
+        runpod.terminate(POD)
+    assert refused.value.pod_id == POD and refused.value.code is None
+    with pytest.raises(runpod.PodError, match="GraphQL -> HTTP 500") as failed:
+        runpod.terminate(POD)
+    assert failed.value.code == 500 and wire.sent.count(TERMINATE) == 2
 
 
 def test_a_machine_with_no_key_asked_the_door_and_its_failure_stands(wire, monkeypatch, tmp_path):

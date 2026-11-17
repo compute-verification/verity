@@ -77,7 +77,7 @@ SUPERVISED_ENV = "RESEARCH_GUARD_SUPERVISED"
 
 class RunPodAPI:
     """The three provider calls the guard makes; tests substitute an object with the same methods.  The pod list is GraphQL's
-    (`runpod.pods`).  A termination is refused until it has a GraphQL form (`runpod._request`), and is tried again each poll."""
+    (`runpod.pods`), and a termination its `podTerminate`; one that fails is tried again each poll."""
 
     def pods(self) -> list[dict[str, Any]]:
         from . import runpod
