@@ -18,9 +18,9 @@ SPOT, and the one record of every verdict (the block record).
     served_verdicts.py pearlplus-period rule DIR --gate CMD --lane L --coin COIN_RECORD
     served_verdicts.py coin DIR --record FILE [--run RUN_ID] [--run-dir DIR]
     served_verdicts.py record --serve-run DIR --window K --sampled-proofs DIR --pieces DIR --out DIR [--node NAME]
-                              [--product P] [--deferred WHY] [--steps LO,HI] [--off-node]
+                              [--product P] [--deferred WHY] [--steps LO,HI] [--off-node] [--development]
                               [--sampled-lean [--sampled-exe PATH]] [--key-sha512 HEX] [--lane L] [--window-tie DIR]
-                              [--tree SHA [--tree-on BRANCH]] [--served-compare FILE] [--composite DIR]
+                              [--tree SHA [--tree-on BRANCH]] [--served-compare FILE] [--composite DIR] [--coins-on M]
     served_verdicts.py witness < PATHS
     served_verdicts.py rebase SERVE_DIR SERVED_DIR < PATHS
     served_verdicts.py composed ANSWER DIR [--gate-exit RC]
@@ -163,7 +163,7 @@ where one about this node rejects or errs the composed verdict is ``reject`` and
 the verdict is the block record's, which is the compiled Lean ``onsite check``'s or ``remote check``'s (``remote-v1``'s
 under Pearl+) answer, as `composite.py` wrote it to the public composite under ``--composite`` (`served_composite.sh`'s
 $OUT/composite, `composite_answer`); a Lean rejection there rejects whatever the rows say. Without one composite of the
-product's check, one whose Lean answered, or with a development one (composed on the served node or on a prover node),
+product's check, one whose Lean answered, or with a development one (`composite.py --development`),
 no Lean answer is the record's, so it is ``undecided``, which the window report (``-window/v1``) and the ``RECORD`` line
 name ``pending``; each says, as ``lean``, where its answer was read or why there is none. A composite not of the
 record's window is refused (`composite_tie`): its SPOT case must name the digest of the docket R that
@@ -219,7 +219,6 @@ import os
 import re
 import shlex
 import shutil
-import socket
 import subprocess
 import sys
 import tarfile
@@ -389,12 +388,28 @@ COPIED_FROM = ("a prover-side copy of each piece's answer file as the served nod
                "an edit to that file on the node or to its copy changes its row")
 #: What a record says of a verdict it was handed: every check behind it, a piece's whole chain of them, ran where the
 #: verdict was computed, and where the record is composed none of them is run again or held to anything.
-TAKEN_AS_GIVEN = "a verdict computed off the auditor's device and handed in is taken as given, for the whole chain"
+TAKEN_AS_GIVEN = "a verdict computed on the workload's node and handed in is taken as given, for the whole chain"
+DEVELOPMENT_RUN = ("a development run (DEVELOPMENT=1): its SPOT proofs may stand on a development challenger "
+                   "session's coins, not the auditor device's, so none of its verdicts is of record")
 #: what `record --off-node` composes from: the served node's compose hand-off (`served_verdicts.sh handoff`), no witness
 HANDED_FROM = ("the served node's compose hand-off, held here to the sums it wrote, never a witness: each row's answer from "
                "where its answer_from says, sampled proofs' recomputed here by its Lean verifier from the case's proofs "
                "where the hand-off carries them, and each other's answer file as the served node wrote it, not the party "
                f"that produced it: an edit to such a file on the node before its hand-off changes its row; {TAKEN_AS_GIVEN}")
+#: the setting that names this machine: the cluster's name for it, the one the gate's peers list it by
+NODE_NAME = "PP_PEER"
+
+
+def this_node(env: Mapping[str, str] | None = None) -> str:
+    """This machine's name (`NODE_NAME`), which the record's host, its served node and the off-node refusal read;
+    ValueError where it is unset, since a record naming a machine nothing maps is no record."""
+    name = (os.environ if env is None else env).get(NODE_NAME, "")
+    if not name:
+        raise ValueError(f"{NODE_NAME} is unset: this machine's name in the cluster, the one the gate's peers list it by, "
+                         "which the record's host, its served node and the off-node refusal read")
+    return name
+
+
 #: where a row's answer came from (``answer_from``: the report's row, and the ``RECORD`` line's ``answers``)
 AS_WRITTEN = "as the served node wrote it"
 #: ... SPOT's under ``record --sampled-lean`` (`lean_sampled_row`)
@@ -778,7 +793,50 @@ def challenger_coins(challenger: str) -> str:
     No address: the gate is named by its kind alone."""
     if challenger.startswith("gate:"):
         return "the gate's, the auditor's challenger"
+    if challenger.startswith("command:"):
+        return f"simulated: a gate this machine runs ({this_node()}), not the auditor's challenger"
     return f"a development challenger's ({challenger.split(':', 1)[0]}), not the auditor's"
+
+
+#: the challengers reached through the gate's verbs: the auditor device's over ssh, or a gate command on this machine
+GATES = ("gate:", "command:")
+#: SPOT's key in a record's ``coins_on``, as the served table's records name them
+SAMPLED_NAME = "sampled-proofs"
+
+
+def sampled_coins(audit: Path, key_sha512: str | None) -> str:
+    """``live`` when the challenger key the audit's v2 case names (its params' ``challenger.key``) is the one this machine
+    pins (``key_sha512``), else ``simulated``, whatever else the run says: a missing case, a case naming no key and no
+    pin are all simulated."""
+    f = audit / "window" / "case-v2.json"
+    params = json.loads(f.read_text()).get("params") if f.is_file() else None
+    ch = params.get("challenger") if isinstance(params, dict) else None
+    key = ch.get("key") if isinstance(ch, dict) else None
+    public = key.get("public") if isinstance(key, dict) else None
+    if not key_sha512 or not isinstance(public, str) or not re.fullmatch(r"(?:[0-9a-fA-F]{2})+", public):
+        return "simulated"
+    return "live" if hashlib.sha512(bytes.fromhex(public)).hexdigest() == key_sha512.lower() else "simulated"
+
+
+def with_coins(rows: Mapping[str, Any], line: dict[str, Any], coins: tuple[str, str] | None) -> dict[str, Any]:
+    """``rows`` with SPOT's row as `on_coins` gives it on ``coins`` (`sampled_coins`, and the machine they were flipped
+    on), and ``line`` saying them; ``rows`` as they are for None."""
+    if coins is None or "integrity" not in rows:
+        return dict(rows)
+    line |= {"coins": coins[0], "coins_on": {SAMPLED_NAME: coins[1]}}
+    return {**rows, "integrity": on_coins(rows["integrity"], *coins)}
+
+
+def on_coins(row: Mapping[str, Any], coins: str, on: str) -> dict[str, Any]:
+    """SPOT's row ``row`` with its ``coins`` and ``coins_on``; on simulated coins its ε and δ only as
+    `block_record.UNDER_AUDITOR` says them."""
+    from verity_e2e_demo import block_record as BR
+
+    out = {**row, "coins": coins, "coins_on": {SAMPLED_NAME: on}}
+    if coins != "live":
+        said = {k: out.pop(k) for k in ("epsilon", "delta") if k in out}
+        out |= {"epsilon": None, "delta": None, BR.UNDER_AUDITOR: said}
+    return out
 
 
 def coins_said(challenger: str, summary: Mapping[str, Any] | None) -> str:
@@ -795,7 +853,7 @@ def coin_trees_refusal(challenger: str, summary: Mapping[str, Any] | None) -> st
     development session's coins, a plain audit (whose one session runs on a tree of its own by design) and an audit that
     reached no session (no summary, or one naming no ``coin_trees``, which its own verdict refuses) are None, as before."""
     s = summary or {}
-    if not challenger.startswith("gate:") or s.get("plain") or "coin_trees" not in s or s["coin_trees"] == "window":
+    if not challenger.startswith(GATES) or s.get("plain") or "coin_trees" not in s or s["coin_trees"] == "window":
         return None
     return (f"the audit's summary says coin_trees={s['coin_trees']!r}: the sampled proof blocks' sessions took their coin "
             "trees from somewhere other than the gate's session that sampled them, which the auditor's Lean verifier "
@@ -860,7 +918,7 @@ def pieces(serve_dir: Path, window: int, out: Path, env: Mapping[str, str] | Non
     from verity_e2e_demo import block_record as BR
 
     env = dict(os.environ if env is None else env)
-    node = node or socket.gethostname()
+    node = node or this_node()
     got: dict[str, dict[str, Any]] = {}
     for key, (name, comp, owner, what) in PIECES.items():
         if (only is not None and comp not in only) or comp in skip:
@@ -2241,7 +2299,7 @@ def terms(r: Mapping[str, Any], subprotocol: Mapping[str, Any] | None) -> list[s
 
 def error_said(entry: Mapping[str, Any]) -> list[str]:
     """What an accepted subprotocol's block record entry says of its error: each δ of the record's at which its quantity
-    is not established, with the error the run established it at. Where the error leaves terms out (the bandwidth
+    is not established, with the error the run established it at (a missed member's or simulated coins' own why). Where the error leaves terms out (the bandwidth
     audit's ``named_terms``) it is said with them beside it, in the terms' own words (`block_record.error_form`, which
     for PoUB's is its ledger's ``DELTA_FORM`` with the error for δ): there, and in a clause of its own where the
     quantity is established at every δ."""
@@ -2250,7 +2308,7 @@ def error_said(entry: Mapping[str, Any]) -> list[str]:
     named = entry.get("named_terms")
     error = BR.error_form(_ratio(Fraction(entry["error"]), BR.DELTAS), named)
     no = [d for d, x in entry["at"].items() if not x["holds"]]
-    if no and "members" in entry["quantity"]:
+    if no and ("members" in entry["quantity"] or "coins" in entry["quantity"]):
         return [f"at δ = {d}: {entry['at'][d]['why']}" for d in no]
     if no:
         return [f"its quantity is not established at δ = {' or '.join(no)}: the run established it except with {error}"]
@@ -2470,7 +2528,8 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
            run: str | None, servers: Mapping[str, tuple[str | None, str]] | None = None, product: str = "onsite",
            deferred: str | None = None, off_node: bool = False, tree: Mapping[str, str] | None = None,
            served_compare: str | None = None, answer: Mapping[str, Any] | None = None,
-           lean: str = "no composite was read", inference_only: Mapping[str, Any] | None = None,
+           lean: str = "no composite was read", development: bool = False,
+           inference_only: Mapping[str, Any] | None = None, coins: tuple[str, str] | None = None,
            front_group: bool = False) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
     """The window report over ``rows`` (by runner name), its block record (None when a subprotocol about this node
     rejected, erred or was undecided), and the ``RECORD`` line's summary, composed for ``product``: each subprotocol it
@@ -2489,7 +2548,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     doesn't read."""
     from verity_e2e_demo import block_record as BR
 
-    host = socket.gethostname()
+    host = this_node()
     if off_node and host == node:
         raise ValueError(f"a record composed off the served node is not composed on it: this host is {node}")
 
@@ -2498,6 +2557,14 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     at = ({k: (None, "real") for k in rows} | dict(servers or {}) | {"integrity": (node, "real")}
           | {k: (None, "real") for k in drops})
     rows = {k: dropped_row(k, product) if k in drops else dict(r) for k, r in rows.items()}
+    if development and "integrity" in rows:
+        r = rows["integrity"]
+        rows["integrity"] = {"verdict": "missing", "owner": r.get("owner"), "why": f"{DEV_VERDICT}: {DEVELOPMENT_RUN}",
+                             "development": r, **({"answer_from": r["answer_from"]} if "answer_from" in r else {})}
+    if development and answer is not None:
+        lean, answer = f"{lean}; {DEVELOPMENT_RUN}, so Lean's answer {answer.get('verdict')} is not the record's", None
+    if coins is not None and rows.get("integrity", {}).get("verdict") not in (None, "missing"):
+        rows["integrity"] = {**rows["integrity"], "coins": coins[0], "coins_on": {SAMPLED_NAME: coins[1]}}
     apart = {"communication"} & set(rows) - set(drops) if front_group else set()
     for k in apart:
         rows[k]["requests"] = FRONT_GROUP
@@ -2514,7 +2581,8 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
                            "reason": f"its answer is not the block record's {subprotocols[k]} subprotocol: {type(e).__name__}: {e}"[:2000]}
     where = {"host": host, "served_node": host == node,
              "from": HANDED_FROM if off_node else COMPOSED_FROM if host == node else COPIED_FROM, **(tree or {})}
-    left = {k: v for k, v in (("deferred", deferred), ("served_compare", served_compare)) if v}
+    left = {k: v for k, v in (("deferred", deferred), ("served_compare", served_compare),
+                              ("development_run", DEVELOPMENT_RUN if development else None)) if v}
     report = {"format": REPORT_FORMAT, "window": window, "node": node, "run": run, "protocols": rows,
               "servers": {k: at[k][0] for k in rows}, "composed_on": where, **left}
     verdicts = {NAMES[k]: DEV_VERDICT if "development" in r and r.get("verdict") == "missing" else r.get("verdict")
@@ -2543,7 +2611,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
                               "lean": lean}
         line = {"composed": composed, "by": bad, **named, "block_record": None, "reason": report["composed"]["reason"],
                 "why": "block_record carries an accepted subprotocol's certificate only"}
-        report["protocols"] = {**rows, **io}
+        report["protocols"] = {**with_coins(rows, line, coins), **io}
         return report, None, line
     extra = {subprotocols[k]: {"row": r, "server": at[k][0], "runs": r.get("runs") or [run], "source": at[k][1]}
              for k, r in rows.items()
@@ -2557,7 +2625,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
             "record_missing": rec["composed"]["missing"],
             "check": BR.check(rec), "steps": list(steps), "node": node,
             "deployment": rec["monitoring_period"]["deployment"]["id"]}
-    report["protocols"] = {**rows, **io}
+    report["protocols"] = {**with_coins(rows, line, coins), **io}
     return report, rec, line
 
 
@@ -2673,6 +2741,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                                                        "whose verdict line the record names")
     r.add_argument("--steps", help="LO,HI: the window's engine steps, in place of picking them from the serve dir")
     r.add_argument("--off-node", action="store_true", help="composed from the served node's compose hand-off, off it")
+    r.add_argument("--development", action="store_true", help="a development run (DEVELOPMENT=1), which the record says")
     r.add_argument("--sampled-lean", action="store_true",
                    help="sampled proofs' row from this host's run of its Lean on the case's proofs (lean_sampled_row)")
     r.add_argument("--sampled-exe", help="vstar-recursive, with --sampled-lean (default: built here)")
@@ -2680,6 +2749,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                                                   "the product's compiled Lean check's answer there is the record's verdict")
     r.add_argument("--tree", help="the commit of the tree composing the record, which composed_on names")
     r.add_argument("--tree-on", help="the branch the composing host pinned that tree from, with --tree")
+    r.add_argument("--coins-on", default="unnamed",
+                   help="the machine SPOT's challenger flipped its coins on, which the record names")
     r.add_argument("--key-sha512", help="the challenger key's pin Pearl+'s live coins are held to for a verdict of record "
                                         "(H1_KEY_SHA512)")
     r.add_argument("--lane", default="vllm", help="the lane whose own gate key Pearl+'s live session must be reserved "
@@ -2699,7 +2770,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     cd.add_argument("--gate-exit", type=int)
     cd.add_argument("--err", type=Path)
     for q in (p, r):
-        q.add_argument("--node", default=socket.gethostname())
+        q.add_argument("--node")
         q.add_argument("--product", default="onsite")
     a = ap.parse_args(argv)
     if a.cmd in ("pieces", "record"):
@@ -2741,7 +2812,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     if a.cmd == "coin-trees":
         try:
-            why = coin_trees_refusal(a.challenger, _json(a.summary) if a.challenger.startswith("gate:") else None)
+            why = coin_trees_refusal(a.challenger, _json(a.summary) if a.challenger.startswith(GATES) else None)
         except ValueError:
             why = f"the audit's {a.summary} is not JSON, so nothing says where its sessions' coin trees came from"
         if why:
@@ -2874,10 +2945,21 @@ def main(argv: Sequence[str] | None = None) -> int:
               flush=True)
         return 0
     if a.cmd == "pieces":
+        try:
+            node = a.node or this_node()
+        except ValueError as e:
+            print(f"PIECES refused: {e}", flush=True)
+            return 1
         a.out.mkdir(parents=True, exist_ok=True)
-        got = pieces(a.serve_run, a.window, a.out, node=a.node, only=a.only, skip=a.skip, product=a.product)
+        got = pieces(a.serve_run, a.window, a.out, node=node, only=a.only, skip=a.skip, product=a.product)
         return 0 if all(g["verdict"] in ("accept", "missing", "dropped", UNCLAIMED) for g in got.values()) else 1
-    if a.off_node and socket.gethostname() == a.node:
+    try:
+        here = this_node()
+    except ValueError as e:
+        print(f"RECORD refused: {e}", flush=True)
+        return 1
+    a.node = a.node or here
+    if a.off_node and here == a.node:
         print(f"RECORD refused: a record composed off the served node is not composed on it: this host is {a.node}",
               flush=True)
         return 1
@@ -2917,7 +2999,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                                off_node=a.off_node, tree={"tree": a.tree, **({"tree_on": a.tree_on} if a.tree_on else {})}
                                if a.tree else None,
                                served_compare=None if a.served_compare is None else served_compare_line(a.served_compare),
-                               answer=answer, lean=lean, inference_only=io,
+                               answer=answer, lean=lean, development=a.development, inference_only=io,
+                               coins=(sampled_coins(audit, a.key_sha512) if a.off_node else "simulated", a.coins_on),
                                front_group=(a.serve_run / "private" / FRONT_WINDOW).is_file())
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "verdicts.json").write_text(json.dumps(report, indent=1, sort_keys=True, default=str) + "\n")
