@@ -676,11 +676,11 @@ def test_a_scan_registered_with_a_second_tied_input_is_refused_by_the_period_che
 def published(out: Path, setup=sz.W63, seed: bytes = b"warden-run", windows: int | None = None,
               late: tuple[int, ...] = (), change=None) -> Path:
     """The synthetic run's records over ``windows`` execution phases (the setup's by default) published as
-    network_attester_serve's `Publisher` publishes a served run's (each record and its certificate, the wire's rows' registration
+    network_attester_serve's `Publisher` publishes a served run's (each record and its attestation, the wire's rows' registration
     and salts), under a network attester key of its own, beside its `deployment.json`, which carries the session's
     start at base 0 of that key's life; the connections of ``late`` failed late (a void run, their reasons in
     ``fails.records``). ``change`` (a record to the record kept) stands in for a network attester that recorded the
-    served cells otherwise: what it gives is kept and certified, and the wire's rows stay the served record's."""
+    served cells otherwise: what it gives is kept and attested, and the wire's rows stay the served record's."""
     windows = windows or setup.windows
     reqs = [sz._request(setup, i, p) for i, p in enumerate(setup.prompts)]
     served = sz.traffic.serve(setup.params, reqs, setup.arrivals, [1 << 20] * len(reqs), setup.responses, windows,
@@ -910,9 +910,9 @@ def test_the_rows_forms_case_is_the_phases_rows_certificates_and_the_scans_answe
     descriptor (``joint/program.json``, the generator form, `scan_zk.scan_root`, whose one-stage reads are each unit's
     slot entries) as the scan, the block's audit (its descriptor, free inputs and no steps; its registration, whose
     ``SlotEntry_v1{…}/c<j>/o0`` is lane j's ``scan/prog<j>`` root and domain and whose ``scan/state`` is the scan's, and
-    its answer), the registration, and its answer, three records' certificates (requests, responses, fails: its own)
+    its answer), the registration, and its answer, three records' attestations (requests, responses, fails: its own)
     and two row registrations, each named by the registration's roots, and the deployment's signed start, the listed
-    entry's session's, certified under its key in its session. The period's mirror reads the block's
+    entry's session's, attested under its key in its session. The period's mirror reads the block's
     `SlotEntry_v1` template's entries off its descriptor, a stand-in whose closure digest is no pinned Definition's
     (`period_case.SLOT_ENTRY_PINS`), and refuses the honest case at the wiring (`period_case.UNWIRED`); with that digest
     pinned it accepts it, its scan's terms read off the test class's own templates with no free inputs, accepts it
@@ -928,7 +928,7 @@ def test_the_rows_forms_case_is_the_phases_rows_certificates_and_the_scans_answe
     through on the scan's own root (each lane's ``prog<j>``, which `EVERY` units each read: `window_answer`'s
     ``rests``), or naming the first lane's alone or the lanes' in another order, refuses by name an answer naming
     another Input (`period_case.TIE_UNHELD`), and refuses the
-    forged case (a certificate's signature changed) at the certificates, a registration whose egress member's o0
+    forged case (an attestation's signature changed) at the attestations, a registration whose egress member's o0
     root is of a row that is not the ok row, or that names no o0 for a member or for any, at the ok bits
     (`period_case.UNOK`), the tampered case (another Program's
     registration) at the registration, the chain case (the round's registration of the Program) at its refusal, a block

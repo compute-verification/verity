@@ -60,7 +60,7 @@ ROWS_DIGESTS = (
 
 def test_the_lengths_rows_form_is_a_parameter_no_other_schedule_hashes():
     """A schedule without lengths rows hashes what it hashed before they were a parameter (the integer fields, the
-    egress form, the kinds and the reasons), so its digest, and every head and certificate that binds it, is unchanged;
+    egress form, the kinds and the reasons), so its digest, and every head and attestation that binds it, is unchanged;
     the form enters the digest of a schedule that has it, and is no integer field of the schedule the period check
     reads."""
     assert NetworkAttesterParams().lengths is None and PLAIN.lengths is None

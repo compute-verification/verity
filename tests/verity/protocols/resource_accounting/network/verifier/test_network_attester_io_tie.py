@@ -301,7 +301,7 @@ def _swap(cells, a, b):
 
 
 def _cell_tampers(inst):
-    """Each way a server or a prover can make the window's cells differ from what the network attester was certified to
+    """Each way a server or a prover can make the window's cells differ from what the network attester was attested to
     release, as a function of the cells. None where the window has no cells to do it with."""
     sh, m, B, R = inst.shape, inst.map, inst.shape.B, inst.shape.R
     data = [i for i in range(sh.N) if not _marker(m[i])]
