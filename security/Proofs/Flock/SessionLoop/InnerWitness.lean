@@ -23,8 +23,8 @@ namespace Claims.ZKServer
 open Claims Claims.ZKMal
 open _root_.Flock (V F128 Stmt SessionSpec)
 open _root_.Flock.Transcript (header)
-open _root_.Flock.Firewall.Frame (labelFrame wordBytes words)
-open _root_.Flock.Firewall.Finish (Tab)
+open _root_.Flock.ZkServer.Frame (labelFrame wordBytes words)
+open _root_.Flock.ZkServer.Finish (Tab)
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000 -- the session's tape types, as `LoopInnerRound0Own`'s in `Inner`
@@ -70,7 +70,7 @@ theorem _root_.Flock.SecurityProofs.LoopInnerRound0Own_honest (hfix : Loop.Reach
       FlockDeploy.setupOf true x = some (s0, spec, sts) ∧ h.length = q + 2 ∧
       CoinLayer.locate (Loop.roundsOf spec sts) 0 q = (k, j + 1) ∧ Loop.realOf src x w ρ k = .ok (tr, hr) ∧
       Except.map Array.size (Loop.schedSoFar tr (k % 2) (spec.domain (spec.tables[k / 2]!) (k % 2)).toUTF8
-        (_root_.Flock.Firewall.Drive.extras sts[k / 2]! (_root_.Flock.Firewall.Drive.linkPoints sts[k / 2]!
+        (_root_.Flock.ZkServer.Drive.extras sts[k / 2]! (_root_.Flock.ZkServer.Drive.linkPoints sts[k / 2]!
           (Loop.wordsAt x (h.tail.map fun p => CoinLayer.rd p.2) 0))) hr
         ((Array.range (j + 1)).map
           fun i => Loop.wordsAt x (h.tail.map fun p => CoinLayer.rd p.2) (q - (j + 1) + i + 1))) = .ok (j + 1) ∧

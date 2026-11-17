@@ -9,9 +9,9 @@ import Proofs.Flock.Soundness.Game
 /-!
 # The rows link at the compiled `--zk` audit
 
-`analysisZCReg` counts a sampled proof block wrong when it is wrong on the registration (`wrongRegZ`). This file adds the units
+`analysisZCReg` counts a sampled proof block incorrect when it is incorrect on the registration (`incorrectRegZ`). This file adds the units
 whose value layer differs, at a registered read, from the registrant's row (`rowsWrongZ`), and bounds the sampled proof blocks of
-both kinds by `ε_ks + δ_link + δ_rows`, at a registrant's openings `wo` of the registered reads `isRead` whose
+both kinds by `ε_ks + ε_bind + δ_rows`, at a registrant's openings `wo` of the registered reads `isRead` whose
 commitments are the registered ones:
 
 * `RowsLinkEvZK`: the link event with the rows added: every close satisfying message decodes off the value layer on
@@ -21,9 +21,9 @@ commitments are the registered ones:
 * `trial_rows_leZC`: the trial's rows mass at a registered read is at most `t'(1 + k)/2^256`, under A2 for the rows
   finder (`RowsCRZC`), since the trial's opening and the registrant's then collide (`ValueBindingZ.collide_spec`);
 * `ideal_le_trialZC`: `ideal_mass_leZC`'s step from the trial to the audit's extractor, for any trace;
-* `analysisZCRows`, `zk_rowsBindSoundC`: the analysis, and its binding error at `rowsBoundZC`, `δ_link + δ_rows` with
-  `δ_rows` at most `δ_link`'s closed form;
-* `zk_flock_drawnC_rows`: `Audit.extraction_audit_drawn` at it.
+* `analysisZCRows`, `zk_rowsBindSoundC`: the analysis, and its binding error at `rowsBoundZC`, `ε_bind + δ_rows` with
+  `δ_rows` at most `ε_bind`'s closed form;
+* `zk_flock_sampledC_rows`: `Audit.extraction_audit_sampled` at it.
 -/
 
 @[expose] public section
@@ -39,7 +39,7 @@ variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Verity.Boolean.Circuit} {n : 
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
 
-variable {L : Law n} {decode : DecoderZK (C := C) planZ tab} {Dh : Type}
+variable {L : SamplingDesign n} {decode : DecoderZK (C := C) planZ tab} {Dh : Type}
   {Hc : List UInt8 → Dh} (vb : ValueBindingZ A P planZ tab decode Hc)
   (isRead : vb.Pos → Prop) (wo : vb.Pos → vb.Opening)
 
@@ -140,7 +140,7 @@ theorem trial_rows_leZC {t' : ℝ} (ht : 0 ≤ t') (k Rw : ℕ) (c : vb.Pos) [No
 `π c` times the trial's bound `Bt` plus `k/(eRw)` for the waits that give up. -/
 theorem ideal_le_trialZC (k Rw : ℕ) (hRw : 1 ≤ Rw) (c : vb.Pos) (Ψ : L.Ω → List (List (OutZC F D Sl)) → ℝ)
     (h0 : ∀ ω bs, 0 ≤ Ψ ω bs) (h1 : ∀ ω bs, Ψ ω bs ≤ 1)
-    (hoff : ∀ ω, ¬ ReadsDrawZ A P planZ tab vb c ω → Ψ ω = fun _ => 0) {Bt : ℝ} (hBt : 0 ≤ Bt)
+    (hoff : ∀ ω, ¬ ReadsSampleZ A P planZ tab vb c ω → Ψ ω = fun _ => 0) {Bt : ℝ} (hBt : 0 ≤ Bt)
     (htr : ∀ _ : Nonempty (ΩcZ A P planZ tab vb L c), expect (trialValZC planZ R Ψ)
       (trialGZC A Hs P planZ tab vb R τ c k Rw) (trialStratZC A Hs P planZ tab vb R τ c k Rw) ≤ Bt) :
     (∑ ω : L.Ω, expect (ind (accωZC planZ R ω)) (gameωZC A Hs planZ R τ ω) (stratωZC A Hs planZ R τ ω).2 *
@@ -153,11 +153,11 @@ theorem ideal_le_trialZC (k Rw : ℕ) (hRw : 1 ≤ Rw) (c : vb.Pos) (Ψ : L.Ω �
     expectAcc (gameωZC A Hs planZ R τ ω) (stratωZC A Hs planZ R τ ω).2 (accωZC planZ R ω) k (Ψ ω) with hf
   have hΩ : (0 : ℝ) < Fintype.card L.Ω := by exact_mod_cast Fintype.card_pos
   have hB : 0 ≤ Bt + k / (Real.exp 1 * Rw) := add_nonneg hBt (by positivity)
-  have hoff' : ∀ ω, ¬ ReadsDrawZ A P planZ tab vb c ω → f ω = 0 := by
+  have hoff' : ∀ ω, ¬ ReadsSampleZ A P planZ tab vb c ω → f ω = 0 := by
     intro ω hω
     simp only [hf, hoff ω hω, expectAcc_zero, mul_zero]
   have hsum : ∑ ω : L.Ω, f ω = ∑ w : ΩcZ A P planZ tab vb L c, f w.1 := by
-    rw [← Finset.sum_filter_of_ne (p := fun ω => ReadsDrawZ A P planZ tab vb c ω)
+    rw [← Finset.sum_filter_of_ne (p := fun ω => ReadsSampleZ A P planZ tab vb c ω)
       (fun ω _ hne => by by_contra h; exact hne (hoff' ω h))]
     exact Finset.sum_subtype _ (fun ω => by simp) f
   rw [hsum, div_le_iff₀ hΩ]
@@ -297,7 +297,7 @@ noncomputable def analysisZCRows
     (hj : JointZC A Hs planZ k a) :
     ExtractionAnalysis L Reg (batchedSessionZC A Hs planZ) where
   Tr := Reg × (Fin C.N → Bool)
-  wrong Xt := wrongRegZ A P planZ tab vb Xt.1 Xt.2 ∪ rowsWrongZ A P planZ tab vb isRead wo Xt.2
+  incorrect Xt := incorrectRegZ A P planZ tab vb Xt.1 Xt.2 ∪ rowsWrongZ A P planZ tab vb isRead wo Xt.2
   committed R τ := (R, Xc R τ)
   ks S R τ u := ENNReal.ofReal (a S R (zcStrat A Hs planZ τ) (tab S R u) / (1 - rateZ (planZ S R) (tab S R u) k))
   link S R τ u Xt := if Xt.1 = R then
@@ -323,7 +323,7 @@ noncomputable def analysisZCRows
           by_contra h; exact hno (Or.inr ⟨g, hg, hrd, h⟩)
         have hcX : P.Correct Xt u := P.correct_congr (fun g hg => (hno1 g hg).symm) (hlow S R' u hS M hsat)
         rcases Finset.mem_union.1 hu with hw | hw
-        · refine (mem_wrongRegZ A P planZ tab vb).1 hw ⟨hcX, fun c => vb.opening S R' u M c, fun g hg => ?_⟩
+        · refine (mem_incorrectRegZ A P planZ tab vb).1 hw ⟨hcX, fun c => vb.opening S R' u M c, fun g hg => ?_⟩
           obtain ⟨h1, h2⟩ := vb.opening_spec S R' u hS M hsat g hg
           exact ⟨h1, h2.trans ((hno1 g hg).trans (P.correct_eval (hown u) hcX g hg))⟩
         · obtain ⟨g, hg, hrd, hne⟩ := (mem_rowsWrongZ A P planZ tab vb isRead wo).1 hw
@@ -383,7 +383,7 @@ noncomputable def rowsBoundZC (k Rw M : ℕ) (ρ t' : ℝ) (R : Reg) (τ : Cont 
   else ⊤
 
 /-- **The rows link theorem**: `zk_linkSoundC` at `analysisZCRows`, whose binding error carries the rows: at a prover whose
-link and rows finders satisfy A2 and whose registered reads' commitments are the registrant's, `δ_link + δ_rows` with
+link and rows finders satisfy A2 and whose registered reads' commitments are the registrant's, `ε_bind + δ_rows` with
 each at most `Q_s/(1 − ρ)·(2t'(1 + k)/2^256 + 1/(eM) + k/(eR_w))` (`rowsBoundZC`). -/
 theorem zk_rowsBindSoundC (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u) {k : ℕ}
     {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
@@ -489,19 +489,19 @@ theorem zk_rowsBindSoundC (hlow : LoweringSoundZK A P planZ tab decode) (hown : 
     _ = _ := by rw [← Finset.sum_mul]; ring
 
 /-- **The sampled proof blocks of the compiled `--zk` audit, against the registration and the registrant's rows**: it accepts
-with a sampled proof block in `wrongRegZ` or in `rowsWrongZ` with probability at most `ε_ks + δ_link + δ_rows`. -/
-theorem zk_flock_drawnC_rows (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u) {k Rw M : ℕ}
+with a sampled proof block in `incorrectRegZ` or in `rowsWrongZ` with probability at most `ε_ks + ε_bind + δ_rows`. -/
+theorem zk_flock_sampledC_rows (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u) {k Rw M : ℕ}
     (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
     {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ}
     (hj : JointZC A Hs planZ k a) {t' : ℝ} (ht : 0 ≤ t')
     (σ : Strategy (audit L Reg (batchedSessionZC A Hs planZ))) :
     prob (fun o => o.1 = true ∧
-        ¬ Disjoint (wrongRegZ A P planZ tab vb (reg σ) (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw) ∪
+        ¬ Disjoint (incorrectRegZ A P planZ tab vb (reg σ) (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw) ∪
           rowsWrongZ A P planZ tab vb isRead wo (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw)) o.2)
         (audit L Reg (batchedSessionZC A Hs planZ)) σ ≤
       ksAvgZC A Hs planZ k a (reg σ) (cont σ) +
         rowsBoundZC A Hs P planZ tab vb isRead wo k Rw M ρ t' (reg σ) (cont σ) :=
-  extraction_audit_drawn (analysisZCRows A Hs P planZ tab vb isRead wo
+  extraction_audit_sampled (analysisZCRows A Hs P planZ tab vb isRead wo
       (fun R τ => XplurZC A Hs P planZ tab vb R τ k Rw) k (fun S R j => (hr S R j).trans_lt hρ) hlow hown a hj)
     (zc_knowledgeSound_rows A Hs P planZ tab vb isRead wo _ _ hlow hown hj)
     (zk_rowsBindSoundC A Hs P planZ tab vb isRead wo hlow hown hRw hM hρ hr hj ht) σ

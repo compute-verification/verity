@@ -1,12 +1,12 @@
 module
 
 public import Properties.Pouw.ServedValues
-public import Proofs.Pouw.PeriodJ10R
+public import Proofs.Pouw.MonitoringPeriodJ10R
 
 /-!
 # Proof of `RightValues`
 
-`H1J10RCheckedCreditPeriod` at the play whose fixed words are the right blocks' words (`rightWords`) and whose folded
+`H1J10RCheckedCreditMonitoringPeriod` at the play whose fixed words are the right blocks' words (`rightWords`) and whose folded
 words are the blocks not skipped whole. There `UnitFixed` holds with equality, so H1 bounds the right blocks' words
 below `(1 − ε(j))₊·N_live` with no premise on the play's anatomy. The step to size is deterministic: a right block is
 live in a credited window (`good_live`, through `credited_iff`), so the size the right blocks miss of `S` is at most
@@ -18,8 +18,8 @@ live in a credited window (`good_live`, through `credited_iff`), so the size the
 
 namespace Properties.Pouw.ServedValues.SecurityProofs
 
-open Properties.Pouw.PeriodJ10R Properties.Pouw.PeriodJ10R.SecurityProofs Properties.Pouw.ServedValues
-open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
+open Properties.Pouw.MonitoringPeriodJ10R Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs Properties.Pouw.ServedValues
+open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
 
 /-- **The blocks' sizes sum to at most the credit** of the registered declaration under its pinned lowering: the
 blocks are disjoint, so their AND gates outside the ledger are among `lower D`'s AND gates. -/
@@ -57,7 +57,7 @@ theorem size_le_sizePerWord {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) {Np
   rwa [div_le_iff₀ (Nat.cast_pos.mpr (Nat.pos_of_ne_zero h))] at hle
 
 theorem creditLive_nonneg {ι K C B : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n : ℕ}
-    (Wp : ExecutionPhasePlay C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (ws : CreditWindows (Paths C Cd.rounds × B) n)
+    (Wp : ExecutionPhasePlay C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (ws : CreditExecutionPhases (Paths C Cd.rounds × B) n)
     (x : Paths (Paths C Cd.rounds × B) n) : 0 ≤ creditLive Sc Cd Wp ws x := by
   unfold creditLive
   refine Finset.sum_nonneg fun w _ => ?_
@@ -65,7 +65,7 @@ theorem creditLive_nonneg {ι K C B : Type} (Sc : Scheme K) (Cd : Declared ι) {
   exacts [Finset.sum_nonneg fun t _ => Nat.cast_nonneg _, le_rfl]
 
 theorem creditedSize_nonneg {ι K C B : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n : ℕ}
-    (Wp : ExecutionPhasePlay C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (ws : CreditWindows (Paths C Cd.rounds × B) n)
+    (Wp : ExecutionPhasePlay C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (ws : CreditExecutionPhases (Paths C Cd.rounds × B) n)
     (sz : Fin Np → ℕ) (x : Paths (Paths C Cd.rounds × B) n) : 0 ≤ creditedSize Sc Cd Wp ws sz x := by
   unfold creditedSize
   refine Finset.sum_nonneg fun w _ => ?_
@@ -83,7 +83,7 @@ theorem rightSize_nonneg {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n 
 /-- **The size the right blocks miss is at most `σ` times the words they miss**, when every right block is live in a
 credited window. -/
 theorem creditedSize_sub_le {ι K C B : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n : ℕ}
-    (Wp : ExecutionPhasePlay C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (ws : CreditWindows (Paths C Cd.rounds × B) n)
+    (Wp : ExecutionPhasePlay C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (ws : CreditExecutionPhases (Paths C Cd.rounds × B) n)
     (sz : Fin Np → ℕ) (x : Paths (Paths C Cd.rounds × B) n) (good : Fin n → Fin Np → Prop)
     (hgood : ∀ w t, good w t → ws.AcceptedUpTo x w ∧ Wp.liveAt x w t = true) :
     creditedSize Sc Cd Wp ws sz x - rightSize Sc Cd sz good ≤
@@ -142,7 +142,7 @@ theorem creditFloor_le {N S σ ε Gw Gs : ℝ} (hN : 0 ≤ N) (hS : 0 ≤ S) (h�
 /-- **A good block is live in a credited window**: it is paid, and `monitoringPeriodMode` skips every other block whole. -/
 theorem good_live {ι C Ξ V : Type} (Cd : Declared ι) {nB mB n : ℕ} (hr : 0 < Cd.rounds) (σ : Fin nB → Fin mB)
     (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB) (unitOf : Fin nB → ℕ) (hKd : 0 < k sT)
-    (ws : CreditWindows (Coin C Ξ Cd.rounds σ sT) n)
+    (ws : CreditExecutionPhases (Coin C Ξ Cd.rounds σ sT) n)
     (opened : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → ℕ → ℕ → V)
     (rel right : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → Fin (tileCount σ sT) → (ℕ → V) → Prop)
     (Wp : ExecutionPhasePlay C (Coin C Ξ Cd.rounds σ sT) (Fin (tileCount σ sT)) Cd.rounds n)
@@ -169,7 +169,7 @@ theorem rightValues : RightValues := by
   have hUF : UnitFixed Pl' pf mode (fun _ t => (tileWords Sc Cd (tileCount σ sT) t : ℝ))
       (fun x => (∑ w, ∑ j, if mode x (w, j) = .whole then 0 else (tileWords Sc Cd (tileCount σ sT) j : ℝ)) / n) :=
     fun _ _ _ => ⟨le_rfl, le_rfl⟩
-  have hH1 := h1J10RCheckedCreditPeriod σ k hk sT unitOf Sc Cd hn hN hr hM hKd ws opened enc place tile Wp Pl' _
+  have hH1 := h1J10RCheckedCreditMonitoringPeriod σ k hk sT unitOf Sc Cd hn hN hr hM hKd ws opened enc place tile Wp Pl' _
     ρ δs δbind δks hS hρ hρ1 hρN hwmax hlk hG hDD hPre hMoved hReg hDraw hServ hSalt hLucks hUF
   refine le_trans (prob_mono ?_) hH1
   intro x hx

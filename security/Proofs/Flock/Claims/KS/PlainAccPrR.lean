@@ -93,7 +93,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 open Flock FlockSoundness FlockSoundness.Game FlockSoundness.Refine FlockSoundness.Discharge
   FlockSoundness.Discharge.Exec FlockSoundness.Discharge.Tables
-open Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain Claims.Bridge.Custody Claims.Bridge.PlainDraw
+open Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain Claims.Bridge.Custody Claims.Bridge.PlainSample
 open Claims.Bridge.Live
 open Lean (Json)
 
@@ -150,8 +150,8 @@ def PlainAccPrRdR (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) : Prop :=
 
 /-! ## The sample -/
 
-/-- **`checksAtJ` refuses a session without a sample** (`drawLaw false tags none`). -/
-theorem checksAtJ_drawSome {s : Ins} {spec : SessionSpec} {x : Claims.Msg} {link : List ByteArray × List ByteArray}
+/-- **`checksAtJ` refuses a session without a sample** (`sampleDesign false tags none`). -/
+theorem checksAtJ_sampleSome {s : Ins} {spec : SessionSpec} {x : Claims.Msg} {link : List ByteArray × List ByteArray}
     {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : FinalJ} {v : Json}
     (h : checksAtJ s spec x link c₁ mids f v = .ok ()) : ∃ d, s.read.draw = some d := by
   unfold checksAtJ at h
@@ -161,12 +161,12 @@ theorem checksAtJ_drawSome {s : Ins} {spec : SessionSpec} {x : Claims.Msg} {link
   obtain ⟨_, -, h⟩ := FlockSoundness.Refine.ebind_ok h
   obtain ⟨_, -, h⟩ := FlockSoundness.Refine.ebind_ok h
   cases hd : s.read.draw with
-  | none => simp [hd, ProvedScope.drawLaw] at h
+  | none => simp [hd, ProvedScope.sampleDesign] at h
   | some d => exact ⟨d, rfl⟩
 
 /-- **An accepting step of `VR rd` at SHA-512 is at a statement that sets up at a sample** (`decideR_sha512`,
-`checksAtJ_drawSome`). -/
-theorem nextR_acc_draw {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+`checksAtJ_sampleSome`). -/
+theorem nextR_acc_sample {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     (h : ((nextR rd x as cs).eval sha512).1 = .acc) :
     ∃ ins spec sts d, setupOf false x = some (ins, spec, sts) ∧ ins.read.draw = some d := by
   cases ha : actR rd x as cs with
@@ -174,18 +174,18 @@ theorem nextR_acc_draw {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as 
   | coin c => revert h; simp [nextR, ha, Claims.OC.eval]
   | decide s spec sts link c₁ mids f =>
     obtain ⟨-, hc, -, -, -⟩ := decideR_sha512 ha h
-    obtain ⟨d, hd⟩ := checksAtJ_drawSome hc
+    obtain ⟨d, hd⟩ := checksAtJ_sampleSome hc
     exact ⟨s, spec, sts, d, actR_setupOf ha, hd⟩
 
-/-- **A statement some run of `VR rd` accepts at SHA-512 sets up at a sample** (`accK_draw` at `VR rd`). -/
-theorem accR_draw {rd : Claims.Msg → Option FinalP} {x : Claims.Msg}
+/-- **A statement some run of `VR rd` accepts at SHA-512 sets up at a sample** (`accK_sample` at `VR rd`). -/
+theorem accR_sample {rd : Claims.Msg → Option FinalP} {x : Claims.Msg}
     (hacc : ¬ Claims.Flock.NoAcc sha512 (VR rd) x) :
     ∃ ins spec sts d, setupOf false x = some (ins, spec, sts) ∧ ins.read.draw = some d := by
   unfold Claims.Flock.NoAcc at hacc
   push Not at hacc
   obtain ⟨Ω, P, ω, r, hr⟩ := hacc
   obtain ⟨as, has⟩ := FlockDeploy.KS.stepWith_acc _ _ _ _ _ _ _ _ _ hr
-  exact nextR_acc_draw has
+  exact nextR_acc_sample has
 
 /-! ## The simulator -/
 
@@ -695,7 +695,7 @@ statement some run of `VR rd` accepts, from the simulation and the decoders (`Pl
 theorem plain_accPr_le_rdAllR_of (rd : Claims.Msg → Option FinalP) {x : Claims.Msg}
     (hno : ¬ Claims.Flock.NoAcc sha512 (VR rd) x) (hIn : PlainRdInR rd x) : PlainAccPrRdR rd x := by
   obtain ⟨s, hs, hin⟩ := accR_inScope Readable.relation hno
-  obtain ⟨ins, spec, sts, d, hset, hd⟩ := accR_draw hno
+  obtain ⟨ins, spec, sts, d, hset, hd⟩ := accR_sample hno
   have h1 := plain_one hs hin hset
   have h0 : 0 < sts.size := by omega
   have hm := parse_m hs hset h0

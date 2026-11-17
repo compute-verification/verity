@@ -11,8 +11,8 @@ What differs from ``attention-head`` (AttentionHead_v3): the tensor-core step (s
 ``Check_inf``), and the first block's padding. The units' shape is v3's, so the same ``tc_units`` reads them off the graph.
 
 T is per instance: a statement covers the instances of one T (:func:`lowering` takes it; :func:`lowering_for_set` reads it off a
-set whose instances share it). The one unit netlist is the same for every T; the leaf maps and the tail are T's. Proved under
-``verity/flock-circuit`` only (:data:`SCHEMES`)."""
+set whose instances share it). The unit's one circuit description is the same for every T; the leaf maps and the tail are T's.
+Proved under ``verity/flock-circuit`` only (:data:`SCHEMES`)."""
 TEMPLATE = "attention-head-v18"
 FAMILY = "AttentionHead_v18"
 UNIT = "attention-head-v18/sm120-fa2-bf16/tc-step"
@@ -46,10 +46,10 @@ def lowering_for_set(input_set):
 
 def supports(subcircuit, scheme):
     if int(subcircuit.params["D"]) % 16:
-        return f"C-Flock lowers {FAMILY} with D a multiple of 16, not D = {subcircuit.params['D']}"
+        return f"Flock lowers {FAMILY} with D a multiple of 16, not D = {subcircuit.params['D']}"
     if scheme in SCHEMES:
         return None
-    return (f"C-Flock proves {subcircuit.id} under verity/flock-circuit ({', '.join(SCHEMES)}: tensor-core steps as units, the "
+    return (f"Flock proves {subcircuit.id} under verity/flock-circuit ({', '.join(SCHEMES)}: tensor-core steps as units, the "
             f"softmax in the statement), not under {scheme}")
 
 

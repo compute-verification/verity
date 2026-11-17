@@ -536,7 +536,5 @@ def ForwardBoundAt (b n wc m D Q k : ℕ) (G : Labelling.TopoDAG n) (W : Fin n �
         k ≤ (Finset.univ.filter fun v => (A₂ (A₁ ω) v).run ((p3Model n wc).answer ω) = topLabel G W ω v).card) ≤
       (n : ℝ≥0∞) * 2 ^ m * ((((n * (Q + 1) + 2 * n) ^ 2 : ℕ) : ℝ≥0∞) / 2 ^ b) ^ (s' + 1)
 
-theorem forwardBound_eq_at (n wc m D Q k : ℕ) (G : Labelling.TopoDAG n) (W : Fin n → Lab n wc) :
-    ForwardBound n wc m D Q k G W = ForwardBoundAt (n * wc) n wc m D Q k G W := rfl
 
 end PousP3Forward

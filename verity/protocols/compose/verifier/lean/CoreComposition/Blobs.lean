@@ -1,4 +1,9 @@
-/-
+module
+
+public import CoreComposition.Same
+public import CoreProtocol.Blobs
+
+/-!
 A composition whose subprotocols may read blobs (`Core.BlobProtocol`, the content-addressed files a check reads beside its
 three byte strings). `productB` hands the caller's blobs to every subprotocol, and a subprotocol that reads none
 (`Core.Protocol.withoutBlobs`, a coercion) ignores them. Its parameters, commitment, evidence and verdict rule are
@@ -6,10 +11,6 @@ three byte strings). `productB` hands the caller's blobs to every subprotocol, a
 `product` of its subprotocols without them. So what `product` accepts, a `productB` accepts on blobs, with each subprotocol
 answering its own case on the same blobs. `sameB` is `same` over blobs in the same way (`sameB_on`).
 -/
-module
-
-public import CoreComposition.Same
-public import CoreProtocol.Blobs
 
 @[expose] public section
 

@@ -17,7 +17,7 @@ import Flock.HmNets
 import Flock.Canon
 import Flock.JsonParse
 import Flock.Net
-import Flock.Firewall
+import Flock.ZkServer
 import Flock.Norm
 import Flock.Public
 import Flock.Statement
@@ -63,7 +63,7 @@ length is the closed header's plus the digest's 128 hex characters (`hdr_len`), 
 -/
 
 @[expose] public section
-open Flock Flock.Firewall RecDeploy.VStarNets FlockVBridge.Names
+open Flock Flock.ZkServer RecDeploy.VStarNets FlockVBridge.Names
 open Properties.Flock.Nets (LinesFit)
 open Lean (Json)
 
@@ -71,7 +71,7 @@ set_option maxHeartbeats 0 -- the `decide +kernel` steps below evaluate the unit
 set_option maxRecDepth 200000
 
 namespace FlockDeploy.Concrete
-open FlockSoundness.Discharge.Recursion.FirewallJson
+open FlockSoundness.Discharge.Recursion.ZkServerJson
 
 theorem hash_size (m : ByteArray) : (Sha512.hash m).size = 64 := by
   unfold Sha512.hash

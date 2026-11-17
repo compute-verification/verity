@@ -271,8 +271,8 @@ padding. -/
 theorem msgBit_seg {p : Port} (hs : p.segs = some segs) {j k : Nat} (hj : j < segs.size)
     (hk1 : firstOf segs j ≤ k) (hk2 : k < firstOf segs (j + 1)) (t : Nat) :
     HmRow.msgBit p k t =
-      segVal p j k (firstOf segs j) (HmRow.blockBit t).1 (HmRow.blockBit t).2 segs[j]!.1 := by
-  rcases hbb : HmRow.blockBit t with ⟨o, b⟩
+      segVal p j k (firstOf segs j) (HmRow.chunkBit t).1 (HmRow.chunkBit t).2 segs[j]!.1 := by
+  rcases hbb : HmRow.chunkBit t with ⟨o, b⟩
   simp only [HmRow.msgBit, hbb, hs, Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size, Nat.sub_zero,
     Nat.add_sub_cancel, Nat.div_one, Id.run_bind]
   generalize hR : Id.run (forIn (List.range' 0 segs.size 1) ((none : Option HmRow.MsgBit), (0 : Nat)) _) = R
@@ -284,13 +284,13 @@ theorem msgBit_seg {p : Port} (hs : p.segs = some segs) {j k : Nat} (hj : j < se
 /-- A compression from the outer message's first on reads the segments' digests, then the outer padding. -/
 theorem msgBit_outer {p : Port} (hs : p.segs = some segs) {k : Nat} (hk : firstOf segs segs.size ≤ k) (t : Nat) :
     HmRow.msgBit p k t =
-      if 128 * (k - firstOf segs segs.size) + (HmRow.blockBit t).1 < 64 * segs.size then
-        .digest (firstOf segs ((128 * (k - firstOf segs segs.size) + (HmRow.blockBit t).1) / 64 + 1) - 1)
-          (64 * ((128 * (k - firstOf segs segs.size) + (HmRow.blockBit t).1) % 64 / 8) + 56 -
-            8 * ((128 * (k - firstOf segs segs.size) + (HmRow.blockBit t).1) % 64 % 8) + (HmRow.blockBit t).2)
-      else .const ((((HmRow.tailOf p).get! (128 * (k - firstOf segs segs.size) + (HmRow.blockBit t).1 -
-        64 * segs.size)).toNat >>> (HmRow.blockBit t).2) % 2 == 1) := by
-  rcases hbb : HmRow.blockBit t with ⟨o, b⟩
+      if 128 * (k - firstOf segs segs.size) + (HmRow.chunkBit t).1 < 64 * segs.size then
+        .digest (firstOf segs ((128 * (k - firstOf segs segs.size) + (HmRow.chunkBit t).1) / 64 + 1) - 1)
+          (64 * ((128 * (k - firstOf segs segs.size) + (HmRow.chunkBit t).1) % 64 / 8) + 56 -
+            8 * ((128 * (k - firstOf segs segs.size) + (HmRow.chunkBit t).1) % 64 % 8) + (HmRow.chunkBit t).2)
+      else .const ((((HmRow.tailOf p).get! (128 * (k - firstOf segs segs.size) + (HmRow.chunkBit t).1 -
+        64 * segs.size)).toNat >>> (HmRow.chunkBit t).2) % 2 == 1) := by
+  rcases hbb : HmRow.chunkBit t with ⟨o, b⟩
   simp only [HmRow.msgBit, hbb, hs, Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size, Nat.sub_zero,
     Nat.add_sub_cancel, Nat.div_one, Id.run_bind]
   generalize hR : Id.run (forIn (List.range' 0 segs.size 1) ((none : Option HmRow.MsgBit), (0 : Nat)) _) = R

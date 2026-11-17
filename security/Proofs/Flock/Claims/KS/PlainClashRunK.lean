@@ -21,7 +21,7 @@ namespace FlockDeploy.KS
 
 open Flock FlockSoundness FlockSoundness.Game FlockSoundness.Refine FlockSoundness.Discharge
   FlockSoundness.Discharge.Exec FlockSoundness.Discharge.Tables
-open Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain Claims.Bridge.Custody Claims.Bridge.PlainDraw
+open Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain Claims.Bridge.Custody Claims.Bridge.PlainSample
 open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128

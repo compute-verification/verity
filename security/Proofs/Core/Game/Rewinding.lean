@@ -12,8 +12,8 @@ Flock's compiled theorem (its soundness package's `README.md` §1.2) covers ever
 including one that never "knows" a table. Its committed table is the **plurality** table: at
 each position, the column the prover opens in the most runs (`IsPlurality`). A run is `bad` when
 it opens some position to a column off the plurality; a pair of runs `conflict`s when both open
-one position, to different columns. By `Merkle.opening_binding`, each conflicting pair (both
-paths valid against one cap) is a collision of the hash, found by running the prover twice with
+one position, to different columns. By `Merkle.openCollPair_spec`, each conflicting pair (both
+paths valid against one cap) gives a collision of the hash, found by running the prover twice with
 independent coins.
 
 `bad_sq_le`: if each run opens at most `Q` of the `N` positions, then

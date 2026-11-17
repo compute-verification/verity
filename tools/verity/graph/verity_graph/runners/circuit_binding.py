@@ -50,7 +50,7 @@ PINS = ".circuit-check.json"
 
 def cache() -> Path:
     """circuit-check's cache on this machine: check's own where check keeps it unless ``CHECK_CACHE`` moves it, as on every node
-    (`tools/verity/check/common.py`'s ``cache_dir() / "circuit-check"``).  ``CHECK_CACHE`` is check's registry's to read
+    (`tools/check/common.py`'s ``cache_dir() / "circuit-check"``).  ``CHECK_CACHE`` is check's registry's to read
     (`tests/lint/test_repo_env_reads.py`), so a machine that sets it keeps these tasks' records apart from check's."""
     return Path.home() / ".cache" / "verity-check" / "circuit-check"
 

@@ -24,7 +24,7 @@ export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$PATH PYTHONDONTWRITEBYTECODE=1
 command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 uv sync -q --all-packages --extra torch-cpu > "$O/sync.log" 2>&1 || { tail -20 "$O/sync.log"; exit 5; }
 PY=$REPO/.venv/bin/python
-export PYTHONPATH=$REPO:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/numerical/python
+export PYTHONPATH=$REPO:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/numerical/python
 read -ra UNITS <<< "${WALK_UNITS:-gq:K=2048}"
 SLOTS=${WALK_SLOTS:-2048} WIDE=${WALK_WIDE:-1,8,4,2} THREADS=${WALK_THREADS:-$(nproc),4} REPS=${WALK_REPS:-2}
 log "unit-walk: source $(git rev-parse HEAD), units ${UNITS[*]}, builds in $W"
@@ -50,5 +50,26 @@ for i in "${staged[@]}"; do
   if grep -q '"same":false' "$O/walk-$i.out"; then log "walk ${UNITS[$i]}: a walk's packed words are not the first run's"; rc=9; fi
   rm -rf "$W/u$i"
 done
+"$PY" - "$O" "$rc" "${UNITS[@]}" <<'EOF' || rc=10
+import json, re, sys
+from pathlib import Path
+from verity_bench import kit
+out, rc, units = Path(sys.argv[1]), int(sys.argv[2]), sys.argv[3:]
+res = kit.writer(out)
+res.validation("passed" if rc == 0 else "failed", "every type staged and walked, each walk's packed words the first run's",
+               f"rc {rc}")
+for i, unit in enumerate(units):
+    f = out / f"walk-{i}.out"
+    walks = [json.loads(x.split("\t", 1)[1]) for x in f.read_text().splitlines() if x.startswith("WALK\t")] if f.exists() else []
+    good = [w for w in walks if w["ok"] and w["same"]]
+    us = lambda w: w["cpu_s"] / w["slots"] * 1e6
+    best = min(good, key=us) if good else None
+    base = [us(w) for w in good if w["wide"] == 1 and w["ahead"] == 0 and w["keep"] == 0]
+    res.measurement("proofs/unit-walk-cpu-per-slot", best and us(best), "CPU microseconds a slot", mark="measured",
+                    member=re.sub(r"[^a-z0-9]+", "-", unit.lower()).strip("-") + "-cpu",
+                    why=None if best else "no walk of this type was ok and its first run's",
+                    extra={"block_type": unit, "baseline_us": min(base) if base else None,
+                           **({k: best[k] for k in ("wide", "ahead", "keep", "threads", "slots", "rows")} if best else {})})
+EOF
 log "unit-walk: done, rc $rc"
 exit $rc

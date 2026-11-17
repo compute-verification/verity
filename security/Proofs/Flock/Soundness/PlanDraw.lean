@@ -12,7 +12,7 @@ the window's one key, and the window around it:
   without a call index.
 * `drawn key call strata L`: the units `plan.draw` draws for one call, before sorting: each stratum's
   `Key.subset(k, len(units), context)`, mapped through its units, each swap's stream read to `L` bytes.
-* `window key calls L`: every call admitted, no call index framed twice (X-SPC-107's admission inside the draw), then each
+* `executionPhase key calls L`: every call admitted, no call index framed twice (X-SPC-107's admission inside the draw), then each
   call's `drawn` under the one key, its units in the window's numbering.
 -/
 
@@ -22,7 +22,7 @@ namespace FlockSoundness.PlanDraw
 
 open Randomness
 
-/-- A layout stratum as `plan.draw` reads it: its template name, its units in order, and the size its law gives it. -/
+/-- A layout stratum as `plan.draw` reads it: its template name, its units in order, and the size its samplingDesign gives it. -/
 structure Stratum where
   name : String
   units : List Nat
@@ -46,15 +46,15 @@ structure Call where
   strata : List Stratum
 
 /-- The calls' draws under the one key, in order. -/
-def drawAll (key : ByteArray) : List Call → Nat → Option (List Nat)
+def sampleAll (key : ByteArray) : List Call → Nat → Option (List Nat)
   | [], _ => some []
   | c :: cs, L => do
     let d ← drawn key c.index c.strata L
-    let r ← drawAll key cs L
+    let r ← sampleAll key cs L
     pure (d ++ r)
 
 /-- **The window draw**: refused if a call index repeats, else every call's draw under the one key. -/
-def window (key : ByteArray) (calls : List Call) (L : Nat) : Option (List Nat) :=
-  if (calls.map fun c => frames c.index).Nodup then drawAll key calls L else none
+def executionPhase (key : ByteArray) (calls : List Call) (L : Nat) : Option (List Nat) :=
+  if (calls.map fun c => frames c.index).Nodup then sampleAll key calls L else none
 
 end FlockSoundness.PlanDraw

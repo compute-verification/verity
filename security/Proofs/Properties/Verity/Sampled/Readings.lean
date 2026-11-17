@@ -4,7 +4,7 @@ public import Proofs.Properties.Verity.Sampled.Decoders
 public import Proofs.Properties.Verity.Sampled.Walk
 
 /-!
-# Sampled proofs' coupling: the readings at a layout
+# SPOT's coupling: the readings at a layout
 
 The readings `MovesReach` reads, at a layout of the session's rounds (`Slot`): where each round's message is fixed on
 the period's game, and what the play's output reveals for it.

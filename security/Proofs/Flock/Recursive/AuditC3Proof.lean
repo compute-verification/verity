@@ -15,7 +15,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.C3.VStarList.Range
-import Proofs.Flock.Recursive.FirewallZK
+import Proofs.Flock.Recursive.ZkServerZK
 import Proofs.Flock.Recursive.Loads
 import Proofs.Flock.Recursive.Private
 import Proofs.Flock.Recursive.RegExtract
@@ -25,7 +25,7 @@ import Proofs.Flock.Soundness.Game
 # The recursive audit at candidate 3: its proof
 
 `Flock.SecurityProofs.RecursiveAuditHolo : Flock.Guarantees.RecursiveAuditHolo`, `PublicAudit`'s proof at candidate 3's
-table, and `RecursiveFirewallPrivate`.
+table, and `RecursiveZkServerPrivate`.
 
 In (i), as in `PublicAudit`'s:
 * where some index has no session that types, the event is empty (`prob_sessionsR_untypable`);
@@ -36,7 +36,7 @@ In (i), as in `PublicAudit`'s:
   (`zk_sessions_recursive_fork_regV`, `Recursive/RegExtract.lean`: the extraction from piece (a)'s runs, off a
   registrant's row off a value the verifier registers itself at its rows, `valueSrcAll`, else `valueFinder`, off a
   read's leaf off the table's, else `leafFinder`, and off a read of R's level-0 top off its node's row under the held
-  salts, else `saltFinder`, and off a held top other than `bcs'`, else `topFinder`, at `_hstk`), here at
+  salts, else `saltFinder`, and off a held top other than `bcs'`, else `topFinder`, under `_hstk`), here at
   the checked sessions (`checkedC3`), whose games are the typed sessions', so the transported prover plays them;
 * at inputs whose inner shape check 5 refuses (`checkInnerStmt`, `AcceptsC3`'s last conjunct), the event is empty; where
   it passes, `T_LOG` is zero, so the slots have one typing, the registered one `hp.τ` (`typing_eq_registered`), and the
@@ -53,10 +53,10 @@ Candidate 3's table ignores the last round's coin, as its pick does (`schedInner
 gap 2 is read at VBridge at the committed rounds (`zk_sessions_recursive_fork_innerLV`, `innerC`'s form off
 `ValueColl ∨ LeafColl ∨ SaltColl ∨ TopColl` that `RegExtract`'s proof reads).
 
-`_hstk` is read here only as `TopColl`'s collision (`topFinder`): VBridgeCOff is a premise. `vbridge_checked` and
+`_hstk` is read here only as `TopColl`'s collision (`TopColl.cand`): VBridgeCOff is a premise. `vbridge_checked` and
 `vbridgeC_checked` carry VBridge and VBridgeC from the typed sessions to the checked ones.
 
-(ii) is `RecursiveFirewallPrivate`.
+(ii) is `RecursiveZkServerPrivate`.
 -/
 
 @[expose] public section
@@ -128,7 +128,7 @@ theorem acceptsZKR_of_keepOwn {Q : VStmt} {Reg' : Type} {z : Q.Outer Reg'}
 
 /-- **VBridge at the typed sessions gives it at the checked sessions**, which accept only what the typed sessions accept
 (`acceptsZKR_of_keepOwn`) and whose reads, layers and commit strings are theirs. -/
-theorem vbridge_checked {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
+theorem vbridge_checked {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
     {Reg' Reg₂ : Type} {ish : RecVStar.Inner} {cs : List (Cm × I.Coin) → Option Flock.RecVStar.InnerCommits}
     {coins : List (Cm × I.Coin) → Option Flock.RecCoins.Source} {bind : Fin S → VStar.Bindings}
     {rows : Option (Array Flock.Registered.Port)}
@@ -153,7 +153,7 @@ theorem vbridge_checked {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Typ
     hdec, hfull⟩
 
 /-- **VBridgeC at the typed sessions gives it at the checked sessions**, as `vbridge_checked`. -/
-theorem vbridgeC_checked {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
+theorem vbridgeC_checked {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
     {Reg' Reg₂ : Type} {ish : RecVStar.Inner} {cs : List (Cm × I.Coin) → Option Flock.RecVStar.InnerCommits}
     {coins : List (Cm × I.Coin) → Option Flock.RecCoins.Source} {bind : Fin S → VStar.Bindings}
     {rows : Option (Array Flock.Registered.Port)}
@@ -309,14 +309,14 @@ theorem recursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
 theorem RecursiveAuditHoloNoA3 : Flock.Guarantees.RecursiveAuditHoloNoA3 := by
   refine And.intro ?_ ?_
   swap
-  · exact RecursiveFirewallPrivate
+  · exact RecursiveZkServerPrivate
   exact recursiveAuditC3AtNoA3 Flock.Guarantees.holoCTs Flock.Guarantees.holoMap
 
 /-- **The recursive audit at candidate 3, as the verifier runs it.** -/
 theorem RecursiveAuditHolo : Flock.Guarantees.RecursiveAuditHolo := by
   refine And.intro ?_ ?_
   swap
-  · exact RecursiveFirewallPrivate
+  · exact RecursiveZkServerPrivate
   exact recursiveAuditC3At Flock.Guarantees.holoCTs Flock.Guarantees.holoMap
 
 end Flock.SecurityProofs

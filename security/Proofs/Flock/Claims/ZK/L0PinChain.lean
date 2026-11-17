@@ -55,7 +55,7 @@ its count, a live history's messages are the binding and the bodies at the rep's
 namespace Claims.ZKServer
 
 open _root_.Flock (F128)
-open _root_.Flock.Firewall.Frame (Cfg Masker Draws MaskSlot absorbed nLig)
+open _root_.Flock.ZkServer.Frame (Cfg Masker Draws MaskSlot absorbed nLig)
 open FlockSoundness.Refine (Frame encs)
 
 /-! ## The rounds' places -/
@@ -87,7 +87,7 @@ theorem absPos_ood_add (l : _root_.Flock.Zk.PadLayout) (t : ℕ) :
 
 /-- **The algebraic phase ends at level 0's out-of-domain pad's place.** -/
 theorem nPiop_ood (l : _root_.Flock.Zk.PadLayout) (d : Draws) (mk : Option MaskSlot) (hk : 0 < l.k0) :
-    (Cfg.ofDraws l d mk).nPiop = absPos l (l.lgOod 0) := by
+    (Cfg.ofSamples l d mk).nPiop = absPos l (l.lgOod 0) := by
   show (absorbed l).size - nLig l = _
   have hlig : nLig l = l.nOod0 + 4 * l.k0 + 4 := by
     unfold nLig
@@ -116,7 +116,7 @@ end Claims.ZKServer
 namespace FlockComplete.LigLock
 
 open Flock
-open _root_.Flock.Firewall.Frame (Cfg Draws MaskSlot Masker)
+open _root_.Flock.ZkServer.Frame (Cfg Draws MaskSlot Masker)
 open Claims.ZKServer (absPos zeros_get! l0Off l0N l0K l0Nc absPos_ood_add)
 
 variable {coin : ℕ → ℕ → F128} {p0 : ℕ} {P : List UInt8} {T : F128} {cap : ByteArray} {sch : Schedule}
@@ -127,7 +127,7 @@ variable {coin : ℕ → ℕ → F128} {p0 : ℕ} {P : List UInt8} {T : F128} {c
 counts named). -/
 theorem l0Sent_at (hk : 0 < lay.k0) (hood : lay.nOod0 = 1) (hkk : sch.k0 = lay.k0) (len : ℕ) {i : ℕ}
     (hi1 : 1 ≤ i) (hi : i ≤ sch.k0 + 2) :
-    L0Sent (Cfg.ofDraws lay d mk) (absPos lay (lay.lgOod 0) + l0Off i) (l0N i) (l0K i) (l0Nc i)
+    L0Sent (Cfg.ofSamples lay d mk) (absPos lay (lay.lgOod 0) + l0Off i) (l0N i) (l0K i) (l0Nc i)
       (l0BodyAt coin p0 P T cap sch t b lay (Array.replicate len 0) rep extra nonce i)
       (l0BodyAt coin p0 P T cap sch t b lay d.h rep extra nonce i) := by
   rcases Nat.lt_or_ge i 2 with h2 | h2
@@ -165,7 +165,7 @@ end FlockComplete.LigLock
 namespace Claims.ZKServer.LeanRelease
 
 open _root_.Flock (F128)
-open _root_.Flock.Firewall.Frame (Cfg Masker Draws MaskSlot absorbed)
+open _root_.Flock.ZkServer.Frame (Cfg Masker Draws MaskSlot absorbed)
 open FlockSoundness.Refine (Frame encs)
 
 /-- **A live history's level-0 messages**: where the frame takes the coins before round `J` outside a masked phase,
@@ -199,12 +199,12 @@ theorem l0_chain {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : M
     (h[J]'(by omega)).1 = 0 :: (encs (openBind T₀ cap₀) ++ (Frame.sq 2 (L.coins x J)).enc) ∧
       ∀ i (hi1 : 1 ≤ i) (hi2 : i ≤ sch.k0 + 2), (h[J + i]'(by omega)).1 =
         0 :: FlockComplete.LigLock.l0BodyAt coin p0 P T cap sch t b (L.lay x (L.rep x J))
-          (L.drawsAt x ρ (L.rep x J)).h rep extra nonce i := by
+          (L.samplesAt x ρ (L.rep x J)).h rep extra nonce i := by
   have hlt : ∀ j, j ≤ h.length → (h.take j).length = j := fun j hj => by
     rw [List.length_take]
     omega
   have hc0 : L.cfg x ρ (h.take J) =
-      Cfg.ofDraws (L.lay x (L.rep x J)) (L.drawsAt x ρ (L.rep x J)) (L.slot x (L.rep x J)) := by
+      Cfg.ofSamples (L.lay x (L.rep x J)) (L.samplesAt x ρ (L.rep x J)) (L.slot x (L.rep x J)) := by
     unfold cfg
     rw [hlt J (by omega)]
   have hcfg : ∀ j, J ≤ j → j ≤ J + sch.k0 + 2 → L.cfg x ρ (h.take j) = L.cfg x ρ (h.take J) := by
@@ -215,7 +215,7 @@ theorem l0_chain {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : M
       ∀ q, q < (L.cfg x ρ (h.take j)).order.size → (L.cfg x ρ (h.take j)).order[q]! < (L.cfg x ρ (h.take j)).h.size := by
     intro j h1 h2
     rw [hcfg j h1 h2, hc0]
-    exact ofDraws_order (L.lay x (L.rep x J)) (L.draws ρ (L.rep x J)) (L.slot x (L.rep x J))
+    exact ofSamples_order (L.lay x (L.rep x J)) (L.draws ρ (L.rep x J)) (L.slot x (L.rep x J))
   have hosz : (L.cfg x ρ (h.take J)).order.size = (absorbed (L.lay x (L.rep x J))).size := by
     rw [hc0]
     rfl
@@ -268,7 +268,7 @@ theorem l0_chain {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : M
       intro hi2
       obtain ⟨m', hA', hon', hl0', hi', hpos'⟩ := ih (by omega)
       have hS := FlockComplete.LigLock.l0Sent_at (coin := coin) (p0 := p0) (P := P) (T := T) (cap := cap)
-        (t := t) (b := b) (rep := rep) (extra := extra) (nonce := nonce) (d := L.drawsAt x ρ (L.rep x J))
+        (t := t) (b := b) (rep := rep) (extra := extra) (nonce := nonce) (d := L.samplesAt x ρ (L.rep x J))
         (mk := L.slot x (L.rep x J)) (by omega) hood hlk.symm len hi1 (by omega)
       obtain ⟨G, H, hR, hBz, hBh⟩ := id hS
       have hJi : J + i < h.length := by omega
@@ -276,7 +276,7 @@ theorem l0_chain {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : M
       have hc' := hci i hi1 (by omega)
       have hmsg := L.msg_l0 (n := l0N i) (k := l0K i)
         (Bh := FlockComplete.LigLock.l0BodyAt coin p0 P T cap sch t b (L.lay x (L.rep x J))
-          (L.drawsAt x ρ (L.rep x J)).h rep extra nonce i) wk x w ρ κ h hl hown (J + i) hJi
+          (L.samplesAt x ρ (L.rep x J)).h rep extra nonce i) wk x w ρ κ h hl hown (J + i) hJi
         (hkd (J + i) (by omega) (by omega)) hA'
         (by rw [hcfg (J + i) (by omega) (by omega), hc0, hc']; exact hS)
         (hsi i hi1 (by omega)) (hord (J + i) (by omega) (by omega)) hon' hi' hpos' (by rw [hc']; exact hk2)
@@ -313,7 +313,7 @@ theorem l0_chain {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : M
   intro i hi1 hi2
   obtain ⟨m', hA', hon', -, hi', hpos'⟩ := hst i hi1 hi2
   have hS := FlockComplete.LigLock.l0Sent_at (coin := coin) (p0 := p0) (P := P) (T := T) (cap := cap)
-    (t := t) (b := b) (rep := rep) (extra := extra) (nonce := nonce) (d := L.drawsAt x ρ (L.rep x J))
+    (t := t) (b := b) (rep := rep) (extra := extra) (nonce := nonce) (d := L.samplesAt x ρ (L.rep x J))
     (mk := L.slot x (L.rep x J)) (by omega) hood hlk.symm len hi1 hi2
   obtain ⟨hk2, h0, hnc⟩ := l0K_ok i
   have hc' := hci i hi1 hi2

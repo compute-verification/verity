@@ -28,7 +28,7 @@ committed, in place of the Match capture's stand-ins, with every value where the
   `a9.capture_words` read these in place of the capture, so `a11.py`'s and `a9.py`'s own loops pick, evaluate and stage
   the same kinds and units into ``OUT/saved-a11`` and ``OUT/saved-a9``. Every operand and return is compared word by word
   with the capture's (``OUT/compare.json``).
-* **Audit.** ``audit`` is `a11.py` with the registration window naming the committed values. Run it with ``--load-values``
+* **Audit.** ``audit`` is `a11.py` with the docket window naming the committed values. Run it with ``--load-values``
   on each saved directory, as a10.sh does.
 """
 from __future__ import annotations
@@ -244,7 +244,7 @@ class Committed:
     def row_of(self, m: dict) -> dict:
         r = self.rows.get(id(m))
         if r is None:
-            raise LookupError(f"{m['name']}: no Program row of record aligned with this Call (compare.json's record.alignment)")
+            raise LookupError(f"{m['name']}: no Program workload of record aligned with this Call (compare.json's record.alignment)")
         return r
 
     def entry(self, m: dict) -> dict:
@@ -278,7 +278,7 @@ class Committed:
         return out
 
     def operands(self, res, store, vals, m: dict) -> list[np.ndarray]:
-        """The Call's operands from its row of record (module docstring), each compared with the capture's."""
+        """The Call's operands from its workload of record (module docstring), each compared with the capture's."""
         from verity_vllm.check.replay import evaluate as EV
         from verity_vllm.commit.opened import OpeningNotVerified
         if id(m) in self._ops:

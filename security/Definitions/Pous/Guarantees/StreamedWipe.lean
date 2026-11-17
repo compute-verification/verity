@@ -8,7 +8,7 @@ public import Definitions.Pous.Model.StreamedWipe
 A proof of secure erasure for memory wipes, in place of the permutation-based
 retention for wipes: the ideal-permutation premise (C8) is false for the reference Feistel10-SHAKE256 `Π₂`, where
 1.53% of the fill rebuilds any label. The game is `Security/Definitions/Pous/Model/StreamedWipe.lean`,
-the protocol `verity/core/protocols/pous/PROTOCOL.md` ("The streamed-label wipe"). Proofs:
+the protocol `verity/protocols/accounting/pous/verifier/PROTOCOL.md` ("The streamed-label wipe"). Proofs:
 `Security/Proofs/Pous/StreamedWipe/`.
 
 **What they rest on.** No named assumption. The labels' PRF (C3, claim `prf/sha-512`) enters as an advantage term in
@@ -17,12 +17,12 @@ physical premises enter as the game's shape, and the challenger's deployment mus
 
 - *no unaccounted tier*: `M` is every bit the server can hold when the fill ends, all its memory tiers;
 - C6, *egress certified over the whole wipe*: `E` bounds the bits that left the boundary from the fill's start to the
-  last challenge, as the network certifier counts them, and the deadline keeps an answer from being fetched from
+  last challenge, as the network attester counts them, and the deadline keeps an answer from being fetched from
   outside in any other way;
 - C5, *no side channel*: no label reaches the outside except through that egress, and nothing reaches the server during
   the challenges but the indices and what the outside sends, which is a function of `ξ` and the indices.
 
-The game is not yet tied to the actual-circuit model of `Definitions.Accounting.Physical`, whose `Memory` and `Links`
+The game is not yet tied to the actual-circuit model of `Definitions.Registration.Physical`, whose `Memory` and `Links`
 constraints are these premises' forms there.
 
 **What it covers.** The sequential reveal: round `j`'s answer reads the indices before it, not those after. A batched

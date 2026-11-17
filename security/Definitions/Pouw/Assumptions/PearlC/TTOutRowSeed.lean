@@ -17,11 +17,11 @@ The reduction reads four conditions, all definitions here, each for the statemen
   noise line `i`) only. It holds of every `devAt p G pr` by `rfl` (`devAt_rowLocal`); for an abstract record, credits
   aren't additive over rows without it.
 - **(C1) `RowSeedNoise sem sem'`:** the per-row noise `sem'` is `sem` on the split workload, row by row.
-- **(C2) the per-row cap:** `pearlCProtocolDevRev1RowCap` and `pearlCTilesDevRev1RowCap` are rev1's protocol and tiles
+- **(C2) the per-row cap:** `pearlCProtocolDevRev1RowInertBound` and `pearlCTilesDevRev1RowInertBound` are rev1's protocol and tiles
   with the cap checked for every row (every credited row, per tile). An aggregate cap doesn't transfer: a row over its
   own cap is excluded in the split game but would be credited in the row-seeded one. The per-row cap implies the
   aggregate one. At a census k the served check caps each row at `ρr = 4ρ` and the tile at `ρ`
-  (`pearlCProtocolDevRev1RowCapAt`, `pearlCTilesDevRev1RowCapAt`), which (C2) at `ρr` bounds (`RowCapAtGap.lean`).
+  (`pearlCProtocolDevRev1RowInertBoundAt`, `pearlCTilesDevRev1RowInertBoundAt`), which (C2) at `ρr` bounds (`RowInertBoundAtGap.lean`).
 - **(C3) `CostModel.SplitClosed CM`:** regrouping rows into units doesn't change what a program costs or queries.
   `CostModel` is abstract, so this is a hypothesis on `CM`, a property of W1 (which charges instructions, not which rows
   form a unit), and no cryptographic assumption.
@@ -88,9 +88,9 @@ def rowCodes (M : Codes) (i : ℕ) : Codes := fun _ l => M i l
 /-- Row `i` of a unit's commitment: that row of its activations, ticket words and useful words. -/
 def rowCommit (c : Commit) (i : ℕ) : Commit := ⟨rowCodes c.act i, rowCodes c.ticket i, rowCodes c.useful i⟩
 
-/-- A transcript relabelled row by row: split unit `v` commits its row of its unit's commitment, and is blank where its
+/-- A trace relabelled row by row: split unit `v` commits its row of its unit's commitment, and is blank where its
 unit is. -/
-def splitTranscript (L : Layout) (τ : Transcript) : Transcript := fun v =>
+def splitTrace (L : Layout) (τ : Trace) : Trace := fun v =>
   if v < rowsOf L then (τ (unitOfRow L v)).map fun c => rowCommit c (rowOfRow L v) else none
 
 /-! ## The conditions -/
@@ -131,51 +131,51 @@ def RowSeedNoise (sem sem' : PearlCSem Q R S) : Prop :=
           (sem'.noise H s U u act).EB ⟨j, hj⟩ t = (sem.splitNoise H s U u i act).EB ⟨j, hj'⟩ t
 
 /-- **(C2) rev1 with the cap checked per row:** `pearlCProtocolDevRev1` whose unit is within the cap when every row is,
-row `i`'s debit (`tileDebitRev1` on the row's words) at most `ρ` times its share of the credit. The credit, `W_ref`,
+row `i`'s debit (`tileInertWorkRev1` on the row's words) at most `ρ` times its share of the credit. The credit, `W_ref`,
 words and rules are rev1's. -/
-noncomputable def pearlCProtocolDevRev1RowCap (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) : Protocol Q R S :=
+noncomputable def pearlCProtocolDevRev1RowInertBound (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) : Protocol Q R S :=
   { pearlCProtocolDevRev1 d sem ρ with
-    capOK := fun H s U u act => ∀ i < (U.layout.shape u).m,
-      sem.tileDebitRev1 d H s U u {i} (range (U.layout.shape u).n) act ≤
+    inertBoundOK := fun H s U u act => ∀ i < (U.layout.shape u).m,
+      sem.tileInertWorkRev1 d H s U u {i} (range (U.layout.shape u).n) act ≤
         ρ * creditDevRev1 d (U.layout.shape u) * tileShare (U.layout.shape u) {i} (range (U.layout.shape u).n) }
 
 /-- **(C2) rev1's audit tiles with the cap checked per credited row:** `pearlCTilesDevRev1` whose tile is within the
 cap when every credited row of it is, at most `ρ` times that row's share of the credit. -/
-noncomputable def pearlCTilesDevRev1RowCap (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) : TileRules Q R S :=
+noncomputable def pearlCTilesDevRev1RowInertBound (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) : TileRules Q R S :=
   { pearlCTilesDevRev1 d sem ρ with
-    capOK := fun H s U g act =>
+    inertBoundOK := fun H s U g act =>
       let tl := auditTiling 64 64 U.layout
       let sh := U.layout.shape (tl.unit g)
       ∀ i ∈ sem.passRows sh act (tl.rows g),
-        sem.tileDebitRev1 d H s U (tl.unit g) {i} (tl.cols g) act ≤
+        sem.tileInertWorkRev1 d H s U (tl.unit g) {i} (tl.cols g) act ≤
           ρ * creditDevRev1 d sh * tileShare sh {i} (tl.cols g) }
 
 /-- **(C2) at a wider row cap:** `pearlCProtocolDevRev1` at the cap `ρ`, whose unit is within the cap when its debit is
-at most `ρ` times its credit and every row's is at most `ρr` times its share (`pearlCProtocolDevRev1RowCap` at `ρr`).
+at most `ρ` times its credit and every row's is at most `ρr` times its share (`pearlCProtocolDevRev1RowInertBound` at `ρr`).
 The credit, `W_ref`, words and rules are rev1's at `ρ`. -/
-noncomputable def pearlCProtocolDevRev1RowCapAt (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ ρr : ℚ) :
+noncomputable def pearlCProtocolDevRev1RowInertBoundAt (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ ρr : ℚ) :
     Protocol Q R S :=
   { pearlCProtocolDevRev1 d sem ρ with
-    capOK := fun H s U u act =>
-      (pearlCProtocolDevRev1 d sem ρ).capOK H s U u act ∧ (pearlCProtocolDevRev1RowCap d sem ρr).capOK H s U u act }
+    inertBoundOK := fun H s U u act =>
+      (pearlCProtocolDevRev1 d sem ρ).inertBoundOK H s U u act ∧ (pearlCProtocolDevRev1RowInertBound d sem ρr).inertBoundOK H s U u act }
 
 /-- **(C2)'s tiles at a wider row cap**: `pearlCTilesDevRev1` at the cap `ρ`, whose tile is
 within the cap when its debit is at most `ρ` times its credited rows' credit and every credited row's is at most `ρr`
-times that row's share (`pearlCTilesDevRev1RowCap` at `ρr`). The credit is rev1's at `ρ`, `(1 − ρ)·C` times the
+times that row's share (`pearlCTilesDevRev1RowInertBound` at `ρr`). The credit is rev1's at `ρ`, `(1 − ρ)·C` times the
 credited rows' share. -/
-noncomputable def pearlCTilesDevRev1RowCapAt (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ ρr : ℚ) :
+noncomputable def pearlCTilesDevRev1RowInertBoundAt (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ ρr : ℚ) :
     TileRules Q R S :=
   { pearlCTilesDevRev1 d sem ρ with
-    capOK := fun H s U g act =>
-      (pearlCTilesDevRev1 d sem ρ).capOK H s U g act ∧ (pearlCTilesDevRev1RowCap d sem ρr).capOK H s U g act }
+    inertBoundOK := fun H s U g act =>
+      (pearlCTilesDevRev1 d sem ρ).inertBoundOK H s U g act ∧ (pearlCTilesDevRev1RowInertBound d sem ρr).inertBoundOK H s U g act }
 
 /-- **(C3) The cost model is closed under splitting rows into units:** every program on a workload has a program on its
-split workload whose transcript is the original's relabelled row by row (`splitTranscript`), at no more cost and no
+split workload whose trace is the original's relabelled row by row (`splitTrace`), at no more cost and no
 more calls, for every oracle, state and salt. -/
 def CostModel.SplitClosed (CM : CostModel Q R S) : Prop :=
   ∀ (prog : CM.Prog) (U : Workload) (act : ℕ → Codes), ∃ (prog' : CM.Prog) (act' : ℕ → Codes),
     ∀ (H : Q → R) (σ : State) (s : S),
-      CM.run prog' H (splitWorkload U) act' σ s = splitTranscript U.layout (CM.run prog H U act σ s) ∧
+      CM.run prog' H (splitWorkload U) act' σ s = splitTrace U.layout (CM.run prog H U act σ s) ∧
         CM.cost prog' H (splitWorkload U) act' σ s ≤ CM.cost prog H U act σ s ∧
         CM.calls prog' H (splitWorkload U) act' σ s ≤ CM.calls prog H U act σ s
 
@@ -189,8 +189,8 @@ def TTOutRowSeed [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostM
   ∀ U : Workload, U.InDomain P D → rowsOf U.layout ≤ 2 ^ 64 → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 →
     ∀ A : Adversary CM, A.Bounded U T q →
       pr (fun x : (Q → R) × S =>
-        T / (1 - g₀) < ∑ u ∈ correctSet P U x.1 x.2 (A.transcript U x.1 x.2),
-          P.credit x.1 x.2 U u (actOf (A.transcript U x.1 x.2) u))
+        T / (1 - g₀) < ∑ u ∈ correctSet P U x.1 x.2 (A.trace U x.1 x.2),
+          P.credit x.1 x.2 U u (actOf (A.trace U x.1 x.2) u))
         ≤ δPearlC q (rowsOf U.layout)
 
 /-- **The row-seeded TT_OUT per audit tile** (a target form): `TTOutTile` with the error read at the row count. -/
@@ -200,8 +200,8 @@ def TTOutTileRowSeed [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : C
   ∀ U : Workload, U.InDomain P D → rowsOf U.layout ≤ 2 ^ 64 → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 →
     ∀ A : Adversary CM, A.Bounded U T q →
       pr (fun x : (Q → R) × S =>
-        T / (1 - g₀) < ∑ g ∈ goodTiles P TR U x.1 x.2 (A.transcript U x.1 x.2),
-          TR.credit x.1 x.2 U g (actOf (A.transcript U x.1 x.2) ((TR.tiling U.layout).unit g)))
+        T / (1 - g₀) < ∑ g ∈ goodTiles P TR U x.1 x.2 (A.trace U x.1 x.2),
+          TR.credit x.1 x.2 U g (actOf (A.trace U x.1 x.2) ((TR.tiling U.layout).unit g)))
         ≤ δPearlC q (rowsOf U.layout)
 
 /-! ## The code-form seed (`-h3`) -/

@@ -100,10 +100,10 @@ structure LoopSessions (Ctx Pub WS : Type) where
 abbrev WCtx (Ωa Ωp : Type) (nh : ℕ) : Type := Ωa × (Fin nh → ByteArray) × Ωp × (Fin nh → ZkView.Salt)
 
 /-- One worker's context at the ZK server's commitments to `msgs` under the salts `y`, the inner coins live
-(`Flock.Guarantees.firewallCommits`). -/
+(`Flock.Guarantees.zkServerCommits`). -/
 abbrev wctxAt {Ωa Ωp : Type} {nh : ℕ} (msgs : Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray) (a : Ωa)
     (p : Ωp) (y : Fin nh → ZkView.Salt) : WCtx Ωa Ωp nh :=
-  (a, _root_.Flock.Guarantees.firewallCommits (msgs a p) y, p, y)
+  (a, _root_.Flock.Guarantees.zkServerCommits (msgs a p) y, p, y)
 
 namespace LoopSessions
 
@@ -304,7 +304,7 @@ def Public {Ow Prog Wit Rv Ωa Ωp Pub WS : Type} {nr nh : ℕ} (V : LoopSession
     (pubS : Ow → Rv → Ωa → (Fin nh → ByteArray) → Pub) : Prop :=
   ∀ o P w, honest o P w → ∀ r a p y, V.pubOf (hctxAt msgs P w r a p y) =
     pubS o (_root_.Flock.Guarantees.regLeaves rows pub P r) a
-      (_root_.Flock.Guarantees.firewallCommits (msgs P w r a p) y)
+      (_root_.Flock.Guarantees.zkServerCommits (msgs P w r a p) y)
 
 /-- Obligation (the worker's values satisfy V*'s circuits, as `SessionsHonest`): at every context `ctx u` the worker
 holds, statement `j < m`'s witness is in `R` at its statement. At `R = Claims.Flock.R parse`, each statement parses and
@@ -376,9 +376,9 @@ theorem outerSessionsZK_of {Ow Prog Wit Rv Ωa Ωp Pub WS NB ΩB Θ : Type} [Fin
       (V.err H kS PS εS g Vs fun x =>
         θ (_root_.Flock.Guarantees.regLeaves rows pub x.1 x.2.2.1) x.2.2.2.1 x.2.2.2.2.1) := by
   intro o P w hw r a p y E
-  have e : _root_.Flock.Guarantees.firewallCommits (committed msgs P w r a p) y =
-      fun i => _root_.Flock.Guarantees.firewallLeaf (msgs P w r a p i) (y i) :=
-    firewallCommits_committed (msgs P w r a p) y
+  have e : _root_.Flock.Guarantees.zkServerCommits (committed msgs P w r a p) y =
+      fun i => _root_.Flock.Guarantees.zkServerLeaf (msgs P w r a p i) (y i) :=
+    zkServerCommits_committed (msgs P w r a p) y
   have hpc := hpub o P w hw r a p y
   have hR := hH o P w hw r ((a, p), y)
   simp only [hctxAt, e] at hpc hR
@@ -529,13 +529,13 @@ theorem outerViewZK_loop {Ωa Ωp Θ : Type} {nh : ℕ} (vs : Claims.ZKServer.Lo
   intro a p y E
   have hR := hH ((a, p), y)
   dsimp only [wctxAt] at hR
-  rw [firewallCommits_committed (msgs a p) y] at hR
+  rw [zkServerCommits_committed (msgs a p) y] at hR
   exact ((LoopSessions.atWorker m stmt wit).view_le Claims.ZKMal.CoinOpen.shaH loopK ((loopRef L₀ src).swP vs).prover
     (Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse) (loopSim L₀ src t)
     (loopEps L₀ src t) (4 * t * 3 ^ t) CB (loop_zkmalR vs t ht hS hV hD hc hsc hT L₀ src) (loopEps_nonneg L₀ src t)
     (by positivity) Vs (fun x => θ x.1 x.2.1)
-    (a, fun i => _root_.Flock.Guarantees.firewallLeaf (msgs a p i) (y i), p, y)
-    (a, fun i => _root_.Flock.Guarantees.firewallLeaf (msgs a p i) (y i)) rfl (fun j hj => hsz j hj _) hR E).trans_eq
+    (a, fun i => _root_.Flock.Guarantees.zkServerLeaf (msgs a p i) (y i), p, y)
+    (a, fun i => _root_.Flock.Guarantees.zkServerLeaf (msgs a p i) (y i)) rfl (fun j hj => hsz j hj _) hR E).trans_eq
     (congrArg (· + _) (LoopSessions.prCoin_simAt_pubStmts _ _ _ _ _ _ _ _ _ _ _))
 
 end FlockSoundness.Discharge.Recursion.OuterZK

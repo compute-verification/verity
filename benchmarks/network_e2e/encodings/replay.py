@@ -11,10 +11,10 @@ whether it had arrived or not, and when the engine is quiet (nothing running or 
 the next step, so neither costs a bit. So the advice is one binary decision per open step, whether the next request had
 arrived (`decisions`): `gamma_values` sends each request's count of open steps passed over as Elias gamma, and `encode`
 codes the decisions with an adaptive binary arithmetic code inside the replay, one bit string per certifier window. Its
-contexts (`CONTEXTS`) are the request's passes so far, its certified ingress bucket against the release buckets around
-the step (`_Clock`), and its certified egress: the replay, forked at the open step and run on with the request arriving
+contexts (`CONTEXTS`) are the request's passes so far, its attested ingress bucket against the release buckets around
+the step (`_Clock`), and its attested egress: the replay, forked at the open step and run on with the request arriving
 now or a step later and nothing after it, says which of its steps emit its outputs, and an earlier request's output from
-each of those steps says which bucket it left in (`_Egress`). `decode` replays from that advice and the certified I/O
+each of those steps says which bucket it left in (`_Egress`). `decode` replays from that advice and the attested I/O
 alone, and
 `table` counts the bits per certifier window against I1 v0's (`advice.bits_by_window`, else `v0_widths`).
 
@@ -55,8 +55,8 @@ STEP_TRACE = "verity-vllm/step-trace/v1"
 
 @dataclass(frozen=True)
 class Releases:
-    """A tick-admitted run's certified releases, as the network certifier (or the trace corpus's stand-in for it) gave
-    them: the registered tick, the certifier run's origin (unix seconds; bucket a is [origin + a·τ_b, origin + (a + 1)·τ_b)),
+    """A tick-admitted run's attested releases, as the network attester (or the trace corpus's stand-in for it) gave
+    them: the registered tick, the attester run's origin (unix seconds; bucket a is [origin + a·τ_b, origin + (a + 1)·τ_b)),
     and each request's release number N and bucket a, in the trace's engine order."""
 
     tick: Tick
@@ -68,9 +68,9 @@ class Releases:
 @dataclass
 class Trace:
     """A served run's step trace (`verity-vllm/step-trace/v1`), its requests in the order they reached the engine, with
-    the certifier's view of its timing when the trace has a clock: each request's ingress time and each step's release
+    the attester's view of its timing when the trace has a clock: each request's ingress time and each step's release
     time (its output's tokens leaving through the egress certifier), or each kept output's own (`output_t`) where the
-    recorder saw them leave one by one; and `releases`, a run served under the certified tick's releases."""
+    recorder saw them leave one by one; and `releases`, a run served under the attested tick's releases."""
 
     engine: Engine
     ids: list[str]
@@ -124,7 +124,7 @@ class Trace:
         return [[self.release_t[s] for s in ks] for ks in self.kept_steps()]  # type: ignore[misc]
 
     def origin(self, bucket_s: float) -> int:
-        """The session's first bucket, its earliest ingress's, which the certified record's buckets count from (the
+        """The session's first bucket, its earliest ingress's, which the attested record's buckets count from (the
         advice module's session-global buckets); 0 without a clock."""
         return min(bucket(t, bucket_s) for t in self.ingress_t) if self.clocked() else 0  # type: ignore[arg-type]
 
@@ -142,7 +142,7 @@ class Trace:
 
 @dataclass(frozen=True)
 class Certified:
-    """What the verifier holds without advice: the registered engine, each request's certified I/O in the order it reached
+    """What the verifier holds without advice: the registered engine, each request's attested I/O in the order it reached
     the engine, and, with a clock, each request's ingress bucket and the bucket each of its kept outputs left in, counted
     from the session's first (`Trace.origin`). The decoder reads nothing else. The drafts a request's rows kept
     (`RequestIO.kept`) are advice and not of it: `decode` refuses a record that carries them."""
@@ -181,10 +181,10 @@ def _asked(engine: Engine, requests: Sequence[RequestIO]) -> tuple[list[RequestI
 def load_step_trace(records: Iterable[dict[str, Any]], *, tokens: dict[str, Sequence[int]] | None = None,
                     ingress_lag_s: float = 0.0, release_lag_s: float = 0.0) -> Trace:
     """A `Trace` from `verity_vllm.engine.step_trace` records. Output lengths and stops come from the trace's `emitted` and
-    `finished` (in a served run the committed sampled tokens and the certified egress say the same); with a draft (the
+    `finished` (in a served run the committed sampled tokens and the attested egress say the same); with a draft (the
     header's `speculative`), so do the drafts each row kept, its `emitted` less its own token. An `arrive` or
     `step` record's `t` is the engine's clock; a record's `ingress_t` / `release_t`, where the recorder has the
-    certifier's, wins, and otherwise the engine's clock less `ingress_lag_s` (plus `release_lag_s`) stands in for it."""
+    attester's, wins, and otherwise the engine's clock less `ingress_lag_s` (plus `release_lag_s`) stands in for it."""
     recs = list(records)
     if not recs or recs[0].get("kind") != "header" or recs[0].get("schema") != STEP_TRACE:
         raise ValueError(f"not a {STEP_TRACE} trace")
@@ -360,14 +360,14 @@ def read_corpus_trace(d: str | Path, *, num_gpu_blocks: int | None = None, block
     the drafts each row kept, which the hook doesn't name: they are read off the tokens the model runner sampled for
     the row (`_sampled`), as each request's `RequestIO.kept` and the trace's `emitted`.
 
-    A request's certified ingress is the client's send time (`ingress="client"`, a passive certifier on the link),
+    A request's attested ingress is the client's send time (`ingress="client"`, a passive certifier on the link),
     or with `ingress="warden"` the server's own arrival stamp (`arrival`, its body read), the order vLLM schedules in.
-    That is not what design v3's warden certifies: behind it the engine still follows the body read, and the warden's
+    That is not what design v3's network attester certifies: behind it the engine still follows the body read, and the network attester's
     release order (a, ordinal) leaves order exceptions to charge (the corpus's `<trace>.released` traces carry it as
     their ingress). `ingress="warden"` is the floor a server admitting in release order at the next bucket would give.
 
-    A trace served under ``--admit tick`` (meta.json's ``tick``: τ and the certifier run's origin) has each request's
-    release number and bucket from its network certifier, a warden trace's warden or the corpus's stand-in for it
+    A trace served under ``--admit tick`` (meta.json's ``tick``: τ and the attester run's origin) has each request's
+    release number and bucket from its network attester, a network attester trace's network attester or the corpus's stand-in for it
     (`requests.jsonl`'s ``release`` and ``bucket``), as `Trace.releases`."""
     d = Path(d)
     meta = json.loads((d / "meta.json").read_text())
@@ -471,8 +471,8 @@ def read_corpus_trace(d: str | Path, *, num_gpu_blocks: int | None = None, block
 
 
 def order_bits(trace: Trace) -> float:
-    """What the engine's arrival order costs beyond the certified ingress order: per request in engine order, an adaptive
-    bit for whether it is the earliest certified ingress not yet admitted, and Elias gamma of its rank among those when
+    """What the engine's arrival order costs beyond the attested ingress order: per request in engine order, an adaptive
+    bit for whether it is the earliest attested ingress not yet admitted, and Elias gamma of its rank among those when
     not (ideal code length, bits)."""
     if not trace.clocked():
         return 0.0
@@ -541,7 +541,7 @@ def _clocked(cert: Certified) -> tuple[list[int], list[list[int]]]:
 
 
 class _Clock:
-    """The certified timing a decision is coded in: request i's ingress bucket against the release buckets around the
+    """The attested timing a decision is coded in: request i's ingress bucket against the release buckets around the
     step. The engine core scheduled it after processing the outputs it has (those of every step but the one in flight
     under async scheduling) and before any later output left, so the newest output it has processed left at about when it
     scheduled or before (`prev`), and the first output it hasn't, of a request in the engine or of i, after (`next`)."""
@@ -563,11 +563,11 @@ class _Clock:
 
 
 class _Egress:
-    """Request i's certified egress against the engine run on from the open step (`Open.whatif`), i arriving now or
+    """Request i's attested egress against the engine run on from the open step (`Open.whatif`), i arriving now or
     before the next step and nothing after it. Under FCFS that run is the served one for i and every request ahead of
     it: a later arrival goes behind them in the running order, so takes none of their budget, and is preempted before
     them. So under the true hypothesis each of i's outputs leaves in the bucket of an earlier request's output from the
-    same step, which the certified egress shows; of any of them, since a frontend streams one step's outputs over some
+    same step, which the attested egress shows; of any of them, since a frontend streams one step's outputs over some
     milliseconds. They are compared up to i's first change of bucket, where some earlier request's must change too (2: no
     earlier request's output to compare with). With a draft the fork keeps none of the drafts its rows carry (`_asked`),
     so each of its rows emits one token, and it is the served run only up to the first of its rows that kept a draft
@@ -831,7 +831,7 @@ def v0_widths(trace: Trace, *, window_buckets: int) -> dict[str, int]:
 
 
 def v0_advice(trace: Trace, v0: Any, *, bucket_s: float = 0.1) -> Any:
-    """The trace as advice v0, built with its module `v0` (`verity.protocols.accounting.certifier.verifier.advice`): the
+    """The trace as advice v0, built with its module `v0` (`verity.protocols.resource_accounting.network.verifier.advice`): the
     trace's rows in its batch order, each hit's sources from the replay's block map, and each kept output released in its
     step's release bucket. v0 validates it as it builds it."""
     rp = replay(trace.engine, trace.requests, admit=trace.before_step, passed=trace.passed)
@@ -864,7 +864,7 @@ def v0_advice(trace: Trace, v0: Any, *, bucket_s: float = 0.1) -> Any:
 def v0_parts(v0: Any, adv: Any) -> dict[str, int] | None:
     """I1 v0's bits by record (`header`, `requests`, `steps`, `release`), from the advice module's layout (`_layout`,
     None without one). The residual advice replaces only the step records: the verifier reads the rest from the
-    certified record."""
+    attested record."""
     layout = getattr(v0, "_layout", None)
     if layout is None:
         return None
@@ -958,7 +958,7 @@ def kept_read(trace: Trace, code: CV.Encoded, arrivals: Code | None = None) -> K
     """`kept_code`'s string of one window, read as advice v1 reads it (`kept.Reader`): the replay asks each emitting
     row's count off the string in place of `RequestIO.kept`. The replay is of the trace's requests added as the trace
     has them, or, given the trace's residual advice `arrivals` (`encode`), the one that advice decodes to (`decode`),
-    so that the steps come from the two strings and the certified record alone. Beside the string it reads K and each
+    so that the steps come from the two strings and the attested record alone. Beside the string it reads K and each
     request's output count. Returns the terms read. Refuses (ValueError) a string that isn't the code's own, a count
     no row can have, and a replay that isn't the trace's steps."""
     K, outputs = trace.engine.num_speculative_tokens, [q.output_len for q in trace.requests]
@@ -989,17 +989,19 @@ def kept_bits(trace: Trace, arrivals: Iterable[Code] = ()) -> dict[str, Any]:
     Beside them, and not sent: `counts[k]`, the rows that verified drafts, emitted and kept k; `entropy`, theirs in bits
     a row (at most `max`, log2(K + 1)); and `alone`, that entropy over those rows, what the counts would come to taken
     each alone. `alone` bounds `charged` from neither side: the code reads each request's count before. The rows and
-    the drafts each carried are the replay's, so it refuses a trace the replay doesn't reproduce."""
+    the drafts each carried are the replay's, so it refuses a trace the replay doesn't reproduce. With no draft no row
+    keeps one, and every term is 0."""
     K = trace.engine.num_speculative_tokens
-    if not K:
-        raise ValueError("the trace's engine serves with no draft, so no row keeps one")
-    if trace.emitted is None:
+    if K and trace.emitted is None:
         raise ValueError("the drafts a row kept are the trace's `emitted` less one, which this trace does not record")
     with KP.emitting() as emitted:
         rp = replay(trace.engine, trace.requests, admit=trace.before_step, passed=trace.passed)
     m = compare(rp.steps, trace.steps)
     if m.first_mismatch is not None:
         raise ValueError(f"the replay diverges from the trace at step {m.first_mismatch} ({m.matched}/{m.steps} steps match)")
+    if not K:
+        return {"K": 0, "rows": 0, "counts": [0], "entropy": 0.0, "max": 0.0, "alone": 0.0, "charged": 0, "ideal": 0,
+                "derived": 0}
     counts = [0] * (K + 1)
     for st, em in zip(rp.steps, trace.emitted):
         for i, d in st.drafts.items():
@@ -1017,10 +1019,10 @@ def kept_bits(trace: Trace, arrivals: Iterable[Code] = ()) -> dict[str, Any]:
 
 def draft_table(trace: Trace, *, contexts: Sequence[str] = ("plain",), bucket_s: float = 0.1,
                 window_buckets: int = 600) -> dict[str, Any]:
-    """A trace served with a draft, as the two classes of advice its replay takes, in bits over the trace: `arrivals`,
+    """A trace, with a draft or none, as the two classes of advice its replay takes, in bits over the trace: `arrivals`,
     the residual advice under each of `contexts` (`encode`, the replay asked each row's kept count as the row emits),
-    which a serve under the certified tick does not send; and `kept_count` (`kept_bits`). Each context's arrivals and
-    the kept count's string, with the certified record and nothing else, decode back to the trace's steps and counts.
+    which a serve under the attested tick does not send; and `kept_count` (`kept_bits`). Each context's arrivals and
+    the kept count's string, with the attested record and nothing else, decode back to the trace's steps and counts.
     `output_tokens` is what the requests emitted, for the bits a token. Refuses a trace the replay doesn't reproduce."""
     codes = {c: encode(trace, contexts=c, bucket_s=bucket_s, window_buckets=window_buckets) for c in contexts}
     return {"requests": len(trace.requests), "steps": len(trace.steps), "tick": trace.releases is not None,
@@ -1029,8 +1031,8 @@ def draft_table(trace: Trace, *, contexts: Sequence[str] = ("plain",), bucket_s:
             "kept_count": kept_bits(trace, codes.values())}
 
 
-#: advice v0's module (`verity.protocols.accounting.certifier.verifier.advice`)
-V0_PATH = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "advice.py"
+#: advice v0's module (`verity.protocols.resource_accounting.network.verifier.advice`)
+V0_PATH = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "advice.py"
 
 
 def load_v0(spec: str | Path | None) -> Any:
@@ -1078,8 +1080,8 @@ def main(argv: Sequence[str] | None = None) -> None:
                     help="a trace-corpus output's release time: its step's (engine) or its streamed chunk's (client)")
     ap.add_argument("--ingress", choices=("client", "warden"), default="client",
                     help="a trace-corpus request's certified ingress: the client's send time (client) or the engine's "
-                         "arrival stamp (warden: the floor a server admitting in the warden's release order would "
-                         "give; the warden certifies the release order, which a trace's .released view carries)")
+                         "arrival stamp (network_attester: the floor a server admitting in the network attester's release order would "
+                         "give; the network attester certifies the release order, which a trace's .released view carries)")
     ap.add_argument("--span", help="of each step trace, only the requests whose id holds this, as a trace of their own: "
                                    "one load of a serve that ran others, begun with the engine drained and its prefix "
                                    "cache reset")

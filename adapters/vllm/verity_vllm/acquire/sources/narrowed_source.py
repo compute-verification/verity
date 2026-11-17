@@ -22,6 +22,9 @@ from typing import Any
 
 from verity_vllm.acquire.sources.allreduce_norm import _flush
 from verity_vllm.acquire.sources.vocab_range_source import module_of
+from verity_vllm.log import init_logger
+
+logger = init_logger(__name__)
 
 SHORT_NAME = "narrowed_rows"
 #: bytes per element of a row's dtype; any other dtype is sized at 4 bytes, an upper bound
@@ -156,18 +159,18 @@ def attach(com: Any, manifest: Mapping[str, Any] | None, *, model: Any = None) -
     if not applies(manifest):
         return None
     if getattr(com, "external_acquisition", False):
-        print(f"[delta] NOTE: narrowed rows NOT attached: committer {getattr(com, 'name', '?')} acquires every value from compiled graphs; the manifest's "
-              "narrowed rows stay unbound (coverage names them)", flush=True)
+        logger.info("[delta] NOTE: narrowed rows NOT attached: committer %s acquires every value from compiled graphs; the manifest's "
+                    "narrowed rows stay unbound (coverage names them)", getattr(com, "name", "?"))
         return None
     try:
         sites = manifest_sites(manifest)
     except ValueError as e:
-        print(f"[delta] REFUSE: {e}", flush=True)
+        logger.error("[delta] REFUSE: %s", e)
         raise SystemExit(3) from None
     src = NarrowedRowsSource(com, model if model is not None else getattr(com, "model", None), sites)
     com.attach_source(src)
-    print(f"[delta] narrowed-rows source attached: {', '.join(f'{op}/{m} {g['columns']}' for op, ms in sites.items() for m, g in ms.items())} "
-          f"-> committer {getattr(com, 'name', '?')}", flush=True)
+    logger.info("[delta] narrowed-rows source attached: %s -> committer %s",
+                ", ".join(f"{op}/{m} {g['columns']}" for op, ms in sites.items() for m, g in ms.items()), getattr(com, "name", "?"))
     return src
 
 

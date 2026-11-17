@@ -1,4 +1,4 @@
-"""Sampled proofs' parties on the deployment layer (`verity.runtime`), as roles and channels a deployment configuration
+"""SPOT's parties on the deployment layer (`verity.runtime`), as roles and channels a deployment configuration
 declares, in three deployments, which the deployment layer's runtime runs (`verity.runtime.runner.run`; `PROTOCOLS` by
 id):
 
@@ -8,25 +8,25 @@ id):
   There is no ZK server and no recursion: the proof server talks only to the verifier.
 - **SPOT[Flock] in two stages** (`SPOT_TWO_ID`: `SPOT_TWO_MANIFEST`, `SPOT_TWO_PROTOCOL`), the same three roles under a
   two-stage sampling design. The sample samples replay blocks; the proof server replays them and registers their interiors
-  (the interior registration), and the verifier then samples the second stage on fresh coins and audits both stages.
+  (the interior docket), and the verifier then samples the second stage on fresh coins and audits both stages.
 - **The core deployment** (`ID`: `MANIFEST`, `PROTOCOL`), which wraps SPOT[Flock] for both composites (remote and onsite).
   Its workers are the inference server and the proof server on one machine, proving behind the ZK server, whose pin the
   verifier holds. Its verifier composes each block's audit with the composite's other subprotocols.
 
-The network certifier is a layer of its own. It stamps each request's release order and bucket at ingress, and SPOT reads
+The network attester is a layer of its own. It stamps each request's release order and bucket at ingress, and SPOT reads
 that stamp as a certified input. Neither imports the other (`tests/test_boundaries.py`); they compose only above both.
 
 ~~~text
 SPOT[Flock]
 challenger       -> verifier          Challenger {address, pin}: where its host answers the open and finish of a session
-inference server -> verifier          Registration {block}, the execution phase's registration record its body
+inference server -> verifier          Registration {block}, the execution phase's docket its body
 inference server -> proof server      Replay {block}, the values the block's proof blocks read its body; one way
-verifier         -> proof server      Sample {block, address}, the block's sample its body, once its registration is in
+verifier         -> proof server      Sample {block, address}, the block's sample its body, once its docket is in
 proof server     -> verifier          Proof {block}, the proofs of the sample's proof blocks its body
 verifier         -> challenger        Done, once every execution phase is decided
 
 SPOT[Flock] in two stages: SPOT[Flock]'s messages, with two between Sample and Proof
-proof server     -> verifier          Interior {block}, the interior registration of the sampled replay blocks its body
+proof server     -> verifier          Interior {block}, the interior docket of the sampled replay blocks its body
 verifier         -> proof server      Second {block, address}, the second stage's sample its body, once its interior is in
 proof server     -> verifier          Proof {block}, the proofs of the second stage's proof blocks its body
 
@@ -43,9 +43,9 @@ A party does no I/O: what its machine does is a capability it is given (`Identit
   whose coins are its own, never the verifier's or the prover's, answering a session's open and finish at ``address``
   and pinned on main's first-parent commit ``pin``;
 - SPOT[Flock]'s:
-  - the inference server's ``serve(block) -> bytes``, execution phase ``block`` served and its registration record, and
+  - the inference server's ``serve(block) -> bytes``, execution phase ``block`` served and its docket, and
     ``replay(block) -> bytes``, the block's replay inputs, which only the proof server reads: every value its proof
-    blocks read, each a proof block's output, a certified input (the network certifier's stamp among them), a registered
+    blocks read, each a proof block's output, a certified input (the network attester's stamp among them), a registered
     value or advice charged at its width, with the salts that open their commitments. A value the served hardware
     decides that no block computes is never a free witness among them: serving makes it canonical, or it is advice;
   - the proof server's ``prove(block, replay, sample, address) -> bytes``: the sample's proof blocks replayed and proved,
@@ -55,16 +55,16 @@ A party does no I/O: what its machine does is a capability it is given (`Identit
     challenger's signed log, its answer (``verdict``, its ``commitment`` and ``reason``);
 - SPOT[Flock] in two stages', SPOT[Flock]'s, except:
   - the proof server's ``interior(block, replay, sample) -> bytes``: the sample's replay blocks replayed and their
-    interiors committed, the interior registration (following the block's registration), and ``prove(block, replay,
+    interiors committed, the interior docket (following the block's docket), and ``prove(block, replay,
     sample, interior, second, address) -> bytes``, the second stage's proof blocks proved, one session a template;
   - the verifier's ``second(block, registration, challenger, sample, interior) -> bytes``, the second stage's sample on
-    that challenger's coins opened after the interior registration's digest, and ``audit(block, registration,
+    that challenger's coins opened after the interior docket's digest, and ``audit(block, registration,
     challenger, sample, proof, interior, second) -> answer``, both stages' audit, whose answer also names the interior
-    registration it audited (``interior``, its digest);
+    docket it audited (``interior``, its digest);
 - the core deployment's:
   - the workers' ``serve(block) -> bytes``, as the inference server's;
   - the ZK server's ``pin() -> {"sha512", "sessions"}``: the ZK server the prover's sessions run, by its SHA-512;
-  - the verifier's ``audit(block, registration, challenger, firewall) -> (answer, case)``: the block's one-stage audit
+  - the verifier's ``audit(block, registration, challenger, zk_server) -> (answer, case)``: the block's one-stage audit
     sampled on that challenger's coins, its answer and its case for the product (`COMPOSED`'s, in its one-stage form), or
     None; ``component(block, name) -> (answer, case) | None``, another listed subprotocol's; and ``product(ids, cases,
     digests) -> {"product", "verdict", "reason"}``, the composite of exactly those subprotocols (`Core.Composites.ofIds`:
@@ -80,12 +80,12 @@ deployment's (`params_of`) also list the configuration's subprotocols (``compone
 `SUBPROTOCOLS`, `verity.config.COMPOSITES`), SPOT[Flock]'s, in one stage or two (`spot_params_of`), none.
 
 Every verifier takes block ``i``'s coins only once its registration and the challenger's address are in, in order of the
-blocks, so no coin is flipped for a block before its registration (live coins, after the commitment). SPOT[Flock]'s samples
+blocks, so no coin is flipped for a block before its docket (live coins, after the commitment). SPOT[Flock]'s samples
 block ``i``'s sample then and sends it to the proof server, and audits the block once its proof is in. In two stages it
-samples block ``i``'s second stage only once the block's interior registration is in, so no second-stage coin is flipped
+samples block ``i``'s second stage only once the block's interior docket is in, so no second-stage coin is flipped
 before the interiors are committed, and audits the block once its proof is in. The core deployment's audits it once the
-ZK server's pin is in too. Each holds the audit's commitment to the registration it was sent, and in two stages the
-answer's ``interior`` to the interior registration the proof server sent: an accepting audit of another record rejects.
+ZK server's pin is in too. Each holds the audit's commitment to the docket it was sent, and in two stages the
+answer's ``interior`` to the interior docket the proof server sent: an accepting audit of another record rejects.
 Each block's line is an output entry of the record and the verifier's outcome:
 
     SPOT[Flock]:  {"block": I, "coins": C, "registration": DIGEST, "verdict": V, "reason": R}
@@ -98,7 +98,7 @@ refuse, so the composite never accepts over it, and an accepting audit of anothe
 composite. An audit or a product that is `Unavailable` is that block's ``error``, never a verdict (an audit's reason a
 private entry of the record); a sample or a second-stage sample that is `Unavailable` ends SPOT[Flock]'s verifier refused
 ``draw`` or ``second``. A verifier refuses by name a block out of range or registered twice (``schema``,
-``out-of-phase``), a second address or pin, an interior registration that isn't a JSON object (``schema``) or is of a
+``out-of-phase``), a second address or pin, an interior docket that isn't a JSON object (``schema``) or is of a
 block not sampled or already registered, or a proof of a block not sampled (in two stages, not sampled a second time) or
 already proved (``out-of-phase``), and a peer that leaves before it said what the verifier waits on (``closed``); it
 tells the challenger ``Done`` before it finishes, however it finishes, and the challenger stops its host on ``Done`` or
@@ -121,12 +121,11 @@ from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 from verity.config import COMPOSITES
-from verity.protocol import Channel, Manifest, Role
+from verity.protocol import Channel, Manifest, ProtocolDef, Role
 from verity.party import Finish, Identity, Received, LogEntry, Send
-from verity.runtime.runner import ProtocolDef
 from verity.channel import Body, Hex, Int, Message, Schema, Str
 
-from .one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
 ID = R.PROTOCOL
 #: SPOT as both composites compose it (`VStar.Recursive.Sampled`): one-stage v2's audit (`ID`'s record, the
@@ -138,11 +137,11 @@ VERSION = 1
 SPOT_ID = "verity/sampled-proofs/spot/v1"
 #: SPOT[Flock] on its own under a two-stage sampling design
 SPOT_TWO_ID = "verity/sampled-proofs/spot/two-stage/v1"
-CHALLENGER, FIREWALL, WORKERS, VERIFIER = "challenger", "firewall", "workers", "verifier"
+CHALLENGER, ZK_SERVER, WORKERS, VERIFIER = "challenger", "firewall", "workers", "verifier"
 INFERENCE_SERVER, PROOF_SERVER = "inference-server", "proof-server"
 #: each composite's subprotocols, by a configuration's names, and their protocol ids (`Core.Onsite.components`,
 #: `Core.Remote.V1.components`): onsite's PoUW is its period check and its bandwidth the P2 session on PoUS's store,
-#: remote's PoUW is Pearl+'s run verdict, and both compose sampled proofs as `COMPOSED`
+#: remote's PoUW is Pearl+'s run verdict, and both compose SPOT as `COMPOSED`
 SUBPROTOCOLS = {
     "verity/onsite/v0": {"bandwidth": "verity/remote-bandwidth/p2/v0", "certifier": "verity/certifier/v0",
                          "inference-only": "verity/inference-only/v0", "pous": "verity/pous/p2/v4/run",
@@ -170,12 +169,12 @@ DONE_SCHEMA = Schema("Done", 1, "structure")
 REGISTRATION_SCHEMA = Schema("Registration", 1, "commitment", {"block": Int(0, MAX_BLOCKS - 1)}, Body(max=MAX_REGISTRATION))
 MANIFEST = Manifest(
     ID, VERSION, "verity.protocols.proofs.spot.verifier.parties:params_of",
-    parties=(Role(CHALLENGER, "auditor", needs=("host",)), Role(FIREWALL, "developer", needs=("pin",)),
+    parties=(Role(CHALLENGER, "auditor", needs=("host",)), Role(ZK_SERVER, "developer", needs=("pin",)),
              Role(WORKERS, "developer", needs=("serve",)),
              Role(VERIFIER, "auditor", needs=("audit", "component", "product"))),
     channels=(Channel(CHALLENGER, VERIFIER, ("Challenger",), carries_coins=True),
               Channel(VERIFIER, CHALLENGER, ("Done",)),
-              Channel(FIREWALL, VERIFIER, ("Firewall",)),
+              Channel(ZK_SERVER, VERIFIER, ("Firewall",)),
               Channel(WORKERS, VERIFIER, ("Registration",))),
     messages=(CHALLENGER_SCHEMA, DONE_SCHEMA,
               Schema("Firewall", 1, "structure", {"sha512": Hex(64), "sessions": Int(1, 1 << 10)}),
@@ -283,7 +282,7 @@ class Challenger:
         return [Finish(self.at, m.fields["name"] if m.type == "Refused" else "closed")]
 
 
-class Firewall:
+class ZkServer:
     """The core deployment's ZK server: its pin told to the verifier."""
 
     def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:
@@ -323,7 +322,7 @@ def _serve(params: Mapping[str, Any], identity: Identity, parse: Callable[[Mappi
 
 
 class Workers:
-    """The core deployment's workers: each execution phase served, and its registration sent to the verifier."""
+    """The core deployment's workers: each execution phase served, and its docket sent to the verifier."""
 
     def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:
         return _serve(params, identity, _params, [REGISTER])
@@ -333,7 +332,7 @@ class Workers:
 
 
 class InferenceServer:
-    """SPOT[Flock]'s inference server: each execution phase served, its registration sent to the verifier, then its replay
+    """SPOT[Flock]'s inference server: each execution phase served, its docket sent to the verifier, then its replay
     inputs to the proof server, which never answers."""
 
     def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:
@@ -417,12 +416,12 @@ class TwoStageProofServer(ProofServer):
 
 
 class _Verifier:
-    """What both deployments' verifiers share: their parameters, the challenger's address and each block's registration
-    held, a refusal by name, an accepting audit held to the registration it was sent, and ``Done`` told to the challenger
+    """What both deployments' verifiers share: their parameters, the challenger's address and each block's docket
+    held, a refusal by name, an accepting audit held to the docket it was sent, and ``Done`` told to the challenger
     however it finishes (module docstring). A deployment's verifier adds its other messages (`_take`), what it waits on
     from its other peers (`_said`) and its decisions (`_advance`)."""
 
-    #: the party whose registrations it holds
+    #: the party whose dockets it holds
     SERVER = WORKERS
 
     def _start(self, params: Mapping[str, Any], parse: Callable[[Mapping[str, Any]], dict[str, Any]]) -> list[Any]:
@@ -474,8 +473,8 @@ class _Verifier:
         raise NotImplementedError
 
     def _held(self, answer: dict[str, Any], digest: str, interior: str | None = None) -> dict[str, Any]:
-        """``answer``, or a rejection when it accepts a commitment other than ``digest``, the registration's, or, given
-        ``interior``, the interior registration's digest, an interior other than it."""
+        """``answer``, or a rejection when it accepts a commitment other than ``digest``, the docket's, or, given
+        ``interior``, the interior docket's digest, an interior other than it."""
         if answer.get("verdict") != "accept":
             return answer
         if answer.get("commitment") != digest:
@@ -493,7 +492,7 @@ class _Verifier:
 
 
 def _record(body: bytes) -> dict[str, Any] | str:
-    """A registration's body as its record, or the refusal `schema` when it isn't a JSON object."""
+    """A docket's body as its record, or the refusal `schema` when it isn't a JSON object."""
     try:
         record = json.loads(body)
     except ValueError:
@@ -510,7 +509,7 @@ class Verifier(_Verifier):
     composite of the listed subprotocols (module docstring)."""
 
     def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:
-        self.firewall: dict[str, Any] | None = None
+        self.zk_server: dict[str, Any] | None = None
         caps = identity.capabilities
         self.audit, self.component, self.product = caps["audit"], caps["component"], caps["product"]
         return self._start(params, _params)
@@ -518,18 +517,18 @@ class Verifier(_Verifier):
     def _take(self, m: Message) -> str | None:
         if m.type != "Firewall":
             return super()._take(m)
-        if self.firewall is not None:
+        if self.zk_server is not None:
             return "out-of-phase"
-        self.firewall = dict(m.fields)
+        self.zk_server = dict(m.fields)
         return None
 
     def _said(self, peer: str) -> bool:
-        return self.firewall is not None if peer == FIREWALL else super()._said(peer)
+        return self.zk_server is not None if peer == ZK_SERVER else super()._said(peer)
 
     def _advance(self) -> list[Any]:
         out: list[Any] = []
         while (len(self.lines) < self.params["blocks"] and len(self.lines) in self.registrations
-               and self.challenger is not None and self.firewall is not None):
+               and self.challenger is not None and self.zk_server is not None):
             out += self._decide(len(self.lines))
         if len(self.lines) == self.params["blocks"]:
             out += self._finish(None)
@@ -541,7 +540,7 @@ class Verifier(_Verifier):
         digest = R.digest(record)
         out = []
         try:
-            answer, case = self.audit(i, raw, dict(self.challenger), dict(self.firewall))
+            answer, case = self.audit(i, raw, dict(self.challenger), dict(self.zk_server))
         except Unavailable as e:
             answer, case = {"verdict": "error"}, None
             out.append(_unavailable(i, e))
@@ -567,11 +566,11 @@ class Verifier(_Verifier):
 
 
 class SpotVerifier(_Verifier):
-    """SPOT[Flock]'s verifier: each block's sample sampled on the challenger's coins once its registration is in and sent to
+    """SPOT[Flock]'s verifier: each block's sample sampled on the challenger's coins once its docket is in and sent to
     the proof server, and the block audited once its proof is in (module docstring)."""
 
     SERVER = INFERENCE_SERVER
-    #: whether each block is proved on a second-stage sample over its interior registration
+    #: whether each block is proved on a second-stage sample over its interior docket
     TWO = False
 
     def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:
@@ -660,13 +659,13 @@ class SpotVerifier(_Verifier):
 
 class TwoStageVerifier(SpotVerifier):
     """SPOT[Flock]'s verifier in two stages: each block's sample sampled as SPOT[Flock]'s is, its second stage sampled on the
-    challenger's coins once its interior registration is in and sent to the proof server, and the block audited on both
+    challenger's coins once its interior docket is in and sent to the proof server, and the block audited on both
     stages once its proof is in (module docstring)."""
 
     TWO = True
 
 
-PROTOCOL = ProtocolDef(MANIFEST, {CHALLENGER: Challenger, FIREWALL: Firewall, WORKERS: Workers, VERIFIER: Verifier})
+PROTOCOL = ProtocolDef(MANIFEST, {CHALLENGER: Challenger, ZK_SERVER: ZkServer, WORKERS: Workers, VERIFIER: Verifier})
 SPOT_PROTOCOL = ProtocolDef(SPOT_MANIFEST, {CHALLENGER: Challenger, INFERENCE_SERVER: InferenceServer,
                                             PROOF_SERVER: ProofServer, VERIFIER: SpotVerifier})
 SPOT_TWO_PROTOCOL = ProtocolDef(SPOT_TWO_MANIFEST, {CHALLENGER: Challenger, INFERENCE_SERVER: InferenceServer,
@@ -674,8 +673,8 @@ SPOT_TWO_PROTOCOL = ProtocolDef(SPOT_TWO_MANIFEST, {CHALLENGER: Challenger, INFE
 PROTOCOLS = {ID: PROTOCOL, SPOT_ID: SPOT_PROTOCOL, SPOT_TWO_ID: SPOT_TWO_PROTOCOL}
 
 
-__all__ = ["ABSENT", "CHALLENGER", "COINS", "COMPONENT", "COMPOSED", "FIREWALL", "ID", "IDS", "INFERENCE_SERVER", "MANIFEST",
+__all__ = ["ABSENT", "CHALLENGER", "COINS", "COMPONENT", "COMPOSED", "ZK_SERVER", "ID", "IDS", "INFERENCE_SERVER", "MANIFEST",
            "NO_CASE", "PROOF_SERVER", "PROTOCOL", "PROTOCOLS", "SPOT_ID", "SPOT_MANIFEST", "SPOT_PROTOCOL", "SPOT_SCHEMAS",
            "SPOT_TWO_ID", "SPOT_TWO_MANIFEST", "SPOT_TWO_PROTOCOL", "SUBPROTOCOLS", "VERIFIER", "VERSION", "WORKERS",
-           "Challenger", "Firewall", "InferenceServer", "ProofServer", "SpotVerifier", "TwoStageProofServer",
+           "Challenger", "ZkServer", "InferenceServer", "ProofServer", "SpotVerifier", "TwoStageProofServer",
            "TwoStageVerifier", "Unavailable", "Verifier", "Workers", "ids_of", "params_of", "spot_params_of"]

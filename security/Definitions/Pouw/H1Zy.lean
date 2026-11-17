@@ -11,7 +11,7 @@ public import Definitions.Pouw.H1Zy.Tile
 public import Definitions.Pouw.H1Zy.LaneChunk
 
 /-!
-# H1's drawn-leaf statements on words (`verity/ml/protocols/pouw/circuit/h1zy.py`)
+# H1's drawn-leaf statements on words (`verity/protocols/accounting/pouw/prover/circuit/h1zy.py`)
 
 `Tile`, a tile unit's one statement: `PouwH1TileZy_v1{TILE}`'s `ok` over `PouwH1Tile_v1` (EXACT's z) or
 `PouwH1Tile_v3` (the one-stream's z at its noise), on its primitives' word views, with the dequant's words as a
@@ -22,14 +22,14 @@ partials. Proved to be the XOR check in `Proofs.Pouw.H1Zy`.
 
 `Chain`: a lane's chain words (`h1tile._chain`), the fx1 chain over its rows' and columns' noise from seed_j, keyed from
 σ_R, as `LaneChunk`'s step machine (`h1Chain K`): the seeds and noise stream (SHA-512), the layout, and duo, on `Tile`'s
-segment and digit pieces. `Accounting.Guarantees.TS.LeafLanesSound` reads its words as the lanes' (`laneChain`);
+segment and digit pieces. `ResourceAccounting.Guarantees.TS.LeafLanesSound` reads its words as the lanes' (`laneChain`);
 `Proofs.Pouw.H1Zy.ChainVectors` holds it to the Python.
 
 `CombineBits`: the same body on bits, its pieces (`PouwXor32_v2`, `PouwEq32_v2`, `PouwAndBit_v2`) at their lowerings.
 Proved in `Proofs.Pouw.H1Zy` to compute `Combine`'s.
 
 `Dequant`: `PouwZyDequant_v1`, the served dequant RN_bf16(RN32(RN32(RN32(z) · s_a) · s_w)), on its primitives' word
-views by integer arithmetic on the encodings (`zyDequant`). `Accounting.Guarantees.TS.LeafLanesSound` reads it as the
+views by integer arithmetic on the encodings (`zyDequant`). `ResourceAccounting.Guarantees.TS.LeafLanesSound` reads it as the
 lane's dequant; `Proofs.Pouw.H1Zy.DequantVectors` holds it to the Python evaluators.
 
 `Lane`: `PouwH1LaneZy_v1{TILE}`'s body at a 32 × 32 leaf over `PouwH1Tile_v1`, on its primitives' word views, with the

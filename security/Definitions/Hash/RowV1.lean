@@ -5,7 +5,7 @@ public import Definitions.Hash.RowSeg
 /-!
 # `sha512/row/v1` over a hash (trusted)
 
-The word row's digest (`verity/ml/commitments/frame_v3/PROTOCOL.md` §6, "Row leaves"), with the hash a parameter `G`
+The word row's digest (`verity/commitments/frame_v3/PROTOCOL.md` §6, "Row leaves"), with the hash a parameter `G`
 (SHA-512 is the instance of record; the reference is `rowleaf.sha512_row_digest`, the verifier's code
 `HmRow.rowPrefix`). The verifier hashes every such row as a role 1 row of 16-bit words: a row is `16 · n` bits (`Row`),
 its words in order, each least significant bit first, so its bytes as `sha512/row-seg/v1` packs them

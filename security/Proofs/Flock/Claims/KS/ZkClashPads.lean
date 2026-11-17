@@ -94,7 +94,7 @@ different pairs collide among its calls (`tiedColl_of_verifyInner`). -/
 theorem zk_padsClash_tied {L : List (Claims.Msg × Claims.Msg)} {spec : SessionSpec} {sts : Array Stmt}
     {record : String} {proofs : Array ByteArray} {lv : Live} {j rr : ℕ} {sch : Schedule} {tPad : ℕ}
     (hv : Zk.verifyWithM (hashesIn (L.map Prod.fst)) spec (tabsOf sts) record proofs = .ok ())
-    (hlv : liveOf spec record = .ok lv) (hj : j < sts.size) (hsch : Zk.schedule sts[j].m = .ok (sch, tPad))
+    (hlv : liveOf spec record = .ok lv) (hj : j < sts.size) (hsch : Zk.schedule sts[j].wideLeaf sts[j].m = .ok (sch, tPad))
     (hp2 : spec.points = 2) (hrr : rr < 2) {y : StreamRec}
     (hy : ∀ i : ℕ, y.rounds[i]?.map (fun rd : Flock.Round => rd.coins) =
       (lv.streams.getD (2 * j + rr) #[])[i]?.map (fun rd : Flock.Round => rd.coins))
@@ -111,7 +111,7 @@ theorem zk_padsClash_tied {L : List (Claims.Msg × Claims.Msg)} {spec : SessionS
   rw [hj', hsch] at hsch'
   obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Except.ok.inj hsch')
   rw [hj'] at hrep
-  have hsch₀ : Zk.schedule (Setup.ofCircuit sts[j]).m = .ok (sch, tPad) := hsch
+  have hsch₀ : Zk.schedule (Setup.ofCircuit sts[j]).wideLeaf (Setup.ofCircuit sts[j]).m = .ok (sch, tPad) := hsch
   obtain ⟨stream', extras, zp, finalC, cons, t, t', hfind', hex, hdec, htr, htk, hinner⟩ :=
     zkVerifyRepWith_inner _ hsch₀ hrep
   obtain rfl : stream = stream' := Option.some.inj (hfind.symm.trans hfind')

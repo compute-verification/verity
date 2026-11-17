@@ -37,7 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # `Deploy.V false`'s custody checks, as the old theorems' `RecordsLiveJ`
 
-`Custody` without `--zk`. The old plain theorems bound flock-verify's acceptance of the transcript a writer `wr` makes
+`Custody` without `--zk`. The old plain theorems bound verity-verify-proof's acceptance of the transcript a writer `wr` makes
 of the live session's outcome, under `RecordsLiveJ I dj Jf wr` (`DecodeZLJ`): the record `verify` accepts carries the
 sample, the outcome's proof files, link points, roots and rounds. `Deploy.V false` takes the record in its last message
 and checks its custody with the same checks as `--zk` (`checks`, `custody`).
@@ -151,7 +151,7 @@ theorem recordsLiveAtP_of_checks {s : Ins} {spec : SessionSpec} {sts : Array Stm
 /-- **An accepting decision of `Deploy.V false` at SHA-512 is an accepting `verify` on a record of its live outcome**:
 on a statement with no `--public-inputs` of sample `d`, the last message's record and proof files are accepted by `verify`
 (`Accepts`) at the statement's inputs, and record the run's live outcome `viewOf` (`RecordsLiveAtP`): the record's sample
-is the statement's as a value (`recordDraw_of_decide`). -/
+is the statement's as a value (`recordSample_of_decide`). -/
 theorem accepts_of_decide_plain {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f : Final} {J mPts : ℕ} {d : Json}
@@ -160,7 +160,7 @@ theorem accepts_of_decide_plain {x : Claims.Msg} {as : List Claims.Msg} {cs : Li
     (hd : s.read.draw = some d) (hJ : J ≤ spec.tables.size) :
     Exec.Accepts s.read.I ⟨f.record, f.proofs⟩ ∧
       RecordsLiveAtP s.read.I d (viewOf J mPts spec link c₁ f) ⟨f.record, f.proofs⟩ := by
-  have hdraw := recordDraw_of_decide ha hacc
+  have hdraw := recordSample_of_decide ha hacc
   obtain ⟨hv, hc⟩ := (next_decide_sha512 ha).1 hacc
   simp only [Bool.false_eq_true, ite_false] at hv
   obtain ⟨hins, hs⟩ := setupOf_some (act_decide ha)

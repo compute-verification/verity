@@ -23,7 +23,7 @@ real it is `probC`.
 
 * `exp_step`: one round from real to ideal costs `δ`, with the ideal leaf averaged over its sampling design. For each block, the
   salt is first redrawn from its posterior given its own leaf (`fiber_avg`, exact); the run is then a `[0,1]`-valued
-  test of that leaf, and T1 (`hiding_fun`) swaps it for an ideal leaf; with the leaf fixed, the round's law changes
+  test of that leaf, and T1 (`hiding_fun`) swaps it for an ideal leaf; with the leaf fixed, the round's sampling design changes
   (`reweight`) to the ideal mode's.
 * `exp_le`: by induction on the number of real rounds; when none is left, the prover's view is a constant and the
   rounds' block marginals are uniform, so `lazy` bounds the run by `value` against live coins.
@@ -73,7 +73,7 @@ section Hybrid
 variable {I Blk Salt D α : Type} [Fintype I] [DecidableEq I] [Fintype Blk] [Nonempty Blk] [Fintype Salt]
   [Nonempty Salt]
 
-/-- Round `j`'s law in mode `m j`: uniform when real; a uniform block and the posterior of leaf `v` when ideal. -/
+/-- Round `j`'s sampling design in mode `m j`: uniform when real; a uniform block and the posterior of leaf `v` when ideal. -/
 noncomputable def wt (ℓ : I → Blk × Salt → D) (m : I → Option D) (j : I) (z : Blk × Salt) : ℝ≥0∞ :=
   (m j).elim (Fintype.card (Blk × Salt) : ℝ≥0∞)⁻¹ fun v =>
     (Fintype.card Blk : ℝ≥0∞)⁻¹ * kern (fun y => ℓ j (z.1, y)) v z.2

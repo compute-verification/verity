@@ -13,21 +13,21 @@ set_option Elab.async false
 /-!
 # One hidden-output `--zk` session of `J` tables at the verifier's public inputs
 
-`ZkHidden/DefsJ.lean` at the verifier's public inputs `own` (`flock-verify verify --zk --public-inputs F`, which
+`ZkHidden/DefsJ.lean` at the verifier's public inputs `own` (`verity-verify-proof verify --zk --public-inputs F`, which
 `Main.buildSessionOf` passes to `Stmt.setupTables`). `HmIn.checkOwn` holds the public file's public input words to `own`
 and changes nothing else `Stmt.setupHidden` returns, but at `own = none` it refuses a circuit with public input
 ports, so the acceptance is its own event (`AcceptsZKP`, which at `none` is `AcceptsZK`: `acceptsZKP_none`):
 
 * `AcceptsZKP`, `LiveAcceptsZKP`: `ZkExec.AcceptsZK` at `Exec.setupOfP (zkInputs I) own`.
 * `setupTables_partsHP`, `setupOf_tableJHP`: `setupTables_partsH`, `setupOf_tableJH` at `own`.
-* `DrawSetupZHJP`, `tableZHJP`, `planZHJP`, `tabZHJP`: `DrawSetupZHJ`, … with a `DrawSetupHP` at table `j`'s inputs.
+* `SampleSetupZHJP`, `tableZHJP`, `planZHJP`, `tabZHJP`: `SampleSetupZHJ`, … with a `SampleSetupHP` at table `j`'s inputs.
 * `tableShHJP`, `planShHJP`, `tabShHJP`, `sitesShHJP`: the public tables (`HiddenExec.TableHP`) and their sites
   (`SitesHP`), at the session's statement circuit `c` (`HmOut.parseStmt`, a templated file's committed circuit
   unrolled).
 * `placeZHJP`, `layZHJP`, `rsZHJP`, `rsZHJP_computes`: `keyPlaceHP`, `keyLayoutHP` and `keyRowsHP` (the program
   `Placed.keyProgP`, its outputs `Layout.outsOfP`, the registration the population's public file `HmIn.loadPublic`,
   with or without shared rows), moved to the `--zk` tables.
-* `DrawOkZKHJP`, `opnAtZHJP`: `DrawOkZKHJ` and `opnAtZHJ` with `setupHidden … own`.
+* `SampleOkZKHJP`, `opnAtZHJP`: `SampleOkZKHJ` and `opnAtZHJ` with `setupHidden … own`.
 -/
 
 namespace FlockSoundness.Discharge.ZkHidden
@@ -42,7 +42,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 /-! ## The acceptance -/
 
-/-- **flock-verify `--zk` accepts the transcript at the verifier's public inputs `own`** (`AcceptsZK` with
+/-- **verity-verify-proof `--zk` accepts the transcript at the verifier's public inputs `own`** (`AcceptsZK` with
 `Exec.setupOfP`). -/
 def AcceptsZKP (I : Inputs) (own : Option ByteArray) (t : Exec.Transcript) : Prop :=
   ∃ spec sts, setupOfP (zkInputs I) own t.record = .ok (spec, sts) ∧ sts.forM Flock.Zk.shapeOk = .ok () ∧
@@ -50,12 +50,12 @@ def AcceptsZKP (I : Inputs) (own : Option ByteArray) (t : Exec.Transcript) : Pro
 
 theorem acceptsZKP_none (I : Inputs) (t : Exec.Transcript) : AcceptsZKP I none t ↔ AcceptsZK I t := Iff.rfl
 
-/-- flock-verify `--zk` accepts the live audit's transcript at `own`. -/
+/-- verity-verify-proof `--zk` accepts the live audit's transcript at `own`. -/
 def LiveAcceptsZKP {n : ℕ} {Reg : Type} (I : Inputs) (own : Option ByteArray)
     (o : Reg × Finset (Fin n) × Exec.Transcript) : Prop :=
   AcceptsZKP I own o.2.2
 
-/-! ## flock-verify's tables at `count > 1` at `own` -/
+/-! ## verity-verify-proof's tables at `count > 1` at `own` -/
 
 section Parts
 
@@ -72,8 +72,8 @@ theorem setupTables_partsHP (hh : tags.hiddenOutputs = true) (hc1 : 1 < count)
       .ok (spec, sts)) :
     tags.manyTables.isSome ∧ count ≤ Tags.MAX_TABLES ∧
       ∃ (population : ℕ) (units : Array ℕ),
-        (∀ d, draw = some d → ∃ u, Draw.UnitDraw.ofJson d = .ok u ∧
-          ((∃ k', u.law = .subset k') ∨ ∃ K st, u.law = .stratified K st) ∧
+        (∀ d, draw = some d → ∃ u, Draw.UnitSample.ofJson d = .ok u ∧
+          ((∃ k', u.samplingDesign = .subset k') ∨ ∃ K st, u.samplingDesign = .stratified K st) ∧
           u.population = population ∧ u.units = units) ∧
         (draw = none → units = Array.range population) ∧
         0 < units.size ∧ units.size % count = 0 ∧ sts.size = count ∧
@@ -115,11 +115,11 @@ theorem setupTables_partsHP (hh : tags.hiddenOutputs = true) (hc1 : 1 < count)
     obtain ⟨hsz, hall⟩ := range_mapM_ok (by assumption)
     obtain ⟨hpos, hmod⟩ := Tables.splits_ok (by assumption)
   all_goals first
-    | (have hdn : draw = none := Tables.draw_none ‹draw.mapM Draw.UnitDraw.ofJson = .ok none›
+    | (have hdn : draw = none := Tables.sample_none ‹draw.mapM Draw.UnitSample.ofJson = .ok none›
        exact ⟨Option.isSome_iff_exists.2 ⟨_, by assumption⟩, by omega, _, _, fun d hd => by simp [hdn] at hd,
          fun _ => rfl, hpos, hmod, hsz, fun j hj => FlockSoundness.Discharge.Exec.ok_of_refuse (hall j hj)⟩)
-    | (have hdu : draw.mapM Draw.UnitDraw.ofJson = .ok (some _) := ‹_›
-       obtain ⟨hD1, hD2⟩ := Tables.draw_split hdu
+    | (have hdu : draw.mapM Draw.UnitSample.ofJson = .ok (some _) := ‹_›
+       obtain ⟨hD1, hD2⟩ := Tables.sample_split hdu
          (by first | exact .inl ⟨_, by assumption⟩ | exact .inr ⟨_, _, by assumption⟩) (by assumption)
        exact ⟨Option.isSome_iff_exists.2 ⟨_, by assumption⟩, by omega, _, _, hD1, hD2, hpos, hmod, hsz,
          fun j hj => FlockSoundness.Discharge.Exec.ok_of_refuse (hall j hj)⟩)
@@ -149,7 +149,7 @@ theorem setupOf_tableJHP {I : Inputs} {own : Option ByteArray} {record : String}
     obtain ⟨-, -, population, units, hD1, -, -, -, hsz, hall⟩ := setupTables_partsHP hh' hc1 hs
     obtain ⟨u, hu, -, hpop, hun⟩ := hD1 _ hd
     refine ⟨by simp only [nTab, hc, ite_false]; exact hsz, fun j hj => ?_⟩
-    have hpart : drawJ I d j = Tables.partDraw population units I.count j := by
+    have hpart : drawJ I d j = Tables.partSample population units I.count j := by
       simp only [drawJ, hc, ite_false]
       unfold partJson
       rw [hu]
@@ -170,13 +170,13 @@ variable {n mPts : ℕ} {Reg : Type}
 
 /-! ## The tables -/
 
-/-- **A hidden-output table `verify --zk` sets up at `own`**, on table `j`'s inputs `I'`: `DrawSetupZHJ` at a
-`DrawSetupHP`. -/
-structure DrawSetupZHJP (I' : Inputs) (own : Option ByteArray) (mPts : ℕ) (S : Finset (Fin n)) (d : Lean.Json) where
-  x : DrawSetupHP I' own mPts S d
+/-- **A hidden-output table `verify --zk` sets up at `own`**, on table `j`'s inputs `I'`: `SampleSetupZHJ` at a
+`SampleSetupHP`. -/
+structure SampleSetupZHJP (I' : Inputs) (own : Option ByteArray) (mPts : ℕ) (S : Finset (Fin n)) (d : Lean.Json) where
+  x : SampleSetupHP I' own mPts S d
   sch : Flock.Schedule
   tPad : ℕ
-  hz : Zk.schedule x.st.m = .ok (sch, tPad)
+  hz : Zk.schedule x.st.wideLeaf x.st.m = .ok (sch, tPad)
   hshape : 2 ≤ (schedOf sch).levels.length ∧ ((schedOf sch).levels.headD default).lanes = (schedOf sch).k0 ∧
     (schedOf sch).m - 7 = (schedOf sch).k0 + ((schedOf sch).levels.headD default).logCols ∧
     levelsChained (schedOf sch).levels (schedOf sch).ext = true
@@ -189,9 +189,9 @@ structure DrawSetupZHJP (I' : Inputs) (own : Option ByteArray) (mPts : ℕ) (S :
       (D.card : ℝ≥0∞) / innerN (layOf x.st sch)
   hzk : Flock.Zk.shapeOk x.st = .ok ()
 
-namespace DrawSetupZHJP
+namespace SampleSetupZHJP
 
-variable {I' : Inputs} {own : Option ByteArray} {S : Finset (Fin n)} {d : Lean.Json} (y : DrawSetupZHJP I' own mPts S d)
+variable {I' : Inputs} {own : Option ByteArray} {S : Finset (Fin n)} {d : Lean.Json} (y : SampleSetupZHJP I' own mPts S d)
 
 theorem innerN_pos : 0 < innerN (layOf y.x.st y.sch) := lt_of_lt_of_le (by simp [Zk.K_PAD]) y.hL
 
@@ -208,7 +208,7 @@ def innerDom : Fin (innerN (layOf y.x.st y.sch)) ↪ 𝔽 :=
     exact Fin.ext (by omega)⟩
 
 /-- **The `--zk` table of a hidden-output table `verify --zk` sets up at `own`**, at statement regions `regs`
-(`DrawSetupZHJ.tabAt`). -/
+(`SampleSetupZHJ.tabAt`). -/
 noncomputable def tabAt (regs : List (Model.Region y.x.st.c.kLog (y.x.st.m - y.x.st.c.kLog)))
     (hregs : ∀ R ∈ regs, R.free.Nodup ∧ R.free.length ≤ PT_LOCAL) : TabZK 𝔽 mPts where
   S := stmtOf y.x.st y.x.wf.1 regs
@@ -246,10 +246,10 @@ noncomputable def table : TabZK 𝔽 mPts := y.tabAt (regionsOf y.x.st) (stmtOf_
 
 /-- A refused table's `--zk` table: the statement with `contra`'s regions, which no witness satisfies. -/
 noncomputable def refused : TabZK 𝔽 mPts :=
-  y.tabAt (regionsOf y.x.st ++ Integrate.DrawSetup.contra y.x.st.c.kLog (y.x.st.m - y.x.st.c.kLog)) y.x.refused_wf
+  y.tabAt (regionsOf y.x.st ++ Integrate.SampleSetup.contra y.x.st.c.kLog (y.x.st.m - y.x.st.c.kLog)) y.x.refused_wf
 
-/-- A table's `--zk` table is the same at every `DrawSetupZHJP` of it. -/
-theorem table_eq (y₁ y₂ : DrawSetupZHJP I' own mPts S d) : y₁.table = y₂.table := by
+/-- A table's `--zk` table is the same at every `SampleSetupZHJP` of it. -/
+theorem table_eq (y₁ y₂ : SampleSetupZHJP I' own mPts S d) : y₁.table = y₂.table := by
   obtain ⟨⟨st₁, h₁, D₁, hD₁, hS₁, hg₁, hb₁, m₁, k₁, a₁, b₁, r₁, e₁, hs₁, hm₁, hp₁, w₁⟩, sch₁, t₁, hz₁, _, _, _, _, _, _⟩ :=
     y₁
   obtain ⟨⟨st₂, h₂, D₂, hD₂, hS₂, hg₂, hb₂, m₂, k₂, a₂, b₂, r₂, e₂, hs₂, hm₂, hp₂, w₂⟩, sch₂, t₂, hz₂, _, _, _, _, _, _⟩ :=
@@ -264,27 +264,27 @@ theorem table_seam : ZkTabSeam y.table (Setup.ofCircuit y.x.st) y.sch y.tPad :=
 theorem table_lay : ZkTabLay y.table (Setup.ofCircuit y.x.st) y.sch := by
   constructor <;> intros <;> rfl
 
-end DrawSetupZHJP
+end SampleSetupZHJP
 
-/-- A `DrawSetupHP` whose statement passes the `--zk` shape check, with `Zk.schedule`'s schedule at its `m`, is a
-`DrawSetupZHJP` (`drawSetupZHJ_of`). -/
-theorem drawSetupZHJP_of {I' : Inputs} {own : Option ByteArray} {S : Finset (Fin n)} {d : Lean.Json}
-    (x : DrawSetupHP I' own mPts S d) (hshape : Flock.Zk.shapeOk x.st = .ok ()) {sch : Flock.Schedule} {tPad : ℕ}
-    (hz : Zk.schedule x.st.m = .ok (sch, tPad)) :
-    ∃ y : DrawSetupZHJP I' own mPts S d, y.x = x ∧ y.sch = sch ∧ y.tPad = tPad := by
+/-- A `SampleSetupHP` whose statement passes the `--zk` shape check, with `Zk.schedule`'s schedule at its `m`, is a
+`SampleSetupZHJP` (`sampleSetupZHJ_of`). -/
+theorem sampleSetupZHJP_of {I' : Inputs} {own : Option ByteArray} {S : Finset (Fin n)} {d : Lean.Json}
+    (x : SampleSetupHP I' own mPts S d) (hshape : Flock.Zk.shapeOk x.st = .ok ()) {sch : Flock.Schedule} {tPad : ℕ}
+    (hz : Zk.schedule x.st.wideLeaf x.st.m = .ok (sch, tPad)) :
+    ∃ y : SampleSetupZHJP I' own mPts S d, y.x = x ∧ y.sch = sch ∧ y.tPad = tPad := by
   obtain ⟨h1, h2, h3, h4, h5, h6⟩ := zk_schedOK x.st _ _ x.wf.1 x.wf.2 x.hm hshape hz
   exact ⟨⟨x, sch, tPad, hz, h1, h2, h3, h4, h5, h6 _, hshape⟩, rfl, rfl, rfl⟩
 
 section Shadow
 
 variable {I : Inputs} {own : Option ByteArray} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-  {d₀ : Lean.Json} (y₀ : DrawSetupZHJP (inputsJ I 0) own mPts S₀ d₀)
+  {d₀ : Lean.Json} (y₀ : SampleSetupZHJP (inputsJ I 0) own mPts S₀ d₀)
 
 open Classical in
 /-- **Table `j` at sample `S`, at `own`** (`tableZHJ`): the table `verify --zk` sets up at table `j`'s inputs and sample
 when it sets one up, and otherwise the reference setup `y₀`'s refused table. -/
 noncomputable def tableZHJP (S : Finset (Fin n)) (j : Fin (nTab I)) : TabZK 𝔽 mPts :=
-  if h : Nonempty (DrawSetupZHJP (inputsJ I j) own mPts (partS I (dj S) S j) (drawJ I (dj S) j)) then
+  if h : Nonempty (SampleSetupZHJP (inputsJ I j) own mPts (partS I (dj S) S j) (drawJ I (dj S) j)) then
     (Classical.choice h).table
   else y₀.refused
 
@@ -307,25 +307,25 @@ open Classical in
 /-- **The public hidden-output table at table `j`'s sample, at `own`**, with the inputs it is set up on. -/
 noncomputable def tableShHJP (S : Finset (Fin n)) (j : Fin (nTab I)) :
     (I' : Inputs) × TableHP I' own mPts (partS I (dj S) S j) :=
-  if h : Nonempty (DrawSetupZHJP (inputsJ I j) own mPts (partS I (dj S) S j) (drawJ I (dj S) j)) then
+  if h : Nonempty (SampleSetupZHJP (inputsJ I j) own mPts (partS I (dj S) S j) (drawJ I (dj S) j)) then
     ⟨inputsJ I j, (Classical.choice h).x.table⟩
   else ⟨inputsJ I 0, y₀.x.refused _⟩
 
 theorem tableShHJP_set {S : Finset (Fin n)} {j : Fin (nTab I)}
-    (h : Nonempty (DrawSetupZHJP (inputsJ I j) own mPts (partS I (dj S) S j) (drawJ I (dj S) j))) :
+    (h : Nonempty (SampleSetupZHJP (inputsJ I j) own mPts (partS I (dj S) S j) (drawJ I (dj S) j))) :
     tableShHJP dj y₀ S j = ⟨inputsJ I j, (Classical.choice h).x.table⟩ := by
   unfold tableShHJP
   rw [dite_eq_left_of_eq_true (eq_true h)]
 
 theorem tableShHJP_refused {S : Finset (Fin n)} {j : Fin (nTab I)}
-    (h : ¬ Nonempty (DrawSetupZHJP (inputsJ I j) own mPts (partS I (dj S) S j) (drawJ I (dj S) j))) :
+    (h : ¬ Nonempty (SampleSetupZHJP (inputsJ I j) own mPts (partS I (dj S) S j) (drawJ I (dj S) j))) :
     tableShHJP dj y₀ S j = ⟨inputsJ I 0, y₀.x.refused _⟩ := by
   unfold tableShHJP
   rw [dite_eq_right_of_eq_false (eq_false h)]
 
 theorem tableZHJP_S (S : Finset (Fin n)) (j : Fin (nTab I)) :
     (tableZHJP dj y₀ S j).S = (tableShHJP dj y₀ S j).2.T.S := by
-  by_cases h : Nonempty (DrawSetupZHJP (inputsJ I j) own mPts (partS I (dj S) S j) (drawJ I (dj S) j))
+  by_cases h : Nonempty (SampleSetupZHJP (inputsJ I j) own mPts (partS I (dj S) S j) (drawJ I (dj S) j))
   · rw [tableShHJP_set dj y₀ h]
     unfold tableZHJP
     rw [dite_eq_left_of_eq_true (eq_true h)]
@@ -363,7 +363,7 @@ variable (ht : I.tags.typed = false)
 include ht in
 theorem tableShHJP_typed (S : Finset (Fin n)) (j : Fin (nTab I)) :
     (tableShHJP dj y₀ S j).1.tags.typed = false := by
-  by_cases h : Nonempty (DrawSetupZHJP (inputsJ I j) own mPts (partS I (dj S) S j) (drawJ I (dj S) j))
+  by_cases h : Nonempty (SampleSetupZHJP (inputsJ I j) own mPts (partS I (dj S) S j) (drawJ I (dj S) j))
   · rw [tableShHJP_set dj y₀ h]
     exact typedJ ht j
   · rw [tableShHJP_refused dj y₀ h]
@@ -376,7 +376,7 @@ include ht hcS in
 theorem tableShHJP_parse (S : Finset (Fin n)) (j : Fin (nTab I)) :
     HmOut.parseStmt (tableShHJP dj y₀ S j).1.tags (tableShHJP dj y₀ S j).1.circuitFile
       (tableShHJP dj y₀ S j).1.tables = .ok c := by
-  by_cases h : Nonempty (DrawSetupZHJP (inputsJ I j) own mPts (partS I (dj S) S j) (drawJ I (dj S) j))
+  by_cases h : Nonempty (SampleSetupZHJP (inputsJ I j) own mPts (partS I (dj S) S j) (drawJ I (dj S) j))
   · rw [tableShHJP_set dj y₀ h]
     exact (parseStmtH_tagsAt ((zkTags_typed I).trans ht) _ _ _ _).trans hcS
   · rw [tableShHJP_refused dj y₀ h]
@@ -419,7 +419,7 @@ include hU hpi hpub in
 /-- `BcSiteHP` at a table set up at table `j`'s inputs at `own` (`tableHP_bcSite` at `inputsJ I j`). -/
 theorem tableShHJP_bcSite {S' : Finset (Fin n)} (Tb : (I' : Inputs) × TableHP I' own mPts S')
     (p₁ : Tb.1.tags.typed = false) (p₂ : HmOut.parseStmt Tb.1.tags Tb.1.circuitFile Tb.1.tables = .ok c)
-    (hX : ∃ (j : ℕ) (d : Lean.Json) (x : DrawSetupHP (inputsJ I j) own mPts S' d), Tb = ⟨inputsJ I j, x.table⟩)
+    (hX : ∃ (j : ℕ) (d : Lean.Json) (x : SampleSetupHP (inputsJ I j) own mPts S' d), Tb = ⟨inputsJ I j, x.table⟩)
     {u : Fin n} (h : u ∈ S') :
     BcSiteHP (Tb.2.acc p₁ p₂ (rowsFit_of_stmt p₁ p₂ hscope)) pop (Tb.2.o u h) (Tb.2.vu u h) u.val := by
   obtain ⟨j, d, x, rfl⟩ := hX
@@ -436,7 +436,7 @@ theorem sitesShHJP_bcSite :
   intro S R u h M hM
   refine bcSiteHP_recast _ (congrArg TabSpec.S (tabOfShHJP_eq dj y₀ S R u)).symm _ _
     (congrArg (fun T : TabSpec mPts => 2 ^ T.S.nbl) (tabOfShHJP_eq dj y₀ S R u)).symm _ _ ?_
-  by_cases hS : Nonempty (DrawSetupZHJP (inputsJ I (partOf I (dj S) u.val)) own mPts
+  by_cases hS : Nonempty (SampleSetupZHJP (inputsJ I (partOf I (dj S) u.val)) own mPts
     (partS I (dj S) S (partOf I (dj S) u.val)) (drawJ I (dj S) (partOf I (dj S) u.val)))
   · exact tableShHJP_bcSite hscope hU hpi hpub _ _ _
       ⟨_, _, (Classical.choice hS).x, tableShHJP_set dj y₀ hS⟩ (mem_partS h)
@@ -515,11 +515,11 @@ end Shadow
 
 /-! ## The challenger's live-coin part's samples, and the openings, at `own` -/
 
-/-- **The challenger's live-coin part's sample at `S`, at `J` hidden-output tables at `own`** (`DrawOkZKHJ` with `setupHidden … own`). -/
-def DrawOkZKHJP (I : Inputs) (own : Option ByteArray) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ)
+/-- **The challenger's live-coin part's sample at `S`, at `J` hidden-output tables at `own`** (`SampleOkZKHJ` with `setupHidden … own`). -/
+def SampleOkZKHJP (I : Inputs) (own : Option ByteArray) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ)
     (S : Finset (Fin n)) : Prop :=
   ∀ j : Fin (nTab I),
-    (∀ D, Draw.UnitDraw.ofJson (drawJ I (dj S) j) = .ok D → ∀ u ∈ partS I (dj S) S j, u.val ∈ D.proved) ∧
+    (∀ D, Draw.UnitSample.ofJson (drawJ I (dj S) j) = .ok D → ∀ u ∈ partS I (dj S) S j, u.val ∈ D.proved) ∧
     ∀ st, Stmt.setupHidden (tagsAt (zkTags I) I.count j) I.circuitFile I.publicFile (zkCoins I) I.tables
       (some (drawJ I (dj S) j)) I.partition I.program own = .ok st → st.mPts = mPts
 
@@ -529,7 +529,7 @@ noncomputable def opnAtZHJP (planZ : Finset (Fin n) → Reg → List (TabZK 𝔽
     (proofs : Array ByteArray) (j : Fin (planZ S R).length) : OpensZ 𝔽 Dig (List UInt8) :=
   match Stmt.setupHidden (tagsAt (zkTags I) I.count j.val) I.circuitFile I.publicFile (zkCoins I) I.tables
       (some (drawJ I (dj S) j.val)) I.partition I.program own with
-  | .ok st => match Zk.schedule st.m with
+  | .ok st => match Zk.schedule st.wideLeaf st.m with
     | .ok (sch, _) => opnZ (Setup.ofCircuit st) sch (nXZJ ((planZ S R).get j))
         #[proofs[2 * j.val]!, proofs[2 * j.val + 1]!]
     | .error _ => default

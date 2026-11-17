@@ -11,7 +11,7 @@ Sections (encode_in_circuit takes ~55 s a word on one core):
   floors  registry primitives that compute an exact floor, carry, comparison, select or mod, with the class the
           stacking-budget classifier (cursor/stack-property-6cd3, benchmarks/stacking_budgets/count_budgets.py) gives each
           and whether property/v1's "roundings" budget (cast + act) counts it;
-  codec   the store codec (p1024/k3/masked, verity.protocols.accounting.poub.verifier.codec): its encode/decode round-trip,
+  codec   the store codec (p1024/k3/masked, verity.protocols.resource_accounting.memory.poub.verifier.codec): its encode/decode round-trip,
           its per-byte squaring cost, the seed-key malleability a post-seed store would exploit, and the bound key that
           closes it (the composition the Lean guarantee rests on);
   encode_in_circuit  the codec's `encode_word` from u8 IMMA products (in range from C = 0) and registry integer and
@@ -27,18 +27,18 @@ import random
 import struct
 import sys
 
-import verity.protocols.accounting.pouw.prover.circuit.words  # noqa: F401  (PoUW word primitives register on import)
+import verity.protocols.resource_accounting.compute.pouw.prover.circuit.words  # noqa: F401  (PoUW word primitives register on import)
 from verity.circuits.defs import REGISTRY, PrimitiveDefinition
 from verity.circuits.evaluation.reference import ScalarReference, evaluate
 from verity.circuits.types import Array, Value
-from verity.definitions.registry import catalog
-from verity.definitions.registry.ref_prims import gather_f32
+from verity_vllm.definitions.registry import catalog
+from verity_vllm.definitions.registry.ref_prims import gather_f32
 from verity.circuits.silicon.integer import BLACKWELL_SM120_S8_M16N8K32 as IMMA_SAT
 from verity.circuits.silicon.integer import (
     BLACKWELL_SM120_S8_M16N8K32_WRAP as IMMA_WRAP,
 )
 from verity.circuits.silicon.integer import S32_MAX, S32_MIN, IntegerMma, s32_value
-from verity.protocols.accounting.poub.verifier import codec as C
+from verity.protocols.resource_accounting.memory.poub.verifier import codec as C
 
 M32 = (1 << 32) - 1
 

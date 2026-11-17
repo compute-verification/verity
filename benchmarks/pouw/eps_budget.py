@@ -2,7 +2,7 @@
 
     uv run python benchmarks/pouw/eps_budget.py [--json OUT] [--md OUT]
 
-ε_skip and γ are `verity_machine_model.skip`'s (benchmarks/machine_model/), whose docstring has the definition, the two
+ε_skip and γ are `verity_machine_model.skip`'s (calibration/machine_model/), whose docstring has the definition, the two
 weightings, the rates and the two pieces of served-only work it does not price. This file prints them as tables, and
 with `--json` writes every cell:
 
@@ -62,8 +62,8 @@ def pv_block_points(rates: dict = RATES) -> list[dict]:
 
 
 def pv_block_table(points: list[dict]) -> str:
-    lines = ["P V's block size (pv, prefill, TS model at the duo fold, every served output free): P V's ε_skip and γ, "
-             "its share of honest time, and the whole model's ε_skip and γ", "",
+    lines = [("P V's block size (pv, prefill, TS model at the duo fold, every served output free): P V's ε_skip and γ, "
+              "its share of honest time, and the whole model's ε_skip and γ"), "",
              "| model | context | design | P block | P V ε_skip | P V γ | P V share | whole ε_skip | whole γ |",
              "|---|---:|---|---:|---:|---:|---:|---:|---:|"]
     for q in points:
@@ -115,8 +115,8 @@ def component_table(name: str, ctx: int, phase: str, ds: list[Design], rates: di
 
 
 def design_table(skips: dict[str, Summary], ds: list[Design]) -> str:
-    lines = ["Each design's ε_skip (`design_skip`, its registry `[skip]`): the most over the models, contexts and "
-             "phases under the floor credit (Corollary D3)", "",
+    lines = [("Each design's ε_skip (`design_skip`, its registry `[skip]`): the most over the models, contexts and "
+              "phases under the floor credit (Corollary D3)"), "",
              "| design | noise (linears, lm_head, QKᵀ, P·V) | ε_skip | credit | at | γ there |",
              "|---|---|---:|---|---|---:|"]
     for d in ds:
@@ -133,8 +133,8 @@ def device_table(data: Path = DATA, vector: str = "", rates: dict = RATES) -> st
     ds = [design(n, data) for n in designs(data)]
     vec = prices(ds[0].name, data, vector).vector
     cells = [(m, c) for m in MODELS for c in CONTEXTS]
-    lines = [f"{data.name if data != DATA else 'sm_120'} on {vec}: ε_skip under the floor credit, prefill, served free "
-             "/ served checked", "",
+    lines = [(f"{data.name if data != DATA else 'sm_120'} on {vec}: ε_skip under the floor credit, prefill, served "
+              "free / served checked"), "",
              "| design | L | ♭ a MMA | " + " | ".join(f"{m.removeprefix('llama-3.1-')} {c // 1024}K" for m, c in cells)
              + " | ε_skip | at |", "|---|---:|---:|" + "---:|" * len(cells) + "---:|---|"]
     for d in ds:

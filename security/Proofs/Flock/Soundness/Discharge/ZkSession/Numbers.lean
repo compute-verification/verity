@@ -21,7 +21,7 @@ radius `(1 − L/N)/2 ≥ 7/16` (`relUDR_ge_m1`, from ArkLib's `relativeUniqueDe
 map meets `TabZK.hpos` (`posLo_uniform`, from `Arith.Correct.lo_balanced`).
 
 `zk_flock_count_execOS_m1`: the `--zk` count curve with every planned table at Flock ZK's parameters,
-`miss(K) + 2^-203 + δ_link`.
+`miss(K) + 2^-203 + ε_bind`.
 -/
 
 @[expose] public section
@@ -30,6 +30,8 @@ namespace FlockSoundness.Discharge.ZkSession
 
 open Game Model Accounting Audit
 open scoped ENNReal NNReal
+
+variable {wideLeaf : Bool}
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
 
@@ -117,17 +119,18 @@ theorem εInner_le_m1 {N : ℕ} (hF : Fintype.card F = 2 ^ 128) (hN : N ≤ 2 ^ 
 
 /-! ## One table -/
 
-/-- A `--zk` table at Flock ZK's parameters: the padded level 0 of `m1Schedule m`, `25 ≤ m ≤ 35`, with Flock ZK's
-padding and two extra lanes on a statement in `fast100`'s range, and the inner proof with 168 queries, `N ≤ 2^13`
+/-- A `--zk` table at Flock ZK's parameters: the padded level 0 of `m1Schedule wideLeaf m` at a statement version
+(`wideLeaf`) and `25 ≤ m ≤ 35`, with Flock ZK's padding and two extra lanes on a statement in `fast100`'s range, and the inner proof with 168 queries, `N ≤ 2^13`
 and `δ ≥ 7/16`. -/
 def TabZK.M1 (T : TabZK F mPts) : Prop :=
-  ∃ m, 25 ≤ m ∧ m ≤ 35 ∧ T.sch = m1Schedule m ∧ T.t = m1Pad m ∧ T.e = 2 ∧ (T.S.shape mPts).InRange ∧
+  ∃ wideLeaf m, 25 ≤ m ∧ m ≤ 35 ∧ T.sch = m1Schedule wideLeaf m ∧ T.t = m1Pad wideLeaf m ∧ T.e = 2 ∧
+    (T.S.shape mPts).InRange ∧
     T.N ≤ 2 ^ 13 ∧ T.q = 168 ∧ 7 / 16 ≤ T.δ
 
 /-- **A `--zk` table's bound at Flock ZK's parameters** is at most `2^-203`. -/
 theorem TabZK.bound_le_m1 (hF : Fintype.card F = 2 ^ 128) (T : TabZK F mPts) (hT : T.M1) :
     T.bound ≤ ENNReal.ofReal ((2 : ℝ) ^ (-(203 : ℝ))) := by
-  obtain ⟨m, h1, h2, hsch, ht, he, hst, hN, hq, hδ⟩ := hT
+  obtain ⟨wideLeaf, m, h1, h2, hsch, ht, he, hst, hN, hq, hδ⟩ := hT
   unfold TabZK.bound
   set r := padRepError T.sch (T.S.shape mPts) T.t T.e
   set l := padLinkError T.sch (T.S.shape mPts) T.t
@@ -144,7 +147,7 @@ theorem TabZK.bound_le_m1 (hF : Fintype.card F = 2 ^ 128) (T : TabZK F mPts) (hT
     · rw [ENNReal.ofReal_of_nonpos h.le]
       simp
   have hpt : l + r ^ 2 ≤ (2 : ℝ) ^ (-(205 : ℝ)) := by
-    have := padTableError_le_m1 m h1 h2 _ hst
+    have := padTableError_le_m1 (wide := wideLeaf) m h1 h2 _ hst
     rw [← hsch, ← ht, ← he] at this
     exact this
   have hb : b ≤ ENNReal.ofReal ((2 : ℝ) ^ (-(114 : ℝ))) := by
@@ -184,30 +187,30 @@ variable (A : Arith F K) {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
 
 /-- With every planned table's bound at most `c`, so is the knowledge term. -/
-theorem ksAvgZK_le {c : ℝ≥0∞} (h : ∀ S R (j : Fin (planZ S R).length), ((planZ S R).get j).bound ≤ c) (L : Law n)
+theorem ksAvgZK_le {c : ℝ≥0∞} (h : ∀ S R (j : Fin (planZ S R).length), ((planZ S R).get j).bound ≤ c) (L : SamplingDesign n)
     (R : Reg) : ksAvgZK planZ L R ≤ c :=
   (avg_mono fun _ => iSup_le fun j => h _ _ j).trans (avg_const c).le
 
 /-- **The `--zk` count curve at the live sample, every table at Flock ZK's parameters**:
-`Pr[accept ∧ at least K wrong units] ≤ miss(K) + 2^-203 + δ_link`. -/
+`Pr[accept ∧ at least K incorrect proof blocks] ≤ miss(K) + 2^-203 + ε_bind`. -/
 theorem zk_flock_count_execOS_m1 (hA : A.Correct) (hM1 : ∀ S R (j : Fin (planZ S R).length), ((planZ S R).get j).M1)
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
+    (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     (place : ∀ S R u, u ∈ S → UnitPlace P (tabOfZ planZ tab S R u).S u)
-    (Xc : (R : Reg) → Cont (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
+    (Xc : (R : Reg) → Cont (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (batchedSessionZK A planZ) R → (Fin C.N → Bool))
-    {δlink : (R : Reg) → Cont (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
+    {εbind : (R : Reg) → Cont (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (batchedSessionZK A planZ) R → ℝ≥0∞}
     (hlink : (analysisZK A P planZ tab (decodeOfPlace A P planZ tab place) Xc
-      (loweringSoundZK_of_place A P planZ tab place)).BindSound δlink)
+      (loweringSoundZK_of_place A P planZ tab place)).BindSound εbind)
     (K : ℕ)
-    (σ : Strategy (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
+    (σ : Strategy (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (batchedSessionZK A planZ))) :
-    prob (fun o => o.1 = true ∧ K ≤ (P.wrong (Xc (reg σ) (cont σ))).card)
-        (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (batchedSessionZK A planZ)) σ ≤
-      (Law.stratified σs ks hks).miss K + ENNReal.ofReal ((2 : ℝ) ^ (-(203 : ℝ))) + δlink (reg σ) (cont σ) :=
+    prob (fun o => o.1 = true ∧ K ≤ (P.incorrect (Xc (reg σ) (cont σ))).card)
+        (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (batchedSessionZK A planZ)) σ ≤
+      (SamplingDesign.stratified σs ks hks).miss K + ENNReal.ofReal ((2 : ℝ) ^ (-(203 : ℝ))) + εbind (reg σ) (cont σ) :=
   (zk_flock_count_execOS A P planZ tab hA σs ks hks St hS Kd pop Lb src hA3 place Xc hlink K σ).trans
     (add_le_add (add_le_add le_rfl (ksAvgZK_le planZ (fun S R j => (planZ S R |>.get j).bound_le_m1 hA.card_F
       (hM1 S R j)) _ _)) le_rfl)

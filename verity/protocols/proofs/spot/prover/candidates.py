@@ -6,7 +6,7 @@ body's children (`parts`) and other decompositions (`ways`), its statics re-boun
 accumulator) or a shared subcircuit recomputed inside each reader (a covering).
 
 `cuts` is a dynamic program at each density of `optimize`'s sweep: a node is a proof block at its statics when its outputs fit a
-public size class (`verity.circuits.partition_v2.unit_class`, the one-stage partition's), or descends by its cheapest way.  A
+public size class (`verity.circuits.partition_v2.size_class`, the one-stage partition's), or descends by its cheapest way.  A
 proof block is priced as the planner prices a subcircuit, serving's commitment on every instance plus the touched statements and
 proved proof blocks of its sample, so a finer cut pays for the wires it commits.
 Each distinct cheapest cut over the grid becomes one alternative of the op (`Candidate.cut`), and the planner chooses among
@@ -25,7 +25,7 @@ from itertools import zip_longest
 from math import log
 
 from verity.protocols.proofs.spot.prover.optimize import Candidate, CostModel, Objective, _k, template_cost
-from verity.circuits.partition_v2 import UNIT_CLASS_MAX, unit_class
+from verity.circuits.partition_v2 import SIZE_CLASS_MAX, size_class
 
 Parts = tuple[tuple["Shape", int], ...]
 
@@ -70,7 +70,7 @@ class Pressure:
 
 
 def _legal(s: Shape) -> bool:
-    return s.cap >= 1 and unit_class(s.out_bits) is not None
+    return s.cap >= 1 and size_class(s.out_bits) is not None
 
 
 def _candidate(op: str, s: Shape, n: int, label: str = "", grain: tuple[str, int] | None = None) -> Candidate:
@@ -107,8 +107,8 @@ class _Program:
             subs = [self.best(child, n * count) for child, count in parts]
             options.append((sum(p for p, _ in subs), tuple(u for _, us in subs for u in us)))
         if not options:
-            why = ("it is past C-Flock's block (cap 0)" if s.cap < 1 else
-                   f"its {s.out_bits} bits out fit no size class (at most {UNIT_CLASS_MAX})")
+            why = ("it is past Flock's block (cap 0)" if s.cap < 1 else
+                   f"its {s.out_bits} bits out fit no size class (at most {SIZE_CLASS_MAX})")
             raise ValueError(f"{s.id} has no legal cut: {why} and it has no parts or ways to descend into")
         self.memo[key] = min(options, key=lambda o: o[0])
         return self.memo[key]

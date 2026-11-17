@@ -1,8 +1,8 @@
 """Flock lowering of ``rope-head`` (RoPEHead_v1): D/2 identical units read off the IR graph, each the pair
 ``RopeOut`` + ``RopeOutAdd`` over (x[i], x[i + D/2], cos[i], sin[i]), lowered piece by piece (``verity_flock.ir_lower``).
 
-The unit's rows do not depend on D; its ``flock-ir-unit/v2`` netlist, whose LEAVES line places the D/2 units on the head's
-words, is pinned per D by :data:`PINS`."""
+The unit's rows do not depend on D; its ``flock-ir-unit/v2`` circuit description, whose LEAVES line places the D/2 units on the
+head's words, is pinned per D by :data:`PINS`."""
 TEMPLATE = "rope-head"
 UNIT = "rope-head/neox-bf16/pair"
 PINS = {64: "9cbdef1922281eadd751b12a8d35d73b5d98aa9660b449136b790b54e459b80e",
@@ -33,7 +33,7 @@ def frame_lowering(subcircuit):
 def supports(subcircuit, scheme):
     if scheme in FRAME_SCHEMES:
         return None
-    return (f"C-Flock proves {subcircuit.id} under {', '.join(FRAME_SCHEMES)} (verity/flock-ir-frame/v3); binding its rows under "
+    return (f"Flock proves {subcircuit.id} under {', '.join(FRAME_SCHEMES)} (verity/flock-ir-frame/v3); binding its rows under "
             f"{scheme} is not wired yet")
 
 

@@ -41,7 +41,7 @@ open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled
 open FlockVBridge.Family (coinSteps)
 open FlockC3.Reps (nCoins RepTie SrcRepTie repsOfVals UnitVals ProofOfVals SetupOfVals FramesOfVals RepRoundsHeld
-  RepsDrawn CoinsEncoded repCoins_repsOfVals)
+  RepsSampled CoinsEncoded repCoins_repsOfVals)
 open Flock.Guarantees (holoCTs holoKinds)
 
 theorem kindCoinTys_length : ∀ σ : List Exec.Kind, (Exec.kindCoinTys σ).length = kindCoins σ
@@ -103,7 +103,7 @@ theorem stageCoins_holoCTs {st : Flock.Stmt} {hp : HoloParams} {u : C3Run (holoA
 
 section src
 
-variable {nT : ℕ} {T : Fin nT → Type} {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : Law n}
+variable {nT : ℕ} {T : Fin nT → Type} {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : SamplingDesign n}
   {Reg Cm Reg' Reg₂ : Type} {S : ℕ} {Vs : Fin S → VStmt}
 
 local notation "ℐ" => holoInnerAt T (holoCTs st hp) st hp
@@ -137,7 +137,7 @@ theorem stageCoins_holo {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg�
     (hcus : FlockSoundness.Assumptions.InnerRecordCustody wr held sparse m)
     (hheld : RepRoundsHeld zs dg N k Rw sh rep wr held s ix)
     (henc : CoinsEncoded (CT := holoCTs st hp) sel m.coin) (hsel : ∀ i s q, sel i s q → m.selC i s q)
-    (hdr : RepsDrawn zs dg N k Rw sh rep vals sel s ix)
+    (hdr : RepsSampled zs dg N k Rw sh rep vals sel s ix)
     (hrt : SrcRepTie zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)))
     (hst : FlockC3.Sparse.SrcSparseTie zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)))
     (hot : AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun _ u => ∃ sh w ops,

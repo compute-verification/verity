@@ -3,7 +3,7 @@
 # with hidden outputs) at N units, one VU a block, so its population's dense size m = k_log + nbl is past 35 while a subset
 # sample of K units is inside it. Stage the population; `statement` (which proves the population itself) is refused in the
 # shape's words; one loopback session without --zk under `--draw subset:K` on the keyed coin tree (FC_COINS=tree), its
-# coins from the auditor's challenger (challenger.sh), proved by the CPU prover; Lean's `flock-verify verify --coins tree`
+# coins from the auditor's challenger (challenger.sh), proved by the CPU prover; Lean's `verity-verify-proof verify --coins tree`
 # on it with the verifier's own program and partition. Then a session at `--draw subset:N`, every unit, which the server
 # refuses at Register in the shape's words. Run from the verity tree (research run --cwd source); CPU only.
 # Outputs under out/: host.txt, stage.json, statement.txt, serve.log, prove.txt, prove.err, live.json, challenger/,
@@ -34,16 +34,16 @@ unset CARGO_TARGET_DIR
 trap 'rm -rf $S' EXIT
 { lscpu | grep -E 'Model name|^CPU\(s\)'; echo "pinned=$PH_PINNED rayon=$RAYON_NUM_THREADS N=$N K=$K"; } > $O/host.txt 2>&1
 
-# Lean's flock-verify, built once per source (91-plain-hidden.sh's cache), while the prover builds
+# Lean's verity-verify-proof, built once per source (91-plain-hidden.sh's cache), while the prover builds
 LSHA=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py key verity/protocols/proofs/flock/verifier)
-LEAN_BIN=$L/lean-$LSHA/flock-verify
+LEAN_BIN=$L/lean-$LSHA/verity-verify-proof
 (
   export PATH=$HOME/.elan/bin:$PATH
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
   exec 9>$L/lean.lock; flock 9
   if [ ! -x $LEAN_BIN ]; then
     rm -rf $L/lean-src && LEAN_SRC=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py copy verity/protocols/proofs/flock/verifier $L/lean-src) \
-      && (cd $LEAN_SRC && lake build flock-verify) && mkdir -p $L/lean-$LSHA && cp $LEAN_SRC/.lake/build/bin/flock-verify $LEAN_BIN
+      && (cd $LEAN_SRC && lake build verity-verify-proof) && mkdir -p $L/lean-$LSHA && cp $LEAN_SRC/.lake/build/bin/verity-verify-proof $LEAN_BIN
   fi
 ) > $O/build-lean.log 2>&1 &
 LP=$!
@@ -69,10 +69,10 @@ B=$BIN/flock-circuit; sha256sum $B | tee $O/binary.sha256
 UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $UV ] || { curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1; UV=$HOME/.local/bin/uv; }
 [ -x $W/py/bin/python ] || { $UV venv -q --python 3.12 $W/py && $UV pip install -q --python $W/py/bin/python numpy blake3; } || exit 1
-export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm
+export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch
 
 D=$S/stage
-python3 verity/protocols/proofs/flock/prover/tests/plain_hidden.py --out $D --n $N --vus-per-block 1 > $O/stage.json 2> $O/stage.err || { tail -20 $O/stage.err; exit 1; }
+python3 tests/verity/protocols/proofs/flock/prover/plain_hidden.py --out $D --n $N --vus-per-block 1 > $O/stage.json 2> $O/stage.err || { tail -20 $O/stage.err; exit 1; }
 PIN=$(sha512sum $D/circuit.txt | cut -d' ' -f1)
 # `statement` proves the population itself, so it still tests the shape at the population's count
 $B statement --circuit $D/circuit.txt --instances $D/pub-$N.bin --tables $D/tables > $O/statement.txt 2>&1

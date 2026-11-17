@@ -176,7 +176,7 @@ noncomputable def effL (Coin : Type) : Compiled Coin (findA Coin) where
   scopeCheck _ := true
   partition _ := some Claims.Witness.Sampling.toyPart
   commit := callCm
-  stage2 _ := Finset.univ
+  secondStage _ := Finset.univ
   checked _ _ := [0]
   sh _ _ := ()
   κb _ _ := 0
@@ -239,8 +239,8 @@ theorem ownLog_E_pos (L : Compiled Coin A) (H : Msg → Msg) {Ω : Type} (P : Pr
   dsimp only
   rw [Claims.Sampling.ownLog_bind, Claims.Sampling.ownLog_of_noHash _ _ (Claims.Sampling.NoHash.waitAccC _ _ _),
     List.nil_append, hm, List.map_cons]
-  obtain ⟨o', ho'⟩ := waitAccC_head H (run H P L.V x ω) (L.kIn_pos x) (forkOn (L.stage2 x) (c.1 l₀) (c.2.1 a m₀))
-    (ms.map fun l => forkOn (L.stage2 x) (c.1 l₀) (c.2.1 a l)) (hacc _)
+  obtain ⟨o', ho'⟩ := waitAccC_head H (run H P L.V x ω) (L.kIn_pos x) (forkOn (L.secondStage x) (c.1 l₀) (c.2.1 a m₀))
+    (ms.map fun l => forkOn (L.secondStage x) (c.1 l₀) (c.2.1 a l)) (hacc _)
   rw [ho', hb, List.zip_cons_cons]
   refine Nat.lt_of_lt_of_le ?_ (ownLog_flatMapRP_head _ _ _ _ _)
   exact hrun _ _ _

@@ -41,7 +41,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from verity.commitments.crypto import lms
-from verity.protocols.proofs.spot.device import challenger as Ch
+from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 
 LANE = "lane-a"
 HOST = "auditor-1"

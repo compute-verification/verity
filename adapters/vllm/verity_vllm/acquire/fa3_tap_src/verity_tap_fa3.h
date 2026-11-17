@@ -24,7 +24,7 @@
  *     warpgroup offset wg*64 (thread_idx = the consumer thread index, 0-based);
  *   * PackGQA (always on for the paged non-TMA launches vLLM issues): the tile rows are PACKED (query row, q-head-in-group)
  *     pairs, m_packed = q_row * qheads_per_kvhead + head_in_group (mask.h / pack_gqa.h: divmod by qhead_per_khead); the kernel's
- *     bidh is the KV head.  The layout therefore keys slab = bidb * h_k + bidh_kv and row = m_packed (M cap = max_seqlen_q *
+ *     bidh is the KV head.  The layout therefore keys slab = bidb * h_k + bidh_kv and row = m_packed (M bound = max_seqlen_q *
  *     qheads_per_kvhead); the row predicate is m_packed < seqlen_q * qheads_per_kvhead.  The host mirror un-packs
  *     (q_row, q_head) = (m // g, bidh_kv * g + m % g);
  *   * IntraWGOverlap schedule (all bf16 hdim 64/128 tiles): the P.V wgmma of block n+1 is issued in the step of block n and
@@ -37,7 +37,7 @@
  *
  * Arming (flash_fwd_launch_template.h): the launch template copies g_verity_tap into the mainloop arguments only if the selected
  * kernel's (kBlockN, kHeadDim) equals the host-declared (BN, D), num_splits == 1 (!Split), no local/softcap/append-KV/Qv/FP8, and
- * the declared caps (HB, M, NB) cover the launch; otherwise the launch is counted in g_verity_tap_skipped and NOTHING is written
+ * the declared bounds (HB, M, NB) cover the launch; otherwise the launch is counted in g_verity_tap_skipped and NOTHING is written
  * (the host turns a skip into a collector error: X-03 fails the run closed).
  ******************************************************************************/
 #pragma once

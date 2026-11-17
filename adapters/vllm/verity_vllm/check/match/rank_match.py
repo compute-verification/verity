@@ -30,8 +30,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from verity_vllm.engine.collectives import fused_norm as FN
 from verity_vllm.engine.collectives.collective_sites import MOE_COLLECTIVE_CLASSES
 from verity_vllm.engine.profiles import layer_classes as LC
+from verity_vllm.program.compact import runs_from_file_items
 from verity_vllm.records.schema_ids import RANK_COMMIT_BINDING_SCHEMA, RANK_MATCH_SCHEMA
 
 __all__ = ["commit_binding", "cross_rank_check", "load_recorder", "own_producers_from_record", "same_module_path"]
@@ -139,7 +141,6 @@ def own_producers_from_record(instances_path: str | Path) -> dict[tuple[int, int
     """The same from a persisted record: `instances.jsonl` rows carrying `collective` + `operand_refs` (node-space runs kept in the file);
     the producer's spec is read from the row whose `node` the own run names."""
     # v2 files hold node-space progressions
-    from verity_vllm.program.compact import runs_from_file_items
     spec_of: dict[int, str] = {}
     step_of: dict[int, Any] = {}
     args_of: dict[int, list] = {}
@@ -172,8 +173,6 @@ def _recorded_as_folded(x: dict) -> tuple[str | None, list[int]]:
     """A recorder row's (kind, partial shape) as the fold states that collective.  A `fused_norm.KIND` row's partial is
     ``stack([partial, residual])``: on its fused path the fold's `fused_allreduce_rms_norm` collective, on its unfused path the
     communicator `all_reduce` the call made, each over the [M, N] partial."""
-    from verity_vllm.engine.collectives import fused_norm as FN
-
     dims = x.get("shape")   # the recorder's shape of the partial; a row without it reads as no shape
     shape = [int(v) for v in dims] if dims else []
     if x.get("kind") != FN.KIND:

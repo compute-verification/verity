@@ -8,9 +8,11 @@ coins   CoinsDraw {n} -> Coins, n bytes in its body
 
 Every source message is `private`: a party records the coins it publishes itself, once they are public. `VirtualClock`
 reads a `VirtualTime` that the runtime advances, when nothing else can happen, to the next alarm or frame in flight;
-each reading may step it (`step`, the cost of a reading). `RealClock` reads the machine's monotonic clock, and the runtime
-waits for its alarms. `SeededCoins` is a SHA-512 counter stream of its seed; `OsCoins` the OS's randomness. A source's
-end of its channel is `owner`.
+each reading may step it (`step`, the cost of a reading). `RealClock` reads one of the machine's clocks, by default its
+monotonic clock, and the runtime waits for its alarms. A clock's `name` is the clock it reads as a record names it
+(`MONOTONIC`, `CLOCK_MONOTONIC ns`, for `time.monotonic_ns`); a virtual clock's is None, since no machine's clock reads
+it. The runtime hands a party its clock's name (`Identity.clock`). `SeededCoins` is a SHA-512 counter stream of its
+seed; `OsCoins` the OS's randomness. A source's end of its channel is `owner`.
 """
 
 from __future__ import annotations
@@ -35,6 +37,8 @@ ANSWERS = {"clock": CLOCK.only(["ClockReading", "ClockTimer"]), "coins": COINS.o
 """What each source sends its party."""
 OWNER = "owner"
 SEEDED_TAG = b"verity/deploy/seeded-coins/v1\0"
+MONOTONIC = "CLOCK_MONOTONIC ns"
+"""The name of `RealClock`'s default clock, Linux's monotonic clock in ns, which `time.monotonic_ns` reads."""
 
 
 class VirtualTime:
@@ -49,6 +53,7 @@ class VirtualTime:
 
 class _Clock:
     virtual = False
+    name: str | None = None
 
     def __init__(self) -> None:
         self.alarms: list[int] = []
@@ -96,11 +101,12 @@ class VirtualClock(_Clock):
 
 
 class RealClock(_Clock):
-    """The machine's monotonic clock, in ns (`read`, `time.monotonic_ns` unless given)."""
+    """A clock of the machine's, in ns: `read`, named `name` (`time.monotonic_ns`, `MONOTONIC`, unless given). A caller
+    that gives `read` gives the name of the clock it reads."""
 
-    def __init__(self, read: Callable[[], int] = time.monotonic_ns) -> None:
+    def __init__(self, read: Callable[[], int] = time.monotonic_ns, name: str = MONOTONIC) -> None:
         super().__init__()
-        self._read = read
+        self._read, self.name = read, name
 
     def read(self) -> int:
         return self._read()
@@ -144,4 +150,4 @@ def seeded(seed: bytes, *labels: str) -> SeededCoins:
     return SeededCoins(hashlib.sha512(SEEDED_TAG + seed + "/".join(labels).encode()).digest())
 
 
-__all__ = ["OWNER", "SeededCoins", "VirtualClock", "VirtualTime", "seeded"]
+__all__ = ["MONOTONIC", "OWNER", "RealClock", "SeededCoins", "VirtualClock", "VirtualTime", "seeded"]

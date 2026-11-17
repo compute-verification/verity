@@ -20,19 +20,19 @@ import Proofs.Flock.Soundness.Discharge.Hm.Site
 /-!
 # One plain sampled session of `J` tables: the plan, sites, layout and rows
 
-`flock-verify verify --plain-tables --session-tables J` (no `--zk`) accepts a public-output session of up to
-`Tags.MAX_TABLES` tables at a subset sample (`ProvedScope.checkP`, `ProvedScope.drawLaw` at `plainTables`). `Stmt.setupTables` sets table
+`verity-verify-proof verify --plain-tables --session-tables J` (no `--zk`) accepts a public-output session of up to
+`Tags.MAX_TABLES` tables at a subset sample (`ProvedScope.checkP`, `ProvedScope.sampleDesign` at `plainTables`). `Stmt.setupTables` sets table
 `j` up under `tagsAt` at its sample `Composed.drawJ` (the session's sample at one table, its part `j` at several). These are
 `Composed.DefsJ`'s public shadow pieces at the plain inputs themselves, so the layout and rows are `Discharge/Layout`'s directly,
 with no transfer to compiled tables:
 
-* `inputsPJ`, `tablePJ`, `planPJ`, `tabPJ`: table `j`'s inputs (`tagsAt`), its table (the `DrawSetup` table where
-  flock-verify sets one up at table `j`'s inputs and sample, else a reference setup `x₀`'s refused table), the plan of
+* `inputsPJ`, `tablePJ`, `planPJ`, `tabPJ`: table `j`'s inputs (`tagsAt`), its table (the `SampleSetup` table where
+  verity-verify-proof sets one up at table `j`'s inputs and sample, else a reference setup `x₀`'s refused table), the plan of
   `nTab I` tables, and each sampled proof block's table (`partOf`).
 * `sitesPJ`, `sitesPJ_parse`, `sitesPJ_bcSite`: each sampled proof block's acceptance, VU and block, the one circuit they parse,
   and `Discharge/Layout`'s site fact.
 * `layPJ`, `rsPJ`, `rsPJ_computes`: `keyedLayout`, `keyedRowsOuts` and `hHm` at those sites.
-* `DrawOkPJ`, `opnPJ`: the challenger's live-coin part's sample at each table, and table `j`'s openings.
+* `SampleOkPJ`, `opnPJ`: the challenger's live-coin part's sample at each table, and table `j`'s openings.
 -/
 
 @[expose] public section
@@ -58,14 +58,14 @@ theorem typedPJ {I : Inputs} (ht : I.tags.typed = false) (j : ℕ) : (inputsPJ I
 section Plan
 
 variable {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-  {d₀ : Lean.Json} (x₀ : DrawSetup (inputsPJ I 0) mPts S₀ d₀)
+  {d₀ : Lean.Json} (x₀ : SampleSetup (inputsPJ I 0) mPts S₀ d₀)
 
 open Classical in
-/-- **Table `j` at sample `S`**: the table flock-verify sets up at table `j`'s inputs and sample when it sets one up, and
-otherwise the reference setup `x₀`'s refused table (a setup at table 0's inputs, which every session flock-verify
-accepts at a sample `DrawOkPJ` admits has: `setupPJ_of_verifiesP`). -/
+/-- **Table `j` at sample `S`**: the table verity-verify-proof sets up at table `j`'s inputs and sample when it sets one up, and
+otherwise the reference setup `x₀`'s refused table (a setup at table 0's inputs, which every session verity-verify-proof
+accepts at a sample `SampleOkPJ` admits has: `setupPJ_of_verifiesP`). -/
 noncomputable def tablePJ (S : Finset (Fin n)) (j : Fin (nTab I)) : Integrate.Table mPts (partS I (dj S) S j) :=
-  if h : Nonempty (DrawSetup (inputsPJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) then
+  if h : Nonempty (SampleSetup (inputsPJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) then
     (Classical.choice h).table (typedPJ ht j)
   else x₀.refused (typedPJ ht 0) _
 
@@ -85,11 +85,11 @@ theorem tabOfPJ_eq (S : Finset (Fin n)) (R : Reg) (u : Fin n) :
   simp only [Partition.tabOf, planPJ, tabPJ, List.get_ofFn]
   rfl
 
-/-- **Table `j` where flock-verify sets it up**: at a `DrawSetup` of table `j`'s inputs and sample, `tablePJ` is the table of
+/-- **Table `j` where verity-verify-proof sets it up**: at a `SampleSetup` of table `j`'s inputs and sample, `tablePJ` is the table of
 one with the same statement. -/
 theorem tablePJ_of {S : Finset (Fin n)} {j : Fin (nTab I)}
-    (x : DrawSetup (inputsPJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) :
-    ∃ y : DrawSetup (inputsPJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j), y.st = x.st ∧
+    (x : SampleSetup (inputsPJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) :
+    ∃ y : SampleSetup (inputsPJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j), y.st = x.st ∧
       tablePJ ht dj x₀ S j = y.table (typedPJ ht j) := by
   refine ⟨Classical.choice ⟨x⟩, Except.ok.inj ((Classical.choice ⟨x⟩).h.symm.trans x.h), ?_⟩
   unfold tablePJ
@@ -116,7 +116,7 @@ theorem sitesPJ_parse : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u �
   show HmRow.parse (tablePJ ht dj x₀ S (partOf I (dj S) u.val)).acc.tags
     (tablePJ ht dj x₀ S (partOf I (dj S) u.val)).acc.cf (tablePJ ht dj x₀ S (partOf I (dj S) u.val)).acc.tables = .ok c
   unfold tablePJ
-  by_cases hS : Nonempty (DrawSetup (inputsPJ I (partOf I (dj S) u.val)) mPts
+  by_cases hS : Nonempty (SampleSetup (inputsPJ I (partOf I (dj S) u.val)) mPts
     (partS I (dj S) S (partOf I (dj S) u.val)) (drawJ I (dj S) (partOf I (dj S) u.val)))
   · rw [dite_eq_left_of_eq_true (eq_true hS)]; exact (parse_tagsAt _ _ _ _ _).trans hc
   · rw [dite_eq_right_of_eq_false (eq_false hS)]; exact (parse_tagsAt _ _ _ _ _).trans hc
@@ -124,7 +124,7 @@ theorem sitesPJ_parse : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u �
 variable {pub : Public} (hpub : HmRow.loadPublic I.tags c I.publicFile = .ok pub) (hpt : pub.tables = none)
 
 include hc hpub hpt in
-/-- **`BcSite` at every satisfiable site** at `J` tables (`sitesAt_bcSite`): at a table flock-verify sets up by
+/-- **`BcSite` at every satisfiable site** at `J` tables (`sitesAt_bcSite`): at a table verity-verify-proof sets up by
 `table_bcSite` at table `j`'s inputs; at a refused one no message satisfies the table. -/
 theorem sitesPJ_bcSite (ho : c.outNet = c.unitNet) :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S)
@@ -138,7 +138,7 @@ theorem sitesPJ_bcSite (ho : c.outNet = c.unitNet) :
   show Layout.BcSite (tablePJ ht dj x₀ S (partOf I (dj S) u.val)).acc pub
     ((tablePJ ht dj x₀ S (partOf I (dj S) u.val)).o u (mem_partS h))
     ((tablePJ ht dj x₀ S (partOf I (dj S) u.val)).vu u (mem_partS h)) u.val
-  by_cases hS : Nonempty (DrawSetup (inputsPJ I (partOf I (dj S) u.val)) mPts
+  by_cases hS : Nonempty (SampleSetup (inputsPJ I (partOf I (dj S) u.val)) mPts
     (partS I (dj S) S (partOf I (dj S) u.val)) (drawJ I (dj S) (partOf I (dj S) u.val)))
   · have e : tablePJ ht dj x₀ S (partOf I (dj S) u.val) = (Classical.choice hS).table (typedPJ ht _) := by
       unfold tablePJ; rw [dite_eq_left_of_eq_true (eq_true hS)]
@@ -179,11 +179,11 @@ end Plan
 
 /-! ## The challenger's live-coin part's samples, and table `j`'s openings -/
 
-/-- **The challenger's live-coin part's sample at `S`, at `J` tables** (`DrawOk` at table `j`'s inputs and sample): each table's sample proves
+/-- **The challenger's live-coin part's sample at `S`, at `J` tables** (`SampleOk` at table `j`'s inputs and sample): each table's sample proves
 the sampled proof blocks it is given (`partS`), and setupH sets each table up at it with `mPts` link points. -/
-def DrawOkPJ (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ) (S : Finset (Fin n)) : Prop :=
+def SampleOkPJ (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ) (S : Finset (Fin n)) : Prop :=
   ∀ j : Fin (nTab I),
-    (∀ D, Draw.UnitDraw.ofJson (drawJ I (dj S) j) = .ok D → ∀ u ∈ partS I (dj S) S j, u.val ∈ D.proved) ∧
+    (∀ D, Draw.UnitSample.ofJson (drawJ I (dj S) j) = .ok D → ∀ u ∈ partS I (dj S) S j, u.val ∈ D.proved) ∧
     ∀ st, Stmt.setupH (tagsAt I.tags I.count j) I.circuitFile I.publicFile I.coins I.tables
       (some (drawJ I (dj S) j)) I.partition I.program = .ok st → st.mPts = mPts
 

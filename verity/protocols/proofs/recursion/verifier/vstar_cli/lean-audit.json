@@ -1,5 +1,5 @@
 {
- "format": 1,
+ "format": 2,
  "roots": ["VStarDifftest", "VStarTraceCli"],
  "exempt": {
   "VStarMain": "the vstar executable's entry point, one line; its command is VStar.Cli.cmd, audited under the verifier's package (verity/protocols/proofs/flock/verifier)",

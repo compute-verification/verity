@@ -1,4 +1,4 @@
-"""Sampled proofs v2's case (`verity/sampled-proofs/one-stage/v2`) of a served window from the files its run kept, for
+"""SPOT v2's case (`verity/sampled-proofs/one-stage/v2`) of a served window from the files its run kept, for
 `composite.py --cases`, and with ``--exe`` its own Lean answer on it.
 
     v2_case.py --window DIR --out DIR --scratch DIR [--exe PATH]
@@ -12,7 +12,7 @@ those, v2's one statement: v1's params with the partition and ``proofs: {circuit
 pin, the summary's, else its ``compose.log``'s; the public file's digest, below; and its registered file), v1's
 commitment, the evidence with the sessions' proofs, and the blobs' paths, the lookup tables its circuit names
 (``m<k>/tables/*.u32``) last. A window without ``summary.json`` is ``m0`` alone. v2 reads one member's statement and
-refuses a windowed registration, so a window of several members has no v2 case: it leaves only ``missing.json`` saying
+refuses a windowed docket, so a window of several members has no v2 case: it leaves only ``missing.json`` saying
 so.
 
 ``public`` is the digest the audit took when it staged the public file, where the window keeps it: ``case-v2.json``'s
@@ -28,7 +28,7 @@ A run that didn't keep the circuit file gets it rebuilt in ``--scratch`` by the 
 records (`compose_circuit.py` over the verifier's synthetic input set, `run.sh`'s ``verity_numerical.bench.generate --n 4
 --seed 1``): the circuit is public structure, and the file is used only if its SHA-512 is the pin, which the check
 reads anyway. The case goes to ``--out`` private as `composite.py` reads it (0700, its files 0600): ``case.json``,
-``params.json``, ``commitment.bin``, ``evidence.json`` and, with ``--exe`` (``sampled-proofs-one-stage-zk``),
+``params.json``, ``commitment.bin``, ``evidence.json`` and, with ``--exe`` (``spot-one-stage-zk``),
 ``answer.json``. ``case.json`` also holds the label, where the circuit file and the public digest came from, under
 ``files``. The label is no part of the case: `composite.py` takes ``params``, ``commitment``, ``evidence`` and ``blobs``
 from that file by name, and Lean is given the three files beside it. A blob with no file, or a refused public file,
@@ -175,7 +175,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--window", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--scratch", type=Path, required=True, help="where a circuit file the run didn't keep is rebuilt")
-    ap.add_argument("--exe", help="sampled-proofs-one-stage-zk, for the case's own Lean answer")
+    ap.add_argument("--exe", help="spot-one-stage-zk, for the case's own Lean answer")
     a = ap.parse_args(argv)
     try:
         v2, how, n = case(a.window, a.scratch)

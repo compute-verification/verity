@@ -34,7 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.DeployK
-import Proofs.Flock.Claims.KS.PlainDrawJRun
+import Proofs.Flock.Claims.KS.PlainSampleJRun
 import Proofs.Flock.Claims.Recursion.NextRFits
 
 /-!

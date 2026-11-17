@@ -19,6 +19,7 @@ from verity_vllm.check.match import supplied_inputs as SI
 from verity_vllm.check.match.canonical_operands import as_progression as _asP
 from verity_vllm.check.match.canonical_operands import weight_field_name as _field_name
 from verity_vllm.check.match.peer_reads import PeerReads
+from verity_vllm.definitions.registry import catalog
 from verity_vllm.log import init_logger
 from verity_vllm.program.compact import expand, lean_root, rle_mapped
 
@@ -48,10 +49,11 @@ def const_value(spec: str) -> tuple[int, int] | None:
 
 
 def _registry():
-    """The registry every module loaded (`verity.definitions.registry.load`); a module that fails to import is named on stderr (its
+    """The registry every module loaded (`verity_vllm.definitions.registry.load`); a module that fails to import is named on stderr (its
     Programs, e.g. Hopper's under Python < 3.12, then fail to decode with that reason)."""
-    from verity.definitions.registry.catalog import load
-    reg, errors = load()
+    loaded = catalog.load()
+    assert loaded is not None
+    reg, errors = loaded
     for e in errors:
         logger.warning("[compare] registry module unavailable (%s): Programs naming its Definitions will not decode", e)
     return reg
@@ -118,7 +120,7 @@ class RootView(PeerReads, PX.PrefixInput):
                 self.inst.append({"k": k, "spec": fid if n.form != "batch" else f"batch:{fid}", "form": n.form,
                                   "args": [runs(a.refs) for a in n.args], "out": str(n.out)})
             # the decoded IR (node objects + Refs trees, O(LP^2) leaves for a long prefill's K/V gathers) is not retained: comparisons read
-            # `inst` only, and keeping it doubled the resident Program (GM-01 > 351 GiB at LP 4096).  `n_nodes` keeps the count.
+            # `inst` only, and keeping it doubled the resident Program.  `n_nodes` keeps the count.
             self.n_nodes = len(body.nodes)
             self.nodes = None
             self.param_names = [n for n, _ in getattr(body, "params", ())]   # empty for a lowered root; kept for callers that inspect it
@@ -175,7 +177,7 @@ class RootView(PeerReads, PX.PrefixInput):
         else:
             # Only the reader counts of the CANDIDATE constants are consulted below (a Const32 instance read as a select's splits
             # operand), so count per progression: a progression over one node (dI == 0) is `count` reads of it; a node-index progression
-            # (dI != 0: the gathers, 97 % of all runs) is one read of every candidate it visits -- found by bisection in the sorted
+            # (dI != 0: the gathers, most runs) is one read of every candidate it visits -- found by bisection in the sorted
             # candidates instead of enumerating its runs.  Exactly the record's per-run count on every consulted key.
             cands: set[int] = set()
             for r in self.inst:

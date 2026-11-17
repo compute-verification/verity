@@ -1,6 +1,6 @@
 module
 
-public import Spot.Registration
+public import Spot.Docket
 public import Proofs.Flock.Claims.Sampling.Reference.Deployed
 public import Proofs.Flock.Claims.Sampling.Reg
 import Mathlib.Algebra.Order.Floor.Extended
@@ -44,7 +44,7 @@ verifier (`Spot`) computes taken from it, and the rest `c`'s:
 * `checked`: the sample of record. `Spot.Slots.select` runs on the registration the statement names (`reg x`, a
   `Reg`: the selection rule, the verifier's own program, query and work table, and the challenger's closure map, as
   `Spot.Run.run` reads them) over `L x` bytes of the coins (`bytes`), and every slot of the layout is
-  checked where the sample is refused (`drawChecked`). Nothing is checked where the statement names no registration.
+  checked where the sample is refused (`sampleChecked`). Nothing is checked where the statement names no registration.
 * `sessions`, `session`, `rounds`: one proof session per registration proves every sampled proof block
   (`Stream.session`, where each covered registration's sample is its own tables of the session's statement). So every
   checked unit's session is the run's one session (`sess`) on its rounds (`sr`), and `sessions = 1`.
@@ -59,16 +59,16 @@ At this code:
 * `sessionSlots_code`: `SessionSlots` holds (`sessionSlots_of_one`).
 * `δc_code`: the record's completeness error is the largest `ZkTables.δc` over its one session's statements, with no
   union bound factor.
-* `drawSlots_code`: `DrawSlots` from `RegMatches` (the registration's program is the statement's descriptor, its layout
+* `sampleSlots_code`: `DrawSlots` from `RegMatches` (the registration's program is the statement's descriptor, its layout
   the statement's partition and its design the statement's design) and `BytesUniform` (the bytes are uniform when the
   coins are).
-* `drawFixed_code`: `DrawFixed` from `BytesFixed` (the session's rounds are second-stage, and the sample's bytes don't
+* `sampleFixed_code`: `SampleFixed` from `BytesFixed` (the session's rounds are second-stage, and the sample's bytes don't
   read them).
 * `framed_code_iff`, `acceptsFramed_code_iff`, `sessionsScope_code_iff`, `sessionWit_code_iff`, `sessionsIn_code_iff`:
   `Framed`, `AcceptsFramed`, `SessionsScope`, `SessionWit` and `SessionsIn` are exactly their one-session forms
   (`FramedOne`, `AcceptsOne`, `SessScope`, `SessWit`, `SessIn`). Each reads `sess` once at a run that checks some unit,
   with no unit named.
-* `N₀_of_shapes`, `sessIn_of_shapes`: `N₀` reads only the session's table sizes, so `SessIn`'s `N₀` clause holds when
+* `N₀_of_shapes`, `sessIn_of_shapes`: `N₀` reads only the session's tables' statement versions and sizes, so `SessIn`'s `N₀` clause holds when
   every session at `x` has the tables `shape x` fixes (`ShapesFixed`). Nothing the Lean verifier runs establishes it at
   `sess`: its registration refusal (`Draw.bernoulli`) fixes the sampled count only, and its outcome step takes the
   session's statement as an opaque object.
@@ -148,9 +148,9 @@ def BytesUniform : Prop :=
 
 /-- **The session's rounds are second-stage and the sample doesn't read them.** -/
 def BytesFixed : Prop :=
-  ∀ x, sr x ⊆ c.stage2 x ∧ ∀ r d, bytes x (forkOn (sr x) r d) = bytes x r
+  ∀ x, sr x ⊆ c.secondStage x ∧ ∀ r d, bytes x (forkOn (sr x) r d) = bytes x r
 
-theorem drawSlots_code (hreg : RegMatches c reg) (hunif : BytesUniform c L bytes) :
+theorem sampleSlots_code (hreg : RegMatches c reg) (hunif : BytesUniform c L bytes) :
     DrawSlots (deploy rel (code c reg L bytes sr sess)) := by
   intro x s Pt hx hP
   obtain ⟨g, l, hg, hd, hl, hPt, hds⟩ := hreg x s Pt hx hP
@@ -160,7 +160,7 @@ theorem drawSlots_code (hreg : RegMatches c reg) (hunif : BytesUniform c L bytes
   rw [hg]
   simp only [Option.map_some, Option.getD_some, Reg.checked, Reg.layout, hl]
 
-theorem drawFixed_code (h : BytesFixed c L bytes sr) : DrawFixed (deploy rel (code c reg L bytes sr sess)) := by
+theorem sampleFixed_code (h : BytesFixed c L bytes sr) : SampleFixed (deploy rel (code c reg L bytes sr sess)) := by
   intro x r u _
   refine ⟨(h x).1, fun d => ?_⟩
   show ((reg x).map fun g => g.checked (bytesOf (bytes x (forkOn (sr x) r d)))).getD [] =
@@ -267,36 +267,37 @@ theorem sessionsIn_code_iff : SessionsIn (code c reg L bytes sr sess) ↔ SessIn
 /-! ## The sessions' table shapes -/
 
 /-- **The session's table shapes are the statement's**: whatever a run shows, the session's statement sets up tables of
-sizes `shape x`, in order. The sampled verifier's registration refusal (`Draw.bernoulli`: `bernoulli`) fixes the sampled
+the statement versions and sizes `shape x`, in order. The sampled verifier's registration refusal (`Draw.bernoulli`: `bernoulli`) fixes the sampled
 count only, and its outcome step never reads the session's tables, so nothing in the Lean verifier establishes this at
 `sess`; at the session the shape check lets through it holds (`shapesFixed_checked`). -/
-def ShapesFixed (shape : Msg → List ℕ) : Prop :=
-  ∀ x v xS vS, sess x v = some (xS, vS) → (FlockDeploy.tables true xS).map (fun p => p.2.m) = shape x
+def ShapesFixed (shape : Msg → List (Bool × ℕ)) : Prop :=
+  ∀ x v xS vS, sess x v = some (xS, vS) → (FlockDeploy.tables true xS).map (fun p => (p.2.wideLeaf, p.2.m)) = shape x
 
 /-- A shape's `N₀`: its tables' masked level-0 codeword lengths, summed. -/
-noncomputable def shapeN₀ (ms : List ℕ) : ℝ := (ms.map fun m => (2 : ℝ) ^ (Claims.Flock.zkLevel0 m).d).sum
+noncomputable def shapeN₀ (ms : List (Bool × ℕ)) : ℝ :=
+  (ms.map fun p => (2 : ℝ) ^ (Claims.Flock.zkLevel0 p.1 p.2).d).sum
 
 /-- **`N₀` reads only the table shapes**: at fixed shapes, every session at `x` has `N₀` the shapes'. -/
-theorem N₀_of_shapes (shape : Msg → List ℕ) (h : ShapesFixed sess shape) (x : Msg) (v : Seen) (xS : Msg) (vS : Seen)
+theorem N₀_of_shapes (shape : Msg → List (Bool × ℕ)) (h : ShapesFixed sess shape) (x : Msg) (v : Seen) (xS : Msg) (vS : Seen)
     (hv : sess x v = some (xS, vS)) : FlockDeploy.N₀ true xS = shapeN₀ (shape x) := by
   rw [← h x v xS vS hv, shapeN₀, List.map_map]
   rfl
 
 /-- **`SessionsIn` from fixed shapes**: the sessions in Flock's masked scope with at most `tables` tables, their shapes
 the statement's, and the record's `N₀` the shapes'. -/
-theorem sessIn_of_shapes (shape : Msg → List ℕ)
+theorem sessIn_of_shapes (shape : Msg → List (Bool × ℕ))
     (hin : ∀ x v xS vS, sess x v = some (xS, vS) → ∃ s spec sts, FlockDeploy.ZkIn xS s spec sts ∧ sts.size ≤ c.tables x)
     (h : ShapesFixed sess shape) (hN : ∀ x, c.innerN₀ x = shapeN₀ (shape x)) : SessIn c sess :=
   fun x v xS vS hv => ⟨hin x v xS vS hv, (N₀_of_shapes sess shape h x v xS vS hv).trans (hN x).symm⟩
 
 /-- **The shape check**: `sess` with every session refused whose tables aren't `shape x`, what an outcome step that held
 the session's tables to the shapes its registration fixes would run. -/
-def shapeChecked (shape : Msg → List ℕ) (x : Msg) (v : Seen) : Option (Msg × Seen) :=
-  (sess x v).filter fun p => decide ((FlockDeploy.tables true p.1).map (fun q => q.2.m) = shape x)
+def shapeChecked (shape : Msg → List (Bool × ℕ)) (x : Msg) (v : Seen) : Option (Msg × Seen) :=
+  (sess x v).filter fun p => decide ((FlockDeploy.tables true p.1).map (fun q => (q.2.wideLeaf, q.2.m)) = shape x)
 
-theorem shapeChecked_some (shape : Msg → List ℕ) {x : Msg} {v : Seen} {p : Msg × Seen}
+theorem shapeChecked_some (shape : Msg → List (Bool × ℕ)) {x : Msg} {v : Seen} {p : Msg × Seen}
     (h : shapeChecked sess shape x v = some p) :
-    sess x v = some p ∧ (FlockDeploy.tables true p.1).map (fun q => q.2.m) = shape x := by
+    sess x v = some p ∧ (FlockDeploy.tables true p.1).map (fun q => (q.2.wideLeaf, q.2.m)) = shape x := by
   unfold shapeChecked at h
   cases hs : sess x v with
   | none => rw [hs] at h; cases h
@@ -309,12 +310,12 @@ theorem shapeChecked_some (shape : Msg → List ℕ) {x : Msg} {v : Seen} {p : M
     · cases h
 
 /-- **The shape check fixes the shapes**: every session it lets through sets up the tables `shape x`. -/
-theorem shapesFixed_checked (shape : Msg → List ℕ) : ShapesFixed (shapeChecked sess shape) shape :=
+theorem shapesFixed_checked (shape : Msg → List (Bool × ℕ)) : ShapesFixed (shapeChecked sess shape) shape :=
   fun _ _ _ _ hv => (shapeChecked_some sess shape hv).2
 
 /-- **Fixed shapes are a shape check that refuses nothing**: `sess`'s sessions have the tables `shape x` exactly when
 the shape check lets each of them through. -/
-theorem shapesFixed_iff_checked (shape : Msg → List ℕ) :
+theorem shapesFixed_iff_checked (shape : Msg → List (Bool × ℕ)) :
     ShapesFixed sess shape ↔ shapeChecked sess shape = sess := by
   constructor
   · intro h
@@ -331,22 +332,22 @@ theorem shapesFixed_iff_checked (shape : Msg → List ℕ) :
 
 /-- **`SessionsIn` at the shape check**: with `sess`'s sessions in Flock's masked scope and the record's `N₀` the
 shapes', the session the shape check lets through is in `SessIn`. -/
-theorem sessIn_checked (shape : Msg → List ℕ)
+theorem sessIn_checked (shape : Msg → List (Bool × ℕ))
     (hin : ∀ x v xS vS, sess x v = some (xS, vS) → ∃ s spec sts, FlockDeploy.ZkIn xS s spec sts ∧ sts.size ≤ c.tables x)
     (hN : ∀ x, c.innerN₀ x = shapeN₀ (shape x)) : SessIn c (shapeChecked sess shape) :=
   sessIn_of_shapes c (shapeChecked sess shape) shape
     (fun x v xS vS hv => hin x v xS vS (shapeChecked_some sess shape hv).1) (shapesFixed_checked sess shape) hN
 
 set_option synthInstance.maxSize 1024 in
-/-- **Sampling completeness at the code**: `complete_deploy` with `SessionSlots` proved, `DrawSlots` and `DrawFixed`
+/-- **Sampling completeness at the code**: `complete_deploy` with `SessionSlots` proved, `DrawSlots` and `SampleFixed`
 from the sample's facts, and the other premises in their one-session form. -/
 theorem complete_code (H : Msg → Msg) (hF : Claims.Flock.Complete H (FlockDeploy.deployZk rel))
     (hfixed : BytesFixed c L bytes sr) (hreg : RegMatches c reg) (hunif : BytesUniform c L bytes)
     (hframe : FramedOne c reg L bytes sr sess H) (haccept : AcceptsOne c reg L bytes sr sess H)
     (hscope : SessScope c reg L bytes sr sess H) (hwit : SessWit rel c reg L bytes sr sess H) :
     Complete H (deploy rel (code c reg L bytes sr sess)) :=
-  complete_deploy rel _ H hF (drawFixed_code rel c reg L bytes sr sess hfixed)
-    (drawSlots_code rel c reg L bytes sr sess hreg hunif) ((framed_code_iff c reg L bytes sr sess H).2 hframe)
+  complete_deploy rel _ H hF (sampleFixed_code rel c reg L bytes sr sess hfixed)
+    (sampleSlots_code rel c reg L bytes sr sess hreg hunif) ((framed_code_iff c reg L bytes sr sess H).2 hframe)
     ((acceptsFramed_code_iff c reg L bytes sr sess H).2 haccept)
     ((sessionsScope_code_iff c reg L bytes sr sess H).2 hscope)
     ((sessionWit_code_iff rel c reg L bytes sr sess H).2 hwit) (sessionSlots_code c reg L bytes sr sess H)

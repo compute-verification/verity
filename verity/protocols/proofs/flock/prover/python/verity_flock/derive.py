@@ -7,7 +7,7 @@ to the Lean derivation byte for byte, and a mismatch can only make an honest pro
 - **An inner layout's range** holds:
   - its own region: input port groups (aligned word runs, exported bits left out), one row per AND item (inlined
     callees' items and inline reads' rows at their items), output copy rows, and the constant last. That's
-    `ir_lower.layout`'s v2 rule, so a flat type's rows are `ir_lower.netlist`'s byte for byte;
+    `ir_lower.layout`'s v2 rule, so a flat type's rows are `ir_lower.circuit_description`'s byte for byte;
   - each placed callee's rows at its aligned offset. Its non-exported input rows become binding copies `form · 1`
     (A = the caller's form, B = the callee's constant), and its constant row copies the caller's (`[c] · [c]`).
 - **A read's rows** are `table/v2`'s: `Flock.Lookup.buildV2` when placed; inline, the same
@@ -15,7 +15,7 @@ to the Lean derivation byte for byte, and a mismatch can only make an honest pro
   constant wires. A product row's B side is the table's, folded table-direct, so it's listed empty and the read's
   `READ` record names it.
 - **The unit's layout is placed by the block.** Its physical rows are its own region alone, constant last as a self
-  row, as `ir_lower.netlist` writes a unit. Each placed entry is a part, a slot of its layout, whose rows are that
+  row, as `ir_lower.circuit_description` writes a unit. Each placed entry is a part, a slot of its layout, whose rows are that
   layout's own; the block's Δ binds them (`Derived.delta`): each part's non-exported input rows to the unit's forms,
   the same form in A and B, and every slot's constant to the pin, `one`. In the unit coordinates this module uses for
   the logical list, the own region comes first, then each part's range in item order, aligned, then `one`.
@@ -448,8 +448,8 @@ class Derivation:
         return head + body + [base + c for c in d.out_cols]
 
 
-def netlist(d: Derived, name: str | None = None) -> str:
-    """The rows as ``ir_lower.netlist`` writes them (dense, 0 .. size - 1), then one ``READ`` line per read's table-direct
+def circuit_description(d: Derived, name: str | None = None) -> str:
+    """The rows as ``ir_lower.circuit_description`` writes them (dense, 0 .. size - 1), then one ``READ`` line per read's table-direct
     side in these rows."""
     head = ["flock-ir-unit/v2", name or d.name, d.size, d.const]
     for groups in (d.in_groups, d.out_groups):
@@ -485,4 +485,4 @@ def logical_text(dv: Derivation) -> str:
     return "\n".join(out) + "\n"
 
 
-__all__ = ["Derivation", "Derived", "Read", "gen_read", "logical_text", "netlist", "rows_digest"]
+__all__ = ["Derivation", "Derived", "Read", "gen_read", "logical_text", "circuit_description", "rows_digest"]

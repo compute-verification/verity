@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from verity_vllm.errors import Refused
 
+__all__ = ["negatives_applied", "parse_serve_shard_from"]
+
 
 def negatives_applied(flip_partial: str | None, swap_requests: str | None, omit_partial_site: str | None, xrank_pairs: list[dict], made: list[dict]) -> dict[str, dict]:
     """Per requested negative: did the target rank actually inject it?  flip_partial -> the rank's flipped_collective_inputs over the pairs (from

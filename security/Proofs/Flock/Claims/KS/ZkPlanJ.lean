@@ -41,19 +41,19 @@ import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
 # The old `--zk` plan at the deployed masked statement is `zkTabs`
 
 The old `--zk` theorems run their decoders on a plan of `J` tables (`Composed.planZJ`): at a sample, table `j` is the
-table `verify --zk` sets up at table `j`'s inputs and sample (`DrawSetupZJ.table`), and a reference setup's refused table
+table `verify --zk` sets up at table `j`'s inputs and sample (`SampleSetupZJ.table`), and a reference setup's refused table
 where it sets none up. `ZkLiveJ` reads Flock ZK's padded tables of the deployed setup (`zkTabs`). Where `verify --zk`
-sets its session up, the two are one list, so the old decoders are right at `zkTabs` (`ZkDrawJ`):
+sets its session up, the two are one list, so the old decoders are right at `zkTabs` (`ZkSampleJ`):
 
 * `setupAt`, `setupAt_tableJ`: `Exec.setupOf` at a sample value rather than a record's (`setupOf_eq_setupAt`), since
   `Deploy.V`'s checks pin a record's sample to the statement's only up to key order; `Composed.setupOf_tableJ` there.
-* `table_eq_zkTab`: a `DrawSetupZJ`'s table is `zkTab` at its statement, at every layout and link layout (`Layout` is a
+* `table_eq_zkTab`: a `SampleSetupZJ`'s table is `zkTab` at its statement, at every layout and link layout (`Layout` is a
   `Prop`, and `Layout.model` is `stmtOf`: `Integrate.model_eq_stmtOf`).
-* `setupZJ_of_setupAt`: where `verify --zk` sets its session up at the sample `dj S`, `DrawOkZKJ` holds and table `j`
-  has `Zk.schedule`'s schedule, table `j` has a `DrawSetupZJ` at its statement (`setupZJ_of_acceptsZK` without the
+* `setupZJ_of_setupAt`: where `verify --zk` sets its session up at the sample `dj S`, `SampleOkZKJ` holds and table `j`
+  has `Zk.schedule`'s schedule, table `j` has a `SampleSetupZJ` at its statement (`setupZJ_of_acceptsZK` without the
   verdict).
 * `tableZJ_eq_zkTabs`, `planZJ_eq_tabsJ`: so the plan there is `tabsJ` of `zkTabs`, at every layout.
-* `drawOkZKJ_empty`: at no sampled proof blocks, `DrawOkZKJ` is the tables' link points, which `setupTables` makes the session's
+* `sampleOkZKJ_empty`: at no sampled proof blocks, `SampleOkZKJ` is the tables' link points, which `setupTables` makes the session's
   (`setupTables_points`).
 * `opnD`, `decD`, `opnAtZJ_eq_opnD`: the deployed `--zk` openings and decoder at the session's statements and tables,
   which the old ones at the plan are where `verify --zk` sets the session up.
@@ -65,14 +65,14 @@ namespace FlockDeploy.KS
 
 open Flock FlockSoundness FlockSoundness.Game FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkSession
 open FlockSoundness.Discharge
-open FlockSoundness.Discharge.Composed (DrawSetupZJ DrawOkZKJ nTab inputsJ drawJ partS tableZJ planZJ outJ repJ)
+open FlockSoundness.Discharge.Composed (SampleSetupZJ SampleOkZKJ nTab inputsJ drawJ partS tableZJ planZJ outJ repJ)
 open FlockSoundness.Discharge.Tables (DecodesTable)
 
 local notation "𝔽" => FlockLevel3.GF128
 
 /-- **`verify`'s setup at a sample**: `Exec.setupOf` at the sample value itself rather than a record's
 (`setupOf_eq_setupAt`). `Deploy.V`'s checks pin a record's sample to the statement's only up to key order
-(`Custody.checks_draw`), so a theorem at the statement's setup names the sample, not a record. -/
+(`Custody.checks_sample`), so a theorem at the statement's setup names the sample, not a record. -/
 def setupAt (I : Exec.Inputs) (dr : Option Lean.Json) : _root_.Flock.V (SessionSpec × Array Stmt) :=
   Stmt.setupTables I.tags I.circuitFile I.publicFile I.coins I.count I.tables dr I.partition I.program I.work
     I.stratified I.closure
@@ -102,7 +102,7 @@ theorem setupAt_tableJ {I : Exec.Inputs} {d : Lean.Json} {spec : SessionSpec} {s
     obtain ⟨-, -, population, units, hD1, -, -, -, hsz, hall⟩ := Tables.setupTables_parts hh' hc1 hs
     obtain ⟨u, hu, -, hpop, hun⟩ := hD1 _ rfl
     refine ⟨by simp only [nTab, hc, ite_false]; exact hsz, fun j hj => ?_⟩
-    have hpart : drawJ I d j = Tables.partDraw population units I.count j := by
+    have hpart : drawJ I d j = Tables.partSample population units I.count j := by
       simp only [drawJ, hc, ite_false]
       unfold DecodeZLJ.partJson
       rw [hu]
@@ -114,12 +114,12 @@ theorem setupAt_tableJ {I : Exec.Inputs} {d : Lean.Json} {spec : SessionSpec} {s
     rw [e1, hpart]
     exact hall j hj
 
-/-- **A `DrawSetupZJ`'s table is `zkTab`** at its statement, at every layout and link layout: the same schedule and
+/-- **A `SampleSetupZJ`'s table is `zkTab`** at its statement, at every layout and link layout: the same schedule and
 `t_pad` (`Zk.schedule` is a function), `stmtOf` the layout's model statement (`Integrate.model_eq_stmtOf`), and the same
 padding constant, pads and inner code. -/
 theorem table_eq_zkTab {n mPts : ℕ} {I' : Exec.Inputs} {S : Finset (Fin n)} {d : Lean.Json}
-    (ht : I'.tags.typed = false) (y : DrawSetupZJ I' mPts S d) {st : Stmt} (hst : y.x.st = st)
-    (L : Layout st) {sch : Flock.Schedule} {tPad : ℕ} (hz : Zk.schedule st.m = .ok (sch, tPad))
+    (ht : I'.tags.typed = false) (y : SampleSetupZJ I' mPts S d) {st : Stmt} (hst : y.x.st = st)
+    (L : Layout st) {sch : Flock.Schedule} {tPad : ℕ} (hz : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad))
     (hk : st.c.kLog ≤ 27) (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL mPts) :
     y.table = zkTab L hz hk hlay := by
   obtain ⟨x, sch', tPad', hz', _, _, _, _, _, _⟩ := y
@@ -127,55 +127,55 @@ theorem table_eq_zkTab {n mPts : ℕ} {I' : Exec.Inputs} {S : Finset (Fin n)} {d
   obtain ⟨rfl, rfl⟩ := Prod.ext_iff.1 (Except.ok.inj (hz'.symm.trans hz))
   have hS : Refine.stmtOf x.st x.wf.1 (Refine.regionsOf x.st) = L.model (Refine.regionsOf x.st) :=
     (Integrate.model_eq_stmtOf ht x.h x.wf.1 _).symm
-  unfold DrawSetupZJ.table DrawSetupZJ.tabAt zkTab
+  unfold SampleSetupZJ.table SampleSetupZJ.tabAt zkTab
   congr 1
 
-/-- **Table `j` is set up where `verify --zk` sets its session up**: at the sample `dj S`, where `DrawOkZKJ` holds and
-table `j` has `Zk.schedule`'s schedule, table `j` has a `DrawSetupZJ` at its inputs, its sample's units of `S` and its
+/-- **Table `j` is set up where `verify --zk` sets its session up**: at the sample `dj S`, where `SampleOkZKJ` holds and
+table `j` has `Zk.schedule`'s schedule, table `j` has a `SampleSetupZJ` at its inputs, its sample's units of `S` and its
 sample, at its statement and schedule. -/
 theorem setupZJ_of_setupAt {I : Exec.Inputs} (hh : I.tags.hiddenOutputs = false) (ht : I.tags.typed = false)
     {n mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S : Finset (Fin n)} {spec : SessionSpec} {sts : Array Stmt}
-    (hs : setupAt (ZkExec.zkInputs I) (some (dj S)) = .ok (spec, sts)) (hok : DrawOkZKJ I dj mPts S)
+    (hs : setupAt (ZkExec.zkInputs I) (some (dj S)) = .ok (spec, sts)) (hok : SampleOkZKJ I dj mPts S)
     (j : Fin (nTab I)) (hj : j.val < sts.size) {sch : Flock.Schedule} {tPad : ℕ}
-    (hz : Zk.schedule sts[j.val].m = .ok (sch, tPad)) :
-    ∃ y : DrawSetupZJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j),
+    (hz : Zk.schedule sts[j.val].wideLeaf sts[j.val].m = .ok (sch, tPad)) :
+    ∃ y : SampleSetupZJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j),
       y.x.st = sts[j.val] ∧ y.sch = sch ∧ y.tPad = tPad := by
   obtain ⟨-, hstJ⟩ := setupAt_tableJ hh hs
   have hst := hstJ j.val hj
   obtain ⟨-, -, _, hf⟩ := schedule_spec hz
   have ht' : (inputsJ I j.val).tags.typed = false := Composed.typedJ ht j.val
-  obtain ⟨_, -, hdr⟩ := Layout.setupH_drawn hst
-  obtain ⟨D, hD, -⟩ := Layout.drawn_spec hdr
-  obtain ⟨x, hx⟩ := drawSetup_of_setupH_g (I := inputsJ I j.val) (S := partS I (dj S) S j) (mPts := mPts)
+  obtain ⟨_, -, hdr⟩ := Layout.setupH_sampled hst
+  obtain ⟨D, hD, -⟩ := Layout.sampled_spec hdr
+  obtain ⟨x, hx⟩ := sampleSetup_of_setupH_g (I := inputsJ I j.val) (S := partS I (dj S) S j) (mPts := mPts)
     ht' hst hf hD ((hok j).1 D hD) ((hok j).2 _ hst)
-  obtain ⟨y, hyx, hys, hyt⟩ := Composed.drawSetupZJ_of ht' x (sch := sch) (tPad := tPad) (by rw [hx]; exact hz)
+  obtain ⟨y, hyx, hys, hyt⟩ := Composed.sampleSetupZJ_of ht' x (sch := sch) (tPad := tPad) (by rw [hx]; exact hz)
   exact ⟨y, by rw [hyx, hx], hys, hyt⟩
 
-/-- **The plan's table `j` is `zkTabs`'s** where `verify --zk` sets its session up at the sample `dj S` and `DrawOkZKJ`
+/-- **The plan's table `j` is `zkTabs`'s** where `verify --zk` sets its session up at the sample `dj S` and `SampleOkZKJ`
 holds. -/
 theorem tableZJ_eq_zkTabs {I : Exec.Inputs} (hh : I.tags.hiddenOutputs = false) (ht : I.tags.typed = false)
     {n mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-    (y₀ : DrawSetupZJ (inputsJ I 0) mPts S₀ d₀) {S : Finset (Fin n)} {spec : SessionSpec} {sts : Array Stmt}
-    (hs : setupAt (ZkExec.zkInputs I) (some (dj S)) = .ok (spec, sts)) (hok : DrawOkZKJ I dj mPts S)
+    (y₀ : SampleSetupZJ (inputsJ I 0) mPts S₀ d₀) {S : Finset (Fin n)} {spec : SessionSpec} {sts : Array Stmt}
+    (hs : setupAt (ZkExec.zkInputs I) (some (dj S)) = .ok (spec, sts)) (hok : SampleOkZKJ I dj mPts S)
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL mPts)
     (j : Fin (nTab I)) (hj : j.val < sts.size) :
     tableZJ dj y₀ S j = zkTabs h0 L hz hk hlay j.val := by
   obtain ⟨y, hyst, -, -⟩ := setupZJ_of_setupAt hh ht dj hs hok j hj (hz j.val hj)
   unfold tableZJ
-  rw [dite_eq_left_of_eq_true (eq_true ⟨y⟩), DrawSetupZJ.table_eq _ y, zkTabs_of_lt h0 L hz hk hlay hj]
+  rw [dite_eq_left_of_eq_true (eq_true ⟨y⟩), SampleSetupZJ.table_eq _ y, zkTabs_of_lt h0 L hz hk hlay hj]
   exact table_eq_zkTab (Composed.typedJ ht j.val) y hyst (L j.val hj) (hz j.val hj) (hk j.val hj) (hlay j.val hj)
 
-/-- **The plan is `tabsJ` of `zkTabs`** where `verify --zk` sets its session up at the sample `dj S` and `DrawOkZKJ`
+/-- **The plan is `tabsJ` of `zkTabs`** where `verify --zk` sets its session up at the sample `dj S` and `SampleOkZKJ`
 holds, at every registration: the setup has the plan's `nTab I` tables (`setupAt_tableJ`), each `zkTabs`'s. -/
 theorem planZJ_eq_tabsJ {I : Exec.Inputs} (hh : I.tags.hiddenOutputs = false) (ht : I.tags.typed = false)
     {n mPts : ℕ} {Reg : Type} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-    (y₀ : DrawSetupZJ (inputsJ I 0) mPts S₀ d₀) {S : Finset (Fin n)} {spec : SessionSpec} {sts : Array Stmt}
-    (hs : setupAt (ZkExec.zkInputs I) (some (dj S)) = .ok (spec, sts)) (hok : DrawOkZKJ I dj mPts S)
+    (y₀ : SampleSetupZJ (inputsJ I 0) mPts S₀ d₀) {S : Finset (Fin n)} {spec : SessionSpec} {sts : Array Stmt}
+    (hs : setupAt (ZkExec.zkInputs I) (some (dj S)) = .ok (spec, sts)) (hok : SampleOkZKJ I dj mPts S)
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL mPts) (R : Reg) :
     planZJ (Reg := Reg) dj y₀ S R = tabsJ sts.size (zkTabs h0 L hz hk hlay) := by
@@ -185,10 +185,10 @@ theorem planZJ_eq_tabsJ {I : Exec.Inputs} (hh : I.tags.hiddenOutputs = false) (h
   simp only [planZJ, tabsJ, List.get_eq_getElem, List.getElem_ofFn]
   exact tableZJ_eq_zkTabs hh ht dj y₀ hs hok h0 L hz hk hlay ⟨i, hi⟩ (by omega)
 
-/-- **`DrawOkZKJ` at no sampled proof blocks** is the tables' link points, which are the session's (`setupTables_points`). -/
-theorem drawOkZKJ_empty {I : Exec.Inputs} (hh : I.tags.hiddenOutputs = false) {n : ℕ}
+/-- **`SampleOkZKJ` at no sampled proof blocks** is the tables' link points, which are the session's (`setupTables_points`). -/
+theorem sampleOkZKJ_empty {I : Exec.Inputs} (hh : I.tags.hiddenOutputs = false) {n : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {spec : SessionSpec} {sts : Array Stmt}
-    (hs : setupAt (ZkExec.zkInputs I) (some (dj ∅)) = .ok (spec, sts)) : DrawOkZKJ I dj spec.mPts ∅ := by
+    (hs : setupAt (ZkExec.zkInputs I) (some (dj ∅)) = .ok (spec, sts)) : SampleOkZKJ I dj spec.mPts ∅ := by
   obtain ⟨hsz, hstJ⟩ := setupAt_tableJ hh hs
   have hh' : (ZkExec.zkTags I).hiddenOutputs = false := (ZkExec.zkTags_hiddenOutputs I).trans hh
   have hpts := (Exec.setupTables_points hh' hs).2
@@ -204,7 +204,7 @@ at table `j`'s statement and its `--zk` schedule, on proof files `2j` and `2j + 
 noncomputable def opnD {mPts : ℕ} (sts : Array Stmt) (ts : List (TabZK 𝔽 mPts)) (proofs : Array ByteArray)
     (j : Fin ts.length) : OpensZ 𝔽 Refine.Dig (List UInt8) :=
   match sts[j.val]? with
-  | some st => match Zk.schedule st.m with
+  | some st => match Zk.schedule st.wideLeaf st.m with
     | .ok (sch, _) => ZkExec.opnZ (Flock.Setup.ofCircuit st) sch (Composed.nXZJ (ts.get j))
         #[proofs[2 * j.val]!, proofs[2 * j.val + 1]!]
     | .error _ => default

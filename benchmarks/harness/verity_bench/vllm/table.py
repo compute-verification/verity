@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 METRIC_LABELS = {
     "time_per_output_token_s": "time / output token",

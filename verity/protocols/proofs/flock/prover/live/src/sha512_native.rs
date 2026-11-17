@@ -626,8 +626,8 @@ mod tests {
         let py = format!(
             "import sys\nsys.path[:0] = ['{r}/verity/protocols/proofs/flock/prover/python', '{r}', '{r}/catalog', '{r}/kernels', '{r}/experimental', '{r}/benchmarks/numerical/python']\n\
              from verity_flock import ir_lower as IL, sha512_circuit as S\nS.CARRY_EVERY = {carry_every}\n\
-             open('{d}/sha512x3.txt', 'w').write(IL.netlist(IL.layout(S.compression3(), ['cv0', 'msg0', 'cv1', 'msg1', 'cv2', 'msg2'], ['out0', 'out1', 'out2']), 'sha512x3', None, None))\n\
-             open('{d}/hm96.txt', 'w').write(IL.netlist(IL.layout(S.hm96_row(), ['cv', 'pad', 'y'], ['bc']), 'hm96', None, None))\n",
+             open('{d}/sha512x3.txt', 'w').write(IL.circuit_description(IL.layout(S.compression3(), ['cv0', 'msg0', 'cv1', 'msg1', 'cv2', 'msg2'], ['out0', 'out1', 'out2']), 'sha512x3', None, None))\n\
+             open('{d}/hm96.txt', 'w').write(IL.circuit_description(IL.layout(S.hm96_row(), ['cv', 'pad', 'y'], ['bc']), 'hm96', None, None))\n",
             r = repo.display(), d = dir.display());
         let ok = std::process::Command::new("python3").arg("-c").arg(py).status().ok()?.success();
         let nets = ok.then(|| ["sha512x3", "hm96"].iter().map(|n| IrUnitNet::load(dir.join(format!("{n}.txt")).to_str().unwrap())).collect());

@@ -28,7 +28,10 @@ stager writes there the SHA-512 of its `program_digests`, the unit's name with a
 id and the row layout, which no program descriptor holds. So the command hashes no program against it. It reads the
 program only to record which was handed (its digest as the verifier computes it, the SHA-512 of the descriptor's
 canonical JSON without `annotations`, and the Definition it names, `program_fn`) and to refuse one that names another
-Definition than `stage.json`'s `word`: a comparison of two names, which binds nothing.
+Definition than `stage.json`'s `word`: a comparison of two names, which binds nothing. Under `PARTITION_V1` the bound
+partition object names its Program (`program`), and the verifier refuses a session handed any other; so there the handed
+Program is held to that digest instead (a bound statement's is the population Program of its word, which names the
+population, not the word), and the record lists it in `held`.
 
 **The label says what an accept holds.** At `--zk` on a circuit under the provisional rule the verifier takes the
 units as the circuit states them and compares no Program with the circuit, so an accept there is recorded as
@@ -198,30 +201,38 @@ def hold(f: Files, stage: Mapping[str, Any]) -> dict:
     the files that passed, and `withheld` the ones the verifier isn't given: the partition under `PARTITION_COVER`,
     for which it takes no object. The program is held to nothing the circuit states. `program` is the one handed: its
     digest as the verifier computes it (`ProvedScope.programDigest`: the descriptor without `annotations`) and the
-    Definition it names (`program_fn`), which is refused when `stage` names another as its `word`."""
+    Definition it names (`program_fn`), which is refused when `stage` names another as its `word`, unless the held
+    partition is under `PARTITION_V1`: then it is refused unless it is the Program the partition object names."""
 
     to = bound(f.circuit)
     doc = {**to, "held": [], "withheld": [], "program": None}
+    part = _json(f.partition, "--partition") if f.partition else None
+    named = part.get("program") if (to["partition"] or {}).get("rule") == PARTITION_V1 and isinstance(part, dict) else None
     if f.program:
         desc = _json(f.program, "--program")
         fn = desc.get("program_fn") if isinstance(desc, dict) else None
-        if None not in (fn, stage.get("word")) and fn != stage["word"]:
+        doc["program"] = {"sha512": _digest({k: v for k, v in desc.items() if k != "annotations"}
+                                            if isinstance(desc, dict) else desc), "fn": fn}
+        if named is None and None not in (fn, stage.get("word")) and fn != stage["word"]:
             raise ValueError(f"{f.program} is the program of another Definition than the statement's: its `program_fn` "
                              f"is {fn}, and {f.stage} names the `word` {stage['word']}: no verifier was started (the "
                              "verifier compares no program with this circuit, so it would not refuse it)")
-        doc["program"] = {"sha512": _digest({k: v for k, v in desc.items() if k != "annotations"}
-                                            if isinstance(desc, dict) else desc), "fn": fn}
     if f.partition:
         rule = (to["partition"] or {}).get("rule")
         if rule not in (PARTITION_V1, PARTITION_COVER):
             raise ValueError(f"{f.circuit} binds no partition under a rule this command hashes (its rule is {rule!r}; "
                              f"{PARTITION_V1} and {PARTITION_COVER} are), so nothing holds {f.partition} to it: no "
                              "verifier was started")
-        got = _digest(_json(f.partition, "--partition"), rule)
+        got = _digest(part, rule)
         if got != to["partition"]["digest"]:
             raise ValueError(f"{f.partition} is not the partition the circuit binds: its digest under {rule} is {got}, "
                              f"and {f.circuit} binds {to['partition']['digest']}: no verifier was started")
         doc["held"].append("partition")
+        if named is not None and doc["program"]:
+            if doc["program"]["sha512"] != named:
+                raise ValueError(f"{f.program} is not the Program the partition object names: its digest is "
+                                 f"{doc['program']['sha512']}, and {f.partition} names {named}: no verifier was started")
+            doc["held"].append("program")
         if rule == PARTITION_COVER:
             doc["withheld"].append("partition")
     return doc

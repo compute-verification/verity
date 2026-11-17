@@ -156,12 +156,12 @@ theorem tableCRZ_of_not_fork {ts : List (TabZK F mPts)} {j : Fin ts.length} {τ 
 
 /-- **The sampled tables' error**: after each sample, the largest over the plan's tables of its `bound` over
 `1 − N₀/(ek)`, averaged over the sample (`ksAvgStrictZ` with no finder budget). -/
-noncomputable def tableErrZ {n : ℕ} {Reg : Type} (planZ : Finset (Fin n) → Reg → List (TabZK F mPts)) (L : Law n)
+noncomputable def tableErrZ {n : ℕ} {Reg : Type} (planZ : Finset (Fin n) → Reg → List (TabZK F mPts)) (L : SamplingDesign n)
     (k : ℕ) (R : Reg) : ℝ≥0∞ :=
   avg fun ω : L.Ω => ⨆ j : Fin (planZ (L.draw ω) R).length,
     ENNReal.ofReal (((planZ (L.draw ω) R).get j).bound.toReal / (1 - rateZ (planZ (L.draw ω) R) j k))
 
-theorem ksAvgStrictZ_zero {n : ℕ} {Reg : Type} (planZ : Finset (Fin n) → Reg → List (TabZK F mPts)) (L : Law n)
+theorem ksAvgStrictZ_zero {n : ℕ} {Reg : Type} (planZ : Finset (Fin n) → Reg → List (TabZK F mPts)) (L : SamplingDesign n)
     (k : ℕ) (R : Reg) : ksAvgStrictZ planZ L k 0 0 R = tableErrZ planZ L k R := by
   simp [ksAvgStrictZ, tableErrZ, ksStrictZ]
 
@@ -172,7 +172,7 @@ section Link
 variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
-  {L : Law n} {decode : DecoderZK (C := C) planZ tab} {Dh : Type}
+  {L : SamplingDesign n} {decode : DecoderZK (C := C) planZ tab} {Dh : Type}
   {Hc : List UInt8 → Dh} (vb : ValueBindingZ A P planZ tab decode Hc) (wo : vb.Pos → vb.Opening)
   (R : Reg) (τ : Cont L Reg (batchedSessionZC A Hs planZ) R)
 
@@ -202,16 +202,16 @@ theorem linkCRZC_of_not_fork {k Rw M : ℕ} (h : ¬ LinkForkZC A Hs P planZ tab 
     (finderCost_nonneg _ fun e => by simp [cTZC])
 
 /-- **`Q_s`**: the expected number of commit strings the sampled proof blocks read. -/
-noncomputable def qsZC (L : Law n) : ℝ :=
+noncomputable def qsZC (L : SamplingDesign n) : ℝ :=
   ∑ c : vb.Pos, (Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω
 
 /-- **The link error**: `Q_s/(1 − ρ)·(1/(eM) + k/(eR_w))`, the link finder's miss after `M` further trials and the
 waits' miss after `R_w` reruns (`linkBoundZC` with no SHA-512 evaluations to count). -/
-noncomputable def linkErrZC (L : Law n) (k Rw M : ℕ) (ρ : ℝ) : ℝ≥0∞ :=
+noncomputable def linkErrZC (L : SamplingDesign n) (k Rw M : ℕ) (ρ : ℝ) : ℝ≥0∞ :=
   ENNReal.ofReal (qsZC A P planZ tab vb L * (1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
 
 /-- **The waits' error**: `Q_s/(1 − ρ)·k/(eR_w)` (`regTermZC` at no finder budget, and `candSlackZC`). -/
-noncomputable def waitErrZC (L : Law n) (k Rw : ℕ) (ρ : ℝ) : ℝ≥0∞ :=
+noncomputable def waitErrZC (L : SamplingDesign n) (k Rw : ℕ) (ρ : ℝ) : ℝ≥0∞ :=
   ENNReal.ofReal (qsZC A P planZ tab vb L * (k / (Real.exp 1 * Rw)) / (1 - ρ))
 
 omit [Fintype K] in
@@ -223,14 +223,14 @@ theorem linkBoundZC_zero {k Rw M : ℕ} {ρ : ℝ} (h : LinkCRZC A Hs P planZ ta
   ring
 
 omit [Fintype K] [DecidableEq K] in
-theorem regTermZC_zero (L : Law n) (k Rw : ℕ) (ρ : ℝ) :
+theorem regTermZC_zero (L : SamplingDesign n) (k Rw : ℕ) (ρ : ℝ) :
     regTermZC A P planZ tab vb L k Rw ρ 0 = waitErrZC A P planZ tab vb L k Rw ρ := by
   unfold regTermZC waitErrZC qsZC
   congr 1
   ring
 
 omit [Fintype K] [DecidableEq K] in
-theorem candSlackZC_eq (L : Law n) (k Rw : ℕ) (ρ : ℝ) :
+theorem candSlackZC_eq (L : SamplingDesign n) (k Rw : ℕ) (ρ : ℝ) :
     candSlackZC (L := L) A P planZ tab vb k Rw ρ = waitErrZC A P planZ tab vb L k Rw ρ := rfl
 
 end Link
@@ -253,7 +253,7 @@ theorem allLeaves_of_not_exLeaves : ∀ {r : ℕ} {f : List (M × C) → Game β
 
 end Leaves
 
-variable {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm β : Type}
+variable {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm β : Type}
   {outer : Reg → L.Ω → List (Cm × I.Coin) → Game β}
 
 /-- **A property of the prover's strategy at the start of some outer session it reaches**, after some sample `ω` and

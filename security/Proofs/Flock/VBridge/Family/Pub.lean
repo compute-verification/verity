@@ -38,7 +38,7 @@ the `c_k`'s, or the verifier's opening and the honest one collide:
   position has the `c_k`'s leaf, or `openPair` collides (`Flock.Registered.opensLeaf_binding`);
 * `opens_of_acceptsZKR`: at a transcript the session accepts, a sampled proof block's row of a port of `own` opens the port's root
   at the position `own` gives (`checked_of_acceptsHJ`, without a registrant), at the table the unit is sampled into;
-* `HOwnRoots`, `RowsDrawn`, `PortNamesUnique`: what the family's sessions must be for that: the verifier's reads files'
+* `HOwnRoots`, `RowsSampled`, `PortNamesUnique`: what the family's sessions must be for that: the verifier's reads files'
   roots are `commitsRoot` over the history's `c_k`, an accepted transcript samples every unit that reads a round's
   commitment and labels it itself, and a circuit's port names are distinct;
 * `pubCommits_or_collides`: at every history and accepting session, each row of `Sk i j` registers `cmtOf (bc cOf)`'s
@@ -120,11 +120,11 @@ statement (`HmOut.drawn` at `drawJ`) labels it `idx`, and `reg ∈ own` is the c
 position `x` for `u`'s label, the public file's `b ‖ c` of `u`'s row `q` opens `reg`'s root at `x` through the header's
 path. -/
 theorem opens_of_acceptsZKR {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
-    {hscope : Layout.scopeOk c = true} {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv) {tr : Exec.Transcript}
+    {hscope : Layout.scopeOk c = true} {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv) {tr : Exec.Transcript}
     (hacc : AcceptsZKR zo.I zo.own tr) {reg : Registered.Port} (hmem : reg ∈ zo.own) {u : Fin nv}
     {q : Fin c.ports.size} (hfind : (List.range c.ports.size).find? (fun p => c.ports[p]!.name == reg.name) = some q.val)
-    {d : Lean.Json} {D : Draw.UnitDraw} {dp : Public} {idx : Array ℕ} (hd : recordDraw tr.record = some d)
-    (hD : Draw.UnitDraw.ofJson (drawJ zo.I d (partOf zo.I d u.val)) = .ok D)
+    {d : Lean.Json} {D : Draw.UnitSample} {dp : Public} {idx : Array ℕ} (hd : recordDraw tr.record = some d)
+    (hD : Draw.UnitSample.ofJson (drawJ zo.I d (partOf zo.I d u.val)) = .ok D)
     (hdp : HmOut.drawn c zo.pub (drawJ zo.I d (partOf zo.I d u.val)) = .ok dp)
     (hidx : Registered.unitIndices dp = .ok idx) (hu : u.val ∈ D.proved) {x : ℕ}
     (hread : reg.reads[idx.getD (D.proved.idxOf u.val) 0]? = some (some x)) :
@@ -152,7 +152,7 @@ theorem opens_of_acceptsZKR {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} 
   obtain ⟨p', positions, paths, hp', hent, hall⟩ := checkPort_at (hports _ hmem)
   rw [hfind] at hp'
   cases hp'
-  obtain ⟨D', hD', -, hn, -, -⟩ := Layout.drawn_spec hdpR
+  obtain ⟨D', hD', -, hn, -, -⟩ := Layout.sampled_spec hdpR
   rw [hD] at hD'
   cases hD'
   have hi : D.proved.idxOf u.val < D.proved.size := Array.idxOf_lt_length_of_mem hu
@@ -166,7 +166,7 @@ theorem opens_of_acceptsZKR {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} 
     exact this
   have hdig : zo.pub.digest u.val q.val c.ports.size =
       Registered.tableRow dp tb q.val (Registered.ref tb c.ports.size q.val (D.proved.idxOf u.val)) := by
-    have h1 := Hidden.drawn_digestW (Hidden.loadPublic_nil zo.hpub) hdpR hD (Layout.proved_lt_population hD) hi q.isLt
+    have h1 := Hidden.sampled_digestW (Hidden.loadPublic_nil zo.hpub) hdpR hD (Layout.proved_lt_population hD) hi q.isLt
     rw [hget] at h1
     rw [← h1]
     simp only [Public.digest, htb, Registered.tableRow, Registered.ref]
@@ -191,7 +191,7 @@ section family
 
 variable {nT nR : ℕ} {T : Fin nT → Type} {CT : Fin nR → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
 variable {cls : HClass} {regs : List (Region cls.kLog (cls.m - cls.kLog))} {sch : Flock.Schedule}
-variable {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
+variable {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
 local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 InnerAccepts.leafPlain cls regs (schedOf sch)
 
@@ -213,14 +213,14 @@ def HOwnRoots (cOf : Cm → List UInt8) : Prop :=
 /-- **An accepted transcript samples the units that read a round's commitment, and labels them itself**: at every
 history, each transcript session `j` accepts has a sample that samples every unit some round-commitment port of `own`
 reads into its table (`partOf`, at the table's sample `drawJ`), and that table's sampled statement (`HmOut.drawn`) labels
-the unit with the unit. U4 (`checkFull` at the record's sample, which `flock-verify --registered --draw` runs) samples those
+the unit with the unit. U4 (`checkFull` at the record's sample, which `verity-verify-proof --registered --draw` runs) samples those
 units in full; the labels are the verifier's own where its partition derives the units (`Registered.derived`, which
 `Registered.check` requires). -/
-def RowsDrawn : Prop :=
+def RowsSampled : Prop :=
   ∀ R ω t R₂ j tr, AcceptsZKR (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr → ∀ reg ∈ (F.zs R ω t R₂ j).own,
     Registered.roundCommitment reg.value = true → ∀ (u : Fin (F.Vs j).nv) x, reg.reads[u.val]? = some (some x) →
       ∃ d D dp idx, recordDraw tr.record = some d ∧
-        Draw.UnitDraw.ofJson (drawJ (F.zs R ω t R₂ j).I d (partOf (F.zs R ω t R₂ j).I d u.val)) = .ok D ∧
+        Draw.UnitSample.ofJson (drawJ (F.zs R ω t R₂ j).I d (partOf (F.zs R ω t R₂ j).I d u.val)) = .ok D ∧
         HmOut.drawn (F.Vs j).c (F.zs R ω t R₂ j).pub (drawJ (F.zs R ω t R₂ j).I d (partOf (F.zs R ω t R₂ j).I d u.val)) =
           .ok dp ∧ Registered.unitIndices dp = .ok idx ∧
         u.val ∈ D.proved ∧ idx.getD (D.proved.idxOf u.val) 0 = u.val
@@ -247,7 +247,7 @@ theorem find_of_unique (hu : F.PortNamesUnique) (j : Fin F.stmts.size) (q : Fin 
 strings registers `cmtOf (bc cOf)`'s digest of `e.1` (`VCommits` at the row), or the verifier's opening of the public
 file's row and the honest opening of the `c_k` collide (`openPair`). -/
 theorem pubCommits_or_collides (cOf : Cm → List UInt8) (hSk : F.Sk = skOf F.Vs F.own F.sel) (hown : F.HOwn)
-    (hroots : F.HOwnRoots cOf) (hdrawn : F.RowsDrawn) (hnames : F.PortNamesUnique) :
+    (hroots : F.HOwnRoots cOf) (hdrawn : F.RowsSampled) (hnames : F.PortNamesUnique) :
     ∀ i R ω (t : List (Cm × (ℐ).Coin)) (e : Cm × (ℐ).Coin), t[i]? = some e → ∀ R₂ j,
       (∃ tr, AcceptsZKR (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr) → ∀ (u : Fin (F.Vs j).nv)
         (q : Fin (F.Vs j).c.ports.size), Sum.inl (u, q) ∈ F.Sk i j → ∀ R' : Reg',

@@ -57,7 +57,7 @@ carries no free value, as past the algebraic phase, passing is equality byte for
 namespace Claims.ZKServer
 
 open _root_.Flock (F128)
-open _root_.Flock.Firewall.Frame (Cfg Masker roundFree check)
+open _root_.Flock.ZkServer.Frame (Cfg Masker roundFree check)
 open FlockSoundness.Refine (Frame encs)
 
 namespace LeanRelease
@@ -158,7 +158,7 @@ theorem ofLoop_sched_live (T : ZKMal.CoinLayer.TableData)
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
     (real : Msg → Flock.Wit →
       (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
-      ℕ → _root_.Flock.V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+      ℕ → _root_.Flock.V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (wk : (ofLoop T L₀ real).toSrv.Worker) (x : Msg) (w : Flock.Wit)
     (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
     (κ : (ofLoop T L₀ real).toSrv.Chk) (e0 : Msg × Msg) (h1 : List (Msg × Msg))
@@ -170,8 +170,8 @@ theorem ofLoop_sched_live (T : ZKMal.CoinLayer.TableData)
       schedSoFar t ((ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 % 2)
         (spec.domain (spec.tables[(ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 / 2]!)
           ((ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 % 2)).toUTF8
-        (_root_.Flock.Firewall.Drive.extras sts[(ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 / 2]!
-          (_root_.Flock.Firewall.Drive.linkPoints sts[(ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 / 2]!
+        (_root_.Flock.ZkServer.Drive.extras sts[(ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 / 2]!
+          (_root_.Flock.ZkServer.Drive.linkPoints sts[(ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 / 2]!
             (wordsAt x (h1.map fun p => ZKMal.CoinLayer.rd p.2) 0))) hi
         ((Array.range (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2).map
           fun j => wordsAt x (h1.map fun p => ZKMal.CoinLayer.rd p.2)
@@ -196,8 +196,8 @@ theorem ofLoop_sched_live (T : ZKMal.CoinLayer.TableData)
     · rcases hs : schedSoFar t ((ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 % 2)
           (spec.domain (spec.tables[(ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 / 2]!)
             ((ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 % 2)).toUTF8
-          (_root_.Flock.Firewall.Drive.extras sts[(ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 / 2]!
-            (_root_.Flock.Firewall.Drive.linkPoints sts[(ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 / 2]!
+          (_root_.Flock.ZkServer.Drive.extras sts[(ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 / 2]!
+            (_root_.Flock.ZkServer.Drive.linkPoints sts[(ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 / 2]!
               (wordsAt x (h1.map fun p => ZKMal.CoinLayer.rd p.2) 0))) hi
           ((Array.range (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2).map
             fun j => wordsAt x (h1.map fun p => ZKMal.CoinLayer.rd p.2)
@@ -214,20 +214,20 @@ theorem ofLoop_scheduled (T : ZKMal.CoinLayer.TableData)
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
     (real : Msg → Flock.Wit →
       (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
-      ℕ → _root_.Flock.V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+      ℕ → _root_.Flock.V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (x : Msg) (w : Flock.Wit)
     (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
     (e0 : Msg × Msg) (h1 : List (Msg × Msg)) (vals : _)
     {s0 : _} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt} {q : ℕ}
     (hx : FlockDeploy.setupOf true x = some (s0, spec, sts)) (hq : h1.length = q + 1)
-    {t : _root_.Flock.Firewall.Finish.Tab} {hi : Array ByteArray}
+    {t : _root_.Flock.ZkServer.Finish.Tab} {hi : Array ByteArray}
     (hreal : real x w ρ (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 = .ok (t, hi))
     {sched : Array (ByteArray × ℕ)}
     (hs : schedSoFar t ((ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 % 2)
       (spec.domain (spec.tables[(ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 / 2]!)
         ((ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 % 2)).toUTF8
-      (_root_.Flock.Firewall.Drive.extras sts[(ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 / 2]!
-        (_root_.Flock.Firewall.Drive.linkPoints sts[(ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 / 2]!
+      (_root_.Flock.ZkServer.Drive.extras sts[(ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 / 2]!
+        (_root_.Flock.ZkServer.Drive.linkPoints sts[(ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 / 2]!
           (wordsAt x (h1.map fun p => ZKMal.CoinLayer.rd p.2) 0))) hi
       ((Array.range (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2).map
         fun j => wordsAt x (h1.map fun p => ZKMal.CoinLayer.rd p.2)

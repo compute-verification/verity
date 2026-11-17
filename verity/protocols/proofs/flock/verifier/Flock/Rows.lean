@@ -1,14 +1,15 @@
-/-
-`flock-rows TYPES --root DIGEST --name NAME [--in-split A,B..] [--out-split A,B..] [--leaves FILE] [--cut FILE] [--logical]`:
-the rows `Flock.Derive.derive` gives the type `DIGEST`, as `flock-ir-unit/v2` on stdout, or with `--logical` its logical list
-(`Derive.logicalText`). `TYPES` is `{"types": [content, ...]}`,
-callees before callers, each checked as `flock-verify circuit-type` checks it. `--leaves` and `--cut` name files holding
-the lowering's `LEAVES` and `CUT` JSON, which are passed through. The Python layout is a mirror held to this output
-(`backends/flock/tests/test_flock_rows.py`).
--/
 module
 
 public import Flock.DeriveCheck
+
+/-!
+`flock-rows TYPES --root DIGEST --name NAME [--in-split A,B..] [--out-split A,B..] [--leaves FILE] [--cut FILE] [--logical]`:
+the rows `Flock.Derive.derive` gives the type `DIGEST`, as `flock-ir-unit/v2` on stdout, or with `--logical` its logical list
+(`Derive.logicalText`). `TYPES` is `{"types": [content, ...]}`,
+callees before callers, each checked as `verity-verify-proof circuit-type` checks it. `--leaves` and `--cut` name files holding
+the lowering's `LEAVES` and `CUT` JSON, which are passed through. The Python layout is a mirror held to this output
+(`backends/flock/tests/test_flock_rows.py`).
+-/
 
 @[expose] public section
 
@@ -64,7 +65,7 @@ def cmd (args : List String) : IO UInt32 := do
     | .error e => IO.eprintln s!"flock-rows: {e}"; return 1
     | .ok d =>
       if args.contains "--logical" then IO.print (Derive.logicalText d)
-      else IO.print (Derive.netlist name d (← readLine? (argOf args "--leaves")) (← readLine? (argOf args "--cut")))
+      else IO.print (Derive.circuitDescription name d (← readLine? (argOf args "--leaves")) (← readLine? (argOf args "--cut")))
       return 0
 
 end Flock.Rows

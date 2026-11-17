@@ -152,7 +152,7 @@ section Lig
 variable {w : Array (Array F128)} [Fact (Flock.RecAlgebra.NoEmpty w)] {M : Flock.RecAlgebra.Messages F128}
 
 theorem challenge_sz {st st' : Flock.RecAlgebra.LSt F128} {k k' : ℕ} {rk : F256}
-    (h : Flock.RecAlgebra.challenge M st k (Flock.RecAlgebra.CoinSource.ofRounds w) = .ok ((rk, st'), k')) :
+    (h : Flock.RecAlgebra.challenge M st k (Flock.RecAlgebra.RoundCoins.ofRounds w) = .ok ((rk, st'), k')) :
     k' = k + 1 ∧ (w[k]!).size = 2 := by
   obtain ⟨s, ⟨a0, a1, a2⟩, msg, ood, oods, conss⟩ := st
   unfold Flock.RecAlgebra.challenge at h
@@ -166,7 +166,7 @@ theorem challenge_sz {st st' : Flock.RecAlgebra.LSt F128} {k k' : ℕ} {rk : F25
   exact ⟨rfl, hc⟩
 
 theorem challenges_sz : ∀ (n : ℕ) (st st' : Flock.RecAlgebra.LSt F128) (k k' : ℕ) (chs : Array F256),
-    Flock.RecAlgebra.challenges M n st k (Flock.RecAlgebra.CoinSource.ofRounds w) = .ok ((chs, st'), k') →
+    Flock.RecAlgebra.challenges M n st k (Flock.RecAlgebra.RoundCoins.ofRounds w) = .ok ((chs, st'), k') →
     k' = k + n ∧ SzAt w k (List.replicate n 2)
   | 0, st, st', k, k', chs, h => by
     simp only [Flock.RecAlgebra.challenges] at h
@@ -182,7 +182,7 @@ theorem challenges_sz : ∀ (n : ℕ) (st st' : Flock.RecAlgebra.LSt F128) (k k'
     exact ⟨by omega, SzAt.cons hc hs rfl⟩
 
 theorem oodIntro_sz {dim split : ℕ} {st st' : Flock.RecAlgebra.LSt F128} {k k' : ℕ} {u : PUnit} (hd : dim ≠ 0)
-    (h : Flock.RecAlgebra.oodIntro M dim split st k (Flock.RecAlgebra.CoinSource.ofRounds w) = .ok ((u, st'), k')) :
+    (h : Flock.RecAlgebra.oodIntro M dim split st k (Flock.RecAlgebra.RoundCoins.ofRounds w) = .ok ((u, st'), k')) :
     k' = k + 2 ∧ SzAt w k [dim, 1] := by
   unfold Flock.RecAlgebra.oodIntro at h
   obtain ⟨hz, h⟩ := Flock.RecAlgebra.vcoinVec_bind hd h
@@ -195,7 +195,7 @@ theorem oodIntro_sz {dim split : ℕ} {st st' : Flock.RecAlgebra.LSt F128} {k k'
 
 theorem queryFold_sz {sch : Flock.Schedule} {i cols : ℕ} {fold : Array F256} {st st' : Flock.RecAlgebra.LSt F128}
     {k k' : ℕ} {u : PUnit} (hq : (sch.levels.getD i default).q ≠ 0)
-    (h : Flock.RecAlgebra.queryFold sch M i cols fold st k (Flock.RecAlgebra.CoinSource.ofRounds w) = .ok ((u, st'), k')) :
+    (h : Flock.RecAlgebra.queryFold sch M i cols fold st k (Flock.RecAlgebra.RoundCoins.ofRounds w) = .ok ((u, st'), k')) :
     k' = k + 3 ∧ SzAt w k (qSz sch i) := by
   obtain ⟨e, h0, h1, h2, -⟩ := Flock.RecAlgebra.vqueryFold hq h
   exact ⟨by omega, SzAt.cons h0 (SzAt.cons h1 (SzAt.one h2) rfl) rfl⟩
@@ -203,7 +203,7 @@ theorem queryFold_sz {sch : Flock.Schedule} {i cols : ℕ} {fold : Array F256} {
 theorem levelsLoop_sz {sch : Flock.Schedule} {R : ℕ} (hq : ∀ i ≤ R, (sch.levels.getD i default).q ≠ 0) :
     ∀ (fuel i split : ℕ) (levels : Array (Array F256)) (e : ℕ) (st : Flock.RecAlgebra.LSt F128) (k : ℕ)
       (out : Array (Array F256) × ℕ) (st' : Flock.RecAlgebra.LSt F128) (k' : ℕ), i + fuel ≤ R →
-      Flock.RecAlgebra.levelsLoop sch M R fuel i split levels e st k (Flock.RecAlgebra.CoinSource.ofRounds w) =
+      Flock.RecAlgebra.levelsLoop sch M R fuel i split levels e st k (Flock.RecAlgebra.RoundCoins.ofRounds w) =
         .ok ((out, st'), k') →
       k' = k + (loopSz sch R fuel i split).length ∧ SzAt w k (loopSz sch R fuel i split)
   | 0, _, _, _, _, st, k, out, st', k', _, h => by
@@ -248,7 +248,7 @@ theorem levelsLoop_sz {sch : Flock.Schedule} {R : ℕ} (hq : ∀ i ≤ R, (sch.l
 theorem ligeritoRun_sz {sch : Flock.Schedule} {st₀ : Flock.RecAlgebra.LSt F128} {k₀ k' : ℕ}
     {out : Array F256 × Array (Array F256) × ℕ} {stV : Flock.RecAlgebra.LSt F128} (hdim : DimSeam sch)
     (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))
-    (hrun : (Flock.RecAlgebra.ligeritoRun sch M).run st₀ k₀ (Flock.RecAlgebra.CoinSource.ofRounds w) =
+    (hrun : (Flock.RecAlgebra.ligeritoRun sch M).run st₀ k₀ (Flock.RecAlgebra.RoundCoins.ofRounds w) =
       .ok ((out, stV), k')) :
     k' = k₀ + (ligSz sch).length ∧ SzAt w k₀ (ligSz sch) := by
   obtain ⟨hn7, h2, hl0, hc0, hl4, hcols, hext⟩ := hdim
@@ -314,7 +314,7 @@ theorem roundSizes_eq {sh : Shape} {S : Flock.RecAlgebra.GfS} {sch : Flock.Sched
   rw [hlc] at hk2 elc er
   rw [hcs] at eg hk3
   have h3' := Flock.RecAlgebra.ligerito_sim (Flock.RecAlgebra.Lin.eval_hom fun _ => 0) _ _ _ _ _ _ _ _ h3
-  obtain ⟨st₀, out, stV, k₄, hrun, hdr⟩ := ligerito_drawn h3'
+  obtain ⟨st₀, out, stV, k₄, hrun, hdr⟩ := ligerito_sampled h3'
   rw [hsch] at hrun
   have : Fact (Flock.RecAlgebra.NoEmpty (Flock.RecAlgebra.zeroRounds (roundSizes sh))) := ⟨hneZ⟩
   obtain ⟨hk, pL⟩ := ligeritoRun_sz hdim hlv hrun

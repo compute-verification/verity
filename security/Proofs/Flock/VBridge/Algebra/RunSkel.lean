@@ -11,7 +11,7 @@ import Proofs.Flock.VBridge.Algebra.Zerocheck
 import VCVio.Prelude.Core
 
 /-!
-# `run`'s residuals have one skeleton at every coin source
+# `run`'s residuals have one skeleton at every `RoundCoins`
 
 `run` (RecAlgebra.lean:532–539) over the symbolic messages flips coins only to scale values (`sm`), to weigh them
 (`dotV`, `kc`, `kf`, `fk`) and to fill the coin-derived points; it branches on no coin's value. The keys a residual
@@ -324,28 +324,28 @@ theorem mem_of_get? {γ : Type} {xs : Array γ} {i : Nat} {a : γ} (h : xs[i]? =
   obtain ⟨hi, rfl⟩ := Array.getElem?_eq_some_iff.mp h
   exact Array.getElem_mem hi
 
-/-! ## Two runs at two coin sources -/
+/-! ## Two runs at two `RoundCoins` -/
 
-/-- A coin source that hands out rounds of the sizes asked. -/
-def Sized (src : CoinSource) : Prop := ∀ k n r, src.round k n = .ok r → r.size = n
+/-- A `RoundCoins` that hands out rounds of the sizes asked. -/
+def Sized (src : RoundCoins) : Prop := ∀ k n r, src.round k n = .ok r → r.size = n
 
-theorem sized_zeros : Sized CoinSource.zeros := by
+theorem sized_zeros : Sized RoundCoins.zeros := by
   intro k n r h
   cases h
   simp
 
-theorem sized_ofRounds (rounds : Array (Array F128)) : Sized (CoinSource.ofRounds rounds) := by
+theorem sized_ofRounds (rounds : Array (Array F128)) : Sized (RoundCoins.ofRounds rounds) := by
   intro k n r h
-  simp only [CoinSource.ofRounds] at h
+  simp only [RoundCoins.ofRounds] at h
   split at h
   · split at h
     · cases h; assumption
     · cases h
   · cases h
 
-/-- `x` and `y` at two sized coin sources: whenever both succeed, their results are related. -/
+/-- `x` and `y` at two sized `RoundCoins`: whenever both succeed, their results are related. -/
 def RS {A B : Type} (R : A → B → Prop) (x : CM A) (y : CM B) : Prop :=
-  ∀ (src src' : CoinSource) (k k' : Nat) a b (j j' : Nat), Sized src → Sized src' → x k src = .ok (a, j) →
+  ∀ (src src' : RoundCoins) (k k' : Nat) a b (j j' : Nat), Sized src → Sized src' → x k src = .ok (a, j) →
     y k' src' = .ok (b, j') → R a b
 
 namespace RS
@@ -393,14 +393,14 @@ end RS
 
 theorem coinVec_rs (n : Nat) : RS (fun v v' : Array F128 => v.size = v'.size) (coinVec n) (coinVec n) := by
   intro src src' k k' a b j j' hz hz' hx hy
-  have e : ∀ {src : CoinSource} {k j : Nat} {v : Array F128}, Sized src → coinVec n k src = .ok (v, j) → v.size = n := by
+  have e : ∀ {src : RoundCoins} {k j : Nat} {v : Array F128}, Sized src → coinVec n k src = .ok (v, j) → v.size = n := by
     intro src k j v hs h
     rcases coinVec_ok h with ⟨rfl, rfl, -⟩ | ⟨-, hr, -⟩
     · rfl
     · exact hs _ _ _ hr
   rw [e hz hx, e hz' hy]
 
-/-! ## Ligerito's state at two coin sources -/
+/-! ## Ligerito's state at two `RoundCoins` -/
 
 /-- Two Ligerito states alike: running sums and round polynomials of one linear skeleton, as many messages and OOD
 values read. -/
@@ -410,7 +410,7 @@ structure SR (st st' : LSt Lin) : Prop where
   msg : st.msg = st'.msg
   ood : st.ood = st'.ood
 
-/-- `x` and `y` from alike states at two sized coin sources: whenever both succeed, related results and alike
+/-- `x` and `y` from alike states at two sized `RoundCoins`: whenever both succeed, related results and alike
 states. -/
 def RSL {A B : Type} (R : A → B → Prop) (x : LM Lin A) (y : LM Lin B) : Prop :=
   ∀ st st', SR st st' → RS (fun p p' => R p.1 p'.1 ∧ SR p.2 p'.2) (x st) (y st')
@@ -458,7 +458,7 @@ theorem modify' {m m' : LSt Lin → LSt Lin} (hm : ∀ st st', SR st st' → SR 
 
 end RSL
 
-/-! ## `run`'s stages at two coin sources -/
+/-! ## `run`'s stages at two `RoundCoins` -/
 
 section Run
 
@@ -718,7 +718,7 @@ theorem run_rs (sh : Shape) (extras extras' : Array Claim) :
 
 end Run
 
-theorem residualLins_run {sh : Shape} {coins : CoinSource} {extras : Array Claim} {r : Array Lin × Info Lin}
+theorem residualLins_run {sh : Shape} {coins : RoundCoins} {extras : Array Claim} {r : Array Lin × Info Lin}
     (h : residualLins sh coins extras = .ok r) : ∃ j, run sh (symbolic sh) extras 0 coins = .ok (r, j) := by
   unfold residualLins at h
   change (Prod.fst <$> run sh (symbolic sh) extras 0 coins) = _ at h
@@ -734,8 +734,8 @@ theorem residualLins_run {sh : Shape} {coins : CoinSource} {extras : Array Claim
 (RecAlgebra.lean:810–811, 532–539). -/
 theorem residualLins_skel {sh : Shape} {rounds : Array (Array F128)} {extras₀ extras : Array Claim}
     {lins₀ lins : Array Lin} {info₀ info : Info Lin}
-    (hz : residualLins sh CoinSource.zeros extras₀ = .ok (lins₀, info₀))
-    (hl : residualLins sh (CoinSource.ofRounds rounds) extras = .ok (lins, info)) :
+    (hz : residualLins sh RoundCoins.zeros extras₀ = .ok (lins₀, info₀))
+    (hl : residualLins sh (RoundCoins.ofRounds rounds) extras = .ok (lins, info)) :
     List.Forall₂ Lin.Skel lins₀.toList lins.toList := by
   obtain ⟨j, hj⟩ := residualLins_run hz
   obtain ⟨j', hj'⟩ := residualLins_run hl
@@ -745,12 +745,12 @@ theorem residualLins_skel {sh : Shape} {rounds : Array (Array F128)} {extras₀ 
 coins: its S is `structureOf`'s, and v is the coefficient slots, then the comb. -/
 theorem verifierRows_ok {sh : Shape} {rounds : Array (Array F128)} {extras : Array Claim} {comb : Array F128}
     {lins : Array Lin} {info : Info Lin} {S : GfS} (hS : structureOf sh = .ok S)
-    (hl : residualLins sh (CoinSource.ofRounds rounds) extras = .ok (lins, info)) :
+    (hl : residualLins sh (RoundCoins.ofRounds rounds) extras = .ok (lins, info)) :
     ∃ b : Built, build sh lins = .ok b ∧ b.S = S ∧
       verifierRows sh rounds extras comb = .ok (b.vVals ++ comb, info, b.kappa) := by
   have hS' := hS
   unfold structureOf at hS'
-  cases hz : residualLins sh CoinSource.zeros (extrasLike sh) with
+  cases hz : residualLins sh RoundCoins.zeros (extrasLike sh) with
   | error e => rw [hz] at hS'; cases hS'
   | ok p =>
     obtain ⟨lins₀, info₀⟩ := p
@@ -759,11 +759,11 @@ theorem verifierRows_ok {sh : Shape} {rounds : Array (Array F128)} {extras : Arr
 /-- `verifierRows` returns exactly when `structureOf` does and `run` succeeds at the rep's coins. -/
 theorem verifierRows_ok_iff {sh : Shape} {rounds : Array (Array F128)} {extras : Array Claim} {comb : Array F128} :
     (∃ x, verifierRows sh rounds extras comb = .ok x) ↔
-      (∃ S, structureOf sh = .ok S) ∧ ∃ r, residualLins sh (CoinSource.ofRounds rounds) extras = .ok r := by
+      (∃ S, structureOf sh = .ok S) ∧ ∃ r, residualLins sh (RoundCoins.ofRounds rounds) extras = .ok r := by
   constructor
   · rintro ⟨x, hx⟩
     unfold verifierRows at hx
-    cases hl : residualLins sh (CoinSource.ofRounds rounds) extras with
+    cases hl : residualLins sh (RoundCoins.ofRounds rounds) extras with
     | error e => rw [hl] at hx; cases hx
     | ok p =>
       refine ⟨?_, p, rfl⟩

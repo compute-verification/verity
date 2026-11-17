@@ -24,7 +24,7 @@ its interior values.
 * `packOf`, `packZ`: the message packing a witness of a `--zk` table's statement, which gives it back
   (`witnessOf_packOf`, `wit_packZ`).
 * `tabOfZHJP_one`: at one table and a constant sample, a sampled proof block's table is any set-up table's at that sample
-  (`DrawSetupZHJP.table_congr`).
+  (`SampleSetupZHJP.table_congr`).
 -/
 
 @[expose] public section
@@ -174,12 +174,12 @@ open FlockSoundness FlockSoundness.Model FlockSoundness.Discharge FlockSoundness
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkSession FlockSoundness.Discharge.ZkHidden
   FlockSoundness.Discharge.ZkBind
 
-/-- **A table set up at one sample is one table**, along equal inputs, sampled proof blocks and samples (`DrawSetupZHJP.table_eq`). -/
-theorem _root_.FlockSoundness.Discharge.ZkHidden.DrawSetupZHJP.table_congr {n mPts : ℕ} {I₁ I₂ : Inputs}
-    {own : Option ByteArray} {S₁ S₂ : Finset (Fin n)} {d₁ d₂ : Lean.Json} (y₁ : DrawSetupZHJP I₁ own mPts S₁ d₁)
-    (y₂ : DrawSetupZHJP I₂ own mPts S₂ d₂) (hI : I₁ = I₂) (hS : S₁ = S₂) (hd : d₁ = d₂) : y₁.table = y₂.table := by
+/-- **A table set up at one sample is one table**, along equal inputs, sampled proof blocks and samples (`SampleSetupZHJP.table_eq`). -/
+theorem _root_.FlockSoundness.Discharge.ZkHidden.SampleSetupZHJP.table_congr {n mPts : ℕ} {I₁ I₂ : Inputs}
+    {own : Option ByteArray} {S₁ S₂ : Finset (Fin n)} {d₁ d₂ : Lean.Json} (y₁ : SampleSetupZHJP I₁ own mPts S₁ d₁)
+    (y₂ : SampleSetupZHJP I₂ own mPts S₂ d₂) (hI : I₁ = I₂) (hS : S₁ = S₂) (hd : d₁ = d₂) : y₁.table = y₂.table := by
   subst hI hS hd
-  exact DrawSetupZHJP.table_eq y₁ y₂
+  exact SampleSetupZHJP.table_eq y₁ y₂
 
 variable {n mPts : ℕ} {Reg : Type} {I : Inputs} {own : Option ByteArray} {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
 
@@ -190,8 +190,8 @@ theorem partOf_one (h1 : I.count ≤ 1) (d : Lean.Json) (v : ℕ) : (Composed.pa
 
 /-- **At one table and a constant sample, a sampled proof block's table is the table set up at that sample** (`tableZHJP`'s
 first branch at table `0`, which proves every sampled proof block: `partS` is `S`). -/
-theorem tabOfZHJP_one (h1 : I.count ≤ 1) {d : Lean.Json} (y₀ : DrawSetupZHJP (inputsJ I 0) own mPts S₀ d₀)
-    {S : Finset (Fin n)} (y : DrawSetupZHJP (inputsJ I 0) own mPts S d) (R : Reg) (u : Fin n) :
+theorem tabOfZHJP_one (h1 : I.count ≤ 1) {d : Lean.Json} (y₀ : SampleSetupZHJP (inputsJ I 0) own mPts S₀ d₀)
+    {S : Finset (Fin n)} (y : SampleSetupZHJP (inputsJ I 0) own mPts S d) (R : Reg) (u : Fin n) :
     tabOfZ (planZHJP (fun _ => d) y₀) (tabZHJP (fun _ => d) y₀) S R u = y.table := by
   rw [tabOfZHJP_eq]
   have hj := partOf_one h1 d u.val
@@ -200,7 +200,7 @@ theorem tabOfZHJP_one (h1 : I.count ≤ 1) {d : Lean.Json} (y₀ : DrawSetupZHJP
   have hd : drawJ I d (Composed.partOf I d u.val).val = d := by
     unfold drawJ
     rw [ite_eq_left h1]
-  have hne : Nonempty (DrawSetupZHJP (inputsJ I (Composed.partOf I d u.val)) own mPts
+  have hne : Nonempty (SampleSetupZHJP (inputsJ I (Composed.partOf I d u.val)) own mPts
       (partS I d S (Composed.partOf I d u.val)) (drawJ I d (Composed.partOf I d u.val))) := by
     rw [hS, hd, hj]
     exact ⟨y⟩
@@ -208,7 +208,7 @@ theorem tabOfZHJP_one (h1 : I.count ≤ 1) {d : Lean.Json} (y₀ : DrawSetupZHJP
     unfold tableZHJP
     exact dite_eq_left hne
   rw [key]
-  exact DrawSetupZHJP.table_congr _ _ (congrArg (inputsJ I) hj) hS hd
+  exact SampleSetupZHJP.table_congr _ _ (congrArg (inputsJ I) hj) hS hd
 
 end OneTable
 
@@ -229,7 +229,7 @@ noncomputable def revealV5 {n mPts : ℕ} {Reg : Type} {I : Inputs} {own : Optio
     (hU : Built D.unroll.unit) {pi : Flock.HmIn.Ports} (hpi : Flock.HmIn.parse D.unroll = .ok pi)
     {pub : Flock.Public} (hpub : Flock.HmIn.loadPublic (zkTags I) D.unroll pi I.publicFile = .ok pub)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    {d₀ : Lean.Json} (y₀ : DrawSetupZHJP (inputsJ I 0) own mPts S₀ d₀) (S : Finset (Fin n)) (R : Reg) (u : Fin n)
+    {d₀ : Lean.Json} (y₀ : SampleSetupZHJP (inputsJ I 0) own mPts S₀ d₀) (S : Finset (Fin n)) (R : Reg) (u : Fin n)
     (M : Model.Message FlockLevel3.GF128 (tabOfZ (planZHJP dj y₀) (tabZHJP dj y₀) S R u).sch.k0
       (tabOfZ (planZHJP dj y₀) (tabZHJP dj y₀) S R u).sch.level₀.logCols) :
     List (List Claims.Msg × Opening Bool) :=
@@ -247,7 +247,7 @@ theorem revealV5_length_le {n mPts : ℕ} {Reg : Type} {I : Inputs} {own : Optio
     (hU : Built D.unroll.unit) {pi : Flock.HmIn.Ports} (hpi : Flock.HmIn.parse D.unroll = .ok pi)
     {pub : Flock.Public} (hpub : Flock.HmIn.loadPublic (zkTags I) D.unroll pi I.publicFile = .ok pub)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    {d₀ : Lean.Json} (y₀ : DrawSetupZHJP (inputsJ I 0) own mPts S₀ d₀) (S : Finset (Fin n)) (R : Reg) (u : Fin n)
+    {d₀ : Lean.Json} (y₀ : SampleSetupZHJP (inputsJ I 0) own mPts S₀ d₀) (S : Finset (Fin n)) (R : Reg) (u : Fin n)
     (M : Model.Message FlockLevel3.GF128 (tabOfZ (planZHJP dj y₀) (tabZHJP dj y₀) S R u).sch.k0
       (tabOfZ (planZHJP dj y₀) (tabZHJP dj y₀) S R u).sch.level₀.logCols) :
     (revealV5 ht hD hU hpi hpub hscope dj y₀ S R u M).length ≤
@@ -270,7 +270,7 @@ theorem correct_of_revealV5
     (hdup : Flock.PortRoots.dupId D.unroll pub = false)
     (hroots : RootFixesDomainL D.unroll (LeafMap.ofPublic D.unroll pub n))
     (kd : ℕ) (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
-    (y₀ : DrawSetupZHJP (inputsJ I 0) own (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀) :
+    (y₀ : SampleSetupZHJP (inputsJ I 0) own (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀) :
     let P := (keyProgP D.unroll pi hU n).partition (Discharge.Layout.outsOfP D.unroll hU n pi)
     let Cc := (keyProgP D.unroll pi hU n).circuit (Discharge.Layout.outsOfP D.unroll hU n pi)
     let Lm := LeafMap.ofPublic D.unroll pub n

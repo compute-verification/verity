@@ -37,6 +37,7 @@ from verity_vllm.commit import challenge as CH
 from verity_vllm.config import CHECKPOINTS, VLLM, WORKLOAD_SCHEMA, WORKLOADS, option
 from verity_vllm.engine.profiles.coverage_roles import ROLE_REPOS
 from verity_vllm.log import init_logger
+from verity_vllm.pipeline.cli import write
 
 __all__ = ["Options", "main"]
 
@@ -255,10 +256,9 @@ def simulate_schedule_chunked(reqs: list[dict], budget: int, max_num_seqs: int =
         for i, t in sched:
             plen = int(reqs[i]["prompt_len"])
             if computed[i] < plen:
-                before = computed[i]
                 computed[i] += t
                 complete = computed[i] >= plen
-                chunks[i].append({"step": step, "tokens": t, "computed_before": before, "prompt_complete": complete})
+                chunks[i].append({"step": step, "tokens": t, "prompt_complete": complete})
                 any_prefill = True
                 any_partial = any_partial or not complete
                 if complete:
@@ -400,7 +400,7 @@ def main(a: Options) -> int:
             for ctx in a.ctx.split(","):
                 d = draw_lengths(prof, ctx, a.seed)
                 sim = simulate_schedule(d) if chunked is None else simulate_schedule_chunked(d, chunked)   # [chunked]
-                print(prof, ctx, [(r["prompt_len"], r["max_tokens"], r["arrive_step"]) for r in d], sim)
+                write(f"{prof} {ctx} {[(r['prompt_len'], r['max_tokens'], r['arrive_step']) for r in d]} {sim}")
         return 0
     tok = Tok(a.tokenizer)
     out_dir = Path(a.out_dir)

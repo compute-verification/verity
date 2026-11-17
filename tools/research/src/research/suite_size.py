@@ -7,7 +7,7 @@ its `--jobs`; a run of many suites at no less than TEST_PROCESS_GB each. That is
 processes (its `--mem-gb`: `serial_slots` and `wide_workers` start no more than it holds at each one's figure), so a run stays
 inside it unless a process passes its own figure, and a larger one buys processes beyond the CPUs asked. A run of named suites
 reserves it whole. A run of many suites has processes at their figure only while the few suites that reach it run, and in a
-pool's slot the reservation caps nothing and is held against the node, whether or not the run reaches it, for as long as the run
+pool's slot the reservation limits nothing and is held against the node, whether or not the run reaches it, for as long as the run
 holds the slot: there it reserves MANY_RESERVED of the budget (`reserve_gb`) and plans its processes on all of it (slot.py's
 BUDGET_OPT). A run
 past its reservation meets the node's own limits, as one past its budget does, and where the node orders its OOM kills by
@@ -18,22 +18,23 @@ on its jobs: its time is the list-scheduling bound, their times summed over the 
 UNDECLARED_S, since at SUITE_TIMEOUT_S each the tree's 79 would ask for a day. Neither drops below the kind's own (AUTO_*). Only
 what a suite declares is used, so named suites that declare neither keep the kind's size, as does a name that matches none or
 several (suites.py refuses it). Reads the checkout's tracked pyproject.toml files, and for `--changed` runs its suites.py
-`--list`; imports nothing from Verity.
+`--list` (not under a trusted launcher tree: `touched`); imports nothing from Verity.
 """
 from __future__ import annotations
 
 import math
-import re
 import shlex
 import subprocess
 import sys
 import tomllib
 from pathlib import Path
 
-SUITES_PY = "tools/verity/check/suites.py"
+from . import suite_layout
+
+SUITES_PY = "tools/check/suites.py"
 #: slot.py's option that gives a run its budget where it reserves less: the launcher sends it only to a tree whose slot.py
 #: names it (one from before the option refuses it, so that tree's run reserves its budget whole)
-SLOT_PY, BUDGET_OPT = "tools/verity/check/slot.py", "--budget-gb"
+SLOT_PY, BUDGET_OPT = "tools/check/slot.py", "--budget-gb"
 #: suites.py's options that take a value
 VALUED = {"--changed", "--skip", "--jobs", "-j", "--mem-gb", "--logs", "--json", "--run", "--per-test-min-s", "--explain"}
 #: suites.py's SUITE_TIMEOUT_S: an undeclared suite's bound
@@ -52,7 +53,7 @@ AUTO_CPUS, AUTO_MEM_GB, AUTO_MAX_S = 4, 16, 3600
 
 def _words(command: list[str]) -> list[str]:
     """``command``'s words, a shell string that runs suites.py split into its own (`bash -lc "uv sync && uv run
-    tools/verity/check/suites.py --changed REV"`, the lane run `research queue` names), so that run is sized as well."""
+    tools/check/suites.py --changed REV"`, the lane run `research queue` names), so that run is sized as well."""
     out: list[str] = []
     for a in command:
         if SUITES_PY in a and a != SUITES_PY and not a.endswith("/" + SUITES_PY):
@@ -88,11 +89,20 @@ def selection(command: list[str]) -> tuple[list[str], int | None, str | None] | 
 
 
 def touched(source: Path, names: list[str], rev: str) -> list[str] | None:
-    """The suites (of `names`, or all) the change from `rev` touches, as the checkout's suites.py says; None where it can't say."""
+    """The suites (of `names`, or all) the change from `rev` touches, as the checkout's suites.py says; None where it can't say,
+    and under a trusted launcher tree (research.launcher), where the checkout's suites.py never runs and no other copy can
+    list its suites without importing its code: the run then takes the kind's size."""
+    from . import launcher
+
+    if launcher.tree(source):
+        print(f"suite_size: the suites a --changed run touches are not listed under ${launcher.ENV} (the source's suites.py "
+              "doesn't run here), so it takes the kind's size unless it gives --mem-gb and --timeout", file=sys.stderr, flush=True)
+        return None
     try:
         r = subprocess.run([sys.executable, SUITES_PY, *names, "--changed", rev, "--list"], cwd=source, capture_output=True, text=True,
                            timeout=120)
-    except (OSError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired) as e:
+        print(f"suite_size: suites.py --list did not run, so the suites touched are not known ({type(e).__name__})", file=sys.stderr, flush=True)
         return None
     line = next((x for x in r.stdout.splitlines() if x.startswith("suites: the change from ") and " touches " in x), None)
     if r.returncode != 0 or line is None:
@@ -101,26 +111,25 @@ def touched(source: Path, names: list[str], rev: str) -> list[str] | None:
     return [] if listed == "none" else [n.strip() for n in listed.split(",") if n.strip()]
 
 
-def _norm(name: str) -> str:
-    return re.sub(r"[-_.]+", "-", name).lower()
-
-
 def declared(source: Path) -> list[dict]:
-    """Each suite of the checkout (a pyproject.toml with [tool.pytest], named as suites.py names it) and what it declares."""
-    files = subprocess.run(["git", "-C", str(source), "ls-files", "-z", "--", "pyproject.toml", "*/pyproject.toml"],
-                           capture_output=True, text=True).stdout.split("\0")
-    out = []
+    """Each suite of the checkout (a pyproject.toml with [tool.pytest], named as suites.py names it: `suite_layout.suite_name`)
+    and what it declares."""
+    from . import launcher
+
+    files = subprocess.run(launcher.git("-C", str(source), "ls-files", "-z", "--", "pyproject.toml", "*/pyproject.toml"),
+                           capture_output=True, text=True, env=launcher.git_env()).stdout.split("\0")
+    read = {}
     for f in filter(None, files):
         try:
-            data = tomllib.loads((source / f).read_text())
-        except (OSError, tomllib.TOMLDecodeError):
-            continue
+            read[str(Path(f).parent)] = tomllib.loads((source / f).read_text())
+        except (OSError, tomllib.TOMLDecodeError) as e:
+            print(f"suite_size: {f} unread, skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
+    out, dirs = [], suite_layout.member_dirs(lambda d: read.get(d, {}))
+    for path, data in read.items():
         if "pytest" not in data.get("tool", {}):
             continue
-        path = str(Path(f).parent)
-        project = data.get("project", {})
         tests = data["tool"].get("verity", {}).get("tests", {})
-        out.append({"name": "repository" if path == "." else _norm(project["name"]) if project.get("name") else path, "path": path,
+        out.append({"name": suite_layout.suite_name(path, data.get("project", {}), dirs), "path": path,
                     "worker_gb": float(tests.get("worker_gb", 0)), "timeout_s": float(tests.get("timeout_s", 0)),
                     "timeout_workers": int(tests.get("timeout_workers", 0))})
     return out
@@ -132,10 +141,11 @@ def _bound(s: dict, workers: int, undeclared: float) -> float:
 
 
 def pick(suites: list[dict], names: list[str]) -> list[dict] | None:
-    """suites.py's `select`: each name exactly a suite's name or path, else in exactly one; None when one doesn't resolve."""
+    """suites.py's `select`: each name exactly one that names a suite (`suite_layout.names`), else in exactly one; None when
+    one doesn't resolve."""
     chosen = []
     for n in names:
-        hits = [s for s in suites if n in (s["name"], s["path"], s["path"].rstrip("/"))] or \
+        hits = [s for s in suites if n in suite_layout.names(s["path"], s["name"])] or \
                [s for s in suites if n in s["name"] or n in s["path"]]
         if len(hits) != 1:
             return None

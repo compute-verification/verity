@@ -44,7 +44,7 @@ open FlockVBridge.Family (OpensAtL)
 section outer
 
 variable {T : ℕ} {Vs : Fin T → VStmt} {Reg' : Type}
-variable {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {Reg₂ : Type}
+variable {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type} {Reg₂ : Type}
 
 /-- **G items 1–3 at a holo shape, the parts' outputs read in the layers**: `algebraDecodes_of_decode` at
 `ResZeroAtLH`, rep `r`'s part `p` copy `cp p r` of unit `un p r`. -/

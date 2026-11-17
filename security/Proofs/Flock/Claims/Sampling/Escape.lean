@@ -53,17 +53,17 @@ Here each is the `Claims.Pr` that a model sample misses `B`:
 * `mem_window`, `window_subset`, `window_zero`, `window_window`: `window o n B` is `B` on `[o, o + n)`, shifted to
   `[0, n)`; `finOf N B`, `disjoint_image_val_iff`: slots below `N` as units of a sample over `Fin N`.
 * `stratum_miss_eq`, `strataPa_eq_Pr`: **independent uniform `k_s`-subsets of consecutive strata** (`StrataΩ`,
-  `strataDraw`) miss `B` with probability `strataPa`; `strataPa_append`, `strataPa_window`.
+  `strataSample`) miss `B` with probability `strataPa`; `strataPa_append`, `strataPa_window`.
 * `OneStage.Pa_all`, `Pa_subset`, `Pa_bernoulli`: the `all`, uniform-subset and Bernoulli samples miss `B` with
   probability `P_a(B)`; `OneStage.Pa_strata`: every design but Bernoulli's is a strata sample (`OneStage.strata`: the
-  stratified and work laws by definition, `all` and `subset` one stratum), with `OneStage.strata_sum`,
+  stratified and work sampling designs by definition, `all` and `subset` one stratum), with `OneStage.strata_sum`,
   `OneStage.strata_le`.
 * `classesPa_eq_prod`, `classesPa_eq_Pr`, `Design.Pa_eq_Pr`: **the classes' product**: `P_a` on the partition is the
   product over its classes of each rule's `P_a` on the class's window (`classPa`), the probability that independent
   samples of the classes all miss; `classesPa_strata`, `Design.Pa_strata`: classes sampled as strata are one strata sample.
 
 `Live.lean` proves these distributions of the executable sample on uniform bytes, and `Select` of the deployed sampled
-verifier's (`drawMisses`, and `DrawLaw` from it, `drawLaw_of_slots`).
+verifier's (`sampleMisses`, and `SampleDesign` from it, `sampleDesign_of_slots`).
 -/
 
 @[expose] public section
@@ -191,24 +191,24 @@ instance instFintypeStrataΩ : (ss : List (ℕ × ℕ)) → Fintype (StrataΩ ss
     inferInstanceAs (Fintype ({S : Finset (Fin n) // S.card = k} × StrataΩ ss))
 
 /-- The slots the strata's subsets sample, stratum `s` from offset `o + n_0 + ⋯ + n_{s−1}`. -/
-def strataDraw : (ss : List (ℕ × ℕ)) → ℕ → StrataΩ ss → Finset ℕ
+def strataSample : (ss : List (ℕ × ℕ)) → ℕ → StrataΩ ss → Finset ℕ
   | [], _, _ => ∅
   | (n, k) :: ss, o, ω =>
-    (ω : {S : Finset (Fin n) // S.card = k} × StrataΩ ss).1.1.image (fun u => o + u.val) ∪ strataDraw ss (o + n) ω.2
+    (ω : {S : Finset (Fin n) // S.card = k} × StrataΩ ss).1.1.image (fun u => o + u.val) ∪ strataSample ss (o + n) ω.2
 
 /-- **`strataPa` is the strata sample's miss probability**: independent uniform `k_s`-subsets of consecutive strata of
 `n_s` slots, from `o`, miss `B` with probability `strataPa ss o B`. -/
 theorem strataPa_eq_Pr : ∀ (ss : List (ℕ × ℕ)) (o : ℕ) (B : Finset ℕ),
-    strataPa ss o B = Pr (fun ω : StrataΩ ss => Disjoint (strataDraw ss o ω) B)
+    strataPa ss o B = Pr (fun ω : StrataΩ ss => Disjoint (strataSample ss o ω) B)
   | [], o, B => by
     rw [strataPa]
     unfold Pr Claims.prUniform
-    simp only [strataDraw, disjoint_empty_left]
+    simp only [strataSample, disjoint_empty_left]
     rw [filter_true_of_mem fun _ _ => trivial, card_univ,
       div_self (Nat.cast_ne_zero.2 (Fintype.card_ne_zero (α := Unit)))]
   | (n, k) :: ss, o, B => by
     rw [strataPa, strataPa_eq_Pr ss (o + n) B, ← stratum_miss_eq, ← Pr_and_prod]
-    exact Pr_congr fun ω => by simp only [strataDraw, disjoint_union_left]
+    exact Pr_congr fun ω => by simp only [strataSample, disjoint_union_left]
 
 theorem strataPa_append : ∀ (ss ss' : List (ℕ × ℕ)) (o : ℕ) (B : Finset ℕ),
     strataPa (ss ++ ss') o B = strataPa ss o B * strataPa ss' (o + (ss.map Prod.fst).sum) B
@@ -257,7 +257,7 @@ theorem OneStage.Pa_bernoulli (ns : List ℕ) {num den : ℕ} [NeZero den] (h : 
   rfl
 
 /-- The strata `(n_s, k_s)` a one-stage design samples uniform subsets of, all but Bernoulli's: the stratified and work
-laws' own, and one stratum of every slot for `all` (sampling all of it) and `subset`. -/
+sampling designs' own, and one stratum of every slot for `all` (sampling all of it) and `subset`. -/
 def OneStage.strata (ns : List ℕ) : OneStage → Option (List (ℕ × ℕ))
   | .all => some [(ns.sum, ns.sum)]
   | .subset K => some [(ns.sum, K)]

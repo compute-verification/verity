@@ -353,7 +353,7 @@ def StepHolds (pipe : Pipeline) (align : Align) (st : State) (a b : List Nat) (w
   (∀ j (h : j < w.prod.length), prodHolds p (a[j]!) (b[j]!) w.prod[j]) ∧
   groupsHold p align pipe.groups st w.prod w.groups
 
-/-- A verification unit's steps from the input state `st`, as `test_verification_unit_on_captured_gemm_coordinates` chains
+/-- A proof block's steps from the input state `st`, as `test_verification_unit_on_captured_gemm_coordinates` chains
 them: each step's input state is the previous step's output, and `out` is the last one's. -/
 def ChainHolds (pipe : Pipeline) (align : Align) : State → List (List Nat × List Nat × Witness) → State → Prop
   | st, [], out => out = st

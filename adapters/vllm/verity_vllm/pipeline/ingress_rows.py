@@ -11,8 +11,8 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
 from typing import Any
 
-from verity.commitments.windows import interface as IF
-from verity.commitments.windows import rows as CS
+from verity.commitments.periods import interface as IF
+from verity.commitments.periods import rows as CS
 from verity_vllm.pipeline.serving_templates import part, template
 from verity_vllm.program.compact import runs_from_file_items
 

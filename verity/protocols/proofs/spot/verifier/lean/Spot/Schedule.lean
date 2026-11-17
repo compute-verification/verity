@@ -1,4 +1,9 @@
-/-
+module
+
+public import Spot.Json
+meta import Spot.Json
+
+/-!
 **The step schedule** (the Python's `schedule`): the replay blocks of a two-stage window as runs of positions of its
 requests, which the boundary registration's record commits before the first coin (`window.schedule`), each run
 `{"request", "first_span", "spans", "first_position", "length"}`: replay blocks `first_span …` up to `first_span + spans`
@@ -14,10 +19,6 @@ the replay blocks' boundaries are, and it is the prover's choice, fixed before t
   from the run that holds it;
 * `failure`: why a record's schedule is refused, none for a record that commits none.
 -/
-module
-
-public import Spot.Json
-meta import Spot.Json
 
 @[expose] public section
 set_option backward.privateInPublic true

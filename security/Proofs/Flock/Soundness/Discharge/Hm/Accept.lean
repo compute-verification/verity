@@ -1,10 +1,3 @@
-/-
-A row's `b ‖ c` in a satisfying witness of the accepted template statement. `HmRow.rowSlots` puts port `p`'s compression
-`k` at `sha512x3` slot `(at_p + k) / 3`, place `(at_p + k) % 3`, with `at_p` the earlier ports' chunks (`rowSlots_eq`).
-So the satisfying witness holds the `sha512x3` and `hm96` rows at every compression of the row (`shaSlot_of_sat`,
-`hmSlot_of_sat`), and `port_commit_rows` gives the row's commit string at its `hm96` slot's outputs (`row_bc_of_sat`),
-given the port's words fill its chunks and the block holds Δ's copies into the slots' `cv` and `pad` inputs.
--/
 module
 
 public import Proofs.Flock.Soundness.Discharge.Hm.Place
@@ -27,6 +20,14 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.Hm.Nets
 import Proofs.Flock.Soundness.ExecSetup
+
+/-!
+A row's `b ‖ c` in a satisfying witness of the accepted template statement. `HmRow.rowSlots` puts port `p`'s compression
+`k` at `sha512x3` slot `(at_p + k) / 3`, place `(at_p + k) % 3`, with `at_p` the earlier ports' chunks (`rowSlots_eq`).
+So the satisfying witness holds the `sha512x3` and `hm96` rows at every compression of the row (`shaSlot_of_sat`,
+`hmSlot_of_sat`), and `port_commit_rows` gives the row's commit string at its `hm96` slot's outputs (`row_bc_of_sat`),
+given the port's words fill its chunks and the block holds Δ's copies into the slots' `cv` and `pad` inputs.
+-/
 
 @[expose] public section
 
@@ -119,20 +120,20 @@ theorem row_bc_of_sat {tags : Tags} {t : Typed.Template} (hd : deriveChecked typ
     (hz : (T.model regs).Satisfies z) (o : Fin (2 ^ (T.model regs).nbl)) {g p : ℕ} (hg : g < st.c.g)
     (hp : p < st.c.ports.size) (hs : st.c.ports[p]!.segs = none) (hn : 0 < st.c.ports[p]!.chunks)
     (hw : 2 * st.c.ports[p]!.words = 128 * st.c.ports[p]!.chunks)
-    (hcv0 : ∀ t < 512, blockBit (T.model regs) z o (shaBase st.c g p 0 + shaIn st.c (2 * shaSub st.c p 0) + t) =
+    (hcv0 : ∀ t < 512, chunkBit (T.model regs) z o (shaBase st.c g p 0 + shaIn st.c (2 * shaSub st.c p 0) + t) =
       wordsBit (HmRow.midstate st.c.ports[p]!.words) t)
     (hchain : ∀ k, k + 1 < st.c.ports[p]!.chunks → ∀ t < 512,
-      blockBit (T.model regs) z o (shaBase st.c g p (k + 1) + shaIn st.c (2 * shaSub st.c p (k + 1)) + t) =
-        blockBit (T.model regs) z o (shaBase st.c g p k + shaOut st.c (shaSub st.c p k) + t))
-    (hcvh : ∀ t < 512, blockBit (T.model regs) z o (st.c.slotCol st.c.hmNet g p + hmIn st.c 0 + t) =
-      blockBit (T.model regs) z o
+      chunkBit (T.model regs) z o (shaBase st.c g p (k + 1) + shaIn st.c (2 * shaSub st.c p (k + 1)) + t) =
+        chunkBit (T.model regs) z o (shaBase st.c g p k + shaOut st.c (shaSub st.c p k) + t))
+    (hcvh : ∀ t < 512, chunkBit (T.model regs) z o (st.c.slotCol st.c.hmNet g p + hmIn st.c 0 + t) =
+      chunkBit (T.model regs) z o
         (shaBase st.c g p (st.c.ports[p]!.chunks - 1) + shaOut st.c (shaSub st.c p (st.c.ports[p]!.chunks - 1)) + t))
-    (hpad : ∀ t < 1024, blockBit (T.model regs) z o (st.c.slotCol st.c.hmNet g p + hmIn st.c 1 + t) =
+    (hpad : ∀ t < 1024, chunkBit (T.model regs) z o (st.c.slotCol st.c.hmNet g p + hmIn st.c 1 + t) =
       wordsBit (HmRow.padWords st.c.ports[p]!.words) t) :
-    bytesOf (blockBit (T.model regs) z o) 128 (bcCol st.c g p) = Binding.commitString
+    bytesOf (chunkBit (T.model regs) z o) 128 (bcCol st.c g p) = Binding.commitString
       ((HmRow.rowPrefix st.c.ports[p]!.words).data.toList ++
-        bytesOf (blockBit (T.model regs) z o) (2 * st.c.ports[p]!.words) (Typed.msgCol st.c g p))
-      (bytesOf (blockBit (T.model regs) z o) 192 (saltCol st.c g p)) := by
+        bytesOf (chunkBit (T.model regs) z o) (2 * st.c.ports[p]!.words) (Typed.msgCol st.c g p))
+      (bytesOf (chunkBit (T.model regs) z o) 192 (saltCol st.c g p)) := by
   refine port_commit_rows st.c _ g p hs hn hw (rowSlots_size hp).ge P.rowNets (fun k hk => (rowSlot_lt hp hk).2)
     (fun k hk => ?_) ?_ hcv0 hchain hcvh hpad
   · exact shaSlot_of_sat hd hul T U hz o P.rowNets hg (by rw [C.perVu_sha]; exact (rowSlot_lt hp hk).1)

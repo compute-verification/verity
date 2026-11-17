@@ -12,8 +12,8 @@ same warm process.
   isn't timed.
 * **Timed:** ``--rounds`` rounds of every k, ascending then descending, so that a drift in the node's load falls on every k
   alike; K sessions each (``--provers``). With ``--outstanding 1`` and ``--ahead 0`` each session runs alone, so its parts
-  are its own: the prover's ``witness_s``, ``prove_total_s`` (its device phases) and ``wait_e2e_s`` (its wait on the live
-  verifier inside the session), and ``rest_s``, the remainder of ``e2e_s``.
+  are its own: the prover's ``witness_s``, ``prove_total_s`` (its device phases, which hold ``wait_e2e_s``, its waits on
+  the live verifier inside the session), and ``rest_s``, the remainder of ``e2e_s`` past the witness and those phases.
 * **Measured:** per k each part's median over the timed sessions, and each part fitted as ``fixed + per_block k`` (least
   squares); each process's peak RSS and the provers' and verifiers' summed peaks (every 0.5 s); the device's peak memory
   and its busy share over the timed sessions; with ``--outstanding`` above 1, statements a second between the timed
@@ -50,10 +50,11 @@ BUILT = re.compile(r"^statement (\S+) instances=(\d+) .* built in ([\d.]+)s", re
 
 
 def rest(live: dict) -> float | None:
-    """``e2e_s`` less the witness, the device's phases and the wait on the live verifier inside the session."""
-    if not all(isinstance(live.get(k), (int, float)) for k in ("e2e_s", "prove_total_s", "wait_e2e_s")):
+    """``e2e_s`` less the witness and the device's phases. The waits on the live verifier (``wait_e2e_s``) fall inside
+    ``prove_total_s``, so they are not taken out again."""
+    if not all(isinstance(live.get(k), (int, float)) for k in ("e2e_s", "prove_total_s")):
         return None
-    return live["e2e_s"] - (live.get("witness_s") or 0.0) - live["prove_total_s"] - live["wait_e2e_s"]
+    return live["e2e_s"] - (live.get("witness_s") or 0.0) - live["prove_total_s"]
 
 
 def fit(points: list[tuple[int, float]]) -> dict | None:
@@ -111,7 +112,7 @@ def main() -> int:
     gpu, t0, cpu0 = SR.Device(a.device), time.monotonic(), SR.throttled()
     wall0 = time.time() - t0
     ps = ProofServer(a.bin, out, devices=[a.device], provers=K, verify_ahead=a.ahead, verdicts=1,
-                     env={"FC_FIREWALL": "0", "FC_HOST_WITNESS": None, "FC_PHASE_TIMES": "1"})
+                     env={"FC_ZK_SERVER": "0", "FC_HOST_WITNESS": None, "FC_PHASE_TIMES": "1"})
 
     def stop(sig, _frame) -> None:
         # the server's processes run in sessions of their own, so a lease's SIGTERM to this one alone would leave them on the GPU

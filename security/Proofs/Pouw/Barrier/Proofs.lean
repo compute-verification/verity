@@ -24,7 +24,7 @@ variable {Q R S : Type}
 
 /-! ## The generic barrier -/
 
-theorem wins_of_all_correct (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) {g c₀ : ℝ}
+theorem wins_of_all_correct (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Trace) {g c₀ : ℝ}
     (hc : 0 ≤ c₀) (hW : 0 < totalWref P U.layout) (hg : g < 1 - c₀ / totalWref P U.layout)
     (hK : correctSet P U H s τ = range U.layout.N) : Wins P U g c₀ τ H s := by
   unfold Wins
@@ -48,7 +48,7 @@ theorem generic : Pouw.Guarantees.Barrier.Generic := by
   obtain ⟨hU, hc, hq, hA, hall⟩ := hpt
   have h := genericPr Q R S CM P D U A c₀ q hU hc hq hA hW g hg δ hG
   have h1 : pr (fun x : (Q → R) × S =>
-      correctSet P U x.1 x.2 (A.transcript U x.1 x.2) = range U.layout.N ∧ ¬ A.Breaks U x.1 x.2) = 1 :=
+      correctSet P U x.1 x.2 (A.trace U x.1 x.2) = range U.layout.N ∧ ¬ A.Breaks U x.1 x.2) = 1 :=
     pr_eq_one fun x => hall x.1 x.2
   rwa [h1] at h
 
@@ -81,12 +81,12 @@ theorem planAdv_bounded (N : NoiseSrc Q R S) (f : Shape → Plan) (U : Workload)
 theorem planAdv_correct (N : NoiseSrc Q R S) (f : Shape → Plan) (P : Protocol Q R S) (U : Workload)
     (hc : ∀ (H : Q → R) (s : S), ∀ u < U.layout.N,
       Correct P U H s u ((f (U.layout.shape u)).commit N H s U (fun _ => 0) u)) :
-    ∀ (H : Q → R) (s : S), correctSet P U H s ((planAdv N f).transcript U H s) = range U.layout.N := by
+    ∀ (H : Q → R) (s : S), correctSet P U H s ((planAdv N f).trace U H s) = range U.layout.N := by
   intro H s
   ext u
   simp only [correctSet, Finset.mem_filter, Finset.mem_range, and_iff_left_iff_imp]
   intro hu
-  exact ⟨_, by simp [Adversary.transcript, gemmModel, planAdv, hu], hc H s u hu⟩
+  exact ⟨_, by simp [Adversary.trace, gemmModel, planAdv, hu], hc H s u hu⟩
 
 theorem gemmModel_hashless (N : NoiseSrc Q R S) : (gemmModel N).Hashless := fun _ _ _ _ _ _ => rfl
 
@@ -95,7 +95,7 @@ theorem planAdv_cheap (N : NoiseSrc Q R S) (f : Shape → Plan) (P : Protocol Q 
     (hc : ∀ (H : Q → R) (s : S), ∀ u < U.layout.N,
       Correct P U H s u ((f (U.layout.shape u)).commit N H s U (fun _ => 0) u)) :
     ∀ (H : Q → R) (s : S),
-      correctSet P U H s ((planAdv N f).transcript U H s) = range U.layout.N ∧ ¬ (planAdv N f).Breaks U H s :=
+      correctSet P U H s ((planAdv N f).trace U H s) = range U.layout.N ∧ ¬ (planAdv N f).Breaks U H s :=
   fun H s => ⟨planAdv_correct N f P U hc H s, not_breaks_of_hashless (gemmModel_hashless N) _ _ _ _⟩
 
 theorem zero_actOK (sh : Shape) : ActOK sh (0 : Mat) := fun _ _ _ _ => by unfold InInt7; norm_num
@@ -174,12 +174,12 @@ theorem refPlan_run (N : NoiseSrc Q R S) (W : Layout → ℕ → ℕ) (f : Shape
     (H : Q → R) (s : S) (hc : ∀ u < U.layout.N, (f (U.layout.shape u)).commit N H s U act u
       = ⟨act u, (addProto N W).refChecked H s U u (act u), (addProto N W).refOut H s U u (act u)⟩) :
     (gemmModel N).run (fun L u => if u < L.N then some (f (L.shape u)) else none) H U act [] s
-      = honestTranscript (addProto N W) H s U act := by
+      = honestTrace (addProto N W) H s U act := by
   funext u
   by_cases hu : u < U.layout.N
-  · simp only [gemmModel, honestTranscript, hu, ite_true, Option.map_some]
+  · simp only [gemmModel, honestTrace, hu, ite_true, Option.map_some]
     rw [hc u hu]
-  · simp [gemmModel, honestTranscript, hu]
+  · simp [gemmModel, honestTrace, hu]
 
 theorem refPlan_cost (N : NoiseSrc Q R S) (f : Shape → Plan) (c : ℕ) (hf : ∀ sh, (f sh).cost = c * sh.Wmm)
     (U : Workload) (act : ℕ → Mat) (H : Q → R) (s : S) :
@@ -458,12 +458,12 @@ theorem plan_run (N : NoiseSrc Q R S) (P : Protocol Q R S) (f : Shape → Plan) 
     (H : Q → R) (s : S) (hc : ∀ u < U.layout.N, (f (U.layout.shape u)).commit N H s U act u
       = ⟨act u, P.refChecked H s U u (act u), P.refOut H s U u (act u)⟩) :
     (gemmModel N).run (fun L u => if u < L.N then some (f (L.shape u)) else none) H U act [] s
-      = honestTranscript P H s U act := by
+      = honestTrace P H s U act := by
   funext u
   by_cases hu : u < U.layout.N
-  · simp only [gemmModel, honestTranscript, hu, ite_true, Option.map_some]
+  · simp only [gemmModel, honestTrace, hu, ite_true, Option.map_some]
     rw [hc u hu]
-  · simp [gemmModel, honestTranscript, hu]
+  · simp [gemmModel, honestTrace, hu]
 
 /-- **Class (b) with the lead's noise is a real protocol.** -/
 theorem relationAdmits : Pinned.RelationAdmits := by

@@ -7,7 +7,7 @@ output row `out` of unit `writer`.
 The table holds one link a row of `ROW_BYTES` bytes: `KIND_LINK`, `reader`, `port`, `writer` and `out`, each a u32
 little-endian, then zeros. The links come first, then all-zero filler rows, `grid L` rows in all, `L` the link count and
 `grid` partition v2's public grid (`GRID_BITS` significant bits). The prover commits the rows as advice before any coin
-(`verity.ml.commitments.advice`: `hm96-sha512/row/v2` hiding leaves in one `frame-v3-sha512` tree), so what is public of
+(`verity.commitments.advice`: `hm96-sha512/row/v2` hiding leaves in one `frame-v3-sha512` tree), so what is public of
 the table is `grid L` and the root.
 
 `check` is the reference, at the inner population's shape (its unit count and each input and output row's words) and its

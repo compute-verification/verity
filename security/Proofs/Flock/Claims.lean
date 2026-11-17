@@ -59,9 +59,6 @@ public import Proofs.Flock.Claims.Recursion.LastBindsEC
 public import Proofs.Flock.Claims.Recursion.BoundRouteCols
 public import Proofs.Flock.Claims.Recursion.BoundWeight
 public import Proofs.Flock.Claims.Recursion.BoundMerged
-public import Proofs.Flock.Claims.Recursion.BoundRouteMerged
-public import Proofs.Flock.Claims.Recursion.BoundMergedLin
-public import Proofs.Flock.Claims.Recursion.BoundRouteMergedLin
 public import Proofs.Flock.Claims.Recursion.KSLin2
 public import Proofs.Flock.Claims.Recursion.KSLinks
 public import Proofs.Flock.Claims.Recursion.BitsLin2
@@ -293,6 +290,11 @@ public import Proofs.Flock.Claims.DeployOC
 public import Proofs.Flock.Claims.DeployInputs
 public import Proofs.Flock.Claims.JsonEq
 public import Proofs.Flock.Claims.CanonEq
+public import Proofs.Flock.Claims.CanonText
+public import Proofs.Flock.Claims.CanonEsc
+public import Proofs.Flock.Claims.CanonRead
+public import Proofs.Flock.Claims.CanonWf
+public import Proofs.Flock.Claims.CanonLine
 public import Proofs.Flock.Claims.Deploy
 public import Proofs.Flock.Claims.DeployE
 public import Proofs.Flock.Claims.DeployVK
@@ -311,7 +313,7 @@ public import Proofs.Flock.Claims.DeployRoundsZk
 public import Proofs.Flock.Claims.DeployK
 public import Proofs.Flock.Claims.DeployEfficient
 public import Proofs.Flock.Claims.Assembled
-public import Proofs.Flock.Claims.KS.ZkDrawJ
+public import Proofs.Flock.Claims.KS.ZkSampleJ
 public import Proofs.Flock.Claims.KS.ConflictRun
 public import Proofs.Flock.Claims.KS.PlainWrP
 public import Proofs.Flock.Claims.CompleteFails
@@ -344,7 +346,6 @@ public import Proofs.Flock.Claims.Recursion.BaseParses
 public import Proofs.Flock.Claims.Bridge.Transports
 public import Proofs.Flock.Claims.Complete.ZkTables.Round2
 public import Proofs.Flock.Claims.ZK.Assemble
-public import Proofs.Flock.Claims.ZK.CoinPass
 public import Proofs.Flock.Claims.ZK.FinHmkLive
 public import Proofs.Flock.Claims.ZK.FinishClaimsX
 public import Proofs.Flock.Claims.ZK.FinishFwL0
@@ -357,7 +358,6 @@ public import Proofs.Flock.Claims.ZK.FrameRep
 public import Proofs.Flock.Claims.ZK.FrameRun
 public import Proofs.Flock.Claims.ZK.L0PinLoop
 public import Proofs.Flock.Claims.ZK.RepCutFw
-public import Proofs.Flock.Claims.ZK.Tape
 public import Proofs.Flock.Claims.Bridge
 public import Proofs.Flock.Claims.KS
 public import Proofs.Flock.Claims.KS.ZkAccepts

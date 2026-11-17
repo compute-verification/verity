@@ -11,29 +11,29 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SCANNED = ("tools/verity/check/suites.py", "tools/verity/check/check.py", "tools/verity/check/slot.py")
+SCANNED = ("tools/check/suites.py", "tools/check/check.py", "tools/check/slot.py")
 COMMAND = re.compile(r"`([^`]*\b(?:uv run|uv sync|research|python3?|git|suites\.py|check\.py|slot\.py)\b[^`]*)`")
 
 #: (file, function, the command it names) -> the test, `path::name`, that runs it from the refused state
 REMEDIATED = {
-    ("tools/verity/check/suites.py", "changed_base", "--changed $(git fetch -q origin main && git merge-base HEAD FETCH_HEAD)"):
-        "tools/verity/check/tests/test_suites.py::test_the_changed_refusals_advice_run_in_a_stale_checkout_gets_past_it",
+    ("tools/check/suites.py", "changed_base", "--changed $(git fetch -q origin main && git merge-base HEAD FETCH_HEAD)"):
+        "tests/tools/check/test_suites.py::test_the_changed_refusals_advice_run_in_a_stale_checkout_gets_past_it",
 }
 
 #: (file, function, the command it names) -> "owner: why", each untested when this test landed
 KNOWN = {
-    ("tools/verity/check/suites.py", "worktree", "git add -A"): "ci: names the step that failed, advises nothing",
-    ("tools/verity/check/suites.py", "changed_base", "research run"): "ci: names where the tree came from, advises nothing",
-    ("tools/verity/check/suites.py", "main", "research run --on"): "ci: a tree outside git; untested",
-    ("tools/verity/check/suites.py", "main", "X && uv run tools/verity/check/suites.py"):
+    ("tools/check/suites.py", "worktree", "git add -A"): "ci: names the step that failed, advises nothing",
+    ("tools/check/suites.py", "changed_base", "research run"): "ci: names where the tree came from, advises nothing",
+    ("tools/check/suites.py", "main", "research run --on"): "ci: a tree outside git; untested",
+    ("tools/check/suites.py", "main", "X && uv run tools/check/suites.py"):
         "ci: syncs the tree's own environment before running there; no test runs it from the refused state",
-    ("tools/verity/check/check.py", "fixtures_only", "research data export"): "ci: needs the store's write key; untested",
-    ("tools/verity/check/check.py", "main", "research run"): "ci: names the launcher, advises nothing",
-    ("tools/verity/check/check.py", "main", "check.py --record --cc-records --on M"): "ci: untested",
-    ("tools/verity/check/check.py", "main", "X && uv run --extra torch-cpu python tools/verity/check/check.py"):
+    ("tools/check/check.py", "fixtures_only", "research data export"): "ci: needs the store's write key; untested",
+    ("tools/check/check.py", "main", "research run"): "ci: names the launcher, advises nothing",
+    ("tools/check/check.py", "main", "check.py --record --cc-records --on M"): "ci: untested",
+    ("tools/check/check.py", "main", "X && uv run --extra torch-cpu python tools/check/check.py"):
         "ci: syncs the tree's own environment before running there; no test runs it from the refused state",
-    ("tools/verity/check/slot.py", "main", "research run --pool NAME"): "ci: untested",
-    ("tools/verity/check/slot.py", "main", "check.py --slots"): "ci: lists the slots; untested",
+    ("tools/check/slot.py", "main", "research run --pool NAME"): "ci: untested",
+    ("tools/check/slot.py", "main", "check.py --slots"): "ci: lists the slots; untested",
 }
 
 

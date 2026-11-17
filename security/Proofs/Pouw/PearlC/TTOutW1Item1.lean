@@ -3,6 +3,7 @@ module
 public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
 public import Proofs.Pouw.PearlC.HonestWords
 public import Proofs.Pouw.Copy
+public import Proofs.Pouw.PearlC.Records
 
 /-!
 # Guessing a `1 × 1 × k` unit's two output words at W1
@@ -17,7 +18,7 @@ useful word `(0, 0, 0)`. The adversary `guessAdv` has no preprocessing and suppl
 - `guess_cost`: its W1 cost (`W1.w1Priced`) is exactly `2·fetch` on every device, workload, state and salt: the moves
   cost 0 and the run fetches the two constants (`guess_fetched`, `guess_read`); `guess_bounded`: it is bounded by
   `2·fetch` and `0` queries.
-- `GuessEvent P k w a θ`: on `(H, s)`, unit `(1, 1, k)` with weights `w` and activations `a` passes `actOK`, `capOK`
+- `GuessEvent P k w a θ`: on `(H, s)`, unit `(1, 1, k)` with weights `w` and activations `a` passes `actOK`, `inertBoundOK`
   and `fixedOK`, its two reference words are FP32 words' values, and its credit exceeds `θ`.
 - `wins_of_event`: on that event, the program whose constants are those two words wins TT_OUT's game at `θ`; so
   `exists_guess_ge`: some constants `t, y < 2^32` win with probability at least `Pr[GuessEvent]/2^64`
@@ -30,7 +31,7 @@ useful word `(0, 0, 0)`. The adversary `guessAdv` has no preprocessing and suppl
 - `not_ttOutPearlCDevW1_old`, `not_ttOutPearlCDevRev1W1_old`: at any record, once `Pr[GuessEvent] > 2^−64`;
 - `not_ttOutW1_devAt_old`, `not_ttOutW1Rev1_devAt_old`: at `devAt ⟨[32], wd, z⟩ G pp` of any width (the H100's
   `devH100` has 14, sm_120's step 26), the representability conjuncts hold always (`HonestWords`), so the hypotheses
-  are deterministic rules on `a` and `w`, `2·fetch/(1 − 1/400) < (1 − ρ)·creditDev`, and `Pr[capOK] > 2^−64`;
+  are deterministic rules on `a` and `w`, `2·fetch/(1 − 1/400) < (1 − ρ)·creditDev`, and `Pr[inertBoundOK] > 2^−64`;
 - `not_ttOutW1_sm120v1_old` (and rev1, and v2): at `Prices.sm120` and `k = 128` (credit 9,480; rev1 and v2 9,472), for
   `fetch ≤ 2000` and `ρ ≤ 1/2`.
 
@@ -196,9 +197,9 @@ theorem guess_act (a : Codes) (ha : ∀ i l, a i l < 2 ^ 32) (u i l : ℕ) :
   rw [guess_mem_of_ne dv sl t y U _ σ (act_ne_tk u i l) (act_ne_us u i l), init_act, W1.w32,
     Nat.mod_eq_of_lt (ha i l)]
 
-/-- The committed transcript of a declared unit. -/
-theorem guess_transcript (salt : S → List ℕ) (a : Codes) (H : Q → R) (s : S) {u : ℕ} (hu : u < U.layout.N) :
-    (guessAdv (Q := Q) (R := R) dv salt a t y).transcript U H s u =
+/-- The committed trace of a declared unit. -/
+theorem guess_trace (salt : S → List ℕ) (a : Codes) (H : Q → R) (s : S) {u : ℕ} (hu : u < U.layout.N) :
+    (guessAdv (Q := Q) (R := R) dv salt a t y).trace U H s u =
       some ⟨fun i l => if i < (U.layout.shape u).m ∧ l < (U.layout.shape u).k then
           (W1.final dv (salt s) (guessProg t y) U (fun _ => a) []).mem (W1.actAt u i l) else a i l,
         fun i j => (W1.final dv (salt s) (guessProg t y) U (fun _ => a) []).mem (W1.ticketAt u i j),
@@ -223,26 +224,26 @@ theorem wordQ_w32 (v : ℕ) : wordQ (W1.w32 v) = wordQ v := by
 /-- **The event** on `(H, s)`: unit `(1, 1, k)` with weights `w` and activations `a` passes the activation, cap and
 weight rules, its ticket and useful reference values `(0, 0)` are FP32 words' values, and its credit exceeds `θ`. -/
 def GuessEvent (P : Protocol Q R S) (k : ℕ) (w a : Codes) (θ : ℝ) (x : (Q → R) × S) : Prop :=
-  P.actOK ⟨1, 1, k⟩ a ∧ P.capOK x.1 x.2 (oneUnit k w) 0 a ∧ P.fixedOK ⟨1, 1, k⟩ w 0 ∧
+  P.actOK ⟨1, 1, k⟩ a ∧ P.inertBoundOK x.1 x.2 (oneUnit k w) 0 a ∧ P.fixedOK ⟨1, 1, k⟩ w 0 ∧
     (∃ t, wordQ t = P.ticket x.1 x.2 (oneUnit k w) 0 a 0 0) ∧ (∃ y, wordQ y = P.useful x.1 x.2 (oneUnit k w) 0 a 0 0) ∧
     θ < P.credit x.1 x.2 (oneUnit k w) 0 a
 
 /-- **The win** of `guessAdv … t y` on `(H, s)`, as TT_OUT's game scores it at `θ = T/(1 − g₀)`. -/
 def GuessWins (dv : W1.W1Device) (salt : S → List ℕ) (P : Protocol Q R S) (k : ℕ) (w a : Codes) (θ : ℝ) (t y : ℕ)
     (x : (Q → R) × S) : Prop :=
-  θ < ∑ u ∈ correctSet P (oneUnit k w) x.1 x.2 ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript (oneUnit k w) x.1 x.2),
-    P.credit x.1 x.2 (oneUnit k w) u (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript (oneUnit k w) x.1 x.2) u)
+  θ < ∑ u ∈ correctSet P (oneUnit k w) x.1 x.2 ((guessAdv (Q := Q) (R := R) dv salt a t y).trace (oneUnit k w) x.1 x.2),
+    P.credit x.1 x.2 (oneUnit k w) u (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).trace (oneUnit k w) x.1 x.2) u)
 
 /-- On the event, the program whose constants are the two reference words wins. -/
 theorem wins_of_event {dv : W1.W1Device} {salt : S → List ℕ} {P : Protocol Q R S} {k : ℕ} {w a : Codes} {θ : ℝ}
     {t y : ℕ} {H : Q → R} {s : S} (ha : ∀ i l, a i l < 2 ^ 32) (hact : P.actOK ⟨1, 1, k⟩ a)
-    (hcap : P.capOK H s (oneUnit k w) 0 a) (hwt : P.fixedOK ⟨1, 1, k⟩ w 0)
+    (hcap : P.inertBoundOK H s (oneUnit k w) 0 a) (hwt : P.fixedOK ⟨1, 1, k⟩ w 0)
     (ht : wordQ t = P.ticket H s (oneUnit k w) 0 a 0 0) (hy : wordQ y = P.useful H s (oneUnit k w) 0 a 0 0)
     (hθ : θ < P.credit H s (oneUnit k w) 0 a) : GuessWins dv salt P k w a θ t y (H, s) := by
-  have hτ : (guessAdv (Q := Q) (R := R) dv salt a t y).transcript (oneUnit k w) H s 0 =
+  have hτ : (guessAdv (Q := Q) (R := R) dv salt a t y).trace (oneUnit k w) H s 0 =
       some ⟨a, fun i j => (W1.final dv (salt s) (guessProg t y) (oneUnit k w) (fun _ => a) []).mem (W1.ticketAt 0 i j),
         fun i j => (W1.final dv (salt s) (guessProg t y) (oneUnit k w) (fun _ => a) []).mem (W1.usefulAt 0 i j)⟩ := by
-    rw [guess_transcript dv t y (oneUnit k w) salt a H s Nat.one_pos]
+    rw [guess_trace dv t y (oneUnit k w) salt a H s Nat.one_pos]
     congr 2
     funext i l
     split_ifs <;> first | rfl | exact guess_act dv (salt s) t y (oneUnit k w) [] a ha 0 i l
@@ -257,7 +258,7 @@ theorem wins_of_event {dv : W1.W1Device} {salt : S → List ℕ} {P : Protocol Q
       exact ⟨(congrArg wordQ (guess_ticket dv (salt s) t y (oneUnit k w) (fun _ => a) [])).trans
           ((wordQ_w32 t).trans ht),
         (congrArg wordQ (guess_useful dv (salt s) t y (oneUnit k w) (fun _ => a) [])).trans ((wordQ_w32 y).trans hy)⟩
-  have hK : correctSet P (oneUnit k w) H s ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript (oneUnit k w) H s) =
+  have hK : correctSet P (oneUnit k w) H s ((guessAdv (Q := Q) (R := R) dv salt a t y).trace (oneUnit k w) H s) =
       {0} := by
     ext u
     simp only [correctSet, Finset.mem_filter, Finset.mem_range, Finset.mem_singleton]
@@ -266,10 +267,10 @@ theorem wins_of_event {dv : W1.W1Device} {salt : S → List ℕ} {P : Protocol Q
       exact Nat.lt_one_iff.1 hu
     · rintro rfl
       exact ⟨Nat.one_pos, _, hτ, hC⟩
-  have hA : actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript (oneUnit k w) H s) 0 = a := by
+  have hA : actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).trace (oneUnit k w) H s) 0 = a := by
     simp only [actOf, hτ]
-  show θ < ∑ u ∈ correctSet P (oneUnit k w) H s ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript (oneUnit k w) H s),
-    P.credit H s (oneUnit k w) u (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript (oneUnit k w) H s) u)
+  show θ < ∑ u ∈ correctSet P (oneUnit k w) H s ((guessAdv (Q := Q) (R := R) dv salt a t y).trace (oneUnit k w) H s),
+    P.credit H s (oneUnit k w) u (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).trace (oneUnit k w) H s) u)
   rw [hK, Finset.sum_singleton, hA]
   exact hθ
 
@@ -296,41 +297,41 @@ are always FP32 words' values (`HonestWords`), and within the cap the credit is 
 theorem guessEvent_devAt {wd : ℕ} (z : ℤ) (G : ℕ) (pp : Prices) (sem : PearlCSem Q R S) (ρ : ℚ)
     {k : ℕ} (hk : k ≤ 2 ^ 16) {w a : Codes} {θ : ℝ} (hop : sem.OperandOK 1 k a) (hrow : sem.RowOK 1 k w 0)
     (hθ : θ < (((1 - ρ) * creditDev (devAt ⟨[32], wd, z⟩ G pp) ⟨1, 1, k⟩ : ℚ) : ℝ)) (x : (Q → R) × S)
-    (hx : (pearlCProtocolDev (devAt ⟨[32], wd, z⟩ G pp) sem ρ).capOK x.1 x.2 (oneUnit k w) 0 a) :
+    (hx : (pearlCProtocolDev (devAt ⟨[32], wd, z⟩ G pp) sem ρ).inertBoundOK x.1 x.2 (oneUnit k w) 0 a) :
     GuessEvent (pearlCProtocolDev (devAt ⟨[32], wd, z⟩ G pp) sem ρ) k w a θ x := by
   have hk32 : ((oneUnit k w).layout.shape 0).k / 32 < 2 ^ 24 := by
     show k / 32 < 2 ^ 24
     exact lt_of_le_of_lt ((Nat.div_le_self k 32).trans hk) (by norm_num)
   obtain ⟨ht, hy⟩ := HonestWords.honestWords_devRev1K z G pp sem ρ 0 x.1 x.2 (oneUnit k w) 0 a hk32 0 0
   refine ⟨hop, hx, hrow, ht, hy, ?_⟩
-  have hc : debitDev (devAt ⟨[32], wd, z⟩ G pp) (sem.unitDebitDev (devAt ⟨[32], wd, z⟩ G pp) x.1 x.2 (oneUnit k w) 0 a) ≤
+  have hc : inertWorkDev (devAt ⟨[32], wd, z⟩ G pp) (sem.unitInertWorkDev (devAt ⟨[32], wd, z⟩ G pp) x.1 x.2 (oneUnit k w) 0 a) ≤
       ρ * creditDev (devAt ⟨[32], wd, z⟩ G pp) ⟨1, 1, k⟩ := hx
   have hq : (1 - ρ) * creditDev (devAt ⟨[32], wd, z⟩ G pp) ⟨1, 1, k⟩ ≤ creditDev (devAt ⟨[32], wd, z⟩ G pp) ⟨1, 1, k⟩ -
-      debitDev (devAt ⟨[32], wd, z⟩ G pp) (sem.unitDebitDev (devAt ⟨[32], wd, z⟩ G pp) x.1 x.2 (oneUnit k w) 0 a) := by
+      inertWorkDev (devAt ⟨[32], wd, z⟩ G pp) (sem.unitInertWorkDev (devAt ⟨[32], wd, z⟩ G pp) x.1 x.2 (oneUnit k w) 0 a) := by
     linarith
   show θ < ((creditDev (devAt ⟨[32], wd, z⟩ G pp) ⟨1, 1, k⟩ -
-    debitDev (devAt ⟨[32], wd, z⟩ G pp) (sem.unitDebitDev (devAt ⟨[32], wd, z⟩ G pp) x.1 x.2 (oneUnit k w) 0 a) : ℚ) : ℝ)
+    inertWorkDev (devAt ⟨[32], wd, z⟩ G pp) (sem.unitInertWorkDev (devAt ⟨[32], wd, z⟩ G pp) x.1 x.2 (oneUnit k w) 0 a) : ℚ) : ℝ)
   exact hθ.trans_le (by exact_mod_cast hq)
 
 /-- `guessEvent_devAt` under rev1. -/
 theorem guessEvent_devAtRev1 {wd : ℕ} (z : ℤ) (G : ℕ) (pp : Prices) (sem : PearlCSem Q R S) (ρ : ℚ)
     {k : ℕ} (hk : k ≤ 2 ^ 16) {w a : Codes} {θ : ℝ} (hop : sem.OperandOK 1 k a) (hrow : sem.RowOK 1 k w 0)
     (hθ : θ < (((1 - ρ) * creditDevRev1 (devAt ⟨[32], wd, z⟩ G pp) ⟨1, 1, k⟩ : ℚ) : ℝ)) (x : (Q → R) × S)
-    (hx : (pearlCProtocolDevRev1 (devAt ⟨[32], wd, z⟩ G pp) sem ρ).capOK x.1 x.2 (oneUnit k w) 0 a) :
+    (hx : (pearlCProtocolDevRev1 (devAt ⟨[32], wd, z⟩ G pp) sem ρ).inertBoundOK x.1 x.2 (oneUnit k w) 0 a) :
     GuessEvent (pearlCProtocolDevRev1 (devAt ⟨[32], wd, z⟩ G pp) sem ρ) k w a θ x := by
   have hk32 : ((oneUnit k w).layout.shape 0).k / 32 < 2 ^ 24 := by
     show k / 32 < 2 ^ 24
     exact lt_of_le_of_lt ((Nat.div_le_self k 32).trans hk) (by norm_num)
   obtain ⟨ht, hy⟩ := HonestWords.honestWords_devRev1K z G pp sem ρ 0 x.1 x.2 (oneUnit k w) 0 a hk32 0 0
   refine ⟨hop, hx, hrow, ht, hy, ?_⟩
-  have hc : sem.unitDebitRev1 (devAt ⟨[32], wd, z⟩ G pp) x.1 x.2 (oneUnit k w) 0 a ≤
+  have hc : sem.unitInertWorkRev1 (devAt ⟨[32], wd, z⟩ G pp) x.1 x.2 (oneUnit k w) 0 a ≤
       ρ * creditDevRev1 (devAt ⟨[32], wd, z⟩ G pp) ⟨1, 1, k⟩ := hx
   have hq : (1 - ρ) * creditDevRev1 (devAt ⟨[32], wd, z⟩ G pp) ⟨1, 1, k⟩ ≤
       creditDevRev1 (devAt ⟨[32], wd, z⟩ G pp) ⟨1, 1, k⟩ -
-        sem.unitDebitRev1 (devAt ⟨[32], wd, z⟩ G pp) x.1 x.2 (oneUnit k w) 0 a := by
+        sem.unitInertWorkRev1 (devAt ⟨[32], wd, z⟩ G pp) x.1 x.2 (oneUnit k w) 0 a := by
     linarith
   show θ < ((creditDevRev1 (devAt ⟨[32], wd, z⟩ G pp) ⟨1, 1, k⟩ -
-    sem.unitDebitRev1 (devAt ⟨[32], wd, z⟩ G pp) x.1 x.2 (oneUnit k w) 0 a : ℚ) : ℝ)
+    sem.unitInertWorkRev1 (devAt ⟨[32], wd, z⟩ G pp) x.1 x.2 (oneUnit k w) 0 a : ℚ) : ℝ)
   exact hθ.trans_le (by exact_mod_cast hq)
 
 /-! ## Its probability -/
@@ -448,7 +449,7 @@ theorem not_ttOutW1_devAt_old {dv : W1.W1Device} {salt : S → List ℕ} {wd : �
     (hθ : 2 * (dv.prices.fetch : ℝ) / (1 - 1 / 400) <
       (((1 - ρ) * creditDev (devAt ⟨[32], wd, z⟩ G pp) ⟨1, 1, k⟩ : ℚ) : ℝ))
     (hcap : 1 / 2 ^ 64 < pr fun x : (Q → R) × S =>
-      (pearlCProtocolDev (devAt ⟨[32], wd, z⟩ G pp) sem ρ).capOK x.1 x.2 (oneUnit k w) 0 a) :
+      (pearlCProtocolDev (devAt ⟨[32], wd, z⟩ G pp) sem ρ).inertBoundOK x.1 x.2 (oneUnit k w) 0 a) :
     ¬ TTOutW1 dv salt (pearlCProtocolDev (devAt ⟨[32], wd, z⟩ G pp) sem ρ)
       (pearlCDomainDevOld (devAt ⟨[32], wd, z⟩ G pp)) (1 / 400) δPearlC :=
   not_ttOutPearlCDevW1_old hk0 h128 hG hk hf ha
@@ -462,7 +463,7 @@ theorem not_ttOutW1Rev1_devAt_old {dv : W1.W1Device} {salt : S → List ℕ} {wd
     (hθ : 2 * (dv.prices.fetch : ℝ) / (1 - 1 / 400) <
       (((1 - ρ) * creditDevRev1 (devAt ⟨[32], wd, z⟩ G pp) ⟨1, 1, k⟩ : ℚ) : ℝ))
     (hcap : 1 / 2 ^ 64 < pr fun x : (Q → R) × S =>
-      (pearlCProtocolDevRev1 (devAt ⟨[32], wd, z⟩ G pp) sem ρ).capOK x.1 x.2 (oneUnit k w) 0 a) :
+      (pearlCProtocolDevRev1 (devAt ⟨[32], wd, z⟩ G pp) sem ρ).inertBoundOK x.1 x.2 (oneUnit k w) 0 a) :
     ¬ TTOutW1 dv salt (pearlCProtocolDevRev1 (devAt ⟨[32], wd, z⟩ G pp) sem ρ)
       (pearlCDomainDevOld (devAt ⟨[32], wd, z⟩ G pp)) (1 / 400) δPearlC :=
   not_ttOutPearlCDevRev1W1_old hk0 h128 hG hk hf ha
@@ -501,7 +502,7 @@ theorem not_ttOutW1_sm120v1_old {dv : W1.W1Device} {salt : S → List ℕ} {sem 
     (hf0 : 0 ≤ dv.prices.fetch) (hf : dv.prices.fetch ≤ 2000) (hρ : ρ ≤ 1 / 2) (ha : ∀ i l, a i l < 2 ^ 32)
     (hop : sem.OperandOK 1 128 a) (hrow : sem.RowOK 1 128 w 0)
     (hcap : 1 / 2 ^ 64 < pr fun x : (Q → R) × S =>
-      (pearlCProtocolDev (devSm120v1 Prices.sm120) sem ρ).capOK x.1 x.2 (oneUnit 128 w) 0 a) :
+      (pearlCProtocolDev (devSm120v1 Prices.sm120) sem ρ).inertBoundOK x.1 x.2 (oneUnit 128 w) 0 a) :
     ¬ TTOutW1 dv salt (pearlCProtocolDev (devSm120v1 Prices.sm120) sem ρ)
       (pearlCDomainDevOld (devSm120v1 Prices.sm120)) (1 / 400) δPearlC := by
   have hc : (9472 : ℚ) ≤ creditDev (devSm120v1 Prices.sm120) ⟨1, 1, 128⟩ := by rw [credit_sm120v1]; norm_num
@@ -513,7 +514,7 @@ theorem not_ttOutW1Rev1_sm120v1_old {dv : W1.W1Device} {salt : S → List ℕ} {
     {w a : Codes} (hf0 : 0 ≤ dv.prices.fetch) (hf : dv.prices.fetch ≤ 2000) (hρ : ρ ≤ 1 / 2)
     (ha : ∀ i l, a i l < 2 ^ 32) (hop : sem.OperandOK 1 128 a) (hrow : sem.RowOK 1 128 w 0)
     (hcap : 1 / 2 ^ 64 < pr fun x : (Q → R) × S =>
-      (pearlCProtocolDevRev1 (devSm120v1 Prices.sm120) sem ρ).capOK x.1 x.2 (oneUnit 128 w) 0 a) :
+      (pearlCProtocolDevRev1 (devSm120v1 Prices.sm120) sem ρ).inertBoundOK x.1 x.2 (oneUnit 128 w) 0 a) :
     ¬ TTOutW1 dv salt (pearlCProtocolDevRev1 (devSm120v1 Prices.sm120) sem ρ)
       (pearlCDomainDevOld (devSm120v1 Prices.sm120)) (1 / 400) δPearlC := by
   have hc : (9472 : ℚ) ≤ creditDevRev1 (devSm120v1 Prices.sm120) ⟨1, 1, 128⟩ := creditRev1_sm120v1.ge
@@ -525,7 +526,7 @@ theorem not_ttOutW1_sm120v2_old {dv : W1.W1Device} {salt : S → List ℕ} {sem 
     (hf0 : 0 ≤ dv.prices.fetch) (hf : dv.prices.fetch ≤ 2000) (hρ : ρ ≤ 1 / 2) (ha : ∀ i l, a i l < 2 ^ 32)
     (hop : sem.OperandOK 1 128 a) (hrow : sem.RowOK 1 128 w 0)
     (hcap : 1 / 2 ^ 64 < pr fun x : (Q → R) × S =>
-      (pearlCProtocolDev (devSm120v2 Prices.sm120) sem ρ).capOK x.1 x.2 (oneUnit 128 w) 0 a) :
+      (pearlCProtocolDev (devSm120v2 Prices.sm120) sem ρ).inertBoundOK x.1 x.2 (oneUnit 128 w) 0 a) :
     ¬ TTOutW1 dv salt (pearlCProtocolDev (devSm120v2 Prices.sm120) sem ρ)
       (pearlCDomainDevOld (devSm120v2 Prices.sm120)) (1 / 400) δPearlC := by
   have hc : (9472 : ℚ) ≤ creditDev (devSm120v2 Prices.sm120) ⟨1, 1, 128⟩ := credit_sm120v2.ge
@@ -537,7 +538,7 @@ theorem not_ttOutW1Rev1_sm120v2_old {dv : W1.W1Device} {salt : S → List ℕ} {
     {w a : Codes} (hf0 : 0 ≤ dv.prices.fetch) (hf : dv.prices.fetch ≤ 2000) (hρ : ρ ≤ 1 / 2)
     (ha : ∀ i l, a i l < 2 ^ 32) (hop : sem.OperandOK 1 128 a) (hrow : sem.RowOK 1 128 w 0)
     (hcap : 1 / 2 ^ 64 < pr fun x : (Q → R) × S =>
-      (pearlCProtocolDevRev1 (devSm120v2 Prices.sm120) sem ρ).capOK x.1 x.2 (oneUnit 128 w) 0 a) :
+      (pearlCProtocolDevRev1 (devSm120v2 Prices.sm120) sem ρ).inertBoundOK x.1 x.2 (oneUnit 128 w) 0 a) :
     ¬ TTOutW1 dv salt (pearlCProtocolDevRev1 (devSm120v2 Prices.sm120) sem ρ)
       (pearlCDomainDevOld (devSm120v2 Prices.sm120)) (1 / 400) δPearlC := by
   have hc : (9472 : ℚ) ≤ creditDevRev1 (devSm120v2 Prices.sm120) ⟨1, 1, 128⟩ := creditRev1_sm120v2.ge
@@ -577,19 +578,19 @@ theorem ttOutPearlCDevRev1W1_of_old [Fintype Q] [DecidableEq Q] [Fintype R] [Fin
     TTOutPearlCDevRev1W1 dv salt d sem ρ :=
   ttOutW1_mono_domain (fun _ => pearlCDomainDevOld_of_new) h
 
-/-- A correct unit of the program's transcript has reference value `+0` at every word `(i, j)`, `j ≠ 0`, of its shape:
+/-- A correct unit of the program's trace has reference value `+0` at every word `(i, j)`, `j ≠ 0`, of its shape:
 the program never writes one. -/
 theorem guess_zero_words {dv : W1.W1Device} {salt : S → List ℕ} {P : Protocol Q R S} {U : Workload} {a : Codes}
     {t y : ℕ} {H : Q → R} {s : S} {u : ℕ}
-    (hu : u ∈ correctSet P U H s ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript U H s)) {i j : ℕ}
+    (hu : u ∈ correctSet P U H s ((guessAdv (Q := Q) (R := R) dv salt a t y).trace U H s)) {i j : ℕ}
     (hi : i < (U.layout.shape u).m) (hj : j < (U.layout.shape u).n) (hj0 : j ≠ 0) :
-    P.ticket H s U u (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript U H s) u) i j = some 0 ∧
-      P.useful H s U u (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript U H s) u) i j = some 0 := by
+    P.ticket H s U u (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).trace U H s) u) i j = some 0 ∧
+      P.useful H s U u (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).trace U H s) u) i j = some 0 := by
   simp only [correctSet, Finset.mem_filter, Finset.mem_range] at hu
   obtain ⟨huN, c, hc, hC⟩ := hu
   obtain ⟨-, -, -, hw⟩ := hC
-  have hc' := Option.some.inj (hc.symm.trans (guess_transcript dv t y U salt a H s huN))
-  have hA : actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript U H s) u = c.act := by
+  have hc' := Option.some.inj (hc.symm.trans (guess_trace dv t y U salt a H s huN))
+  have hA : actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).trace U H s) u = c.act := by
     simp only [actOf, hc]
   rw [hA]
   have ht0 : c.ticket i j = 0 := by
@@ -608,12 +609,12 @@ reference words `(0, j)`, `0 < j < 64`, ticket and useful, are all `+0`. -/
 theorem guess_win_zero {dv : W1.W1Device} {salt : S → List ℕ} {P : Protocol Q R S} {U : Workload} {a : Codes}
     {t y : ℕ} {H : Q → R} {s : S} {θ : ℝ}
     (hn : ∀ u < U.layout.N, 0 < (U.layout.shape u).m ∧ 64 ≤ (U.layout.shape u).n) (hθ : 0 ≤ θ)
-    (hwin : θ < ∑ u ∈ correctSet P U H s ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript U H s),
-      P.credit H s U u (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript U H s) u)) :
+    (hwin : θ < ∑ u ∈ correctSet P U H s ((guessAdv (Q := Q) (R := R) dv salt a t y).trace U H s),
+      P.credit H s U u (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).trace U H s) u)) :
     ∃ u < U.layout.N, ∀ j, 0 < j → j < 64 →
-      P.ticket H s U u (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript U H s) u) 0 j = some 0 ∧
-        P.useful H s U u (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript U H s) u) 0 j = some 0 := by
-  obtain ⟨u, hu⟩ : (correctSet P U H s ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript U H s)).Nonempty := by
+      P.ticket H s U u (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).trace U H s) u) 0 j = some 0 ∧
+        P.useful H s U u (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).trace U H s) u) 0 j = some 0 := by
+  obtain ⟨u, hu⟩ : (correctSet P U H s ((guessAdv (Q := Q) (R := R) dv salt a t y).trace U H s)).Nonempty := by
     by_contra h
     rw [Finset.not_nonempty_iff_eq_empty] at h
     rw [h, Finset.sum_empty] at hwin
@@ -631,13 +632,13 @@ theorem guess_win_zero_pearlCDev {dv : W1.W1Device} {salt : S → List ℕ} {d :
     {ρ : ℚ} {U : Workload} (hD : pearlCDomainDev d U.layout) {a : Codes} {t y : ℕ} {H : Q → R} {s : S} {T : ℝ}
     (hT : 0 ≤ T)
     (hwin : T / (1 - 1 / 400) < ∑ u ∈ correctSet (pearlCProtocolDev d sem ρ) U H s
-        ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript U H s),
-      (pearlCProtocolDev d sem ρ).credit H s U u (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript U H s) u)) :
+        ((guessAdv (Q := Q) (R := R) dv salt a t y).trace U H s),
+      (pearlCProtocolDev d sem ρ).credit H s U u (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).trace U H s) u)) :
     ∃ u < U.layout.N, ∀ j, 0 < j → j < 64 →
       (pearlCProtocolDev d sem ρ).ticket H s U u
-          (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript U H s) u) 0 j = some 0 ∧
+          (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).trace U H s) u) 0 j = some 0 ∧
         (pearlCProtocolDev d sem ρ).useful H s U u
-          (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript U H s) u) 0 j = some 0 :=
+          (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).trace U H s) u) 0 j = some 0 :=
   guess_win_zero (fun u hu => ⟨(hD u hu).1, (hD u hu).2.1.1⟩) (div_nonneg hT (by norm_num)) hwin
 
 /-- `guess_win_zero_pearlCDev` under rev1. -/
@@ -645,14 +646,14 @@ theorem guess_win_zero_pearlCDevRev1 {dv : W1.W1Device} {salt : S → List ℕ} 
     {sem : PearlCSem Q R S} {ρ : ℚ} {U : Workload} (hD : pearlCDomainDev d U.layout) {a : Codes} {t y : ℕ}
     {H : Q → R} {s : S} {T : ℝ} (hT : 0 ≤ T)
     (hwin : T / (1 - 1 / 400) < ∑ u ∈ correctSet (pearlCProtocolDevRev1 d sem ρ) U H s
-        ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript U H s),
+        ((guessAdv (Q := Q) (R := R) dv salt a t y).trace U H s),
       (pearlCProtocolDevRev1 d sem ρ).credit H s U u
-        (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript U H s) u)) :
+        (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).trace U H s) u)) :
     ∃ u < U.layout.N, ∀ j, 0 < j → j < 64 →
       (pearlCProtocolDevRev1 d sem ρ).ticket H s U u
-          (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript U H s) u) 0 j = some 0 ∧
+          (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).trace U H s) u) 0 j = some 0 ∧
         (pearlCProtocolDevRev1 d sem ρ).useful H s U u
-          (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript U H s) u) 0 j = some 0 :=
+          (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).trace U H s) u) 0 j = some 0 :=
   guess_win_zero (fun u hu => ⟨(hD u hu).1, (hD u hu).2.1.1⟩) (div_nonneg hT (by norm_num)) hwin
 
 end Pouw.PearlC.TTOutW1Item1

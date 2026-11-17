@@ -24,7 +24,7 @@ nor writes `stopped`, so their put leaves the session's stop as the round's put 
 namespace Claims.ZKServer.Relay
 
 open _root_.Flock (F128)
-open _root_.Flock.Firewall.Frames (Sessions Rep)
+open _root_.Flock.ZkServer.Frames (Sessions Rep)
 
 /-- **Every frame at `p`'s key** in the loop's frames `R` is `p`. -/
 def OnlyAt (R : Sessions) (p : Rep) : Prop := ∀ q ∈ R.reps, keyOf q = keyOf p → q = p
@@ -39,7 +39,7 @@ theorem keyOf_of_put {p q : Rep} (h : (q.sid == p.sid && q.table == p.table && q
 /-- **A put sets every frame at its key.** -/
 theorem onlyAt_put (R : Sessions) (p : Rep) : OnlyAt (R.put p) p := by
   intro q hq hk
-  unfold _root_.Flock.Firewall.Frames.Sessions.put at hq
+  unfold _root_.Flock.ZkServer.Frames.Sessions.put at hq
   simp only [Array.mem_map] at hq
   obtain ⟨q₀, -, e⟩ := hq
   split at e
@@ -77,7 +77,7 @@ theorem onlyAt_keptStep {sid i r : Nat} {R R' : Sessions} {p : Rep} (h : KeptSte
         simpa using hs
   | put p' hk' =>
     intro q hq hkq
-    unfold _root_.Flock.Firewall.Frames.Sessions.put at hq
+    unfold _root_.Flock.ZkServer.Frames.Sessions.put at hq
     simp only [Array.mem_map] at hq
     obtain ⟨q₀, hq₀, e⟩ := hq
     split at e
@@ -89,13 +89,13 @@ theorem onlyAt_keptStep {sid i r : Nat} {R R' : Sessions} {p : Rep} (h : KeptSte
     unfold keepOf
     split <;> exact ha
   | file root r' b hf =>
-    unfold _root_.Flock.Firewall.Frames.Sessions.file at hf
+    unfold _root_.Flock.ZkServer.Frames.Sessions.file at hf
     split at hf
     · cases hf
     · cases hf
       exact ha
   | inner root r' j b hf =>
-    unfold _root_.Flock.Firewall.Frames.Sessions.innerRound at hf
+    unfold _root_.Flock.ZkServer.Frames.Sessions.innerRound at hf
     simp only at hf
     split at hf
     · cases hf
@@ -123,7 +123,7 @@ theorem stopped_put_onlyAt {R : Sessions} {p₀ p : Rep} (ha : OnlyAt R p₀) (h
   rw [stopped_iff, stopped_iff]
   constructor
   · rintro ⟨q, hq, hqs, hqst⟩
-    unfold _root_.Flock.Firewall.Frames.Sessions.put at hq
+    unfold _root_.Flock.ZkServer.Frames.Sessions.put at hq
     simp only [Array.mem_map] at hq
     obtain ⟨q₀, hq₀, e⟩ := hq
     split at e
@@ -138,7 +138,7 @@ theorem stopped_put_onlyAt {R : Sessions} {p₀ p : Rep} (ha : OnlyAt R p₀) (h
     · rw [← e] at hqs hqst
       exact ⟨q₀, hq₀, hqs, hqst⟩
   · rintro ⟨q, hq, hqs, hqst⟩
-    unfold _root_.Flock.Firewall.Frames.Sessions.put
+    unfold _root_.Flock.ZkServer.Frames.Sessions.put
     by_cases hm : (q.sid == p.sid && q.table == p.table && q.rep == p.rep) = true
     · have e₀ := ha q hq ((keyOf_of_put hm).trans hk)
       refine ⟨p, Array.mem_map.mpr ⟨q, hq, by simp [hm]⟩, ?_, ?_⟩
@@ -149,15 +149,15 @@ theorem stopped_put_onlyAt {R : Sessions} {p₀ p : Rep} (ha : OnlyAt R p₀) (h
     · exact ⟨q, Array.mem_map.mpr ⟨q, hq, by simp [hm]⟩, hqs, hqst⟩
 
 /-- **The frame's take of a round's coins keeps `stopped`.** -/
-theorem coins_stopped {c : _root_.Flock.Firewall.Frame.Cfg} {st st' : _root_.Flock.Firewall.Frame.State}
-    {cs : Array F128} (h : _root_.Flock.Firewall.Frame.step c st (.coins (.ok cs)) = (.ok, st')) :
+theorem coins_stopped {c : _root_.Flock.ZkServer.Frame.Cfg} {st st' : _root_.Flock.ZkServer.Frame.State}
+    {cs : Array F128} (h : _root_.Flock.ZkServer.Frame.step c st (.coins (.ok cs)) = (.ok, st')) :
     st'.m.stopped = st.m.stopped := by
   have e := answer_stopped c st.m cs st.m.stopped
-  have e2 : ({ st.m with stopped := st.m.stopped } : _root_.Flock.Firewall.Frame.Masker).answer c cs =
+  have e2 : ({ st.m with stopped := st.m.stopped } : _root_.Flock.ZkServer.Frame.Masker).answer c cs =
       st.m.answer c cs := rfl
-  rw [e2, _root_.Flock.Firewall.Frame.answer_of_step h] at e
+  rw [e2, _root_.Flock.ZkServer.Frame.answer_of_step h] at e
   simp only [Except.map, Except.ok.injEq] at e
-  have e' := congrArg _root_.Flock.Firewall.Frame.Masker.stopped e
+  have e' := congrArg _root_.Flock.ZkServer.Frame.Masker.stopped e
   exact e'
 
 /-- **A round's coins keep the session's stop**: where the rep has a frame when its round reads the loop's frames
@@ -165,8 +165,8 @@ theorem coins_stopped {c : _root_.Flock.Firewall.Frame.Cfg} {st st' : _root_.Flo
 read (`R₂`), the put of the frame's take of the coins `cs` (`Loop.coinsOf`) leaves every session's stop as it was. -/
 theorem stopped_coins {R R₁ R₂ : Sessions} {sid i r : Nat} {p₁ : Rep} (hfr : (frameAt R sid i r).isSome)
     (hk : keyOf p₁ = (sid, i, r)) (h₀₁ : Kept sid i r R R₁) (h₁₂ : Kept sid i r (R₁.put p₁) R₂) {cs : Array F128}
-    {st₂ : _root_.Flock.Firewall.Frame.State}
-    (hcs : _root_.Flock.Firewall.Frame.step p₁.cfg p₁.st (.coins (.ok cs)) = (.ok, st₂)) (sid' : Nat) :
+    {st₂ : _root_.Flock.ZkServer.Frame.State}
+    (hcs : _root_.Flock.ZkServer.Frame.step p₁.cfg p₁.st (.coins (.ok cs)) = (.ok, st₂)) (sid' : Nat) :
     (R₂.put (Loop.coinsOf p₁ st₂ cs)).stopped sid' = R₂.stopped sid' := by
   have hp : frameAt (R₁.put p₁) sid i r = some p₁ :=
     frameAt_put_self R₁ p₁ hk (by rw [frameAt_kept h₀₁ hfr]; exact hfr)

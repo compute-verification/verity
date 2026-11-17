@@ -47,7 +47,7 @@ open FlockVBridge.OfVStar (ResZeroAtLH)
 /-- **Level `ℓ`'s α at a rep's rounds and extras**: the Ligerito run's, in the coin-derived points `residualLins`
 returns there (`verifierRows`' info, `infoAlpha_of_rows`); none where it refuses. -/
 def infoAlpha (sh : Flock.Shape) (rounds : Array (Array F128)) (extras : Array Flock.Claim) (ℓ : ℕ) : Array F128 :=
-  match Flock.RecAlgebra.residualLins sh (Flock.RecAlgebra.CoinSource.ofRounds rounds) extras with
+  match Flock.RecAlgebra.residualLins sh (Flock.RecAlgebra.RoundCoins.ofRounds rounds) extras with
   | .ok (_, info) => (info.lg.conss[ℓ]!).alpha
   | .error _ => #[]
 
@@ -58,7 +58,7 @@ theorem infoAlpha_of_rows {sh : Flock.Shape} {rounds : Array (Array F128)} {extr
     infoAlpha sh rounds extras ℓ = (info.lg.conss[ℓ]!).alpha := by
   unfold Flock.RecAlgebra.verifierRows at h
   unfold infoAlpha
-  cases hl : Flock.RecAlgebra.residualLins sh (Flock.RecAlgebra.CoinSource.ofRounds rounds) extras with
+  cases hl : Flock.RecAlgebra.residualLins sh (Flock.RecAlgebra.RoundCoins.ofRounds rounds) extras with
   | error _ => rw [hl] at h; cases h
   | ok q =>
     obtain ⟨lins, _⟩ := q
@@ -115,7 +115,7 @@ def withReads {S : ℕ} {stmt : Fin S → VStar.Stmt} {Vs : Fin S → VStmt} {sh
     alpha := fun R ω t ρ => infoAlpha sh (heldRounds (held (wr t)) (s ρ)) (M.extras R ω t ρ) }
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-  {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type} {S : ℕ} {Vs : Fin S → VStmt}
+  {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type} {S : ℕ} {Vs : Fin S → VStmt}
   {stmt : Fin S → VStar.Stmt} {sh : Flock.Shape}
   {zs : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
   {dg : ByteArray → ByteArray} {N k Rw : ℕ}

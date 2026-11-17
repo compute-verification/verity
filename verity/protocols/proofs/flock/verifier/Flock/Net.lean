@@ -1,12 +1,13 @@
-/-
-`Flock.Circuit`: an expanded circuit in `flock-ir-unit/v2` form (a unit, a tail stage, or a lookup slot built from its
-table), and the text helpers its parser uses.
--/
 module
 
 public import Flock.Comp
 public import Flock.Scan
 public import Base.Pow2
+
+/-!
+`Flock.Circuit`: an expanded circuit in `flock-ir-unit/v2` form (a unit, a tail stage, or a lookup slot built from its
+table), and the text helpers its parser uses.
+-/
 
 @[expose] public section
 set_option backward.privateInPublic true

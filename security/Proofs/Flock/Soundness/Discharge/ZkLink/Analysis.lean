@@ -106,7 +106,7 @@ def JointZC (k : ℕ) (a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sess
     accProbZC A Hs (planZ S R) τ * failProbAccZ A Hs (planZ S R) j k τ ≤
       a S R τ j + rateZ (planZ S R) j k * accProbZC A Hs (planZ S R) τ
 
-variable {L : Law n}
+variable {L : SamplingDesign n}
 
 /-- **The compiled binding error**: `ε·Pr[the oracle extracted from k accepted reruns has the link event]/(1 − N₀/(ek))`
 at sampled proof block `u`. -/
@@ -126,7 +126,7 @@ noncomputable def analysisZC (decode : DecoderZK (C := C) planZ tab)
     (hj : JointZC A Hs planZ k a) :
     ExtractionAnalysis L Reg (batchedSessionZC A Hs planZ) where
   Tr := Fin C.N → Bool
-  wrong := P.wrong
+  incorrect := P.incorrect
   committed := Xc
   ks S R τ u := ENNReal.ofReal (a S R (zcStrat A Hs planZ τ) (tab S R u) / (1 - rateZ (planZ S R) (tab S R u) k))
   link := linkTermZC A Hs P planZ tab decode k
@@ -135,7 +135,7 @@ noncomputable def analysisZC (decode : DecoderZK (C := C) planZ tab)
       ⟨hc, fun M _ hsat => by
         by_contra hno
         push Not at hno
-        exact P.mem_wrong.1 hu (P.correct_congr (fun g hg => (hno g hg).symm) (hlow S R u hS M hsat))⟩
+        exact P.mem_incorrect.1 hu (P.correct_congr (fun g hg => (hno g hg).symm) (hlow S R u hS M hsat))⟩
     set ε := accProbZC A Hs (planZ S R) (zcStrat A Hs planZ τ)
     set r := rateZ (planZ S R) (tab S R u) k
     set a' := a S R (zcStrat A Hs planZ τ) (tab S R u)

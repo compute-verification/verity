@@ -24,20 +24,22 @@ import Proofs.Flock.Soundness.Game
 /-!
 # Proof of the integrity audit over a monitoring period of blocks, with carried state
 
-* `SamplingBlock.accepted_drawnWrong_le_at`: one session's bound at the value layer of any values `Xv`
-  (`zk_session_soundHJ_custody_drawn_at`): `ε_ks` and the binding errors against `Xv` (`errBoundZC`).
-* `CarriedBlocks.errBound_le`: at the values `Xcar`, the binding errors are `δ_link`'s at every commit string no carried
+* `SamplingBlock.accepted_sampledIncorrect_le_at`: one session's bound at the value layer of any values `Xv`
+  (`zk_session_soundHJ_custody_sampled_at`): `ε_ks` and the binding errors against `Xv` (`errBoundZC`).
+* `CarriedBlocks.errBound_le`: at the values `Xcar`, the binding errors are `ε_bind`'s at every commit string no carried
   leaf sits at, and at a carried leaf's commit string the leaf's trial's binding error at the pulled-back value
   (`CarriedBlocks.carriedE`).
-* `CarriedBlocks.periodE_errX_le`: that trial's binding error, averaged over the monitoring period up to the session, is the
+* `CarriedBlocks.monitoringPeriodE_errX_le`: that trial's binding error, averaged over the monitoring period up to the session, is the
   binding error of the leaf's trial in that session played after the monitoring period before it (`expect_compTo`), at most `m`
   times the mixture's (`errAt_le_mix`), which `ecr/sha-512` at the leaf's finder bounds (`link_mass_le`), with the
   finder's cost at most `Σ_{t ∈ ℓ} (Σ_{j < t} t'_j + t'_t(1 + k_t))/m`.
-* `Flock.SecurityProofs.IntegrityHorizonCarried`: `IntegrityHorizon`'s proof, `period_unionE` in place of
-  `period_union` for the sessions accepted with a sampled proof block wrong, each carried leaf's term summed over the monitoring period.
+* `Flock.SecurityProofs.IntegrityPooledCarried`: `IntegrityPooled`'s proof, `monitoringPeriod_unionE` in place of
+  `monitoringPeriod_union` for the sessions accepted with a sampled proof block incorrect, each carried leaf's term summed over the monitoring period.
 * `CarriedBlocks.integrity_on`: the same on a set `I` of the sessions, as `Flock.SecurityProofs.integrity_on`, each
-  carried leaf's term weighing only its sessions in `I` (`CarriedLeaf.carryOn`).
+  carried leaf's term weighing only its sessions in `I` (`CarriedLeaf.carryOn`); `CarriedBlocks.integrity_on_units`
+  reads the rate `q` only at sessions with units.
 * `Flock.SecurityProofs.IntegrityBlockCarried`: `CarriedBlocks.integrity_on` at block `b`'s sessions.
+* `Flock.SecurityProofs.IntegrityAllProvedCarried`: `CarriedBlocks.integrity_on_units` at `q = 1`, `M = 1`.
 * `CarriedBlocks.run_ofServer`: with no carried leaf the run is `ServerBlocks.run`, so the carried statements read
   `ServerBlocks`' records there.
 * `Flock.SecurityProofs.IntegrityBlock_of_IntegrityBlockCarried`: `IntegrityBlockCarried` at `CarriedBlocks.ofServer`
@@ -58,9 +60,9 @@ theorem expect_optG_neg {γ : Type} (F : γ → ℝ) (c : Prop) (g : c → Game 
   | .isTrue h => absurd h hn
   | .isFalse _ => rfl
 
-theorem periodGood_true {β : ℕ → Type} (G : (i : ℕ) → Game (β i)) (i T : ℕ) (s : Strategy (monitoringPeriodG G i T)) :
+theorem monitoringPeriodGood_true {β : ℕ → Type} (G : (i : ℕ) → Game (β i)) (i T : ℕ) (s : Strategy (monitoringPeriodG G i T)) :
     MonitoringPeriodGood G (fun _ _ => True) i T s :=
-  periodGood_of_plays G _ T i s fun _ _ _ => trivial
+  monitoringPeriodGood_of_plays G _ T i s fun _ _ _ => trivial
 
 end FlockSoundness.Game
 
@@ -78,17 +80,17 @@ variable (w : SamplingBlock)
 
 open Classical in
 /-- **One session's drawn-unit bound at the value layer of any values `Xv`**, at the strategy `τ` that plays it. -/
-theorem accepted_drawnWrong_le_at
+theorem accepted_sampledIncorrect_le_at
     (Xv : (R : w.Reg) → Cont w.L w.Reg (batchedSessionZC execArith hs512 (planZHJ w.dj w.y₀)) R → w.vb.Pos →
       w.vb.Val)
     (τ : Strategy w.game) (hcr : w.CR τ) :
     prob (fun o => LiveAcceptsZK w.I o ∧ ∃ u ∈ o.2.1,
-        u ∈ wrongRegZ execArith w.P (planZHJ w.dj w.y₀) (tabZHJ w.dj w.y₀) w.vb (reg (w.sim τ))
+        u ∈ incorrectRegZ execArith w.P (planZHJ w.dj w.y₀) (tabZHJ w.dj w.y₀) w.vb (reg (w.sim τ))
           (XlayerZC execArith w.P (planZHJ w.dj w.y₀) (tabZHJ w.dj w.y₀) w.vb
             (Xv (reg (w.sim τ)) (cont (w.sim τ))))) w.game τ ≤
       w.ks + errBoundZC execArith hs512 w.P (planZHJ w.dj w.y₀) (tabZHJ w.dj w.y₀) w.vb Xv w.k w.Rw w.ρ
         (reg (w.sim τ)) (cont (w.sim τ)) := by
-  have h := zk_session_soundHJ_custody_drawn_at w.I w.ht (Flock.Desc.parse_flat w.hD) w.hU w.hpub w.hpt w.hscope
+  have h := zk_session_soundHJ_custody_sampled_at w.I w.ht (Flock.Desc.parse_flat w.hD) w.hU w.hpub w.hpt w.hscope
     w.kd w.hdiv w.dj w.y₀ w.wr w.dg w.N w.Lb w.src w.hTags w.hCust w.hk w.hRw w.hρ w.hr Xv τ (qF := w.qF)
     (qS := w.qS) hcr.1
   refine h.trans (add_le_add ?_ le_rfl)
@@ -109,8 +111,8 @@ theorem readP_nonneg (c : w.vb.Pos) : 0 ≤ w.readP c := div_nonneg (Nat.cast_no
 private theorem mul_add_le {π E K B g : ℝ} (hπ : 0 ≤ π) (h : E ≤ B + g) : π * (E + K) ≤ π * (B + K) + π * g := by
   nlinarith
 
-/-- **The binding errors against `Xv`, split**: at most `δ_link` plus `Σ_c π_c g_c/(1 − ρ)` when each commit string's
-binding error is at most `δ_link`'s per-string term plus `g_c`. -/
+/-- **The binding errors against `Xv`, split**: at most `ε_bind` plus `Σ_c π_c g_c/(1 − ρ)` when each commit string's
+binding error is at most `ε_bind`'s per-string term plus `g_c`. -/
 theorem errBound_le_of (R : w.Reg) (κ : Cont w.L w.Reg (batchedSessionZC execArith hs512 (planZHJ w.dj w.y₀)) R)
     (Xv : (R : w.Reg) → Cont w.L w.Reg (batchedSessionZC execArith hs512 (planZHJ w.dj w.y₀)) R → w.vb.Pos →
       w.vb.Val)
@@ -330,7 +332,7 @@ theorem Xcar_free (t : ℕ) (R : (S.W t).Reg)
   unfold Xcar
   rw [dite_eq_right_of_eq_false (eq_false h)]
 
-/-- **The binding error at `Xcar`, per commit string**: `δ_link`'s term where no carried leaf sits, under A2 for the
+/-- **The binding error at `Xcar`, per commit string**: `ε_bind`'s term where no carried leaf sits, under A2 for the
 session's link finders, and where one sits, its binding error at the leaf's value. -/
 theorem err_le_gAt (t : ℕ) (τ : Strategy (S.W t).game)
     (hL : LinkCRZC execArith hs512 (S.W t).P (planZHJ (S.W t).dj (S.W t).y₀) (tabZHJ (S.W t).dj (S.W t).y₀) (S.W t).vb
@@ -369,7 +371,7 @@ theorem sum_gAt (t : ℕ) (τ : Strategy (S.W t).game) :
     ring
   · simp only [hx, ↓reduceIte, mul_zero, Finset.sum_const_zero, zero_div, zero_mul]
 
-/-- **The binding errors at `Xcar`**: `δ_link` plus the carried term. -/
+/-- **The binding errors at `Xcar`**: `ε_bind` plus the carried term. -/
 theorem errBound_le (t : ℕ) (τ : Strategy (S.W t).game)
     (hL : LinkCRZC execArith hs512 (S.W t).P (planZHJ (S.W t).dj (S.W t).y₀) (tabZHJ (S.W t).dj (S.W t).y₀) (S.W t).vb
       (reg ((S.W t).sim τ)) (cont ((S.W t).sim τ)) (S.W t).k (S.W t).Rw (S.W t).M (S.W t).t') :
@@ -379,40 +381,40 @@ theorem errBound_le (t : ℕ) (τ : Strategy (S.W t).game)
   refine ((S.W t).errBound_le_of _ _ (S.Xcar s t) (S.gAt s t τ) (S.err_le_gAt s t τ hL)).trans ?_
   rw [S.sum_gAt s t τ]
 
-/-- **One session's stage**: accepted with a sampled proof block wrong, each carried leaf read at its value, with probability
-at most `ε_ks + δ_link` plus the carried term. -/
+/-- **One session's stage**: accepted with a sampled proof block incorrect, each carried leaf read at its value, with probability
+at most `ε_ks + ε_bind` plus the carried term. -/
 theorem stage_le (t : ℕ) (τ : Strategy (S.W t).game) (hcr : (S.W t).CR τ) :
-    prob (fun b => (S.record s t τ b).accepted ∧ (S.record s t τ b).drawnWrong) (S.W t).game τ ≤
+    prob (fun b => (S.record s t τ b).accepted ∧ (S.record s t τ b).sampledWrong) (S.W t).game τ ≤
       ((S.W t).ks + (S.W t).link) + ENNReal.ofReal (S.carriedE s t τ) := by
-  refine ((S.W t).accepted_drawnWrong_le_at (S.Xcar s t) τ hcr).trans ?_
+  refine ((S.W t).accepted_sampledIncorrect_le_at (S.Xcar s t) τ hcr).trans ?_
   rw [add_assoc]
   exact add_le_add le_rfl (S.errBound_le s t τ hcr.2)
 
 /-- **A carried leaf's binding error in one of its sessions, over the monitoring period before it**, is at most `m` times its
 finder's bound under A2. -/
-theorem periodE_errX_le (x : Fin S.nL)
+theorem monitoringPeriodE_errX_le (x : Fin S.nL)
     (hA2 : Assumptions.SHA512CRExpected H512 (finderG (S.mix s x) (S.leaf x).M)
       (finderStrat (S.mix s x) (S.mixS s x) (S.leaf x).M)
       (outOf (rdSig fun _ => (S.leaf x).rd) (S.leaf x).op (S.leaf x).col)
       (finderCost (rdSig fun _ => (S.leaf x).rd) (S.leaf x).costMix))
     {d : ℕ} (hd : d ∈ (S.leaf x).sessions) :
-    periodE (fun t => (S.W t).game) (S.errX s x) d 0 S.T s ≤
+    monitoringPeriodE (fun t => (S.W t).game) (S.errX s x) d 0 S.T s ≤
       2 * (∑ t ∈ (S.leaf x).sessions, ((∑ j ∈ Finset.range t, (S.W j).t') + (S.W t).t' * (1 + (S.W t).k))) /
         2 ^ (256 : ℝ) + (S.leaf x).sessions.card / (Real.exp 1 * (S.leaf x).M) := by
-  have h1 : periodE (fun t => (S.W t).game) (S.errX s x) d 0 S.T s ≤
-      periodE (fun t => (S.W t).game)
+  have h1 : monitoringPeriodE (fun t => (S.W t).game) (S.errX s x) d 0 S.T s ≤
+      monitoringPeriodE (fun t => (S.W t).game)
         (fun j τ => errAt ((S.leaf x).trial j τ) ((S.leaf x).trialS j τ) (S.leaf x).rd (S.Xm s x)) d 0 S.T s :=
-    periodE_mono (fun t => (S.W t).game) d 0 S.T s (periodGood_true _ 0 S.T s) fun j τ hj _ => by
+    monitoringPeriodE_mono (fun t => (S.W t).game) d 0 S.T s (monitoringPeriodGood_true _ 0 S.T s) fun j τ hj _ => by
       rw [zero_add] at hj
       subst hj
       exact (S.leaf x).errZC_le_trial hd τ (S.Xm s x)
   have h2 : errAt (S.comp s x ⟨d, hd⟩) (S.compS s x ⟨d, hd⟩) (S.leaf x).rd (S.Xm s x) =
-      periodE (fun t => (S.W t).game)
+      monitoringPeriodE (fun t => (S.W t).game)
         (fun j τ => errAt ((S.leaf x).trial j τ) ((S.leaf x).trialS j τ) (S.leaf x).rd (S.Xm s x)) d 0 S.T s := by
     rw [errAt_eq_expect]
     refine (expect_compTo (fun t => (S.W t).game) _ (S.leaf x).trial (S.leaf x).trialS d 0 S.T (S.hin x d hd) s).trans
       ?_
-    exact congrArg (fun f => periodE (fun t => (S.W t).game) f d 0 S.T s)
+    exact congrArg (fun f => monitoringPeriodE (fun t => (S.W t).game) f d 0 S.T s)
       (funext fun j => funext fun τ => (errAt_eq_expect _ _ _ _).symm)
   have h3 := errAt_le_mix (S.comp s x) (S.compS s x) (fun _ => (S.leaf x).rd) ⟨d, hd⟩ (S.Xm s x)
   have hX : ∀ v, pRd (S.mix s x) (S.mixS s x) (rdSig fun _ => (S.leaf x).rd) v ≤
@@ -434,9 +436,9 @@ theorem periodE_errX_le (x : Fin S.nL)
     refine add_le_add le_rfl ?_
     refine le_trans (le_of_eq (expect_compTo (fun t => (S.W t).game) _ (S.leaf x).trial (S.leaf x).trialS i.1 0 S.T
       (S.hin x i.1 i.2) s)) ?_
-    refine (periodE_mono (fun t => (S.W t).game) i.1 0 S.T s (periodGood_true _ 0 S.T s)
+    refine (monitoringPeriodE_mono (fun t => (S.W t).game) i.1 0 S.T s (monitoringPeriodGood_true _ 0 S.T s)
       (f' := fun j _ => (S.W j).t' * (1 + (S.W j).k)) fun j τ _ _ => (S.leaf x).expect_cost_le j τ).trans ?_
-    refine (periodE_const_le (fun t => (S.W t).game) (fun j => (S.W j).t' * (1 + (S.W j).k))
+    refine (monitoringPeriodE_const_le (fun t => (S.W t).game) (fun j => (S.W j).t' * (1 + (S.W j).k))
       (fun j => mul_nonneg (S.W j).ht' (by positivity)) i.1 0 S.T s).trans (le_of_eq ?_)
     simp only [zero_add]
   have hm0 : (0 : ℝ) < Fintype.card (S.leaf x).Ses := by exact_mod_cast Fintype.card_pos
@@ -449,7 +451,7 @@ theorem periodE_errX_le (x : Fin S.nL)
       (fun t => (∑ j ∈ Finset.range t, (S.W j).t') + (S.W t).t' * (1 + (S.W t).k))
   have hcard : (Fintype.card (S.leaf x).Ses : ℝ) = (S.leaf x).sessions.card := by
     exact_mod_cast Fintype.card_coe (S.leaf x).sessions
-  calc periodE (fun t => (S.W t).game) (S.errX s x) d 0 S.T s
+  calc monitoringPeriodE (fun t => (S.W t).game) (S.errX s x) d 0 S.T s
       ≤ errAt (S.comp s x ⟨d, hd⟩) (S.compS s x ⟨d, hd⟩) (S.leaf x).rd (S.Xm s x) := h1.trans h2.symm.le
     _ ≤ Fintype.card (S.leaf x).Ses * errAt (S.mix s x) (S.mixS s x) (rdSig fun _ => (S.leaf x).rd) (S.Xm s x) := h3
     _ ≤ Fintype.card (S.leaf x).Ses * (2 * expect (S.leaf x).costMix (S.mix s x) (S.mixS s x) / 2 ^ (256 : ℝ) +
@@ -469,20 +471,20 @@ theorem carriedOn_nonneg (I : Finset ℕ) (t : ℕ) (τ : Strategy (S.W t).game)
 
 /-- **A carried leaf's term over the sessions `I`**: its weighted binding errors, summed over the monitoring period's
 sessions in `I`, are at most `δ_carry` at `I`. -/
-theorem sum_periodE_le (I : Finset ℕ) (x : Fin S.nL)
+theorem sum_monitoringPeriodE_le (I : Finset ℕ) (x : Fin S.nL)
     (hA2 : Assumptions.SHA512CRExpected H512 (finderG (S.mix s x) (S.leaf x).M)
       (finderStrat (S.mix s x) (S.mixS s x) (S.leaf x).M)
       (outOf (rdSig fun _ => (S.leaf x).rd) (S.leaf x).op (S.leaf x).col)
       (finderCost (rdSig fun _ => (S.leaf x).rd) (S.leaf x).costMix)) :
     ENNReal.ofReal (∑ d ∈ Finset.range S.T,
-        (if d ∈ I then S.wt x d else 0) * periodE (fun t => (S.W t).game) (S.errX s x) d 0 S.T s) ≤
+        (if d ∈ I then S.wt x d else 0) * monitoringPeriodE (fun t => (S.W t).game) (S.errX s x) d 0 S.T s) ≤
       (S.leaf x).carryOn I := by
   unfold CarriedLeaf.carryOn
   apply ENNReal.ofReal_le_ofReal
   have hsub : (S.leaf x).sessions ∩ I ⊆ Finset.range S.T := fun d hd =>
     Finset.mem_range.2 (S.hin x d (Finset.mem_inter.1 hd).1)
   have hz : ∀ d ∈ Finset.range S.T, d ∉ (S.leaf x).sessions ∩ I →
-      (if d ∈ I then S.wt x d else 0) * periodE (fun t => (S.W t).game) (S.errX s x) d 0 S.T s = 0 := by
+      (if d ∈ I then S.wt x d else 0) * monitoringPeriodE (fun t => (S.W t).game) (S.errX s x) d 0 S.T s = 0 := by
     intro d _ hd
     rw [Finset.mem_inter, not_and_or] at hd
     rcases hd with hd | hd
@@ -492,7 +494,7 @@ theorem sum_periodE_le (I : Finset ℕ) (x : Fin S.nL)
   refine Finset.sum_le_sum fun d hd => ?_
   obtain ⟨hdx, hdI⟩ := Finset.mem_inter.1 hd
   simp only [wt, hdx, hdI, ↓reduceIte]
-  exact mul_le_mul_of_nonneg_left (S.periodE_errX_le s x hA2 hdx)
+  exact mul_le_mul_of_nonneg_left (S.monitoringPeriodE_errX_le s x hA2 hdx)
     (div_nonneg ((S.W d).readP_nonneg _) (by linarith [(S.W d).hρ]))
 
 /-- **The carried terms over the sessions `I`**: at most `Σ_ℓ δ_carry,ℓ` at `I`. -/
@@ -501,32 +503,99 @@ theorem carry_le (I : Finset ℕ)
       (finderStrat (S.mix s x) (S.mixS s x) (S.leaf x).M)
       (outOf (rdSig fun _ => (S.leaf x).rd) (S.leaf x).op (S.leaf x).col)
       (finderCost (rdSig fun _ => (S.leaf x).rd) (S.leaf x).costMix)) :
-    ENNReal.ofReal (∑ d ∈ Finset.range S.T, periodE (fun t => (S.W t).game) (S.carriedOn s I) d 0 S.T s) ≤
+    ENNReal.ofReal (∑ d ∈ Finset.range S.T, monitoringPeriodE (fun t => (S.W t).game) (S.carriedOn s I) d 0 S.T s) ≤
       ∑ x, (S.leaf x).carryOn I := by
   have hf : S.carriedOn s I = fun j τ => ∑ x, (if j ∈ I then S.wt x j else 0) * S.errX s x j τ := by
     funext j τ
     by_cases hj : j ∈ I
     · simp only [carriedOn, carriedE, hj, ↓reduceIte]
     · simp only [carriedOn, hj, ↓reduceIte, zero_mul, Finset.sum_const_zero]
-  have hsplit : ∑ d ∈ Finset.range S.T, periodE (fun t => (S.W t).game) (S.carriedOn s I) d 0 S.T s =
+  have hsplit : ∑ d ∈ Finset.range S.T, monitoringPeriodE (fun t => (S.W t).game) (S.carriedOn s I) d 0 S.T s =
       ∑ x, ∑ d ∈ Finset.range S.T,
-        (if d ∈ I then S.wt x d else 0) * periodE (fun t => (S.W t).game) (S.errX s x) d 0 S.T s := by
+        (if d ∈ I then S.wt x d else 0) * monitoringPeriodE (fun t => (S.W t).game) (S.errX s x) d 0 S.T s := by
     rw [Finset.sum_comm, hf]
     refine Finset.sum_congr rfl fun d _ => ?_
-    refine (periodE_sum (fun t => (S.W t).game) Finset.univ
+    refine (monitoringPeriodE_sum (fun t => (S.W t).game) Finset.univ
       (fun x j τ => (if j ∈ I then S.wt x j else 0) * S.errX s x j τ) d 0 S.T s).trans
       (Finset.sum_congr rfl fun x _ => ?_)
-    refine (periodE_mul (fun t => (S.W t).game) (fun j => if j ∈ I then S.wt x j else 0) (S.errX s x) d 0 S.T
+    refine (monitoringPeriodE_mul (fun t => (S.W t).game) (fun j => if j ∈ I then S.wt x j else 0) (S.errX s x) d 0 S.T
       s).trans ?_
     rw [zero_add]
   have hnn : ∀ x ∈ (Finset.univ : Finset (Fin S.nL)), 0 ≤ ∑ d ∈ Finset.range S.T,
-      (if d ∈ I then S.wt x d else 0) * periodE (fun t => (S.W t).game) (S.errX s x) d 0 S.T s :=
+      (if d ∈ I then S.wt x d else 0) * monitoringPeriodE (fun t => (S.W t).game) (S.errX s x) d 0 S.T s :=
     fun x _ => Finset.sum_nonneg fun d _ => mul_nonneg (ite_nonneg (S.wt_nonneg x d) le_rfl)
-      (periodE_nonneg (fun t => (S.W t).game) (S.errX_nonneg s x) d 0 S.T s)
+      (monitoringPeriodE_nonneg (fun t => (S.W t).game) (S.errX_nonneg s x) d 0 S.T s)
   rw [hsplit, ENNReal.ofReal_sum_of_nonneg hnn]
-  exact Finset.sum_le_sum fun x _ => S.sum_periodE_le s I x (hA2 x)
+  exact Finset.sum_le_sum fun x _ => S.sum_monitoringPeriodE_le s I x (hA2 x)
 
-/-- **`IntegrityHorizonCarried` on a set `I` of the monitoring period's sessions**, at `M` incorrect proof blocks: as
+/-- **`integrity_on` with the sampling rate read only at sessions with units**: a session with `n = 0` has no proof
+block, so no incorrect one, and its sample misses with probability at most `1 = (1 - q)^0`. -/
+theorem integrity_on_units (I : Finset ℕ) {q : ℝ} (hq : 0 < q)
+    (hqt : ∀ t ∈ I, 0 < (S.W t).n → q ≤ ((S.W t).kd : ℝ) / (S.W t).n)
+    (hA3 : ∀ t ∈ I, Assumptions.UniformRandomBytes (S.W t).Lb (S.W t).src)
+    (hs : MonitoringPeriodGood (fun t => (S.W t).game) (fun t => (S.W t).CR) 0 S.T s)
+    (hA2 : ∀ x, Assumptions.SHA512CRExpected H512 (finderG (S.mix s x) (S.leaf x).M)
+      (finderStrat (S.mix s x) (S.mixS s x) (S.leaf x).M)
+      (outOf (rdSig fun _ => (S.leaf x).rd) (S.leaf x).op (S.leaf x).col)
+      (finderCost (rdSig fun _ => (S.leaf x).rd) (S.leaf x).costMix)) (M : ℕ) :
+    value (fun l => (∀ r ∈ l, r.idx ∈ I → r.accepted) ∧
+        M ≤ ((l.filter fun r => r.idx ∈ I).map SamplingBlockRec.incorrect).sum) (S.run s) ≤
+      ENNReal.ofReal (1 - q) ^ M + ∑ t ∈ I, ((S.W t).ks + (S.W t).link) + ∑ x, (S.leaf x).carryOn I := by
+  classical
+  set xq : ℝ≥0∞ := ENNReal.ofReal (1 - q)
+  have hx : xq ≤ 1 := ENNReal.ofReal_le_one.2 (by linarith)
+  -- some session of `I` accepted with a sampled proof block incorrect, each carried leaf read at its value
+  have hA := monitoringPeriod_unionE (fun t => (S.W t).game) (fun t => S.record s t)
+    (fun r => r.idx ∈ I ∧ r.accepted ∧ r.sampledWrong) (fun t τ => (S.W t).CR τ)
+    (fun t => if t ∈ I then (S.W t).ks + (S.W t).link else 0) (S.carriedOn s I) (S.carriedOn_nonneg s I)
+    (fun t τ hτ => by
+      by_cases ht : t ∈ I
+      · simp only [carriedOn, ht, ↓reduceIte]
+        exact (prob_mono (fun o ho => ho.2) _ _).trans (S.stage_le s t τ hτ)
+      · simp only [carriedOn, ht, ↓reduceIte, ENNReal.ofReal_zero, add_zero]
+        exact (prob_mono (q := fun _ => False) (fun o ho => ht ho.1) _ _).trans_eq (prob_false _ _)) S.T 0 s hs
+  -- every sample of `I` misses, with at least `M` incorrect proof blocks in `I`
+  have hB := monitoringPeriod_horizon (fun t => (S.W t).game) (fun t => S.record s t)
+    (fun r => r.idx ∈ I → ¬ r.sampledWrong) (fun r => if r.idx ∈ I then r.incorrect else 0)
+    (fun t τ => (S.W t).CR τ) xq hx
+    (fun t τ _ => by
+      by_cases ht : t ∈ I
+      · refine ⟨(S.incorrectSet s t τ).card, fun _ => ite_eq_left_of_eq_true _ _ (eq_true ht), ?_⟩
+        rcases Nat.eq_zero_or_pos (S.W t).n with hn | hn
+        · have h0 : (S.incorrectSet s t τ).card = 0 :=
+            Nat.le_zero.1 (((Finset.card_le_univ _).trans_eq (Fintype.card_fin _)).trans_eq hn)
+          rw [h0, pow_zero]
+          exact prob_le_one _ _ _
+        refine (prob_mono (q := fun o => ¬ ∃ u ∈ o.2.1, u ∈ S.incorrectSet s t τ) (fun o ho => ho ht) _ _).trans ?_
+        exact ((S.W t).sampleMiss_le (hA3 t ht) _ τ).trans
+          (pow_le_pow_left₀ zero_le ((S.W t).one_sub_le hq (hqt t ht hn)) _)
+      · exact ⟨0, fun _ => ite_eq_right_of_eq_false _ _ (eq_false ht),
+          (prob_le_one _ _ _).trans_eq (pow_zero xq).symm⟩) S.T 0 s M hs
+  have hε : ∑ t ∈ Finset.range S.T, (fun t => if t ∈ I then (S.W t).ks + (S.W t).link else 0) (0 + t) ≤
+      ∑ t ∈ I, ((S.W t).ks + (S.W t).link) := by
+    simp only [zero_add]
+    rw [← Finset.sum_filter]
+    exact Finset.sum_le_sum_of_subset fun t ht => (Finset.mem_filter.1 ht).2
+  calc value (fun l => (∀ r ∈ l, r.idx ∈ I → r.accepted) ∧
+        M ≤ ((l.filter fun r => r.idx ∈ I).map SamplingBlockRec.incorrect).sum) (S.run s)
+      ≤ value (fun l => (∃ r ∈ l, r.idx ∈ I ∧ r.accepted ∧ r.sampledWrong) ∨
+          ((∀ r ∈ l, r.idx ∈ I → ¬ r.sampledWrong) ∧
+            M ≤ (l.map fun r => if r.idx ∈ I then r.incorrect else 0).sum)) (S.run s) := by
+        refine value_mono (fun l hl => ?_) _
+        by_cases hd : ∃ r ∈ l, r.idx ∈ I ∧ r.sampledWrong
+        · obtain ⟨r, hr, hrI, hdr⟩ := hd
+          exact Or.inl ⟨r, hr, hrI, hl.1 r hr hrI, hdr⟩
+        · exact Or.inr ⟨fun r hr hrI hdr => hd ⟨r, hr, hrI, hdr⟩,
+            (Flock.SecurityProofs.sum_filter_incorrect I l) ▸ hl.2⟩
+    _ ≤ value (fun l => ∃ r ∈ l, r.idx ∈ I ∧ r.accepted ∧ r.sampledWrong) (S.run s) +
+          value (fun l => (∀ r ∈ l, r.idx ∈ I → ¬ r.sampledWrong) ∧
+            M ≤ (l.map fun r => if r.idx ∈ I then r.incorrect else 0).sum) (S.run s) :=
+        value_or_le _ _ _
+    _ ≤ (∑ t ∈ I, ((S.W t).ks + (S.W t).link) + ∑ x, (S.leaf x).carryOn I) + xq ^ M :=
+        add_le_add (hA.trans (add_le_add hε (S.carry_le s I hA2))) hB
+    _ = xq ^ M + ∑ t ∈ I, ((S.W t).ks + (S.W t).link) + ∑ x, (S.leaf x).carryOn I := by ring
+
+/-- **`IntegrityPooledCarried` on a set `I` of the monitoring period's sessions**, at `M` incorrect proof blocks: as
 `Flock.SecurityProofs.integrity_on`, with each session of `I`'s carried term. -/
 theorem integrity_on (I : Finset ℕ) {q : ℝ} (hq : 0 < q)
     (hqt : ∀ t ∈ I, q ≤ ((S.W t).kd : ℝ) / (S.W t).n)
@@ -537,56 +606,9 @@ theorem integrity_on (I : Finset ℕ) {q : ℝ} (hq : 0 < q)
       (outOf (rdSig fun _ => (S.leaf x).rd) (S.leaf x).op (S.leaf x).col)
       (finderCost (rdSig fun _ => (S.leaf x).rd) (S.leaf x).costMix)) (M : ℕ) :
     value (fun l => (∀ r ∈ l, r.idx ∈ I → r.accepted) ∧
-        M ≤ ((l.filter fun r => r.idx ∈ I).map WindowRec.wrong).sum) (S.run s) ≤
-      ENNReal.ofReal (1 - q) ^ M + ∑ t ∈ I, ((S.W t).ks + (S.W t).link) + ∑ x, (S.leaf x).carryOn I := by
-  classical
-  set xq : ℝ≥0∞ := ENNReal.ofReal (1 - q)
-  have hx : xq ≤ 1 := ENNReal.ofReal_le_one.2 (by linarith)
-  -- some session of `I` accepted with a sampled proof block wrong, each carried leaf read at its value
-  have hA := period_unionE (fun t => (S.W t).game) (fun t => S.record s t)
-    (fun r => r.idx ∈ I ∧ r.accepted ∧ r.drawnWrong) (fun t τ => (S.W t).CR τ)
-    (fun t => if t ∈ I then (S.W t).ks + (S.W t).link else 0) (S.carriedOn s I) (S.carriedOn_nonneg s I)
-    (fun t τ hτ => by
-      by_cases ht : t ∈ I
-      · simp only [carriedOn, ht, ↓reduceIte]
-        exact (prob_mono (fun o ho => ho.2) _ _).trans (S.stage_le s t τ hτ)
-      · simp only [carriedOn, ht, ↓reduceIte, ENNReal.ofReal_zero, add_zero]
-        exact (prob_mono (q := fun _ => False) (fun o ho => ht ho.1) _ _).trans_eq (prob_false _ _)) S.T 0 s hs
-  -- every sample of `I` misses, with at least `M` incorrect proof blocks in `I`
-  have hB := period_horizon (fun t => (S.W t).game) (fun t => S.record s t)
-    (fun r => r.idx ∈ I → ¬ r.drawnWrong) (fun r => if r.idx ∈ I then r.wrong else 0)
-    (fun t τ => (S.W t).CR τ) xq hx
-    (fun t τ _ => by
-      by_cases ht : t ∈ I
-      · refine ⟨(S.wrongSet s t τ).card, fun _ => ite_eq_left_of_eq_true _ _ (eq_true ht), ?_⟩
-        refine (prob_mono (q := fun o => ¬ ∃ u ∈ o.2.1, u ∈ S.wrongSet s t τ) (fun o ho => ho ht) _ _).trans ?_
-        exact ((S.W t).drawMiss_le (hA3 t ht) _ τ).trans
-          (pow_le_pow_left₀ zero_le ((S.W t).one_sub_le hq (hqt t ht)) _)
-      · exact ⟨0, fun _ => ite_eq_right_of_eq_false _ _ (eq_false ht),
-          (prob_le_one _ _ _).trans_eq (pow_zero xq).symm⟩) S.T 0 s M hs
-  have hε : ∑ t ∈ Finset.range S.T, (fun t => if t ∈ I then (S.W t).ks + (S.W t).link else 0) (0 + t) ≤
-      ∑ t ∈ I, ((S.W t).ks + (S.W t).link) := by
-    simp only [zero_add]
-    rw [← Finset.sum_filter]
-    exact Finset.sum_le_sum_of_subset fun t ht => (Finset.mem_filter.1 ht).2
-  calc value (fun l => (∀ r ∈ l, r.idx ∈ I → r.accepted) ∧
-        M ≤ ((l.filter fun r => r.idx ∈ I).map WindowRec.wrong).sum) (S.run s)
-      ≤ value (fun l => (∃ r ∈ l, r.idx ∈ I ∧ r.accepted ∧ r.drawnWrong) ∨
-          ((∀ r ∈ l, r.idx ∈ I → ¬ r.drawnWrong) ∧
-            M ≤ (l.map fun r => if r.idx ∈ I then r.wrong else 0).sum)) (S.run s) := by
-        refine value_mono (fun l hl => ?_) _
-        by_cases hd : ∃ r ∈ l, r.idx ∈ I ∧ r.drawnWrong
-        · obtain ⟨r, hr, hrI, hdr⟩ := hd
-          exact Or.inl ⟨r, hr, hrI, hl.1 r hr hrI, hdr⟩
-        · exact Or.inr ⟨fun r hr hrI hdr => hd ⟨r, hr, hrI, hdr⟩,
-            (Flock.SecurityProofs.sum_filter_wrong I l) ▸ hl.2⟩
-    _ ≤ value (fun l => ∃ r ∈ l, r.idx ∈ I ∧ r.accepted ∧ r.drawnWrong) (S.run s) +
-          value (fun l => (∀ r ∈ l, r.idx ∈ I → ¬ r.drawnWrong) ∧
-            M ≤ (l.map fun r => if r.idx ∈ I then r.wrong else 0).sum) (S.run s) :=
-        value_or_le _ _ _
-    _ ≤ (∑ t ∈ I, ((S.W t).ks + (S.W t).link) + ∑ x, (S.leaf x).carryOn I) + xq ^ M :=
-        add_le_add (hA.trans (add_le_add hε (S.carry_le s I hA2))) hB
-    _ = xq ^ M + ∑ t ∈ I, ((S.W t).ks + (S.W t).link) + ∑ x, (S.leaf x).carryOn I := by ring
+        M ≤ ((l.filter fun r => r.idx ∈ I).map SamplingBlockRec.incorrect).sum) (S.run s) ≤
+      ENNReal.ofReal (1 - q) ^ M + ∑ t ∈ I, ((S.W t).ks + (S.W t).link) + ∑ x, (S.leaf x).carryOn I :=
+  S.integrity_on_units s I hq (fun t ht _ => hqt t ht) hA3 hs hA2 M
 
 /-- A monitoring period of server-time blocks with no carried leaf. -/
 def ofServer (S : ServerBlocks) : CarriedBlocks := { S with nL := 0, leaf := Fin.elim0, hin := fun x => x.elim0 }
@@ -595,8 +617,8 @@ def ofServer (S : ServerBlocks) : CarriedBlocks := { S with nL := 0, leaf := Fin
 theorem record_ofServer (S : ServerBlocks) (s : Strategy S.game) (t : ℕ) :
     (ofServer S).record s t = (S.W t).record t := by
   funext τ o
-  have hw : (ofServer S).wrongSet s t τ = (S.W t).wrongSet τ := by
-    unfold CarriedBlocks.wrongSet SamplingBlock.wrongSet
+  have hw : (ofServer S).incorrectSet s t τ = (S.W t).incorrectSet τ := by
+    unfold CarriedBlocks.incorrectSet SamplingBlock.incorrectSet
     congr 1
   unfold CarriedBlocks.record SamplingBlock.record
   rw [hw]
@@ -618,43 +640,43 @@ open FlockSoundness FlockSoundness.Game Flock.Guarantees
 open scoped ENNReal
 
 /-- **The integrity audit over a monitoring period of server-time blocks, with carried state.** -/
-theorem IntegrityHorizonCarried : Flock.Guarantees.IntegrityHorizonCarried := by
+theorem IntegrityPooledCarried : Flock.Guarantees.IntegrityPooledCarried := by
   intro S q δ hq hδ hqt hA3 s hT hL hA2
   classical
   have hs : MonitoringPeriodGood (fun t => (S.W t).game) (fun t => (S.W t).CR) 0 S.T s :=
-    periodGood_of_plays _ _ S.T 0 s fun t τ hp => And.intro (hT t τ hp) (hL t τ hp)
+    monitoringPeriodGood_of_plays _ _ S.T 0 s fun t τ hp => And.intro (hT t τ hp) (hL t τ hp)
   set M : ℕ := ⌈Real.log (1 / δ) / q⌉₊
   set xq : ℝ≥0∞ := ENNReal.ofReal (1 - q)
   have hx : xq ≤ 1 := ENNReal.ofReal_le_one.2 (by linarith)
   have hfac : ∀ t < S.T, ∀ m : ℕ, (1 - ((S.W t).kd : ℝ≥0∞) / (S.W t).n) ^ m ≤ xq ^ m :=
     fun t ht m => pow_le_pow_left₀ zero_le ((S.W t).one_sub_le hq (hqt t ht)) m
-  have hgood := periodGood_mono _ S.T 0 s (fun j τ _ hj hcr => (⟨by omega, hcr⟩ : j < S.T ∧ (S.W j).CR τ)) hs
-  -- some session accepted with a sampled proof block wrong, each carried leaf read at its value
-  have hA := period_unionE (fun t => (S.W t).game) (fun t => S.record s t) (fun r => r.accepted ∧ r.drawnWrong)
+  have hgood := monitoringPeriodGood_mono _ S.T 0 s (fun j τ _ hj hcr => (⟨by omega, hcr⟩ : j < S.T ∧ (S.W j).CR τ)) hs
+  -- some session accepted with a sampled proof block incorrect, each carried leaf read at its value
+  have hA := monitoringPeriod_unionE (fun t => (S.W t).game) (fun t => S.record s t) (fun r => r.accepted ∧ r.sampledWrong)
     (fun t τ => t < S.T ∧ (S.W t).CR τ) (fun t => (S.W t).ks + (S.W t).link) (S.carriedOn s (Finset.range S.T))
     (S.carriedOn_nonneg s _) (fun t τ hτ => by
       simp only [CarriedBlocks.carriedOn, Finset.mem_range.2 hτ.1, ↓reduceIte]
       exact S.stage_le s t τ hτ.2) S.T 0 s hgood
   -- every sample misses, with at least `M` incorrect proof blocks in all
-  have hB := period_horizon (fun t => (S.W t).game) (fun t => S.record s t) (fun r => ¬ r.drawnWrong)
-    WindowRec.wrong (fun t τ => t < S.T ∧ (S.W t).CR τ) xq hx
-    (fun t τ hτ => ⟨(S.wrongSet s t τ).card, fun _ => rfl,
-      ((S.W t).drawMiss_le (hA3 t hτ.1) _ τ).trans (hfac t hτ.1 _)⟩) S.T 0 s M hgood
+  have hB := monitoringPeriod_horizon (fun t => (S.W t).game) (fun t => S.record s t) (fun r => ¬ r.sampledWrong)
+    SamplingBlockRec.incorrect (fun t τ => t < S.T ∧ (S.W t).CR τ) xq hx
+    (fun t τ hτ => ⟨(S.incorrectSet s t τ).card, fun _ => rfl,
+      ((S.W t).sampleMiss_le (hA3 t hτ.1) _ τ).trans (hfac t hτ.1 _)⟩) S.T 0 s M hgood
   have hxM : xq ^ M ≤ ENNReal.ofReal δ := one_sub_pow_le_of_log hq hδ (Nat.le_ceil _)
   have hε : ∑ t ∈ Finset.range S.T, (fun t => (S.W t).ks + (S.W t).link) (0 + t) =
       ∑ b ∈ Finset.range S.B, S.err b := by
     simp only [zero_add]
     exact sum_range_start S.toServerBlocks (fun t => (S.W t).ks + (S.W t).link) S.B
-  calc value (fun l => (∀ r ∈ l, r.accepted) ∧ Real.log (1 / δ) / q ≤ ((l.map WindowRec.wrong).sum : ℝ)) (S.run s)
-      ≤ value (fun l => (∃ r ∈ l, r.accepted ∧ r.drawnWrong) ∨
-          ((∀ r ∈ l, ¬ r.drawnWrong) ∧ M ≤ (l.map WindowRec.wrong).sum)) (S.run s) := by
+  calc value (fun l => (∀ r ∈ l, r.accepted) ∧ Real.log (1 / δ) / q ≤ ((l.map SamplingBlockRec.incorrect).sum : ℝ)) (S.run s)
+      ≤ value (fun l => (∃ r ∈ l, r.accepted ∧ r.sampledWrong) ∨
+          ((∀ r ∈ l, ¬ r.sampledWrong) ∧ M ≤ (l.map SamplingBlockRec.incorrect).sum)) (S.run s) := by
         refine value_mono (fun l hl => ?_) _
-        by_cases hd : ∃ r ∈ l, r.drawnWrong
+        by_cases hd : ∃ r ∈ l, r.sampledWrong
         · obtain ⟨r, hr, hdr⟩ := hd
           exact Or.inl ⟨r, hr, hl.1 r hr, hdr⟩
         · exact Or.inr ⟨fun r hr hdr => hd ⟨r, hr, hdr⟩, Nat.ceil_le.2 hl.2⟩
-    _ ≤ value (fun l => ∃ r ∈ l, r.accepted ∧ r.drawnWrong) (S.run s) +
-          value (fun l => (∀ r ∈ l, ¬ r.drawnWrong) ∧ M ≤ (l.map WindowRec.wrong).sum) (S.run s) :=
+    _ ≤ value (fun l => ∃ r ∈ l, r.accepted ∧ r.sampledWrong) (S.run s) +
+          value (fun l => (∀ r ∈ l, ¬ r.sampledWrong) ∧ M ≤ (l.map SamplingBlockRec.incorrect).sum) (S.run s) :=
         value_or_le _ _ _
     _ ≤ (∑ b ∈ Finset.range S.B, S.err b + ∑ x, (S.leaf x).carry) + ENNReal.ofReal δ := by
         refine add_le_add ?_ (hB.trans hxM)
@@ -668,10 +690,21 @@ theorem IntegrityHorizonCarried : Flock.Guarantees.IntegrityHorizonCarried := by
 theorem IntegrityBlockCarried : Flock.Guarantees.IntegrityBlockCarried := by
   intro S b q δ hq hδ hqt hA3 s hT hL hA2
   have hs : MonitoringPeriodGood (fun t => (S.W t).game) (fun t => (S.W t).CR) 0 S.T s :=
-    periodGood_of_plays _ _ S.T 0 s fun t τ hp => And.intro (hT t τ hp) (hL t τ hp)
+    monitoringPeriodGood_of_plays _ _ S.T 0 s fun t τ hp => And.intro (hT t τ hp) (hL t τ hp)
   refine (value_mono (fun l hl => ⟨hl.1, Nat.ceil_le.2 hl.2⟩) _).trans
     ((S.integrity_on s (S.sessions b) hq hqt hA3 hs hA2 ⌈Real.log (1 / δ) / q⌉₊).trans ?_)
   exact add_le_add (add_le_add (one_sub_pow_le_of_log hq hδ (Nat.le_ceil _)) le_rfl) le_rfl
+
+/-- **Sessions that prove every unit and share registered values, with no proof block incorrect**: `integrity_on_units`
+at `q = 1` and `M = 1`, whose sampling term `(1 - q)^M` is then `0`; a session with no units reads no rate. -/
+theorem IntegrityAllProvedCarried : Flock.Guarantees.IntegrityAllProvedCarried := by
+  intro S I hall hA3 s hT hL hA2
+  have hs : MonitoringPeriodGood (fun t => (S.W t).game) (fun t => (S.W t).CR) 0 S.T s :=
+    monitoringPeriodGood_of_plays _ _ S.T 0 s fun t τ hp => And.intro (hT t τ hp) (hL t τ hp)
+  have hqt : ∀ t ∈ I, 0 < (S.W t).n → (1 : ℝ) ≤ ((S.W t).kd : ℝ) / (S.W t).n := fun t ht hn => by
+    rw [hall t ht, div_self (Nat.cast_ne_zero.2 hn.ne')]
+  have h := S.integrity_on_units s I one_pos hqt hA3 hs hA2 1
+  rwa [sub_self, ENNReal.ofReal_zero, pow_one, zero_add] at h
 
 /-- **`IntegrityBlockCarried` is `IntegrityBlock` with no carried leaf**: at `CarriedBlocks.ofServer S` the run is
 `S.run` (`CarriedBlocks.run_ofServer`), the carried term is `0` and the finder premise is vacuous. -/

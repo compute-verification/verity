@@ -110,7 +110,7 @@ noncomputable def Bound.innerFO (decC : Msg → Msg → Coin) (ω : Ω)
 extend to. -/
 noncomputable def Bound.keepAO (ω : Ω) (ρ : Fin (Bd.DE.V.k (xI D x)) → Coin)
     (a : (Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x) : Bool :=
-  Bd.keepDO decI H D DO decO P x ω (extendDraw (ρ, a))
+  Bd.keepDO decI H D DO decO P x ω (extendSample (ρ, a))
 
 /-- The served run at a sample, opened (`openT`): what `E^rep` at `DE` sees where `E*`'s inner stage sees the served
 run. -/
@@ -277,13 +277,13 @@ theorem Bound.abortRun_eqO (decC : Msg → Msg → Coin) (hn : Bd.DE.V.k (xI D x
     (t : (Fin (Bd.DE.V.k (xI D x)) → Coin) × (Fin (D.V.k x) → Coin) ×
       (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x) :
     abortRun H (Bd.innerPO decI H D DO decO P x decC) Bd.DE.V (xI D x) (Bd.keepAO decI H D DO decO P x) ω t =
-      Bd.innerFO decI H D DO decO P x decC ω (extendDraw t) := by
-  have hc : innerCoins D (Inner.ofFlock Bd.deploy decI) x (extendDraw t).1 = t.1 :=
+      Bd.innerFO decI H D DO decO P x decC ω (extendSample t) := by
+  have hc : innerCoins D (Inner.ofFlock Bd.deploy decI) x (extendSample t).1 = t.1 :=
     innerCoins_extend D (Inner.ofFlock Bd.deploy decI) x hn t.1 t.2.1
   unfold abortRun Bound.keepAO
-  show (if Bd.keepDO decI H D DO decO P x ω (extendDraw t) = true then
+  show (if Bd.keepDO decI H D DO decO P x ω (extendSample t) = true then
       run H (Bd.innerPO decI H D DO decO P x decC) Bd.DE.V (xI D x) ω t.1 else abortTranscript) =
-    Bd.innerFO decI H D DO decO P x decC ω (extendDraw t)
+    Bd.innerFO decI H D DO decO P x decC ω (extendSample t)
   unfold Bound.innerFO
   rw [hc]
 
@@ -291,8 +291,8 @@ theorem Bound.abortRun_eqO (decC : Msg → Msg → Coin) (hn : Bd.DE.V.k (xI D x
 judged sample's inner view rejects**: `E*`'s inner `E^rep` at the bound record's openings sees what `E^rep` at `DE`'s sees
 of the served runs opened (`erep_rel₂`), which off the bad samples are `P_O`'s aborting runs (`servedO_seen`); the
 judged sample is `P_O`'s accepted run where its inner view accepts. A bad rerun costs `N_I` times one sample's
-(`Pr_exists_rerun_draws`), and `E^rep` at `P_O`'s aborting runs over their own coins is `Inner.PrBadAbort` at `DE`'s
-(`unifMap_extendDraw`). -/
+(`Pr_exists_rerun_samples`), and `E^rep` at `P_O`'s aborting runs over their own coins is `Inner.PrBadAbort` at `DE`'s
+(`unifMap_extendSample`). -/
 theorem Bound.PrBadGood_le_merged (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans c) = c)
     (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO) (hR : InnerRounds D (Inner.ofFlock Bd.deploy decI))
     [Fintype Ω] :
@@ -411,7 +411,7 @@ theorem Bound.PrBadGood_le_merged (decC : Msg → Msg → Coin) (hdec : ∀ x c,
         (Fin ((Inner.ofFlock Bd.DE decI).waits (xI D x)) → Fin ((Inner.ofFlock Bd.DE decI).cap (xI D x)) →
           (Fin (Bd.DE.V.k (xI D x)) → Coin) × (Fin (D.V.k x) → Coin) ×
             (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x) =>
-        (s.1, (extendDraw s.2.1).1, (extendDraw s.2.1).2, fun i j => extendDraw (s.2.2 i j))) := by
+        (s.1, (extendSample s.2.1).1, (extendSample s.2.1).2, fun i j => extendSample (s.2.2 i j))) := by
       let e : Ω × ((Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x) ×
           (Fin ((Inner.ofFlock Bd.DE decI).waits (xI D x)) → Fin ((Inner.ofFlock Bd.DE decI).cap (xI D x)) →
             (Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x) ≃
@@ -422,21 +422,21 @@ theorem Bound.PrBadGood_le_merged (decC : Msg → Msg → Coin) (hdec : ∀ x c,
           invFun := fun s => (s.1, (s.2.1, s.2.2.1), s.2.2.2)
           left_inv := fun _ => rfl
           right_inv := fun _ => rfl }
-      exact (UnifMap.self.prod ((unifMap_extendDraw hn).prod
-        (UnifMap.pi (UnifMap.pi (unifMap_extendDraw hn) _) _))).comp (UnifMap.equiv e)
+      exact (UnifMap.self.prod ((unifMap_extendSample hn).prod
+        (UnifMap.pi (UnifMap.pi (unifMap_extendSample hn) _) _))).comp (UnifMap.equiv e)
     rw [← hΦ.Pr Yb]
     refine Pr_congr fun s => ?_
-    show (Bd.innerFO decI H D DO decO P x decC s.1 (extendDraw s.2.1)).out = .acc ∧
+    show (Bd.innerFO decI H D DO decO P x decC s.1 (extendSample s.2.1)).out = .acc ∧
       ¬ (Inner.ofFlock Bd.DE decI).R.ext (xI D x)
         ((erepProg ((Inner.ofFlock Bd.DE decI).waits (xI D x)) ((Inner.ofFlock Bd.DE decI).k (xI D x))
           ((Inner.ofFlock Bd.DE decI).cap (xI D x)) (Inner.ofFlock Bd.DE decI).opens
           ((Inner.ofFlock Bd.DE decI).assemble (xI D x)) ((Inner.ofFlock Bd.DE decI).check (xI D x))
-          (extendDraw s.2.1) (fun i j => extendDraw (s.2.2 i j))).eval H
+          (extendSample s.2.1) (fun i j => extendSample (s.2.2 i j))).eval H
             (Bd.innerFO decI H D DO decO P x decC s.1)).1 ↔ _
-    have hf : (fun d => Bd.innerFO decI H D DO decO P x decC s.1 (extendDraw d)) =
+    have hf : (fun d => Bd.innerFO decI H D DO decO P x decC s.1 (extendSample d)) =
         abortRun H (Bd.innerPO decI H D DO decO P x decC) Bd.DE.V (xI D x) (Bd.keepAO decI H D DO decO P x) s.1 :=
       funext fun d => (Bound.abortRun_eqO decC hn s.1 d).symm
-    rw [erepProg_eval_comp H (Bd.innerFO decI H D DO decO P x decC s.1) extendDraw, hf,
+    rw [erepProg_eval_comp H (Bd.innerFO decI H D DO decO P x decC s.1) extendSample, hf,
       ← Bound.abortRun_eqO decC hn]
     rfl
   have hZ : Pr Zb ≤ NI D (Inner.ofFlock Bd.deploy decI) x *
@@ -456,7 +456,7 @@ theorem Bound.PrBadGood_le_merged (decC : Msg → Msg → Coin) (hdec : ∀ x c,
         invFun := fun t => (t.1, t.2.1.1, t.2.1.2, t.2.2)
         left_inv := fun _ => rfl
         right_inv := fun _ => rfl }
-    have hpe := Pr_exists_rerun_draws H (Bd.servedO decI H D DO decO P x)
+    have hpe := Pr_exists_rerun_samples H (Bd.servedO decI H D DO decO P x)
       ((Inner.ofFlock Bd.DE decI).waits (xI D x)) ((Inner.ofFlock Bd.DE decI).k (xI D x))
       ((Inner.ofFlock Bd.DE decI).cap (xI D x)) (Inner.ofFlock Bd.DE decI).opens
       ((Inner.ofFlock Bd.DE decI).assemble (xI D x)) ((Inner.ofFlock Bd.DE decI).check (xI D x))
@@ -543,8 +543,8 @@ theorem Bound.PrBAbort_le_by (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC
           (extend ρ a.1, a.2)).getD []) ++
         cl x (extend (forkCoins j ρ ρ') a'.1) ((eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x ω
           (extend (forkCoins j ρ ρ') a'.1, a'.2)).getD []))).isSome := by
-      rcases Bound.innerFO_vLog_subBy decC hdec hV hL ω (extendDraw (ρ, a)) with h1 | ⟨u, v, huv, -⟩
-      · rcases Bound.innerFO_vLog_subBy decC hdec hV hL ω (extendDraw (forkCoins j ρ ρ', a')) with
+      rcases Bound.innerFO_vLog_subBy decC hdec hV hL ω (extendSample (ρ, a)) with h1 | ⟨u, v, huv, -⟩
+      · rcases Bound.innerFO_vLog_subBy decC hdec hV hL ω (extendSample (forkCoins j ρ ρ', a')) with
           h2 | ⟨u, v, huv, -⟩
         · exact findColl_isSome_of_sub H htrue (fun p hp => (List.mem_append.1 hp).elim
             (fun hp => List.mem_append_left _ (h1 p hp)) fun hp => List.mem_append_right _ (h2 p hp)) h

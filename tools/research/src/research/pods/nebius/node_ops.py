@@ -7,7 +7,7 @@
 OOM guard.  The kernel's OOM killer picks by size alone and can take the lease loop (which stops the VM on time), sshd sessions or
 the samplers.  When MemAvailable falls under ACT_PCT of MemTotal, the guard stops the largest process group of this user by
 resident memory, outside PROTECT: SIGTERM, then SIGKILL after 10 s.  Under WARN_PCT it only alerts.  Every OOM kill anywhere
-(/proc/vmstat oom_kill, including a gpu-lease job killed at its own cgroup cap) is an alert, with the user journal's line naming
+(/proc/vmstat oom_kill, including a gpu-lease job killed at its own cgroup limit) is an alert, with the user journal's line naming
 the unit.
 
 Page: OUT/status.md, with who holds which GPU (gpu-lease status), the GPUs' latest sample (gpu_util_sampler's JSONL, so no NVML
@@ -26,7 +26,7 @@ import signal
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 OUT = Path(os.environ.get("OPS_DIR", "/workspace/pouw/infra"))
@@ -43,7 +43,7 @@ _last_alert: dict[str, float] = {}
 
 
 def now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def iso(t: datetime | None = None) -> str:
@@ -113,7 +113,9 @@ def groups() -> dict[int, dict]:
             pgid = int(stat.rsplit(")", 1)[1].split()[2])
             rss = int((d / "statm").read_text().split()[1]) * page
             cmd = (d / "cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace").strip()
-        except (OSError, ValueError, IndexError):
+        except (OSError, ValueError, IndexError) as e:
+            if d.exists():
+                print(f"node_ops: pid {d.name} unread, so it counts in no group ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         g = out.setdefault(pgid, {"rss": 0, "cmds": [], "pids": []})
         g["rss"] += rss
@@ -121,6 +123,15 @@ def groups() -> dict[int, dict]:
         if int(d.name) == pgid or not g["cmds"]:
             g["cmds"].insert(0, cmd)
     return out
+
+
+def signalled(pgid: int, sig: int) -> bool:
+    """Whether `sig` reached process group `pgid`: False once the group is gone."""
+    try:
+        os.killpg(pgid, sig)
+        return True
+    except ProcessLookupError:
+        return False
 
 
 class Guard:
@@ -142,10 +153,7 @@ class Guard:
             alert("mem-low", "node", f"MemAvailable {avail / 2**30:.0f} GiB ({pct:.1f}%) of {total / 2**30:.0f} GiB")
         for pgid, t0 in list(self.pending.items()):
             if time.monotonic() - t0 > 10:
-                try:
-                    os.killpg(pgid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
+                signalled(pgid, signal.SIGKILL)
                 del self.pending[pgid]
         if pct >= ACT_PCT or self.pending:
             return
@@ -154,9 +162,7 @@ class Guard:
             return
         guests = {k: v for k, v in gs.items() if in_verity_scope(k)}
         pgid, g = max((guests or gs).items(), key=lambda kv: kv[1]["rss"])
-        try:
-            os.killpg(pgid, signal.SIGTERM)
-        except ProcessLookupError:
+        if not signalled(pgid, signal.SIGTERM):
             return
         self.pending[pgid] = time.monotonic()
         rec = {"t": iso(), "pgid": pgid, "rss_gib": round(g["rss"] / 2**30, 1), "cmd": g["cmds"][0][:300],
@@ -170,12 +176,15 @@ class Guard:
 LEASE_DIR = Path(os.environ.get("GPU_LEASE_DIR", "/run/gpu-lease"))
 BUILD = {"lake", "lean", "leanc", "cargo", "rustc", "cc1", "cc1plus", "ld", "ld.lld", "make", "ninja", "nvcc", "ptxas", "cicc", "xz"}
 QUIET_MATCH = re.compile(os.environ["QUIET_MATCH"]) if os.environ.get("QUIET_MATCH") else None
-# a train check (slot.py's group, check.py under it) runs straight through a timed window, so landing never waits on one: a
-# --timed lease would otherwise freeze a train's check for the whole window
-QUIET_EXEMPT = re.compile(r"-m research |research launch-request|/workspace/pouw/fill/running/|timeout |tools/verity/check/(check|slot)\.py")
+# a candidate's check (slot.py's group, check.py under it) runs straight through a timed window, so landing never waits on one: a
+# --timed lease would otherwise freeze a candidate's check for the whole window. The check's directory either way a tree spells it
+# (slot_only.CHECK_DIRS; this file is installed alone), as a whole path (slot_only.check_file)
+CHECK_DIRS = ("tools/check/", "tools/verity/check/")
+CHECK_PY = rf"(?<![\w.-])(?:{'|'.join(map(re.escape, CHECK_DIRS))})(?:check|slot)\.py(?![\w.-])"
+QUIET_EXEMPT = re.compile(rf"-m research |research launch-request|/workspace/pouw/fill/running/|timeout |{CHECK_PY}")
 # of those, the ones whose descendants in groups of their own (ninja's compiles, a check's subprocesses) are spared too; a research
 # runner's are not, since every run's workload descends from one
-QUIET_EXEMPT_TREE = re.compile(r"/workspace/pouw/fill/running/|timeout |tools/verity/check/(check|slot)\.py")
+QUIET_EXEMPT_TREE = re.compile(rf"/workspace/pouw/fill/running/|timeout |{CHECK_PY}")
 # `research run`'s per-run sampler polls nvidia-smi every 5 s for the whole life of a run, the timed run's own included,
 # so every one is paused for a window whatever its CPU use (the pous root, 17:19Z); its run records the gap.
 SAMPLER = re.compile(r"-m research\.telemetry sample ")
@@ -186,7 +195,7 @@ class Quiet:
     process groups other than the window's own, and continue them once it ends.  CPU-heavy: at least one core busy over the last
     tick, or a build, Lean or cargo process in the group.  Left running: the window's process tree, research runners, fill jobs
     (their runner pauses them), fill's timing jobs (a pause voids their chunk, and nothing stops them before their max_min),
-    anything under GNU `timeout` (it would lose the paused time), train checks (slot.py, check.py), every process a GPU lease runs
+    anything under GNU `timeout` (it would lose the paused time), candidates' checks (slot.py, check.py), every process a GPU lease runs
     (`in_lease_scope`), the descendants of those in groups of their own, and PROTECT's daemons.  Measured
     reason: CPU load on the other NUMA node slows decode-shape GEMM timing by 0.3-1.4% (run r20260930-075259-37cc)."""
 
@@ -198,20 +207,17 @@ class Quiet:
         self.t = time.monotonic()
         self.hz = os.sysconf("SC_CLK_TCK")
         try:                                   # groups an earlier instance stopped: kept stopped while the window lasts, else continued
-            earlier = [int(p) for p in json.loads(self.STATE.read_text())]
-        except (OSError, ValueError):
+            earlier = [int(p) for p in json.loads(self.STATE.read_text())] if self.STATE.exists() else []
+        except (OSError, ValueError) as e:
+            print(f"node_ops: {self.STATE} unread, so no group an earlier instance stopped is kept ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             earlier = []
         open_window = self.window() is not None
         for pgid in earlier:
-            try:
-                if open_window:
-                    os.killpg(pgid, 0)
+            if open_window:
+                if signalled(pgid, 0):
                     self.paused[pgid] = {"t0": time.monotonic(), "cmd": "(adopted after an ops restart)"}
-                else:
-                    os.killpg(pgid, signal.SIGCONT)
-                    self.log(event="resume", pgid=pgid, why="ops restart")
-            except ProcessLookupError:
-                pass
+            elif signalled(pgid, signal.SIGCONT):
+                self.log(event="resume", pgid=pgid, why="ops restart")
         self.save()
 
     def save(self) -> None:
@@ -241,10 +247,7 @@ class Quiet:
 
     def resume(self, why: str) -> None:
         for pgid, info in list(self.paused.items()):
-            try:
-                os.killpg(pgid, signal.SIGCONT)
-            except ProcessLookupError:
-                pass
+            signalled(pgid, signal.SIGCONT)
             self.log(event="resume", pgid=pgid, why=why, cmd=info["cmd"][:200], paused_s=round(time.monotonic() - info["t0"]))
             del self.paused[pgid]
         self.save()
@@ -264,8 +267,10 @@ class Quiet:
                 f = st[1].split()
                 procs[int(d.name)] = {"ppid": int(f[1]), "pgid": int(f[2]), "cpu": int(f[11]) + int(f[12]), "comm": comm,
                                       "cmd": (d / "cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace").strip()}
-            except (OSError, ValueError, IndexError):
-                continue
+            except (OSError, ValueError, IndexError) as e:
+                if d.exists():
+                    print(f"quiet: pid {d.name} unread, so this tick leaves it out ({type(e).__name__}: {e})", file=sys.stderr,
+                          flush=True)
         holder = self.window()
         if holder is None:
             if self.paused:
@@ -302,7 +307,8 @@ class Quiet:
             if (g["rate"] >= 1.0 or g["comms"] & BUILD or SAMPLER.search(text)) and not any(map(in_timing_slice, g["pids"])):
                 try:
                     os.killpg(pgid, signal.SIGSTOP)
-                except (ProcessLookupError, PermissionError):
+                except (ProcessLookupError, PermissionError) as e:
+                    print(f"node_ops: process group {pgid} not stopped ({type(e).__name__})", file=sys.stderr, flush=True)
                     continue
                 cmd = next((c for c in g["cmds"] if c), "?")
                 self.paused[pgid] = {"t0": time.monotonic(), "cmd": cmd}
@@ -321,7 +327,8 @@ def busy_last_hour() -> str:
         for line in f.read_text().splitlines():
             try:
                 r = json.loads(line)
-            except json.JSONDecodeError:
+            except json.JSONDecodeError as e:
+                print(f"node_ops: a line of {f.name} is not JSON, skipped ({e})", file=sys.stderr, flush=True)
                 continue
             if r["t"] < cutoff:
                 continue
@@ -342,7 +349,8 @@ def last_sample() -> dict | None:
     for line in reversed(lines):
         try:
             return json.loads(line)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
+            print(f"node_ops: a line is not JSON, so the one before it is read ({e})", file=sys.stderr, flush=True)
             continue
     return None
 
@@ -362,10 +370,11 @@ def runs(window_s: float = 7200) -> tuple[list[dict], list[dict]]:
     cutoff = time.time() - window_s
     for d in sorted(RUNS.glob("r2026*")):
         try:
-            if d.stat().st_mtime < cutoff:
+            if d.stat().st_mtime < cutoff or not (d / "status.json").exists():
                 continue
             st = json.loads((d / "status.json").read_text())
-        except (OSError, ValueError):
+        except (OSError, ValueError) as e:
+            print(f"node_ops: run {d.name} skipped, its status unread ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         # the runner's transition, the last naming a pid: `tele set-timeout` appends a `running` one without
         trs = [t for t in st.get("transitions") or [] if isinstance(t, dict)]
@@ -378,8 +387,9 @@ def runs(window_s: float = 7200) -> tuple[list[dict], list[dict]]:
                 alert("dead-run", d.name, f"run {d.name} is marked running but its process {tr.get('pid')} is gone: {cmd}")
         else:
             try:
-                cls = json.loads((d / "failure.json").read_text()).get("class")
-            except (OSError, ValueError):
+                cls = json.loads((d / "failure.json").read_text()).get("class") if (d / "failure.json").exists() else None
+            except (OSError, ValueError) as e:
+                print(f"node_ops: run {d.name}'s failure.json unread, so it has no class ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
                 cls = None
             if cls and cls != "SUCCESS":
                 failed.append({"run": d.name, "class": cls, "cmd": cmd})
@@ -401,11 +411,13 @@ def stop_at() -> datetime | None:
     """When lease.sh stops the VM: the lease's expiry, never later than 5 min before root's deadline (both `EPOCH ...`)."""
     ends = []
     for f, margin in ((LEASE_FILE, 0), (DEADLINE_FILE, 300)):
+        if not f.exists():
+            continue
         try:
             ends.append(int(f.read_text().split()[0]) - margin)
-        except (OSError, ValueError, IndexError):
-            pass
-    return datetime.fromtimestamp(min(ends), timezone.utc) if ends else None
+        except (OSError, ValueError, IndexError) as e:
+            print(f"node_ops: {f} unread, so it sets no stop time ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
+    return datetime.fromtimestamp(min(ends), UTC) if ends else None
 
 
 def fill_alerts() -> None:
@@ -426,7 +438,7 @@ def page() -> str:
     left = (stop - t).total_seconds() / 3600 if stop else float("nan")
     lease = subprocess.run(["gpu-lease", "status"], capture_output=True, text=True).stdout.strip().splitlines()
     s = last_sample() or {}
-    age = (t - datetime.strptime(s["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)).total_seconds() if s else 1e9
+    age = (t - datetime.strptime(s["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)).total_seconds() if s else 1e9
     if age > 180:
         alert("stale", "sampler", f"gpu_util_sampler's last sample is {age / 60:.0f} min old")
     fill = (FILL / "status.txt").read_text().strip().splitlines() if (FILL / "status.txt").exists() else ["(no fill runner)"]
@@ -438,9 +450,9 @@ def page() -> str:
     L = [f"# vy-nebius-2 at {iso(t)}", "",
          (f"Stops itself at {stop:%Y-%m-%dT%H:%MZ} (lease and deadline): {left:.1f} h, {8 * left:.0f} GPU-h left. " if stop else
           "Stop time unknown: the lease and deadline files are unreadable. ") +
-         f"Clocks locked at 2,100 MHz. Refreshed every minute by node_ops.py; `cat /workspace/pouw/infra/status.md`.", ""]
+         "Clocks locked at 2,100 MHz. Refreshed every minute by node_ops.py; `cat /workspace/pouw/infra/status.md`.", ""]
     alerts = [json.loads(l) for l in (OUT / "alerts.jsonl").read_text().splitlines()[-20:]] if (OUT / "alerts.jsonl").exists() else []
-    recent = [a for a in alerts if (t - datetime.strptime(a["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)).total_seconds() < 7200]
+    recent = [a for a in alerts if (t - datetime.strptime(a["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)).total_seconds() < 7200]
     paused = [f"- pgid {k} for {int((time.monotonic() - v['t0']) / 60)} min: `{v['cmd'][:120]}`" for k, v in (QUIET.paused.items() if QUIET else [])]
     hourly = (OUT / "hourly.txt").read_text().strip().splitlines()[-8:] if (OUT / "hourly.txt").exists() else []
     L += [f"**Utilisation:** {busy_last_hour()}.", "", "By hour (the infra lane's hourly record):", ""] + \

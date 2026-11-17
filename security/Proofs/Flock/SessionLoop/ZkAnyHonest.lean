@@ -18,7 +18,7 @@ at one instance:
 * the relation of one pair, the concrete `--zk` statement with its trace (`FlockDeploy.concreteStmt`,
   `FlockDeploy.wC`), which are in the deployed relation (`FlockDeploy.concreteStmt_rel`) and in its scope
   (`FlockDeploy.concreteStmt_scope`);
-* `Loop.tapeRel`: a release whose frames sample the tape's samples at that statement (`Loop.tapeDraws`), released as
+* `Loop.tapeRel`: a release whose frames sample the tape's samples at that statement (`Loop.tapeSamples`), released as
   the session loop's own inner rounds (`withInner`, at the finish's honest rounds `finHonest` and with Rust's checks
   passing, `acceptCross`), link and `Finish` (`ofLoopLink`) on the source `Loop.tapeSrcHi`;
 * the honest values (`finS.honestVals`) and the honest worker (`valsWk`).
@@ -36,13 +36,13 @@ namespace Claims.ZKServer.Loop
 
 open Claims Claims.ZKMal
 
-/-- A release whose frames sample the tape's samples at the concrete statement (`tapeDraws`), its other fields
+/-- A release whose frames sample the tape's samples at the concrete statement (`tapeSamples`), its other fields
 `LoopWitness.rel0`'s. -/
 noncomputable def tapeRel : LeanRelease Flock.Wit Tp where
   rep _ _ := 0
   lay _ _ := default
   slot _ _ := none
-  draws := tapeDraws FlockDeploy.concreteStmt
+  draws := tapeSamples FlockDeploy.concreteStmt
   prog _ _ := {}
   coinsOf _ _ := #[]
   fresh _ _ := .error ""

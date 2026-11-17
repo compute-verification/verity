@@ -66,7 +66,7 @@ open RecDeploy.ResLower (staged_hidden)
 /-! ## What V\*'s units output -/
 
 theorem sparse_outWords_pos (sh : RecSparse.Shape) : 0 < RecSparse.outWords sh := by
-  unfold RecSparse.outWords RecSparse.residualNames RecSparse.F_WORDS RecSparse.ROW_BLOCK
+  unfold RecSparse.outWords RecSparse.residualNames RecSparse.F_WORDS RecSparse.ROW_CHUNK
   cases sh.stacked <;> simp <;> omega
 
 /-- **Each V\* unit outputs a positive number of words per output**: one output `out` of `a > 0` words, or two

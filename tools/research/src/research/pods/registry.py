@@ -3,15 +3,20 @@
     research pods register NAME --pod-id ID --project P [--lane L] [--root DIR] [--python PY] [--guard N|true] [--replace] [--any-name]
     research pods register NAME --host ADDR --project P [--lane L] [--port N] [--user U] [--rate USD_PER_HOUR] [--root DIR] [--nebius-instance-id ID] [--replace]
     research pods unregister NAME
+    research pods stopped NAME [--back]                      # mark a machine stopped, so placement leaves it out; --back clears it
     research pods registry [--json]                          # every machine `research run --on` accepts, and where it comes from
     research pods registry import [--apply] [--all]          # seed machines.d from machines.toml (running pods only unless --all)
     research pods create <runpod flags> --register --project P [--guard N]   # create, wait for sshd, register under --name
+    research pods env NAME [NAME ...]                        # `export <NAME>_HOST=<host>` per machine, for `eval` only (`host_env`)
 
 `~/.research/machines.toml` is one hand-edited file on the laptop; every lane that creates a pod had to merge an entry into it.
 The registry is a directory with one TOML file per machine, `<dir>/<name>.toml`, holding that machine's table (`provider`,
 `pod_id`, `project` or `projects`, and optionally `root`, `python`, `guard`, `ramlock`; a Nebius VM's `nebius_instance_id`, and the
-`deadline` fleet.py's sampler copies from its /etc/research/deadline, and its `unreachable_since` while no sample reads it; `lane`, the lane whose budget line pays for it, infra when
-unset) plus who registered it and when.  Two
+`deadline` fleet.py's sampler copies from its /etc/research/deadline, and its `unreachable_since` while no sample reads it; `stopped_since`,
+which `research pods stopped` writes; `lane`, the lane whose budget line pays for it, infra when
+unset) plus who registered it and when.  A machine marked `stopped_since`, or `unreachable_since` for UNREACHABLE_OUT_MIN, is out
+of placement (`left_out`): `research run --on auto` asks it nothing and `research deploy` writes it into no list of machines, and
+it is still reached by name.  Two
 agents registering two pods write two files, so nothing is ever hand-merged; in the notes repo, `research notes sync` carries
 them to every machine.  `<dir>/_families.toml` carries the `[families.<fam>]` VRAM references `pods check-part` reads.
 
@@ -34,10 +39,12 @@ without waiting for a later sync; `RESEARCH_NOTES_SYNC=0` leaves the commit to t
 """
 from __future__ import annotations
 
+import calendar
 import datetime as dt
 import json
 import os
 import re
+import shlex
 import socket
 import subprocess
 import sys
@@ -45,6 +52,7 @@ import tomllib
 from pathlib import Path
 from typing import Any, Callable
 
+from .. import settings
 from . import strip_pod_suffix
 
 REGISTRY_ENV = "RESEARCH_MACHINES_D"
@@ -52,8 +60,14 @@ FAMILIES_FILE = "_families.toml"
 NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
 POD_ID_RE = re.compile(r"[a-z0-9]{8,32}")
 KNOWN_KEYS = ("provider", "pod_id", "host", "port", "user", "rate_usd_per_hour", "project", "projects", "root", "python", "guard", "ramlock",
-              "nebius_instance_id", "lane", "deadline", "unreachable_since")
-KEPT_KEYS = ("lane", "deadline")   # a re-registration of the same binding that doesn't set them keeps the old file's
+              "nebius_instance_id", "lane", "deadline", "unreachable_since", "stopped_since")
+KEPT_KEYS = ("lane", "deadline", "stopped_since")   # a re-registration of the same binding that doesn't set them keeps the old file's
+#: the minutes a machine's `unreachable_since` stands before placement leaves it out. The sampler writes that mark on its own
+#: (fleet.py, after UNREACH_S without an answer) and clears it at the next answer, so a machine that is slow for a few samples,
+#: or restarted, keeps its place; `stopped_since` is a person's word and counts at once
+UNREACHABLE_OUT_MIN = 60
+STAMP = "%Y-%m-%dT%H:%M:%SZ"
+STAMP_RE = re.compile(r"(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)Z")
 OWNER_DEFAULT = "infra"            # a machine that names no lane is infra's (fleet.py's idle report rings its lane)
 HOST_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9.:-]{0,252}")
 OFF = ("", "none", "off", "0")
@@ -112,6 +126,22 @@ def validate(name: str, entry: Any) -> str | None:
     return None
 
 
+def left_out(entry: dict, now: float) -> str | None:
+    """Why placement leaves the machine `entry` out at `now` (an epoch), or None: `stopped since T` once `stopped_since` is set,
+    `no answer since T` once its `unreachable_since` is UNREACHABLE_OUT_MIN old. A mark that isn't a time leaves nothing out."""
+    def at(key: str) -> float | None:
+        m = STAMP_RE.fullmatch(v) if isinstance(v := entry.get(key), str) else None
+        y, mo, d, h, mi, s = map(int, m.groups()) if m else (0,) * 6
+        return calendar.timegm((y, mo, d, h, mi, s)) if y >= 1970 and 1 <= mo <= 12 and 1 <= d <= 31 and h < 24 and mi < 60 and s < 60 \
+            else None
+
+    if at("stopped_since") is not None:
+        return f"stopped since {entry['stopped_since']}"
+    if (t := at("unreachable_since")) is not None and now - t >= UNREACHABLE_OUT_MIN * 60:
+        return f"no answer since {entry['unreachable_since']}"
+    return None
+
+
 def binding(entry: dict) -> str | None:
     """What a name is bound to: a runpod pod id, or an ssh machine's host."""
     return entry.get("pod_id") or entry.get("host")
@@ -119,6 +149,32 @@ def binding(entry: dict) -> str | None:
 
 def _bound(entry: dict) -> str:
     return f"pod {entry['pod_id']}" if entry.get("pod_id") else f"host {entry.get('host')}"
+
+
+def host_var(name: str) -> str:
+    """The variable a script reads machine `name`'s host from: the name in capitals, `-` as `_`, then `_HOST`
+    (vy-challenger-1 -> VY_CHALLENGER_1_HOST)."""
+    return re.sub(r"[^A-Z0-9]", "_", name.upper()) + "_HOST"
+
+
+def host_env(names: list[str], machines: dict[str, dict] | None = None) -> dict[str, str]:
+    """{host_var(name): host} for each named ssh machine, read as `research pods ssh NAME` reads it (`remote.load_machines`,
+    `remote.ssh_host_target`).  Refused, naming the file it looked for, when a name is not a registered ssh machine; nothing is
+    returned for the others then.  The refusal never holds an address."""
+    from .. import remote
+
+    ms = remote.load_machines() if machines is None else machines
+    out: dict[str, str] = {}
+    for name in names:
+        m = ms.get(name)
+        if m is None or m.get("provider") != "ssh":
+            d = registry_dir(remote.machines_path())
+            looked = d / f"{name}.toml" if d is not None else remote.machines_path()
+            why = ("its file is refused (`research pods registry` says why)" if name in problems else
+                   "it is a RunPod pod, whose address RunPod gives" if m is not None else f"no {looked}")
+            raise remote.Refused(f"{name!r} is not a registered ssh machine: {why}")
+        out[host_var(name)] = remote.ssh_host_target({**m, "name": name})["host"]
+    return out
 
 
 def load_dir(d: Path) -> tuple[dict[str, dict], dict[str, str]]:
@@ -151,7 +207,7 @@ def merged(toml_machines: dict[str, dict], machines_toml: Path, environ: dict | 
     if d is None:
         return toml_machines
     if REGISTRY_ENV not in (os.environ if environ is None else environ):
-        from ..notes_sync import ensure_clone  # noqa: PLC0415
+        from ..notes_sync import ensure_clone
 
         if line := ensure_clone(notes_root(environ)):
             print(line, file=sys.stderr)
@@ -184,7 +240,8 @@ def families(machines_toml: Path, environ: dict | None = None) -> dict[str, dict
     if d is not None and (d / FAMILIES_FILE).is_file():
         try:
             extra = tomllib.loads((d / FAMILIES_FILE).read_text()).get("families", {})
-        except (OSError, tomllib.TOMLDecodeError):
+        except (OSError, tomllib.TOMLDecodeError) as e:
+            print(f"registry: {d / FAMILIES_FILE} unread, so it adds no family ({type(e).__name__}: {e})", file=sys.stderr)
             extra = {}
         for k, v in extra.items():
             out.setdefault(k, v)
@@ -281,8 +338,8 @@ def _write_checked(name: str, entry: dict[str, Any], mt: Path, *, replace: bool,
     same = old is not None and all(old.get(k) == entry.get(k) for k in KNOWN_KEYS)
     if same:
         return p, "unchanged"
-    now = now or dt.datetime.now(dt.timezone.utc)
-    entry["registered_by"] = os.environ.get("RESEARCH_AGENT") or socket.gethostname()
+    now = now or dt.datetime.now(dt.UTC)
+    entry["registered_by"] = settings.get("RESEARCH_AGENT") or socket.gethostname()
     entry["registered_at"] = f"{now:%Y-%m-%dT%H:%MZ}"
     write_entry(d, name, entry)
     return p, "updated" if old is not None else "registered"
@@ -332,6 +389,32 @@ def unregister(name: str, machines_toml: Path | None = None, environ: dict | Non
     return p
 
 
+def stopped(name: str, back: bool = False, *, machines_toml: Path | None = None, environ: dict | None = None,
+            now: dt.datetime | None = None) -> tuple[Path, str]:
+    """Write `stopped_since` (now) into machine `name`'s registry file, or with `back` take it out, keeping its other lines as
+    they are. -> (path, what was done). A mark that is there keeps its time. Refused when the registry holds no such machine."""
+    from .. import remote
+
+    p = write_dir(machines_toml or remote.machines_path(), environ) / f"{name}.toml"
+    if not NAME_RE.fullmatch(name) or not p.is_file():
+        raise remote.Refused(f"stopped {name}: no {p}")
+    try:
+        old = tomllib.loads(p.read_text())
+    except tomllib.TOMLDecodeError as e:
+        raise remote.Refused(f"stopped {name}: {p} doesn't parse ({e})") from None
+    had = old.get("stopped_since")
+    if back and had is None:
+        return p, "wasn't marked stopped"
+    if not back and left_out({"stopped_since": had}, 0):
+        return p, f"is marked stopped since {had} already"
+    when = f"{now or dt.datetime.now(dt.UTC):{STAMP}}"
+    kept = [ln for ln in p.read_text().splitlines() if not ln.startswith("stopped_since =")]
+    tmp = p.with_name(f".{name}.toml.tmp-{os.getpid()}")
+    tmp.write_text("\n".join([*kept, *([] if back else [f'stopped_since = "{when}"'])]) + "\n")
+    os.replace(tmp, p)
+    return p, f"is no longer marked stopped (it was since {had})" if back else f"is marked stopped since {when}"
+
+
 def plan_import(machines_toml: Path, d: Path, running: set[str] | None) -> list[dict]:
     """machines.toml entries to copy into the registry: every valid one not there yet whose pod is running (`running` = pod ids;
     None = all).  Each row: name, action (`write` | `skip`), why."""
@@ -352,7 +435,7 @@ def plan_import(machines_toml: Path, d: Path, running: set[str] | None) -> list[
 def _sync(paths: list[Path]) -> str | None:
     from .. import notes_sync
 
-    if os.environ.get(notes_sync.SYNC_ENV, "").strip() in ("0", "false", "no", "off"):
+    if settings.get(notes_sync.SYNC_ENV, "").strip() in ("0", "false", "no", "off"):
         return None
     root = notes_root()
     rel = [str(p.relative_to(root)) for p in paths if root in p.parents]
@@ -402,14 +485,28 @@ def main(argv: list[str]) -> int:
     rg.add_argument("--any-name", action="store_true", help="allow a pod whose RunPod name is not NAME")
     ur = sub.add_parser("unregister", help="remove a machine's registry file (git history keeps it)")
     ur.add_argument("name")
+    st = sub.add_parser("stopped", help="mark a machine stopped (`stopped_since`): `research run --on auto` asks it nothing and the "
+                                        "next `research deploy roll` takes it out of every list of machines. It stops no machine")
+    st.add_argument("name")
+    st.add_argument("--back", action="store_true", help="take the mark out: the machine runs again")
     ls = sub.add_parser("registry", help="every machine run --on accepts, with its source; `import` seeds machines.d from machines.toml")
     ls.add_argument("action", nargs="?", choices=["list", "import"], default="list")
     ls.add_argument("--apply", action="store_true", help="import: write the files (default: show the plan)")
     ls.add_argument("--all", action="store_true", help="import: also entries whose pod is not running")
     ls.add_argument("--json", action="store_true")
+    ev = sub.add_parser("env", help="print `export <NAME>_HOST=<host>` for each named machine, from the register. Its output holds "
+                                    "addresses: for `eval \"$(research pods env NAME ...)\"` only, never a log, a note or a brief",
+                        description="Print `export <NAME>_HOST=<host>` for each named machine, from the register. The output holds "
+                                    "addresses: for `eval \"$(research pods env NAME ...)\"` only, never a log, a note or a brief. "
+                                    "An unregistered name prints nothing for any.")
+    ev.add_argument("names", nargs="+", metavar="NAME")
     ns = ap.parse_args(argv)
     mt = remote.machines_path()
     try:
+        if ns.cmd == "env":
+            hosts = host_env(ns.names)
+            print("".join(f"export {k}={shlex.quote(v)}\n" for k, v in hosts.items()), end="")
+            return 0
         if ns.cmd == "register" and ns.host:
             p, what = register_ssh(ns.name, ns.host, ns.project, port=ns.port, user=ns.user, rate=ns.rate, root=ns.root, python=ns.python,
                                    replace=ns.replace, nebius_instance_id=ns.nebius_instance_id, lane=ns.lane)
@@ -420,6 +517,12 @@ def main(argv: list[str]) -> int:
                                any_name=ns.any_name, lane=ns.lane)
             print(f"{what.upper()} {ns.name} -> pod {ns.pod_id} ({p})")
             written = [p] if what != "unchanged" else []
+        elif ns.cmd == "stopped":
+            p, what = stopped(ns.name, ns.back)
+            print(f"{ns.name} {what} ({p}). Nothing is stopped or started by this: `research deploy roll /etc/vy/peers --by WHO "
+                  f"{'' if ns.back else '--allow-shrink '}--apply` {'puts it back into' if ns.back else 'takes it out of'} every "
+                  "node's list")
+            written = [p] if "already" not in what and "wasn't" not in what else []
         elif ns.cmd == "unregister":
             p = unregister(ns.name)
             print(f"UNREGISTERED {ns.name} ({p})")
@@ -439,7 +542,7 @@ def main(argv: list[str]) -> int:
             d = write_dir(mt)
             running = None
             if not ns.all:
-                from .connect import _list_pods  # noqa: PLC0415
+                from .connect import _list_pods
 
                 running = {p.get("id") for p in _list_pods() if (p.get("desiredStatus") or "").upper() == "RUNNING"}
             plan = plan_import(mt, d, running)

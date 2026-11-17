@@ -16,21 +16,21 @@ public import Proofs.Flock.ZkAny.RelayWords
 namespace Claims.ZKServer.Relay
 
 open _root_.Flock (F128)
-open _root_.Flock.Firewall.Session (State Placed byte?)
-open _root_.Flock.Firewall.Frames (Sessions Rep)
-open _root_.Flock.Firewall.Frame (Req Place)
+open _root_.Flock.ZkServer.Session (State Placed byte?)
+open _root_.Flock.ZkServer.Frames (Sessions Rep)
+open _root_.Flock.ZkServer.Frame (Req Place)
 
 /-- **A rep's frame keeps its configuration from one round to the next**: at a `RoundRun` whose round releases and
 whose coins the rep's frame took off the auditor's answer, the frame the session's next round finds has the
 configuration of the frame the round found. -/
 theorem roundRun_cfg {sid : Nat} {st : State} {pl : Placed} {stream : String} {n i r : Nat}
-    {dom content : ByteArray} {e : Env} {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {R₃ : Sessions}
+    {dom content : ByteArray} {e : Env} {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {R₃ : Sessions}
     (hr : RoundRun sid st pl stream n i r dom content e R L0 R₃) (hreq : st.request pl (.round stream n) = none)
     (hfr : (frameAt R sid i r).isSome) {j : Nat} {p q p₁ : Rep} (hf : R.find sid i r = some (j, p)) {pl' : Place}
     {f : Bool} {nd : Option String} {o : ByteArray}
-    (hrp : _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl', f, nd))
-    (ho : (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dom content n).out = .ok o)
-    (hput : (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dom content n).put = some p₁) {a : ByteArray}
+    (hrp : _root_.Flock.ZkServer.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl', f, nd))
+    (ho : (_root_.Flock.ZkServer.Frames.roundStep R L0 sid i r dom content n).out = .ok o)
+    (hput : (_root_.Flock.ZkServer.Frames.roundStep R L0 sid i r dom content n).put = some p₁) {a : ByteArray}
     (ha : e.ans = some a) (hb : byte? a 0 = some 2) (hs : (st.answer (.round stream n) a).1.stop = none)
     (hc : e.coins = .ok ()) {pre : List Req} {ev : List (Nat × ByteArray × Place × Array F128)}
     (hR : RepRun pre ev q) : ∃ p₃, frameAt R₃ sid i r = some p₃ ∧ p₃.cfg = p.cfg := by

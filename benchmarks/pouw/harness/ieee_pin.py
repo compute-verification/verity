@@ -50,7 +50,7 @@ def _gate():
     beside this file where the two were copied out of the tree."""
     name = "pouw_harness_sass_gate"
     if name not in sys.modules:
-        tree = HERE.parent.parent.parent / "verity/protocols/accounting/pouw/prover/sass_gate.py"
+        tree = HERE.parent.parent.parent / "verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py"
         spec = importlib.util.spec_from_file_location(name, tree if tree.is_file() else HERE / "sass_gate.py")
         sys.modules[name] = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(sys.modules[name])
@@ -58,7 +58,9 @@ def _gate():
 
 
 SG = _gate()
-SOURCE = HERE / "ieee_pin.cu"
+#: the pinned builds' source: the tree's, beside the pins, or the copy beside this file where the two were copied out
+_TREE_SOURCE = HERE.parent.parent.parent / "verity/protocols/resource_accounting/compute/pouw/prover/ieee_pin.cu"
+SOURCE = _TREE_SOURCE if _TREE_SOURCE.is_file() else HERE / "ieee_pin.cu"
 ARCHS = {"sm_120a": 120, "sm_90a": 90}
 
 

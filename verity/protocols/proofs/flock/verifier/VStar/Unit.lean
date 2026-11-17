@@ -13,7 +13,7 @@ creation order, the output group's copy rows, the constant. `ir_lower.layout` la
 reads, through any rows); every AND of these units is live, and `laid` refuses a unit with a dead one rather than lay it
 out differently.
 
-`text` is `ir_lower.netlist`: a header line `flock-ir-unit/v2 name rows const` and each side's groups, one line
+`text` is `ir_lower.circuit_description`: a header line `flock-ir-unit/v2 name rows const` and each side's groups, one line
 `|A| A.. |B| B..` per row, then (a lowering's text) `LEAVES` and the leaf maps as `json.dumps` writes them (`pyDumps`). A circuit file's sections
 are the same text without `LEAVES`.
 -/

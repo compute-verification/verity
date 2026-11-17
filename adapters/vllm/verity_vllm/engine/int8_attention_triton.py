@@ -211,6 +211,7 @@ def _kv_launch(k: torch.Tensor, v: torch.Tensor, bt: torch.Tensor | None, starts
     st = _host(tuple(starts), dev) if starts is not None else ln
     ks = k_scales.to(device=dev, dtype=torch.float32).contiguous()
     if paged:
+        assert bt is not None, "a paged launch reads its block table"
         bs, (skn, sko, skg), (svn, svo, svg), sbt = k.shape[1], k.stride()[:3], v.stride()[:3], bt.stride(0)
     else:
         bs, (skn, skg), (svn, svg), sko, svo, sbt, bt = 1, k.stride()[:2], v.stride()[:2], 0, 0, 0, ln

@@ -7,7 +7,7 @@ import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Inv
 
 /-!
-# Games: the monad laws, values, and bounds over one coin
+# Games: the monad identities, values, and bounds over one coin
 
 `value` against the optimal prover bounds every strategy's `prob` (`prob_le_value`), is at most one and monotone in the
 event, and is bounded through a bind or a coin from a bound on each continuation.

@@ -88,7 +88,7 @@ def reset() -> None:
 # the memo tables pin the RootView / Projection objects they were computed from; without a release a process that
 # checks several records in a row (harness in-process mode, tests, a profiler loop) grows by one record's caches per record.  check()
 # brackets its body with enter()/leave(): the OUTERMOST call (depth 0 again -- the alternate-criterion run is a nested check() and must
-# keep the memo) drops every table.  row_pod = one record per process, so the release changes nothing on a row of record.
+# keep the memo) drops every table.  row_pod = one record per process, so the release changes nothing on a workload of record.
 _depth = 0
 
 
@@ -238,7 +238,7 @@ def _check_origin(h) -> None:
 # collision.  For a compact (progression-form) operand the trie walk over a node-space progression of `count` runs is memoised per
 # (prefix node, base, delta, count) WITHIN ONE CALL (the producers named by a (step, index) base are this RootView's, under this cone):
 # the attention gather at position t+1 is the gather at position t plus one producer, so it costs ONE trie step instead of t -- the
-# run count no longer multiplies the work.  The relation is unchanged: every memoised node is the trie node the full walk would reach.
+# run count does not multiply the work.  The relation is unchanged: every memoised node is the trie node the full walk would reach.
 # A non-node progression is one trie step of its own (a different item set, the same partition: the operand is a normal form).  Values stay equality keys inside ONE process (`_Hashes` carries the pid).
 _trie: dict[tuple, int] = {}         # (prefix node, run item) -> node; node 0 = the empty operand; per process, released on leave
 

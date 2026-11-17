@@ -9,11 +9,11 @@ novel data a token brings, and any decoding work. A model (``models.json``) is a
 (``calibrations.json``), queried with the training data either committed (free to read) or novel (``b_tok`` bits per
 token).
 
-``construct`` is ``slowdown.search``: one family of compliant constructions, in which a block covers a slice of every
+``construct`` is ``bracket.search``: one family of compliant constructions, in which a block covers a slice of every
 token's computation, reads its slice's state, the activations crossing into it and the tokens' data, and is padded to
 ``Gamma``. The board (``rows.json``) and the library use the same search.
 
-``lower`` is the thread theorem (``slowdown.thread_lower``) on the same profile. It is 1 when the algorithm is not one
+``lower`` is the thread theorem (``bracket.thread_lower``) on the same profile. It is 1 when the algorithm is not one
 the theorem covers, and 1 when the data is committed, since its premise ``ThetaRegistered`` then fails (the coverage
 gap).
 
@@ -35,10 +35,10 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import catalog  # noqa: E402
-import slowdown  # noqa: E402
+import bracket  # noqa: E402
 
 TRAITS = {
-    "theorem_applies": "the thread theorem covers it (end-to-end training of the reference circuit)",
+    "theorem_applies": "the thread theorem covers it (end-to-end training by the reference training algorithm)",
     "updated_fraction": "fraction of the model's parameters updated",
     "state_bits_per_param": "bits of state a reader needs per updated parameter",
     "state_splits": "a slice of the model needs only its own share of the state (false for seeds)",
@@ -58,7 +58,7 @@ MODEL_FIELDS = ("n_total", "n_active", "d_model", "entry_fee", "fanout")
 FAMILIES = frozenset({"reference", "architecture", "optimizer", "data", "objective", "parallel-communication",
                       "local-learning", "fine-tuning", "low-rank", "rl-adapter", "seed-based", "zeroth-order",
                       "distillation", "sparsity-moe", "precision", "growth-reuse", "retrieval"})
-#: ``attacker``: state at the cheapest rate an attacker could use (weights at the retained-quality rate, no optimizer
+#: ``attacker``: state at the cheapest rate a malicious developer could use (weights at the retained-quality rate, no optimizer
 #: state); ``as-published``: state at the precision the method is published with (weights and optimizer moments).
 CONVENTIONS = frozenset({"attacker", "as-published"})
 #: the full-parameter recipe a strategy must beat: ``multiplier_needed`` is the multiplier at which the strategy's
@@ -91,7 +91,7 @@ ATTACKER_RATES = {"state_bits_per_param": "b_w.pretrained/frontier-lossy:central
 
 def traits(alg: dict, convention: str = "attacker") -> dict:
     """An algorithm's traits under a convention: ``as-published`` keeps them; ``attacker`` caps its state and boundary
-    bits at the literature's central rates (``ATTACKER_RATES``), the cheapest an attacker could use at about the same
+    bits at the literature's central rates (``ATTACKER_RATES``), the cheapest a malicious developer could use at about the same
     quality, so that every algorithm is compared alike."""
     tr = dict(alg["traits"])
     if convention == "attacker":
@@ -114,8 +114,8 @@ def profile(alg: dict, model: dict, policy: dict, data: str, convention: str = "
 
 
 def construct(p: Profile, K: float, Gamma: float) -> dict:
-    """The cheapest construction in ``slowdown.search``'s family, with its reads broken down per block."""
-    return slowdown.search(p.U_slice_total, p.splits, p.flops, p.w, p.t, p.decode, K, Gamma)
+    """The cheapest construction in ``bracket.search``'s family, with its reads broken down per block."""
+    return bracket.search(p.U_slice_total, p.splits, p.flops, p.w, p.t, p.decode, K, Gamma)
 
 
 def _theorem_inputs(alg: dict, model: dict, p: Profile, convention: str) -> dict:
@@ -138,8 +138,8 @@ def lower(alg: dict, model: dict, policy: dict, data: str, convention: str = "at
     # A block that holds a token's whole state generates the tokens it does not read (rollouts), so a thread value
     # costs it no more than the novel data per token.
     token_rate = p.t if p.U_slice_total <= policy["K"] else policy["b_tok"]
-    return slowdown.thread_lower(_theorem_inputs(alg, model, p, convention), policy["K"], policy["Gamma"], token_rate), \
-        slowdown.THREAD_THEOREM
+    return bracket.thread_lower(_theorem_inputs(alg, model, p, convention), policy["K"], policy["Gamma"], token_rate), \
+        bracket.THREAD_THEOREM
 
 
 def query(alg_id: str, model_id: str, policy_id: str, data: str = "novel", convention: str = "attacker") -> dict:
@@ -152,10 +152,10 @@ def query(alg_id: str, model_id: str, policy_id: str, data: str = "novel", conve
     m = (alg.get("multiplier") or {}).get("value")
     ref = construct(profile(by_id("algorithms")[REFERENCE], model, policy, data, convention), policy["K"], policy["Gamma"])
     return {"algorithm": alg_id, "model": model_id, "policy": policy_id, "data": data, "convention": convention,
-            "multiplier": m, "multiplier_needed": c["rho"] / ref["rho"],
-            "efficiency_achievable": m / c["rho"] if m else None,
+            "multiplier": m, "multiplier_needed": c["slowdown"] / ref["slowdown"],
+            "efficiency_achievable": m / c["slowdown"] if m else None,
             "efficiency_ceiling": m / lo if m else None, "lower": lo, "lower_basis": why,
-            "upper": c["rho"], "slices": 1 / c["phi"], "tokens_per_block": c["tokens"],
+            "upper": c["slowdown"], "slices": 1 / c["phi"], "tokens_per_block": c["tokens"],
             "read_shares": {k: v / total for k, v in c["reads"].items()}, "reads": c["reads"], "work": c["work"]}
 
 

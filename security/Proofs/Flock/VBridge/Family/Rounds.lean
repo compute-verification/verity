@@ -217,10 +217,10 @@ theorem skOf_congr {S : ℕ} (Vs : Fin S → VStmt) {own own' : Fin S → Array 
 
 /-- **U4's pass, port by port**: `fullMiss` finds nothing where every unit reading a round's commitment is sampled in
 full. -/
-theorem fullMiss_eq_none {own : Array Registered.Port} {d : Flock.Draw.UnitDraw} :
+theorem fullMiss_eq_none {own : Array Registered.Port} {d : Flock.Draw.UnitSample} :
     Registered.fullMiss own d = none ↔
       ∀ p ∈ own, Registered.roundCommitment p.value = true → ∀ u < p.reads.size,
-        p.reads[u]!.isSome = true → Registered.drawsInFull d u = true := by
+        p.reads[u]!.isSome = true → Registered.samplesInFull d u = true := by
   unfold Registered.fullMiss
   rw [Array.findSome?_eq_none_iff]
   refine forall₂_congr fun p _ => ?_
@@ -230,13 +230,13 @@ theorem fullMiss_eq_none {own : Array Registered.Port} {d : Flock.Draw.UnitDraw}
   · simp [hc]
 
 /-- **U4's pass on a parsed sample**: `checkFull` passes where `fullMiss` finds nothing. -/
-theorem checkFull_ok_iff {own : Array Registered.Port} {dj : Lean.Json} {d : Flock.Draw.UnitDraw}
-    (hd : Flock.Draw.UnitDraw.ofJson dj = .ok d) :
+theorem checkFull_ok_iff {own : Array Registered.Port} {dj : Lean.Json} {d : Flock.Draw.UnitSample}
+    (hd : Flock.Draw.UnitSample.ofJson dj = .ok d) :
     Registered.checkFull (some own) (some dj) = .ok () ↔ Registered.fullMiss own d = none := by
   unfold Registered.checkFull
   dsimp only
   rw [hd]
-  have e : ∀ f : Flock.Draw.UnitDraw → Except String Unit, (Except.ok d >>= f) = f d := fun _ => rfl
+  have e : ∀ f : Flock.Draw.UnitSample → Except String Unit, (Except.ok d >>= f) = f d := fun _ => rfl
   rw [e]
   cases Registered.fullMiss own d with
   | none => exact iff_of_true rfl rfl
@@ -244,8 +244,8 @@ theorem checkFull_ok_iff {own : Array Registered.Port} {dj : Lean.Json} {d : Flo
 
 /-- **U4 at `ownOf` from the verifier's U4**: where a session's reads file has `ownOf`'s message-round ports, a sample
 that passes U4 on it passes U4 on `ownOf`'s, whose ports are all message-round ports. -/
-theorem checkFull_of_msgPorts {own own' : Array Registered.Port} {dj : Lean.Json} {d : Flock.Draw.UnitDraw}
-    (hd : Flock.Draw.UnitDraw.ofJson dj = .ok d) (hm : ∀ p ∈ own', isMsg p = true)
+theorem checkFull_of_msgPorts {own own' : Array Registered.Port} {dj : Lean.Json} {d : Flock.Draw.UnitSample}
+    (hd : Flock.Draw.UnitSample.ofJson dj = .ok d) (hm : ∀ p ∈ own', isMsg p = true)
     (h : SameMsg own own') (hU4 : Registered.checkFull (some own) (some dj) = .ok ()) :
     Registered.checkFull (some own') (some dj) = .ok () := by
   have hn := fullMiss_eq_none.1 ((checkFull_ok_iff hd).1 hU4)
@@ -262,7 +262,7 @@ section family
 
 variable {nT nR : ℕ} {T : Fin nT → Type} {CT : Fin nR → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
 variable {cls : HClass} {regs : List (Region cls.kLog (cls.m - cls.kLog))} {sch : Flock.Schedule}
-variable {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
+variable {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
 local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 InnerAccepts.leafPlain cls regs (schedOf sch)
 
@@ -299,7 +299,7 @@ message-round ports are the statement's.
 (`ZkOuter.own`, `registeredInput`, `FlockVerify.lean:228-242`) has `own j`'s message-round ports (`SameMsg`). V*'s
 staging writes them (`rec_vstage.messages`, `rec_vstage.py:156-168`; `rec_residuals.write`, `rec_residuals.py:452-454`);
 no check of the verifier's compares a file's port names with the statement's. The check that establishes it: at
-`flock-verify --registered`, the file's ports named `m<k>` or registering `rec-c<k>` are the statement's ports `m<k>`,
+`verity-verify-proof --registered`, the file's ports named `m<k>` or registering `rec-c<k>` are the statement's ports `m<k>`,
 each under `rec-c<k>` with reads `[0, 1]` (`msgPorts` against `ownOf`). -/
 def HOwn : Prop := ∀ R ω t R₂ j, SameMsg (F.zs R ω t R₂ j).own (F.own j)
 

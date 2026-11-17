@@ -26,7 +26,7 @@ rounds the record's). `StageHeld` names that of a stage, and `coinsAt_stageHeld`
 record's points are the map's at the first coin) where the map's points are the first coin's coordinate
 (`PointsEncoded`) and the run's points are the record's.
 `stageHeld_repsOfVals`: the reps' stages are `StageHeld` at `repsOfVals`, rep 0's from round 1 and rep 1's after it,
-from their rounds' custody (`RepRoundsHeld`) and samples (`RepsDrawn`).
+from their rounds' custody (`RepRoundsHeld`) and samples (`RepsSampled`).
 -/
 
 @[expose] public section
@@ -132,7 +132,7 @@ theorem nCoins_of {ts : List Step} {ks : List ℕ} {f : ℕ → Msg} (h : ts.fil
   rw [h, List.length_map]
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-  {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type} {S : ℕ} {Vs : Fin S → VStmt}
+  {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type} {S : ℕ} {Vs : Fin S → VStmt}
   {zs : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
   {dg : ByteArray → ByteArray} {N k Rw : ℕ}
   {stp : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
@@ -147,7 +147,7 @@ local notation "ℐ" => holoInnerAt T CT st hp
 
 /-- **The reps' stages are `StageHeld`**, rep 0's from the history's round 1 on and rep 1's after it: rep `i`'s coin
 steps are its consumed rounds' coins (`repIdx`, from its steps' weave), each the coins the verifier holds of stream
-`s i` at its round (`RepRoundsHeld`, through `ProofOfVals`' coins), sampled in order from `repStart` (`RepsDrawn`). A
+`s i` at its round (`RepRoundsHeld`, through `ProofOfVals`' coins), sampled in order from `repStart` (`RepsSampled`). A
 sparse phase's and R's stage take the same four parts: the coin steps' rounds from the stage's weave, the rounds held of
 its stream, and the samples from where the stage before it ends. -/
 theorem stageHeld_repsOfVals
@@ -156,7 +156,7 @@ theorem stageHeld_repsOfVals
     (hs : SetupOfVals zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) sh rep vals)
     (hf : FramesOfVals zs dg N k Rw sh rep vals)
     (hheld : RepRoundsHeld zs dg N k Rw sh rep wr held s ix)
-    (hdr : RepsDrawn zs dg N k Rw sh rep vals selC s ix) :
+    (hdr : RepsSampled zs dg N k Rw sh rep vals selC s ix) :
     AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun t u =>
       StageHeld (CT := CT) t wr held selC 1 (u.ts 0) ∧
         StageHeld (CT := CT) t wr held selC (1 + nCoins (u.ts 0)) (u.ts 1) := by

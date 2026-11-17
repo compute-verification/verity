@@ -42,7 +42,7 @@ its `n_S(x)` V\* sessions), so the tape grows with the statement. On one tape fo
 tape of `M` sessions, read at a statement of `n_S(x) ≤ M` sessions down to its own, the same bound holds there:
 
 * `ZKmalAt.of_fibers`: `ZKmalAt` carries over to a prover that reads its tape through a map of the nonces and one of
-  the rests, each with fibers of one size: the real transcript's law and `Fork`'s collision probability are the same.
+  the rests, each with fibers of one size: the real transcript's distribution and `Fork`'s collision probability are the same.
 * `zkmalR_of_rx`: so `ZKmalRx` gives `ZKmalR` on one tape that each statement of the relation reads so.
 * `SeqTape.capN`, `SeqTape.capΩ`: the nested tape of `m ≤ M` sessions in that of `M`: at each level above `m`, the
   nonce's part for the sessions before it, and the rest's (`fibersEq_capN`, `fibersEq_capΩ`). Reading through the
@@ -82,7 +82,7 @@ theorem Pr_of_fibers {α β : Type} [Fintype α] [Nonempty α] [Fintype β] [Non
   Pr_comp_fiber f (fun b => hf b (Classical.arbitrary β)) p
 
 /-- **`ZKmalAt` for a prover that runs `P` at `x` on its tape through a map of the nonces and one of the rests, each
-with fibers of one size**: the real transcript has `P`'s law, and `Fork`'s two runs, on one nonce and two rests, are
+with fibers of one size**: the real transcript has `P`'s sampling design, and `Fork`'s two runs, on one nonce and two rests, are
 `P`'s on one nonce and two rests. -/
 theorem ZKmalAt.of_fibers {W N Ω N' Ω' : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] [Fintype N']
     [Nonempty N'] [Fintype Ω'] [Nonempty Ω'] {H : Msg → Msg} {k : ℕ} {P : W → Prover (N × Ω)} {R : W → Prop}

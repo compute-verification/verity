@@ -13,6 +13,6 @@ a served workload's Program, their Boolean lowerings).
     entries   the shared lists' layout, one file per entry (``pins/``)
     cli       ``circuit-check TARGET... | --all | --structural UNIT.tmpl TARGET | --ambient TARGET... [--out report.json]``
 
-The suite (`tools/verity/circuit_check/tests`) runs it over every registered Definition and template; a failure is a correctness or
+The suite (`tests/tools/verity/circuit_check`) runs it over every registered Definition and template; a failure is a correctness or
 invariant violation, named; redundant and dead gates are warnings with counts.
 """

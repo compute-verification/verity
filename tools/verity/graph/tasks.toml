@@ -76,11 +76,11 @@ timeout_s = 3600
 # whole tree)
 files = ["verity/protocols/proofs/flock/verifier/**", "verity/circuits/base/**", "verity/circuits/lean/**",
          "verity/commitments/lean/**", "verity/protocols/proofs/flock/prover/check_build.sh", "verity/protocols/proofs/flock/prover/live/**",
-         "verity/protocols/proofs/flock/prover/flock-*-b684b12.patch", "verity/protocols/proofs/flock/prover/agreement/**", "tools/verity/check/suites.py",
+         "verity/protocols/proofs/flock/prover/flock-*-b684b12.patch", "verity/protocols/proofs/flock/prover/agreement/**", "tools/check/suites.py",
          "**/pyproject.toml"]
 kinds = ["lean-build", "flock-circuit-build", "lean-agreement", "lean-unit-cut", "lean-suites", "flock-rust-tests"]
 env = "lean"
 about = "{kind} {name}"
-# a check slot's (`tools/verity/check/tasks.py`'s SLOT); the agreement needs 24 GB at least (`check.AGREEMENT_MIN_GB`)
+# a check slot's (`tools/check/tasks.py`'s SLOT); the agreement needs 24 GB at least (`check.AGREEMENT_MIN_GB`)
 resources = { cores = 16, mem_gb = 64, disk_gb = 20 }
 timeout_s = 7200

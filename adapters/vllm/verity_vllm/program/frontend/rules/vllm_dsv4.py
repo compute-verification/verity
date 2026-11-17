@@ -23,19 +23,19 @@ from __future__ import annotations
 import torch
 from verity.circuits.refs import Coll, array_of, concat
 from verity.circuits.types import Array, Value
-from verity.definitions.numerics.flashmla_twin import (
+from verity_vllm.definitions.numerics.flashmla_twin import (
     num_sm_parts,
     request_splits,
     sched_meta,
 )
-from verity.definitions.registry import dsv4_compressor as C
-from verity.definitions.registry import dsv4_indexer as I
-from verity.definitions.registry import dsv4_qnorm_insert as Q
-from verity.definitions.registry.flashmla import FLASHMLA_DSV4
+from verity_vllm.definitions.registry import dsv4_compressor as C
+from verity_vllm.definitions.registry import dsv4_indexer as I
+from verity_vllm.definitions.registry import dsv4_qnorm_insert as Q
+from verity_vllm.definitions.registry.flashmla import FLASHMLA_DSV4
 
-from verity_vllm.program.frontend.derive import refuse
-from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo, StateRule
-from verity_vllm.program.frontend.rules.common import call_args, known, shape
+from verity_torch.frontend.derive import refuse
+from verity_torch.frontend.rules.base import OpRule, RuleInfo, StateRule
+from verity_torch.frontend.rules.common import call_args, known, shape
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     active_target_profile,
     launch_sequences_of,
@@ -49,8 +49,6 @@ from verity_vllm.program.frontend.rules.vllm_dsa import (
     _value,
 )
 from verity_vllm.program.frontend.rules.vllm_iface import iface, targets_for
-
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 
 BF16, F32, E4M3, U8 = torch.bfloat16, torch.float32, torch.float8_e4m3fn, torch.uint8
 M32 = 0xFFFFFFFF

@@ -5,6 +5,9 @@ remote's, listed in any order. These two are the only composites a verifier runs
 two (`Verity.verifier`), so `ofIds` refuses any other set by name (an id no composite composes, one listed twice, none,
 or a set that is no composite's). Remote's development composite, H1's `Core.Remote.protocol` (`verity/remote/v0`), is
 no composite here: `ofIds` refuses its subprotocols, and it runs only as its own development executable (`remote`).
+Remote's plain sibling (`Core.Site.Registration.Composite.plain`, the inference-only policy's rows check in v0's place)
+is refused by name until its soundness is proved (`plainRefusal`): `Verity.PlainSoundness` takes the rows check's target
+as a hypothesis, and no compiled check carries the rows check's id.
 
     product IDS id | check PARAMS COMMITMENT EVIDENCE | serve        IDS: the subprotocols' ids, comma-separated
 
@@ -14,9 +17,11 @@ module
 
 public import CoreOnsite
 public import CoreProtocol.Cli
+public import CoreProtocol.Site
 public import CoreRemote
 meta import CoreOnsite
 meta import CoreProtocol.Cli
+meta import CoreProtocol.Site
 meta import CoreRemote
 
 @[expose] public section
@@ -35,8 +40,15 @@ def composites : List (BlobProtocol × List String) :=
 /-- Every subprotocol of some composite, by id. -/
 def known : List String := (composites.flatMap (·.2)).eraseDups
 
+/-- Why remote's plain sibling is refused, named whatever order its ids come in. -/
+def plainRefusal : String :=
+  s!"[{", ".intercalate Core.Site.Registration.Composite.plain}] is remote's plain sibling, refused until its " ++
+    "soundness is proved (Verity.PlainSoundness takes the rows check's target as a hypothesis)"
+
 /-- The composite over exactly the subprotocols `ids` names, in any order, or why the list is refused. -/
 def ofIds (ids : List String) : Except String BlobProtocol :=
+  let plain := Core.Site.Registration.Composite.plain
+  if plain.length == ids.length && plain.all ids.contains then .error plainRefusal else
   match ids.find? (fun i => !known.contains i) with
   | some i => .error s!"{i} is no composite's subprotocol ({", ".intercalate known})"
   | none =>
@@ -97,5 +109,11 @@ private def remoteV1Ids : List String := Core.Remote.V1.components.map (·.id)
   "is no composite's subprotocol"
 #guard contains (match ofIds ["verity/sampled-proofs/one-stage/v2"] with | .error e => e | .ok _ => "")
   "is no composite's subprotocol"
+-- remote's plain sibling is refused by name, in any order, and a list of its ids that isn't it as before
+private def plainIds : List String := Core.Site.Registration.Composite.plain
+#guard idOf plainIds == none && idOf plainIds.reverse == none
+#guard (match ofIds plainIds with | .error e => e == plainRefusal | .ok _ => false)
+#guard (match ofIds plainIds.reverse with | .error e => e == plainRefusal | .ok _ => false)
+#guard contains (match ofIds (plainIds.take 2) with | .error e => e | .ok _ => "") "is no composite's subprotocol"
 
 end Core.Composites

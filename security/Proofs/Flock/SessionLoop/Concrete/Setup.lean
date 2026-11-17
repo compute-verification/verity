@@ -7,7 +7,7 @@ import Flock.HmNets
 import Flock.Canon
 import Flock.JsonParse
 import Flock.Net
-import Flock.Firewall
+import Flock.ZkServer
 import Flock.Norm
 import Flock.Public
 import Flock.Statement
@@ -63,7 +63,7 @@ import all Init.WF
 -/
 
 @[expose] public section
-open Flock Flock.Firewall RecDeploy.VStarNets FlockVBridge.Names
+open Flock Flock.ZkServer RecDeploy.VStarNets FlockVBridge.Names
 open Lean (Json)
 
 set_option maxHeartbeats 0 -- the walks below step through `Stmt.setupH` and leave closed checks to the kernel

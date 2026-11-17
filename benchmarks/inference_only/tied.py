@@ -11,7 +11,8 @@ both:
   count as `bound_charged` takes them, under each of its readings (`Charged.reading`): one `β_x` with the threshold at
   which the figure is largest (`best_w`), one `β_x` at the top budget with no block charged, and a `β_x` a block;
 * **the uncredited share** `s`: the share of a block's work that no PoUW check credits, which the caller states. A
-  developer gets that share whole, so each figure `ρ` is quoted with its limit `1 / (s + 1/ρ)` (`min_cut.capped`). The
+  developer gets that share whole, so each figure `slowdown` is quoted with its limit
+  `1 / (s + 1/slowdown)` (`min_cut.capped`). The
   words that work computes are tied by nothing either: a fourth reading counts them as fresh input, `k + word · u` with
   `u` the most words `s` of a block's work feeds (a word of a linear's output is fed by at least the least fan-in of
   the model's linears), under one `β_x` with its own best threshold.
@@ -27,7 +28,7 @@ from collections.abc import Iterator
 from typing import Any
 
 import policy as P
-from rho import min_cut
+from slowdown import min_cut
 
 #: the fourth reading's name: `Charged.reading` at the `k` that holds the uncredited words, and this
 IN_K = "the uncredited words as fresh input"
@@ -51,16 +52,17 @@ def spans(t: P.Tied, work: float) -> Iterator[dict[str, Any]]:
         yield r
 
 
-def priced(t: P.Tied, sh: P.Shape, s: float) -> dict[str, Any]:
+def priced(t: P.Tied, sh: P.Shape, s: float, source: str = "the command line",
+           verdict: dict[str, Any] | None = None) -> dict[str, Any]:
     """The tied policy's figures at the uncredited share ``s``: one block's, then each of the calculator's fleets over
     one execution phase and over each monitoring period under each reading, every figure with its limit at ``s`` and
-    the pooled total in gates."""
+    the pooled total in gates. ``source`` says where ``s`` is from, and ``verdict`` is the PoUW verdict that gives it."""
     p, N = t.policy, t.policy.work[P.TOTAL]
     work = {"N": N, "O": N * sh.outputs * min_cut.BF16 / sh.macs, "size": p.c}
     most, fan_in = output_words(p, sh), min(k for _, _, k in sh.linears)
     words = min(s * N / fan_in, most)
     k_words = p.k + t.word_bits * words
-    one, with_words = min_cut.bound(p.c, p.k, p.n, **work), min_cut.bound(p.c, k_words, p.n, **work)
+    one, with_words = P.bound(p, sh), P.bound(p, sh, k=k_words)
     rows = []
     for r in spans(t, N):
         untied = t.untied(r["blocks"], r["seconds"])
@@ -87,7 +89,7 @@ def priced(t: P.Tied, sh: P.Shape, s: float) -> dict[str, Any]:
         "work": {**{x: p.work[x] for x in P.WORK}, "N": N}, "work_is": P.WORK_IS,
         "untied": {"words": t.words, "blocks": t.blocks, "phase_seconds": t.phase_seconds,
                    "macs_a_word": t.macs_a_word, "word_bits": t.word_bits, "most_a_block": most},
-        "uncredited": {"share": s, "from": "the command line", "pouw_verdict": None, "macs_a_block": s * N,
+        "uncredited": {"share": s, "from": source, "pouw_verdict": verdict, "macs_a_block": s * N,
                        "words_a_block": words, "least_fan_in": fan_in, "k_with_words": k_words},
         "block": {"number": one.slowdown, "limit": min_cut.capped(one.slowdown, s), "rests_on": one.rests_on,
                   "with_words": {"k": k_words, "number": with_words.slowdown,

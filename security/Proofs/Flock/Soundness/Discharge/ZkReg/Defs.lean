@@ -13,7 +13,7 @@ import VCVio.Prelude.Core
 /-!
 # `verify --zk --registered F`, as an event of the audit
 
-`flock-verify verify --zk --registered F` (`Main.verifyCmd`) checks a `--zk` session as `ZkExec.AcceptsZK` does, and
+`verity-verify-proof verify --zk --registered F` (`Main.verifyCmd`) checks a `--zk` session as `ZkExec.AcceptsZK` does, and
 holds every table's statement to the verifier's own registered reads `own` (F's ports, `Registered.ofJson`): after
 `Stmt.setupTables` and before `Zk.shapeOk`, `Main.buildSession` runs `Flock.checkRegistered` on each statement, the
 library's definition, which `AcceptsZKR` reads as it is. `AcceptsZKR` is that verdict; it implies `AcceptsZK`.
@@ -41,9 +41,9 @@ open FlockSoundness.Discharge.ZkExec (zkInputs)
 
 export Flock (checkRegistered)
 
-/-- **flock-verify `--zk --registered F` accepts the transcript**, `own` F's ports: the session's statements set up from
+/-- **verity-verify-proof `--zk --registered F` accepts the transcript**, `own` F's ports: the session's statements set up from
 `zkInputs I` and the record's sample, each passes the registered check against `own`, every port of each one's circuit is
-a port of `own` (`Registered.checkComplete`, which flock-verify runs whenever `--registered` is given), each passes
+a port of `own` (`Registered.checkComplete`, which verity-verify-proof runs whenever `--registered` is given), each passes
 `Zk.shapeOk`, and `Flock.Zk.verify` accepts the record and the proof files. -/
 def AcceptsZKR (I : Inputs) (own : Array Registered.Port) (t : Exec.Transcript) : Prop :=
   ∃ spec sts, setupOf (zkInputs I) t.record = .ok (spec, sts) ∧ sts.forM (checkRegistered · (some own)) = .ok () ∧
@@ -52,7 +52,7 @@ def AcceptsZKR (I : Inputs) (own : Array Registered.Port) (t : Exec.Transcript) 
 
 variable {n : ℕ} {Reg : Type}
 
-/-- flock-verify `--zk --registered F` accepts the live audit's transcript. -/
+/-- verity-verify-proof `--zk --registered F` accepts the live audit's transcript. -/
 def LiveAcceptsZKR (I : Inputs) (own : Array Registered.Port) (o : Reg × Finset (Fin n) × Exec.Transcript) : Prop :=
   AcceptsZKR I own o.2.2
 
@@ -67,7 +67,7 @@ def OwnReads (own : Array Registered.Port) (c : Circuit) (pub : Public) (t : Exe
     (readAt : (Fin n × Fin c.ports.size) ⊕ Gate → ℕ) : Prop :=
   ∀ p, isRead p → ∃ u q d D dp idx, p = .inl (u, q) ∧ port p ∈ own ∧
     (List.range c.ports.size).find? (fun j => c.ports[j]!.name == (port p).name) = some q.val ∧
-    recordDraw t.record = some d ∧ Draw.UnitDraw.ofJson d = .ok D ∧ HmRow.drawn c pub d = .ok dp ∧
+    recordDraw t.record = some d ∧ Draw.UnitSample.ofJson d = .ok D ∧ HmRow.drawn c pub d = .ok dp ∧
     Registered.unitIndices dp = .ok idx ∧ u.val ∈ D.proved ∧
     (port p).reads[idx.getD (D.proved.idxOf u.val) 0]? = some (some (readAt p))
 
@@ -77,7 +77,7 @@ def regPaths (c : Circuit) (pub : Public) (t : Exec.Transcript)
     (port : (Fin n × Fin c.ports.size) ⊕ Gate → Registered.Port) : (Fin n × Fin c.ports.size) ⊕ Gate → ByteArray
   | .inl (u, q) => Option.getD (do
       let d ← recordDraw t.record
-      let D ← (Draw.UnitDraw.ofJson d).toOption
+      let D ← (Draw.UnitSample.ofJson d).toOption
       let dp ← (HmRow.drawn c pub d).toOption
       let tb ← dp.tables
       let (_, paths) ← (Registered.entry dp (port (.inl (u, q)))).toOption

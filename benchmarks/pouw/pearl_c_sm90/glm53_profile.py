@@ -126,7 +126,8 @@ def _instrument(run, PPD) -> None:
 def run_mode(a: argparse.Namespace) -> int:
     import torch
     import glm53_timing as T
-    from verity_vllm.protocols.pouw import pearl_c as PPD
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
+    from verity_torch.pouw.pearl_c import run_device as PPDR
 
     shapes = [tuple(map(int, s.split(":"))) for s in a.shapes] if a.shapes else list(SHAPES)
     schedule = (a.schedule or ["serial"])[0]
@@ -135,7 +136,7 @@ def run_mode(a: argparse.Namespace) -> int:
     run.keys = _ranged("host keys", run.keys)
     run.uploads.put = _ranged("host upload", run.uploads.put)
     run._after = _ranged("host after", run._after)
-    PPD.screen_into = _ranged("host screen", PPD.screen_into)
+    PPDR.screen_into = _ranged("host screen", PPDR.screen_into)
     end_pass, calls = run.end_pass, a.calls or CALLS
     for w, W in weights.items():
         n, k = W.shape
@@ -332,7 +333,7 @@ def grouped_mode(a: argparse.Namespace) -> int:
     import glm53_timing as T
     import grouped_check as GC
     import torch
-    from verity_vllm.protocols.pouw.pearl_c import grouped as PG
+    from verity_torch.pouw.pearl_c import grouped as PG
 
     shapes = [tuple(map(int, s.split(":"))) for s in a.shapes] if a.shapes else list(GC.SHAPES)
     schedules = a.schedule or list(GC.SCHEDULES)

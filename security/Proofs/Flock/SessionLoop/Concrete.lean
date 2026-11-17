@@ -2,14 +2,14 @@ module
 
 public import Proofs.Flock.Claims.DeployInputs
 public import Proofs.Flock.Claims.ZK.Reference
-public import Proofs.Flock.Recursive.FirewallWire
+public import Proofs.Flock.Recursive.ZkServerWire
 public import Proofs.Flock.SessionLoop.ConcreteNet
 public import Properties.Flock.Nets
 import all Init.Data.String.Defs
 
 /-! # A statement the deployed `--zk` setup parses
 
-`Loop.not_zkOut_leakL` and the session loop's honest witness take a statement `x` with
+`Loop.not_zkOut_link` and the session loop's honest witness take a statement `x` with
 `FlockDeploy.setupOf true x = some _`. This file holds what such a statement needs.
 
 * `FlockDeploy.decode_encode_of_fits`: `decode` reads back every `Raw` whose lengths fit their 8-byte words, so a
@@ -66,7 +66,7 @@ theorem run_rdBytes {b : ByteArray} (h : b.size < 2 ^ 64) (rest : Claims.Msg) :
 theorem run_rdStr {s : String} (h : s.toUTF8.size < 2 ^ 64) (rest : Claims.Msg) :
     rdStr.run (encStr s ++ rest) = some (s, rest) := by
   rw [rdStr, encStr, run_bind_some (run_rdBytes h rest),
-    FlockSoundness.Discharge.Recursion.FirewallWire.fromUTF8?_toUTF8]
+    FlockSoundness.Discharge.Recursion.ZkServerWire.fromUTF8?_toUTF8]
   rfl
 
 theorem run_rdBool (b : Bool) (rest : Claims.Msg) : rdBool.run (encBool b ++ rest) = some (b, rest) := by

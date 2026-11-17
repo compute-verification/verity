@@ -9,7 +9,7 @@ public import Proofs.Flock.Claims.Recursion.Abort
 `Escapes` over the samples `BAbort` makes, each a run's coins with its abort coins `(r, a)`:
 
 * **Escapes over samples** (`EscapesD`): fork events on two samples at one tape, the second sharing the first's coins
-  before some round and sampling the rest and its abort coins fresh (`forkDraw`, as `BAbort` samples its second run), and
+  before some round and sampling the rest and its abort coins fresh (`forkSample`, as `BAbort` samples its second run), and
   one-run events, each tied to a collision among the verifier's calls in the runs `tr` at those samples.
 * **The tie** (`EscapesD.Kept`, `EscapesD.toAbort`): escapes tied to the prover's runs whose events each read only kept
   runs are tied to the runs as they abort, since a kept run is the prover's run (`abortRun_of_keep`). Their term is
@@ -28,11 +28,11 @@ open Claims
 
 /-- **A fork's second sample** at round `j`: the coins before round `j` shared with `d`, the rest of the coins and the
 abort coins `d'`'s, as `BAbort` samples its second run. -/
-def forkDraw {Coin A : Type} {n : ℕ} (j : Fin n) (d d' : (Fin n → Coin) × A) : (Fin n → Coin) × A :=
+def forkSample {Coin A : Type} {n : ℕ} (j : Fin n) (d d' : (Fin n → Coin) × A) : (Fin n → Coin) × A :=
   (forkCoins j d.1 d'.1, d'.2)
 
 /-- **One prover's escapes over samples**, at the runs `tr` at each tape and sample: fork events `ev i` on two samples, the
-second `forkDraw (j i)` of the first, with weights `c i` under a square root, and one-run events `ev₁ l` with linear
+second `forkSample (j i)` of the first, with weights `c i` under a square root, and one-run events `ev₁ l` with linear
 weights `β l`, each tied to a collision among the verifier's calls in the runs `tr` reads. -/
 structure EscapesD {Ω Coin A : Type} (H : Msg → Msg) (n : ℕ) (tr : Ω → (Fin n → Coin) × A → Transcript) where
   I : Type
@@ -46,7 +46,7 @@ structure EscapesD {Ω Coin A : Type} (H : Msg → Msg) (n : ℕ) (tr : Ω → (
   ev₁ : L → Ω → (Fin n → Coin) × A → Prop
   c_nonneg : ∀ i, 0 ≤ c i
   β_nonneg : ∀ l, 0 ≤ β l
-  tied : ∀ i ω d d', ev i ω d d' → TiedColl H ((tr ω d).vLog ++ (tr ω (forkDraw (j i) d d')).vLog)
+  tied : ∀ i ω d d', ev i ω d d' → TiedColl H ((tr ω d).vLog ++ (tr ω (forkSample (j i) d d')).vLog)
   tied₁ : ∀ l ω d, ev₁ l ω d → TiedColl H (tr ω d).vLog
 
 attribute [instance] EscapesD.finI EscapesD.finL
@@ -74,7 +74,7 @@ theorem EscapesD.term_nonneg [Fintype Coin] [Fintype A] (e : EscapesD H n tr) (�
 are kept. -/
 def EscapesD.Kept (e : EscapesD H n tr) (keep : Ω → (Fin n → Coin) → A → Bool) : Prop :=
   (∀ i ω d d', e.ev i ω d d' → keep ω d.1 d.2 = true ∧
-    keep ω (forkDraw (e.j i) d d').1 (forkDraw (e.j i) d d').2 = true) ∧
+    keep ω (forkSample (e.j i) d d').1 (forkSample (e.j i) d d').2 = true) ∧
   ∀ l ω d, e.ev₁ l ω d → keep ω d.1 d.2 = true
 
 end EscapesD
@@ -181,13 +181,13 @@ theorem Pr_fork_le_abort (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω) (
     (keep : Ω → (Fin (V.k x) → Coin) → A → Bool) (hk : 0 < V.k x) (j : Fin (V.k x))
     (ev : Ω → (Fin (V.k x) → Coin) × A → (Fin (V.k x) → Coin) × A → Prop)
     (hev : ∀ ω d d', ev ω d d' →
-      TiedColl H ((abortRun H P V x keep ω d).vLog ++ (abortRun H P V x keep ω (forkDraw j d d')).vLog)) :
+      TiedColl H ((abortRun H P V x keep ω d).vLog ++ (abortRun H P V x keep ω (forkSample j d d')).vLog)) :
     Pr (fun s : Ω × ((Fin (V.k x) → Coin) × A) × ((Fin (V.k x) → Coin) × A) => ev s.1 s.2.1 s.2.2) ≤
       forkPrA H V P x keep hk j := by
   unfold forkPrA
   refine Pr_mono fun s hs => ?_
   have hl : ∀ p ∈ (abortRun H P V x keep s.1 s.2.1).vLog ++
-      (abortRun H P V x keep s.1 (forkDraw j s.2.1 s.2.2)).vLog, H p.1 = p.2 := by
+      (abortRun H P V x keep s.1 (forkSample j s.2.1 s.2.2)).vLog, H p.1 = p.2 := by
     intro p hp
     rcases List.mem_append.1 hp with hp | hp
     · exact abortRun_vLog H P V x keep _ _ p hp

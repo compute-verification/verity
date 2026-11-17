@@ -79,7 +79,7 @@ FILL_PROOF = 1 / 16
 #: R = 128's is cost-model/v1's commitment floor too.
 HASH_LEAVES = {64: 0.101, 128: 0.060}
 HASH_RECEIPTS = 0.016
-DRAWS = 0.019
+HASH_SAMPLES = 0.019
 
 
 def hash_leaves(r: int) -> float:
@@ -125,9 +125,6 @@ class Family:
     #: P·V noised as `pv` instead of `peel` (sm_120 only, the one device with pv designs): ε_skip's ratio and the
     #: whole-model γ's change, dither-c against dither-c-peel in eps_budget (8B, floor credit; pv's γ is the TS model's)
     pv_noise: tuple[float, float] | None = None
-    #: the next larger L's design on this device (machine model, measured kernels): (the headline's L, the larger L,
-    #: its core ε as a fraction, its ratio 1 + γ)
-    larger_l: tuple[int, int, float, float] | None = None
 
     @functools.cached_property
     def fill(self) -> dict[str, list[tuple[float, float, float, float, float]]]:
@@ -161,12 +158,6 @@ FAMILIES = (
            "dither-2s-licpw-redux-ldtm0-l32", "DC-100-ri",
            "B200", 7.00, "vy-dc-b200: $7.00/h, one GPU with its host (measured price)",
            served=0.2061, route=0.0, skip_no_pv=0.0, pv_share=0.0185),
-    Family("L40S", "sm_89", "dither-2s L16 (ADA-89)", "dither-2s-l16", "", "L40S", 1.90,
-           "vy-dc-l40s: $1.90/h, one GPU with its host (measured price)",
-           served=0.2186, route=0.000226, skip_no_pv=0.0, pv_share=0.0185, larger_l=(16, 32, 0.126726, 1.5446)),
-    Family("A100", "sm_80", "dither-2s L16 (AMPERE-80)", "dither-2s-l16", "", "A100 SXM4 80 GB", 1.79,
-           "vy-dc-a100: RunPod $1.79/h (note:20261017T1852Z-draft-rt-dc, measured price)",
-           served=0.2184, route=0.0, skip_no_pv=0.0, pv_share=0.0185, larger_l=(16, 32, 0.014775, 2.9618)),
 )
 
 
@@ -216,15 +207,15 @@ def _cut_label(cut: dict) -> str:
 
 def sampling_sweep(tree: Path, out: Path = SAMPLING_DATA) -> dict:
     """Regenerate `budget_sampling.json` from OPT2's planner on `tree`, a checkout with
-    `benchmarks/sampling_plan/int8_llama.py` whose B is the serve-time total, run with `scheme=None` so a spend
+    `verity/protocols/proofs/spot/prover/cost/int8_llama.py` whose B is the serve-time total, run with `scheme=None` so a spend
     is sampling's alone, the serve-time commitments being `budget.py`'s own terms. Per regime its frontier at δ_s, and at
     each spend of SPEND_GRID the least-ε plan within it (`at_budget`, the zero-work templates included): ε_sample, the
     samples a week, the share of the plan's cost that grows with a unit's ANDs (all but the sessions' fixed cost) and the
     linears' cut. ≈ 2 s a regime."""
     tree = Path(tree).resolve()
-    sys.path[:0] = [str(tree), str(tree / "benchmarks" / "sampling_plan")]
-    import int8_llama as P
-    from inputs import I
+    sys.path[:0] = [str(tree)]
+    from verity.protocols.proofs.spot.prover.cost import int8_llama as P
+    from verity.protocols.proofs.spot.prover.cost.inputs import I
 
     P.DELTA = math.exp(-LN_INV_DELTA)
     v = {k: i.value for k, i in I.items()}
@@ -244,7 +235,7 @@ def sampling_sweep(tree: Path, out: Path = SAMPLING_DATA) -> dict:
                         round(1 - costs.statement_fixed * sessions / total, 5), _cut_label(s["cut"])])
         regimes[name] = {"commit": commit, "statement": statement, "points": pts}
     head = subprocess.run(["git", "-C", str(tree), "rev-parse", "--short=10", "HEAD"], capture_output=True, text=True)
-    doc = {"source": "budget.py --sampling-sweep: OPT2's int8 Llama-3.1-8B row (benchmarks/sampling_plan/"
+    doc = {"source": "budget.py --sampling-sweep: OPT2's int8 Llama-3.1-8B row (calibration/sampling_plan/"
                      f"int8_llama.py at {head.stdout.strip() or 'unknown'}), cost-model/v1, δ_s = 2^-41, a week of one "
                      "RTX PRO 6000; point = [B_s, eps_sample, draws a week, unit_share, linears' cut]",
            "regimes": regimes}
@@ -271,10 +262,10 @@ def _loglog(xs, ys, x: float) -> float:
     return math.exp(math.log(ys[i - 1]) + t * (math.log(ys[i]) - math.log(ys[i - 1])))
 
 
-def spend_for(draws: float, regime: str = "plain") -> float:
-    """The spend (an RTX PRO 6000's week) at which the regime's plan samples `draws` units a week."""
+def spend_for(units: float, regime: str = "plain") -> float:
+    """The spend (an RTX PRO 6000's week) at which the regime's plan samples `units` units a week."""
     xs, _, ds, _, _ = curve(regime)
-    return _loglog(ds, xs, draws)
+    return _loglog(ds, xs, units)
 
 
 @dataclass(frozen=True)
@@ -341,7 +332,7 @@ def point(f: Family, c: Config, b_s: float, *, leaf: int = 128, p: float = P_PAS
     sigma_w = luck_full / DEFICIT
     luck = s.eps * sigma_w / (1 - p)
     served = -f.served * skip if c.served else 0.0
-    hashing = hash_leaves(leaf) + HASH_RECEIPTS + DRAWS
+    hashing = hash_leaves(leaf) + HASH_RECEIPTS + HASH_SAMPLES
     return Point(c, skip + served + machine + luck + s.eps, skip, served, machine, luck, s.eps,
                  gamma - 1 + hashing + b_s, gamma - 1, hashing, b_s, s.draws, s.cut, gamma, sigma_w)
 
@@ -349,7 +340,7 @@ def point(f: Family, c: Config, b_s: float, *, leaf: int = 128, p: float = P_PAS
 def fixed_b(f: Family, c: Config, leaf: int = 128) -> float:
     """B without sampling: the transform and the hashing."""
     gamma = next(q for q in f.fill[c.mix] if q[0] == c.y)[1]
-    return gamma - 1 + hash_leaves(leaf) + HASH_RECEIPTS + DRAWS
+    return gamma - 1 + hash_leaves(leaf) + HASH_RECEIPTS + HASH_SAMPLES
 
 
 def today(f: Family, **kw) -> Point:
@@ -422,14 +413,14 @@ def levers(f: Family, **kw) -> list[dict]:
     ys = [p[0] for p in f.fill[c.mix]]
     step(point(f, Config(c.mix, ys[1], c.served), t.B_sample, **kw), f"verified filler, y = 0 → {ys[1]:g} a word",
          "the machine model's sweep (honest time modeled past the measured kernel); FILL-OPT (decision 94)")
-    step(point(f, c, f.prover * spend_for(2 * TODAY_SAMPLES), **kw), "draws 2 → 4 a round",
+    step(point(f, c, f.prover * spend_for(2 * TODAY_SAMPLES), **kw), "samples 2 → 4 a round",
          "cost-model/v1's sessions (A6's two, fitted: the session's fixed cost is the uncertain part, σ 0.5)")
-    for regime, rests in (("sessions/256", "multi-round sessions amortizing a session 256-fold (OPT2's estimate); S "
-                                           "holds when a session covers its rounds"),
-                          ("prefix, sessions/256", "also the running sums committed anyway (COMMIT's prefix mode), so "
-                                                   "chunks of 32 pay")):
+    for regime, rests in (("sessions/256", ("multi-round sessions amortizing a session 256-fold (OPT2's estimate); S "
+                                            "holds when a session covers its rounds")),
+                          ("prefix, sessions/256", ("also the running sums committed anyway (COMMIT's prefix mode), so "
+                                                    "chunks of 32 pay"))):
         step(point(f, Config(c.mix, c.y, c.served, regime), f.prover * spend_for(TODAY_SAMPLES, regime), **kw),
-             f"today's draws in regime {regime}", rests)
+             f"today's samples in regime {regime}", rests)
     step(point(f, c, t.B_sample, leaf=256, **{k: v for k, v in kw.items() if k != "leaf"}),
          "SHA-512 leaves R = 128 → 256", "COMMIT-GPU's two points extrapolated (modeled)")
     row("operand floor (--operands floor)", -f.route, 0.0, "a new named assumption on φ_del (decision 89: Daniel's)")
@@ -440,10 +431,6 @@ def levers(f: Family, **kw) -> list[dict]:
             "the served check (pv has no peel)")
     row("P·V uncredited", f.skip_no_pv - t.eps_skip, 0.0,
         f"forgoes {100 * f.pv_share:.2f}% of the credit at 8B 2K (19% at 8B 32K); changes what ε is a fraction of")
-    if f.larger_l:
-        small, big, core, gamma = f.larger_l
-        row(f"L = {small} → {big}", core - (t.eps_skip + t.eps_machine), gamma - t.gamma,
-            "the device's own designs (machine model, measured kernels); no design has a smaller L")
     step(point(f, c, t.B_sample, p=7 / 16, **kw), "2-bit coins (p ≤ 7/16)",
          "moves only luck; FRONTIER: perplexity +2.32/+2.83%, fails")
     return rows
@@ -482,20 +469,20 @@ def headline(fams=FAMILIES, mults=(1, 2, 5, 10), **kw) -> list[str]:
 
 def render(fams=FAMILIES, **kw) -> str:
     lines = ["# ε against the verification budget B (budget.py)", "",
-             "B is a fraction of the plain workload's compute (other resources at their price); ε is the headline's "
-             "core (ε_skip + served + ε_machine + ε_luck) plus sampling, OPT2's ε_sample under cost-model/v1 at δ_s = "
-             "2⁻⁴¹. The allocation is the least ε within the budget, the rest of it spent on sampling. Marginals are "
-             "−Δε per +0.1 of B (10% of the workload's compute), in percentage points, for each optimum lever's next "
-             "step.", "", "## Headline: ε = core + sampling", ""] + headline(fams, **kw) + [""]
+             ("B is a fraction of the plain workload's compute (other resources at their price); ε is the headline's "
+              "core (ε_skip + served + ε_machine + ε_luck) plus sampling, OPT2's ε_sample under cost-model/v1 at δ_s = "
+              "2⁻⁴¹. The allocation is the least ε within the budget, the rest of it spent on sampling. Marginals are "
+              "−Δε per +0.1 of B (10% of the workload's compute), in percentage points, for each optimum lever's next "
+              "step."), "", "## Headline: ε = core + sampling", ""] + headline(fams, **kw) + [""]
     for f in fams:
         t = today(f, **kw)
         lines += [f"## {f.name}: {f.design}", "",
-                  f"GPU {f.gpu} at ${f.gpu_usd_h:.2f}/h ({f.price_source}); a B_s of its compute buys "
-                  f"{1 / f.prover:.3g}× as much of cost-model/v1's RTX PRO 6000 provers.", ""]
+                  (f"GPU {f.gpu} at ${f.gpu_usd_h:.2f}/h ({f.price_source}); a B_s of its compute buys "
+                   f"{1 / f.prover:.3g}× as much of cost-model/v1's RTX PRO 6000 provers."), ""]
         for regime in ALLOCATED:
             lines += [f"Regime `{regime}`:", "",
-                      "| budget | config (mix, y, served) | ε | core | ε_skip | served | ε_machine | ε_luck | ε_sample | B "
-                      "| γ | hash + receipts + draws | B_s | draws a week | cut |",
+                      ("| budget | config (mix, y, served) | ε | core | ε_skip | served | ε_machine | ε_luck | ε_sample | B "
+                       "| γ | hash + receipts + draws | B_s | draws a week | cut |"),
                       "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|"]
             alloc = allocation(f, regime=regime, **kw)
             rows = ([("today", t, [])] if regime == "plain" else []) + [(f"{m}× today", q, mg) for m, q, mg in alloc]
@@ -510,8 +497,8 @@ def render(fams=FAMILIES, **kw) -> str:
                              f"{_pct(q.core)} | {_pct(q.eps_skip)} | {_pct(q.eps_served)} | {_pct(q.eps_machine)} | "
                              f"{_pct(q.eps_luck)} | {_pct(q.eps_sample, 4)} | {q.B:.3f} | {q.B_transform:.3f} | "
                              f"{q.B_hash:.3f} | {q.B_sample:.4f} | {q.draws:.3g} | {q.cut} |")
-            lines += ["", "Marginals at each optimum (−Δε pp per 0.1 of B; a step down's is the ε each 0.1 of B it "
-                      "frees costs):", ""]
+            lines += ["", ("Marginals at each optimum (−Δε pp per 0.1 of B; a step down's is the ε each 0.1 of B it "
+                           "frees costs):"), ""]
             for label, q, mg in rows:
                 if mg:
                     cells = ", ".join(f"{name} {-de / db * 0.1 * 100:.4f}" for name, de, db in mg if db)

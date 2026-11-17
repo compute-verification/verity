@@ -26,6 +26,7 @@ import re
 import shutil
 import socket
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -38,7 +39,7 @@ KEYS = (
 # exec.machine: the machines.toml name a `research run --on <machine>` ran on (job.json run.remote.machine), indexed so that
 # `research pods unpreserved|drain <machine>` can find every Attempt recorded on a machine; hw.hostname is the container's hostname.
 LOCKFILES = ("uv.lock", "Cargo.lock")
-UNTRACKED_CAP_BYTES = 64 << 20
+UNTRACKED_LIMIT_BYTES = 64 << 20
 #: The runner's capture of a dirty source in the run dir (`source_conditions(dirty_capture=...)`), which custody always uploads
 #: (store.custody.RUN_FILES): the tree on the machine is never a run's only copy of its source.  Inside: the diff against HEAD, and
 #: each untracked, unignored file under DIRTY_UNTRACKED/.
@@ -82,7 +83,8 @@ def _run(cmd: list[str], *, cwd: Path | None = None, timeout: float = 10.0, bina
         return None
     try:
         r = subprocess.run(cmd, cwd=cwd, capture_output=True, timeout=timeout)
-    except (OSError, subprocess.TimeoutExpired, ValueError):
+    except (OSError, subprocess.TimeoutExpired, ValueError) as e:
+        print(f"env: {cmd[0]} did not run, so what it reports is not recorded ({type(e).__name__})", file=sys.stderr, flush=True)
         return None
     if r.returncode != 0:
         return None
@@ -140,7 +142,7 @@ def _dirty_digest(root: Path, commit: str = "HEAD", capture: Path | None = None)
                 tar = _drop(tar, capture)
                 continue
             total += p.stat().st_size
-            if total > UNTRACKED_CAP_BYTES:
+            if total > UNTRACKED_LIMIT_BYTES:
                 _drop(tar, capture)
                 return "too-large"
             h.update(rel.encode("utf-8") + b"\0")
@@ -184,7 +186,8 @@ def _sha256_file(p: Path) -> str | None:
             for chunk in iter(lambda: f.read(1 << 20), b""):
                 h.update(chunk)
         return h.hexdigest()
-    except OSError:
+    except OSError as e:
+        print(f"env: {p} not hashed ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
 
 
@@ -323,8 +326,8 @@ def conditions(*, run_dir: Path | str | None = None, project: str | None = None,
     out["hw.cpu"] = _cpu()
     try:
         out["hw.hostname"] = socket.gethostname()
-    except OSError:
-        pass
+    except OSError as e:
+        print(f"env: no host name recorded ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
     out["exec.exclusive"] = exclusive
     out["exec.load_start"] = load_now()
     out["exec.project"] = project

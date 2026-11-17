@@ -6,11 +6,11 @@ public import Flock.Zk
 
 /-!
 `flock-read-tmpl`'s command: the table read's template (`Flock.ReadNet.readTmpl`), and the check that a circuit file holds
-it, which is what the read's binding (`readUnitDrawn_check`) takes of the file it reads.
+it, which is what the read's binding (`readUnitSampled_check`) takes of the file it reads.
 
     flock-read-tmpl V H                 `readTmpl V H` as `flock-ir-tmpl/v2` text, once `Tmpl.parse` reads it back and
                                         `ReadNet.check V H` accepts it
-    flock-read-tmpl check V H CIRCUIT   `ok NAME` (exit 0) when CIRCUIT parses as `flock-verify verify --zk` parses a
+    flock-read-tmpl check V H CIRCUIT   `ok NAME` (exit 0) when CIRCUIT parses as `verity-verify-proof verify --zk` parses a
                                         `verity/flock-circuit/tmpl` statement (`HmOut.parseTmpl`), its unit's template
                                         passes `ReadNet.check V H` and its outputs are its unit's; else the first of those
                                         that fails (exit 1)

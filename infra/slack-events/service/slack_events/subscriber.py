@@ -25,7 +25,7 @@ BUDGET_S = 45.0                                                  # of the functi
 
 async def on_message(message: Message[dict[str, Any]]) -> None:
     try:
-        await anyio.to_thread.run_sync(consumer.consume, deps.production(), message.payload, message.metadata.delivery_count)
+        await anyio.to_thread.run_sync(consumer.consume, deps.deployed(), message.payload, message.metadata.delivery_count)
     except consumer.Retry as r:
         raise RetryAfter(r.delay, reason=str(r)) from None
 

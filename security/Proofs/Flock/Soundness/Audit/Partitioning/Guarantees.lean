@@ -13,7 +13,7 @@ definitions they read are in `Partitioning.Model`; `Λ` below is `ln(1/δ)`.
 * `ConverseExact`, `ConverseAsymptotic`: a sampling design under which every set of `K` units escapes with probability at most `δ`
   samples at least `(n − K + 1)(1 − δ^{1/K}) ≥ (n − K + 1)/K · Λ · (1 − Λ/(2K))` units in expectation.
 * `Achievability`: independent samples with `q_u = min(1, Λ/C · w u)` meet the target, up to any `ε` per unit.
-* `GranularityOptimum` (headline): with `n` units of work `s` each, the cheapest law costs
+* `GranularityOptimum` (headline): with `n` units of work `s` each, the cheapest sampling design costs
   `c(s) · (ns/C) · Λ` up to the factor `1 − s/C − C/(ns) − sΛ/(2C)`, with `c(s) = f + o·s`. The total work `ns` and so
   `(ns/C) · Λ` don't depend on `s`. `GranularityChoice`: so the best granularity minimizes `c(s)`, up to that factor.
 * `ServedGranularityOptimum`: when serving commits every unit, sampled or not, `β` bytes each at `h` a byte with weight `w`,
@@ -21,7 +21,7 @@ definitions they read are in `Partitioning.Model`; `Λ` below is `ln(1/δ)`.
 * `ServedGranularityChoice`: so over granularities of the same work `F`, the leading served cost
   `c(s) · (F/C) · Λ + w · (F/s) · β · h` (`servedCost`) is least at `s* = √(wβhC/(oΛ))`, not at the finest `s`.
 * `HeavyUnit`: a unit doing work at least `C` is sampled with probability at least `1 − δ`.
-* `UnequalDraws`, `UnequalCost`: with unequal units of work in `[a, A]` and `A · Λ ≤ C`, every sampling design meeting the target
+* `UnequalSamples`, `UnequalCost`: with unequal units of work in `[a, A]` and `A · Λ ≤ C`, every sampling design meeting the target
   samples at least `1/ρ` of `Achievability`'s `F/C · Λ` (`F` the total work), and pays at least `1/ρ²` of its cost, less
   one term per class `[aρ^j, aρ^{j+1})` of units. `UnequalCost` also assumes `a ≤ A`, which matters only with no units.
 
@@ -29,7 +29,7 @@ definitions they read are in `Partitioning.Model`; `Λ` below is `ln(1/δ)`.
 on the leak, not leaks an adversary achieves.
 
 * `ExfiltrationOptimum`: with every unit `b` bits wide and `K` the most incorrect proof blocks the target `ℓ` allows
-  (`b·K + locBits n K ≤ ℓ < b·(K+1) + locBits n (K+1)`), a certifying law samples at least `(n − K)(1 − δ^{1/(K+1)})`
+  (`b·K + locBits n K ≤ ℓ < b·(K+1) + locBits n (K+1)`), a certifying sampling design samples at least `(n − K)(1 − δ^{1/(K+1)})`
   units, and one samples at most `n · Λ/(K+1)`, up to any `ε`.
 * `RefinementRule` (headline): splitting each unit into `r` of width `b'` costs at least what the unsplit partition
   achieves, up to the factor `(1 − K/n)(1 − Λ/(2(K+1)))`, unless `b' + log₂ r < b + log₂(K+2)/(K+1)`: refining pays
@@ -38,10 +38,10 @@ on the leak, not leaks an adversary achieves.
 **Two-stage**, with `ψ = detectionRisk N k p`:
 
 * `RiskConcave`: for `k ≥ 2` and `p ≤ 1/2`, the increments of `ψ` do not increase.
-* `Concentration`: so for wrong proof blocks spread over replay units with `m_i` each, `∑_i ψ(m_i)` is smallest when
-  they fill whole replay units, with at most one partial: the prover's least detectable placement concentrates.
-* `NestedEscape`: `ψ` is the nested law's detection risk. Under `nested`, a wrong set with `m_i` wrong proof blocks in
-  replay unit `i` escapes with probability `∏_i (1 − p + p · C(N − m_i, k)/C(N, k))`, which for `p < 1` is
+* `Concentration`: so for wrong proof blocks spread over replay blocks with `m_i` each, `∑_i ψ(m_i)` is smallest when
+  they fill whole replay blocks, with at most one partial: the prover's least detectable placement concentrates.
+* `NestedEscape`: `ψ` is the nested sampling design's detection risk. Under `nested`, a wrong set with `m_i` wrong proof blocks in
+  replay block `i` escapes with probability `∏_i (1 − p + p · C(N − m_i, k)/C(N, k))`, which for `p < 1` is
   `exp(−∑_i ψ(m_i))`.
 -/
 
@@ -54,56 +54,56 @@ open Finset
 /-- **The converse, exactly.** A sampling design under which every set of at least `K` of its `n` units escapes with probability at
 most `δ` samples at least `(n − K + 1)(1 − δ^{1/K})` units in expectation. -/
 def ConverseExact : Prop :=
-  ∀ (n K : ℕ) (L : Law n) (δ : ℝ), 0 < K → K ≤ n → (L.miss K).toReal ≤ δ →
-    ((n : ℝ) - K + 1) * (1 - δ ^ ((K : ℝ)⁻¹)) ≤ meanDraws L
+  ∀ (n K : ℕ) (L : SamplingDesign n) (δ : ℝ), 0 < K → K ≤ n → (L.miss K).toReal ≤ δ →
+    ((n : ℝ) - K + 1) * (1 - δ ^ ((K : ℝ)⁻¹)) ≤ meanSamples L
 
 /-- **The converse, asymptotically**: `(n − K + 1)(1 − δ^{1/K}) ≥ (n − K + 1)/K · Λ · (1 − Λ/(2K))`, so a sampling design meeting
 `ConverseExact`'s hypothesis samples about `(n/K) · ln(1/δ)` units when `K ≫ ln(1/δ)`. -/
 def ConverseAsymptotic : Prop :=
-  ∀ (n K : ℕ) (L : Law n) (δ : ℝ), 0 < K → K ≤ n → 0 < δ → δ ≤ 1 → (L.miss K).toReal ≤ δ →
-    ((n : ℝ) - K + 1) / K * Real.log δ⁻¹ * (1 - Real.log δ⁻¹ / (2 * K)) ≤ meanDraws L
+  ∀ (n K : ℕ) (L : SamplingDesign n) (δ : ℝ), 0 < K → K ≤ n → 0 < δ → δ ≤ 1 → (L.miss K).toReal ≤ δ →
+    ((n : ℝ) - K + 1) / K * Real.log δ⁻¹ * (1 - Real.log δ⁻¹ / (2 * K)) ≤ meanSamples L
 
-/-- **Achievability**: for any `ε > 0`, some law meets the free-compute target while sampling unit `u` with probability
+/-- **Achievability**: for any `ε > 0`, some sampling design meets the free-compute target while sampling unit `u` with probability
 at most `min(1, Λ/C · w u) + ε`. -/
 def Achievability : Prop :=
   ∀ (n : ℕ) (w : Fin n → ℝ) (C δ ε : ℝ), (∀ u, 0 ≤ w u) → 0 < C → 0 < δ → δ ≤ 1 → 0 < ε →
-    ∃ L : Law n, MeetsTarget L w C δ ∧ ∀ u, (L.incl u).toReal ≤ min 1 (Real.log δ⁻¹ / C * w u) + ε
+    ∃ L : SamplingDesign n, MeetsTarget L w C δ ∧ ∀ u, (L.incl u).toReal ≤ min 1 (Real.log δ⁻¹ / C * w u) + ε
 
 /-- **The granularity optimum.** With `n` units of work `s` each, every sampling design meeting the free-compute target costs at
-least `c(s) · (ns/C) · Λ · (1 − s/C − C/(ns) − sΛ/(2C))`, and some law costs at most `c(s) · (ns/C) · Λ + ε`. -/
+least `c(s) · (ns/C) · Λ · (1 − s/C − C/(ns) − sΛ/(2C))`, and some sampling design costs at most `c(s) · (ns/C) · Λ + ε`. -/
 def GranularityOptimum : Prop :=
   ∀ (n : ℕ) (s C f o δ : ℝ), 0 < s → 0 < C → 0 ≤ f → 0 ≤ o → 0 < δ → δ ≤ 1 →
-    (∀ L : Law n, MeetsTarget L (fun _ => s) C δ →
+    (∀ L : SamplingDesign n, MeetsTarget L (fun _ => s) C δ →
       unitCost f o s * (n * s / C * Real.log δ⁻¹) * (1 - s / C - C / (n * s) - s * Real.log δ⁻¹ / (2 * C)) ≤
         cost L fun _ => unitCost f o s) ∧
-    ∀ ε > 0, ∃ L : Law n, MeetsTarget L (fun _ => s) C δ ∧
+    ∀ ε > 0, ∃ L : SamplingDesign n, MeetsTarget L (fun _ => s) C δ ∧
       cost L (fun _ => unitCost f o s) ≤ unitCost f o s * (n * s / C * Real.log δ⁻¹) + ε
 
 /-- **The best granularity minimizes `c(s)`.** Divide the same work into `n` units of size `s` or `n'` of size `s'`.
-For every sampling design meeting the target at `s'`, some law meets it at `s` and costs at most `c(s)/c(s')` times as much, up to
+For every sampling design meeting the target at `s'`, some sampling design meets it at `s` and costs at most `c(s)/c(s')` times as much, up to
 the factor `1 − s'/C − C/(n's') − s'Λ/(2C)` and any `ε`. Stated cross-multiplied. -/
 def GranularityChoice : Prop :=
   ∀ (n n' : ℕ) (s s' C f o δ : ℝ), 0 < s → 0 < s' → (n : ℝ) * s = n' * s' → 0 < C → 0 ≤ f → 0 ≤ o → 0 < δ →
-    δ ≤ 1 → ∀ L' : Law n', MeetsTarget L' (fun _ => s') C δ → ∀ ε > 0, ∃ L : Law n, MeetsTarget L (fun _ => s) C δ ∧
+    δ ≤ 1 → ∀ L' : SamplingDesign n', MeetsTarget L' (fun _ => s') C δ → ∀ ε > 0, ∃ L : SamplingDesign n, MeetsTarget L (fun _ => s) C δ ∧
       unitCost f o s' * ((1 - s' / C - C / (n' * s') - s' * Real.log δ⁻¹ / (2 * C)) *
           cost L fun _ => unitCost f o s) ≤
         unitCost f o s * cost L' (fun _ => unitCost f o s') + ε
 
 /-- **The granularity optimum with serving's commitment.** Serving commits every one of the `n` units, sampled or not,
-`β` bytes each at `h` a byte, weighted `w` against proving. Every law meeting the free-compute target costs at least
-`c(s) · (ns/C) · Λ · (1 − s/C − C/(ns) − sΛ/(2C)) + w·n·β·h` in proving and commitment, and some law costs at most
+`β` bytes each at `h` a byte, weighted `w` against proving. Every sampling design meeting the free-compute target costs at least
+`c(s) · (ns/C) · Λ · (1 − s/C − C/(ns) − sΛ/(2C)) + w·n·β·h` in proving and commitment, and some sampling design costs at most
 `c(s) · (ns/C) · Λ + w·n·β·h + ε`. -/
 def ServedGranularityOptimum : Prop :=
   ∀ (n : ℕ) (s C f o δ w β h : ℝ), 0 < s → 0 < C → 0 ≤ f → 0 ≤ o → 0 < δ → δ ≤ 1 →
-    (∀ L : Law n, MeetsTarget L (fun _ => s) C δ →
+    (∀ L : SamplingDesign n, MeetsTarget L (fun _ => s) C δ →
       unitCost f o s * (n * s / C * Real.log δ⁻¹) * (1 - s / C - C / (n * s) - s * Real.log δ⁻¹ / (2 * C)) +
           w * (n * β * h) ≤
         cost L (fun _ => unitCost f o s) + w * (n * β * h)) ∧
-    ∀ ε > 0, ∃ L : Law n, MeetsTarget L (fun _ => s) C δ ∧
+    ∀ ε > 0, ∃ L : SamplingDesign n, MeetsTarget L (fun _ => s) C δ ∧
       cost L (fun _ => unitCost f o s) + w * (n * β * h) ≤
         unitCost f o s * (n * s / C * Real.log δ⁻¹) + w * (n * β * h) + ε
 
-/-- **The served granularity choice: the root law.** Cut work `F` into units of work `s`, each committing `β` bytes at
+/-- **The served granularity choice: the root sampling design.** Cut work `F` into units of work `s`, each committing `β` bytes at
 `h` a byte with weight `w`, with `c(s) = f + o·s`, `o > 0` and `δ < 1`. The leading served cost `servedCost` (proving
 `c(s) · (F/C) · Λ` plus commitment `w · (F/s) · β · h`) is least at `s* = √(wβhC/(oΛ))`: no granularity costs less. -/
 def ServedGranularityChoice : Prop :=
@@ -113,16 +113,16 @@ def ServedGranularityChoice : Prop :=
 /-- **A heavy unit is sampled almost surely**: under a sampling design meeting the free-compute target, a unit doing work at least
 `C` is sampled with probability at least `1 − δ`. -/
 def HeavyUnit : Prop :=
-  ∀ (n : ℕ) (w : Fin n → ℝ) (C δ : ℝ) (L : Law n), MeetsTarget L w C δ → ∀ u, C ≤ w u → 1 - δ ≤ (L.incl u).toReal
+  ∀ (n : ℕ) (w : Fin n → ℝ) (C δ : ℝ) (L : SamplingDesign n), MeetsTarget L w C δ → ∀ u, C ≤ w u → 1 - δ ≤ (L.incl u).toReal
 
 /-- **The converse for unequal units, in samples.** With every unit's work in `[a, A]`, `A · Λ ≤ C` and `ρ > 1`, every sampling design
 meeting the free-compute target samples at least `Λ (1 − AΛ/(2C)) (F/(ρC) · (1 − A/C) − J)` units in expectation, where
 `F` is the total work and `J = ⌊log_ρ (A/a)⌋ + 1` the number of classes `[aρ^j, aρ^{j+1})`. -/
-def UnequalDraws : Prop :=
+def UnequalSamples : Prop :=
   ∀ (n : ℕ) (w : Fin n → ℝ) (ρ a A C δ : ℝ), 1 < ρ → 0 < a → (∀ u, a ≤ w u ∧ w u ≤ A) → 0 < C → 0 < δ → δ ≤ 1 →
-    A * Real.log δ⁻¹ ≤ C → ∀ L : Law n, MeetsTarget L w C δ →
+    A * Real.log δ⁻¹ ≤ C → ∀ L : SamplingDesign n, MeetsTarget L w C δ →
       Real.log δ⁻¹ * (1 - A * Real.log δ⁻¹ / (2 * C)) *
-          ((∑ u, w u) / (ρ * C) * (1 - A / C) - (⌊Real.logb ρ (A / a)⌋₊ + 1)) ≤ meanDraws L
+          ((∑ u, w u) / (ρ * C) * (1 - A / C) - (⌊Real.logb ρ (A / a)⌋₊ + 1)) ≤ meanSamples L
 
 /-- **The converse for unequal units, in cost**, with unit `u` costing `c(w u) = f + o · w u`: every sampling design meeting the
 target pays at least `Λ (1 − AΛ/(2C)) (∑_u w u · c(w u)/(ρ²C) · (1 − A/C) − J · c(A))`, against `Achievability`'s
@@ -130,19 +130,19 @@ target pays at least `Λ (1 − AΛ/(2C)) (∑_u w u · c(w u)/(ρ²C) · (1 −
 negative `A` makes `c(A)` negative and the bound positive while every sampling design costs `0`. -/
 def UnequalCost : Prop :=
   ∀ (n : ℕ) (w : Fin n → ℝ) (ρ a A C δ f o : ℝ), 1 < ρ → 0 < a → a ≤ A → (∀ u, a ≤ w u ∧ w u ≤ A) → 0 < C →
-    0 < δ → δ ≤ 1 → 0 ≤ f → 0 ≤ o → A * Real.log δ⁻¹ ≤ C → ∀ L : Law n, MeetsTarget L w C δ →
+    0 < δ → δ ≤ 1 → 0 ≤ f → 0 ≤ o → A * Real.log δ⁻¹ ≤ C → ∀ L : SamplingDesign n, MeetsTarget L w C δ →
       Real.log δ⁻¹ * (1 - A * Real.log δ⁻¹ / (2 * C)) *
           ((∑ u, w u * unitCost f o (w u)) / (ρ ^ 2 * C) * (1 - A / C) -
             (⌊Real.logb ρ (A / a)⌋₊ + 1) * unitCost f o A) ≤ cost L fun u => unitCost f o (w u)
 
 /-- **The exfiltration optimum, for the bound.** With every unit `b` bits wide, let `K` be the most incorrect proof blocks the
-target `ℓ` allows: `b·K + locBits n K ≤ ℓ < b·(K+1) + locBits n (K+1)`. Every law whose bound certifies `ℓ` samples at
-least `(n − K)(1 − δ^{1/(K+1)})` units in expectation, and some law certifying `ℓ` samples at most `n · Λ/(K+1) + ε`. -/
+target `ℓ` allows: `b·K + locBits n K ≤ ℓ < b·(K+1) + locBits n (K+1)`. Every sampling design whose bound certifies `ℓ` samples at
+least `(n − K)(1 − δ^{1/(K+1)})` units in expectation, and some sampling design certifying `ℓ` samples at most `n · Λ/(K+1) + ε`. -/
 def ExfiltrationOptimum : Prop :=
   ∀ (n b K : ℕ) (δ ℓ : ℝ), 0 < δ → δ ≤ 1 → (b : ℝ) * K + locBits n K ≤ ℓ →
     ℓ < (b : ℝ) * (K + 1) + locBits n (K + 1) →
-    (∀ L : Law n, CertifiesLeak L (fun _ => b) δ ℓ → ((n : ℝ) - K) * (1 - δ ^ ((K + 1 : ℝ)⁻¹)) ≤ meanDraws L) ∧
-    ∀ ε > 0, ∃ L : Law n, CertifiesLeak L (fun _ => b) δ ℓ ∧ meanDraws L ≤ n * Real.log δ⁻¹ / (K + 1) + ε
+    (∀ L : SamplingDesign n, CertifiesLeak L (fun _ => b) δ ℓ → ((n : ℝ) - K) * (1 - δ ^ ((K + 1 : ℝ)⁻¹)) ≤ meanSamples L) ∧
+    ∀ ε > 0, ∃ L : SamplingDesign n, CertifiesLeak L (fun _ => b) δ ℓ ∧ meanSamples L ≤ n * Real.log δ⁻¹ / (K + 1) + ε
 
 /-- **The refinement rule, for the bound.** Split each of `n` units of work `s` and width `b` into `r` units of work
 `s/r` and width `b'`, with `K` as in `ExfiltrationOptimum` and `2(K + 1) ≤ n`. If `b + log₂(K+2)/(K+1) ≤ b' + log₂ r`,
@@ -153,9 +153,9 @@ def RefinementRule : Prop :=
   ∀ (n r b b' K : ℕ) (s f o δ ℓ : ℝ), 1 ≤ r → 0 < s → 0 ≤ f → 0 ≤ o → 0 < δ → δ ≤ 1 → 2 * (K + 1) ≤ n →
     (b : ℝ) * K + locBits n K ≤ ℓ → ℓ < (b : ℝ) * (K + 1) + locBits n (K + 1) →
     (b : ℝ) + Real.logb 2 (K + 2) / (K + 1) ≤ b' + Real.logb 2 r →
-    (∀ ε > 0, ∃ L : Law n, CertifiesLeak L (fun _ => b) δ ℓ ∧
+    (∀ ε > 0, ∃ L : SamplingDesign n, CertifiesLeak L (fun _ => b) δ ℓ ∧
       cost L (fun _ => unitCost f o s) ≤ unitCost f o s * (n * Real.log δ⁻¹ / (K + 1)) + ε) ∧
-    ∀ L' : Law (r * n), CertifiesLeak L' (fun _ => b') δ ℓ →
+    ∀ L' : SamplingDesign (r * n), CertifiesLeak L' (fun _ => b') δ ℓ →
       (1 - K / n) * (1 - Real.log δ⁻¹ / (2 * (K + 1))) * (unitCost f o s * (n * Real.log δ⁻¹ / (K + 1))) ≤
         cost L' fun _ => unitCost f o (s / r)
 
@@ -164,29 +164,29 @@ def RiskConcave : Prop :=
   ∀ (N k m : ℕ) (p : ℝ), 2 ≤ k → 0 ≤ p → p ≤ 1 / 2 →
     detectionRisk N k p (m + 2) - detectionRisk N k p (m + 1) ≤ detectionRisk N k p (m + 1) - detectionRisk N k p m
 
-/-- **Concentration.** For `k ≥ 2` and `p ≤ 1/2`, wrong proof blocks spread over `R` replay units of `N`, `m i` in
-replay unit `i`, have a total detection risk at least that of the same number `M = ∑_i m i` packed into `⌊M/N⌋` full
-replay units and one holding `M mod N`. -/
+/-- **Concentration.** For `k ≥ 2` and `p ≤ 1/2`, wrong proof blocks spread over `R` replay blocks of `N`, `m i` in
+replay block `i`, have a total detection risk at least that of the same number `M = ∑_i m i` packed into `⌊M/N⌋` full
+replay blocks and one holding `M mod N`. -/
 def Concentration : Prop :=
   ∀ (N k R : ℕ) (p : ℝ), 2 ≤ k → k ≤ N → 0 ≤ p → p ≤ 1 / 2 → ∀ m : Fin R → ℕ, (∀ i, m i ≤ N) →
     (((∑ i, m i) / N : ℕ) : ℝ) * detectionRisk N k p N + detectionRisk N k p ((∑ i, m i) % N) ≤
       ∑ i, detectionRisk N k p (m i)
 
-/-- **The nested law's escape.** Under `nested R N k a b`, with `p = a/b ≤ 1`, a set `B` of proof blocks with
-`m_i = wrongIn B i` of them in replay unit `i` escapes with probability `∏_i (1 − p + p · C(N − m_i, k)/C(N, k))`: each
-replay unit escapes its two stages independently of the others. For `p < 1` that is `exp(−∑_i ψ(m_i))`, with
+/-- **The nested sampling design's missProb.** Under `nested R N k a b`, with `p = a/b ≤ 1`, a set `B` of proof blocks with
+`m_i = incorrectIn B i` of them in replay block `i` escapes with probability `∏_i (1 − p + p · C(N − m_i, k)/C(N, k))`: each
+replay block escapes its two stages independently of the others. For `p < 1` that is `exp(−∑_i ψ(m_i))`, with
 `ψ = detectionRisk N k p`.
 
-Under `nested` every commitment comes before the one nested sample, so `nested` is a one-stage law over the proof blocks.
-The two-stage design commits a sampled replay unit's interior after the first stage, and its acceptance probability at
+Under `nested` every commitment comes before the one nested sample, so `nested` is a one-stage sampling design over the proof blocks.
+The two-stage design commits a sampled replay block's interior after the first stage, and its acceptance probability at
 the footprint (`Claims.Sampling.Design.Two.Pa`) is `E_S ∏_{i ∈ S} C(N − m_i, k)/C(N, k)` over the first stage's sample
-`S`, with `m_i` replay unit `i`'s footprint. A Bernoulli(`p`) first stage samples the replay units independently, so that
+`S`, with `m_i` replay block `i`'s footprint. A Bernoulli(`p`) first stage samples the replay blocks independently, so that
 is this product at the footprints. -/
 def NestedEscape : Prop :=
   ∀ (R N k a b : ℕ) [NeZero b] (hk : k ≤ N), a ≤ b → ∀ B : Finset (Fin (R * N)),
-    ((nested R N k a b hk).escape B).toReal =
-        ∏ i, (1 - (a / b : ℝ) + (a / b : ℝ) * ((N - wrongIn B i).choose k : ℝ) / (N.choose k : ℝ)) ∧
-      (a < b → ((nested R N k a b hk).escape B).toReal =
-        Real.exp (-∑ i, detectionRisk N k (a / b) (wrongIn B i)))
+    ((nested R N k a b hk).missProb B).toReal =
+        ∏ i, (1 - (a / b : ℝ) + (a / b : ℝ) * ((N - incorrectIn B i).choose k : ℝ) / (N.choose k : ℝ)) ∧
+      (a < b → ((nested R N k a b hk).missProb B).toReal =
+        Real.exp (-∑ i, detectionRisk N k (a / b) (incorrectIn B i)))
 
 end FlockSoundness.Audit.Partitioning.Guarantees

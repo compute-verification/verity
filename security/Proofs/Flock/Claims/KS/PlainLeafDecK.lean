@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.KS.PlainBound
-public import Proofs.Flock.Claims.KS.PlainDrawAccK
+public import Proofs.Flock.Claims.KS.PlainSampleAccK
 public import Proofs.Flock.Claims.KS.PlainLive
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -35,8 +35,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.KS.DecodeHidden
-import Proofs.Flock.Claims.KS.PlainDrawDecK
-import Proofs.Flock.Claims.KS.PlainDrawK
+import Proofs.Flock.Claims.KS.PlainSampleDecK
+import Proofs.Flock.Claims.KS.PlainSampleK
 import Proofs.Flock.Soundness.Discharge.Exec.VerifyK
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
@@ -46,7 +46,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 
 The scope admits hidden outputs under plain SHA-512 leaves (`flock-leaf/sha512-unsalted`) without `--zk`
 (`ProvedScope.leafOk`). Their model leaf is `Refine.leafPlain` (`Refine.leafOfId`), not the salted `leaf512` that
-`PlainDrawAccK` and `PlainDrawDecK` read, and the decoders there are right at `leafPlain` by the same proofs, through
+`PlainSampleAccK` and `PlainSampleDecK` read, and the decoders there are right at `leafPlain` by the same proofs, through
 `keep` and at any record writer, with `table_verdict_plain` and `setupHidden_plain` for `table_verdict_hm96` and
 `setupHidden_hm96`. At `keep := id` and `wrPD` they are `PlainLeafDec`'s:
 
@@ -72,9 +72,9 @@ def TagsOkHU (I : Inputs) : Prop :=
 
 end FlockSoundness.Discharge.HiddenDec
 
-namespace FlockSoundness.Discharge.AtDraw
+namespace FlockSoundness.Discharge.AtSample
 
-open Claims.Bridge.PlainDraw (setupAtD AcceptsAtDK named_of_setupAtD)
+open Claims.Bridge.PlainSample (setupAtD AcceptsAtDK named_of_setupAtD)
 
 local notation "𝔽" => FlockLevel3.GF128
 
@@ -84,7 +84,7 @@ open Flock FlockLevel3 Refine Game Transcript Model Accounting
 open FlockSoundness.Discharge.Exec FlockSoundness.Discharge.HiddenExec
 open Lean (Json)
 
-/-- **flock-verify's acceptance at `dr` through `keep` under hidden outputs and plain SHA-512 leaves makes each table's
+/-- **verity-verify-proof's acceptance at `dr` through `keep` under hidden outputs and plain SHA-512 leaves makes each table's
 verdict accept at the plain leaf** (`accepts_verdict_plainAnyD`). -/
 theorem accepts_verdict_plainAnyDK (keep : Bool → Bool) {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript}
     (hh : I.tags.hiddenOutputs = true) (hl : I.tags.merkleLeaf = "flock-leaf/sha512-unsalted")
@@ -157,7 +157,7 @@ section Req0
 open Flock Refine Model Game FlockSoundness.Discharge.Exec
 open Lean (Json)
 
-/-- **At flock-verify's acceptance at `dr` through `keep`, each table's level-0 openings at the plain leaf are its
+/-- **At verity-verify-proof's acceptance at `dr` through `keep`, each table's level-0 openings at the plain leaf are its
 reps' deployed entries** (`accepts_opens₀LDU`): `accepts_opens₀LDLfK` at `leafPlain`. -/
 theorem accepts_opens₀LDUK (keep : Bool → Bool)
     {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript} (h : AcceptsAtDK keep I dr t) :
@@ -210,7 +210,7 @@ open Flock Refine Exec Game Model Accounting Audit
 open FlockSoundness.Discharge.DecodeZL FlockSoundness.Discharge.HiddenExec
 open Lean (Json)
 
-/-- **flock-verify's acceptance at `dr` through `keep` of a one-table session under hidden outputs and plain SHA-512
+/-- **verity-verify-proof's acceptance at `dr` through `keep` of a one-table session under hidden outputs and plain SHA-512
 leaves, rep by rep** (`accepts_repsOneDU`): `accepts_repsOneDLfK` at `leafPlain`. -/
 theorem accepts_repsOneDUK (keep : Bool → Bool)
     {I : Inputs} {dr : Option Json} {t : Exec.Transcript} (hrr : I.tags.retainRounds = true)
@@ -244,12 +244,12 @@ theorem accepts_repsOneDUK (keep : Bool → Bool)
 
 end Reps
 
-end FlockSoundness.Discharge.AtDraw
+end FlockSoundness.Discharge.AtSample
 
-namespace Claims.Bridge.PlainDraw
+namespace Claims.Bridge.PlainSample
 
 open _root_.Flock FlockSoundness FlockSoundness.Game FlockSoundness.Refine FlockSoundness.Discharge
-  FlockSoundness.Discharge.Exec Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain FlockSoundness.Discharge.AtDraw
+  FlockSoundness.Discharge.Exec Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain FlockSoundness.Discharge.AtSample
 open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
@@ -260,8 +260,8 @@ open DecodeZL HiddenExec HiddenDec in
 theorem decodesTable_wrK_scHU_of (keep : Bool → Bool)
     {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
-    (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
-    (hT : TagsOkHU I) {S : Finset (Fin n)} (hS : DrawOkH I dj mPts S) (R : Reg) {N : ℕ}
+    (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀)) {Reg : Type}
+    (hT : TagsOkHU I) {S : Finset (Fin n)} (hS : SampleOkH I dj mPts S) (R : Reg) {N : ℕ}
     (hN : N = 2 ^ (lvOf (tablesAtH (Reg := Reg) dj x₀ S R).sch 0).logLen) (C : Fin N → List 𝔽)
     (rootB₀ : Array ByteArray) (wr : Tables.LiveOutJ 1 mPts → Exec.Transcript)
     (hwr : ∀ o, RecordsLiveAtDK keep I (dj S) o (wr o)) (j : Fin [tablesAtH (Reg := Reg) dj x₀ S R].length) :
@@ -283,8 +283,8 @@ open DecodeZL HiddenExec HiddenDec in
 theorem decodesTable_wrPDK_scHU (keep : Bool → Bool)
     {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
-    (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
-    (hT : TagsOkHU I) {S : Finset (Fin n)} (hS : DrawOkH I dj mPts S) (R : Reg) {N : ℕ}
+    (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀)) {Reg : Type}
+    (hT : TagsOkHU I) {S : Finset (Fin n)} (hS : SampleOkH I dj mPts S) (R : Reg) {N : ℕ}
     (hN : N = 2 ^ (lvOf (tablesAtH (Reg := Reg) dj x₀ S R).sch 0).logLen) (C : Fin N → List 𝔽)
     (rootB₀ : Array ByteArray) (j : Fin [tablesAtH (Reg := Reg) dj x₀ S R].length) :
     Tables.DecodesTable (fun _ cap pend os => tableOutL H512 enc512 leafPlain cap pend os)
@@ -300,7 +300,7 @@ theorem decodesTable_wrPDK_scHU (keep : Bool → Bool)
   decodesTable_wrK_scHU_of keep ht hc dj x₀ hT hS R hN C rootB₀ (wrPDK keep I (dj S))
     (recordsLiveAtDK_wrPDK keep I (dj S)) j
 
-end Claims.Bridge.PlainDraw
+end Claims.Bridge.PlainSample
 
 namespace FlockDeploy.KS
 
@@ -323,7 +323,7 @@ theorem plain_setupHiddenU {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse 
       st.m ≤ 35 :=
   plain_setupHiddenT hs hin hset h hh hl hd
 
-open Classical Discharge.Tables Claims.Bridge.PlainDraw in
+open Classical Discharge.Tables Claims.Bridge.PlainSample in
 /-- **The deployed plain decoders are right at `plainTab` for the verdict at the sample, at hidden outputs and plain
 SHA-512 leaves, at a record writer**: `plain_hdecHLfAtK_of` at `LeafForm.plain`. -/
 theorem plain_hdecHUAtK_of (keep : Bool → Bool)
@@ -351,10 +351,10 @@ theorem plain_hdecHUAtK_of (keep : Bool → Bool)
       (fun _ _ => true) (fun _ _ _ => []) (fun rs _ => capOfRoot rs[0]!)
       (fun j => repsOf (D := Refine.Dig) execArith ([plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay].get j))
       j :=
-  plain_hdecHLfAtK_of keep AtDraw.LeafForm.plain hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay C rootB₀ wr
+  plain_hdecHLfAtK_of keep AtSample.LeafForm.plain hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay C rootB₀ wr
     hwr
 
-open Classical Discharge.Tables Claims.Bridge.PlainDraw in
+open Classical Discharge.Tables Claims.Bridge.PlainSample in
 /-- **The deployed plain decoders are right at `plainTab` for the verdict at the sample, at hidden outputs and plain
 SHA-512 leaves**: `plain_hdecHUAt` with `plainVerdictAtK keep` for `plainVerdictAt` (`plain_hdecHUAtK_of` at
 `wrPDK`). -/

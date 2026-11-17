@@ -8,7 +8,7 @@ public import Proofs.Flock.Soundness.StrictCR
 /-!
 # The end-to-end theorem with the value binding of `hm96-sha512/row/v1` rows
 
-`flock_e2e_count` and `flock_e2e_drawn` (`E2E.lean`), and their forms at the executable's sampling design
+`flock_e2e_count` and `flock_e2e_sampled` (`E2E.lean`), and their forms at the executable's sampling design
 (`ExecStratified.lean`), with `vb : ValueBinding` built from the serving rows (`HmRows.binding`). The binding's hash is
 SHA-512 (`Refine.H512`), so `SHA512CRExpected` (`hCR`) is about SHA-512 itself, and what `vb` carried becomes:
 * `HmRowComputes` (`hHm`), the circuit's row hashing, the one gap of the binding;
@@ -20,7 +20,7 @@ SHA-512 (`Refine.H512`), so `SHA512CRExpected` (`hCR`) is about SHA-512 itself, 
 of the finders built from the prover bounded (`hCR : LinkCR … (reg σ) (cont σ) …`). The other hypotheses (`dp`, `hConst`,
 `hZero`) are the skeleton's, unchanged (`E2E.lean`).
 
-**The two forms of SHA-512's collision resistance.** The binding error `δ_link` is under `SHA512CRExpected` (`ecr/sha-512`,
+**The two forms of SHA-512's collision resistance.** The binding error `ε_bind` is under `SHA512CRExpected` (`ecr/sha-512`,
 through `hCR`), of SHA-512 itself, since the rows' binding hashes with it. The knowledge term and `δ_tree` are under
 `SHA512CRStrict` (`cr/sha-512`, through `hKS` and `hT`), of the session's hash `H`, which `Prog.flock_headline` takes to
 be SHA-512; each at its finders' budgets:
@@ -37,9 +37,9 @@ named hypothesis. The skeleton's `hExec` (every accept is the model's) gives a c
 (`TreeRewind.ofNever`).
 
 **A3.** None of these forms takes A3 (`uniform/io-getrandombytes`). The generic forms hold at every sampling design `L`, the live
-sample `Law.execOS` included, and read it only through their terms. The `_exec` forms are at `Law.execStratified`, whose
-outcomes are the byte tapes themselves, uniform by construction. The live verifier's bytes enter through `Law.execOS`, and
-A3 compares its count curve with `Law.stratified`'s (`Law.execOS_miss_le`): `Prog.flock_headline` composes the two.
+sample `SamplingDesign.execOS` included, and read it only through their terms. The `_exec` forms are at `SamplingDesign.execStratified`, whose
+outcomes are the byte tapes themselves, uniform by construction. The live verifier's bytes enter through `SamplingDesign.execOS`, and
+A3 compares its count curve with `SamplingDesign.stratified`'s (`SamplingDesign.execOS_miss_le`): `Prog.flock_headline` composes the two.
 -/
 
 @[expose] public section
@@ -66,15 +66,15 @@ variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) {mPts : ℕ}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
-  {L : Law n}
+  {L : SamplingDesign n}
 
 /-- **The end-to-end count curve, with the rows' value binding**: `flock_e2e_count` at `vb := HmRows.binding rs hHm`.
-If `execAccept` holds, the probability that at least `K` units of the committed circuit are wrong at the committed values
-is at most `miss_L(K) + ε_ks + δ_link + δ_tree`: `ε_ks` and `δ_tree` under `SHA512CRStrict` of `H` (`cr/sha-512`,
-through `hKS` and `hT`), `δ_link` under `SHA512CRExpected` of SHA-512 (`ecr/sha-512`, through `hCR`). Beyond the
+If `execAccept` holds, the probability that at least `K` units of the committed circuit are incorrect at the committed values
+is at most `miss_L(K) + ε_ks + ε_bind + δ_tree`: `ε_ks` and `δ_tree` under `SHA512CRStrict` of `H` (`cr/sha-512`,
+through `hKS` and `hT`), `ε_bind` under `SHA512CRExpected` of SHA-512 (`ecr/sha-512`, through `hCR`). Beyond the
 skeleton's `dp`, `hConst` and `hZero`, it takes the rows' layout (`lay`, `rs`), `HmRowComputes` (`hHm`) and the serving
 roots' rewinding (`tr`). It takes no A3: `miss_L` is the sampling design's own, and `Prog.flock_headline` bounds the live sample's by
-`Law.stratified`'s under A3. -/
+`SamplingDesign.stratified`'s under A3. -/
 theorem flock_e2e_count_hm96
     {execAccept : Bool × Finset (Fin n) → Prop}
     {unitRows : Fin n → FlockSoundness.Rows} (dp : P.DerivedPlaces plan tab unitRows)
@@ -90,7 +90,7 @@ theorem flock_e2e_count_hm96
     (tr : StrictCR.TreeRewind H (audit L Reg (batchedSession H E plan)) σ fun o => execAccept o ∧ o.1 = false)
     {qT : ℝ} (hT : tr.finder.CR H qT) :
     prob (fun o => execAccept o ∧
-        K ≤ (P.wrong (Xpub ones zeros (P.Xplur H E plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))).card)
+        K ≤ (P.incorrect (Xpub ones zeros (P.Xplur H E plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))).card)
         (audit L Reg (batchedSession H E plan)) σ ≤
       L.miss K + StrictCR.ksAvgStrict plan L k qF qS (reg σ) +
         P.linkBoundE (L := L) plan tab (rs.binding hHm) k Rw M ρ t' + ENNReal.ofReal (tr.bound qT) :=
@@ -100,11 +100,11 @@ theorem flock_e2e_count_hm96
       (add_le_add (add_le_add le_rfl (StrictCR.ksAvgBE_le_strict H E plan k (reg σ) (cont σ) hKS)) le_rfl))
     (tr.le hT))
 
-/-- **The end-to-end drawn-unit bound, with the rows' value binding**: `flock_e2e_drawn` at
-`vb := HmRows.binding rs hHm`, at most `ε_ks + δ_link + δ_tree`, as in `flock_e2e_count_hm96` (`cr/sha-512` through `hKS`
-and `hT`, `ecr/sha-512` through `hCR`). It reads the sampling design only through `ε_ks` and `δ_link`, both at `L`, so it holds as
-stated at the live sample (`L := Law.execOS …`), with no A3. -/
-theorem flock_e2e_drawn_hm96
+/-- **The end-to-end drawn-unit bound, with the rows' value binding**: `flock_e2e_sampled` at
+`vb := HmRows.binding rs hHm`, at most `ε_ks + ε_bind + δ_tree`, as in `flock_e2e_count_hm96` (`cr/sha-512` through `hKS`
+and `hT`, `ecr/sha-512` through `hCR`). It reads the sampling design only through `ε_ks` and `ε_bind`, both at `L`, so it holds as
+stated at the live sample (`L := SamplingDesign.execOS …`), with no A3. -/
+theorem flock_e2e_sampled_hm96
     {execAccept : Bool × Finset (Fin n) → Prop}
     {unitRows : Fin n → FlockSoundness.Rows} (dp : P.DerivedPlaces plan tab unitRows)
     (ones : Finset (Fin C.N)) (hConst : P.ConstCols plan tab dp.place ones)
@@ -119,23 +119,23 @@ theorem flock_e2e_drawn_hm96
     (tr : StrictCR.TreeRewind H (audit L Reg (batchedSession H E plan)) σ fun o => execAccept o ∧ o.1 = false)
     {qT : ℝ} (hT : tr.finder.CR H qT) :
     prob (fun o => execAccept o ∧
-        ¬ Disjoint (P.wrong (Xpub ones zeros (P.Xplur H E plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))) o.2)
+        ¬ Disjoint (P.incorrect (Xpub ones zeros (P.Xplur H E plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))) o.2)
         (audit L Reg (batchedSession H E plan)) σ ≤
       StrictCR.ksAvgStrict plan L k qF qS (reg σ) + P.linkBoundE (L := L) plan tab (rs.binding hHm) k Rw M ρ t' +
         ENNReal.ofReal (tr.bound qT) :=
   (prob_split_accept _ σ execAccept _).trans (add_le_add
-    ((P.flock_e2e_drawn H E plan tab (execAccept := fun o => o.1 = true ∧ execAccept o) (fun _ h => h.1) dp ones
+    ((P.flock_e2e_sampled H E plan tab (execAccept := fun o => o.1 = true ∧ execAccept o) (fun _ h => h.1) dp ones
       hConst zeros hZero (rs.binding hHm) hk hRw hM hρ hr ht σ hCR).trans
       (add_le_add (StrictCR.ksAvgBE_le_strict H E plan k (reg σ) (cont σ) hKS) le_rfl))
     (tr.le hT))
 
 variable {m : ℕ} (St : Fin m → Flock.Draw.Stratum) (Ls : Fin m → ℕ)
 
-/-- **The e2e drawn-unit bound at the executable's law, with the rows' value binding**: `flock_e2e_drawn_exec` at
-`vb := HmRows.binding rs hHm`, at most `ε_ks + δ_link + δ_tree`, as in `flock_e2e_count_hm96` (`cr/sha-512` through `hKS`
-and `hT`, `ecr/sha-512` through `hCR`). `Law.execStratified`'s outcomes are uniform byte tapes, so it takes no A3; the live
-verifier's bytes are `flock_e2e_drawn_hm96`'s at `L := Law.execOS …`. -/
-theorem flock_e2e_drawn_exec_hm96
+/-- **The e2e drawn-unit bound at the executable's sampling design, with the rows' value binding**: `flock_e2e_sampled_exec` at
+`vb := HmRows.binding rs hHm`, at most `ε_ks + ε_bind + δ_tree`, as in `flock_e2e_count_hm96` (`cr/sha-512` through `hKS`
+and `hT`, `ecr/sha-512` through `hCR`). `SamplingDesign.execStratified`'s outcomes are uniform byte tapes, so it takes no A3; the live
+verifier's bytes are `flock_e2e_sampled_hm96`'s at `L := SamplingDesign.execOS …`. -/
+theorem flock_e2e_sampled_exec_hm96
     {execAccept : Bool × Finset (Fin n) → Prop}
     {unitRows : Fin n → FlockSoundness.Rows} (dp : P.DerivedPlaces plan tab unitRows)
     (ones : Finset (Fin C.N)) (hConst : P.ConstCols plan tab dp.place ones)
@@ -143,32 +143,32 @@ theorem flock_e2e_drawn_exec_hm96
     (lay : Layout P plan tab (P.placeDecoder plan tab dp.place)) (rs : HmRows lay) (hHm : rs.Computes)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t')
-    (σ : Strategy (audit (Law.execStratified St Ls) Reg (batchedSession H E plan)))
+    (σ : Strategy (audit (SamplingDesign.execStratified St Ls) Reg (batchedSession H E plan)))
     (hCR : P.LinkCR H E plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw M t')
-    {qF qS : ℝ} (hKS : ∀ ω j, StrictCR.TableCR execArith H E (plan ((Law.execStratified St Ls).draw ω) (reg σ)) j
+    {qF qS : ℝ} (hKS : ∀ ω j, StrictCR.TableCR execArith H E (plan ((SamplingDesign.execStratified St Ls).draw ω) (reg σ)) j
       (batchStrat H E plan (cont σ ω)) qF qS)
-    (tr : StrictCR.TreeRewind H (audit (Law.execStratified St Ls) Reg (batchedSession H E plan)) σ
+    (tr : StrictCR.TreeRewind H (audit (SamplingDesign.execStratified St Ls) Reg (batchedSession H E plan)) σ
       fun o => execAccept o ∧ o.1 = false)
     {qT : ℝ} (hT : tr.finder.CR H qT) :
     prob (fun o => execAccept o ∧
-        ¬ Disjoint (P.wrong (Xpub ones zeros (P.Xplur H E plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))) o.2)
-        (audit (Law.execStratified St Ls) Reg (batchedSession H E plan)) σ ≤
-      StrictCR.ksAvgStrict plan (Law.execStratified St Ls) k qF qS (reg σ) +
-        P.linkBoundE (L := Law.execStratified St Ls) plan tab (rs.binding hHm) k Rw M ρ t' +
+        ¬ Disjoint (P.incorrect (Xpub ones zeros (P.Xplur H E plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))) o.2)
+        (audit (SamplingDesign.execStratified St Ls) Reg (batchedSession H E plan)) σ ≤
+      StrictCR.ksAvgStrict plan (SamplingDesign.execStratified St Ls) k qF qS (reg σ) +
+        P.linkBoundE (L := SamplingDesign.execStratified St Ls) plan tab (rs.binding hHm) k Rw M ρ t' +
         ENNReal.ofReal (tr.bound qT) :=
   (prob_split_accept _ σ execAccept _).trans (add_le_add
-    ((P.flock_e2e_drawn_exec H E plan tab St Ls (execAccept := fun o => o.1 = true ∧ execAccept o) (fun _ h => h.1)
+    ((P.flock_e2e_sampled_exec H E plan tab St Ls (execAccept := fun o => o.1 = true ∧ execAccept o) (fun _ h => h.1)
       dp ones hConst zeros hZero (rs.binding hHm) hk hRw hM hρ hr ht σ hCR).trans
       (add_le_add (StrictCR.ksAvgBE_le_strict H E plan k (reg σ) (cont σ) hKS) le_rfl))
     (tr.le hT))
 
-/-- **The e2e count curve at the executable's law, with the rows' value binding**: `flock_e2e_count_exec` at
-`vb := HmRows.binding rs hHm`, its count curve bounded by `Law.stratified`'s `miss`, at most
-`miss(K) + ε_ks + δ_link + δ_tree`, as in `flock_e2e_count_hm96` (`cr/sha-512` through `hKS` and `hT`, `ecr/sha-512`
-through `hCR`). `Law.execStratified`'s outcomes are uniform byte tapes, so it takes no A3; at the live verifier's bytes
+/-- **The e2e count curve at the executable's sampling design, with the rows' value binding**: `flock_e2e_count_exec` at
+`vb := HmRows.binding rs hHm`, its count curve bounded by `SamplingDesign.stratified`'s `miss`, at most
+`miss(K) + ε_ks + ε_bind + δ_tree`, as in `flock_e2e_count_hm96` (`cr/sha-512` through `hKS` and `hT`, `ecr/sha-512`
+through `hCR`). `SamplingDesign.execStratified`'s outcomes are uniform byte tapes, so it takes no A3; at the live verifier's bytes
 the same curve is `Prog.flock_headline`'s, under A3. -/
 theorem flock_e2e_count_exec_hm96 (σs : Fin n → Fin m) (ks : Fin m → ℕ)
-    (hks : ∀ s, ks s ≤ (Law.stratum σs s).card) (hS : Law.ExecStrata σs ks St)
+    (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card) (hS : SamplingDesign.ExecStrata σs ks St)
     {execAccept : Bool × Finset (Fin n) → Prop}
     {unitRows : Fin n → FlockSoundness.Rows} (dp : P.DerivedPlaces plan tab unitRows)
     (ones : Finset (Fin C.N)) (hConst : P.ConstCols plan tab dp.place ones)
@@ -176,18 +176,18 @@ theorem flock_e2e_count_exec_hm96 (σs : Fin n → Fin m) (ks : Fin m → ℕ)
     (lay : Layout P plan tab (P.placeDecoder plan tab dp.place)) (rs : HmRows lay) (hHm : rs.Computes)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t')
-    (K : ℕ) (σ : Strategy (audit (Law.execStratified St Ls) Reg (batchedSession H E plan)))
+    (K : ℕ) (σ : Strategy (audit (SamplingDesign.execStratified St Ls) Reg (batchedSession H E plan)))
     (hCR : P.LinkCR H E plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw M t')
-    {qF qS : ℝ} (hKS : ∀ ω j, StrictCR.TableCR execArith H E (plan ((Law.execStratified St Ls).draw ω) (reg σ)) j
+    {qF qS : ℝ} (hKS : ∀ ω j, StrictCR.TableCR execArith H E (plan ((SamplingDesign.execStratified St Ls).draw ω) (reg σ)) j
       (batchStrat H E plan (cont σ ω)) qF qS)
-    (tr : StrictCR.TreeRewind H (audit (Law.execStratified St Ls) Reg (batchedSession H E plan)) σ
+    (tr : StrictCR.TreeRewind H (audit (SamplingDesign.execStratified St Ls) Reg (batchedSession H E plan)) σ
       fun o => execAccept o ∧ o.1 = false)
     {qT : ℝ} (hT : tr.finder.CR H qT) :
     prob (fun o => execAccept o ∧
-        K ≤ (P.wrong (Xpub ones zeros (P.Xplur H E plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))).card)
-        (audit (Law.execStratified St Ls) Reg (batchedSession H E plan)) σ ≤
-      (Law.stratified σs ks hks).miss K + StrictCR.ksAvgStrict plan (Law.execStratified St Ls) k qF qS (reg σ) +
-        P.linkBoundE (L := Law.execStratified St Ls) plan tab (rs.binding hHm) k Rw M ρ t' +
+        K ≤ (P.incorrect (Xpub ones zeros (P.Xplur H E plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))).card)
+        (audit (SamplingDesign.execStratified St Ls) Reg (batchedSession H E plan)) σ ≤
+      (SamplingDesign.stratified σs ks hks).miss K + StrictCR.ksAvgStrict plan (SamplingDesign.execStratified St Ls) k qF qS (reg σ) +
+        P.linkBoundE (L := SamplingDesign.execStratified St Ls) plan tab (rs.binding hHm) k Rw M ρ t' +
         ENNReal.ofReal (tr.bound qT) :=
   (prob_split_accept _ σ execAccept _).trans (add_le_add
     ((P.flock_e2e_count_exec H E plan tab St Ls σs ks hks hS (execAccept := fun o => o.1 = true ∧ execAccept o)

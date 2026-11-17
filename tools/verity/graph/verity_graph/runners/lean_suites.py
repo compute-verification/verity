@@ -1,4 +1,4 @@
-"""lean-suites: `tools/verity/check/suites.py` on suites check runs after its lean-build (`suites.AFTER_LEAN`; the task's var
+"""lean-suites: `tools/check/suites.py` on suites check runs after its lean-build (`suites.AFTER_LEAN`; the task's var
 `suites`), as check's lean-suites step runs them: `--lean-built`, lake on the PATH through elan (`lean_build.ELAN`), each suite's
 timeout, and the task's cores and memory as `--jobs` and `--mem-gb`.  A task of a suite's part (its var `files`, K/M) runs
 `--files K/M` with `--timings` a record that holds none of the suite's files, so suites.py packs them by path alone and every
@@ -31,7 +31,7 @@ from ..graph import LOG
 from . import call
 from .lean_build import ELAN, LAKE_BUILD, STAMP, TREE
 
-SUITES = "tools/verity/check/suites.py"
+SUITES = "tools/check/suites.py"
 REPORT, LOGS, TIMINGS = "suites-lean.json", "suites", "suites-timings.json"
 #: in the package's `.lake`: the tree's tasks stage lean-build's build one at a time
 STAGE_LOCK = "graph-stage.lock"

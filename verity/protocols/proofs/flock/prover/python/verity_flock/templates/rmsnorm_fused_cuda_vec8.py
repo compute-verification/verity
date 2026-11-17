@@ -14,7 +14,7 @@ threads by the token count), and threads beyond N / 8 hold nothing. :func:`warps
 consecutive warps, so an instance holds a power-of-two number of units (GLM-5.3: 24 warps of one vector at BLOCK 1024, three
 a unit; 8 warps of three vectors at BLOCK 256; 8 units of 768 elements either way). At N = 6144 the tail's ``/ N`` divides by a
 constant that is not a power of two, which the tail lowers through the IEEE divider (``verity_flock.tail``) where 2048 and 4096
-took an exact reciprocal. The unit netlist is pinned per
+took an exact reciprocal. The unit's circuit description is pinned per
 (N, EPS, BLOCK) by :data:`PINS`, its leaf maps and cut structure (the tail with N and eps, the cut ports) included.
 
 A unit of 768 elements is about 2^21.8 rows, more than frame-v3's 2^22-bit block holds beside its compressions, so these
@@ -76,11 +76,11 @@ def circuit_lowering(subcircuit):
 def supports(subcircuit, scheme, family: str = FAMILY, unit: str = UNIT):
     n, _eps, block = _statics(subcircuit)
     if warps(n, block) is None:
-        return (f"C-Flock lowers {family} when its warps are identical units (min(BLOCK, N / 8) threads in whole warps, each "
+        return (f"Flock lowers {family} when its warps are identical units (min(BLOCK, N / 8) threads in whole warps, each "
                 f"holding N / 8 / threads vectors), not N = {n}, BLOCK = {block}")
     if scheme in SCHEMES:
         return None
-    return (f"C-Flock proves {subcircuit.id} under verity/flock-circuit ({', '.join(SCHEMES)}: unit {unit}, the row tail in the "
+    return (f"Flock proves {subcircuit.id} under verity/flock-circuit ({', '.join(SCHEMES)}: unit {unit}, the row tail in the "
             f"statement), not under {scheme}")
 
 

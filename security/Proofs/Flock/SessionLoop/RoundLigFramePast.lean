@@ -27,7 +27,7 @@ namespace Claims.ZKServer.LigOff
 
 open _root_.Flock (F128)
 open _root_.Flock.Transcript (header)
-open _root_.Flock.Firewall.Drive (Step openStep)
+open _root_.Flock.ZkServer.Drive (Step openStep)
 open FlockSoundness.Refine (Frame encs)
 open FlockComplete.LigLock.Fed (feedR feed_eq Sized CoinAt)
 open Loop
@@ -72,9 +72,9 @@ theorem feedR_counts {α : Type} : ∀ (s : Step α) (cs : List (Array F128)), S
 
 /-- **A rep's schedule past its algebraic phase, with its counts**: the rounds its opening, fed the rest of the coins,
 sent and asks for next. -/
-theorem schedSoFar_pairs {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : ByteArray}
+theorem schedSoFar_pairs {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray}
     {xs : Array (Array F128)} {hi : Array ByteArray} {cr : Array (Array F128)} {alg sched : Array (ByteArray × ℕ)}
-    (hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom =
+    (hal : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) dom =
       .ok alg)
     (hs : schedSoFar t rep dom xs hi cr = .ok sched) (hA : alg.size ≤ cr.size) :
     sched.toList.drop alg.size =
@@ -107,12 +107,12 @@ theorem schedSoFar_pairs {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom
 set_option maxHeartbeats 1000000 in
 /-- **A rep's schedule past level 0's close**: fed fewer coins than the opening asks for, each round from the close
 `C = alg.size + (xs.size + 2) + 1 + k0 + 4` to the rounds fed, the next included, is `PastRound`'s. -/
-theorem sched_past {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
+theorem sched_past {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray} {cr : Array (Array F128)} {alg sched : Array (ByteArray × ℕ)}
-    (hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom =
+    (hal : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) dom =
       .ok alg)
     (hs : schedSoFar t rep dom xs hi cr = .ok sched) (hdom : dom.size < 2 ^ 64)
-    (hdg : t.st.digest.size < 2 ^ 64) (hcn : (_root_.Flock.Firewall.Finish.flat t.cm0.cap).size < 2 ^ 64)
+    (hdg : t.st.digest.size < 2 ^ 64) (hcn : (_root_.Flock.ZkServer.Finish.flat t.cm0.cap).size < 2 ^ 64)
     (hm : t.st.m < 2 ^ 64) (hmk : t.st.merkle = _root_.Flock.MerkleScheme.hm96Sha512) (hx : xs.size + 2 < 2 ^ 64)
     (hk : 1 ≤ t.sch.k0) (hn : t.sch.n < 2 ^ 62) (hq : ∀ i, (t.sch.levels.getD i default).q < 2 ^ 63)
     (hm14 : 14 ≤ t.st.m) (hn0 : t.sch.n ≠ 0) (htp : 2 * t.tPad < 2 ^ 64)
@@ -136,7 +136,7 @@ theorem sched_past {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : Byt
   have hQ := FlockComplete.LigShape.ligeritoPZk_logQ coin cr.size t.sch T t.cm0.toC t.g
     (FlockComplete.basisVals sws (t.st.m - 7)) (_root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0)
     (Array.replicate (_root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0).len 0) rep t.tPad t.extra t.lanePad
-    (fun l => _root_.Flock.Firewall.Finish.saltAt (hi.getD (l - 1) ByteArray.empty)) (fun _ _ => 0) tr₂ l₂
+    (fun l => _root_.Flock.ZkServer.Finish.saltAt (hi.getD (l - 1) ByteArray.empty)) (fun _ _ => 0) tr₂ l₂
     hk hn0 hn' hq' htp hd (by rw [hl₂, hls]; omega)
   rw [hrun, hl₂, hls] at hQ
   have hps : p < sched.size := by omega

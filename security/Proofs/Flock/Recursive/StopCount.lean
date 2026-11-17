@@ -1,14 +1,14 @@
 module
 
-public import Firewall.Release
+public import ZkServer.Release
 public import Proofs.Flock.Recursive.StopLeak
 
 /-!
 # A recursive session's stops, counted from the ZK server's rules
 
 `StopLeak`'s `prCoin_cut_le` bounds what a view released at a stop leaks by the number of stops, and `RecStops M` counts
-a recursive session's, `1 + Σ_p (M p + 1)`. This file states that the ZK server's rules (`Firewall.Record`,
-`Firewall.Release`, run as `Firewall.Loop` and `rec_live` run them) release a recursive session's view cut at one of
+a recursive session's, `1 + Σ_p (M p + 1)`. This file states that the ZK server's rules (`ZkServer.Record`,
+`ZkServer.Release`, run as `ZkServer.Loop` and `rec_live` run them) release a recursive session's view cut at one of
 `RecStops M`: the stop `recStop` that the run reached, read off what reached the auditor.
 
 **The run** (`StopCount.run`) is a list of steps, each one op on the record's events by the code's own function, in any
@@ -43,7 +43,7 @@ line that is not `Event.line` of the event it parses to).
 
 namespace Flock.StopCount
 
-open Core.Firewall
+open Core.ZkServer
 
 /-- The outer slot's holder: an outer session of `session` at `part`, admitted as `admitted`, `going` once
 `Decision.after` let its proofs leave. -/
@@ -76,7 +76,7 @@ def put {α : Type} (f : String → ℕ → α) (s : String) (p : ℕ) (a : α) 
 /-- One op of a run. -/
 inductive Step where
   /-- `rec_live` opens a recursive session on `stream` with its statements `parts` -/
-  | openRec (stream : String) (parts : Array String) (budget : Option ℕ) (release : Option Core.Firewall.Schedule)
+  | openRec (stream : String) (parts : Array String) (budget : Option ℕ) (release : Option Core.ZkServer.Schedule)
   /-- the next message of `s`'s inner session reaches the auditor -/
   | innerSend (s : String)
   /-- `s`'s inner session finished -/
@@ -90,7 +90,7 @@ inductive Step where
   /-- the holder's next message reaches the auditor -/
   | relay
   /-- the holder's `Finish` at `now` (ms), the prover and the send check having returned `prove` and `ready` -/
-  | barrier (now : ℕ) (prove ready : Core.Firewall.Run)
+  | barrier (now : ℕ) (prove ready : Core.ZkServer.Run)
   /-- the auditor's verdict on the holder's proofs, or the fault that cut them while they left -/
   | verdict (v : Except String Bool)
   /-- the holder ended before its `Finish` was decided -/
@@ -179,7 +179,7 @@ def cutAt {n : ℕ} (M : Fin n → ℕ) (r : Flock.SecurityProofs.RecStops M) (p
 def nOf (σ : St) (s : String) : ℕ := ((openOf σ.evs s).map fun o => o.parts.size + 1).getD 0
 
 /-- The release schedule `s` was opened with, if any. -/
-def schedOf (σ : St) (s : String) : Option Core.Firewall.Schedule := (openOf σ.evs s).bind (·.release)
+def schedOf (σ : St) (s : String) : Option Core.ZkServer.Schedule := (openOf σ.evs s).bind (·.release)
 
 /-- Whether `s` was opened and a statement of it is not released. -/
 def unreleasedOf (σ : St) (s : String) : Bool :=
@@ -217,11 +217,11 @@ of `s` is what `cutAt` keeps at the stop the run reached (`recStop`), nothing of
 statement's from one outer session, admitted at most once; `s` runs through unless a statement of it was not released;
 and where `s` is scheduled, each statement `j` whose proofs left did so at its release time (`releaseMs`).
 
-It is about `StopCount.run`, a model of the loop's ops, not about `Firewall.Loop` or `rec_live` themselves. Its ops are
+It is about `StopCount.run`, a model of the loop's ops, not about `ZkServer.Loop` or `rec_live` themselves. Its ops are
 the record's own functions, and four of its guards are the model's: only the outer slot's holder relays, and at most
 `M s p` messages of each statement (`relay`); the inner session sends at most `M s 0` messages and finishes only after
 its last (`innerSend`, `innerFinish`); the auditor's verdict releases a statement only after its last message
-(`verdict`); and every op reads back the events the record holds as written (`St.evs`). That `Firewall.Loop` and
+(`verdict`); and every op reads back the events the record holds as written (`St.evs`). That `ZkServer.Loop` and
 `rec_live` keep these guards is open, among it that nothing of an outer session reaches the auditor after its stop. -/
 def RecStopsOfRun : Prop :=
   ∀ (M : String → ℕ → ℕ) (steps : List StopCount.Step) (s : String),
@@ -230,7 +230,7 @@ def RecStopsOfRun : Prop :=
     (∀ p, (StopCount.run M steps).adm s p ≤ 1) ∧
     (StopCount.recStop M (StopCount.run M steps) s = none ∨ StopCount.unreleasedOf (StopCount.run M steps) s = true) ∧
     ∀ j, StopCount.schedOf (StopCount.run M steps) s = none ∨ (StopCount.run M steps).left s (j + 1) = none ∨
-      (StopCount.run M steps).left s (j + 1) = Core.Firewall.releaseMs (StopCount.schedOf (StopCount.run M steps) s) j
+      (StopCount.run M steps).left s (j + 1) = Core.ZkServer.releaseMs (StopCount.schedOf (StopCount.run M steps) s) j
 
 end Flock.Guarantees
 

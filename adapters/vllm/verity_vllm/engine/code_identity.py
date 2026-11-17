@@ -5,13 +5,19 @@ Inductor output code the process compiled.
 
 from __future__ import annotations
 
+import base64
+import contextlib
+import glob
+import hashlib
 import json
 import os
+import re
+import struct
 from typing import Any
 
 from verity_vllm import settings
 from verity_vllm.engine import env as engine_env
-
+from verity_vllm.engine import kernel_identity as KI
 
 _VERITY_INDUCTOR_DIR_MARK = engine_env.INDUCTOR_DIR_MARK
 
@@ -24,7 +30,7 @@ CUBIN_DENY_LIST: tuple[str, ...] = (".debug*", ".rel.debug*", ".rela.debug*", ".
 _CUBIN_DENY_PREFIX = (".debug", ".rel.debug", ".rela.debug", ".nv.debug", ".nv_debug", ".rel.nv_debug", ".rela.nv_debug", ".rel.nv.debug", ".rela.nv.debug")
 CUBIN_CODE_IDENTITY_RULE = ("sha256 over every ELF section of the executed cubin EXCEPT the named deny-list " + repr(CUBIN_DENY_LIST)
                             + " (debug/line info, embedded PTX text, symbol/string tables); NOT a .text allow-list")
-_PATH_STRING_RE = None
+_PATH_STRING_RE = re.compile(rb"/[\x21-\x7e]{3,}")
 
 
 def cubin_section_denied(name: str) -> bool:
@@ -33,8 +39,6 @@ def cubin_section_denied(name: str) -> bool:
 
 def _elf_section_bytes(b: bytes) -> dict[str, bytes]:
     """Pure-Python ELF32/64 section walk -> {section name: bytes} ({} if not an ELF)."""
-    import struct
-
     if len(b) < 64 or b[:4] != b"\x7fELF":
         return {}
     is64, le = b[4] == 2, b[5] == 1
@@ -68,8 +72,6 @@ def _elf_section_bytes(b: bytes) -> dict[str, bytes]:
 def cubin_sections(b: bytes) -> dict[str, str]:
     """Per-section sha256 of a cubin (ELF), every section (deny-listed ones included, so that WHICH sections differ between
     two cubins is on record).  {} if not an ELF."""
-    import hashlib
-
     return {n: hashlib.sha256(d).hexdigest() for n, d in _elf_section_bytes(b).items()}
 
 
@@ -77,14 +79,9 @@ def _split_path_strings(data: bytes) -> tuple[bytes, list[str]]:
     """Replace every printable run (>= 4 bytes) that is an ABSOLUTE PATH (starts with '/', no whitespace) by b'<PATH>' and return the
     normalised bytes + the removed strings.  Device data of Inductor/Triton kernels embeds the generated module's absolute source path
     (tl.device_assert / assert message strings in .nv.global.init) -- a per-process string, not computation."""
-    import re
-
-    global _PATH_STRING_RE
-    if _PATH_STRING_RE is None:
-        _PATH_STRING_RE = re.compile(rb"/[\x21-\x7e]{3,}")
     found: list[str] = []
 
-    def _sub(m: "re.Match[bytes]") -> bytes:
+    def _sub(m: re.Match[bytes]) -> bytes:
         found.append(m.group().decode("latin1"))
         return b"<PATH>"
 
@@ -95,8 +92,6 @@ def cubin_section_detail(b: bytes) -> dict[str, dict[str, Any]]:
     """For every NON-deny-listed section: sha256, size, sha256 of the bytes with absolute-path strings normalised
     (`residue_sha256`), and the path strings themselves -- so a cross-arm difference in device data can be DECODED from the record:
     residue equal + only path strings differ = per-process source path embedded in device data; anything else = not one specialization."""
-    import hashlib
-
     out: dict[str, dict[str, Any]] = {}
     for n, d in _elf_section_bytes(b).items():
         if cubin_section_denied(n):
@@ -113,8 +108,6 @@ def cubin_section_detail(b: bytes) -> dict[str, dict[str, Any]]:
 def cubin_code_sha256(sections: dict[str, str]) -> str | None:
     """sha256 over the sorted {(section name, sha256)} of every section NOT on CUBIN_DENY_LIST = everything the device loads (SASS, constant
     banks, initialised globals, rodata, kernel info), without debug/line-info/symbol sections.  None if the cubin has no .text section."""
-    import hashlib
-
     code = sorted((k, v) for k, v in sections.items() if not cubin_section_denied(k))
     return hashlib.sha256(json.dumps(code).encode()).hexdigest() if any(k.startswith(".text") for k, _ in code) else None
 
@@ -122,8 +115,6 @@ def cubin_code_sha256(sections: dict[str, str]) -> str | None:
 def cubin_code_sha256_normalized(detail: dict[str, dict[str, Any]]) -> str | None:
     """As cubin_code_sha256 but over each non-deny-listed section's residue_sha256 (absolute-path strings normalised): equal across two
     processes iff every difference is a path string.  The strict digest is the identity; this one names what the difference is."""
-    import hashlib
-
     code = sorted((k, v.get("residue_sha256")) for k, v in detail.items())
     return hashlib.sha256(json.dumps(code).encode()).hexdigest() if any(k.startswith(".text") for k, _ in code) else None
 
@@ -136,15 +127,10 @@ def _triton_cache_files(h: str | None) -> dict[str, Any]:
     the compile metadata json (num_warps / num_stages / target / options) -- what the executed binary was compiled WITH."""
     if not h:
         return {}
-    import base64
-    import glob
-
     root = settings.TRITON_CACHE_DIR or os.path.join(os.path.expanduser("~"), ".triton", "cache")
     cands = [os.path.join(root, str(h))]                          # Triton <= 3.3: <hex hash>/
-    try:                                                           # Triton >= 3.4: base32(sha256 digest)/ (52 chars, no padding)
+    with contextlib.suppress(ValueError):                          # Triton >= 3.4: base32(sha256 digest)/ (52 chars, no padding)
         cands.append(os.path.join(root, base64.b32encode(bytes.fromhex(str(h))).decode().rstrip("=")))
-    except ValueError:
-        pass
     d = next((c for c in cands if os.path.isdir(c)), None)
     if d is None:
         # last resort: the metadata json of every entry carries "hash": <hex> (indexed once per root)
@@ -155,7 +141,8 @@ def _triton_cache_files(h: str | None) -> dict[str, Any]:
                 if os.path.basename(mj).startswith("__grp__"):
                     continue
                 try:
-                    md = json.load(open(mj))
+                    with open(mj) as f:
+                        md = json.load(f)
                     if isinstance(md, dict) and md.get("hash"):
                         idx[str(md["hash"])] = os.path.dirname(mj)
                 except (OSError, ValueError):
@@ -167,15 +154,14 @@ def _triton_cache_files(h: str | None) -> dict[str, Any]:
     out: dict[str, Any] = {"dir": d}
     cub = sorted(glob.glob(os.path.join(d, "*.cubin")))
     if cub:
-        try:
-            out["cubin"] = open(cub[0], "rb").read()
-        except OSError:
-            pass
+        with contextlib.suppress(OSError), open(cub[0], "rb") as f:
+            out["cubin"] = f.read()
     for mj in sorted(glob.glob(os.path.join(d, "*.json"))):
         if os.path.basename(mj).startswith("__grp__"):
             continue
         try:
-            md = json.load(open(mj))
+            with open(mj) as f:
+                md = json.load(f)
             if isinstance(md, dict) and ("num_warps" in md or "target" in md):
                 out["meta"] = {k: md.get(k) for k in ("name", "num_warps", "num_stages", "num_ctas", "cluster_dims", "enable_fp_fusion", "debug", "shared",
                                                       "ptx_version", "target", "maxnreg", "launch_cooperative_grid") if k in md}
@@ -189,8 +175,6 @@ def _binary_identity(k: Any, cfg: Any = None) -> dict[str, Any]:
     """One compiled Triton binary: triton hash (source x signature/specialization x options x env), cubin sha256 (bytes), per-section
     sha256 + code_sha256 (every section except CUBIN_DENY_LIST) + code_sha256_normalized / section_detail (path strings in
     device data decoded), the compile metadata, and the autotune config it was compiled for."""
-    import hashlib
-
     ent: dict[str, Any] = {"triton_hash": str(getattr(k, "hash", None)) if getattr(k, "hash", None) else None}
     asm = getattr(k, "asm", None)
     cub = asm.get("cubin") if isinstance(asm, dict) else None
@@ -230,12 +214,11 @@ def loaded_code_objects() -> dict[str, Any]:
     EXECUTES after autotuning); `executed_set_sha256` over the sorted {(kernel, src sha, executed code id, executed config)} is the identity
     of the specialization the graphs replay.  Two processes running the same code objects differ in cubin BYTES when the debug/line-info
     sections carry the per-process module path (code_sha256 equal) or in EXECUTED config when autotuning picked another candidate."""
-    import hashlib
-
     def _sha(b: Any) -> str:
         return hashlib.sha256(b if isinstance(b, (bytes, bytearray)) else str(b).encode()).hexdigest()
 
     try:
+        # torch's two stay inside the function: this module is imported where torch is not installed
         from torch._inductor.codecache import PyCodeCache
         from torch._inductor.runtime.triton_heuristics import CachingAutotuner
         reg: list[tuple[str, Any]] = []
@@ -246,8 +229,11 @@ def loaded_code_objects() -> dict[str, Any]:
             for k, m in items:
                 if id(m) in seen:
                     continue
-                seen.add(id(m)); reg.append((str(k), m))
-        mods, kernels, bins_all = [], {}, set()
+                seen.add(id(m))
+                reg.append((str(k), m))
+        mods: list[dict[str, Any]] = []
+        kernels: dict[str, dict[str, Any]] = {}
+        bins_all: set[str] = set()
         for key, mod in reg:
             ks = 0
             for name, obj in list(vars(mod).items()):
@@ -266,17 +252,17 @@ def loaded_code_objects() -> dict[str, Any]:
                     cub = asm.get("cubin") if isinstance(asm, dict) else None
                     if cub is not None:
                         bins.append("cubin:" + _sha(cub))
-                    elif getattr(k, "hash", None):
-                        bins.append("triton:" + str(k.hash))
+                    elif held := getattr(k, "hash", None):
+                        bins.append("triton:" + str(held))
                 # the EXECUTED specialization: the launcher(s) left after autotuning (Inductor keeps ONE launcher = the benchmark winner; the
                 # graphs captured / the eager steps launch that binary) -- autotuning picks it per process by benchmark, so two processes
                 # running the same code objects can execute differently configured binaries
                 executed: list[dict[str, Any]] = []
                 cfgs = []
-                for l in list(getattr(obj, "launchers", None) or []):
-                    c = getattr(l, "config", None)
-                    b = getattr(l, "bin", None)
-                    e_ = _binary_identity(b, c) if b is not None else ({"config": None, "id": None})
+                for launcher in list(getattr(obj, "launchers", None) or []):
+                    c = getattr(launcher, "config", None)
+                    b = getattr(launcher, "bin", None)
+                    e_: dict[str, Any] = _binary_identity(b, c) if b is not None else ({"config": None, "id": None})
                     if b is None and c is not None:
                         # no `bin` on the launcher (older Inductor): the executed binary is the compile result whose config equals the launcher's
                         for b_ in compiled:
@@ -300,10 +286,11 @@ def loaded_code_objects() -> dict[str, Any]:
                 bins_all.update(bins)
                 candidates = [{"kwargs": {str(a): (int(b2) if isinstance(b2, int) else str(b2)) for a, b2 in (getattr(c, "kwargs", None) or {}).items()},
                                "num_warps": getattr(c, "num_warps", None), "num_stages": getattr(c, "num_stages", None)} for c in list(getattr(obj, "configs", None) or [])]
-                ent = {"src_sha256": _sha(src) if src else None, "binaries": sorted(set(bins)), "n_launchers": len(getattr(obj, "launchers", None) or []),
-                       "n_compile_results": len(compiled), "executed_configs": cfgs, "n_configs_candidate": len(candidates), "candidate_configs": candidates,
-                       "compiled": compiled, "executed": executed, "module_key": key,
-                       "autotuned": len(candidates) > 1 or len(compiled) > 1}
+                ent: dict[str, Any] = {
+                    "src_sha256": _sha(src) if src else None, "binaries": sorted(set(bins)), "n_launchers": len(getattr(obj, "launchers", None) or []),
+                    "n_compile_results": len(compiled), "executed_configs": cfgs, "n_configs_candidate": len(candidates), "candidate_configs": candidates,
+                    "compiled": compiled, "executed": executed, "module_key": key,
+                    "autotuned": len(candidates) > 1 or len(compiled) > 1}
                 if kname in kernels and kernels[kname]["src_sha256"] == ent["src_sha256"]:   # the same kernel bound in kernel module + wrapper namespace
                     kernels[kname]["binaries"] = sorted(set(kernels[kname]["binaries"]) | set(bins))
                     have = {json.dumps(x.get("id")) + json.dumps(x.get("config"), sort_keys=True) for x in kernels[kname]["compiled"]}
@@ -347,6 +334,18 @@ def loaded_code_objects() -> dict[str, Any]:
         return {"error": repr(e)[:200]}
 
 
+def _kernels_of(snapshot: dict[str, Any]) -> dict[str, Any]:
+    """A snapshot's kernels by name; none where it leaves `per_kernel` out or holds none."""
+    held = snapshot.get("per_kernel")
+    return held if held else {}
+
+
+def _listed(kernel: dict[str, Any], key: str) -> list[Any]:
+    """The list a kernel's record holds under `key`; an empty one where it leaves the key out or holds none."""
+    held = kernel.get(key)
+    return held if held else []
+
+
 def loaded_code_objects_delta(start: dict[str, Any], end: dict[str, Any]) -> dict[str, Any]:
     """Compare two loaded_code_objects() snapshots of ONE process (after engine build = compile + Inductor autotune + CUDA-graph capture,
     and after the last measured run), so that repeated graph replay is covered and not only compilation/warm-up: the graphs replay
@@ -354,13 +353,13 @@ def loaded_code_objects_delta(start: dict[str, Any], end: dict[str, Any]) -> dic
     recorded at build is the identity of every replayed step; anything new (a recompile, a re-tune, a new specialization) is named."""
     if not isinstance(start, dict) or not isinstance(end, dict) or start.get("error") or end.get("error"):
         return {"ok": None, "why": f"snapshot unavailable: start {str((start or {}).get('error'))[:80]} end {str((end or {}).get('error'))[:80]}"}
-    ps, pe = start.get("per_kernel") or {}, end.get("per_kernel") or {}
+    ps, pe = _kernels_of(start), _kernels_of(end)
     new_k = sorted(set(pe) - set(ps))
     gone_k = sorted(set(ps) - set(pe))
     changed_exec = sorted(k for k in set(ps) & set(pe)
-                          if json.dumps([(e.get("id"), e.get("config")) for e in ps[k].get("executed") or []], sort_keys=True)
-                          != json.dumps([(e.get("id"), e.get("config")) for e in pe[k].get("executed") or []], sort_keys=True))
-    changed_bins = sorted(k for k in set(ps) & set(pe) if sorted(ps[k].get("binaries") or []) != sorted(pe[k].get("binaries") or []))
+                          if json.dumps([(e.get("id"), e.get("config")) for e in _listed(ps[k], "executed")], sort_keys=True)
+                          != json.dumps([(e.get("id"), e.get("config")) for e in _listed(pe[k], "executed")], sort_keys=True))
+    changed_bins = sorted(k for k in set(ps) & set(pe) if sorted(_listed(ps[k], "binaries")) != sorted(_listed(pe[k], "binaries")))
     changed_src = sorted(k for k in set(ps) & set(pe) if ps[k].get("src_sha256") != pe[k].get("src_sha256"))
     out = {"modules_start": start.get("modules"), "modules_end": end.get("modules"), "new_modules": (end.get("modules") or 0) - (start.get("modules") or 0),
            "kernels_start": start.get("kernels"), "kernels_end": end.get("kernels"), "new_kernels": new_k[:40], "kernels_gone": gone_k[:40],
@@ -380,8 +379,6 @@ def generated_kernels_of_this_process(inductor_dir: str | None = None) -> dict[s
     {(kernel name, source sha256)}; call_set_sha256 over the pieces' launch programs), plus where it was read from.  Shared by the record
     path (RunHeader.compilation.generated_kernels) and commit_delta's versions.json so the two pins are comparable byte for byte."""
     try:
-        from verity_vllm.engine import kernel_identity as KI
-
         ind = inductor_dir or settings.TORCHINDUCTOR_CACHE_DIR or KI.inductor_cache_dir()
         doc = KI.collect(ind, KI.triton_cache_dir())
         gk = dict(doc["summary"])

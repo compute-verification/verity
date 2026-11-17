@@ -465,7 +465,7 @@ theorem complete_plain (H : Claims.Msg → Claims.Msg) (h64 : Claims.Out64 H)
       sends := sendCount_goal H _
       linkFirst := linkFirst_goal H h64 _
       finalFits := JsonRT.finalFits_goal h64 hP
-      draw := JsonRT.drawMatches_goal h64 hP
+      draw := JsonRT.sampleMatches_goal h64 hP
       liveReads := JsonRT.liveReads_goal h64 hP
       canonical := JsonRT.canonical_goal h64 hP
       rootB := JsonRT.custodyRootB_goal h64 hP

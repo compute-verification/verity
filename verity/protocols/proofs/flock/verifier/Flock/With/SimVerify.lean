@@ -1,8 +1,3 @@
-/-
-The `…With` functions of `Flock.With.Hashes`, `Flock.With.Transcript` and `Flock.With.Verify` under a simulation
-(`Flock.With.Sim`): run with two oracles that `S` relates hash by hash, each function's two runs are related by `S` (or by
-its lift to the transcript and the Ligerito state).
--/
 module
 
 public import Flock.With.Sim
@@ -11,6 +6,12 @@ public import Flock.With.Verify
 import Std.Data.HashMap
 import Std.Data.HashSet
 import Std.Data.TreeMap.Raw.Lemmas
+
+/-!
+The `…With` functions of `Flock.With.Hashes`, `Flock.With.Transcript` and `Flock.With.Verify` under a simulation
+(`Flock.With.Sim`): run with two oracles that `S` relates hash by hash, each function's two runs are related by `S` (or by
+its lift to the transcript and the Ligerito state).
+-/
 
 @[expose] public section
 

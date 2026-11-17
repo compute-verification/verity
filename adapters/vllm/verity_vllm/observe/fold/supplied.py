@@ -11,6 +11,7 @@ import os
 from verity.circuits.refs import Affine, runs
 from verity.circuits.types import RecordType, Type, Value
 
+from verity_vllm.errors import Refused
 from verity_vllm.observe.fold.resolver import Supplied
 
 __all__ = ["program_registered_values"]
@@ -85,18 +86,18 @@ class SuppliedInputs:
 def program_registered_values(program_dirs) -> bool:
     """Whether the Build's Program dirs register the program's values (`result.json` `program.supplied.registration`, a
     `registered_values` derive's), so the fold the Match compares against them folds under `Profile.registered_values` too.  Dirs
-    that disagree, or one without a readable result.json, are refused by name (SystemExit)."""
+    that disagree, or one without a readable result.json, are refused by name (`Refused`)."""
     got = set()
     for d in program_dirs:
         try:
             with open(os.path.join(d, "result.json")) as f:
                 prog = json.load(f).get("program")
         except (OSError, ValueError, AttributeError) as e:
-            raise SystemExit(f"{d}: no readable result.json ({type(e).__name__}): whether its Program registers its values is unknown") from None
+            raise Refused(f"{d}: no readable result.json ({type(e).__name__}): whether its Program registers its values is unknown") from None
         supplied = prog.get("supplied") if prog else None
         got.add(bool(supplied and supplied.get("registration")))
     if len(got) > 1:
-        raise SystemExit(f"{list(program_dirs)}: some Programs register their values and some hold them as constants")
+        raise Refused(f"{list(program_dirs)}: some Programs register their values and some hold them as constants")
     return got == {True}
 
 

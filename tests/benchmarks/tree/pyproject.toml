@@ -1,0 +1,17 @@
+# The tree's numbers (`not_yet.py`, `not_built.py`, `lint_sites.py`). Not a package: its tests run in the workspace
+# environment, on made-up `lint_counts.py` lines, so no lint runs.
+[tool.pytest.ini_options]
+testpaths = ["."]
+pythonpath = ["../../../benchmarks/tree"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# the result is written through the harness kit's writer, whose settings.py is built on verity_config's registry
+inputs = ["benchmarks/tree", "tools/config/verity_config",
+    "verity/__init__.py",
+    "tools/config/verity_config/verity_settings.py",
+    "benchmarks/harness/verity_bench/__init__.py",
+    "benchmarks/harness/verity_bench/kit.py",
+    "benchmarks/harness/verity_bench/kit_report.py",
+    "benchmarks/harness/verity_bench/settings.py",
+]

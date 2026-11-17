@@ -37,13 +37,13 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # PoUW's proof premise from Flock's rows link (trusted)
 
-`Flock.Guarantees.SoundAtBridge` concludes the proof layer's soundness (`Accounting.TS.ProofLayer.SoundAt`, the
+`Flock.Guarantees.SoundAtBridge` concludes the proof layer's soundness (`ResourceAccounting.TS.ProofLayer.SoundAt`, the
 layer whose relation reads the path's coins) from Flock's `Flock.Guarantees.EndToEndRegisteredRows`, applied once
 per unit, when proof `i` of round `w` on the window's path `x` is a Flock session `sess x w i` (a `RowsSession`)
 with outcome `out x w i`. It closes the three gaps between the two as follows:
 
 1. **the probability bridge** is three named premises: the window's sampling design at each `(w, i)` is its sessions'
-   (`WindowLaw`), the layer accepts a proof only where flock-verify accepts its session (`AcceptedLive`), and the
+   (`ExecutionPhaseSamplingDesign`), the layer accepts a proof only where verity-verify-proof accepts its session (`AcceptedLive`), and the
    relation holds at the value layer's rows wherever every sampled proof block of the session is right (`RelOfRows`);
 2. **the opening against the plurality** is one named premise, `OpenedPlurAt`: an accepted proof's opening is the
    layer value `rows` of the plurality value layer `XplurZC`, outside `δo`; it holds at `δo = 0` when the layer's
@@ -51,7 +51,7 @@ with outcome `out x w i`. It closes the three gaps between the two as follows:
 3. **the per-unit link** is proved: each session carries one registrant's opening per unit, and a union bound over its
    `n` units gives `n` times `EndToEndRegisteredRows`' bound (`RowsSession.prob_badU_le`).
 
-So `δ_ZK = δo + δ`, where `δ` bounds `n · (ε_ks + δ_link + δ_rows + q_R²/2^513)` at every session a path runs: the
+So `δ_ZK = δo + δ`, where `δ` bounds `n · (ε_ks + ε_bind + δ_rows + q_R²/2^513)` at every session a path runs: the
 whole of `EndToEndRegisteredRows`' bound, its rewinding terms `1/(e·M) + k/(e·Rw)` included, times the session's `n`.
 
 Importing this module makes `X` a token (ArkLib's global `notation3 "X"`, `ArkLib.Data.Polynomial.Trivariate`), so a
@@ -65,21 +65,21 @@ composition over any family of sessions, `Proofs.Flock.SoundAtBridge.Union`, imp
 
 namespace Flock.SoundAtBridge
 
-open FlockSoundness FlockSoundness.Discharge.ZkReg Accounting.TS
+open FlockSoundness FlockSoundness.Discharge.ZkReg ResourceAccounting.TS
 open Pouw.RelativeSecurity (Paths)
 open scoped ENNReal
 
 variable {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type}
 
 /-- **Gap 1, the window's sampling design** (open): at each round `w` and
-proof `i`, the window's coins, read through the session proof `i` runs and its outcome, have the sessions' law
-(`SessionLaw`): the session's coins are the path's, fresh and uniform given its setting and its prover. -/
-def WindowLaw (sess : Paths Ω S → Fin S → Fin nπ → RowsSession) (out : ∀ x w i, (sess x w i).Out) : Prop :=
-  ∀ w i, SessionLaw (Out := fun s : RowsSession => s.Out) (fun s => s.G) (fun s => s.τ) (fun x => sess x w i)
+proof `i`, the window's coins, read through the session proof `i` runs and its outcome, have the sessions' sampling design
+(`SessionSamplingDesign`): the session's coins are the path's, fresh and uniform given its setting and its prover. -/
+def ExecutionPhaseSamplingDesign (sess : Paths Ω S → Fin S → Fin nπ → RowsSession) (out : ∀ x w i, (sess x w i).Out) : Prop :=
+  ∀ w i, SessionSamplingDesign (Out := fun s : RowsSession => s.Out) (fun s => s.G) (fun s => s.τ) (fun x => sess x w i)
     (fun x => out x w i)
 
 /-- **Gap 1, acceptance** (open): the layer accepts proof `i` of round `w` only
-where flock-verify accepts its session's outcome (`LiveAcceptsZKR`). -/
+where verity-verify-proof accepts its session's outcome (`LiveAcceptsZKR`). -/
 def AcceptedLive (pf : ProofLayer Ω S nπ V) (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
     (out : ∀ x w i, (sess x w i).Out) : Prop :=
   ∀ x w i, pf.accepted x w i → LiveAcceptsZKR (sess x w i).I (sess x w i).own (out x w i)
@@ -93,28 +93,28 @@ def OpenedPlurAt (pf : ProofLayer Ω S nπ V) (sess : Paths Ω S → Fin S → F
     (fun x => pf.accepted x w i ∧ pf.opened x w i ≠ rows (sess x w i) (sess x w i).Xv) ≤ δo
 
 /-- **Gap 1, the relation is what the sampled proof blocks certify** (open): on every path, when no sampled proof block of proof `i`'s
-session is wrong (`WrongAt`) and every sampled proof block's rows are right at its own owned reads (`RowsAt`), proof `i`'s
+session is wrong (`IncorrectAt`) and every sampled proof block's rows are right at its own owned reads (`RowsAt`), proof `i`'s
 relation holds at `rows` of the value layer; it can hold only for a relation that reads no unsampled unit and no input
 row at a read the verifier doesn't own. -/
 def RelOfRows (pf : ProofLayer Ω S nπ V) (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
     (out : ∀ x w i, (sess x w i).Out) (rows : ∀ s : RowsSession, (Fin s.Circ.N → Bool) → V) : Prop :=
-  ∀ x w i, (∀ u ∈ (out x w i).2.1, ¬ (sess x w i).WrongAt u ∧ (sess x w i).RowsAt (out x w i) u) →
+  ∀ x w i, (∀ u ∈ (out x w i).2.1, ¬ (sess x w i).IncorrectAt u ∧ (sess x w i).RowsAt (out x w i) u) →
     pf.rel x w i (rows (sess x w i) (sess x w i).Xv)
 
 end Flock.SoundAtBridge
 
 namespace Flock.Guarantees
 
-open Flock.SoundAtBridge Accounting.TS
+open Flock.SoundAtBridge ResourceAccounting.TS
 open Pouw.RelativeSecurity (Paths)
 open scoped ENNReal
 
 /-- **PoUW's proof premise from Flock's rows link, at `δ_ZK = δo + δ`.** For any window of proofs
-(`pf : Accounting.TS.ProofLayer Ω S nπ V`, its relation on the path) whose proof `i` of round `w` on the
+(`pf : ResourceAccounting.TS.ProofLayer Ω S nπ V`, its relation on the path) whose proof `i` of round `w` on the
 path `x` is the Flock session `sess x w i` (`EndToEndRegisteredRows`' setting with one registrant's opening per
 unit, `RowsSession`) with outcome `out x w i`, and a reading `rows s` of a session's value layer as a layer value:
 given `EndToEndRegisteredRows`' named assumptions at every session and every unit's opening (`RowsSession.CR`), the
-window's sampling design (`WindowLaw`), acceptance (`AcceptedLive`), the opening's agreement with the plurality outside `δo`
+window's sampling design (`ExecutionPhaseSamplingDesign`), acceptance (`AcceptedLive`), the opening's agreement with the plurality outside `δo`
 (`OpenedPlurAt`) and the relation's reading of the sampled proof blocks (`RelOfRows`), and `δ ≥ 0` with
 $$n \cdot (\varepsilon_{ks} + \delta_{link} + \delta_{rows} + q_R^2/2^{513}) \le \delta$$
 at every session a path runs (`RowsSession.bound`, `n` its units), each proof is accepted with an opening that fails
@@ -125,7 +125,7 @@ def SoundAtBridge : Prop :=
     (rows : ∀ s : RowsSession, (Fin s.Circ.N → Bool) → V) (δo δ : ℝ),
     -- cr/sha-512 and ecr/sha-512 as EndToEndRegisteredRows takes them, at every session and every unit's opening
     (∀ x w i, (sess x w i).CR) →
-    WindowLaw sess out →
+    ExecutionPhaseSamplingDesign sess out →
     AcceptedLive pf sess out →
     OpenedPlurAt pf sess rows δo →
     RelOfRows pf sess out rows →

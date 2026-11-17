@@ -47,7 +47,7 @@ tables (`LiveOutJ`, `DecodesTable`). At `J = 1` the two meet:
 * `wrP1`, `recordsLive_wrP1`: `wrP` at one table, read at one table's outcome, records the live session
   (`DecodeZL.RecordsLive`); where `verify` accepts what `wrP` writes, it accepts what `wrP1` writes for the outcome's
   `oneOf` (`accepts_wrP1_oneOf`).
-* `decodesTable_wrP`: at a sample `S` that sets the table up at `mPts` link points (`DrawOk`), under the verify command's
+* `decodesTable_wrP`: at a sample `S` that sets the table up at `mPts` link points (`SampleOk`), under the verify command's
   tags (`TagsOk`), the deployed decoders are right at `wrP` (`DecodesTable`, `Pr_acc_plain_le`'s `hdec`), from
   `decodesOn_exec` at the sampling design of the one sample `S`.
 -/
@@ -115,13 +115,13 @@ theorem accepts_wrP1_oneOf {n mPts : ℕ} {Reg : Type} (I : Exec.Inputs) (dj : F
   · exact absurd h (not_accepts_nil _ _)
 
 /-- **The deployed plain decoders are right at `wrP`, at one table** (`DecodesTable`: `LivePlain.Pr_acc_plain_le`'s
-`hdec` at the table `tablesAt` sets up): at a sample `S` that sets the table up at `mPts` link points (`DrawOk`), under
+`hdec` at the table `tablesAt` sets up): at a sample `S` that sets the table up at `mPts` link points (`SampleOk`), under
 the verify command's tags (`TagsOk`), on a circuit whose outputs are its units', from `decodesOn_exec` at the sampling design of the
 one sample `S`. -/
 theorem decodesTable_wrP {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet) {mPts : ℕ}
-    (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : Integrate.DrawSetup I mPts S₀ (dj S₀)) {Reg : Type}
-    (hT : DecodeZL.TagsOk I) {S : Finset (Fin n)} (hS : DecodeZL.DrawOk I dj mPts S) (R : Reg)
+    (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : Integrate.SampleSetup I mPts S₀ (dj S₀)) {Reg : Type}
+    (hT : DecodeZL.TagsOk I) {S : Finset (Fin n)} (hS : DecodeZL.SampleOk I dj mPts S) (R : Reg)
     (j : Fin [Integrate.tablesAt (Reg := Reg) ht dj x₀ S R].length) :
     Tables.DecodesTable (fun _ cap pend os => tableOutL H512 enc512 leaf512 cap pend os)
       (fun _ o => o.accepted = true) (fun o => Exec.Accepts I (wrP I dj (fun _ _ => 1) S R o))

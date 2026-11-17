@@ -3,16 +3,16 @@
 # ZK server, and verified by the Lean verifier against the window's registered roots (served.py's docstring).
 #   research run --on NODE --project verity --campaign C --source . --cwd source --mem-gb G --timeout 600m \
 #     --declared-output 'out/*' --env H1L_MEM_GB=G --env H1S_CALLS=... [...] -- bash benchmarks/pouw/h1_lanes/served.sh
-#   1. hidden_zk/job.sh's builds and the ZK server's Lean frame (flock-firewall)
+#   1. hidden_zk/job.sh's builds and the ZK server's Lean frame (flock-zk-server)
 #   2. the sampled proof blocks (h1_prove/served.py: core's sample on the window's signed coin) and served.py extract: the sampled proof block's
 #      openings from the prover's saved window, into the job's scratch (private), never out/
 #   3. served.py prepare: the lane statements and the negatives staged (WORK/plan.tsv)
-#   4. one loopback --zk session per statement, H1L_PAR at a time, each lane's prover under the ZK server (FC_FIREWALL=1:
-#      the Lean session loop, its level-0 sample and Lean finish) unless H1S_FIREWALL=0; the negatives first, without it
-#      (H1S_UNFIREWALLED: what they check is the verifier's refusal)
+#   4. one loopback --zk session per statement, H1L_PAR at a time, each lane's prover under the ZK server (FC_ZK_SERVER=1:
+#      the Lean session loop, its level-0 sample and Lean finish) unless H1S_ZK_SERVER=0; the negatives first, without it
+#      (H1S_NO_ZK_SERVER: what they check is the verifier's refusal)
 #   5. the plan's Lean checks, each with the lane Program, its partition, its public file and registered reads: with
 #      H1L_VERIFY_EACH=1 (the default) each statement's right after its session, holding its session slot, so a refusal shows
-#      after the first lane (the first firewalled lane runs before the negatives); with 0, all after the last session
+#      after the first lane (the first lane behind the ZK server runs before the negatives); with 0, all after the last session
 #   6. served.py summarize: out/summary.json
 # env: H1L_MEM_GB (the job's --mem-gb)
 #      the window: H1S_CALLS (pouw-h1-calls.json)  H1S_SESSION (the gate's fetched session out/)  H1S_LEDGER (ledger heads,
@@ -31,16 +31,16 @@
 #   why (the live verifier's and the prover's exits, a kill's signal), it gets no Lean check, and the job exits 1
 #      H1L_K (4096)  H1L_PAR (8: sessions at a time)  H1L_LPAR (8: Lean checks at a time)  H1L_JOBS (8: prepare's stagers)
 #      H1L_VERIFY_EACH (1)
-#      H1L_LANES (all, or 0,5,...)  H1S_FIREWALL (1)  H1S_UNFIREWALLED ("tampered-zy other-call-a")  H1S_KEEP (tags whose sessions out/ keeps: "lane0 tampered-zy", or all;
+#      H1L_LANES (all, or 0,5,...)  H1S_ZK_SERVER (1)  H1S_NO_ZK_SERVER ("tampered-zy other-call-a")  H1S_KEEP (tags whose sessions out/ keeps: "lane0 tampered-zy", or all;
 #      each as soon as its session ends)  H1S_KEEP_CIRCUIT (a node directory each lowered circuit is kept in after prepare,
 #      as SHA512.txt, a hard link where it can be: the scratch, the circuit's other name, goes at exit)
-#      H1S_FIREWALL_TGZ (`git archive --format=tar.gz REV verity/protocols/proofs/flock/verifier
+#      H1S_ZK_SERVER_TGZ (`git archive --format=tar.gz REV verity/protocols/proofs/flock/verifier
 #      verity/circuits/base verity/circuits/lean verity/commitments/lean`, the last three where REV has them: the ZK server frame built from REV's
 #      Lean, which must speak this tree's prover protocol; the verifier stays this tree's)
-#      H1S_FIREWALL_TGZ_DIR (a node directory of such tarballs, read again before each ZK server session: the session runs
+#      H1S_ZK_SERVER_TGZ_DIR (a node directory of such tarballs, read again before each ZK server session: the session runs
 #      the frame of the last *.tgz by name, so a later frame dropped in mid-share serves the lanes after it. Move a tarball
 #      in whole (mv), never write it in place; one that doesn't build is logged and the previous frame kept. Each session's
-#      frame is in out/TAG/firewall.sha256 and every frame's binary in out/binaries.sha256)
+#      frame is in out/TAG/zk-server.sha256 and every frame's binary in out/binaries.sha256)
 set -uo pipefail
 export HZ_CONFIGS=h1-served HZ_MEM_GB=${H1L_MEM_GB:?} HZ_RUNS=1 HZ_WARM=0
 export HZ_CACHE=${HZ_CACHE:-/workspace/research/cache/pouw-hidden-zk}
@@ -48,35 +48,35 @@ export HZ_CACHE=${HZ_CACHE:-/workspace/research/cache/pouw-hidden-zk}
 . benchmarks/pouw/hidden_zk/job.sh
 H=$SRC/benchmarks/pouw/h1_lanes
 export PYTHONPATH=$SRC:$SRC/verity/protocols/proofs/flock/prover/python:$SRC/benchmarks/pouw/hidden_zk:$SRC/benchmarks/pouw/h1_prove
-PAR=${H1L_PAR:-8} LPAR=${H1L_LPAR:-8} K=${H1L_K:-4096} FW=${H1S_FIREWALL:-1}
+PAR=${H1L_PAR:-8} LPAR=${H1L_LPAR:-8} K=${H1L_K:-4096} FW=${H1S_ZK_SERVER:-1}
 WK=$W/work OP=$W/opened.json
 mkdir -p "$OUT/lean" "$WK"
 setup
 fw_frame() {   # fw_frame TGZ: the ZK server frame built from TGZ, cached by the tarball's hash; its binary's path on stdout
   local fd
-  fd=$HZ_CACHE/firewall-$(sha256sum "$1" | cut -c1-16)
-  (exec 8>"$fd.lock"; flock 8; [ -x "$fd/protocols/flock/verifier/.lake/build/bin/flock-firewall" ] || { rm -rf "$fd" && mkdir -p "$fd" \
-    && tar -xzf "$1" -C "$fd" --strip-components=1 && cd "$fd/protocols/flock/verifier" && lake build flock-firewall; }) \
-    < /dev/null >> "$OUT/build-firewall.log" 2>&1
-  echo "$fd/protocols/flock/verifier/.lake/build/bin/flock-firewall"
+  fd=$HZ_CACHE/zk-server-$(sha256sum "$1" | cut -c1-16)
+  (exec 8>"$fd.lock"; flock 8; [ -x "$fd/protocols/flock/verifier/.lake/build/bin/flock-zk-server" ] || { rm -rf "$fd" && mkdir -p "$fd" \
+    && tar -xzf "$1" -C "$fd" --strip-components=1 && cd "$fd/protocols/flock/verifier" && lake build flock-zk-server; }) \
+    < /dev/null >> "$OUT/build-zk-server.log" 2>&1
+  echo "$fd/protocols/flock/verifier/.lake/build/bin/flock-zk-server"
 }
-fw_last() { ls "${H1S_FIREWALL_TGZ_DIR:?}"/*.tgz 2>/dev/null | LC_ALL=C sort | tail -1; }
-FWDIR=${H1S_FIREWALL_TGZ_DIR:-}
-if [ "$FW" = 1 ] && [ -n "$FWDIR" ] && [ -z "${H1S_FIREWALL_TGZ:-}" ]; then H1S_FIREWALL_TGZ=$(fw_last); fi
+fw_last() { ls "${H1S_ZK_SERVER_TGZ_DIR:?}"/*.tgz 2>/dev/null | LC_ALL=C sort | tail -1; }
+FWDIR=${H1S_ZK_SERVER_TGZ_DIR:-}
+if [ "$FW" = 1 ] && [ -n "$FWDIR" ] && [ -z "${H1S_ZK_SERVER_TGZ:-}" ]; then H1S_ZK_SERVER_TGZ=$(fw_last); fi
 FWTGZ=
-if [ "$FW" = 1 ] && [ -n "${H1S_FIREWALL_TGZ:-}" ]; then
-  log "firewall frame from $H1S_FIREWALL_TGZ ($(sha256sum "$H1S_FIREWALL_TGZ" | cut -c1-16)), not this tree's"
-  FWTGZ=$(sha256sum "$H1S_FIREWALL_TGZ" | cut -c1-64)
-  export FC_FIREWALL_LEAN
-  FC_FIREWALL_LEAN=$(fw_frame "$H1S_FIREWALL_TGZ")
+if [ "$FW" = 1 ] && [ -n "${H1S_ZK_SERVER_TGZ:-}" ]; then
+  log "ZK server frame from $H1S_ZK_SERVER_TGZ ($(sha256sum "$H1S_ZK_SERVER_TGZ" | cut -c1-16)), not this tree's"
+  FWTGZ=$(sha256sum "$H1S_ZK_SERVER_TGZ" | cut -c1-64)
+  export FC_ZK_SERVER_LEAN
+  FC_ZK_SERVER_LEAN=$(fw_frame "$H1S_ZK_SERVER_TGZ")
 elif [ "$FW" = 1 ]; then
-  export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
-  (exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_FIREWALL_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-firewall)) \
-    > "$OUT/build-firewall.log" 2>&1
+  export FC_ZK_SERVER_LEAN=${LEAN%/*}/flock-zk-server
+  (exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_ZK_SERVER_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-zk-server)) \
+    > "$OUT/build-zk-server.log" 2>&1
 fi
 if [ "$FW" = 1 ]; then
-  [ -x "$FC_FIREWALL_LEAN" ] || { tail -20 "$OUT/build-firewall.log"; log "no firewall frame at $FC_FIREWALL_LEAN"; exit 1; }
-  sha256sum "$FC_FIREWALL_LEAN" | tee -a "$OUT/binaries.sha256" | tee -a "$OUT/job.log"
+  [ -x "$FC_ZK_SERVER_LEAN" ] || { tail -20 "$OUT/build-zk-server.log"; log "no ZK server frame at $FC_ZK_SERVER_LEAN"; exit 1; }
+  sha256sum "$FC_ZK_SERVER_LEAN" | tee -a "$OUT/binaries.sha256" | tee -a "$OUT/job.log"
 fi
 
 # ---- the sampled proof block's openings ---------------------------------------------------------------------------------------------
@@ -114,7 +114,7 @@ else
 fi
 
 # ---- the statements ------------------------------------------------------------------------------------------------------
-log "h1-served: K=$K tile=${H1_TILE:-v1} firewall $FW, sessions $PAR at a time, Lean $LPAR at a time"
+log "h1-served: K=$K tile=${H1_TILE:-v1} ZK server $FW, sessions $PAR at a time, Lean $LPAR at a time"
 DESC=()
 [ -z "${H1S_SMOKE:-}" ] && [ -n "${H1S_DESCRIPTOR:-}" ] && DESC=(--descriptor "$H1S_DESCRIPTOR")
 $TIME "$OUT/prepare.time" "$PY" "$H/served.py" prepare --opened "$OP" --work "$WK" --jobs "${H1L_JOBS:-8}" \
@@ -146,15 +146,15 @@ keep() {   # keep TAG: TAG's sessions and pin into out/, if H1S_KEEP names it (o
 # ---- proofs: one --zk session per statement ------------------------------------------------------------------------------
 VLIMIT=$(declare -f vlimit)
 if [ "$FW" = 1 ]; then
-  export FC_FIREWALL=1 FC_HOST_WITNESS=1 FC_FIREWALL_STATEMENT=verity/flock-circuit
-  export FC_FIREWALL_HELLO_ARGS="--partition $WK/verifier/lane.partition.json --program $WK/verifier/lane.program.json"
+  export FC_ZK_SERVER=1 FC_HOST_WITNESS=1 FC_ZK_SERVER_STATEMENT=verity/flock-circuit
+  export FC_ZK_SERVER_HELLO_ARGS="--partition $WK/verifier/lane.partition.json --program $WK/verifier/lane.program.json"
   # the ZK server's Lean processes are the prover's children, and under an address-space limit (ulimit -v) their runtime
   # can't create its threads: a ZK server session is bounded by the run's cgroup (--mem-gb) alone
   vlimit() { :; }
 fi
 N=1
 export RAYON_NUM_THREADS=$(( TH / PAR > 0 ? TH / PAR : 1 ))
-UNFW=" ${H1S_UNFIREWALLED:-tampered-zy other-call-a} "
+UNFW=" ${H1S_NO_ZK_SERVER:-tampered-zy other-call-a} "
 # H1L_SESSION_GB: a ZK server session starts only while that much is free, H1L_STAGGER seconds after the last, so
 # H1L_PAR is an upper limit and memory decides. A ZK server session at K=4096 holds the prover (137 GiB), its live verifier
 # (141 GiB) and the ZK server's Lean process (~40 GB), ~350 GB together, and reaches that only after ~H1L_RAMP seconds
@@ -230,7 +230,7 @@ lean_check() {   # lean_check TAG CAP: the plan's Lean check of TAG, in the fore
   [ -n "${tag:-}" ] || return 0
   s=$(ls -d "$D"/sessions/*/ 2>/dev/null | tr '\n' ' ')
   [ -n "$s" ] || { echo "no session under $D" > "$OUT/lean/$tag.err"; return 0; }
-  env -u FC_FIREWALL -u FC_HOST_WITNESS -u FC_FIREWALL_STATEMENT -u FC_FIREWALL_HELLO_ARGS \
+  env -u FC_ZK_SERVER -u FC_HOST_WITNESS -u FC_ZK_SERVER_STATEMENT -u FC_ZK_SERVER_HELLO_ARGS \
     $TIME "$OUT/lean/$tag.time" bash -c "$(lean_vlimit "$2") exec $(verifier_env) $LEAN verify --zk --circuit $D/circuit.txt \
     --statement verity/flock-circuit --public $pub --partition $part --program $prog --registered $reg --session $s" \
     > "$OUT/lean/$tag.out" 2> "$OUT/lean/$tag.err"
@@ -257,21 +257,21 @@ while IFS=$'\t' read -r kind tag D; do
   if [ "$fw" = 1 ] && [ -n "$FWDIR" ]; then
     t=$(fw_last)
     if [ -n "$t" ] && h=$(sha256sum "$t" | cut -c1-64) && [ "$h" != "$FWTGZ" ]; then
-      log "$tag: a new firewall frame in $FWDIR, $t (${h:0:16}): building"
+      log "$tag: a new ZK server frame in $FWDIR, $t (${h:0:16}): building"
       f=$(fw_frame "$t")
       if [ -x "$f" ]; then
-        FWTGZ=$h FC_FIREWALL_LEAN=$f
-        log "$tag: firewall frame now from $t (${h:0:16})"
-        sha256sum "$FC_FIREWALL_LEAN" | tee -a "$OUT/binaries.sha256" | tee -a "$OUT/job.log"
+        FWTGZ=$h FC_ZK_SERVER_LEAN=$f
+        log "$tag: ZK server frame now from $t (${h:0:16})"
+        sha256sum "$FC_ZK_SERVER_LEAN" | tee -a "$OUT/binaries.sha256" | tee -a "$OUT/job.log"
       else
-        log "$tag: $t (${h:0:16}) did not build, the frame stays $FC_FIREWALL_LEAN: $(tail -3 "$OUT/build-firewall.log")"
+        log "$tag: $t (${h:0:16}) did not build, the frame stays $FC_ZK_SERVER_LEAN: $(tail -3 "$OUT/build-zk-server.log")"
         FWTGZ=$h
       fi
     fi
   fi
-  [ "$fw" = 1 ] && sha256sum "$FC_FIREWALL_LEAN" > "$OUT/$tag/firewall.sha256"
-  log "prove $tag (firewall $fw)"
-  ( [ "$fw" = 1 ] || unset FC_FIREWALL FC_HOST_WITNESS FC_FIREWALL_STATEMENT FC_FIREWALL_HELLO_ARGS
+  [ "$fw" = 1 ] && sha256sum "$FC_ZK_SERVER_LEAN" > "$OUT/$tag/zk-server.sha256"
+  log "prove $tag (ZK server $fw)"
+  ( [ "$fw" = 1 ] || unset FC_ZK_SERVER FC_HOST_WITNESS FC_ZK_SERVER_STATEMENT FC_ZK_SERVER_HELLO_ARGS
     k0=$(oom_kills)
     if session "$D" "$OUT/$tag" && ! why=$(live_failed "$OUT/$tag"); then
       [ "$EACH" = 1 ] && printf '%(%s)T\n' -1 > "$OUT/lean/$tag.start"
@@ -290,7 +290,7 @@ while IFS=$'\t' read -r kind tag D; do
   [ "$fw" = 1 ] && [ -n "${H1L_SESSION_GB:-}" ] && sleep "${H1L_STAGGER:-60}"
 done < <(order)
 wait
-unset FC_FIREWALL FC_HOST_WITNESS FC_FIREWALL_STATEMENT FC_FIREWALL_HELLO_ARGS
+unset FC_ZK_SERVER FC_HOST_WITNESS FC_ZK_SERVER_STATEMENT FC_ZK_SERVER_HELLO_ARGS
 eval "$VLIMIT"
 log "proved: $(ls -d "$WK"/st/*/sessions/*/ 2>/dev/null | wc -l) sessions"
 

@@ -96,7 +96,7 @@ theorem units_le_of_fits {Θ : Type} [DecidableEq Θ] (P : m.Prog Θ) (σ : m.St
 
 /-- **The window bound**: a run meeting the model in `len` ticks of `τ` seconds uses at most the device's tensor MACs,
 CUDA-core ops (32 an issue slot, and every pipe's lanes) and device-memory bits summed over the window
-(`Card.toDevice`). It builds no per-tick `Accounting.Schedule`. -/
+(`Card.toDevice`). It builds no per-tick `ResourceAccounting.Schedule`. -/
 theorem fits_toDevice {Θ : Type} [DecidableEq Θ] (P : m.Prog Θ) (σ : m.State Θ) (sched : List Θ) (τ : ℚ≥0)
     (len : ℕ) {ι : Type} (cap : ι → ℕ) (h : Fits P σ sched (len * τ)) :
     units (run P σ sched).2 .tensor ≤ len * ((m.card.toDevice τ cap).rate .tc : ℚ≥0) ∧

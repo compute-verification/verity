@@ -18,7 +18,7 @@ Without promotion (`G = 0`) the chain is `Accum.pureChain p`, one fold of `p`'s 
   (`pureFlags_iff_skipOne`) and `FreezeP.absorbedP` there (`pureFlags_iff_absorbed`, from `skipOne_iffP`). While the
   output is finite, unchanged output is unchanged word (`pureFlags_iff_word`). The skip resumes from the atom's incoming
   word (`pureSkip_resume`), so an identity atom is flagged (`pureFlags_of_identity`). The unit's form, the ticket
-  `chainAt p 0` (`unitFlagsAt_zero_iff`), and `debitDev`'s count and `needed` at `G = 0` (`pureDebit_eq`,
+  `chainAt p 0` (`unitFlagsAt_zero_iff`), and `inertWorkDev`'s count and `needed` at `G = 0` (`pureInertWork_eq`,
   `pureNeeded_iff`).
 * **Identities on sm_120** (`sm120_no_identity`, `sm120_pure_no_identity`): the pure chain's words stay `+0` or normal
   at exponent at least `−11 − w`, each at most the absolute mass `Σ |a·b|` of the atoms before it
@@ -175,7 +175,7 @@ theorem pureFlags_iff_word (k : ℕ) (a b : Fin k → Code) (t : ℕ) (hf : pure
   rw [pureFlags_iff]
   exact and_congr_right fun _ => ⟨fun h => pureWord_eq p h hf, fun h => congrArg wordQ h⟩
 
-/-! ## The unit's form, for `debitDev` at `G = 0` -/
+/-! ## The unit's form, for `inertWorkDev` at `G = 0` -/
 
 variable {m n k : ℕ}
 
@@ -188,17 +188,17 @@ theorem unitFlagsAt_zero_iff (Aq : Matrix (Fin m) (Fin k) Code) (Bq : Matrix (Fi
   rw [AccumProofs.chainAt_zero_eq_pure]
   exact pureFlags_iff p k (Aq i) (Bq j) t
 
-/-- **The debit's atoms at `G = 0`** (`debitDev`'s `x.atoms`, `Skip.chainDebit`): the unit's atoms whose lone skip leaves
+/-- **The debit's atoms at `G = 0`** (`inertWorkDev`'s `x.atoms`, `Skip.chainInertWork`): the unit's atoms whose lone skip leaves
 the ticket unchanged. -/
-theorem pureDebit_eq (Aq : Matrix (Fin m) (Fin k) Code) (Bq : Matrix (Fin n) (Fin k) Code) (c : ℚ) :
-    chainDebit k c (unitFlagsAt p 0 Aq Bq) = c * ∑ i : Fin m, ∑ j : Fin n, ((Finset.range (k / 32)).filter fun t =>
+theorem pureInertWork_eq (Aq : Matrix (Fin m) (Fin k) Code) (Bq : Matrix (Fin n) (Fin k) Code) (c : ℚ) :
+    chainInertWork k c (unitFlagsAt p 0 Aq Bq) = c * ∑ i : Fin m, ∑ j : Fin n, ((Finset.range (k / 32)).filter fun t =>
       pureChain p ((rowAtoms (Aq i) (Bq j)).eraseIdx t) = chainAt p 0 Aq Bq i j).card := by
   have h : ∀ i j, ((Finset.range (k / 32)).filter fun t => unitFlagsAt p 0 Aq Bq i j t = true) =
       (Finset.range (k / 32)).filter fun t =>
         pureChain p ((rowAtoms (Aq i) (Bq j)).eraseIdx t) = chainAt p 0 Aq Bq i j :=
     fun i j => Finset.filter_congr fun t ht => by
       rw [unitFlagsAt_zero_iff, and_iff_right (Finset.mem_range.1 ht)]
-  unfold chainDebit
+  unfold chainInertWork
   simp only [h]
 
 /-- **`needed` at `G = 0`**, on `k` a multiple of 32: element `(i, l)` of `A′` is needed exactly when some word `(i, j)`

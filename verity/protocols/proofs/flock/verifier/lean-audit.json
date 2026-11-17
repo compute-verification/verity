@@ -1,5 +1,5 @@
 {
- "format": 1,
+ "format": 2,
  "roots": [
   "Flock",
   "FlockVerify",
@@ -18,6 +18,7 @@
   "Flock.Test.InnerStreams",
   "Flock.Test.RoundWords",
   "Flock.Test.InnerLink",
+  "Flock.Test.RecCap",
   "Flock.Test.RecCoins",
   "Flock.Test.RecOpen",
   "Flock.Test.RecRecord",
@@ -47,6 +48,7 @@
   "Flock.Test.DescOfProg",
   "Flock.Test.LinkUnits",
   "Flock.Test.RegCover",
+  "Flock.Test.RegTwoParams",
   "Flock.Test.RegKnown",
   "Flock.Test.KnownRead",
   "Flock.Test.RegRows",
@@ -98,27 +100,26 @@
   "Flock.Test.Annot"
  ],
  "exempt": {
-  "Flock.Test.RecCap": "a test, not a proof: its #guards evaluate whole V* lists in the interpreter, 1,097-1,246 s to build on every check node, so it gated every Flock-touching Lean check by about 18 min; built right after landing by verity/protocols/proofs/flock/prover/tests/test_lean_rec_cap_guards.py instead (the tier for parts whose cold run is over 10 min; a small-shape guard is to go back into the roots)",
-  "FlockFirewall": "the flock-firewall executable's entry point; its commands are Flock.Firewall.cmd, (`contract`) Flock.Firewall.Contract.cmd, (`frame`, `tap`) Flock.Firewall.Frame.cmd and tapCmd, (`coins`) Flock.Firewall.Coins.cmd, (`hello`) Flock.Firewall.Hello.cmd, (`session`) Flock.Firewall.Session.cmd and (`finish`) Flock.Firewall.Finish.cmd, audited under Flock",
+  "FlockZkServerMain": "the flock-zk-server executable's entry point; its commands are Flock.ZkServer.cmd, (`contract`) Flock.ZkServer.Contract.cmd, (`frame`, `tap`) Flock.ZkServer.Frame.cmd and tapCmd, (`coins`) Flock.ZkServer.Coins.cmd, (`hello`) Flock.ZkServer.Hello.cmd, (`session`) Flock.ZkServer.Session.cmd and (`finish`) Flock.ZkServer.Finish.cmd, audited under Flock",
   "FlockRows": "the flock-rows executable's entry point, one line; its command is Flock.Rows.cmd, audited under Flock",
   "FlockWitness": "the flock-witness executable's entry point, one line; its command is Flock.Witness.cmd, audited under Flock",
   "FlockRecSparse": "the flock-rec-sparse executable's entry point, one line; its command is Flock.RecSparseCmd.cmd, audited under Flock",
   "FlockRecOpening": "the flock-rec-opening executable's entry point, one line; its command is Flock.RecOpeningCmd.cmd, audited under Flock",
   "FlockRecLinks": "the flock-rec-links executable's entry point, one line; its command is Flock.RecLinksCmd.cmd, audited under Flock",
-  "FlockFrameTape": "the flock-frame-tape executable's entry point, a test's: Flock.Firewall.Frame.cmdWith (audited under Flock) with the rep's draws read from a file, so verity/protocols/proofs/flock/prover/tests/test_firewall_frame.py knows the pads the frame masks with",
+  "FlockFrameTape": "the flock-frame-tape executable's entry point, a test's: Flock.ZkServer.Frame.cmdWith (audited under Flock) with the rep's draws read from a file, so tests/verity/protocols/proofs/flock/prover/test_zk_server_frame.py knows the pads the frame masks with",
   "FlockReadTmpl": "the flock-read-tmpl executable's entry point, one line; its command is Flock.ReadTmplCmd.cmd, audited under Flock"
  },
  "assumptions": {},
  "open": {
-  "Flock.Firewall.Contract.FirewallComputes": {
-   "owner": "@firewall-contract",
-   "digest": "10ce3362fd413ab328b12f38b4771422e218144267f0fc7504c5a67821372912",
+  "Flock.ZkServer.Contract.Holds": {
+   "owner": "@zk-server-contract",
+   "digest": "7009b47ab0d117a654211028cc39c336e06bbe3dba4d3fc3b4dd9006a7ab5bf8",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Flock.Firewall.Contract.Holds": {
-   "owner": "@firewall-contract",
-   "digest": "6611dcca688d4c82e6900626f1697d941b4ed3f32a3537d5292b2e5e220ce974",
+  "Flock.ZkServer.Contract.ZkServerComputes": {
+   "owner": "@zk-server-contract",
+   "digest": "c72979b972b923ac2fc31134c42cba32b5970154909b6f97f2cc8ecf3c9c0f69",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   }
@@ -337,13 +338,13 @@
   }
  },
  "unwitnessed": {
-  "Flock.Firewall.Contract.holds_coins": "f611d55ea12c11473bcbfe0f723437d933d8bdfed81b134e1c2427a6961b37df",
-  "Flock.Firewall.Contract.holds_coins_binding": "440fe1557c52cfc039fe7de0f3d2a61a3def418b42dbbc8f710547689f334711",
-  "Flock.Firewall.Contract.holds_commit": "15196dcbfdd621070fec595078f25d91bea5231c788c2420525d8efcbcd5728d",
-  "Flock.Firewall.Contract.holds_computed": "356e6e3e7042c1194d6dbca4fd6b9077d0042bb4dd61b956135b9228641f0e59",
-  "Flock.Firewall.Contract.holds_finish": "517bb4d3fba64c5643d16167bcaff8990f7a66a6902f8f85d1309536ffb66027",
-  "Flock.Firewall.Contract.holds_fixed": "f63a6c36d77ac4ab1cf2b4e5a1d17e2179d85048e48d1b674d5f325483d94dc4",
-  "Flock.Firewall.Contract.holds_masked": "457708597f2841098fb5904b6f15316d8f12d995a46c791b11e033668cb118ce"
+  "Flock.ZkServer.Contract.holds_coins": "3565d547a0689ec7bc181c9c194e891027f257d2661ac77e50cb3b98211f4ca0",
+  "Flock.ZkServer.Contract.holds_coins_binding": "af3d7bce9bde393937d74e1990098b8f682326299fefedf1a56b9c7425696eab",
+  "Flock.ZkServer.Contract.holds_commit": "48397a230cbcb212508b71ea78adff9e9e447bf7787e692c90baf30c96d32d6b",
+  "Flock.ZkServer.Contract.holds_computed": "059c53a7372b12bd476505bdbc8ed79f3a162b98daf246aaa22e2b9b03e46154",
+  "Flock.ZkServer.Contract.holds_finish": "04a3999ead52947d6118d40bd4737cf50208d1874929b81d0956af770e631ef7",
+  "Flock.ZkServer.Contract.holds_fixed": "1c11e6a8e63a3ea769483c06b65f8ef0c4007e946d09c57f64424ff56f6e96cb",
+  "Flock.ZkServer.Contract.holds_masked": "ea01af4fb774953ebc952aadb87a1117dea186ba75c35a69fd0c15d46ebbc8bf"
  },
  "compile_time": {
   "Flock.With.ReturnsWalk": {
@@ -366,198 +367,6 @@
   "Flock": "C-Flock is excepted until its spec is extracted"
  },
  "guarantees": {
-  "Flock.Firewall.Contract.commitLeaf_eq": {
-   "owner": "@firewall-contract",
-   "signature": [
-    "Flock.Firewall.Contract.commitLeaf_eq (msg salt : ByteArray) :",
-    "  Eq (Flock.Firewall.Contract.commitLeaf msg salt)",
-    "    (Flock.Hm96.Default512.treeLeaf (Flock.Firewall.Contract.commitBC msg salt))"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "a7d43f86e900aef1dd9ec4d39216186ccbdccd394d69bdaac40f3f3c7e908a67"
-  },
-  "Flock.Firewall.Contract.holds_coins": {
-   "owner": "@firewall-contract",
-   "signature": [
-    "Flock.Firewall.Contract.holds_coins {pub : Flock.Firewall.Contract.PublicInput} {t : Flock.Firewall.Contract.ReleaseLog}",
-    "  (h : Flock.Firewall.Contract.Holds pub t) {stream : String} {k : Nat} {cs relayed : Array Flock.F128}",
-    "  {opening : ByteArray}",
-    "  (hm : List.instMembership.mem t.items.toList (Flock.Firewall.Contract.Item.coins stream k cs relayed opening)) :",
-    "  And (Eq relayed cs)",
-    "    (Or",
-    "      (Exists fun c =>",
-    "        And (Eq (pub.coinCommit stream k) (Option.some c))",
-    "          (And (Eq opening.size Flock.Firewall.Contract.SALT_BYTES)",
-    "            (Eq c.data (Flock.Firewall.Contract.commitBC (Flock.Firewall.Contract.coinMsg stream k cs) opening).data)))",
-    "      (And (Eq pub.coins List.nil.toArray) (Eq opening.size 0)))"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": ["Flock.Firewall.Contract.Holds"],
-    "reads": []
-   },
-   "type_hash": "f611d55ea12c11473bcbfe0f723437d933d8bdfed81b134e1c2427a6961b37df"
-  },
-  "Flock.Firewall.Contract.holds_coins_binding": {
-   "owner": "@firewall-contract",
-   "signature": [
-    "Flock.Firewall.Contract.holds_coins_binding {pub : Flock.Firewall.Contract.PublicInput}",
-    "  {t t' : Flock.Firewall.Contract.ReleaseLog} (h : Flock.Firewall.Contract.Holds pub t)",
-    "  (h' : Flock.Firewall.Contract.Holds pub t') {stream : String} {k : Nat} {cs cs' relayed relayed' : Array Flock.F128}",
-    "  {y y' : ByteArray}",
-    "  (hm : List.instMembership.mem t.items.toList (Flock.Firewall.Contract.Item.coins stream k cs relayed y))",
-    "  (hm' : List.instMembership.mem t'.items.toList (Flock.Firewall.Contract.Item.coins stream k cs' relayed' y'))",
-    "  (hc : Ne (pub.coinCommit stream k) Option.none)",
-    "  (hne : Ne (Flock.Firewall.Contract.coinMsg stream k cs) (Flock.Firewall.Contract.coinMsg stream k cs')) :",
-    "  And",
-    "    (Ne",
-    "      (Flock.Firewall.Contract.coinPair (Flock.Firewall.Contract.coinMsg stream k cs)",
-    "          (Flock.Firewall.Contract.coinMsg stream k cs') y y').fst",
-    "      (Flock.Firewall.Contract.coinPair (Flock.Firewall.Contract.coinMsg stream k cs)",
-    "          (Flock.Firewall.Contract.coinMsg stream k cs') y y').snd)",
-    "    (Eq",
-    "      (Flock.Sha512.hash",
-    "        (Flock.Firewall.Contract.coinPair (Flock.Firewall.Contract.coinMsg stream k cs)",
-    "            (Flock.Firewall.Contract.coinMsg stream k cs') y y').fst)",
-    "      (Flock.Sha512.hash",
-    "        (Flock.Firewall.Contract.coinPair (Flock.Firewall.Contract.coinMsg stream k cs)",
-    "            (Flock.Firewall.Contract.coinMsg stream k cs') y y').snd))"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": ["Flock.Firewall.Contract.Holds"],
-    "reads": []
-   },
-   "type_hash": "440fe1557c52cfc039fe7de0f3d2a61a3def418b42dbbc8f710547689f334711"
-  },
-  "Flock.Firewall.Contract.holds_commit": {
-   "owner": "@firewall-contract",
-   "signature": [
-    "Flock.Firewall.Contract.holds_commit {pub : Flock.Firewall.Contract.PublicInput}",
-    "  {t : Flock.Firewall.Contract.ReleaseLog} (h : Flock.Firewall.Contract.Holds pub t) {msg : ByteArray} {i : Nat}",
-    "  {sent : ByteArray} (hm : List.instMembership.mem t.items.toList (Flock.Firewall.Contract.Item.commit msg i sent)) :",
-    "  And (instLTNat.lt i t.salts.size)",
-    "    (And (Not (Array.instMembership.mem t.exposedSalts i))",
-    "      (And (Eq (Array.instGetElem?NatLtSize.getElem! t.salts i).size Flock.Firewall.Contract.SALT_BYTES)",
-    "        (And (Eq sent.data (Flock.Firewall.Contract.commitBC msg (Array.instGetElem?NatLtSize.getElem! t.salts i)).data)",
-    "          (∀ (j : Nat),",
-    "            instLTNat.lt j t.salts.size →",
-    "              Ne j i →",
-    "                Ne (Array.instGetElem?NatLtSize.getElem! t.salts j).data",
-    "                  (Array.instGetElem?NatLtSize.getElem! t.salts i).data))))"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": ["Flock.Firewall.Contract.Holds"],
-    "reads": []
-   },
-   "type_hash": "15196dcbfdd621070fec595078f25d91bea5231c788c2420525d8efcbcd5728d"
-  },
-  "Flock.Firewall.Contract.holds_computed": {
-   "owner": "@firewall-contract",
-   "signature": [
-    "Flock.Firewall.Contract.holds_computed {spec : String → Option ByteArray} {pub : Flock.Firewall.Contract.PublicInput}",
-    "  {t : Flock.Firewall.Contract.ReleaseLog} (h : Flock.Firewall.Contract.Holds pub t)",
-    "  (hc : Flock.Firewall.Contract.FirewallComputes spec t) {what : String} {src : Flock.Firewall.Contract.By}",
-    "  {want sent : ByteArray} {ps : Array Nat}",
-    "  (hm : List.instMembership.mem t.items.toList (Flock.Firewall.Contract.Item.fixed what src want sent ps))",
-    "  (hs :",
-    "    Or (Eq src Flock.Firewall.Contract.By.recheck)",
-    "      (Or (Eq src Flock.Firewall.Contract.By.shadow) (Eq src Flock.Firewall.Contract.By.own))) :",
-    "  Eq (spec what) (Option.some sent)"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": ["Flock.Firewall.Contract.FirewallComputes", "Flock.Firewall.Contract.Holds"],
-    "reads": []
-   },
-   "type_hash": "356e6e3e7042c1194d6dbca4fd6b9077d0042bb4dd61b956135b9228641f0e59"
-  },
-  "Flock.Firewall.Contract.holds_finish": {
-   "owner": "@firewall-contract",
-   "signature": [
-    "Flock.Firewall.Contract.holds_finish {pub : Flock.Firewall.Contract.PublicInput}",
-    "  {t : Flock.Firewall.Contract.ReleaseLog} (h : Flock.Firewall.Contract.Holds pub t) :",
-    "  Eq t.items.toList.getLast? (Option.some Flock.Firewall.Contract.Item.finish)"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": ["Flock.Firewall.Contract.Holds"],
-    "reads": []
-   },
-   "type_hash": "517bb4d3fba64c5643d16167bcaff8990f7a66a6902f8f85d1309536ffb66027"
-  },
-  "Flock.Firewall.Contract.holds_fixed": {
-   "owner": "@firewall-contract",
-   "signature": [
-    "Flock.Firewall.Contract.holds_fixed {pub : Flock.Firewall.Contract.PublicInput} {t : Flock.Firewall.Contract.ReleaseLog}",
-    "  (h : Flock.Firewall.Contract.Holds pub t) {what : String} {src : Flock.Firewall.Contract.By} {want sent : ByteArray}",
-    "  {ps : Array Nat}",
-    "  (hm : List.instMembership.mem t.items.toList (Flock.Firewall.Contract.Item.fixed what src want sent ps)) :",
-    "  And",
-    "    (Eq src Flock.Firewall.Contract.By.schedule →",
-    "      Exists fun sched =>",
-    "        Exists fun o =>",
-    "          Exists fun w =>",
-    "            Exists fun o' =>",
-    "              And (Eq pub.schedule (Option.some sched))",
-    "                (And (Eq (Flock.Firewall.Contract.scheduled sched o what) (Except.ok { fst := w, snd := o' }))",
-    "                  (Eq sent.data w.data)))",
-    "    (And",
-    "      (Eq src Flock.Firewall.Contract.By.statement →",
-    "        Exists fun w => And (Eq (pub.lookup what) (Option.some w)) (Eq sent.data w.data))",
-    "      (Ne src Flock.Firewall.Contract.By.schedule →",
-    "        Ne src Flock.Firewall.Contract.By.statement →",
-    "          And (Eq sent.data want.data) (Eq (pub.computes.contains what) Bool.true)))"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": ["Flock.Firewall.Contract.Holds"],
-    "reads": []
-   },
-   "type_hash": "f63a6c36d77ac4ab1cf2b4e5a1d17e2179d85048e48d1b674d5f325483d94dc4"
-  },
-  "Flock.Firewall.Contract.holds_masked": {
-   "owner": "@firewall-contract",
-   "signature": [
-    "Flock.Firewall.Contract.holds_masked {pub : Flock.Firewall.Contract.PublicInput}",
-    "  {t : Flock.Firewall.Contract.ReleaseLog} (h : Flock.Firewall.Contract.Holds pub t) {v : Flock.F128} {p : Nat}",
-    "  {sent : Flock.F128} (hm : List.instMembership.mem t.items.toList (Flock.Firewall.Contract.Item.masked v p sent)) :",
-    "  And (instLTNat.lt p t.pads.size)",
-    "    (And (Not (Array.instMembership.mem t.exposedPads p))",
-    "      (And (Eq sent (instHAdd.hAdd v (Array.instGetElem?NatLtSize.getElem! t.pads p)))",
-    "        (∀ (q : Nat),",
-    "          instLTNat.lt q t.pads.size →",
-    "            Ne q p →",
-    "              Ne (Array.instGetElem?NatLtSize.getElem! t.pads q) (Array.instGetElem?NatLtSize.getElem! t.pads p))))"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": ["Flock.Firewall.Contract.Holds"],
-    "reads": []
-   },
-   "type_hash": "457708597f2841098fb5904b6f15316d8f12d995a46c791b11e033668cb118ce"
-  },
   "Flock.RecLinks.check_sound": {
    "owner": "@proofs",
    "signature": [
@@ -630,13 +439,205 @@
     "reads": []
    },
    "type_hash": "6dad6f59128ad47ab24414e32de877bb654a05d7db3bf255eff8495197ee8bca"
+  },
+  "Flock.ZkServer.Contract.commitLeaf_eq": {
+   "owner": "@firewall-contract",
+   "signature": [
+    "Flock.ZkServer.Contract.commitLeaf_eq (msg salt : ByteArray) :",
+    "  Eq (Flock.ZkServer.Contract.commitLeaf msg salt)",
+    "    (Flock.Hm96.Default512.treeLeaf (Flock.ZkServer.Contract.commitBC msg salt))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "60d432d6905ca7b7a0a712c003a529857b9285ddf026b201df022490eddcdfce"
+  },
+  "Flock.ZkServer.Contract.holds_coins": {
+   "owner": "@firewall-contract",
+   "signature": [
+    "Flock.ZkServer.Contract.holds_coins {pub : Flock.ZkServer.Contract.PublicInput} {t : Flock.ZkServer.Contract.ReleaseLog}",
+    "  (h : Flock.ZkServer.Contract.Holds pub t) {stream : String} {k : Nat} {cs relayed : Array Flock.F128}",
+    "  {opening : ByteArray}",
+    "  (hm : List.instMembership.mem t.items.toList (Flock.ZkServer.Contract.Item.coins stream k cs relayed opening)) :",
+    "  And (Eq relayed cs)",
+    "    (Or",
+    "      (Exists fun c =>",
+    "        And (Eq (pub.coinCommit stream k) (Option.some c))",
+    "          (And (Eq opening.size Flock.ZkServer.Contract.SALT_BYTES)",
+    "            (Eq c.data (Flock.ZkServer.Contract.commitBC (Flock.ZkServer.Contract.coinMsg stream k cs) opening).data)))",
+    "      (And (Eq pub.coins List.nil.toArray) (Eq opening.size 0)))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Flock.ZkServer.Contract.Holds"],
+    "reads": []
+   },
+   "type_hash": "3565d547a0689ec7bc181c9c194e891027f257d2661ac77e50cb3b98211f4ca0"
+  },
+  "Flock.ZkServer.Contract.holds_coins_binding": {
+   "owner": "@firewall-contract",
+   "signature": [
+    "Flock.ZkServer.Contract.holds_coins_binding {pub : Flock.ZkServer.Contract.PublicInput}",
+    "  {t t' : Flock.ZkServer.Contract.ReleaseLog} (h : Flock.ZkServer.Contract.Holds pub t)",
+    "  (h' : Flock.ZkServer.Contract.Holds pub t') {stream : String} {k : Nat} {cs cs' relayed relayed' : Array Flock.F128}",
+    "  {y y' : ByteArray}",
+    "  (hm : List.instMembership.mem t.items.toList (Flock.ZkServer.Contract.Item.coins stream k cs relayed y))",
+    "  (hm' : List.instMembership.mem t'.items.toList (Flock.ZkServer.Contract.Item.coins stream k cs' relayed' y'))",
+    "  (hc : Ne (pub.coinCommit stream k) Option.none)",
+    "  (hne : Ne (Flock.ZkServer.Contract.coinMsg stream k cs) (Flock.ZkServer.Contract.coinMsg stream k cs')) :",
+    "  And",
+    "    (Ne",
+    "      (Flock.ZkServer.Contract.coinPair (Flock.ZkServer.Contract.coinMsg stream k cs)",
+    "          (Flock.ZkServer.Contract.coinMsg stream k cs') y y').fst",
+    "      (Flock.ZkServer.Contract.coinPair (Flock.ZkServer.Contract.coinMsg stream k cs)",
+    "          (Flock.ZkServer.Contract.coinMsg stream k cs') y y').snd)",
+    "    (Eq",
+    "      (Flock.Sha512.hash",
+    "        (Flock.ZkServer.Contract.coinPair (Flock.ZkServer.Contract.coinMsg stream k cs)",
+    "            (Flock.ZkServer.Contract.coinMsg stream k cs') y y').fst)",
+    "      (Flock.Sha512.hash",
+    "        (Flock.ZkServer.Contract.coinPair (Flock.ZkServer.Contract.coinMsg stream k cs)",
+    "            (Flock.ZkServer.Contract.coinMsg stream k cs') y y').snd))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Flock.ZkServer.Contract.Holds"],
+    "reads": []
+   },
+   "type_hash": "af3d7bce9bde393937d74e1990098b8f682326299fefedf1a56b9c7425696eab"
+  },
+  "Flock.ZkServer.Contract.holds_commit": {
+   "owner": "@firewall-contract",
+   "signature": [
+    "Flock.ZkServer.Contract.holds_commit {pub : Flock.ZkServer.Contract.PublicInput}",
+    "  {t : Flock.ZkServer.Contract.ReleaseLog} (h : Flock.ZkServer.Contract.Holds pub t) {msg : ByteArray} {i : Nat}",
+    "  {sent : ByteArray} (hm : List.instMembership.mem t.items.toList (Flock.ZkServer.Contract.Item.commit msg i sent)) :",
+    "  And (instLTNat.lt i t.salts.size)",
+    "    (And (Not (Array.instMembership.mem t.exposedSalts i))",
+    "      (And (Eq (Array.instGetElem?NatLtSize.getElem! t.salts i).size Flock.ZkServer.Contract.SALT_BYTES)",
+    "        (And (Eq sent.data (Flock.ZkServer.Contract.commitBC msg (Array.instGetElem?NatLtSize.getElem! t.salts i)).data)",
+    "          (∀ (j : Nat),",
+    "            instLTNat.lt j t.salts.size →",
+    "              Ne j i →",
+    "                Ne (Array.instGetElem?NatLtSize.getElem! t.salts j).data",
+    "                  (Array.instGetElem?NatLtSize.getElem! t.salts i).data))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Flock.ZkServer.Contract.Holds"],
+    "reads": []
+   },
+   "type_hash": "48397a230cbcb212508b71ea78adff9e9e447bf7787e692c90baf30c96d32d6b"
+  },
+  "Flock.ZkServer.Contract.holds_computed": {
+   "owner": "@firewall-contract",
+   "signature": [
+    "Flock.ZkServer.Contract.holds_computed {spec : String → Option ByteArray} {pub : Flock.ZkServer.Contract.PublicInput}",
+    "  {t : Flock.ZkServer.Contract.ReleaseLog} (h : Flock.ZkServer.Contract.Holds pub t)",
+    "  (hc : Flock.ZkServer.Contract.ZkServerComputes spec t) {what : String} {src : Flock.ZkServer.Contract.By}",
+    "  {want sent : ByteArray} {ps : Array Nat}",
+    "  (hm : List.instMembership.mem t.items.toList (Flock.ZkServer.Contract.Item.fixed what src want sent ps))",
+    "  (hs :",
+    "    Or (Eq src Flock.ZkServer.Contract.By.recheck)",
+    "      (Or (Eq src Flock.ZkServer.Contract.By.shadow) (Eq src Flock.ZkServer.Contract.By.own))) :",
+    "  Eq (spec what) (Option.some sent)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Flock.ZkServer.Contract.Holds", "Flock.ZkServer.Contract.ZkServerComputes"],
+    "reads": []
+   },
+   "type_hash": "059c53a7372b12bd476505bdbc8ed79f3a162b98daf246aaa22e2b9b03e46154"
+  },
+  "Flock.ZkServer.Contract.holds_finish": {
+   "owner": "@firewall-contract",
+   "signature": [
+    "Flock.ZkServer.Contract.holds_finish {pub : Flock.ZkServer.Contract.PublicInput}",
+    "  {t : Flock.ZkServer.Contract.ReleaseLog} (h : Flock.ZkServer.Contract.Holds pub t) :",
+    "  Eq t.items.toList.getLast? (Option.some Flock.ZkServer.Contract.Item.finish)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Flock.ZkServer.Contract.Holds"],
+    "reads": []
+   },
+   "type_hash": "04a3999ead52947d6118d40bd4737cf50208d1874929b81d0956af770e631ef7"
+  },
+  "Flock.ZkServer.Contract.holds_fixed": {
+   "owner": "@firewall-contract",
+   "signature": [
+    "Flock.ZkServer.Contract.holds_fixed {pub : Flock.ZkServer.Contract.PublicInput} {t : Flock.ZkServer.Contract.ReleaseLog}",
+    "  (h : Flock.ZkServer.Contract.Holds pub t) {what : String} {src : Flock.ZkServer.Contract.By} {want sent : ByteArray}",
+    "  {ps : Array Nat}",
+    "  (hm : List.instMembership.mem t.items.toList (Flock.ZkServer.Contract.Item.fixed what src want sent ps)) :",
+    "  And",
+    "    (Eq src Flock.ZkServer.Contract.By.schedule →",
+    "      Exists fun sched =>",
+    "        Exists fun o =>",
+    "          Exists fun w =>",
+    "            Exists fun o' =>",
+    "              And (Eq pub.schedule (Option.some sched))",
+    "                (And (Eq (Flock.ZkServer.Contract.scheduled sched o what) (Except.ok { fst := w, snd := o' }))",
+    "                  (Eq sent.data w.data)))",
+    "    (And",
+    "      (Eq src Flock.ZkServer.Contract.By.statement →",
+    "        Exists fun w => And (Eq (pub.lookup what) (Option.some w)) (Eq sent.data w.data))",
+    "      (Ne src Flock.ZkServer.Contract.By.schedule →",
+    "        Ne src Flock.ZkServer.Contract.By.statement →",
+    "          And (Eq sent.data want.data) (Eq (pub.computes.contains what) Bool.true)))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Flock.ZkServer.Contract.Holds"],
+    "reads": []
+   },
+   "type_hash": "1c11e6a8e63a3ea769483c06b65f8ef0c4007e946d09c57f64424ff56f6e96cb"
+  },
+  "Flock.ZkServer.Contract.holds_masked": {
+   "owner": "@firewall-contract",
+   "signature": [
+    "Flock.ZkServer.Contract.holds_masked {pub : Flock.ZkServer.Contract.PublicInput}",
+    "  {t : Flock.ZkServer.Contract.ReleaseLog} (h : Flock.ZkServer.Contract.Holds pub t) {v : Flock.F128} {p : Nat}",
+    "  {sent : Flock.F128} (hm : List.instMembership.mem t.items.toList (Flock.ZkServer.Contract.Item.masked v p sent)) :",
+    "  And (instLTNat.lt p t.pads.size)",
+    "    (And (Not (Array.instMembership.mem t.exposedPads p))",
+    "      (And (Eq sent (instHAdd.hAdd v (Array.instGetElem?NatLtSize.getElem! t.pads p)))",
+    "        (∀ (q : Nat),",
+    "          instLTNat.lt q t.pads.size →",
+    "            Ne q p →",
+    "              Ne (Array.instGetElem?NatLtSize.getElem! t.pads q) (Array.instGetElem?NatLtSize.getElem! t.pads p))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Flock.ZkServer.Contract.Holds"],
+    "reads": []
+   },
+   "type_hash": "ea01af4fb774953ebc952aadb87a1117dea186ba75c35a69fd0c15d46ebbc8bf"
   }
  },
  "shape": {
   "premises": [],
   "properties": {
-   "Flock.Firewall.Contract.holds_coins_binding": {
-    "function": "Flock.Firewall.Contract.run",
+   "Flock.ZkServer.Contract.holds_coins_binding": {
+    "function": "Flock.ZkServer.Contract.run",
     "outcome": "accept"
    },
    "Flock.RecLinks.check_sound": {
@@ -645,30 +646,30 @@
    }
   },
   "frozen": {
-   "Flock.Firewall.Contract.commitLeaf_eq": "frozen: not in the shape sweep: needs an entry under shape.properties, or a restatement",
-   "Flock.Firewall.Contract.holds_coins": "frozen: not in the shape sweep: needs an entry under shape.properties, or a restatement",
-   "Flock.Firewall.Contract.holds_commit": "frozen: not in the shape sweep: needs an entry under shape.properties, or a restatement",
-   "Flock.Firewall.Contract.holds_computed": "frozen: not in the shape sweep: needs an entry under shape.properties, or a restatement",
-   "Flock.Firewall.Contract.holds_finish": "frozen: not in the shape sweep: needs an entry under shape.properties, or a restatement",
-   "Flock.Firewall.Contract.holds_fixed": "frozen: not in the shape sweep: needs an entry under shape.properties, or a restatement",
-   "Flock.Firewall.Contract.holds_masked": "frozen: not in the shape sweep: needs an entry under shape.properties, or a restatement"
+   "Flock.ZkServer.Contract.commitLeaf_eq": "frozen: not in the shape sweep: needs an entry under shape.properties, or a restatement",
+   "Flock.ZkServer.Contract.holds_coins": "frozen: not in the shape sweep: needs an entry under shape.properties, or a restatement",
+   "Flock.ZkServer.Contract.holds_commit": "frozen: not in the shape sweep: needs an entry under shape.properties, or a restatement",
+   "Flock.ZkServer.Contract.holds_computed": "frozen: not in the shape sweep: needs an entry under shape.properties, or a restatement",
+   "Flock.ZkServer.Contract.holds_finish": "frozen: not in the shape sweep: needs an entry under shape.properties, or a restatement",
+   "Flock.ZkServer.Contract.holds_fixed": "frozen: not in the shape sweep: needs an entry under shape.properties, or a restatement",
+   "Flock.ZkServer.Contract.holds_masked": "frozen: not in the shape sweep: needs an entry under shape.properties, or a restatement"
   },
   "inline": {
-   "Flock.Firewall.Contract.holds_coins": {
-    "List.instMembership.mem t.items.toList (Flock.Firewall.Contract.Item.coins stream k cs relayed opening)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+   "Flock.ZkServer.Contract.holds_coins": {
+    "List.instMembership.mem t.items.toList (Flock.ZkServer.Contract.Item.coins stream k cs relayed opening)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Flock.Firewall.Contract.holds_commit": {
-    "List.instMembership.mem t.items.toList (Flock.Firewall.Contract.Item.commit msg i sent)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+   "Flock.ZkServer.Contract.holds_commit": {
+    "List.instMembership.mem t.items.toList (Flock.ZkServer.Contract.Item.commit msg i sent)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Flock.Firewall.Contract.holds_computed": {
-    "List.instMembership.mem t.items.toList (Flock.Firewall.Contract.Item.fixed what src want sent ps)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Or (Eq src Flock.Firewall.Contract.By.recheck) (Or (Eq src Flock.Firewall.Contract.By.shadow) (Eq src Flock.Firewall.Contract.By.own))": "a disjunction, inline when the rule came: name it or state it as a guarantee's conclusion"
+   "Flock.ZkServer.Contract.holds_computed": {
+    "List.instMembership.mem t.items.toList (Flock.ZkServer.Contract.Item.fixed what src want sent ps)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Or (Eq src Flock.ZkServer.Contract.By.recheck) (Or (Eq src Flock.ZkServer.Contract.By.shadow) (Eq src Flock.ZkServer.Contract.By.own))": "a disjunction, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Flock.Firewall.Contract.holds_fixed": {
-    "List.instMembership.mem t.items.toList (Flock.Firewall.Contract.Item.fixed what src want sent ps)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+   "Flock.ZkServer.Contract.holds_fixed": {
+    "List.instMembership.mem t.items.toList (Flock.ZkServer.Contract.Item.fixed what src want sent ps)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Flock.Firewall.Contract.holds_masked": {
-    "List.instMembership.mem t.items.toList (Flock.Firewall.Contract.Item.masked v p sent)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+   "Flock.ZkServer.Contract.holds_masked": {
+    "List.instMembership.mem t.items.toList (Flock.ZkServer.Contract.Item.masked v p sent)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    }
   }
  },
@@ -727,89 +728,6 @@
     "Flock.Sha512.round": "a9113a9eceffba2e20e17c99b23fc2a95d96cf32f1f3146f644f2e9aae7c6a5a",
     "Flock.Sha512.sched": "747b4628141c01730f79c31c4d56b7fcf6699a923c854474dc17032ac6a7777a",
     "Flock.Sha512.word": "b1086da4c00e9cf65abe8a24bde5bf83aa2e6897854b30766e6be070dc7de279"
-   }
-  },
-  "Flock.Firewall.Assumptions": {
-   "digest": "af9ea94f8fcb40d6ec6dfd3cbcd28ffb735288e0e1d3863a0a086770bc105515",
-   "definitions": {
-    "Flock.Firewall.Contract.FirewallComputes": "10ce3362fd413ab328b12f38b4771422e218144267f0fc7504c5a67821372912"
-   }
-  },
-  "Flock.Firewall.Contract": {
-   "digest": "e6a367cf3134242f24a354fac31c354357b5c3b0ffb799a553e9199992395020",
-   "definitions": {
-    "Flock.Firewall.Contract.By": "d91fb21fc66675874eb81a58c294ef88d3b1b06b3de8d8421c92c9264583a53e",
-    "Flock.Firewall.Contract.By.casesOn": "2b6107e1f89c6e2113a2dec80173ed689020034ea2d503bde43c893b99319c03",
-    "Flock.Firewall.Contract.By.name": "ce6b8bcf3cc1c97f0d639ab15905a6bc4085c507ae0294057985d5b256724694",
-    "Flock.Firewall.Contract.By.own": "89a4962b5c522aec3161a27b4f99ef52ad0f3a5e177a9f4a656b683d9af1fae8",
-    "Flock.Firewall.Contract.By.rec": "0053858acc265323cfd64a72ce692f3307488f696240115fbd4189080eaa39fd",
-    "Flock.Firewall.Contract.By.recheck": "4d73027880bec0f8b742ded9b35f7a82511d5af0cc8d0d693444863fd20239a9",
-    "Flock.Firewall.Contract.By.schedule": "bfc189027ed74e464f6e3e7ec5ec55e7975e71fee84a5893653f74b4b8e7b199",
-    "Flock.Firewall.Contract.By.shadow": "0842791377b2519fca9730ad83c6c09b6e53a628da00eaf6c657ef620ed11ebd",
-    "Flock.Firewall.Contract.By.statement": "33089f4773d8189957b703d75b5eb65be50ff15579fd777ec33dda03cfa72c04",
-    "Flock.Firewall.Contract.COINS_TAG": "b08a144dbb2ea89618a289102372da079f319007747cbdf457f940cf7be7ce43",
-    "Flock.Firewall.Contract.Holds": "6611dcca688d4c82e6900626f1697d941b4ed3f32a3537d5292b2e5e220ce974",
-    "Flock.Firewall.Contract.Item": "f0d66a50e4ec8bb1baf70e03fea05dbb0f7b29f262bb940e58e23a738bc71def",
-    "Flock.Firewall.Contract.Item.casesOn": "6d338e63c2f50fc2f9e09f5fc71bdcfe20f09f01b028941cf19d0797aae1c88f",
-    "Flock.Firewall.Contract.Item.check": "49cef243c504bbc2d35a2e032d6e07d0342c2cd828f9d3931cecb9780a109520",
-    "Flock.Firewall.Contract.Item.coins": "057db6b45e03576752cf78c5d2a648b02904cdf76259526719c6ce9e988e6a03",
-    "Flock.Firewall.Contract.Item.commit": "0a96218d9f091d7da9d76a4de379754bc737a96a615e813dc132036816af42c6",
-    "Flock.Firewall.Contract.Item.finish": "cffb4ad10ee5f96a2883d5a26251d20dc305d341e36098b51c31cfebbd0cb37b",
-    "Flock.Firewall.Contract.Item.fixed": "748c4962d89dee5328e60cf3642cd23b54e2f63150e7fde0c083d9ab633ed648",
-    "Flock.Firewall.Contract.Item.masked": "28c699cfb8b27c1d79c690a1aee13cfea7c00c8c651c58313c5a338f142d19d1",
-    "Flock.Firewall.Contract.Item.rec": "43040e8278453fd860e040c00cb953125840bcb80547925d0e858bd2dde6ef58",
-    "Flock.Firewall.Contract.Order": "944860fa9db7c01bae9cdc3874cf7a9f4c6154a7c110a6434e1ea691a4da2bce",
-    "Flock.Firewall.Contract.Order.opened": "4b927ed0b00af6a0e6d9066fc6e4a6132465a3cc68e029453527c213f5c26297",
-    "Flock.Firewall.Contract.Order.rounds": "2f3f7dfc2dc3301e302d1a3b29c3a804c079def59eace92c08315f9aa89c0e05",
-    "Flock.Firewall.Contract.Order.stage": "be17bd84140828dba6d8e4b10dc012a32c0c3ec16e233ee8ab5be9ef617431cf",
-    "Flock.Firewall.Contract.PublicInput": "fc07c70da8ad776dbab8c97ee049a1902937b553e9212fd5a8f28df79adb808e",
-    "Flock.Firewall.Contract.PublicInput.coinCommit": "13ec4d343cff815096a7160ac294b99d1d53a4f9d85aad262e04f34d99a6fcaa",
-    "Flock.Firewall.Contract.PublicInput.coins": "7813f8477fb872a7d0076ba1307effd9ca0b3407fbc2efbf8562fed2f13d0383",
-    "Flock.Firewall.Contract.PublicInput.computes": "3b018f0ead5eb858b6b6f6c2bbb079085318edd64a44f267eaac17d010d13c44",
-    "Flock.Firewall.Contract.PublicInput.lookup": "e7569378f2da6042cb9955086ca3607066e08ef9b038dba46813537416ac8b33",
-    "Flock.Firewall.Contract.PublicInput.relations": "a8a46fa09ff0c8a89fd1ec68547be4d273546251cb845dc635a4d4a31f34a5eb",
-    "Flock.Firewall.Contract.PublicInput.schedule": "eb33258d42a340ded01e9d2582d4e4bde6e7adceef973169ef24a664ed7c2a3e",
-    "Flock.Firewall.Contract.PublicInput.statement": "24ceb43621403bc66f925855d69e1e84fb1f33ccefefcb9013b9b36bb8cb5393",
-    "Flock.Firewall.Contract.ReleaseDecision": "00c61c0b9b1658415071b8f78846855c7ea97d23834f04183b248253a26f86ed",
-    "Flock.Firewall.Contract.ReleaseDecision.accepted": "81e71281ddbc438df48199b2caa8ad17b230619476ec88a24f9429450c6fb297",
-    "Flock.Firewall.Contract.ReleaseDecision.cut": "d2292233a7293c8bc9e848b68323547a42a3b16ba805eb7b0c8dd1c00305c298",
-    "Flock.Firewall.Contract.ReleaseLog": "b429991f47c15e3284bd6e60f7ad50a225ff0f23b4e1a5efc01ddf56809bf2a8",
-    "Flock.Firewall.Contract.ReleaseLog.exposedPads": "c5ece29f82a4a7a27a8cea7df90865beffbbcae9fe22decdcc4935f230381bbf",
-    "Flock.Firewall.Contract.ReleaseLog.exposedSalts": "71a071a4aa841550f9c6599143388f2dc7b9a0de08f7667e57a17f8640cd0e93",
-    "Flock.Firewall.Contract.ReleaseLog.items": "0d9b08df2e69d564a2bf93ecdf5763f5d297eff7cc7b478f4cad7b7b814f832a",
-    "Flock.Firewall.Contract.ReleaseLog.pads": "437151a2fe374538529bab9b863c8b0456a392d5a51309e75154e1956d58fedd",
-    "Flock.Firewall.Contract.ReleaseLog.salts": "4d033214226e7388fcc90e546d063cf294edb23f2664d3f616d9a36ad1d55c9f",
-    "Flock.Firewall.Contract.SALT_BYTES": "76eaa71673568b18e3a2687449cf2b8061edd307bb4e9dd29c5b9469a341d4e8",
-    "Flock.Firewall.Contract.SCHEDULE_FORMAT": "c43dfd14d1f8928c8ec925974ad8956aae3e221dfba2275bf573f2853be0635b",
-    "Flock.Firewall.Contract.State": "acceac09e0f266e16b685ea607bf5b3d6e7dbe3222f9e59be7ca082fc03f39de",
-    "Flock.Firewall.Contract.State.checked": "24db83301a30ad320f4e9e28885d4f3dd82e0dc13aeb6da626dfdc20e86134b9",
-    "Flock.Firewall.Contract.State.coined": "f1f3d32e8eb17495479691abe00b835bfd3c701b7dc39ef46245b10262e330ac",
-    "Flock.Firewall.Contract.State.finished": "352d30334b6a040555c5387eb5ea6c18305b24673510adc5a7da02cd54983358",
-    "Flock.Firewall.Contract.State.init": "05f830c60ba409a47452445bf491425fd39697249952374f39d5a31b97f0e840",
-    "Flock.Firewall.Contract.State.order": "faa6f3af9dae517bc25d38f91547e81c722974e3d73aac31b75347411e5740d0",
-    "Flock.Firewall.Contract.State.owed": "b43ed1935b4261a11444e8f7a0e9d2d99d5c58780802af9009f13c2f804bfbe9",
-    "Flock.Firewall.Contract.State.passed": "be164eff485dc958994e3cd140378e855af3b121c1cc8e67552e082e21ef0f55",
-    "Flock.Firewall.Contract.State.usedPad": "fdd70a0f65d11d9dea0108fbcde7b5090bc7429221ca8b04d0544270cf5c06ac",
-    "Flock.Firewall.Contract.State.usedSalt": "1dbf2f76089fe5774341e9627e88a627dde67c3a09d789c0bb4374519fcf7dd4",
-    "Flock.Firewall.Contract.bytesEq": "c4b29028da21ff73831875115b5c900a548873834563a21b2b3bf2144cd2cb56",
-    "Flock.Firewall.Contract.coinMsg": "b009e6f90480529c065a50c8c7da5db177876ca7dc431ff85b038a1099ddfceb",
-    "Flock.Firewall.Contract.coinPair": "eff873cbe9af8a350a12211a12b1dfa320eb3875967b6ac1bda4bd5bea52bb2b",
-    "Flock.Firewall.Contract.commitBC": "27bd408fc640be0ed9d38299371f18e5bfe8548c6fe5c866c16d0dae82f44c52",
-    "Flock.Firewall.Contract.commitLeaf": "061fcd6212240735b5518536e4f880809e86c4aa76929a19184bd58b19dee3b7",
-    "Flock.Firewall.Contract.f128Eq": "06f815dea54e5a81e488c815b05aa2bebbe31de291353fd8d84e9225f50f46b3",
-    "Flock.Firewall.Contract.fixes": "bd77d7fb5c20a93948cc06ca37dda15bdd53e9d5a9dfa2865fd828249294631c",
-    "Flock.Firewall.Contract.go": "e8ad30d3eff23daed3ede43fba14a60a4c5607c6e849c011665d7a38603556f1",
-    "Flock.Firewall.Contract.need": "6b4de406b9b94627197f7ff5799c90ad473e2c802b1dff66074f1282aee15087",
-    "Flock.Firewall.Contract.owes": "1339a4385eb937c0624dfeaa45d2005d1ba3e286eaac6d0148ed676d52a71280",
-    "Flock.Firewall.Contract.pairwiseDistinct": "d2a5394b192d247c2b3ff0cffe1cb0b64cbddc46bd8925f52f5892e47acecd97",
-    "Flock.Firewall.Contract.roundAt": "d3a166c82c2495311773a97e2ae872d786e275a487137acf9adf460772aedec6",
-    "Flock.Firewall.Contract.run": "3df1332507d62ca8e40d95121f36cfa59bd1269427a734662f010359ed25d685",
-    "Flock.Firewall.Contract.scheduled": "51981dc1ae84a5672f7d2650f88aa5142feafb77f833c86351c941f092bfc923",
-    "Flock.Firewall.Contract.step": "03674bcaf69bc2110a2fb84911f20102613a893fa3659e1157f5a2aafb5b4454",
-    "Flock.Firewall.Contract.streams": "e165b227621dd1e07fc95045d98b77aa98cb45517fb4b16b64f655d951ab37ee",
-    "Flock.Firewall.Contract.tapeError": "8d2fef39cf0ecf6adb08291c1ac71e9e3598d5e6d021babb5152cd71e7aa7626",
-    "_private.Flock.Firewall.Contract.0.Flock.Firewall.Contract.canonBytes": "be796eca9f941ff1425bb1e8566cd8e5d7049a9a30859c4ba3a83c70a9489289",
-    "_private.Flock.Firewall.Contract.0.Flock.Firewall.Contract.field": "ad17232aaccc1682ea4eb0599417aa9f38f92378534fa991f254c913a727a931"
    }
   },
   "Flock.Hm96": {
@@ -874,6 +792,89 @@
     "Flock.RecLinks.ordered": "6cc1589bda304cdabd8ba56b046fbd5ee50a4ebde1e3a181c9da9f7bfd1ac88f",
     "Flock.RecLinks.table": "a19dd4e349bbd0d1eb1250feee2b7de64a059320d7855613fb5f1d974572de3e",
     "Flock.RecLinks.u32At": "c1675f44eafac783a305179e813be310e7b341eaa28ee67706d1aa50d3aff4f6"
+   }
+  },
+  "Flock.ZkServer.Assumptions": {
+   "digest": "f4089d14389f9d849f5ae8030ee2f408fb6d3725d720d79bcd8ec173f820930c",
+   "definitions": {
+    "Flock.ZkServer.Contract.ZkServerComputes": "c72979b972b923ac2fc31134c42cba32b5970154909b6f97f2cc8ecf3c9c0f69"
+   }
+  },
+  "Flock.ZkServer.Contract": {
+   "digest": "d7a5d08e7e1a85c71f54d8fa7c3e5d1f356e2356bc52f9e814d333a33f4cb491",
+   "definitions": {
+    "Flock.ZkServer.Contract.By": "b34516f1c1f38532e85262b29c49d078bf979fa924f9b4f2916ee1c31ee7f939",
+    "Flock.ZkServer.Contract.By.casesOn": "45d32a3ba9e74bffd7e780b1ed5c3626206bcd616cb62516753eef654485d9a4",
+    "Flock.ZkServer.Contract.By.name": "95015e2df71d64c995452237b215f9234b5581ff0967ee5d37eb2ffcdd6e5567",
+    "Flock.ZkServer.Contract.By.own": "ffc74f6861b2ec8f5e833dd52b9fdfed8c6b644a5a754d7e35eab56633a1cfe6",
+    "Flock.ZkServer.Contract.By.rec": "756666497b1f8b74f17a980ae2326e1415ae433100ad4e2d67b6d1b094936b91",
+    "Flock.ZkServer.Contract.By.recheck": "7b526e2aac75688a1ffa6f3d5978c85eac8c9996fd61d22615c9c5522409df8f",
+    "Flock.ZkServer.Contract.By.schedule": "77eee2ae03bb37332f33339801a4f78cdc609c747381e416f3ede3f9b5e2cde4",
+    "Flock.ZkServer.Contract.By.shadow": "63f9760b7762d2973757a2a3e95e9dcfa59a04e561b021d5298c947aefe1686f",
+    "Flock.ZkServer.Contract.By.statement": "bcc98f7cafac5d8cb0dcde11d4bcbac6844b1186da7ff539205486d8fe057cbc",
+    "Flock.ZkServer.Contract.COINS_TAG": "96d06efcca18022ced2753b7a5f4607c0b9545fd6e78c6eaa0dec7733e55b85f",
+    "Flock.ZkServer.Contract.Holds": "7009b47ab0d117a654211028cc39c336e06bbe3dba4d3fc3b4dd9006a7ab5bf8",
+    "Flock.ZkServer.Contract.Item": "e06a7f7dc709ad619d6ae8032dcc6e07d513f67f5c6f937fc02fcc9eff232b9e",
+    "Flock.ZkServer.Contract.Item.casesOn": "f4ff32a0d3566c058ef24525f2c5bb6a79a1fd6d9409ed32e36eb4f87137b980",
+    "Flock.ZkServer.Contract.Item.check": "2b455a0c979b81f6462522894dda85ab786265a87368dfedda43570cc07b7fe8",
+    "Flock.ZkServer.Contract.Item.coins": "6e853fb6c6a68f1415065c952472750019a4d9143431ebef6d4554553183a162",
+    "Flock.ZkServer.Contract.Item.commit": "fe5328028ed2336b7e6c32586d3bb4cdd61ed98873c6f87fcfc7f4a744d0722e",
+    "Flock.ZkServer.Contract.Item.finish": "2e8fbd7d34e7e8a42a6cce040d59a4de7fe7c07c0363818c7b2ff23532ead624",
+    "Flock.ZkServer.Contract.Item.fixed": "890e4e63a5793d5560ab908791fe7b252828ad814980bbde23219313fcfa30df",
+    "Flock.ZkServer.Contract.Item.masked": "ad7d4f8f8600a58d05735df707f969fe36aead1740439cdb9a3694a99185c835",
+    "Flock.ZkServer.Contract.Item.rec": "ca112ac943f064fd379d29cb4e0259f24459577c80373141d296e8e060694d52",
+    "Flock.ZkServer.Contract.Order": "43896d5d18ad4578d5f275b43ce4b5cb7c66c71a8e62a68a3485d96ebd099a1b",
+    "Flock.ZkServer.Contract.Order.opened": "895504bb3f1ea3475a1d7ce157a065102aa2bb71c431a80d9a494322a72aac21",
+    "Flock.ZkServer.Contract.Order.rounds": "8cf2b690c694567e2b9678a0ab6df2065bb5c3cd93846a8ab4ed381e40abfec6",
+    "Flock.ZkServer.Contract.Order.stage": "c4cb3266b580404faeaa378e9f5f64467422b3afa6fe52ae582f17c89e568fbe",
+    "Flock.ZkServer.Contract.PublicInput": "cdb8b3363118c7651275dbbde5c96eeca009b61f4c31a3263d3177ca6628b2fe",
+    "Flock.ZkServer.Contract.PublicInput.coinCommit": "f096b5919c78b0ad9992f00bce9b54541a8f0b4c1cd23fbd56cf25402d347eab",
+    "Flock.ZkServer.Contract.PublicInput.coins": "3128809effe44beb6738a3612c685893cc3aabb723acae69ea96a0aa9d8b8d85",
+    "Flock.ZkServer.Contract.PublicInput.computes": "29d6034727f94988e113735ca28f0d39c88aa0a2db2e85e7d107a1e66365c1b7",
+    "Flock.ZkServer.Contract.PublicInput.lookup": "291ad9e62b854a3f1e2c883696a57630068ec56f095a9a9736a7526c2822d78f",
+    "Flock.ZkServer.Contract.PublicInput.relations": "1e1a066b873f5d53541811d1acbfafeeaadbf6a6b522e62cace0de340446f58a",
+    "Flock.ZkServer.Contract.PublicInput.schedule": "6209e893f562a7e79eadb79a02384a6255b44c86166407d79558162941c5942b",
+    "Flock.ZkServer.Contract.PublicInput.statement": "0ee47076d8e16aed5b4ddd0e9a28dd5e88c0a4eecb5d65a1740c86980d10e245",
+    "Flock.ZkServer.Contract.ReleaseDecision": "6cbd7e0511ada6ddab4256cfac271a3657448bd155c5325c62099adc2e955cb2",
+    "Flock.ZkServer.Contract.ReleaseDecision.accepted": "d4be7ba2e8732fd272292042c850b5eed76b865b2f5d1bda00d0514c833c2bac",
+    "Flock.ZkServer.Contract.ReleaseDecision.cut": "9e190f97c792761eb471d5c9cabace434057ad4c616ec7292e1d74987e1dc25f",
+    "Flock.ZkServer.Contract.ReleaseLog": "21a8792ea0be2bb00c4d99b6b6b144157ccce0c13338a6418d480434a4405c8c",
+    "Flock.ZkServer.Contract.ReleaseLog.exposedPads": "4cda3d2051dd8d17324a111b6422811b67c001d954cf9861d2e43029ae1b3606",
+    "Flock.ZkServer.Contract.ReleaseLog.exposedSalts": "8b12980811ca73a3995b87afcaf9b6a112f3b7b3c3a1a18e4bcdf5e572fd73b1",
+    "Flock.ZkServer.Contract.ReleaseLog.items": "2b6a69765711b04c8e182863ea08c23039167867f7a10ab4d8a6e1a2136f8544",
+    "Flock.ZkServer.Contract.ReleaseLog.pads": "29f9501a602e1ae561cdd60df2fa22d172f7e332b31c45964e305431f151aec7",
+    "Flock.ZkServer.Contract.ReleaseLog.salts": "a00a20d7e30dc9b7334a1668060f709431d5fd08455107647c17716cbf980447",
+    "Flock.ZkServer.Contract.SALT_BYTES": "92ee525acbeb191f2ba76497e7f217084ab2040d979914baea016c28c9b1a898",
+    "Flock.ZkServer.Contract.SCHEDULE_FORMAT": "5ccaa3350160713fcd7c265754cfee6fde2bf8f09a5ce244523ce1f8e535a2e3",
+    "Flock.ZkServer.Contract.State": "b43806f3eb80ff38eb996d64d6b3f82a55ef978a73b502954d2858fd889e615f",
+    "Flock.ZkServer.Contract.State.checked": "2321f0b531bc0650e06922520dc0a9e8dfa9a62af9103ba68dc4694a20bdd062",
+    "Flock.ZkServer.Contract.State.coined": "33ade8317ef11f86cdaf18fe7ed758832236ef53fc45fb72f69939655fb17171",
+    "Flock.ZkServer.Contract.State.finished": "6851c5f37ea34cb80dcef3f5f8b534cac363d9bda2d8a4bb60f1ddc5c9078db0",
+    "Flock.ZkServer.Contract.State.init": "d1a011f1151d496acd9b052168df6d6c298bc6721f0589d42dd118a87ac23c94",
+    "Flock.ZkServer.Contract.State.order": "7e8939b2643666b37350ca6ac0be10b067156520ed366ff6cb27d063bfd47ed4",
+    "Flock.ZkServer.Contract.State.owed": "2bf342b9cbd39632d692a2b931e6f85bb75d9d5f3802e04921bbf30db371f396",
+    "Flock.ZkServer.Contract.State.passed": "f7b664c1b4cb72ca1f2173f96f4bdf6455f51b6687b53c4a92cddb5af308d921",
+    "Flock.ZkServer.Contract.State.usedPad": "8761a0c002369314f0f43c44416ac5d9ccd600ad9131b11bf23acf3e5ad43eb9",
+    "Flock.ZkServer.Contract.State.usedSalt": "ffe4252b54deced882315a84571eeffdec114756cc2ba5ef42f120c5c6b16216",
+    "Flock.ZkServer.Contract.bytesEq": "415809e34a9b5957271246e4400b7ac5233500408b89bbdd131aec605cb2ee54",
+    "Flock.ZkServer.Contract.coinMsg": "f1d4d6f0231902886e12e16a936462200d2e1f56db237ab33a27d9ee208fdfe3",
+    "Flock.ZkServer.Contract.coinPair": "3775251dcfeae289ce1c229f0a6612d1d535aa6e3c304907fdc88b4845fbda0f",
+    "Flock.ZkServer.Contract.commitBC": "974322cc8659b2372cd4da5371f649a819812fc8a0a3f62e83a7b1312b02a9d1",
+    "Flock.ZkServer.Contract.commitLeaf": "87d15c8138650a826442c69dd0819b05361472db2149b72418ef2e5e21cbf770",
+    "Flock.ZkServer.Contract.f128Eq": "ea5d26a4553b959f61354a0c6d9ecc5e3df5aa1af3eb9725274b771931c8dedf",
+    "Flock.ZkServer.Contract.fixes": "5b94ee573a3e6a00368ec0a7a772da12cfdd79e3b3ae553b0fa05d6bcd0db95e",
+    "Flock.ZkServer.Contract.go": "a2a63e00b00f999e30da1517119eefba565580a23d97c07be001163ee17aa248",
+    "Flock.ZkServer.Contract.need": "c455fb350353d90270dee2318d383c18023aa9455f8f492efcf97ba6bd760bf1",
+    "Flock.ZkServer.Contract.owes": "a7a4bd1708c648853a0e5469b6f79e8ca111497818cfb640169afceede695748",
+    "Flock.ZkServer.Contract.pairwiseDistinct": "ffe06b4f9da4971bebd4b7036f33e80d570d80fe17e7d17fd34bdfac2295502e",
+    "Flock.ZkServer.Contract.roundAt": "2e65740c0b14e6bf3a09f706df90db6b89aed772c3dff1988c96b9a0335144d8",
+    "Flock.ZkServer.Contract.run": "ca351ff24eecf499697313c052b6893f6e0bcb5de6c56f5e255cb2f4b7057cd7",
+    "Flock.ZkServer.Contract.scheduled": "c72773efd399b49c9ee22d4851482d8c6ac51e9b9a9f474c533795b0cc3e76f2",
+    "Flock.ZkServer.Contract.step": "854524c4d532a06c9a35f5dd639799b88b23858d5ac46244c11027f094b00790",
+    "Flock.ZkServer.Contract.streams": "cff9d3b1bc4d2d4abe9091505d47a50dff44be736c5f98810d6ddbf6c402ca6d",
+    "Flock.ZkServer.Contract.tapeError": "fa3ab42fa0dab6f9359ceaaac879a550e1ebd697a9f829175672bcf1e36576a6",
+    "_private.Flock.ZkServer.Contract.0.Flock.ZkServer.Contract.canonBytes": "c0d99bf3601c9458dbcd8aebde4e22ad525fb6b82e510425bdf5c60895e4f569",
+    "_private.Flock.ZkServer.Contract.0.Flock.ZkServer.Contract.field": "f6eaabb0f9c1093b5b5d21161fbb544532b5e317e27cb46d26e18eadf02ba299"
    }
   }
  },

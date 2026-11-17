@@ -12,15 +12,15 @@ public import Proofs.Flock.Claims.KS.PlainLeafClashK
 
 @[expose] public section
 
-namespace FlockSoundness.Discharge.AtDraw
+namespace FlockSoundness.Discharge.AtSample
 
-open Claims.Bridge.PlainDraw (setupAtD AcceptsAtD AcceptsAtDJK TranscriptJ named_of_setupAtD acceptsAtD_iff_acceptsAtDK_id)
+open Claims.Bridge.PlainSample (setupAtD AcceptsAtD AcceptsAtDJK TranscriptJ named_of_setupAtD acceptsAtD_iff_acceptsAtDK_id)
 open Flock Refine Model Game FlockSoundness.Discharge.Exec
 open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **At flock-verify's acceptance at `dr` through `keep`, each table's recorded caps and level-`ℓ` openings are its
+/-- **At verity-verify-proof's acceptance at `dr` through `keep`, each table's recorded caps and level-`ℓ` openings are its
 reps' deployed ones**, at every level `ℓ ≥ 1`: `accepts_opensLDJK` at `leafPlain`, `accepts_opens₀LDUJK` past level 0,
 each rep's caps its proof's recursive caps and its level-`ℓ` openings its `plainLevelColsOf` entries;
 `accepts_opensLDLfJK` at `leafPlain`. -/
@@ -67,12 +67,12 @@ theorem accepts_opensLDUJK (keep : Bool → Bool)
                   (ptsOf sts[j].mPts sess.points)).length) s₁.rounds t.proofs[2 * j + 1]! ℓ :=
   accepts_opensLDLfJK keep leafPlain h
 
-end FlockSoundness.Discharge.AtDraw
+end FlockSoundness.Discharge.AtSample
 
-namespace Claims.Bridge.PlainDraw
+namespace Claims.Bridge.PlainSample
 
 open _root_.Flock FlockSoundness FlockSoundness.Game FlockSoundness.Refine FlockSoundness.Discharge
-  FlockSoundness.Discharge.Exec Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain FlockSoundness.Discharge.AtDraw
+  FlockSoundness.Discharge.Exec Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain FlockSoundness.Discharge.AtSample
 open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
@@ -92,8 +92,8 @@ over any transcript recording `o`: `clash₀_wrKH_ofJ` at `leafPlain`; `clash₀
 theorem clash₀_wrKHU_ofJ (keep : Bool → Bool)
     {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
-    (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
-    (hT : TagsOkHU I) {S : Finset (Fin n)} (hS : DrawOkH I dj mPts S) (R : Reg)
+    (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀)) {Reg : Type}
+    (hT : TagsOkHU I) {S : Finset (Fin n)} (hS : SampleOkH I dj mPts S) (R : Reg)
     (o : Tables.LiveOutJ 1 mPts) {t : TranscriptJ} (hrl : RecordsLiveAtDJK keep I (dj S) o t)
     (hacc : AcceptsAtDJK keep I (some (dj S)) t)
     (pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig)
@@ -115,8 +115,8 @@ reps'**, at `keep` over any transcript recording `o`: `laterEntries_wrKH_ofJ` at
 theorem laterEntries_wrKHU_ofJ (keep : Bool → Bool)
     {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
-    (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
-    (hT : TagsOkHU I) {S : Finset (Fin n)} (hS : DrawOkH I dj mPts S) (R : Reg)
+    (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀)) {Reg : Type}
+    (hT : TagsOkHU I) {S : Finset (Fin n)} (hS : SampleOkH I dj mPts S) (R : Reg)
     (o : Tables.LiveOutJ 1 mPts) {t : TranscriptJ} (hrl : RecordsLiveAtDJK keep I (dj S) o t)
     (hacc : AcceptsAtDJK keep I (some (dj S)) t)
     (pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig)
@@ -128,13 +128,13 @@ theorem laterEntries_wrKHU_ofJ (keep : Bool → Bool)
       r :=
   laterEntries_wrKHLf_ofJ keep LeafFormJ.plain ht hc dj x₀ hT hS R o hrl hacc pend' hp
 
-end Claims.Bridge.PlainDraw
+end Claims.Bridge.PlainSample
 
 namespace FlockDeploy.KS
 
 open Flock FlockSoundness FlockSoundness.Game FlockSoundness.Refine FlockSoundness.Discharge
   FlockSoundness.Discharge.Exec FlockSoundness.Discharge.Tables
-open Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain Claims.Bridge.Custody Claims.Bridge.PlainDraw
+open Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain Claims.Bridge.Custody Claims.Bridge.PlainSample
   Claims.Bridge.Live
 open Lean (Json)
 
@@ -161,7 +161,7 @@ theorem plain_clash₀HUAtK_ofJ (keep : Bool → Bool)
     (hcl : Clash₀LU ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (tableOutL H512 enc512 leafPlain (capOfRoot o.rootB[0]!) pend'
       (plainOpnH (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d o.proofs 0))) :
     EntriesClashJK keep ins.read.I d t :=
-  plain_clash₀HLfAtK_ofJ keep AtDraw.LeafFormJ.plain hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay o hrl hacc
+  plain_clash₀HLfAtK_ofJ keep AtSample.LeafFormJ.plain hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay o hrl hacc
     pend' hp hcl
 
 /-- **The deployed plain decoders' later entries at `plainTab`, at the sample, at hidden outputs under plain SHA-512
@@ -185,15 +185,15 @@ theorem plain_laterEntriesHUAtK_ofJ (keep : Bool → Bool)
     ∀ r < 2, LaterEntriesAtJK keep ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ ins.read.I d t
       (tableOutL H512 enc512 leafPlain (capOfRoot o.rootB[0]!) pend'
         (plainOpnH (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d o.proofs 0)) r :=
-  plain_laterEntriesHLfAtK_ofJ keep AtDraw.LeafFormJ.plain hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay o hrl
+  plain_laterEntriesHLfAtK_ofJ keep AtSample.LeafFormJ.plain hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay o hrl
     hacc pend' hp
 
 end FlockDeploy.KS
 
-namespace Claims.Bridge.PlainDraw
+namespace Claims.Bridge.PlainSample
 
 open _root_.Flock FlockSoundness FlockSoundness.Game FlockSoundness.Refine FlockSoundness.Discharge
-  FlockSoundness.Discharge.Exec Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain FlockSoundness.Discharge.AtDraw
+  FlockSoundness.Discharge.Exec Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain FlockSoundness.Discharge.AtSample
 open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
@@ -204,8 +204,8 @@ open DecodeZL HiddenExec HiddenDec in
 theorem clash₀_wrPDHUJK (keep : Bool → Bool)
     {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
-    (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
-    (hT : TagsOkHU I) {S : Finset (Fin n)} (hS : DrawOkH I dj mPts S) (R : Reg)
+    (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀)) {Reg : Type}
+    (hT : TagsOkHU I) {S : Finset (Fin n)} (hS : SampleOkH I dj mPts S) (R : Reg)
     (o : Tables.LiveOutJ 1 mPts) (hacc : AcceptsAtDJK keep I (some (dj S)) (wrPDJK keep I (dj S) o))
     (pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig)
     (hp : ∀ r : Fin 2, PlaysT (repsOf (D := Dig) execArith (tablesAtH (Reg := Reg) dj x₀ S R) o.pts r)
@@ -225,8 +225,8 @@ reps'**, at `keep` (`laterEntries_wrPDHU`). -/
 theorem laterEntries_wrPDHUJK (keep : Bool → Bool)
     {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
-    (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
-    (hT : TagsOkHU I) {S : Finset (Fin n)} (hS : DrawOkH I dj mPts S) (R : Reg)
+    (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀)) {Reg : Type}
+    (hT : TagsOkHU I) {S : Finset (Fin n)} (hS : SampleOkH I dj mPts S) (R : Reg)
     (o : Tables.LiveOutJ 1 mPts) (hacc : AcceptsAtDJK keep I (some (dj S)) (wrPDJK keep I (dj S) o))
     (pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig)
     (hp : ∀ r : Fin 2, PlaysT (repsOf (D := Dig) execArith (tablesAtH (Reg := Reg) dj x₀ S R) o.pts r)
@@ -243,8 +243,8 @@ entries**, at `keep` (`laterClash_wrPDHU`). -/
 theorem laterClash_wrPDHUJK (keep : Bool → Bool)
     {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
-    (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
-    (hT : TagsOkHU I) {S : Finset (Fin n)} (hS : DrawOkH I dj mPts S) (R : Reg)
+    (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀)) {Reg : Type}
+    (hT : TagsOkHU I) {S : Finset (Fin n)} (hS : SampleOkH I dj mPts S) (R : Reg)
     (o : Tables.LiveOutJ 1 mPts) (hacc : AcceptsAtDJK keep I (some (dj S)) (wrPDJK keep I (dj S) o))
     (pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig)
     (hp : ∀ r : Fin 2, PlaysT (repsOf (D := Dig) execArith (tablesAtH (Reg := Reg) dj x₀ S R) o.pts r)
@@ -255,13 +255,13 @@ theorem laterClash_wrPDHUJK (keep : Bool → Bool)
     LaterEntriesClashJK keep I (dj S) (wrPDJK keep I (dj S) o) :=
   laterEntriesClashK_ofUJ keep (laterEntries_wrPDHUJK keep ht hc dj x₀ hT hS R o hacc pend' hp) hcl
 
-end Claims.Bridge.PlainDraw
+end Claims.Bridge.PlainSample
 
 namespace FlockDeploy.KS
 
 open Flock FlockSoundness FlockSoundness.Game FlockSoundness.Refine FlockSoundness.Discharge
   FlockSoundness.Discharge.Exec FlockSoundness.Discharge.Tables
-open Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain Claims.Bridge.Custody Claims.Bridge.PlainDraw
+open Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain Claims.Bridge.Custody Claims.Bridge.PlainSample
   Claims.Bridge.Live
 open Lean (Json)
 

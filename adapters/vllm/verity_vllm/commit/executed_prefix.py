@@ -181,7 +181,7 @@ def executed_prefix_facts(epr: dict[str, Any], binding: CommitBinding | Mapping[
     # tokens.json (a_r per request, the lag attestation), the link falls to G6 for a_r, and the class would fault 'a_r is not linked
     # (linked=False)' + 'LAG rule not attested' -- a MISSING INPUT read as a verdict on the Program.  The fact names the missing file(s);
     # the consumer faults on it by name.
-    account_missing = [] if by_commit else [leg for leg, present in (("tokens.json", tj is not None), ("global_match.json", g6 is not None)) if not present]
+    account_missing = [] if by_commit else [name for name, present in (("tokens.json", tj is not None), ("global_match.json", g6 is not None)) if not present]
     past = {} if cov is None or cov.rows_past_the_stop is None else cov.rows_past_the_stop.steps_past_by_request
     eos = stop.get("eos")   # the Program's declared EOS ids: None where it declares no stop rule; a declared empty list is no id
     eos_set = None if eos is None else ({int(x) for x in eos} if eos else set())
@@ -243,7 +243,7 @@ def facts_accepted_by(fn, facts: dict[str, dict[str, Any]]) -> dict[str, dict[st
 ACTIVITY_PADDING = "bot-by-enablement"
 
 
-def rows_past_the_stop(bmap: dict[str, Any], request_steps: dict[str, Iterable[int]], *, max_report: int = 8) -> dict[str, Any]:
+def rows_past_the_stop(bmap: dict[str, Any], request_steps: Mapping[str, Iterable[int]], *, max_report: int = 8) -> dict[str, Any]:
     """Committed leaf entries of a declared request at an engine step OUTSIDE its executed prefix of record = 'execution past the stop'
     (a row the Program says was never executed carries committed values): named per request with the steps, FAIL by name.  Entries of
     other request ids (`*`, unmapped) are not this check's.
@@ -292,7 +292,7 @@ def rows_past_the_stop(bmap: dict[str, Any], request_steps: dict[str, Iterable[i
             "error": None if not errors else " | ".join(errors)}
 
 
-def restrict_engine_steps(engine_steps: list[dict[str, Any]], request_steps: dict[str, Iterable[int]]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+def restrict_engine_steps(engine_steps: list[dict[str, Any]], request_steps: Mapping[str, Iterable[int]]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """The manifest's declared per-engine-step composition (`engine_steps[e].members`: request x rows, the Program's cap shape) restricted
     to the executed prefix of record: a member whose request did not execute at e is dropped (its rows/n_seq recomputed); a step with no
     executing request is dropped.  Returns (restricted, {"members_dropped", "steps_dropped", "steps_changed"})."""
@@ -348,7 +348,7 @@ def _classify(stats: dict[str, Any] | None, x: dict[str, Any], rid: str, n: int 
     stats["kind_by_family"].setdefault(fam, family_kind(x))
 
 
-def restrict_manifest_identities(identities: list[dict[str, Any]], request_steps: dict[str, Iterable[int]], *,
+def restrict_manifest_identities(identities: list[dict[str, Any]], request_steps: Mapping[str, Iterable[int]], *,
                                  engine_step_of: Any = None, stats: dict[str, Any] | None = None) -> tuple[list[dict[str, Any]], int]:
     """The flat manifest identities (`required_manifest["identities"]`, engine_step annotated) CLASSIFIED against the executed prefix of
     record for the layouts-only coverage check: a per-request row at an engine step its request did not execute is the named class

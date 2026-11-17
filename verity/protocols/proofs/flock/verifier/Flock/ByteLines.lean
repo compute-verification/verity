@@ -1,13 +1,14 @@
-/-
+module
+
+public import Flock.SplitNL
+
+/-!
 An ASCII circuit file's lines, read off its bytes: one pass finds every `'\n'` and checks every byte is ASCII (`cutsU`),
 and a `View` holds the file's `String` and those positions. A line's `String` is cut from the file's only when read
 (`View.str`), and a row's numbers are read off the file's bytes (`View.nums`), so a row makes no `String`. `View.of?_spec`:
 the view's lines are those `HmRow.parseWith` splits off the file (`String.splitOn "\n"`, a last empty line dropped), and
 each line's numbers are `Net.lineNums`'.
 -/
-module
-
-public import Flock.SplitNL
 
 @[expose] public section
 

@@ -38,7 +38,7 @@ theorem playsT_recv_bind {β M : Type} {f : M → Game β} {m : M} {ts : List St
     (h : PlaysT (f m) ts b) : PlaysT (recv M >>= f) (.inl ⟨M, m⟩ :: ts) b :=
   .send m h
 
-theorem playsT_draw_bind {β C : Type} {iF : Fintype C} {iN : Nonempty C} {f : C → Game β} {x : C}
+theorem playsT_sample_bind {β C : Type} {iF : Fintype C} {iN : Nonempty C} {f : C → Game β} {x : C}
     {ts : List Step} {b : β} (h : PlaysT (f x) ts b) : PlaysT (@draw C iF iN >>= f) (.inr ⟨C, x⟩ :: ts) b :=
   .coin x h
 
@@ -87,7 +87,7 @@ theorem holoTableCL_plays (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc
     simp only [holoSteps, List.append_assoc]
   rw [e]
   unfold holoTableCL
-  exact ⟨_, playsT_recv_bind (playsT_draw_bind (playsT_bind' hint (playsT_bind' hrp (playsT_recv_bind (.ret _))))),
+  exact ⟨_, playsT_recv_bind (playsT_sample_bind (playsT_bind' hint (playsT_bind' hrp (playsT_recv_bind (.ret _))))),
     by simp only [Bool.and_eq_true, decide_eq_true_eq]; exact ⟨⟨⟨hv.1, hv.2.1⟩, hv.2.2⟩, hok⟩⟩
 
 end FlockC3.Compose

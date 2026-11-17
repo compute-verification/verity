@@ -22,28 +22,16 @@ variable {Q R S : Type}
 `g₀ = 1/400` and `δPearlC`. It is `TTOutPearlCDev`'s statement on `Fp4Device`'s maps. `PearlCDevice` reads E4M3 codes,
 32-MAC atoms and promotion groups, so the FP4 line has its own record. At `G = 0` rev1 is this same statement, because
 rev1's first-add term is zero with no promotion. The domain includes D-SK (`Fp4Sem.SaltKeyedB`), so at a `sem` whose
-`B̃` is not keyed by A's salt it claims nothing. -/
-def TTOutFp4 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (d : Fp4Device)
-    (sem : Fp4Sem Q R S) (ρ : ℚ) : Prop :=
-  TTOut CM (pearlCProtocolFp4 d sem ρ) (pearlCDomainFp4 sem) (1 / 400) δPearlC
-
-/-- **TT_OUT(1/400) per audit tile at an FP4 record** `d`: `TTOutTile` at `pearlCProtocolFp4 d sem ρ` and
-`pearlCTilesFp4 d sem ρ`, the `64 × 64` audit grid. -/
-def TTOutTileFp4 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (d : Fp4Device)
-    (sem : Fp4Sem Q R S) (ρ : ℚ) : Prop :=
-  TTOutTile CM (pearlCProtocolFp4 d sem ρ) (pearlCTilesFp4 d sem ρ) (pearlCDomainFp4 sem) (1 / 400) δPearlC
-
-/-- **The named assumption `tt-out/fp4-sm120`: TT_OUT(1/400) for Pearl-C4 on sm_120** (`pearl-c-nvfp4-v0`, theory §2
-and §5): `TTOutFp4` at `devFp4Sm120`.
+`B̃` is not the one SHA-512 keys by this job's salt it claims nothing. At sm_120 (`tt-out/fp4-sm120`,
+`TTOutFp4Sm120` at `devFp4Sm120`, in `Proofs.Pouw.PearlC.Records`):
 
 - **The cost model.** `CM` is the sm_120 accounting in FP4 units: W1 at the node-2 prices, where one unit is one dense
   NVFP4 MAC with FP32 accumulation and an instruction is priced by its whole fragment. It charges every operation a
   program executes, and it is the same `CostModel` for the honest reference and for every adversary. That the honest
   sm_120 program fits `W_ref` under this `CM` is the kernel's measured claim, not part of this assumption. At W1
-  (`TTOutFp4Sm120W1`, `Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1`) `CM` is the term
-  `W1.w1Priced (W1Device.fp4Sm120 sha fetch) salt`.
-- **The credit.** `creditFp4` less the unit's replayed debit (`Fp4Sem.unitDebit`), whose executable reference is
-  `pearl_c4.tile_debit` (`9363e5012`). The debit has D-24's 2:4 row windows (`Fp4Dev.rowWin24`), F1′ (the base
+  (`TTOutFp4W1`, `Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1`) `CM` is the term `W1.w1Priced dv salt`.
+- **The credit.** `creditFp4` less the unit's replayed debit (`Fp4Sem.unitInertWork`), whose executable reference is
+  `pearl_c4.tile_inert_work` (`9363e5012`). The debit has D-24's 2:4 row windows (`Fp4Dev.rowWin24`), F1′ (the base
   split's expected saving per row window under the exact noise distribution, `Fp4Dev.f1Row`, B̃'s at 10 times), the chain's
   firings whose lone skip leaves the word unchanged (`Fp4Skip.fp4PureFlags`), the positions whose A′ and B̃ codes are
   both salt-dead, the forming elements that are salt-dead or needed by no word, the sub-grid blocks
@@ -71,16 +59,17 @@ and §5): `TTOutFp4` at `devFp4Sm120`.
   on the FP32 error bound of `s5_stats`' `ρ²`, about `(k/256 + 13)·u ≈ 270u ≈ 2^-15.9` at `k = 2^16`, against the
   `2⁻¹⁰` allowance, and on the numerical table of `s5_stats`' error. There is no Lean
   lemma about `s5_stats` until `s5_stats` is pinned.
-- **D-SK is a domain rule.** `pearlCDomainFp4 sem` requires `Fp4Sem.SaltKeyedB`: `B̃`'s lines are sampled from
-  `seed_B = H_"pearl-c4/v1/seed-B"(salt ‖ root_B)` (SHA-512, `pearl_c4.labelled`), so `B̃` is a function of the salt
-  and root_B, and the ticket, U and the debit compare against the `B̃` the verifier forms itself. A variant that fixes
-  `B̃` before A's salt is outside D₄ and needs the per-salt split debit.
+- **D-SK is a domain rule.** `pearlCDomainFp4 sem` requires `Fp4Sem.SaltKeyedB`: `B̃`'s lines are the ones SHA-512
+  gives from `seed_B = H_"pearl-c4/v1/seed-B"(salt ‖ root_B)` at an injective encoding of the salt
+  (`NoiseSha512Fp4.seedB` and `sampleB`, `pearl_c4.seed_b` and `line` op for op), so `B̃` is a function of the salt
+  and root_B, and the ticket, U and the debit compare against the `B̃` the verifier forms itself. The registered
+  scheme's noise (`pearl-c-nvfp4-v0`, h0), `sha512Fp4Sem`, meets it. A variant that fixes `B̃` before A's salt is outside D₄ and needs the per-salt split debit.
 - **The shared definitions it reads.** The ticket is `Fp4.cTilde` at `Fp4.sm120Nvf4`, U is `Fp4Dev.peelFp4` (the FP4
   chains feeding `PeelExact`'s BF16 peel), the forming is `Fp4Dev.formRow`, and the salt-dead predicate is
   `Fp4Dev.saltDead4`.
-- **`sem`.** The noise lines (`Fp4Sem.lines`) and the row scales `alpha` and `beta` become shared definitions as they
-  land. `TTOutFp4Sm120` at any other of these is a different assumption, and replacing one with the landed definition
-  is a re-grant.
+- **`sem`.** D-SK pins `B̃`'s lines to SHA-512's, and `sha512Fp4Sem` pins all four (`NoiseSha512Fp4`). The row scales
+  `alpha` and `beta` become shared definitions as they land. `TTOutFp4` at any other of these is a different
+  assumption, and replacing one with the landed definition is a re-grant.
 - **What it carries.** As for FP8: joint skips of several firings within a word that no lone flag sees, which no replay
   count bounds. At `G = 0` the whole `k/64`-firing chain is one group, so these are the only joint skips.
 - **What falsifies it.** A program of the model that outputs correct ticket and useful words within the cap, on some
@@ -88,15 +77,14 @@ and §5): `TTOutFp4` at `devFp4Sm120`.
   cancelling sets of firings, aligned spikes, identity tiles, exact runs, forming that reads the activations alone,
   fused or skipped noisy casts, and degenerate activations. Here they apply to the E2M1 grid, where a block's codes
   saturate at `6·s_b`. -/
-def TTOutFp4Sm120 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (sem : Fp4Sem Q R S)
-    (ρ : ℚ) : Prop :=
-  TTOutFp4 CM devFp4Sm120 sem ρ
-
-/-- **`tt-out/fp4-sm120` per audit tile**: `TTOutTileFp4` at `devFp4Sm120`. It changes `TTOutFp4Sm120` as
-`TTOutTilePearlC` changes `TTOutPearlC`: good tiles of any committed unit, credited rows per row, the cap per tile, and a
-fixed credit of `(1 − ρ)·creditFp4` times the credited rows' share. -/
-def TTOutTileFp4Sm120 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
+def TTOutFp4 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (d : Fp4Device)
     (sem : Fp4Sem Q R S) (ρ : ℚ) : Prop :=
-  TTOutTileFp4 CM devFp4Sm120 sem ρ
+  TTOut CM (pearlCProtocolFp4 d sem ρ) (pearlCDomainFp4 sem) (1 / 400) δPearlC
+
+/-- **TT_OUT(1/400) per audit tile at an FP4 record** `d`: `TTOutTile` at `pearlCProtocolFp4 d sem ρ` and
+`pearlCTilesFp4 d sem ρ`, the `64 × 64` audit grid. -/
+def TTOutTileFp4 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (d : Fp4Device)
+    (sem : Fp4Sem Q R S) (ρ : ℚ) : Prop :=
+  TTOutTile CM (pearlCProtocolFp4 d sem ρ) (pearlCTilesFp4 d sem ρ) (pearlCDomainFp4 sem) (1 / 400) δPearlC
 
 end Pouw.PearlC.Assumptions

@@ -30,7 +30,7 @@ any family of cuts and any rewriting of the tape:
   every later tape is one through it, and the walk keeps the whole tape (`Pos.toStop_spec`).
 * **What a stop fixes** (`Pos.modes`, `Pos.read_here`): at a stop, each cut fixed there reads, on every tape through
   any later position, what it reads at the stop.
-* **The coupling through a joint law** (`pr_le_of_joint`): a joint law of another game's outcome and a tape of `g`, whose
+* **The coupling through a joint distribution** (`pr_le_of_joint`): a joint distribution of another game's outcome and a tape of `g`, whose
   tape marginal is within `h` of the uniform tape's, and on whose support an event of the tape implies one of the
   outcome, bounds the event's probability over the uniform tape by the outcome's plus `h`.
 
@@ -382,7 +382,7 @@ theorem run_tape {Ks₀ : ι → DigestCut V g} {p : Pos g σ V ι} (h : p.Inv K
 
 end Pos
 
-/-! ## The coupling through a joint law -/
+/-! ## The coupling through a joint distribution -/
 
 theorem prob_mono_reaches {p q : α → Prop} :
     ∀ (g : Game α) (s : Strategy g), (∀ a, PlayReaches g s a → p a → q a) → prob p g s ≤ prob q g s
@@ -396,7 +396,7 @@ theorem prob_mono_reaches {p q : α → Prop} :
   | @Game.coin _ C _ _ k, s, h => Finset.sum_le_sum fun c _ =>
       mul_le_mul_right (prob_mono_reaches (k c) (s c) fun a ha => h a ⟨c, ha⟩) _
 
-/-- **The coupling through a joint law**: a joint law `W` of an outcome and a tape of `g` at `σ` whose tape is, at the
+/-- **The coupling through a joint distribution**: a joint distribution `W` of an outcome and a tape of `g` at `σ` whose tape is, at the
 event `Q`, within `h` of the uniform tape (`hW`), and on whose support `Q` of the tape implies `E` of the outcome (`hE`),
 bounds `Q`'s probability over the uniform tape by `E`'s under `W`, plus `h`. -/
 theorem pr_le_of_joint {g : Game α} {σ : Strategy g} {β : Type} (W : Game (β × CoinTape g σ)) (w : Strategy W)

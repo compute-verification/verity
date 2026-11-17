@@ -38,17 +38,17 @@ if [ ! -x "$PY" ]; then
   (exec 8>"$FLOCK_WORK/flock-circuit/venv.lock"; flock 8; [ -x "$PY" ] || { "$UV" venv -q --python 3.12 "$FLOCK_WORK/flock-circuit/py" \
     && "$UV" pip install -q --python "$PY" numpy blake3; })
 fi
-export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
-if [ -x "$LEAN" ] && [ ! -x "$FC_FIREWALL_LEAN" ]; then
+export FC_ZK_SERVER_LEAN=${LEAN%/*}/flock-zk-server
+if [ -x "$LEAN" ] && [ ! -x "$FC_ZK_SERVER_LEAN" ]; then
   command -v lake > /dev/null || export PATH="$HOME/.elan/bin:$PATH"
-  (exec 8>"$PT_WORK/lean.lock"; flock 8; [ -x "$FC_FIREWALL_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-firewall)) \
-    > "$O/lake-firewall.log" 2>&1
+  (exec 8>"$PT_WORK/lean.lock"; flock 8; [ -x "$FC_ZK_SERVER_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-zk-server)) \
+    > "$O/lake-zk-server.log" 2>&1
 fi
-for p in "$BIN" "$LEAN" "$FC_FIREWALL_LEAN" "$PY"; do
-  [ -x "$p" ] || { log "missing: '$p'"; tail -20 "$O/build.txt" "$O/lean-build.txt" "$O/lake-firewall.log"; exit 1; }
+for p in "$BIN" "$LEAN" "$FC_ZK_SERVER_LEAN" "$PY"; do
+  [ -x "$p" ] || { log "missing: '$p'"; tail -20 "$O/build.txt" "$O/lean-build.txt" "$O/lake-zk-server.log"; exit 1; }
 done
-sha256sum "$BIN" "$LEAN" "$FC_FIREWALL_LEAN" | tee "$O/binaries.sha256" | tee -a "$O/job.log"
-export PYTHONPATH=$REPO:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/numerical/python
+sha256sum "$BIN" "$LEAN" "$FC_ZK_SERVER_LEAN" | tee "$O/binaries.sha256" | tee -a "$O/job.log"
+export PYTHONPATH=$REPO:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/numerical/python
 if [ -x /workspace/verity-guest/bin/gpu-lease ] && [ -e /run/gpu-lease/pool.gpus ]; then
   LEASE=(env GPU_LEASE_DIR=/run/gpu-lease GPU_LEASE_ALLOWED_FILE=/run/gpu-lease/pool.gpus /workspace/verity-guest/bin/gpu-lease)
 else

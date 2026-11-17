@@ -91,7 +91,7 @@ the mean sample times that bound, and a bound on the mean over all coins does no
 namespace Claims.SamplingGeneric
 
 open Claims Finset
-open Claims.Sampling (AuditStatement Partition InScopeTwo ownLog forkOn wrongAllAt wrongAllAt_subset gateBlock)
+open Claims.Sampling (AuditStatement Partition InScopeTwo ownLog forkOn incorrectAllAt incorrectAllAt_subset gateBlock)
 
 /-! ## Averages -/
 
@@ -647,7 +647,7 @@ theorem isPlurality_iplur (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type}
     | some ρ =>
       simp only [iop, iplur, hgb, Option.bind_some, Option.map_some, Option.getD_some]
       exact le_plur (fun b => Pr fun ec : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
-        L.iopensAt H P x ω (forkOn (L.stage2 x) r ec.1) ec.2 ρ g = some b) v
+        L.iopensAt H P x ω (forkOn (L.secondStage x) r ec.1) ec.2 ρ g = some b) v
   have h' : (#(FlockSoundness.Rewinding.openedTo (L.iopTable H P x ω Pρ r) g v) : ℝ) ≤
       #(FlockSoundness.Rewinding.openedTo (L.iopTable H P x ω Pρ r) g (L.iplur H P x ω Pρ r g)) := by
     rw [hcnt, hcnt]
@@ -658,7 +658,7 @@ theorem isPlurality_iplur (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type}
 table (`iplur`) of the second stages' openings at its tape and first stage. -/
 theorem off_of_offIreg (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (Pρ : Partition) (r : Fin (L.V.k x) → Coin) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x)
-    (h : L.OffIreg H P x ω Pρ (forkOn (L.stage2 x) r ec.1) ec.2) :
+    (h : L.OffIreg H P x ω Pρ (forkOn (L.secondStage x) r ec.1) ec.2) :
     ∃ g : Fin (L.nG x),
       FlockSoundness.Rewinding.Off (L.iopTable H P x ω Pρ r) (fun g => L.iplur H P x ω Pρ r g) ec g := by
   obtain ⟨g, hg, ρ, hgb, b, hb, hne⟩ := h
@@ -677,7 +677,7 @@ the two runs. -/
 noncomputable def icoll (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} (P : Prover Ω) (x : Msg)
     (s : AuditStatement) (ω : Ω) (r : Fin (L.V.k x) → Coin) (ec ec' : (Fin (L.V.k x) → Coin) × L.SlotEC x) :
     Option (Msg × Msg) :=
-  L.toCompiled.collX H P x s (ω, (forkOn (L.stage2 x) r ec.1, ec.2)) (ω, (forkOn (L.stage2 x) r ec'.1, ec'.2))
+  L.toCompiled.collX H P x s (ω, (forkOn (L.secondStage x) r ec.1, ec.2)) (ω, (forkOn (L.secondStage x) r ec'.1, ec'.2))
 
 /-- What `icoll` outputs is a collision of `H`. -/
 theorem icoll_collision (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} (P : Prover Ω) (x : Msg)
@@ -708,8 +708,8 @@ theorem icoll_of_conflictAt {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : 
   obtain ⟨a', ha', ha1', ha2', ha3', -⟩ := iopensAt_some hs hb2'
   have hroots : a.1 = a'.1 := by
     rw [ha1, ha1', hS.interior x Ω P ω r ec.1 ρ, hS.interior x Ω P ω r ec'.1 ρ]
-  obtain ⟨u, v, huv, -⟩ := Compiled.bconf_of_disagree hbind s P ω (forkOn (L.stage2 x) r ec.1, ec.2)
-    (forkOn (L.stage2 x) r ec'.1, ec'.2) (Or.inl ha) (Or.inr ha') hroots (ha2.trans ha2'.symm)
+  obtain ⟨u, v, huv, -⟩ := Compiled.bconf_of_disagree hbind s P ω (forkOn (L.secondStage x) r ec.1, ec.2)
+    (forkOn (L.secondStage x) r ec'.1, ec'.2) (Or.inl ha) (Or.inr ha') hroots (ha2.trans ha2'.symm)
     (by rw [ha3, ha3']; exact fun h => hne (congrArg some h))
   exact Option.isSome_iff_exists.2 ⟨(u, v), huv⟩
 
@@ -719,13 +719,13 @@ theorem iop_isSome_needs (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} 
     {s : AuditStatement} (hs : L.parse x = some s) (Pρ : Partition) (needs : ℕ → Finset ℕ)
     (hpos : ∀ u v w, ∀ p ∈ L.reveal s u v w, p.2.pos ∈ needs u) (r : Fin (L.V.k x) → Coin)
     (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : ℕ) (hg : (L.iop H P x ω Pρ r ec g).isSome) :
-    ∃ u ∈ L.checked x (forkOn (L.stage2 x) r ec.1), g ∈ needs u := by
+    ∃ u ∈ L.checked x (forkOn (L.secondStage x) r ec.1), g ∈ needs u := by
   obtain ⟨b, hb⟩ := Option.isSome_iff_exists.1 hg
   simp only [iop] at hb
   obtain ⟨ρ, -, hb'⟩ := Option.bind_eq_some_iff.1 hb
   obtain ⟨a, ha, -, ha2, -, -⟩ := iopensAt_some hs hb'
   obtain ⟨u, hu, hmem⟩ :=
-    L.toCompiled.kept_pos_mem_needs H P x s ω needs hpos (forkOn (L.stage2 x) r ec.1) ec.2 ha
+    L.toCompiled.kept_pos_mem_needs H P x s ω needs hpos (forkOn (L.secondStage x) r ec.1) ec.2 ha
   exact ⟨u, hu, ha2 ▸ hmem⟩
 
 /-- **The first-hit finder at the committed interiors**, at cap `K`. It keeps a tape and a run's coins off the second
@@ -739,9 +739,9 @@ noncomputable def finderI (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type}
   Verity.FirstHit.sampleFinder
     (fun (t : Ω × (Fin (L.V.k x) → Coin)) => L.iopTable H P x t.1 Pρ t.2)
     (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)) =>
-      decide (∃ u ∈ L.checked x (forkOn (L.stage2 x) t.2 ec.1), g.val ∈ needs u))
+      decide (∃ u ∈ L.checked x (forkOn (L.secondStage x) t.2 ec.1), g.val ∈ needs u))
     (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x) =>
-      L.callsAt H P x s t.1 (forkOn (L.stage2 x) t.2 ec.1) ec.2) K
+      L.callsAt H P x s t.1 (forkOn (L.secondStage x) t.2 ec.1) ec.2) K
     fun q : (Ω × (Fin (L.V.k x) → Coin)) × (((Fin (L.V.k x) → Coin) × L.SlotEC x) ×
         (Fin K → (Fin (L.V.k x) → Coin) × L.SlotEC x)) =>
       Verity.FirstHit.outOf (L.iopTable H P x q.1.1 Pρ q.1.2) (L.icoll H P x s q.1.1 q.1.2) K q.2.1 q.2.2
@@ -768,21 +768,21 @@ theorem pr_offIreg_le_needs_ex_cap {H : Msg → Msg} {L : CompiledTwo Coin A} (h
     (vstar := fun (t : Ω × (Fin (L.V.k x) → Coin)) (g : Fin (L.nG x)) => L.iplur H P x t.1 Pρ t.2 g)
     (fun t => L.isPlurality_iplur H P x t.1 Pρ t.2)
     (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)) =>
-      decide (∃ u ∈ L.checked x (forkOn (L.stage2 x) t.2 ec.1), g.val ∈ needs u))
+      decide (∃ u ∈ L.checked x (forkOn (L.secondStage x) t.2 ec.1), g.val ∈ needs u))
     (fun t ec g hg => decide_eq_true (L.iop_isSome_needs H P x t.1 hs Pρ needs hpos t.2 ec g hg))
     (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x) =>
-      L.callsAt H P x s t.1 (forkOn (L.stage2 x) t.2 ec.1) ec.2) K
+      L.callsAt H P x s t.1 (forkOn (L.secondStage x) t.2 ec.1) ec.2) K
     (fun t => L.icoll H P x s t.1 t.2)
     (fun t ec ec' g hg => icoll_of_conflictAt hbind hS hs Pρ P t.1 t.2 ec ec' g hg)
     (fun t ec ec' u v huv => L.icoll_collision H P x s t.1 t.2 ec ec' huv) hCR
   rw [Fintype.card_fin] at h
-  have hP := Pr_keep_forkOn (L.stage2 x)
+  have hP := Pr_keep_forkOn (L.secondStage x)
     (fun (ω : Ω) (R : Fin (L.V.k x) → Coin) (c : L.SlotEC x) => L.OffIreg H P x ω Pρ R c)
-  have hE := Ex_keep_forkOn (L.stage2 x) (fun (ω : Ω) (R : Fin (L.V.k x) → Coin) (c : L.SlotEC x) =>
+  have hE := Ex_keep_forkOn (L.secondStage x) (fun (ω : Ω) (R : Fin (L.V.k x) → Coin) (c : L.SlotEC x) =>
     (((1 + #(univ.filter fun g : Fin (L.nG x) => decide (∃ u ∈ L.checked x R, g.val ∈ needs u))) *
       L.callsAt H P x s ω R c : ℕ) : ℝ))
   have hoff : Pr (fun q : (Ω × (Fin (L.V.k x) → Coin)) × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
-      L.OffIreg H P x q.1.1 Pρ (forkOn (L.stage2 x) q.1.2 q.2.1) q.2.2) ≤
+      L.OffIreg H P x q.1.1 Pρ (forkOn (L.secondStage x) q.1.2 q.2.1) q.2.2) ≤
       Pr (fun q : (Ω × (Fin (L.V.k x) → Coin)) × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => ∃ g : Fin (L.nG x),
         FlockSoundness.Rewinding.Off (L.iopTable H P x q.1.1 Pρ q.1.2)
           (fun g : Fin (L.nG x) => L.iplur H P x q.1.1 Pρ q.1.2 g) q.2 g) :=
@@ -817,9 +817,9 @@ theorem eventTwo_split_acc {H : Msg → Msg} {L : CompiledTwo Coin A} (hS : L.Se
     (hPt : L.partition s = some Pt) (hd : L.two s = some d) (hin : InScopeTwo Pt d s) {Ω : Type} (P : Prover Ω)
     (ω : Ω) (tr : ℕ → Option Bool) :
     Pr (fun r : Fin (L.V.k x) → Coin => (run H P L.V x ω r).out = .acc ∧
-      ∃ u ∈ L.checked x r, u ∈ wrongAllAt s Pt d.part tr (L.iregVal H P x ω r)) ≤
+      ∃ u ∈ L.checked x r, u ∈ incorrectAllAt s Pt d.part tr (L.iregVal H P x ω r)) ≤
       Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => (run H P L.V x ω rc.1).out = .acc ∧
-        ∃ i, L.leadSel x (L.selOf x (wrongAllAt s Pt d.part tr (L.iregVal H P x ω rc.1)))
+        ∃ i, L.leadSel x (L.selOf x (incorrectAllAt s Pt d.part tr (L.iregVal H P x ω rc.1)))
             (L.checked x rc.1) = some i ∧
           ∃ u : Fin (L.nPU x), (L.checked x rc.1)[i.val]? = some u.val ∧
             ¬ L.Found H x (run H P L.V x ω) u rc.1 (rc.2 i u)) +
@@ -840,11 +840,11 @@ theorem eventTwo_split_acc {H : Msg → Msg} {L : CompiledTwo Coin A} (hS : L.Se
         (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => (run H P L.V x ω rc.1).out = .acc ∧
           L.OffIreg H P x ω d.part rc.1 rc.2)))
   refine (Pr_fst (β := L.SlotEC x) (fun r : Fin (L.V.k x) → Coin => (run H P L.V x ω r).out = .acc ∧
-    ∃ u ∈ L.checked x r, u ∈ wrongAllAt s Pt d.part tr (L.iregVal H P x ω r))).symm.trans_le
+    ∃ u ∈ L.checked x r, u ∈ incorrectAllAt s Pt d.part tr (L.iregVal H P x ω r))).symm.trans_le
       (Sampling.Pr_or_le (fun rc hrc => ?_) le_rfl hIO)
   obtain ⟨hacc, v, hvl, hvF⟩ := hrc
   obtain ⟨i, hi, u, hiu, huF⟩ := L.selOf_some x (hS.slots x rc.1)
-    (fun w hw => by rw [Compiled.nPU_eq hs hPt]; exact mem_range.1 (wrongAllAt_subset s Pt d.part _ _ hw)) hvl hvF
+    (fun w hw => by rw [Compiled.nPU_eq hs hPt]; exact mem_range.1 (incorrectAllAt_subset s Pt d.part _ _ hw)) hvl hvF
   obtain ⟨i₀, u₀, hlead, hu₀⟩ := Compiled.leadOf_some hiu u.isLt
   rcases regTwo_split hS hs hPt hd hin P ω rc.1 rc.2 hacc i u hiu tr huF i₀ u₀ hlead hu₀ with h | h | h | h
   · exact Or.inl ⟨hacc, i₀, by rw [Compiled.leadSel, hi, Option.bind_some, hlead], u₀, hu₀, h⟩
@@ -869,19 +869,19 @@ theorem eventTwo_le_of_off {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS
     (hN : Pr (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => (run H P L.V x q.1 q.2.1).out = .acc ∧
       L.OffIreg H P x q.1 d.part q.2.1 q.2.2) ≤ bN) :
     Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
-        ∃ u ∈ L.checked x p.2, u ∈ wrongAllAt s Pt d.part (tr p.1) (L.iregVal H P x p.1 p.2)) ≤
+        ∃ u ∈ L.checked x p.2, u ∈ incorrectAllAt s Pt d.part (tr p.1) (L.iregVal H P x p.1 p.2)) ≤
       L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) + bI + bB + bN := by
   have hSK : L.toCompiled.SessionKS H := Compiled.sessionKS_of hA ⟨hS.fixed, hS.runs⟩
   obtain ⟨β, hβ0, hβ, hκ⟩ := hSK x Ω P
   have hT : Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
       (run H P L.V x ω rc.1).out = .acc ∧
-        ∃ i, L.leadSel x (L.selOf x (wrongAllAt s Pt d.part (tr ω) (L.iregVal H P x ω rc.1)))
+        ∃ i, L.leadSel x (L.selOf x (incorrectAllAt s Pt d.part (tr ω) (L.iregVal H P x ω rc.1)))
             (L.checked x rc.1) = some i ∧
           ∃ u : Fin (L.nPU x), (L.checked x rc.1)[i.val]? = some u.val ∧
             ¬ L.Found H x (run H P L.V x ω) u rc.1 (rc.2 i u)) ≤
       L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) :=
     Compiled.pr_unfound_le_at H L.toCompiled P β hβ0 hβ
-      (fun ω r => L.leadSel x (L.selOf x (wrongAllAt s Pt d.part (tr ω) (L.iregVal H P x ω r))))
+      (fun ω r => L.leadSel x (L.selOf x (incorrectAllAt s Pt d.part (tr ω) (L.iregVal H P x ω r))))
       (fun ω r e => by simp only [iregVal_forkOn]) fun ω r sl => hκ ω r sl
   have hB' : Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
       (run H P L.V x ω rc.1).out = .acc ∧
@@ -1064,8 +1064,8 @@ theorem icollBy_of_conflictAt {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind 
     (P : Prover Ω) (needs : ℕ → Finset ℕ) (hpos : ∀ u v w, ∀ p ∈ L.reveal s u v w, p.2.pos ∈ needs u) (ω : Ω)
     (r : Fin (L.V.k x) → Coin) (ec ec' : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x))
     (h : FlockSoundness.Rewinding.ConflictAt (L.iopTable H P x ω Pρ r) (ec, ec') g) :
-    (L.toCompiled.collBy H P x s needs (ω, (forkOn (L.stage2 x) r ec.1, ec.2))
-      (ω, (forkOn (L.stage2 x) r ec'.1, ec'.2)) g.val).isSome := by
+    (L.toCompiled.collBy H P x s needs (ω, (forkOn (L.secondStage x) r ec.1, ec.2))
+      (ω, (forkOn (L.secondStage x) r ec'.1, ec'.2)) g.val).isSome := by
   obtain ⟨h1', h2', hne'⟩ := h
   have h1 : (L.iopTable H P x ω Pρ r ec g).isSome := h1'
   have h2 : (L.iopTable H P x ω Pρ r ec' g).isSome := h2'
@@ -1082,8 +1082,8 @@ theorem icollBy_of_conflictAt {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind 
   obtain ⟨a', ha', ha1', ha2', ha3', -⟩ := iopensAt_some hs hb2'
   have hroots : a.1 = a'.1 := by
     rw [ha1, ha1', hS.interior x Ω P ω r ec.1 ρ, hS.interior x Ω P ω r ec'.1 ρ]
-  have hc := Compiled.collBy_isSome hbind s P needs (ω, (forkOn (L.stage2 x) r ec.1, ec.2))
-    (ω, (forkOn (L.stage2 x) r ec'.1, ec'.2)) ha ha' (fun u w hm => hpos u _ w a' hm) hroots
+  have hc := Compiled.collBy_isSome hbind s P needs (ω, (forkOn (L.secondStage x) r ec.1, ec.2))
+    (ω, (forkOn (L.secondStage x) r ec'.1, ec'.2)) ha ha' (fun u w hm => hpos u _ w a' hm) hroots
     (ha2.trans ha2'.symm) (by rw [ha3, ha3']; exact fun h => hne (congrArg some h))
   rw [ha2'] at hc
   exact hc
@@ -1098,18 +1098,18 @@ noncomputable def finderIAt (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Typ
   Verity.FirstHit.sampleFinderAt
     (fun (t : Ω × (Fin (L.V.k x) → Coin)) => L.iopTable H P x t.1 Pρ t.2)
     (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)) =>
-      decide (∃ u ∈ L.checked x (forkOn (L.stage2 x) t.2 ec.1), g.val ∈ needs u))
+      decide (∃ u ∈ L.checked x (forkOn (L.secondStage x) t.2 ec.1), g.val ∈ needs u))
     (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x) =>
-      L.callsAt H P x s t.1 (forkOn (L.stage2 x) t.2 ec.1) ec.2)
+      L.callsAt H P x s t.1 (forkOn (L.secondStage x) t.2 ec.1) ec.2)
     (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x)
         (J : Finset (Fin (L.nG x))) =>
-      ∑ g ∈ J, L.toCompiled.callsBy H P x s needs g.val t.1 (forkOn (L.stage2 x) t.2 ec.1) ec.2) K
+      ∑ g ∈ J, L.toCompiled.callsBy H P x s needs g.val t.1 (forkOn (L.secondStage x) t.2 ec.1) ec.2) K
     fun q : (Ω × (Fin (L.V.k x) → Coin)) × (((Fin (L.V.k x) → Coin) × L.SlotEC x) ×
         (Fin K → (Fin (L.V.k x) → Coin) × L.SlotEC x)) =>
       Verity.FirstHit.outOfAt (L.iopTable H P x q.1.1 Pρ q.1.2)
         (fun (ec ec' : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)) =>
-          L.toCompiled.collBy H P x s needs (q.1.1, (forkOn (L.stage2 x) q.1.2 ec.1, ec.2))
-            (q.1.1, (forkOn (L.stage2 x) q.1.2 ec'.1, ec'.2)) g.val) K q.2.1 q.2.2
+          L.toCompiled.collBy H P x s needs (q.1.1, (forkOn (L.secondStage x) q.1.2 ec.1, ec.2))
+            (q.1.1, (forkOn (L.secondStage x) q.1.2 ec'.1, ec'.2)) g.val) K q.2.1 q.2.2
 
 /-- **The mass off the committed interiors, by position, at one cap**:
 `2·E[c + Σ_{g ∈ sample} c_g]/2^256 + N/(K + 1)`, under `ExpectedCR` at the by-position finder of the cap `K`: `c` a
@@ -1132,30 +1132,30 @@ theorem pr_offIreg_le_needs_at_cap {H : Msg → Msg} {L : CompiledTwo Coin A} (h
     (vstar := fun (t : Ω × (Fin (L.V.k x) → Coin)) (g : Fin (L.nG x)) => L.iplur H P x t.1 Pρ t.2 g)
     (fun t => L.isPlurality_iplur H P x t.1 Pρ t.2)
     (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)) =>
-      decide (∃ u ∈ L.checked x (forkOn (L.stage2 x) t.2 ec.1), g.val ∈ needs u))
+      decide (∃ u ∈ L.checked x (forkOn (L.secondStage x) t.2 ec.1), g.val ∈ needs u))
     (fun t ec g hg => decide_eq_true (L.iop_isSome_needs H P x t.1 hs Pρ needs hpos t.2 ec g hg))
     (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x) =>
-      L.callsAt H P x s t.1 (forkOn (L.stage2 x) t.2 ec.1) ec.2)
+      L.callsAt H P x s t.1 (forkOn (L.secondStage x) t.2 ec.1) ec.2)
     (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x)
         (J : Finset (Fin (L.nG x))) =>
-      ∑ g ∈ J, L.toCompiled.callsBy H P x s needs g.val t.1 (forkOn (L.stage2 x) t.2 ec.1) ec.2)
+      ∑ g ∈ J, L.toCompiled.callsBy H P x s needs g.val t.1 (forkOn (L.secondStage x) t.2 ec.1) ec.2)
     (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)) =>
-      L.toCompiled.callsBy H P x s needs g.val t.1 (forkOn (L.stage2 x) t.2 ec.1) ec.2)
+      L.toCompiled.callsBy H P x s needs g.val t.1 (forkOn (L.secondStage x) t.2 ec.1) ec.2)
     (fun _ _ _ => le_rfl) K
     (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec ec' : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)) =>
-      L.toCompiled.collBy H P x s needs (t.1, (forkOn (L.stage2 x) t.2 ec.1, ec.2))
-        (t.1, (forkOn (L.stage2 x) t.2 ec'.1, ec'.2)) g.val)
+      L.toCompiled.collBy H P x s needs (t.1, (forkOn (L.secondStage x) t.2 ec.1, ec.2))
+        (t.1, (forkOn (L.secondStage x) t.2 ec'.1, ec'.2)) g.val)
     (fun t ec ec' g hg => icollBy_of_conflictAt hbind hS hs Pρ P needs hpos t.1 t.2 ec ec' g hg)
     (fun t ec ec' g u v huv => L.toCompiled.collBy_collision H P x s needs _ _ g.val huv) hCR
   rw [Fintype.card_fin] at h
-  have hP := Pr_keep_forkOn (L.stage2 x)
+  have hP := Pr_keep_forkOn (L.secondStage x)
     (fun (ω : Ω) (R : Fin (L.V.k x) → Coin) (c : L.SlotEC x) => L.OffIreg H P x ω Pρ R c)
-  have hE := Ex_keep_forkOn (L.stage2 x) (fun (ω : Ω) (R : Fin (L.V.k x) → Coin) (c : L.SlotEC x) =>
+  have hE := Ex_keep_forkOn (L.secondStage x) (fun (ω : Ω) (R : Fin (L.V.k x) → Coin) (c : L.SlotEC x) =>
     ((L.callsAt H P x s ω R c +
       ∑ g ∈ univ.filter (fun g : Fin (L.nG x) => decide (∃ u ∈ L.checked x R, g.val ∈ needs u)),
         L.toCompiled.callsBy H P x s needs g.val ω R c : ℕ) : ℝ))
   have hoff : Pr (fun q : (Ω × (Fin (L.V.k x) → Coin)) × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
-      L.OffIreg H P x q.1.1 Pρ (forkOn (L.stage2 x) q.1.2 q.2.1) q.2.2) ≤
+      L.OffIreg H P x q.1.1 Pρ (forkOn (L.secondStage x) q.1.2 q.2.1) q.2.2) ≤
       Pr (fun q : (Ω × (Fin (L.V.k x) → Coin)) × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => ∃ g : Fin (L.nG x),
         FlockSoundness.Rewinding.Off (L.iopTable H P x q.1.1 Pρ q.1.2)
           (fun g : Fin (L.nG x) => L.iplur H P x q.1.1 Pρ q.1.2 g) q.2 g) :=
@@ -1256,17 +1256,17 @@ theorem pr_offIreg_le_finder {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind :
     (vstar := fun (t : Ω × (Fin (L.V.k x) → Coin)) (g : Fin (L.nG x)) => L.iplur H P x t.1 Pρ t.2 g)
     (fun t => L.isPlurality_iplur H P x t.1 Pρ t.2)
     (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)) =>
-      decide (∃ u ∈ L.checked x (forkOn (L.stage2 x) t.2 ec.1), g.val ∈ needs u))
+      decide (∃ u ∈ L.checked x (forkOn (L.secondStage x) t.2 ec.1), g.val ∈ needs u))
     (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x) =>
-      L.callsAt H P x s t.1 (forkOn (L.stage2 x) t.2 ec.1) ec.2) K
+      L.callsAt H P x s t.1 (forkOn (L.secondStage x) t.2 ec.1) ec.2) K
     (fun t => L.icoll H P x s t.1 t.2)
     (fun t ec ec' g hg => icoll_of_conflictAt hbind hS hs Pρ P t.1 t.2 ec ec' g hg)
     (fun t ec ec' u v huv => L.icoll_collision H P x s t.1 t.2 ec ec' huv)
   rw [Fintype.card_fin] at h
-  have hP := Pr_keep_forkOn (L.stage2 x)
+  have hP := Pr_keep_forkOn (L.secondStage x)
     (fun (ω : Ω) (R : Fin (L.V.k x) → Coin) (c : L.SlotEC x) => L.OffIreg H P x ω Pρ R c)
   have hoff : Pr (fun q : (Ω × (Fin (L.V.k x) → Coin)) × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
-      L.OffIreg H P x q.1.1 Pρ (forkOn (L.stage2 x) q.1.2 q.2.1) q.2.2) ≤
+      L.OffIreg H P x q.1.1 Pρ (forkOn (L.secondStage x) q.1.2 q.2.1) q.2.2) ≤
       Pr (fun q : (Ω × (Fin (L.V.k x) → Coin)) × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => ∃ g : Fin (L.nG x),
         FlockSoundness.Rewinding.Off (L.iopTable H P x q.1.1 Pρ q.1.2)
           (fun g : Fin (L.nG x) => L.iplur H P x q.1.1 Pρ q.1.2 g) q.2 g) :=
@@ -1285,11 +1285,11 @@ theorem ex_cost_finderI_le (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type
   (Verity.FirstHit.ex_cost_sampleFinder_le
     (fun (t : Ω × (Fin (L.V.k x) → Coin)) => L.iopTable H P x t.1 Pρ t.2)
     (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)) =>
-      decide (∃ u ∈ L.checked x (forkOn (L.stage2 x) t.2 ec.1), g.val ∈ needs u))
+      decide (∃ u ∈ L.checked x (forkOn (L.secondStage x) t.2 ec.1), g.val ∈ needs u))
     (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x) =>
-      L.callsAt H P x s t.1 (forkOn (L.stage2 x) t.2 ec.1) ec.2) K
+      L.callsAt H P x s t.1 (forkOn (L.secondStage x) t.2 ec.1) ec.2) K
     (L.finderI H P x s Pρ needs K).out).trans_eq
-    (Ex_keep_forkOn (L.stage2 x) fun (ω : Ω) (R : Fin (L.V.k x) → Coin) (c : L.SlotEC x) =>
+    (Ex_keep_forkOn (L.secondStage x) fun (ω : Ω) (R : Fin (L.V.k x) → Coin) (c : L.SlotEC x) =>
       (((1 + #(univ.filter fun g : Fin (L.nG x) => decide (∃ u ∈ L.checked x R, g.val ∈ needs u))) *
         L.callsAt H P x s ω R c : ℕ) : ℝ))
 
@@ -1307,22 +1307,22 @@ theorem pr_offIreg_le_finderAt {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind
     (vstar := fun (t : Ω × (Fin (L.V.k x) → Coin)) (g : Fin (L.nG x)) => L.iplur H P x t.1 Pρ t.2 g)
     (fun t => L.isPlurality_iplur H P x t.1 Pρ t.2)
     (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)) =>
-      decide (∃ u ∈ L.checked x (forkOn (L.stage2 x) t.2 ec.1), g.val ∈ needs u))
+      decide (∃ u ∈ L.checked x (forkOn (L.secondStage x) t.2 ec.1), g.val ∈ needs u))
     (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x) =>
-      L.callsAt H P x s t.1 (forkOn (L.stage2 x) t.2 ec.1) ec.2)
+      L.callsAt H P x s t.1 (forkOn (L.secondStage x) t.2 ec.1) ec.2)
     (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x)
         (J : Finset (Fin (L.nG x))) =>
-      ∑ g ∈ J, L.toCompiled.callsBy H P x s needs g.val t.1 (forkOn (L.stage2 x) t.2 ec.1) ec.2) K
+      ∑ g ∈ J, L.toCompiled.callsBy H P x s needs g.val t.1 (forkOn (L.secondStage x) t.2 ec.1) ec.2) K
     (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec ec' : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)) =>
-      L.toCompiled.collBy H P x s needs (t.1, (forkOn (L.stage2 x) t.2 ec.1, ec.2))
-        (t.1, (forkOn (L.stage2 x) t.2 ec'.1, ec'.2)) g.val)
+      L.toCompiled.collBy H P x s needs (t.1, (forkOn (L.secondStage x) t.2 ec.1, ec.2))
+        (t.1, (forkOn (L.secondStage x) t.2 ec'.1, ec'.2)) g.val)
     (fun t ec ec' g hg => icollBy_of_conflictAt hbind hS hs Pρ P needs hpos t.1 t.2 ec ec' g hg)
     (fun t ec ec' g u v huv => L.toCompiled.collBy_collision H P x s needs _ _ g.val huv)
   rw [Fintype.card_fin] at h
-  have hP := Pr_keep_forkOn (L.stage2 x)
+  have hP := Pr_keep_forkOn (L.secondStage x)
     (fun (ω : Ω) (R : Fin (L.V.k x) → Coin) (c : L.SlotEC x) => L.OffIreg H P x ω Pρ R c)
   have hoff : Pr (fun q : (Ω × (Fin (L.V.k x) → Coin)) × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
-      L.OffIreg H P x q.1.1 Pρ (forkOn (L.stage2 x) q.1.2 q.2.1) q.2.2) ≤
+      L.OffIreg H P x q.1.1 Pρ (forkOn (L.secondStage x) q.1.2 q.2.1) q.2.2) ≤
       Pr (fun q : (Ω × (Fin (L.V.k x) → Coin)) × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => ∃ g : Fin (L.nG x),
         FlockSoundness.Rewinding.Off (L.iopTable H P x q.1.1 Pρ q.1.2)
           (fun g : Fin (L.nG x) => L.iplur H P x q.1.1 Pρ q.1.2 g) q.2 g) :=
@@ -1342,16 +1342,16 @@ theorem ex_cost_finderIAt_le (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Ty
   (Verity.FirstHit.ex_cost_sampleFinderAt_le
     (fun (t : Ω × (Fin (L.V.k x) → Coin)) => L.iopTable H P x t.1 Pρ t.2)
     (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)) =>
-      decide (∃ u ∈ L.checked x (forkOn (L.stage2 x) t.2 ec.1), g.val ∈ needs u))
+      decide (∃ u ∈ L.checked x (forkOn (L.secondStage x) t.2 ec.1), g.val ∈ needs u))
     (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x) =>
-      L.callsAt H P x s t.1 (forkOn (L.stage2 x) t.2 ec.1) ec.2)
+      L.callsAt H P x s t.1 (forkOn (L.secondStage x) t.2 ec.1) ec.2)
     (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x)
         (J : Finset (Fin (L.nG x))) =>
-      ∑ g ∈ J, L.toCompiled.callsBy H P x s needs g.val t.1 (forkOn (L.stage2 x) t.2 ec.1) ec.2)
+      ∑ g ∈ J, L.toCompiled.callsBy H P x s needs g.val t.1 (forkOn (L.secondStage x) t.2 ec.1) ec.2)
     (fun (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)) =>
-      L.toCompiled.callsBy H P x s needs g.val t.1 (forkOn (L.stage2 x) t.2 ec.1) ec.2)
+      L.toCompiled.callsBy H P x s needs g.val t.1 (forkOn (L.secondStage x) t.2 ec.1) ec.2)
     (fun _ _ _ => le_rfl) K (L.finderIAt H P x s Pρ needs K).out).trans_eq
-    (Ex_keep_forkOn (L.stage2 x) fun (ω : Ω) (R : Fin (L.V.k x) → Coin) (c : L.SlotEC x) =>
+    (Ex_keep_forkOn (L.secondStage x) fun (ω : Ω) (R : Fin (L.V.k x) → Coin) (c : L.SlotEC x) =>
       ((L.callsAt H P x s ω R c +
         ∑ g ∈ univ.filter (fun g : Fin (L.nG x) => decide (∃ u ∈ L.checked x R, g.val ∈ needs u)),
           L.toCompiled.callsBy H P x s needs g.val ω R c : ℕ) : ℝ))

@@ -21,7 +21,7 @@ import subprocess
 import sys
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 INTERVAL = float(os.environ.get("UTIL_INTERVAL_S", "10"))
@@ -33,9 +33,12 @@ QUERY = "index,uuid,utilization.gpu,utilization.memory,memory.used,power.draw,cl
 
 def num(s: str):
     s = s.strip()
+    if s in ("", "N/A", "[N/A]", "[Not Supported]", "[Unknown Error]"):
+        return None
     try:
         return float(s) if "." in s else int(s)
-    except ValueError:
+    except ValueError as e:
+        print(f"gpu_util_sampler: {s[:40]!r} is not a number, read as none ({e})", file=sys.stderr, flush=True)
         return None
 
 
@@ -83,7 +86,8 @@ def lease_owner(i: int) -> str | None:
     lock, owner = LEASE_DIR / f"{i}.lock", LEASE_DIR / f"{i}.owner"
     try:
         r = subprocess.run(["flock", "-n", "-s", str(lock), "true"], capture_output=True, timeout=5)
-    except Exception:  # noqa: BLE001
+    except (OSError, subprocess.SubprocessError) as e:
+        print(f"gpu_util_sampler: GPU {i}'s lock not probed, so it has no owner ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
     if r.returncode == 0:
         return None
@@ -107,7 +111,9 @@ def lease_waiters() -> list[str]:
             continue
         try:
             argv = (d / "cmdline").read_bytes().split(b"\0")
-        except OSError:
+        except OSError as e:
+            if d.exists():
+                print(f"gpu_util_sampler: pid {d.name}'s command line unread ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         s = [a.decode(errors="replace") for a in argv if a]
         if len(s) >= 3 and s[1].endswith("gpu-lease") and "--wait" in s[:6]:
@@ -121,8 +127,8 @@ def wait_files() -> list[str]:
         try:
             if subprocess.run(["flock", "-n", "-s", str(f), "true"], capture_output=True, timeout=5).returncode != 0:
                 out.append(f.read_text().strip())
-        except Exception:  # noqa: BLE001
-            pass
+        except (OSError, subprocess.SubprocessError) as e:
+            print(f"gpu_util_sampler: {f.name} skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
     return out
 
 
@@ -130,7 +136,7 @@ def base(prev_cpu: tuple[int, int]) -> tuple[dict, tuple[int, int]]:
     cur = cpu_times()
     dt, di = cur[0] - prev_cpu[0], cur[1] - prev_cpu[1]
     mem = {l.split(":")[0]: int(l.split()[1]) for l in Path("/proc/meminfo").read_text().splitlines()[:5]}
-    return {"t": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    return {"t": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "cpu_busy": round(1 - di / dt, 4) if dt > 0 else None,
             "load1": float(Path("/proc/loadavg").read_text().split()[0]),
             "mem_used_gib": round((mem["MemTotal"] - mem["MemAvailable"]) / 2**20, 1),

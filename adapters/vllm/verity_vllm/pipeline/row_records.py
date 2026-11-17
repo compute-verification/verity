@@ -197,11 +197,11 @@ def _memory_headroom(proc: str = "/proc/self/cgroup", root: str = "/sys/fs/cgrou
     def rd(p: str) -> int | None:
         try:
             with open(p) as f:
-                return int(v) if (v := f.read().strip()).isdigit() else None
+                return int(v) if (v := f.read().strip()).isdecimal() else None
         except OSError:
             return None
     with open(meminfo) as f:
-        kv = {ln.split(":")[0]: int(ln.split()[1]) * 1024 for ln in f if ln.split()[1].isdigit()}
+        kv = {ln.split(":")[0]: int(ln.split()[1]) * 1024 for ln in f if ln.split()[1].isdecimal()}
     try:
         with open(proc) as f:
             rel = next((ln.strip().split(":", 2)[2] for ln in f if ln.startswith("0::")), "")

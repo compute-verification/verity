@@ -8,8 +8,10 @@
     table    [RESULT ...] [--store --workload W [--commit C]] [--baseline] [--json]   the throughput frontier over B
     baseline [--workload W] [--lock RESULT ...]          the pinned hill-climb baseline (baseline.json), or pin one sweep
     instances --workload W [--write]                     regenerate the workload's frozen instance manifest
-    workloads                                            the VU families and their B caps
+    workloads                                            the proof-block families and their B caps
     zk                                                   what configuration 2 measures today (job.sh ZK=1: --zk sessions under the ZK server)
+    record   [--workload W] [--B B] [--provers 1,2] --cores C,C   the metric's run, on its GPU node: the prover points, 1 then 2
+             at once (each on its own card and cores), the Lean verifier on each bundle, and one reading a prover count
 
 The job scripts call the rest: ``population``, ``check-instances``, ``partition``, ``staged``, ``probe``, ``put-bundle``,
 ``fetch-bundle``, ``lean-verdict``, ``point-result``, ``zk-point`` and ``profile-phases``.
@@ -53,14 +55,14 @@ def _jsonl(path: Path) -> list[dict]:
 
 
 def cmd_population(a) -> int:
-    """The point's population and sampling design: ``law.json`` (the verifier's stratified sampling design for B, ``serve --draw-law``) in
-    ``--out``; prints the VU Definition and n_max, the class sweep's PT_VU and PT_N."""
+    """The point's population and sampling design: ``law.json`` (the verifier's stratified sampling design for B, ``serve --sample-design``) in
+    ``--out``; prints the proof block's Definition and n_max, the class sweep's PT_VU and PT_N."""
     w = workload(a.workload)
     if not 1 <= a.B <= w.n_max:
         print(f"{w.name}: B = {a.B} outside [1, {w.n_max}]", file=sys.stderr)
         return 1
     Path(a.out).mkdir(parents=True, exist_ok=True)
-    (Path(a.out) / "law.json").write_text(json.dumps(I.law(w, a.B), sort_keys=True) + "\n")
+    (Path(a.out) / "law.json").write_text(json.dumps(I.sampling_design(w, a.B), sort_keys=True) + "\n")
     print(w.vu, w.n_max)
     return 0
 
@@ -150,7 +152,7 @@ _MS = re.compile(r"^(inputs|setup(?: \(drawn\))?|.+?): (\d+) ms$")
 
 
 def cmd_lean_verdict(a) -> int:
-    """One JSON line for one session's ``flock-verify verify``: its verdict, time and peak memory."""
+    """One JSON line for one session's ``verity-verify-proof verify``: its verdict, time and peak memory."""
     out = Path(a.stdout).read_text() if Path(a.stdout).exists() else ""
     err = Path(a.stderr).read_text() if Path(a.stderr).exists() else ""
     verdict = next((json.loads(ln[len("VERDICT "):]) for ln in out.splitlines() if ln.startswith("VERDICT ")), None)
@@ -220,7 +222,9 @@ def cmd_point_result(a) -> int:
         sw = {**sw, "verifier": {**sw["verifier"], "sha256": lean_sha, "build_key": lean_key,
                                  "commit": os.environ.get("RESEARCH_SOURCE_SHA") or _git_head()}}
     extra = {"prove_run": a.prove_run or pt.get("run"), "bundle": a.bundle, "sessions": {"warm": pt.get("warm"), "runs": pt.get("runs")},
-             "prover_node": "vy-nebius-1", "gpu_lease": "n1-lease (infra/cluster submit.py): one GPU, the sessions only"}
+             "prover_node": pt.get("prover_node", "vy-nebius-1"),
+             "gpu_lease": "n1-lease (infra/cluster submit.py): one GPU, the sessions only"
+             if pt.get("prover_node", "vy-nebius-1") == "vy-nebius-1" else "gpu-lease: one GPU, the sessions only"}
     if lean:
         extra["verifier_hardware"] = _probe_cpu()
     doc = RS.point(w, int(a.B), rec, run_id=os.environ.get("RESEARCH_RUN_ID") or "local", hardware=hw, software=sw,
@@ -451,11 +455,25 @@ def cmd_zk_point(a) -> int:
     """``zk-point``: the ZK point's result (``job.sh ZK=1``) from its records; exit 0 when it passed."""
     from . import zk
 
-    doc = zk.point(Path(a.dir), workload(a.workload), a.B, zk.firewall_on(), os.environ.get("RESEARCH_RUN_ID"))
+    doc = zk.point(Path(a.dir), workload(a.workload), a.B, zk.zk_server_on(), os.environ.get("RESEARCH_RUN_ID"))
     Path(a.out).write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
     print(json.dumps({"status": doc["validation"]["status"], "detail": doc["validation"]["detail"]}
                      | {m["name"]: m["value"] for m in doc["measurements"]}))
     return 0 if doc["validation"]["status"] == "passed" else 1
+
+
+def cmd_record(a) -> int:
+    from verity_bench import kit
+
+    from . import record as REC
+    provers = [int(n) for n in a.provers.split(",")]
+    cores = a.cores.split(",")
+    if len(cores) < max(provers):
+        raise SystemExit(f"--cores names {len(cores)} core range(s) and --provers needs {max(provers)}, one a prover")
+    w = kit.writer("pt-record")
+    out = Path(w.out) / "out"
+    points = REC.run(P.repository_root(), out, a.workload, a.B, provers, cores, w.stamp.get("node") or "local", w.run)
+    return REC.write(w, out, a.workload, a.B, points)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -510,6 +528,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--bundle", default=None); p.add_argument("--out", required=True)
     p = sub.add_parser("zk-point"); p.add_argument("--workload", required=True); p.add_argument("--B", type=int, required=True)
     p.add_argument("--dir", required=True); p.add_argument("--out", required=True)
+    p = sub.add_parser("record"); p.add_argument("--workload", default=DEFAULT_WORKLOAD); p.add_argument("--B", type=int, default=64)
+    p.add_argument("--provers", default="1,2"); p.add_argument("--cores", required=True)
     p = sub.add_parser("profile-phases"); p.add_argument("--script", required=True); p.add_argument("--time", required=True)
     p.add_argument("--stderr", required=True); p.add_argument("--stdout", default=None); p.add_argument("--out", required=True)
     p.add_argument("--bundle", default=None); p.add_argument("--prove-run", default=None)
@@ -519,4 +539,4 @@ def main(argv: list[str] | None = None) -> int:
             "instances": cmd_instances, "workloads": cmd_workloads, "zk": cmd_zk, "population": cmd_population,
             "check-instances": cmd_check_instances, "partition": cmd_partition, "staged": cmd_staged, "probe": cmd_probe, "lean-verdict": cmd_lean_verdict,
             "point-result": cmd_point_result, "put-bundle": cmd_put_bundle, "fetch-bundle": cmd_fetch_bundle,
-            "profile-phases": cmd_profile_phases, "zk-point": cmd_zk_point}[a.cmd](a)
+            "profile-phases": cmd_profile_phases, "zk-point": cmd_zk_point, "record": cmd_record}[a.cmd](a)

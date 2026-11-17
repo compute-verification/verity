@@ -26,7 +26,7 @@ import Proofs.Flock.Soundness.Refine.Walk
 # What a hidden-output statement takes from the public file (`PublicExposes`)
 
 `HmOut.loadPublic` and `HmOut.drawn` are `HmRow`'s on the circuit without output ports, so a public file's output words
-are `n · 0` of them (`loadPublic_outputs_nil`, `drawn_outputs_nil`). `HmOut.regions` is one `mkRegion` per row, region
+are `n · 0` of them (`loadPublic_outputs_nil`, `sampled_outputs_nil`). `HmOut.regions` is one `mkRegion` per row, region
 `p` row `p`'s `b ‖ c` at its `hm96` slot, as `HmRow.regions`' region "digest p" (`regions_get`).
 -/
 
@@ -71,9 +71,9 @@ theorem foldl_extract_zero (a : Array ℕ) (w : ℕ) (hw : w = 0) (L : Array ℕ
   | cons x l ih => intro acc; rw [List.foldl_cons, ih]; simp
 
 /-- A hidden-output statement's sampled public file holds no output word. -/
-theorem drawn_outputs_nil {c : Circuit} {pop pub : Public} {d : Lean.Json} (h : HmOut.drawn c pop d = .ok pub) :
+theorem sampled_outputs_nil {c : Circuit} {pop pub : Public} {d : Lean.Json} (h : HmOut.drawn c pop d = .ok pub) :
     pub.outputs = #[] := by
-  obtain ⟨D, -, hout⟩ := Layout.drawn_outputs h
+  obtain ⟨D, -, hout⟩ := Layout.sampled_outputs h
   rw [hout]
   exact foldl_extract_zero _ _ rfl _
 
@@ -93,7 +93,7 @@ theorem public_exposes' : PublicExposes := by
   · obtain ⟨pop, hl, hn, hd⟩ := s.pub
     cases draw with
     | none => rw [hn rfl]; exact loadPublic_outputs_nil hl
-    | some d => exact drawn_outputs_nil (hd d rfl)
+    | some d => exact sampled_outputs_nil (hd d rfl)
   · have hp' : p < st.regions.size := hsz ▸ hp
     exact ⟨st.regions[p], Array.getElem?_eq_getElem hp', hall p hp'⟩
 

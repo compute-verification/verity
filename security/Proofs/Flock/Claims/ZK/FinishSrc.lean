@@ -39,7 +39,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The ZK server's rep against the rep from a source
 
-`flock-firewall finish`'s rep (`repFwC`) computes what it sends from the passed values and the rep's pads; the session's
+`flock-zk-server finish`'s rep (`repFwC`) computes what it sends from the passed values and the rep's pads; the session's
 rep from a source (`FlockComplete.repCut`) reads the same messages from the source. Here both run on the session's sends
 (`asksCut`), and where the source holds what the ZK server computes, they run alike up to what only the final message
 reads (`eraseZ`):
@@ -58,7 +58,7 @@ reads (`eraseZ`):
 
 @[expose] public section
 
-namespace Flock.Firewall.Finish
+namespace Flock.ZkServer.Finish
 
 open Flock Transcript
 
@@ -418,4 +418,4 @@ theorem repCut_fw (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (hm : st.
     rfl
   · simp only [FlockComplete.eraseZ, eraseL_eraseL', hie]
 
-end Flock.Firewall.Finish
+end Flock.ZkServer.Finish

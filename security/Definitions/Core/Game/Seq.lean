@@ -41,7 +41,7 @@ def runsStrat (g : Game α) (s : Strategy g) : (n : ℕ) → Strategy (runsG g n
   | n + 1 => Strategy.bind g _ s fun a => Strategy.map (a :: ·) _ (runsStrat g s n)
 
 /-- The strategy of a coin: nothing to play. -/
-def drawStrat (C : Type) [Fintype C] [Nonempty C] : Strategy (Game.draw C) := fun _ => PUnit.unit
+def sampleStrat (C : Type) [Fintype C] [Nonempty C] : Strategy (Game.draw C) := fun _ => PUnit.unit
 
 end Game
 

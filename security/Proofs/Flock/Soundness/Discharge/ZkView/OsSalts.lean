@@ -4,13 +4,13 @@ public import Proofs.Flock.Soundness.Discharge.ZkView.Leaf
 public import Proofs.Flock.Soundness.Discharge.PrivateCircuit.Defs
 public import Proofs.Flock.Soundness.CROnly.Hiding
 public import Proofs.Flock.Soundness.ZK.RealLeaves
-public import Proofs.Flock.Soundness.ExecDraw
+public import Proofs.Flock.Soundness.ExecSample
 
 /-!
 # Salts from the operating system (A3)
 
 Flock reads every hm96 leaf salt from the operating system, 192 bytes a leaf (`getrandom`, the kernel's
-`getrandom(2)`), as the recursive audit's firewall and a registrant do. The hiding and zero-knowledge theorems sample each
+`getrandom(2)`), as the recursive audit's ZK server and a registrant do. The hiding and zero-knowledge theorems sample each
 salt uniformly from `Salt`, hm96-sha512's 1536 salt bits. The step between the two is A3 per test
 (`Assumptions.UniformRandomBytesTest`, `uniform/io-getrandombytes`: the operating system's bytes pass the test as
 independent uniform bytes do, up to `η`), taken at the one event each theorem bounds, and `η` enters its bound. No
@@ -18,7 +18,7 @@ premise on a stream generator is left on the salts:
 
 * `saltOfBytes`, `saltEquiv`: 192 bytes as a salt, in `bitsOf`'s order (bit `t` is bit `t % 8` of byte `t / 8`), a
   bijection. `saltBytes_saltOfBytes`: the bytes a leaf hashes for that salt are the OS's bytes themselves
-  (`Audit.Law.streamOf`), so the executable's leaf under the OS's salt is the model's leaf at `saltOfBytes`
+  (`Audit.SamplingDesign.streamOf`), so the executable's leaf under the OS's salt is the model's leaf at `saltOfBytes`
   (`leaf_os`, from `leafSplit`). `saltsEquiv n`: `n` salts from `n` streams of 192 bytes.
 * `uniformRandomBytesTest_of`: A3's every-event form gives the per-test form at every test, at `η = 0`.
 * `prCoin_os`, `prCoin_os_prod`: an event of values decoded bijectively from the OS's bytes has, within `η` either way,
@@ -73,8 +73,8 @@ theorem saltOfBytes_apply (b : Fin 192 → Fin 256) (i : Fin 192) (j : Fin 8) (h
 theorem bytesOf_eq_streamOf {k : ℕ} (x : Fin (8 * k) → ZMod 2) (b : Fin k → Fin 256)
     (h : ∀ (i : Fin k) (j : Fin 8) (hij : 8 * i.val + j.val < 8 * k),
       x ⟨8 * i.val + j.val, hij⟩ = if (b i).val.testBit j.val then 1 else 0) :
-    bytesOf x = Audit.Law.streamOf b := by
-  unfold bytesOf Audit.Law.streamOf
+    bytesOf x = Audit.SamplingDesign.streamOf b := by
+  unfold bytesOf Audit.SamplingDesign.streamOf
   congr 1
   refine congrArg Array.ofFn (funext fun i => ?_)
   rw [← byteOf_testBit_fin (b i)]
@@ -82,13 +82,13 @@ theorem bytesOf_eq_streamOf {k : ℕ} (x : Fin (8 * k) → ZMod 2) (b : Fin k �
 
 /-- **The leaf's salt bytes are the OS's bytes**: the 192 bytes the executable's leaf hashes for `saltOfBytes b`
 (`saltBytes`) are `b` itself, as a byte stream. -/
-theorem saltBytes_saltOfBytes (b : Fin 192 → Fin 256) : saltBytes (saltOfBytes b) = Audit.Law.streamOf b :=
+theorem saltBytes_saltOfBytes (b : Fin 192 → Fin 256) : saltBytes (saltOfBytes b) = Audit.SamplingDesign.streamOf b :=
   bytesOf_eq_streamOf (k := 192) (saltOfBytes b) b fun i j h => saltOfBytes_apply b i j h
 
 /-- **The executable's leaf at the OS's salt bytes** is the model's at `saltOfBytes`: for a 64-byte digest `x`,
 `Default512.leaf x b = H(x ⊕ M·y, c(y))` with `y = saltOfBytes b` (`leafSplit`). -/
 theorem leaf_os (x : ByteArray) (b : Fin 192 → Fin 256) (hx : x.size = 64) :
-    Flock.Hm96.Default512.leaf x (Audit.Law.streamOf b) =
+    Flock.Hm96.Default512.leaf x (Audit.SamplingDesign.streamOf b) =
       leafH (bitsOf x + My (saltOfBytes b), saltHash (saltOfBytes b)) := by
   rw [← saltBytes_saltOfBytes]
   exact leafSplit x _ hx

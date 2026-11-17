@@ -65,7 +65,7 @@ theorem framed_runSteps {e : ExecHolo} (u : C3Run e) : Framed u (runSteps u) := 
   simp only [List.drop_succ_cons, List.drop_zero, List.drop_left]
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
+  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
@@ -243,7 +243,7 @@ end decoder
 /-- R's opening's read fact at a tape `l` and a run `u`, as `OpeningRead` reads them. -/
 def OpeningReadAt (l : List Step) (u : C3Run (holoAt st hp)) : Prop :=
   ∃ (sh : Flock.Shape) (M : Flock.RecAlgebra.Messages F128) (a : Fin 2 → Flock.RecAlgebra.AClaim F128)
-    (cs : Flock.RecAlgebra.CoinSource) (k₀ k₁ : ℕ) (res : Array F128) (ρ : Fin 2 → Fin 7 → GF128) (γ : Fin 2 → GF128),
+    (cs : Flock.RecAlgebra.RoundCoins) (k₀ k₁ : ℕ) (res : Array F128) (ρ : Fin 2 → Fin 7 → GF128) (γ : Fin 2 → GF128),
     Flock.RecOpening.shape? (holoAt st hp).cls.shape.mReg 2 = some sh ∧
     Flock.RecOpening.run sh M #[a 0, a 1] k₀ cs = .ok (res, k₁) ∧ (∀ x ∈ res, x = 0) ∧
     (∀ i, FlockSoundness.Refine.ClaimRel (holoAt st hp).cls.shape.mReg (a i).toClaim (u.claim i).toClaim) ∧

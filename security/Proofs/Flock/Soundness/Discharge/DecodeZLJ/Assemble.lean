@@ -29,11 +29,11 @@ import Proofs.Flock.Soundness.Refine.Setup
 /-!
 # The decoder is right at `J` tables
 
-`decodesOnJ_exec`: `DecodesOnJ` at `planJ`, table by table. At an outcome flock-verify accepts, at table `j`:
+`decodesOnJ_exec`: `DecodesOnJ` at `planJ`, table by table. At an outcome verity-verify-proof accepts, at table `j`:
 
 * `RecordsLiveJ` gives the record's sample `dj S`, the proof files, the link points, and table `j`'s root and streams.
-* `accepts_tables` sets table `j` up with setupH under `tagsAt` at `partDraw` of part `j`, which is `partJson (dj S)`;
-  `DrawOkJ` gives its link points. So a `SetupJ` exists, and `planJ`'s table `j` is `stmtOf` of setupH's statement
+* `accepts_tables` sets table `j` up with setupH under `tagsAt` at `partSample` of part `j`, which is `partJson (dj S)`;
+  `SampleOkJ` gives its link points. So a `SetupJ` exists, and `planJ`'s table `j` is `stmtOf` of setupH's statement
   (`tableJ_of`, `model_eq_stmtOf`), with its `fast100` schedule and `PT_LOCAL`.
 * `accepts_reps_at` gives each rep's run and rounds and the salted verdict; `repRun_at` (at `op_carries`,
   `lig_carries`) makes each run a `RepRun` for `decJ`, and `playsT_of_repRun` a run on its tape `repTapeJ`.
@@ -55,7 +55,7 @@ theorem decodesOnJ_exec : DecodesOnJExec := by
   obtain ⟨hd, hprf, hrec⟩ := hwr _ R o hacc
   obtain ⟨spec, sts, hsu, -, -, -, population, units, hD1, -, -, -, hsz, hall⟩ := accepts_tables hh hc1 hacc
   obtain ⟨u, hu, -, hpop, hun⟩ := hD1 _ hd
-  have hpart : partJson (dj (L.draw ω)) I.count j.val = partDraw population units I.count j.val := by
+  have hpart : partJson (dj (L.draw ω)) I.count j.val = partSample population units I.count j.val := by
     unfold partJson
     rw [hu]
     dsimp only

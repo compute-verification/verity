@@ -26,7 +26,7 @@ Proofs about `Pouw.PearlC.Fp4Skip` on any `Fp4Atom` (`sm120Nvf4`, `sm120Mxf4`), 
 * **The gap: D₄ gives neither hypothesis.**
   - `NoLoss`: D-SS lets a pair's unit weights span 31.6 binades, past the 27-bit window, and a participating group whose
     dot cancels still anchors the grid. `noLoss_gap` is an `sm120Nvf4` firing with scale bytes inside D-SS (a spread
-    of 2^13.1 per operand) whose grid drops a bit of a sum that fits binary32. Debit term 5 (sub-grid blocks) charges the
+    of 2^13.1 per operand) whose grid drops a bit of a sum that fits binary32. InertWork term 5 (sub-grid blocks) charges the
     blocks that drop out entirely. A partial loss like this one skips nothing.
   - `Fits`: the running sum's bit span, which D₄ doesn't bound (`K` up to 2^16). Once the sum needs more than 24 bits,
     the binary32 write drops the low ones.

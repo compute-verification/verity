@@ -22,10 +22,10 @@ there is the deferred release's link. Here is `envPre_loop`'s step at the `Commi
 
 namespace Claims.ZKServer.Relay
 
-open _root_.Flock.Firewall.Session
-open _root_.Flock.Firewall hiding State
+open _root_.Flock.ZkServer.Session
+open _root_.Flock.ZkServer hiding State
 open _root_.Flock (SessionSpec Stmt)
-open _root_.Flock.Firewall.Frames (Sessions)
+open _root_.Flock.ZkServer.Frames (Sessions)
 
 /-- **The history before the run's `j`-th message has `j` rounds.** -/
 theorem LoopModel.length_hist {W Rr : Type} (M : LoopModel W Rr) {j : Nat} (hj : j ≤ M.τ.length) :

@@ -10,7 +10,7 @@ The ZK server's value service holds a key `k` and derives every value commitment
 salts (`Service.out`) and their tags under `k` (`Service.tags`). A registration's record is its number `n` on the ZK
 server's record, the number `m` of sessions the service's epoch opened, the registered session's view and a record tag
 under `k` over all three (`Service.rtag`), and the session loop admits a record whose record tag is the server's
-(`Service.admits`). The code is `Flock.Firewall.Salts`.
+(`Service.admits`). The code is `Flock.ZkServer.Salts`.
 
 A serving stack commits its values in `m` sessions, sees each one's view and hands the loop a record (`Stack`): one of its
 sessions' (`Choice`'s `inl`), which the service registers, or any record of its own making (`inr`). As a function of
@@ -26,7 +26,7 @@ it is the same function under every key.
 
 A stream of `r` registrations, registration `i` of an epoch of `m i` sessions (`StreamStack`): the loop admits each
 registration once, oldest first, and passes over (`skip`) one no statement reads before a later one is read, each a
-failure of the stream, which stops at its failure budget (`Core.Firewall.admitReads`). What the loop admits is each
+failure of the stream, which stops at its failure budget (`Core.ZkServer.admitReads`). What the loop admits is each
 registration's record, or none where it passed it over (`StreamRecord`); `streamReal`, `streamIdeal`, `streamGenuine`,
 `streamPrfAdvantage` and `streamForgeAdvantage` are the five above over the stream, at each of the stack's choices
 (`streamChoices`: a session of each registration's epoch, or none, at most `b` none).

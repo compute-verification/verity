@@ -42,7 +42,7 @@ hiding leaf, and `StmtFixes` asks a check to hold at the readers' messages of ev
 element-level step whose last message carries the record's parsed value: the layout's reader `rd` (the code side's, as
 `final` is) reads it as the statement, the parsed value and the proof files (`FinalJ`), and the decision runs the
 verdict and custody's reading at the coin-substituted value (`decisionAtJ`), the sample check at the parsed value
-(`drawOfJ`). There is no parse in it, so parse success is no check of `IVStar`.
+(`sampleOfJ`). There is no parse in it, so parse success is no check of `IVStar`.
 
 * **The step** (`actJ`, `nextJ`): a coin is answered as the deployed plain verifier answers it (`nextJ_coin`, so
   `deploySplit` applies); at a decision it is `decisionJF` (`nextJ_decide`).
@@ -76,14 +76,14 @@ structure FinalJ where
   proofs : Array ByteArray
 
 /-- The record's sample at its parsed value, rebuilt (`recordDraw` after the parse). -/
-def drawOfJ (j : Json) : Option Json :=
+def sampleOfJ (j : Json) : Option Json :=
   match j.getObjVal? "unit_draw" with
   | .ok Json.null => none
   | .ok d => some (Flock.norm d)
   | .error _ => none
 
-theorem recordDraw_of_parse {record : String} {j : Json} (h : Flock.JsonParse.parse record = .ok j) :
-    FlockSoundness.Discharge.Exec.recordDraw record = drawOfJ j := by
+theorem recordSample_of_parse {record : String} {j : Json} (h : Flock.JsonParse.parse record = .ok j) :
+    FlockSoundness.Discharge.Exec.recordDraw record = sampleOfJ j := by
   unfold FlockSoundness.Discharge.Exec.recordDraw
   rw [h]
   rfl
@@ -92,10 +92,10 @@ theorem recordDraw_of_parse {record : String} {j : Json} (h : Flock.JsonParse.pa
 def checksAtJ (s : Ins) (spec : SessionSpec) (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin)
     (mids : List (Claims.Msg × Coin)) (f : FinalJ) (j' : Json) : Flock.V Unit := do
   Record.check (f.stmt == x) "live: the last message's statement is not the statement"
-  Record.check (drawEq (drawOfJ f.j) s.read.draw) "live: the record's draw is not the statement's"
+  Record.check (sampleEq (sampleOfJ f.j) s.read.draw) "live: the record's draw is not the statement's"
   custody spec (← liveOfJ spec j') link c₁ mids
   s.read.check
-  if s.read.draw.isNone then ProvedScope.drawLaw false s.read.tags false none
+  if s.read.draw.isNone then ProvedScope.sampleDesign false s.read.tags false none
 
 /-- **The decision at a session at the parsed value**: the plain verdict and custody's reading at the coin-substituted
 value. -/
@@ -162,7 +162,7 @@ theorem decisionAtJ_eq (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (x : Cl
     decisionAtJ s spec sts x link c₁ mids ⟨f.stmt, j, f.proofs⟩ = decisionCsAt s spec sts x link c₁ mids f := by
   have hs : RecordText.check f.record = pure () := RecordText.check_of hj hc
   rw [decisionCsAt_parse s spec sts x link c₁ mids hj]
-  simp only [decisionAtJ, decisionJ, verdictJM, checksAtJ, checksJ, recordDraw_of_parse hj, hs, bind_pure_unit,
+  simp only [decisionAtJ, decisionJ, verdictJM, checksAtJ, checksJ, recordSample_of_parse hj, hs, bind_pure_unit,
     Bool.false_eq_true, ↓reduceIte]
 
 /-- **The parsed value's decision is `nextCs`'s** on a record in its canonical text that parses to it. -/

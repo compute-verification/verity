@@ -24,38 +24,38 @@ Two of the Round slot's facts at a frame round, from the loop's code:
 namespace Claims.ZKServer.Relay
 
 open _root_.Flock (V SessionSpec Stmt)
-open _root_.Flock.Firewall.Frame (Cfg)
-open _root_.Flock.Firewall.Frames (Sessions Rep)
+open _root_.Flock.ZkServer.Frame (Cfg)
+open _root_.Flock.ZkServer.Frames (Sessions Rep)
 
 /-- **Rep 1's prior step keeps the masking state's stop**: it adds only prior claims. -/
-theorem prior_stopped (c : Cfg) (st : _root_.Flock.Firewall.Frame.State) (k : Nat) (b : ByteArray) :
-    (_root_.Flock.Firewall.Frame.step c st (.prior k b)).2.m.stopped = st.m.stopped := by
-  simp only [_root_.Flock.Firewall.Frame.step]
+theorem prior_stopped (c : Cfg) (st : _root_.Flock.ZkServer.Frame.State) (k : Nat) (b : ByteArray) :
+    (_root_.Flock.ZkServer.Frame.step c st (.prior k b)).2.m.stopped = st.m.stopped := by
+  simp only [_root_.Flock.ZkServer.Frame.step]
   split
   · rfl
   · split <;> rfl
 
-theorem prior_stopped' {c : Cfg} {st st' : _root_.Flock.Firewall.Frame.State} {k : Nat} {b : ByteArray}
-    (h : _root_.Flock.Firewall.Frame.step c st (.prior k b) = (.ok, st')) : st'.m.stopped = st.m.stopped := by
+theorem prior_stopped' {c : Cfg} {st st' : _root_.Flock.ZkServer.Frame.State} {k : Nat} {b : ByteArray}
+    (h : _root_.Flock.ZkServer.Frame.step c st (.prior k b) = (.ok, st')) : st'.m.stopped = st.m.stopped := by
   have e := prior_stopped c st k b
   rw [h] at e
   exact e
 
-theorem placeOf_st' {salts : Array (ByteArray × Nat × Array ByteArray)} {l0 : _root_.Flock.Firewall.Level0.Level0}
-    {s : _root_.Flock.Firewall.Frames.Release} {p : Rep} {dom : ByteArray}
-    {v : _root_.Flock.Firewall.Frame.Place × Nat × Rep}
-    (h : _root_.Flock.Firewall.Frames.placeOf salts l0 s p dom = .ok v) : v.2.2.st = p.st :=
+theorem placeOf_st' {salts : Array (ByteArray × Nat × Array ByteArray)} {l0 : _root_.Flock.ZkServer.Level0.Level0}
+    {s : _root_.Flock.ZkServer.Frames.Release} {p : Rep} {dom : ByteArray}
+    {v : _root_.Flock.ZkServer.Frame.Place × Nat × Rep}
+    (h : _root_.Flock.ZkServer.Frames.placeOf salts l0 s p dom = .ok v) : v.2.2.st = p.st :=
   (placeOf_run (pl := v.1) (n := v.2.1) h).2.1
 
 set_option maxHeartbeats 1000000 in
 /-- **The frame `roundPlace` readies has stopped exactly where the frame it found had**: `withAlg`, rep 0's
 algebraic-phase coins at rep 1's first round and `placeOf` keep the masking state's stop. -/
-theorem roundPlace_stopped {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {sid i r j : Nat}
-    {dom content : ByteArray} {n : Nat} {p q : Rep} {pl : _root_.Flock.Firewall.Frame.Place} {f : Bool}
+theorem roundPlace_stopped {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r j : Nat}
+    {dom content : ByteArray} {n : Nat} {p q : Rep} {pl : _root_.Flock.ZkServer.Frame.Place} {f : Bool}
     {nd : Option String} (hf : R.find sid i r = some (j, p))
-    (h : _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, f, nd)) :
+    (h : _root_.Flock.ZkServer.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, f, nd)) :
     q.st.m.stopped = p.st.m.stopped := by
-  unfold _root_.Flock.Firewall.Frames.roundPlace at h
+  unfold _root_.Flock.ZkServer.Frames.roundPlace at h
   simp only [hf, bind, Except.bind, pure, Except.pure] at h
   by_cases hfst : (p.coins.isEmpty && !p.st.begun) = true
   all_goals repeat' (first
@@ -69,22 +69,22 @@ theorem roundPlace_stopped {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slo
     | (cases h
        have e1 := placeOf_st' (by assumption)
        first
-         | exact congrArg (fun s : _root_.Flock.Firewall.Frame.State => s.m.stopped) e1
+         | exact congrArg (fun s : _root_.Flock.ZkServer.Frame.State => s.m.stopped) e1
          | (have e2 := (withAlg_run (by assumption)).2.1
             first
-              | exact congrArg (fun s : _root_.Flock.Firewall.Frame.State => s.m.stopped) (e1.trans e2)
+              | exact congrArg (fun s : _root_.Flock.ZkServer.Frame.State => s.m.stopped) (e1.trans e2)
               | (have e3 := prior_stopped' (by assumption)
-                 exact ((congrArg (fun s : _root_.Flock.Firewall.Frame.State => s.m.stopped) e1).trans e3).trans
-                   (congrArg (fun s : _root_.Flock.Firewall.Frame.State => s.m.stopped) e2))))
+                 exact ((congrArg (fun s : _root_.Flock.ZkServer.Frame.State => s.m.stopped) e1).trans e3).trans
+                   (congrArg (fun s : _root_.Flock.ZkServer.Frame.State => s.m.stopped) e2))))
 
 /-- **In a session that has not stopped, the frame `roundPlace` readies has not stopped.** -/
-theorem roundPlace_live {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {sid i r : Nat}
-    {dom content : ByteArray} {n : Nat} {q : Rep} {pl : _root_.Flock.Firewall.Frame.Place} {f : Bool}
+theorem roundPlace_live {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r : Nat}
+    {dom content : ByteArray} {n : Nat} {q : Rep} {pl : _root_.Flock.ZkServer.Frame.Place} {f : Bool}
     {nd : Option String}
-    (h : _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, f, nd))
+    (h : _root_.Flock.ZkServer.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, f, nd))
     (hR : R.stopped sid = false) : q.st.m.stopped = false := by
   rcases hf : R.find sid i r with _ | ⟨_, p⟩
-  · unfold _root_.Flock.Firewall.Frames.roundPlace at h
+  · unfold _root_.Flock.ZkServer.Frames.roundPlace at h
     simp only [hf] at h
     cases h
   · rw [roundPlace_stopped hf h]
@@ -94,15 +94,15 @@ theorem roundPlace_live {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots}
 
 /-- **The session's stop from a round that releases to its next request** is the round's put's on the frames the
 round read (`stopped_next`, its readied frame's stop from `roundPlace_live`). -/
-theorem stopped_step {R R₁ R₂ R₃ : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {sid i r : Nat}
+theorem stopped_step {R R₁ R₂ R₃ : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r : Nat}
     {dom content : ByteArray} {n : Nat} {q p₁ : Rep} {rr : ByteArray} {f : Bool} {nd : Option String}
     {o : ByteArray} (hfr : (frameAt R sid i r).isSome)
-    (hrp : _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom content n = .ok (q, .sched rr, f, nd))
-    (ho : (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dom content n).out = .ok o)
-    (hput : (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dom content n).put = some p₁)
+    (hrp : _root_.Flock.ZkServer.Frames.roundPlace R L0 sid i r dom content n = .ok (q, .sched rr, f, nd))
+    (ho : (_root_.Flock.ZkServer.Frames.roundStep R L0 sid i r dom content n).out = .ok o)
+    (hput : (_root_.Flock.ZkServer.Frames.roundStep R L0 sid i r dom content n).put = some p₁)
     (hK₀₁ : Kept sid i r R R₁) (hS₀₁ : SessKept sid R R₁) (hK₁₂ : Kept sid i r (R₁.put p₁) R₂)
-    (hS₁₂ : SessKept sid (R₁.put p₁) R₂) {cs : Array _root_.Flock.F128} {st₂ : _root_.Flock.Firewall.Frame.State}
-    (hcs : _root_.Flock.Firewall.Frame.step p₁.cfg p₁.st (.coins (.ok cs)) = (.ok, st₂))
+    (hS₁₂ : SessKept sid (R₁.put p₁) R₂) {cs : Array _root_.Flock.F128} {st₂ : _root_.Flock.ZkServer.Frame.State}
+    (hcs : _root_.Flock.ZkServer.Frame.step p₁.cfg p₁.st (.coins (.ok cs)) = (.ok, st₂))
     (hS₂₃ : SessKept sid (R₂.put (Loop.coinsOf p₁ st₂ cs)) R₃) :
     R₃.stopped sid = (R.put p₁).stopped sid :=
   stopped_next hfr hrp (roundPlace_live hrp) ho hput hK₀₁ hS₀₁ hK₁₂ hS₁₂ hcs hS₂₃
@@ -124,20 +124,20 @@ theorem scheduled_place (T : ZKMal.CoinLayer.TableData)
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand))
     (real : Msg → Claims.Flock.Wit →
       (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
-      Nat → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+      Nat → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (x : Msg) (w : Claims.Flock.Wit)
     (ρ : (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)
     (e0 : Msg × Msg) (h1 : List (Msg × Msg)) (vals : String → Option ByteArray)
     {s0 : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt} {q : Nat}
     (hx : FlockDeploy.setupOf true x = some (s0, spec, sts)) (hq : h1.length = q + 1)
-    {t : _root_.Flock.Firewall.Finish.Tab} {hi : Array ByteArray}
+    {t : _root_.Flock.ZkServer.Finish.Tab} {hi : Array ByteArray}
     (hreal : real x w ρ (ZKMal.CoinLayer.locate (Loop.roundsOf spec sts) 0 q).1 = .ok (t, hi))
     {sched : Array (ByteArray × Nat)}
     (hs : Loop.schedSoFar t ((ZKMal.CoinLayer.locate (Loop.roundsOf spec sts) 0 q).1 % 2)
       (spec.domain (spec.tables[(ZKMal.CoinLayer.locate (Loop.roundsOf spec sts) 0 q).1 / 2]!)
         ((ZKMal.CoinLayer.locate (Loop.roundsOf spec sts) 0 q).1 % 2)).toUTF8
-      (_root_.Flock.Firewall.Drive.extras sts[(ZKMal.CoinLayer.locate (Loop.roundsOf spec sts) 0 q).1 / 2]!
-        (_root_.Flock.Firewall.Drive.linkPoints sts[(ZKMal.CoinLayer.locate (Loop.roundsOf spec sts) 0 q).1 / 2]!
+      (_root_.Flock.ZkServer.Drive.extras sts[(ZKMal.CoinLayer.locate (Loop.roundsOf spec sts) 0 q).1 / 2]!
+        (_root_.Flock.ZkServer.Drive.linkPoints sts[(ZKMal.CoinLayer.locate (Loop.roundsOf spec sts) 0 q).1 / 2]!
           (Loop.wordsAt x (h1.map fun p => ZKMal.CoinLayer.rd p.2) 0))) hi
       ((Array.range (ZKMal.CoinLayer.locate (Loop.roundsOf spec sts) 0 q).2).map
         fun j => Loop.wordsAt x (h1.map fun p => ZKMal.CoinLayer.rd p.2)

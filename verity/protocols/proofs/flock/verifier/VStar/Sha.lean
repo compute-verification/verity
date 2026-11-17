@@ -38,7 +38,7 @@ def shaMsg (bits : List Lin) (pre : Nat) : List Lin := bits ++ (bitsOf (padTail 
 def blockAt (msg : Array Lin) (off : Nat) : List Lin := (List.range 1024).map fun p => msg.getD (off + wordBit p) Lin.zero
 
 /-- One compression of the state's 512 forms by a block's 1024. -/
-def shaBlock (st blk : List Lin) : M (List Lin) := do
+def shaChunk (st blk : List Lin) : M (List Lin) := do
   let out ← compress (words st 8) (words blk 16)
   pure out.flatten
 
@@ -46,7 +46,7 @@ def shaBlock (st blk : List Lin) : M (List Lin) := do
 def shaBlocks (msg : Array Lin) : Nat → Nat → List Lin → M (List Lin)
   | 0, _, st => pure st
   | n + 1, k, st => do
-    let st ← shaBlock st (blockAt msg (1024 * k))
+    let st ← shaChunk st (blockAt msg (1024 * k))
     shaBlocks msg n (k + 1) st
 
 def shaFrom (cv : List (BitVec 64)) (bits : List Lin) (pre : Nat) : M (List Lin) := do

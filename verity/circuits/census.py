@@ -51,7 +51,7 @@ its served MACs (m·n·k) apart from its tail atoms (k-steps appended to the sam
 class's ancestors add up what the rule says. A class of a family `RULED` names is refused while `FAMILY_COUNTS` has no rule for it
 (the family's module registers it when imported, which decoding a Program never does), and so is a Definition carrying a rule
 (`.counts`) that `FAMILY_COUNTS` lacks: neither is counted by `PRODUCTS`.  The s8 family's served MACs (`ops.s8`) are those whose
-roles Lean's `Accounting.Gates.roleOf` states: a served product's main chain toward its committed words, which only an `S8Dot`
+roles Lean's `ResourceAccounting.Gates.roleOf` states: a served product's main chain toward its committed words, which only an `S8Dot`
 or `S8Matmul` has.  `GemmAccumulatorS8` and PoUW's segment dots (`PouwSegDot_v2`, `PouwSegDot0_v2`: an H1 tile's lanes) perform
 their products and serve none (`serves_none`).  `served_macs_by_precision` splits the served MACs by the
 operand format of the steps
@@ -71,7 +71,7 @@ by family: Triton's MMAv2 e4m3 dot on sm_90 (`HopperE4m3MmaV2Dot32`) runs as f16
 `mac:fp8`.  Every other gate is `cuda:gate`.  A class's work includes
 its callees'.  The census counts work only when asked (`census(..., boolean=...)`; without it there is no `work`): for a Boolean
 Program, each root Call's own gates; for a word Program, each root Call through the Boolean version a resolver gives
-(`verity.definitions.boolean.boolean_version`), named in its class's `boolean_version`, so a class under a word Call has no
+(`verity.circuits.ops.boolean.versions.boolean_version`), named in its class's `boolean_version`, so a class under a word Call has no
 `work`.  A root Call with no Boolean version, or whose Boolean body reaches a primitive other than a gate, a constant bit or an
 input, is refused by name (`NoBooleanWork`), and so is a `PRODUCTS` step bound to no silicon model (its module, which binds it,
 never imported).  A tensor-core step inlined into a traced body (a Definition compiled and traced again as one circuit) is no
@@ -184,8 +184,8 @@ RULED: dict[str, str] = {"S8Dot_v1": "verity.circuits.ops.s8", "S8Matmul_v1": "v
                          "S8Dot_v2": "verity.circuits.ops.boolean.s8", "S8Matmul_v2": "verity.circuits.ops.boolean.s8",
                          "GemmAccumulatorS8_v1": "verity.circuits.ops.gemm",
                          "GemmAccumulatorS8_v2": "verity.circuits.ops.boolean.gemm",
-                         "PouwSegDot_v2": "verity.protocols.accounting.pouw.prover.circuit.segment",
-                         "PouwSegDot0_v2": "verity.protocols.accounting.pouw.prover.circuit.segment"}
+                         "PouwSegDot_v2": "verity.protocols.resource_accounting.compute.pouw.prover.circuit.segment",
+                         "PouwSegDot0_v2": "verity.protocols.resource_accounting.compute.pouw.prover.circuit.segment"}
 
 
 def serves_none(bindings: dict) -> dict[str, int]:
@@ -1016,7 +1016,7 @@ def census(program: Any, ends: list[int] | None = None, digest: str | None = Non
            boolean: bool | Callable[[Any], Any] = False) -> dict:
     """The census/v1 of `program` (a `Program` or a `DecodedProgram`) over the steps `ends` (default: one step), naming the
     Program by `digest` (`codec.program_digest`) when given.  With `boolean` it counts Boolean work (`work`): True counts each
-    root Call's own gates, a resolver (`verity.definitions.boolean.boolean_version`) each root Call that is not Boolean through
+    root Call's own gates, a resolver (`verity.circuits.ops.boolean.versions.boolean_version`) each root Call that is not Boolean through
     the Boolean Definition it returns; either refuses (`NoBooleanWork`) every root Call it cannot count, by name."""
     root = program.root
     nodes = root.body.nodes

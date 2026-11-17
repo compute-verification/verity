@@ -1,10 +1,3 @@
-/-
-The two row nets of a parsed circuit: `HmNets.check` makes its `sha512x3` and `hm96` nets `Net.ofRows` of the verifier's
-layouts (`shaNet_ofRows`, `hmNet_ofRows`), so their input ports sit at `cv_k = 1536 k`, `msg_k = 1536 k + 512`
-(`shaIn_eq`) and `cv = 0`, `pad = 512`, `y = 1536` (`hmIn_eq`), and their outputs at the layouts' output groups
-(`shaOut_eq`, `hmOut_eq`). `port_commit_rows` is `port_commit` with the slots holding the nets' rows (`LaidRows`) in
-place of the builder's rows, and the nets' places from `HmNets.check`.
--/
 module
 
 public import Proofs.Flock.Soundness.Discharge.Hm.Laid
@@ -23,6 +16,14 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Verifier.HmNets
+
+/-!
+The two row nets of a parsed circuit: `HmNets.check` makes its `sha512x3` and `hm96` nets `Net.ofRows` of the verifier's
+layouts (`shaNet_ofRows`, `hmNet_ofRows`), so their input ports sit at `cv_k = 1536 k`, `msg_k = 1536 k + 512`
+(`shaIn_eq`) and `cv = 0`, `pad = 512`, `y = 1536` (`hmIn_eq`), and their outputs at the layouts' output groups
+(`shaOut_eq`, `hmOut_eq`). `port_commit_rows` is `port_commit` with the slots holding the nets' rows (`LaidRows`) in
+place of the builder's rows, and the nets' places from `HmNets.check`.
+-/
 
 @[expose] public section
 

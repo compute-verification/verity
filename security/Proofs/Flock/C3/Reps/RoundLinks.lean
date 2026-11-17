@@ -342,7 +342,7 @@ theorem read_of_port {own : Array Flock.Registered.Port} {sv : VStar.Stmt} (ho :
   exact ⟨pt, hpt, rfl, rfl, x, hx, hP⟩
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-  {n : ℕ} {L : Law n} {Reg Reg' Reg₂ : Type} {S : ℕ} {Vs : Fin S → VStmt}
+  {n : ℕ} {L : SamplingDesign n} {Reg Reg' Reg₂ : Type} {S : ℕ} {Vs : Fin S → VStmt}
 
 local notation "ℐ" => holoInnerAt T CT st hp
 

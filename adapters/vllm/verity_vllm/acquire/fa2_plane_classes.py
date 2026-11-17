@@ -269,7 +269,7 @@ def observe(names: Iterable[str]) -> dict[int, ObservedLayer]:
                 ol.unparsed.append(n)
             else:
                 ol.whole.append(g)
-        elif len(parts) == 3 and parts[0].startswith("s") and parts[0][1:].isdigit() and parts[2] in PLANES_MS:
+        elif len(parts) == 3 and parts[0].startswith("s") and parts[0][1:].isdecimal() and parts[2] in PLANES_MS:
             i, g = int(parts[0][1:]), _geom(parts[1])
             if g is None:
                 ol.unparsed.append(n)

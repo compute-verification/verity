@@ -60,7 +60,7 @@
 # time it reads, epoch seconds (tests).
 #
 # CPU quota: where the machine's CPU time is capped (a container's cpu.max: $GPU_LEASE_CPU_MAX, default /sys/fs/cgroup/cpu.max), runs
-# pinned to more CPUs than the cap allows are throttled together, and a timed run among them is void.  --cores CPUS (48-57,60)
+# pinned to more CPUs than the quota allows are throttled together, and a timed run among them is void.  --cores CPUS (48-57,60)
 # declares the CPUs a run pins: CMD runs under `taskset -c CPUS`, and the lease records cores=CPUS.  The pin is the lease's word, not
 # a fence: a job can still widen its own affinity.  Every CPU of the list must be one this request may run on here: `taskset -c
 # CPUS` is tried, and a list it can't pin to at all, or pins to only a part of (the rest are CPUs this machine hasn't, or outside
@@ -74,7 +74,8 @@
 # The count covers leases only: a process that holds no lease is not in it, whatever it is pinned to.  And only the leases of this
 # lease directory ($GPU_LEASE_DIR): a machine with a second directory is not counted across them.  A request without --cores is
 # not refused either: where there is a quota and a live lease declared its cores, it starts with one warning line naming that
-# lease, and the next request that declares counts it.
+# lease, and the next request that declares counts it.  Where there is a quota and the request may run on every CPU, it also says
+# that its lease counts as all of them, so every request that declares waits or is refused while it is held.
 # What the count can't see, the machine's own counter shows: every lease writes cpu.stat's nr_throttled and throttled_usec (the
 # file beside cpu.max) into its owner lines when it starts, and end_nr_throttled and end_throttled_usec when it is released, and
 # says the difference on stderr, so a timed run shows whether the machine was throttled while it held its GPUs.
@@ -90,7 +91,7 @@
 # GPU_LEASE_STARTED overrides the lease's start time, %Y-%m-%dT%H:%M:%SZ (tests).
 #
 # Agent mode: while the node's scheduler (`cluster agent --mode live`, infra/cluster) holds $GPU_LEASE_DIR/agent.lock, it decides
-# instead of the rules above.  Every request queues at once as its wait file, which also records --max-min (max=), the memory cap
+# instead of the rules above.  Every request queues at once as its wait file, which also records --max-min (max=), the memory limit
 # (mem=), --preemptible (preempt=1) and --timed (timed=1); the agent stops what its plan evicts, and grants by writing
 # $GPU_LEASE_DIR/grant.<pid>, the GPU indices comma-separated.  gpu-lease takes exactly those GPUs (polling every
 # $GPU_LEASE_AGENT_POLL_S seconds, default 0.5) and preempts nothing itself.  A request without --wait gives up with 75 when no
@@ -591,12 +592,12 @@ def every():
 
 try:
     with open(e["GL_CPU_MAX"]) as fh:
-        cap = fh.read().split()
+        quota_line = fh.read().split()
 except OSError:
-    cap = []
-if len(cap) != 2 or not (cap[0].isdigit() and cap[1].isdigit() and int(cap[1])):
+    quota_line = []
+if len(quota_line) != 2 or not (quota_line[0].isdigit() and quota_line[1].isdigit() and int(quota_line[1])):
     sys.exit(0)                     # no quota here: no file, or `max`
-quota, period = int(cap[0]), int(cap[1])
+quota, period = int(quota_line[0]), int(quota_line[1])
 leases = {}
 for line in e["GL_LEASES"].splitlines():
     i, _, head = line.partition(" ")
@@ -667,6 +668,23 @@ declared_beside() {
   [ "${#order[@]}" -gt 0 ] || return 0
   for key in "${order[@]}"; do out+="${out:+; }GPU ${gpus[$key]}, ${what[$key]}"; done
   echo "$out"
+}
+
+counts_whole() {
+  # "N QUOTA" where the machine has a CPU quota and this lease, declaring no cores, may run on all N CPUs of it, which is what
+  # cores_over counts it as (its process tree's Cpus_allowed_list, every CPU where none is read); nothing otherwise
+  local quota="" period="" proc=${GPU_LEASE_PROC:-/proc} n k
+  [ -r "$cpu_max" ] && read -r quota period < "$cpu_max"
+  case $quota$period in ''|*[!0-9]*) return 0 ;; esac
+  [ "$period" -gt 0 ] || return 0
+  n=$(grep -c '^cpu[0-9]' "$proc/stat" 2>/dev/null)
+  [ "${n:-0}" -gt 0 ] || n=$(nproc --all)
+  k=$n
+  [ -r "$proc/self/status" ] && k=$(awk -v n="$n" '$1 == "Cpus_allowed_list:" {
+    split($2, parts, ","); for (i in parts) { m = split(parts[i], r, "-"); for (c = r[1] + 0; c <= r[m] + 0; c++) if (c < n && !(c in seen)) { seen[c]; k++ } }
+  } END { print k + 0 }' "$proc/self/status")
+  [ "$k" = 0 ] || [ "$k" = "$n" ] || return 0
+  echo "$n $(awk -v q="$quota" -v p="$period" 'BEGIN { printf "%g", q / p }')"
 }
 
 report_usage() {
@@ -797,7 +815,11 @@ if [ -n "$on" ]; then
 fi
 if [ "$n" -gt "$total" ]; then echo "gpu-lease: $n GPUs asked, $total are gpu-lease's here${on:+ in --on $on}" >&2; exit 2; fi
 mkdir -p "$dir" 2>/dev/null
-[ -w "$dir" ] || { echo "gpu-lease: $dir is not writable" >&2; exit 2; }
+[ -w "$dir" ] || {
+  echo "gpu-lease: $dir is not writable: make it once for every user of this machine's GPUs (sudo mkdir -m 1777 $dir)," \
+    "or name one with GPU_LEASE_DIR; every run sharing these GPUs must use the same one" >&2
+  exit 2
+}
 if [ -n "$cores" ]; then
   for tool in python3 taskset; do
     command -v "$tool" > /dev/null 2>&1 || { echo "gpu-lease: --cores needs $tool, which isn't on PATH here" >&2; exit 2; }
@@ -836,7 +858,7 @@ if [ "$memgb" != 0 ]; then
   if command -v systemd-run > /dev/null && systemd-run --user --scope --quiet --collect true > /dev/null 2>&1; then
     scope=(systemd-run --user --scope --quiet --collect --unit "gpu-lease-$$" -p "MemoryMax=${memgb}G" -p MemorySwapMax=0 --)
   else
-    echo "gpu-lease: this user's systemd can't make a scope here, so CMD runs without a memory cap" >&2
+    echo "gpu-lease: this user's systemd can't make a scope here, so CMD runs without a memory limit" >&2
     memgb=""
   fi
 fi
@@ -932,6 +954,10 @@ if [ -z "$cores" ]; then
   beside=$(declared_beside)
   [ -z "$beside" ] || echo "gpu-lease: warning: no --cores here, beside a lease that declared its own ($beside): this run's CPUs are" \
     "in no count against the machine's CPU quota until the next request that declares counts them; pass --cores" >&2
+  whole=$(counts_whole)
+  [ -z "$whole" ] || echo "gpu-lease: no --cores: this lease counts as all ${whole% *} CPUs of this machine against its CPU quota" \
+    "of ${whole#* } while it is held, so every other lease that names --cores waits or is refused until it ends; pass --cores LIST" \
+    "(per card, the ten CPUs of its own NUMA node that the slots file gives)" >&2
 fi
 cmdline=$(echo "$*" | cut -c1-200)
 [ -n "$cores" ] && set -- taskset -c "$cores" "$@"

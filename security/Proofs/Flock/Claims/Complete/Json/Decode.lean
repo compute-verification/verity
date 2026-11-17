@@ -51,7 +51,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 
 `decode_recordObj`: with no premise on the JSON library, `Record.decodeWith` through
 `Hashes.ofSha512 h` reads the printed honest record (`printJ` of `recordObj`) back as `sessOf`, its every check passing,
-for one table, no keyed coin tree, a printable sample that decodes (`DrawOk`), a non-empty `Σ` and `root_B`, the
+for one table, no keyed coin tree, a printable sample that decodes (`SampleOk`), a non-empty `Σ` and `root_B`, the
 configured point shape, one recorded stream per rep stream and well-formed rounds, with `h`'s outputs 64 bytes (S12
 compares each round's digest length with the empty message's).
 
@@ -119,10 +119,10 @@ theorem array_mapIdxM_ok_of {α β : Type} (f : Nat → α → V β) (a : Array 
 
 /-- What the decoder's U1–U3 need of the statement's sample: none, or a non-null printable sample that decodes, its proved
 units the statement's instances. -/
-def DrawOk (spec : SessionSpec) : Prop :=
-  match spec.unitDraw with
+def SampleOk (spec : SessionSpec) : Prop :=
+  match spec.unitSample with
   | none => True
-  | some d => d ≠ Json.null ∧ Good d ∧ ∃ D, Draw.UnitDraw.ofJson d = .ok D ∧ D.proved.size = spec.instances
+  | some d => d ≠ Json.null ∧ Good d ∧ ∃ D, Draw.UnitSample.ofJson d = .ok D ∧ D.proved.size = spec.instances
 
 /-- A recorded round as the decoder reads it back: its digest the retained bytes'. -/
 def roundRec (spec : SessionSpec) (h : ByteArray → ByteArray) (r : Round) : Round :=
@@ -142,12 +142,12 @@ def sessOf (spec : SessionSpec) (h : ByteArray → ByteArray) (rootB : Array Byt
     proofSha := (spec.repStreams.zip proofs).map fun q => (q.1.2.2, hexOf (dgOf spec h q.2)) }
 
 /-- **The honest record decodes** (S1–S14) as `sessOf`: one table `t`, no keyed coin tree, the statement's sample
-`DrawOk`, a non-empty `Σ` and `root_B`, the configured points, one recorded stream per rep stream, each with rounds of
+`SampleOk`, a non-empty `Σ` and `root_B`, the configured points, one recorded stream per rep stream, each with rounds of
 `1 ≤ n ≤ 65536` coins, and `h`'s outputs 64 bytes. -/
 theorem decode_recordObj {h : ByteArray → ByteArray}
     (h64 : ∀ b, (h b).size = 64) {spec : SessionSpec} {t : String} (ht : spec.tables = #[t])
     (hct : spec.coinTree = none)
-    (hdraw : DrawOk spec) (hsig : 0 < spec.sigma.size)
+    (hdraw : SampleOk spec) (hsig : 0 < spec.sigma.size)
     {rb : ByteArray} (hrb : 0 < rb.size)
     {points : Array (Array F128)} (hpts : points.size = spec.points) (hpm : ∀ p ∈ points, p.size = spec.mPts)
     {streams : Array (Array Round)} (hss : streams.size = spec.repStreams.size)
@@ -156,9 +156,9 @@ theorem decode_recordObj {h : ByteArray → ByteArray}
     Record.decodeWith (Hashes.ofSha512 h : Hashes V) spec (printJ (recordObj spec h #[rb] points streams proofs)) =
       .ok (sessOf spec h #[rb] points streams proofs) := by
   have hgood := good_recordObj ht h rb points streams proofs (by
-    unfold DrawOk at hdraw
+    unfold SampleOk at hdraw
     revert hdraw
-    cases spec.unitDraw with
+    cases spec.unitSample with
     | none => exact fun _ => .null
     | some d => exact fun hd => hd.2.1)
   obtain ⟨j, hp, hs⟩ := FlockComplete.JsonRT.parse_print _ hgood
@@ -182,15 +182,15 @@ theorem decode_recordObj {h : ByteArray → ByteArray}
   have hlm : Record.str l "mode" = .ok "exchange" := str_same hls (gL (by simp [linkList]))
   have hsg : Record.str l "sigma" = .ok (hexOf spec.sigma) :=
     str_same hls (gL (v := hexJ spec.sigma) (by simp [linkList]))
-  obtain ⟨dv, hdv, hdvs⟩ := hs.getObjVal (gR (k := "unit_draw") (v := spec.unitDraw.getD Json.null)
+  obtain ⟨dv, hdv, hdvs⟩ := hs.getObjVal (gR (k := "unit_draw") (v := spec.unitSample.getD Json.null)
     (by simp [recordList]))
   simp only [hlm, hsg, ok_bind, beq_self_eq_true, check_true, hdv]
   have hdc : ∀ o : Option Json, (dv = Json.null → o = none) → (dv ≠ Json.null → o = some dv) →
-      Draw.check o spec.unitDraw spec.instances = .ok () := by
+      Draw.check o spec.unitSample spec.instances = .ok () := by
     intro o ho₁ ho₂
-    unfold DrawOk at hdraw
+    unfold SampleOk at hdraw
     revert hdraw hdvs
-    cases spec.unitDraw with
+    cases spec.unitSample with
     | none =>
       intro _ hdvs
       simp only [Option.getD_none] at hdvs

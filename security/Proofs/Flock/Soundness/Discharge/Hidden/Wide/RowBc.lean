@@ -158,7 +158,7 @@ theorem inBit_copyAll (hda : st.da = (HmRow.delta st.c st.pin).1) (hrw : RowWire
     (hf : (rowCopiesAll st.c st.pin ++
         wireCopiesOf st.c (HmRow.rowWires st.c.ports st.c.shaNet st.c.hmNet).toList).filter
       (fun e => e.1 = x) = [(x, src)]) :
-    blockBit (L.model regs) z o x = blockBit (L.model regs) z o src := by
+    chunkBit (L.model regs) z o x = chunkBit (L.model regs) z o src := by
   have R := RowRanges.ofL L F.parse F.check
   have hF : ∀ j, (flatPairsAll st.c st.pin).count (x, j) = (if j = x then 1 else 0) + (if j = src then 1 else 0) :=
     fun j => by
@@ -181,13 +181,13 @@ theorem row_copies_tgt (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < s
     {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : SatEx (L.model regs) (UnitIn st.c) z) (o : Fin (2 ^ (L.model regs).nbl)) {g p : ℕ} (hg : g < st.c.g)
     (hp : p < st.c.ports.size) (h0 : 0 < st.c.ports[p]!.chunks) :
-    (∀ t < 512, blockBit (L.model regs) z o (shaBase st.c g p 0 + shaIn st.c (2 * shaSub st.c p 0) + t) =
+    (∀ t < 512, chunkBit (L.model regs) z o (shaBase st.c g p 0 + shaIn st.c (2 * shaSub st.c p 0) + t) =
       wordsBit (Sha512.compress Sha512.iv (HmRow.prefixOf st.c.ports[p]!) 0) t) ∧
     (∀ k, k + 1 < st.c.ports[p]!.chunks → ∀ t < 512,
-      blockBit (L.model regs) z o (shaBase st.c g p (k + 1) + shaIn st.c (2 * shaSub st.c p (k + 1)) + t) =
-        blockBit (L.model regs) z o (shaBase st.c g p k + shaOut st.c (shaSub st.c p k) + t)) ∧
-    (∀ t < 512, blockBit (L.model regs) z o (st.c.slotCol st.c.hmNet g p + hmIn st.c 0 + t) =
-      blockBit (L.model regs) z o
+      chunkBit (L.model regs) z o (shaBase st.c g p (k + 1) + shaIn st.c (2 * shaSub st.c p (k + 1)) + t) =
+        chunkBit (L.model regs) z o (shaBase st.c g p k + shaOut st.c (shaSub st.c p k) + t)) ∧
+    (∀ t < 512, chunkBit (L.model regs) z o (st.c.slotCol st.c.hmNet g p + hmIn st.c 0 + t) =
+      chunkBit (L.model regs) z o
         (shaBase st.c g p (st.c.ports[p]!.chunks - 1) + shaOut st.c (shaSub st.c p (st.c.ports[p]!.chunks - 1)) + t)) := by
   have R := RowRanges.ofL L F.parse F.check
   have hrw : RowWires st.c := F.parse.rowWires
@@ -199,7 +199,7 @@ theorem row_copies_tgt (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < s
     have hf := cv0_filterAll R hu (pin := st.pin) hg hp h0 ht
     rw [inBit_copyAll L F hda hrw hu hz o (Or.inl rfl) (shaPos_at R hu hg hp h0 (off := t) (by omega))
       (shaNet_ofRows R.rowNets) (by rw [shaNet_inRows R.rowNets]; omega) (shaLaid_self (by omega)) hf]
-    exact blockBit_constSrc _ _ hpin hzero
+    exact chunkBit_constSrc _ _ hpin hzero
   · have hs : shaSub st.c p (k + 1) < 3 := (rowSlot_lt hp hk).2
     have hf := chain_filterAll R hu (pin := st.pin) (k := k + 1) hg hp (by omega) hk ht
     rw [chainDst_eq R.rowNets hs] at hf
@@ -223,7 +223,7 @@ theorem row_copies_tgt0 (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < 
     {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : SatEx (L.model regs) (UnitIn st.c) z) (o : Fin (2 ^ (L.model regs).nbl)) {g p : ℕ} (hg : g < st.c.g)
     (hp : p < st.c.ports.size) (h0 : st.c.ports[p]!.chunks = 0) :
-    ∀ t < 512, blockBit (L.model regs) z o (st.c.slotCol st.c.hmNet g p + hmIn st.c 0 + t) =
+    ∀ t < 512, chunkBit (L.model regs) z o (st.c.slotCol st.c.hmNet g p + hmIn st.c 0 + t) =
       wordsBit (Sha512.compress Sha512.iv (HmRow.prefixOf st.c.ports[p]!) 0) t := by
   have R := RowRanges.ofL L F.parse F.check
   have hrw : RowWires st.c := F.parse.rowWires
@@ -234,7 +234,7 @@ theorem row_copies_tgt0 (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < 
   have hf := hmcv0_filterAll R hu (pin := st.pin) hg hp h0 ht
   rw [inBit_copyAll L F hda hrw hu hz o (Or.inr rfl) (R.hmIn_at hg hp (off := t) (by omega)) (hmNet_ofRows R.rowNets)
     (by rw [hmNet_inRows R.rowNets]; omega) (hmLaid_self (by omega)) hf]
-  exact blockBit_constSrc _ _ hpin hzero
+  exact chunkBit_constSrc _ _ hpin hzero
 
 /-- **The constant bits of template instance `g`'s row `p`'s `pad`**, in every block of a satisfying witness of the
 untyped statement: wherever `HmRow.constBit` gives the row's last block a constant, Δ's one copy holds it there. -/
@@ -244,7 +244,7 @@ theorem pad_const_tgt (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st
     (hz : SatEx (L.model regs) (UnitIn st.c) z) (o : Fin (2 ^ (L.model regs).nbl)) {g p : ℕ} (hg : g < st.c.g)
     (hp : p < st.c.ports.size) :
     ∀ t < 1024, ∀ v, HmRow.constBit st.c.ports[p]! (HmRow.tailOf st.c.ports[p]!) st.c.ports[p]!.chunks t = some v →
-      blockBit (L.model regs) z o (st.c.slotCol st.c.hmNet g p + hmIn st.c 1 + t) = v := by
+      chunkBit (L.model regs) z o (st.c.slotCol st.c.hmNet g p + hmIn st.c 1 + t) = v := by
   have R := RowRanges.ofL L F.parse F.check
   have hrw : RowWires st.c := F.parse.rowWires
   have hpin := pin_bit_ex L hz o
@@ -274,10 +274,10 @@ theorem row_bc_tgt (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st.c.
     (h1 : 128 * st.c.ports[p]!.chunks ≤ 2 * st.c.ports[p]!.words)
     (h2 : 2 * st.c.ports[p]!.words + 17 ≤ 128 * (st.c.ports[p]!.chunks + 1))
     (hu : ∀ p ∈ st.c.ports.toList, p.segs = none) :
-    bytesOf (blockBit (L.model regs) z o) 128 (bcCol st.c g p) = Binding.commitString
+    bytesOf (chunkBit (L.model regs) z o) 128 (bcCol st.c g p) = Binding.commitString
       ((HmRow.prefixOf st.c.ports[p]!).data.toList ++
-        bytesOf (blockBit (L.model regs) z o) (2 * st.c.ports[p]!.words) (Typed.msgCol st.c g p))
-      (bytesOf (blockBit (L.model regs) z o) 192 (saltCol st.c g p)) := by
+        bytesOf (chunkBit (L.model regs) z o) (2 * st.c.ports[p]!.words) (Typed.msgCol st.c g p))
+      (bytesOf (chunkBit (L.model regs) z o) 192 (saltCol st.c g p)) := by
   have R := RowRanges.ofL L F.parse F.check
   have hhm := hmSlot_flat_ex L F hz o hg (by rw [R.perVu_hm]; exact lt_of_lt_of_le hp (le_nextPow2 _))
   have hs := hu _ (getElem_mem_toList' hp)

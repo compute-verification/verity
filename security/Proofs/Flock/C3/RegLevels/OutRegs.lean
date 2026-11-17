@@ -161,7 +161,7 @@ theorem outBitRow_laid {c : Flock.Circuit} {j : ℕ} (h : OutsLaid c j) {n : ℕ
 section Copy
 
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
+  {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
 /-- **A copy's output column on a registered output row is registered** (`RegOut`), as the registrant's bit there:
 copy `j`'s computed column `outCol j' t'` is a returned output of the unit (`Layout.OutColAt`, so in `outsOf` and

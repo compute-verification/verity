@@ -10,8 +10,9 @@ public import Proofs.Flock.Soundness.StrictCR
 `StrictCRL.lean` for the compiled `--zk` session. Every term of `ksBoundAccZ` is a finder's collision probability: the
 rewinding finders (`forkFinder` at each committed object the lock fixes: each rep's level caps, pads root and `τ`
 commitment; `twoRuns` at level 0) and the self-clash finder (`oneRun`) run the compiled prover, and every pair they
-count is a collision of `H` (`opRZ_conflict_collision`, `opPadsAtZ_conflict_collision`, `opTauZ_conflict_collision`,
-`op₀Z_conflict_collision`, `SelfClashZ.collision`). A cap's finder counts every pair, accepting or not, so it bounds
+count names two byte strings, which the finder outputs (`opRZPair`, `opPadsAtZPair`, `tauPairZ`, `op₀ZPair`,
+`selfCandsZ`): a collision of `H` (`opRZ_conflict_collision`, `opPadsAtZ_conflict_collision`,
+`opTauZ_conflict_collision`, `op₀Z_conflict_collision`, `selfCandsZ_spec`). A cap's finder counts every pair, accepting or not, so it bounds
 `advRSZ`, which counts only runs accepting every table up to the table's (`forkE_capAcc_le`). So:
 
 * `ksBoundAccZ_le_strict`: a `--zk` table's knowledge bound in a session is at most `ksStrictZ`, at finders that
@@ -20,7 +21,7 @@ count is a collision of `H` (`opRZ_conflict_collision`, `opPadsAtZ_conflict_coll
   sampling design and the budgets;
 * `zk_flock_countC_execOS_ks` and `zk_flock_countC_execOS_strict`: the compiled count curve at the live sample with
   `JointZC` discharged (`jointZC_ksBound`), and with `ε_ks` in closed form under A1;
-* `zk_flock_countC_execOS_cr`: the same with each unit read at its place, so `ε_ks`, `δ_link` and `δ_tree` rest on A1,
+* `zk_flock_countC_execOS_cr`: the same with each unit read at its place, so `ε_ks`, `ε_bind` and `δ_tree` rest on A1,
   A2 and A3 alone;
 * `zk_flock_countC_execOS_m1_cr`: the same with every table at Flock ZK's parameters, each table's bound at most
   `2^-203` (`ksAvgStrictZ_le_m1`).
@@ -49,42 +50,42 @@ variable (A : Arith F K) (Hs : Hashes F D Sl) (T : TabZK F mPts)
 continuations, and a level-`ℓ` position they open to different rows. -/
 noncomputable def advRSFinderZ (r ℓ : ℕ) (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) : Finder Pair :=
   forkFinder (plurSZ Hs T pre.length) (slotOf r ℓ + 4)
-    (fun d => conflictPick Hs.H
+    (fun d => conflictPick
       (fun outs : List (OutZC F D Sl) => opRZ Hs.H Hs.E Hs.Lf T.sch r ℓ d (outs.getD pre.length dfltOutZC))
-      fun x _ h => opRZ_conflict_collision (x := (x.1.getD pre.length dfltOutZC, x.2.getD pre.length dfltOutZC)) h)
+      fun x p => opRZPair Hs.H Hs.E Hs.Lf T.sch r ℓ d (x.1.getD pre.length dfltOutZC, x.2.getD pre.length dfltOutZC) p)
     none (lockSessZ A Hs T pre post default cap₀) (pushStrat A Hs T cap₀ pre post σ)
 
 /-- **`Adv^pads_r`'s finder in the session**: at the table's rep `r`'s pads root, two continuations, and a pads position
 they open to different pairs. -/
 noncomputable def advPadsSFinderZ (r : ℕ) (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) : Finder Pair :=
   forkFinder (plurSZ Hs T pre.length) r
-    (fun d => conflictPick Hs.H
+    (fun d => conflictPick
       (fun outs : List (OutZC F D Sl) => opPadsAtZ Hs T.N T.q r d (outs.getD pre.length dfltOutZC))
-      fun x _ h => opPadsAtZ_conflict_collision (x := (x.1.getD pre.length dfltOutZC, x.2.getD pre.length dfltOutZC)) h)
+      fun x p => opPadsAtZPair Hs T.N T.q r d (x.1.getD pre.length dfltOutZC, x.2.getD pre.length dfltOutZC) p)
     none (lockSessZ A Hs T pre post default cap₀) (pushStrat A Hs T cap₀ pre post σ)
 
 /-- **`Adv^τ_r`'s finder in the session**: at the table's rep `r`'s `τ` commitment, two continuations that open it to
 different values. -/
 noncomputable def advTauSFinderZ (r : ℕ) (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) : Finder Pair :=
   forkFinder (plurSZ Hs T pre.length) (2 + r)
-    (fun d => conflictPick Hs.H
+    (fun d => conflictPick
       (fun outs : List (OutZC F D Sl) => opTauZ Hs r d (outs.getD pre.length dfltOutZC))
-      fun x _ h => opTauZ_conflict_collision (x := (x.1.getD pre.length dfltOutZC, x.2.getD pre.length dfltOutZC)) h)
+      fun x _ => tauPairZ Hs r (x.1.getD pre.length dfltOutZC, x.2.getD pre.length dfltOutZC))
     none (lockSessZ A Hs T pre post default cap₀) (pushStrat A Hs T cap₀ pre post σ)
 
-/-- **`Adv₀`'s finder in the session**: two runs after `Commit`, and a level-0 position of the table they open to
-different rows. -/
+/-- **`Adv₀`'s finder in the session**: two runs after `Commit`, and the pair of their openings at the first level-0
+position of the table they open to different rows. -/
 noncomputable def adv₀SFinderZ (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) : Finder Pair :=
   twoRuns (sessAtZ pre post (tabAfterZC A Hs T cap₀)) σ
-    (conflictPick Hs.H
+    (conflictPick
       (fun outs : List (OutZC F D Sl) => op₀Z Hs.H Hs.E Hs.Lf T cap₀ (outs.getD pre.length dfltOutZC))
-      fun x _ h => op₀Z_conflict_collision (x := (x.1.getD pre.length dfltOutZC, x.2.getD pre.length dfltOutZC)) h)
+      fun x p => op₀ZPair Hs.H Hs.E Hs.Lf T cap₀ (x.1.getD pre.length dfltOutZC, x.2.getD pre.length dfltOutZC) p)
 
-/-- **The self-clash finder in the session**: one run after `Commit`, and what the table opens two ways in it. -/
+/-- **The self-clash finder in the session**: one run after `Commit`, and the pair of the first two of the table's
+openings that open something two ways in it (`selfCandsZ`). -/
 noncomputable def selfSFinderZ (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) : Finder Pair :=
   oneRun (sessAtZ pre post (tabAfterZC A Hs T cap₀)) σ
-    (onePick Hs.H (fun outs : List (OutZC F D Sl) => SelfClashZ Hs T (outs.getD pre.length dfltOutZC))
-      fun _ h => h.collision)
+    (onePick fun outs : List (OutZC F D Sl) => selfCandsZ Hs T (outs.getD pre.length dfltOutZC))
 
 /-- **`SHA512CRStrict` for a `--zk` table's finders in a session**: the rewinding finders at budget `qF`, the self-clash
 finder at budget `qS`.
@@ -109,6 +110,7 @@ theorem advRSZ_le_strict (r ℓ : ℕ) (σ : Strategy (sessAtZ pre post (tabAfte
     (lockSessZ A Hs T pre post default cap₀) (pushStrat A Hs T cap₀ pre post σ)).trans
   (forkE_conflict_le Hs.H (plurSZ Hs T pre.length) (slotOf r ℓ + 4)
     (fun d (outs : List (OutZC F D Sl)) => opRZ Hs.H Hs.E Hs.Lf T.sch r ℓ d (outs.getD pre.length dfltOutZC))
+    (fun d x p => opRZPair Hs.H Hs.E Hs.Lf T.sch r ℓ d (x.1.getD pre.length dfltOutZC, x.2.getD pre.length dfltOutZC) p)
     (fun _ x _ h => opRZ_conflict_collision (x := (x.1.getD pre.length dfltOutZC, x.2.getD pre.length dfltOutZC)) h)
     (lockSessZ A Hs T pre post default cap₀) (pushStrat A Hs T cap₀ pre post σ))).trans h.le
 
@@ -117,6 +119,7 @@ theorem advPadsSZ_le_strict (r : ℕ) (σ : Strategy (sessAtZ pre post (tabAfter
     advPadsSZ A Hs T pre post cap₀ r σ ≤ q ^ 2 / 2 ^ (513 : ℝ) :=
   (forkE_conflict_le Hs.H (plurSZ Hs T pre.length) r
     (fun d (outs : List (OutZC F D Sl)) => opPadsAtZ Hs T.N T.q r d (outs.getD pre.length dfltOutZC))
+    (fun d x p => opPadsAtZPair Hs T.N T.q r d (x.1.getD pre.length dfltOutZC, x.2.getD pre.length dfltOutZC) p)
     (fun _ x _ h => opPadsAtZ_conflict_collision (x := (x.1.getD pre.length dfltOutZC, x.2.getD pre.length dfltOutZC)) h)
     (lockSessZ A Hs T pre post default cap₀) (pushStrat A Hs T cap₀ pre post σ)).trans h.le
 
@@ -125,6 +128,7 @@ theorem advTauSZ_le_strict (r : ℕ) (σ : Strategy (sessAtZ pre post (tabAfterZ
     advTauSZ A Hs T pre post cap₀ r σ ≤ q ^ 2 / 2 ^ (513 : ℝ) :=
   (forkE_conflict_le Hs.H (plurSZ Hs T pre.length) (2 + r)
     (fun d (outs : List (OutZC F D Sl)) => opTauZ Hs r d (outs.getD pre.length dfltOutZC))
+    (fun _ x _ => tauPairZ Hs r (x.1.getD pre.length dfltOutZC, x.2.getD pre.length dfltOutZC))
     (fun _ x _ h => opTauZ_conflict_collision (x := (x.1.getD pre.length dfltOutZC, x.2.getD pre.length dfltOutZC)) h)
     (lockSessZ A Hs T pre post default cap₀) (pushStrat A Hs T cap₀ pre post σ)).trans h.le
 
@@ -134,6 +138,7 @@ theorem adv₀SZ_le_strict (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T c
     adv₀SZ A Hs T pre post cap₀ σ ≤ q ^ 2 / 2 ^ (513 : ℝ) :=
   (expect₂_conflict_le Hs.H (sessAtZ pre post (tabAfterZC A Hs T cap₀)) σ
     (fun outs : List (OutZC F D Sl) => op₀Z Hs.H Hs.E Hs.Lf T cap₀ (outs.getD pre.length dfltOutZC))
+    (fun x p => op₀ZPair Hs.H Hs.E Hs.Lf T cap₀ (x.1.getD pre.length dfltOutZC, x.2.getD pre.length dfltOutZC) p)
     fun x _ h => op₀Z_conflict_collision (x := (x.1.getD pre.length dfltOutZC, x.2.getD pre.length dfltOutZC)) h).trans
     h.le
 
@@ -143,7 +148,8 @@ theorem selfSZ_le_strict (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap
     expect (ind fun outs : List (OutZC F D Sl) => SelfClashZ Hs T (outs.getD pre.length dfltOutZC))
       (sessAtZ pre post (tabAfterZC A Hs T cap₀)) σ ≤ q ^ 2 / 2 ^ (513 : ℝ) :=
   (expect_one_le Hs.H _ σ (fun outs : List (OutZC F D Sl) => SelfClashZ Hs T (outs.getD pre.length dfltOutZC))
-    fun _ h => h.collision).trans h.le
+    (fun outs : List (OutZC F D Sl) => selfCandsZ Hs T (outs.getD pre.length dfltOutZC)) (fun _ h => h.cand)
+    fun _ _ hc h => selfCandsZ_spec hc h).trans h.le
 
 /-- **`ε_c⁻` in the session under `SHA512CRStrict`.** -/
 theorem epsSZ_le_strict (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) {qF qS : ℝ}
@@ -182,7 +188,7 @@ noncomputable def ksStrictZ (ts : List (TabZK F mPts)) (j : Fin ts.length) (k : 
 /-- **The compiled `--zk` knowledge term in closed form**: after each sample, the largest over the plan's tables of
 `ksStrictZ/(1 − N₀/(ek))`, averaged over the sample. -/
 noncomputable def ksAvgStrictZ {n : ℕ} {Reg : Type} (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
-    (L : Law n) (k : ℕ) (qF qS : ℝ) (R : Reg) : ℝ≥0∞ :=
+    (L : SamplingDesign n) (k : ℕ) (qF qS : ℝ) (R : Reg) : ℝ≥0∞ :=
   avg fun ω : L.Ω => ⨆ j : Fin (planZ (L.draw ω) R).length,
     ENNReal.ofReal (ksStrictZ (planZ (L.draw ω) R) j k qF qS / (1 - rateZ (planZ (L.draw ω) R) j k))
 
@@ -210,7 +216,7 @@ theorem ksBoundAccZ_le_strict (ts : List (TabZK F mPts)) (j : Fin ts.length) (k 
 /-- **The compiled knowledge term under `SHA512CRStrict`**: `ksAvgZC` at the knowledge bound `ksBoundAccZ` is at most
 `ksAvgStrictZ`, at a prover each of whose tables' finders, after each sample, satisfies `SHA512CRStrict` at budgets `qF`,
 `qS` (`TableCRZ`). -/
-theorem ksAvgZC_le_strict {n : ℕ} {Reg : Type} (planZ : Finset (Fin n) → Reg → List (TabZK F mPts)) {L : Law n}
+theorem ksAvgZC_le_strict {n : ℕ} {Reg : Type} (planZ : Finset (Fin n) → Reg → List (TabZK F mPts)) {L : SamplingDesign n}
     (k : ℕ) {qF qS : ℝ} (R : Reg) (τ : Cont L Reg (batchedSessionZC A Hs planZ) R)
     (hCR : ∀ ω j, TableCRZ A Hs (planZ (L.draw ω) R) j (zcStrat A Hs planZ (τ ω)) qF qS) :
     ksAvgZC A Hs planZ k (fun S R τ j => ksBoundAccZ A Hs (planZ S R) j k τ) R τ ≤
@@ -239,7 +245,7 @@ noncomputable def ksStrictZm1 (ts : List (TabZK F mPts)) (j : Fin ts.length) (k 
 /-- **The compiled `--zk` knowledge term at Flock ZK's parameters in closed form**: `ksAvgStrictZ` at `ksStrictZm1`.
 -/
 noncomputable def ksAvgStrictZm1 {n : ℕ} {Reg : Type} (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
-    (L : Law n) (k : ℕ) (qF qS : ℝ) (R : Reg) : ℝ≥0∞ :=
+    (L : SamplingDesign n) (k : ℕ) (qF qS : ℝ) (R : Reg) : ℝ≥0∞ :=
   avg fun ω : L.Ω => ⨆ j : Fin (planZ (L.draw ω) R).length,
     ENNReal.ofReal (ksStrictZm1 (planZ (L.draw ω) R) j k qF qS / (1 - rateZ (planZ (L.draw ω) R) j k))
 
@@ -258,7 +264,7 @@ theorem ksStrictZ_le_m1 (hF : Fintype.card F = 2 ^ 128) (ts : List (TabZK F mPts
 ZK's parameters, `ksAvgStrictZ` is at most `ksAvgStrictZm1`. -/
 theorem ksAvgStrictZ_le_m1 (hF : Fintype.card F = 2 ^ 128) {n : ℕ} {Reg : Type}
     (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
-    (hM1 : ∀ S R (j : Fin (planZ S R).length), ((planZ S R).get j).M1) (L : Law n) (k : ℕ) (qF qS : ℝ) (R : Reg) :
+    (hM1 : ∀ S R (j : Fin (planZ S R).length), ((planZ S R).get j).M1) (L : SamplingDesign n) (k : ℕ) (qF qS : ℝ) (R : Reg) :
     ksAvgStrictZ planZ L k qF qS R ≤ ksAvgStrictZm1 planZ L k qF qS R := by
   refine avg_mono fun ω => iSup_mono fun j => ?_
   rcases le_or_gt (1 - rateZ (planZ (L.draw ω) R) j k) 0 with h0 | h0
@@ -279,24 +285,24 @@ variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Verity.Boolean.Circuit} {n : 
 
 /-- **The compiled `--zk` count curve at the live sample, with `ε_ks` discharged** (`zk_flock_countC_execOS` at
 `jointZC_ksBound`): for `k ≥ 1` accepted reruns,
-`Pr[execAccept ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link + δ_tree`, with `ε_ks` the compiled analysis's
+`Pr[execAccept ∧ at least K incorrect proof blocks] ≤ miss(K) + ε_ks + ε_bind + δ_tree`, with `ε_ks` the compiled analysis's
 knowledge term at `ksBoundAccZ`, every table's fork terms at its committed objects and its level-0 term in the session. -/
 theorem zk_flock_countC_execOS_ks (hA : A.Correct) (hlow : LoweringSoundZK A P planZ tab decode)
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
+    (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t') (K : ℕ)
-    (σ : Strategy (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
+    (σ : Strategy (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (batchedSessionZC A Hs planZ)))
     {execAccept : Bool × Finset (Fin n) → Prop}
-    (tr : StrictCR.TreeRewind Hs.H (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
+    (tr : StrictCR.TreeRewind Hs.H (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (batchedSessionZC A Hs planZ)) σ fun o => execAccept o ∧ o.1 = false)
     {qT : ℝ} (hT : tr.finder.CR Hs.H qT) :
-    prob (fun o => execAccept o ∧ K ≤ (P.wrong (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw)).card)
-        (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (batchedSessionZC A Hs planZ)) σ ≤
-      (Law.stratified σs ks hks).miss K +
+    prob (fun o => execAccept o ∧ K ≤ (P.incorrect (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw)).card)
+        (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (batchedSessionZC A Hs planZ)) σ ≤
+      (SamplingDesign.stratified σs ks hks).miss K +
         ksAvgZC A Hs planZ k (fun S R τ j => ksBoundAccZ A Hs (planZ S R) j k τ) (reg σ) (cont σ) +
         linkBoundZC A Hs P planZ tab vb k Rw M ρ t' (reg σ) (cont σ) + ENNReal.ofReal (tr.bound qT) :=
   zk_flock_countC_execOS A Hs P planZ tab vb hlow σs ks hks St hS Kd pop Lb src hA3 hRw hM hρ hr
@@ -306,28 +312,28 @@ theorem zk_flock_countC_execOS_ks (hA : A.Correct) (hlow : LoweringSoundZK A P p
 `Flock.Draw.drawWith`'s stratified sampling design on a byte source that A3 makes uniform (`hA3`), every table's finders after each
 sample under A1 at budgets `qF`, `qS` (`hCR`), the link finders under A2 (in `linkBoundZC`) and the serving roots'
 rewinding finder under A1 at budget `qT` (`hT`):
-`Pr[execAccept ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link + δ_tree`, with `miss(K)` `Law.stratified`'s count
+`Pr[execAccept ∧ at least K incorrect proof blocks] ≤ miss(K) + ε_ks + ε_bind + δ_tree`, with `miss(K)` `SamplingDesign.stratified`'s count
 curve and `ε_ks = ksAvgStrictZ`. -/
 theorem zk_flock_countC_execOS_strict (hA : A.Correct) (hlow : LoweringSoundZK A P planZ tab decode)
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
+    (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t') (K : ℕ)
-    (σ : Strategy (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
+    (σ : Strategy (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (batchedSessionZC A Hs planZ)))
     {qF qS : ℝ}
-    (hCR : ∀ ω j, TableCRZ A Hs (planZ ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) (reg σ))
+    (hCR : ∀ ω j, TableCRZ A Hs (planZ ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) (reg σ))
       j (zcStrat A Hs planZ (cont σ ω)) qF qS)
     {execAccept : Bool × Finset (Fin n) → Prop}
-    (tr : StrictCR.TreeRewind Hs.H (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
+    (tr : StrictCR.TreeRewind Hs.H (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (batchedSessionZC A Hs planZ)) σ fun o => execAccept o ∧ o.1 = false)
     {qT : ℝ} (hT : tr.finder.CR Hs.H qT) :
-    prob (fun o => execAccept o ∧ K ≤ (P.wrong (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw)).card)
-        (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (batchedSessionZC A Hs planZ)) σ ≤
-      (Law.stratified σs ks hks).miss K +
-        ksAvgStrictZ planZ (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS (reg σ) +
+    prob (fun o => execAccept o ∧ K ≤ (P.incorrect (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw)).card)
+        (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (batchedSessionZC A Hs planZ)) σ ≤
+      (SamplingDesign.stratified σs ks hks).miss K +
+        ksAvgStrictZ planZ (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS (reg σ) +
         linkBoundZC A Hs P planZ tab vb k Rw M ρ t' (reg σ) (cont σ) + ENNReal.ofReal (tr.bound qT) :=
   (zk_flock_countC_execOS_ks A Hs P planZ tab vb hA hlow σs ks hks St hS Kd pop Lb src hA3 hk hRw hM hρ hr ht K σ
     tr hT).trans
@@ -346,13 +352,13 @@ variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Verity.Boolean.Circuit} {n : 
 (`zk_flock_count_execOS_m1_cr`'s compiled counterpart at any table parameters; `zk_flock_countC_execOS_m1_cr` is the one
 at Flock ZK's). Each sampled proof block is read from its table at its place (`place`),
 and the committed transcript is the plurality value layer of a binding of wires to registered commit strings (`vb`).
-Then `Pr[execAccept ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link + δ_tree`, with `miss(K)` `Law.stratified`'s
+Then `Pr[execAccept ∧ at least K incorrect proof blocks] ≤ miss(K) + ε_ks + ε_bind + δ_tree`, with `miss(K)` `SamplingDesign.stratified`'s
 count curve on bytes A3 makes uniform (`hA3`), `ε_ks = ksAvgStrictZ` under A1 for every table's finders after each sample
-(`hCR`), `δ_link = linkBoundZC` under A2 for the link finders (`⊤` at a prover whose finders fail it), and
+(`hCR`), `ε_bind = linkBoundZC` under A2 for the link finders (`⊤` at a prover whose finders fail it), and
 `δ_tree = tr.bound qT` under A1 for the serving roots' rewinding finder (`hT`). -/
 theorem zk_flock_countC_execOS_cr (hA : A.Correct)
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
+    (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     (place : ∀ S R u, u ∈ S → UnitPlace P (tabOfZ planZ tab S R u).S u)
@@ -360,19 +366,19 @@ theorem zk_flock_countC_execOS_cr (hA : A.Correct)
     (vb : ValueBindingZ A P planZ tab (decodeOfPlace A P planZ tab place) Hc)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t') (K : ℕ)
-    (σ : Strategy (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
+    (σ : Strategy (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (batchedSessionZC A Hs planZ)))
     {qF qS : ℝ}
-    (hCR : ∀ ω j, TableCRZ A Hs (planZ ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) (reg σ))
+    (hCR : ∀ ω j, TableCRZ A Hs (planZ ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) (reg σ))
       j (zcStrat A Hs planZ (cont σ ω)) qF qS)
     {execAccept : Bool × Finset (Fin n) → Prop}
-    (tr : StrictCR.TreeRewind Hs.H (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
+    (tr : StrictCR.TreeRewind Hs.H (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (batchedSessionZC A Hs planZ)) σ fun o => execAccept o ∧ o.1 = false)
     {qT : ℝ} (hT : tr.finder.CR Hs.H qT) :
-    prob (fun o => execAccept o ∧ K ≤ (P.wrong (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw)).card)
-        (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (batchedSessionZC A Hs planZ)) σ ≤
-      (Law.stratified σs ks hks).miss K +
-        ksAvgStrictZ planZ (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS (reg σ) +
+    prob (fun o => execAccept o ∧ K ≤ (P.incorrect (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw)).card)
+        (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (batchedSessionZC A Hs planZ)) σ ≤
+      (SamplingDesign.stratified σs ks hks).miss K +
+        ksAvgStrictZ planZ (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS (reg σ) +
         linkBoundZC A Hs P planZ tab vb k Rw M ρ t' (reg σ) (cont σ) + ENNReal.ofReal (tr.bound qT) :=
   zk_flock_countC_execOS_strict A Hs P planZ tab vb hA (loweringSoundZK_of_place A P planZ tab place) σs ks hks St hS
     Kd pop Lb src hA3 hk hRw hM hρ hr ht K σ hCR tr hT
@@ -382,8 +388,8 @@ accepted assumptions**: `zk_flock_countC_execOS_cr` with each table's bound at m
 `ε_ks = ksAvgStrictZm1`, as `zk_flock_count_execOS_m1_cr` has `2^-203` at the interactive-oracle layer. -/
 theorem zk_flock_countC_execOS_m1_cr (hA : A.Correct)
     (hM1 : ∀ S R (j : Fin (planZ S R).length), ((planZ S R).get j).M1)
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
+    (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     (place : ∀ S R u, u ∈ S → UnitPlace P (tabOfZ planZ tab S R u).S u)
@@ -391,19 +397,19 @@ theorem zk_flock_countC_execOS_m1_cr (hA : A.Correct)
     (vb : ValueBindingZ A P planZ tab (decodeOfPlace A P planZ tab place) Hc)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t') (K : ℕ)
-    (σ : Strategy (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
+    (σ : Strategy (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (batchedSessionZC A Hs planZ)))
     {qF qS : ℝ}
-    (hCR : ∀ ω j, TableCRZ A Hs (planZ ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) (reg σ))
+    (hCR : ∀ ω j, TableCRZ A Hs (planZ ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) (reg σ))
       j (zcStrat A Hs planZ (cont σ ω)) qF qS)
     {execAccept : Bool × Finset (Fin n) → Prop}
-    (tr : StrictCR.TreeRewind Hs.H (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
+    (tr : StrictCR.TreeRewind Hs.H (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (batchedSessionZC A Hs planZ)) σ fun o => execAccept o ∧ o.1 = false)
     {qT : ℝ} (hT : tr.finder.CR Hs.H qT) :
-    prob (fun o => execAccept o ∧ K ≤ (P.wrong (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw)).card)
-        (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (batchedSessionZC A Hs planZ)) σ ≤
-      (Law.stratified σs ks hks).miss K +
-        ksAvgStrictZm1 planZ (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS (reg σ) +
+    prob (fun o => execAccept o ∧ K ≤ (P.incorrect (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw)).card)
+        (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (batchedSessionZC A Hs planZ)) σ ≤
+      (SamplingDesign.stratified σs ks hks).miss K +
+        ksAvgStrictZm1 planZ (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS (reg σ) +
         linkBoundZC A Hs P planZ tab vb k Rw M ρ t' (reg σ) (cont σ) + ENNReal.ofReal (tr.bound qT) :=
   (zk_flock_countC_execOS_cr A Hs P planZ tab hA σs ks hks St hS Kd pop Lb src hA3 place vb hk hRw hM hρ hr ht K σ hCR
     tr hT).trans

@@ -3,6 +3,8 @@ module
 public import Proofs.Flock.Claims.Complete.Link
 public import Proofs.Flock.Claims.Complete.Zk.Discharge
 public import Proofs.Flock.Claims.Complete.Zk.Skeleton
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 import Flock.With.SimVerify
 import Flock.With.SimWalk
 import Mathlib.Algebra.Order.Floor.Extended
@@ -68,12 +70,14 @@ namespace FlockComplete
 
 open With
 
+variable {wideLeaf : Bool}
+
 /-! ## The masked session in three parts -/
 
 /-- The masked session's schedules: each table's `--zk` schedule and `t_pad`. -/
 def schedsPZk {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M] (tabs : Array Setup) :
     M (Array (Schedule × ℕ)) :=
-  tabs.mapM fun st => (monadLift (Zk.schedule st.m) : M (Schedule × Nat))
+  tabs.mapM fun st => (monadLift (Zk.schedule st.wideLeaf st.m) : M (Schedule × Nat))
 
 /-- Each table's masked level-0 commitment, salted from the tape's level `0`. -/
 def commitsPZk {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M] (hs : Hashes M)
@@ -212,18 +216,23 @@ theorem getD_set_zero_d (a : Array Level) (l : Level) (hl : l.d = a[0]!.d) :
   · simp [Array.getD, Array.set!, Array.setIfInBounds, h0, hl]
   · simp [Array.getD, Array.set!, Array.setIfInBounds, h0]
 
-/-- The `--zk` schedule keeps fast100's level-0 `d`, so it is at most `56`. -/
-theorem zkSchedule_d0 {m : ℕ} {v : Schedule × ℕ} (h : Zk.schedule m = .ok v) : (v.1.levels.getD 0 default).d ≤ 56 := by
-  unfold Zk.schedule at h
-  obtain ⟨q0, -, h⟩ := except_ok_bind h
-  cases hf : fast100 m with
-  | none => rw [hf] at h; cases h
-  | some sch =>
-    rw [hf] at h
-    cases h
-    show ((sch.levels.set! 0 _).getD 0 default).d ≤ 56
-    simp only [getD_set_zero_d]
-    exact fast100_d0 hf
+/-- A `--zk` schedule's level-0 `d` is at most `56`: the kernel's evaluation at either statement version, `m < 40`
+(`queries0` refuses the rest). -/
+theorem zkSchedule_d0 {m : ℕ} {v : Schedule × ℕ} (h : Zk.schedule wideLeaf m = .ok v) : (v.1.levels.getD 0 default).d ≤ 56 := by
+  by_cases hm : m < 40
+  · have key : ∀ (w : Bool) (m : Fin 40), (match Zk.schedule w m.val with
+        | .ok v => decide ((v.1.levels.getD 0 default).d ≤ 56)
+        | .error _ => true) = true := by
+      decide +kernel
+    have := key wideLeaf ⟨m, hm⟩
+    simp only [h, decide_eq_true_eq] at this
+    exact this
+  · exfalso
+    unfold Zk.schedule at h
+    obtain ⟨q0, hq0, -⟩ := except_ok_bind h
+    unfold Zk.queries0 at hq0
+    simp [show ¬m ≤ 24 by omega, show m ≠ 25 by omega, show m ≠ 26 by omega, show m ≠ 27 by omega,
+      show ¬m ≤ 31 by omega, show ¬m ≤ 35 by omega] at hq0
 
 /-- **The masked case's statement commits with `hm96-sha512/v1`**: the scope check's leaf scheme. -/
 theorem CaseZk.hm96 {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (c : CaseZk H rel) :
@@ -278,7 +287,7 @@ theorem linkFirstZk_goal (H : Claims.Msg → Claims.Msg) (hH : ∀ m, (H m).leng
   obtain ⟨schs, cms, hs, hc, hh⟩ := sessionSZk_link o.ran
   obtain ⟨st, hsts, hms⟩ := o.hm96
   have htabs : tabsOf o.sts = #[Setup.ofCircuit st] := by rw [hsts]; simp [tabsOf]
-  have hsch : ∃ v, Zk.schedule st.m = .ok v ∧ schs = #[v] := by
+  have hsch : ∃ v, Zk.schedule st.wideLeaf st.m = .ok v ∧ schs = #[v] := by
     unfold schedsPZk at hs
     rw [htabs] at hs
     obtain ⟨h1, h2⟩ := FlockSoundness.Discharge.Exec.array_mapM_ok_getElem hs

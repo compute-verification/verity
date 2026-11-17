@@ -8,55 +8,12 @@ announcement, only the names it starts with). Each gets a doorbell in its inbox
 thread, which its agent subscribes to. The footer carries the post's kind and flags.
 Notes are records, never messages.
 
-  research msg send --as NAME [--to @A @B ...] [--thread TS] [--kind WORD] [--quiet] [--urgent] (--text T | --file PATH)
-                    [--verify CMD] [--ships URL#sha256=HEX | git:SHA]...     # prints `<ts> <permalink>`; --kind announce: an announcement
-  research msg ask --as NAME --to @OWNER (--text T | --file PATH) [--urgent]   # an issue in OWNER's Linear team on its current
-                                                                   # milestone, its tag and doorbell (`send` files nothing)
-  research msg ask --as NAME --to @daniel --kind K --question Q --why W --option V=L... --recommend V --default V --deadline D
-                   --page FILE.md --area AREA                      # to @daniel: the ask's page and card, as `ask-daniel --page`
-  research msg close --as NAME --thread TS [--link URL] [--note T] [--declined WHY]   # ✅ or ❌: a status line, and the reaction on an ask
-  research msg linear check|state|comment|list|audit|place|edit ... # Linear through the app, never the MCP connector (`linear -h`)
-  research msg linear audit [TEAM ...] [--lane HANDLE] [--close-strays --as HANDLE]   # findings; the flag cancels the strays
-  research msg linear relate ISSUE blocks|blocked-by|related|duplicate OTHER | unrelate ISSUE OTHER
-  research msg linear update PROJECT --health onTrack|atRisk|offTrack --body-file F   # a project update
-  research msg linear project create NAME --team KEY... [--lead USER] [--target D] [--description-file F]
-  research msg linear project edit PROJECT [--team KEY...] [--date D|none] [--status S]   # teams, target date, status
-  research msg linear milestone create|edit PROJECT NAME [--date D] [--description-file F] [--rename NEW]
-  research msg read --thread TS [--since TS] | --since TS | --as NAME [--peek] [--urgent] [--json]  # --as: NAME's unread doorbells
-  research msg names open|read|close|list|revoke [--as NAME] [--forward-to @NAME] [--succeeds] [--poster BC_ID]  # the names you answer to
-  research msg traffic [--hours H] [--json]                        # the monitor: doorbells, pauses, dropped names, unanswered asks
-  research msg traffic --latency [--hours H] [--json]              # per lane: asks, answered (by record), median and p90 minutes
-  research msg pickup --thread TS                                  # 👀 on an ask you own
-  research msg retract --as NAME --ts TS [--thread ROOT] [--why W] # blank a post NAME sent
-  research msg roster --thread TS [--json]                         # an announcement's status lines; exit 0 when all are done
-  research msg handles [--json] | subscriptions --as HANDLE        # the registry, holders from routes; the subscribe calls a holder makes
-  research msg owners [PATH...]                                    # who owns each path (stdin: `git diff --name-only main... |`)
-  research msg match --as HANDLE --event JSON|TEXT|@PATH|- [--why] # exit 0 addressed, 1 not, 2 error
-  research msg verify-author --event JSON|@PATH|- [--why] [--authorizes]  # exit 0 only for our bot, a channel's bot or a named person;
-                                                                   # --authorizes: only for a named human, who may authorize spend
-  research msg deliver --ts TS [--thread T]                         # ring the doorbells for a post no client delivered
-  research msg deliver --channel ask-the-team|chat-NAME --event JSON|@PATH|-  # a person's post there: its doorbells name the
-                                                                   # channel; a chat's doorbells carry no text (`chat_targets`)
-  research msg chat open NAME (--user U... | --email E) [--start-here URL] [--note T] [--lane HANDLE] [--cursor-bot U...]
-                                                                   # a person's private #chat-NAME; the person goes to people.d;
-                                                                   # --lane: the lane their unaddressed posts go to ('' clears it)
-  research msg chat close NAME | chat list                         # archive it and mark it closed; each chat in people.d
-  research msg chat expect NAME --email E [--note T] [--lane HANDLE]  # someone invited to the workspace: people.d, no channel
-                                                                   # yet; the Slack events service opens it at their team_join
-  research msg groups sync [--apply]                               # one user group per handle; a plan unless --apply
-  research msg slack-app export|diff|apply [--app-id ID] [--manifest PATH]   # the app's manifest: live, against the repo's, update
-  research msg ask-daniel --as HANDLE --kind blocking|default --question Q --why W --option VALUE=LABEL... --recommend V
-                          --default V --deadline '3:00 PM'|ISO (--page FILE.md --area AREA | --link NOTION_URL) [--wait]
-                          # the ask's page in the Asks for Daniel database, and a card in #ask-daniel linking it; prints `<id> <ts> <permalink>`
-  research msg ask-daniel status ID [--wait] [--json] | resolve ID --choice V [--note T]
-                          # status follows the ask's page once its Status has left Waiting on Daniel: the page's Status and
-                          # Decision, and one `differs:` line when the card says otherwise; an unreadable page leaves the card alone
-  research msg ask-daniel extend ID --deadline '3:00 PM'|ISO [--note T] | withdraw ID --note T   # the asker only, while pending
-                          # --wait polls for at most 20 min: a card still pending then exits 79 with the status command (research/waitcap.py)
-  research msg ask-daniel pages [--as HANDLE] [--hours H] [--json]  # asks' pages edited lately: Status, Decision, newest comment
+Each subcommand's flags are its `-h`.  `send` prints `<ts> <permalink>` and `ask-daniel` `<id> <ts> <permalink>`.  Once an
+ask's page has left Waiting on Daniel, `ask-daniel status` and `resolve` follow it, with one `differs:` line when the card
+says otherwise; `extend` and `withdraw` are the asker's alone, while the card is pending.
 
 An ask lives in one record, by its target: a handle's ask is an issue in its Linear team, and an ask to @daniel is a page in the
-Asks for Daniel database; `traffic` reads that record's state for whether, and `--latency` for when, it was answered.
+Asks for Daniel database; `traffic` reads that record's state for whether it was answered.
 
 `reply` is an older spelling of `send --thread`, kept while callers move.
 
@@ -110,12 +67,17 @@ from zoneinfo import ZoneInfo
 
 try:
     from . import vocabulary, waitcap
-    from .timefmt import both, slack_dates
+    from .timefmt import DEADLINE_WORDS, both, slack_dates, stamp_ahead
 except ImportError:                                                 # run as a single file: `python3 slack.py ...`
     class vocabulary:  # research/vocabulary.py's table isn't beside a single file: nothing is flagged
         @staticmethod
         def retired(text: str) -> list[tuple[str, str]]:
             return []
+
+    DEADLINE_WORDS = {"by", "until", "till", "before", "after", "at", "from", "eta", "since", "to", "due"}   # timefmt's
+
+    def stamp_ahead(text: str, now: Any) -> str | None:
+        return None
 
     def both(t: Any) -> str:
         return f"{datetime.fromtimestamp(float(t), UTC):%H:%MZ}" if re.fullmatch(r"\d+(?:\.\d+)?", str(t)) else str(t)
@@ -123,8 +85,8 @@ except ImportError:                                                 # run as a s
     def slack_dates(text: str, now: Any = None) -> str:
         return text
 
-    class waitcap:  # research/waitcap.py's cap, which a single file carries itself
-        WAIT_CAP_S, STILL_GOING = 1200, 79
+    class waitcap:  # research/waitcap.py's limit, which a single file carries itself
+        WAIT_LIMIT_S, STILL_GOING = 1200, 79
 
         @staticmethod
         def still_going(what: str, check: str, waited_s: float, end: str) -> str:
@@ -215,7 +177,7 @@ AGENT_ID_RE = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}|bc-[0-
                          r"|[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")                 # a desktop agent's, a bare UUID
 WORKER_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,39}")      # `linear comment --worker NAME`: shows as LANE/NAME
 QUIET = "(quiet)"                                                # ending a post: ring only the names it starts with
-CAP_PER_HOUR = 20                                                # doorbells into one inbox from one author in one thread
+LIMIT_PER_HOUR = 20                                              # doorbells into one inbox from one author in one thread
 DOORBELL_MAX = 600                                               # characters of the post a doorbell carries
 POST_MAX = 3000                                                  # bytes: Slack splits a longer post into separate top-level messages
 INBOX_HEAD = "Inbox for @"
@@ -357,12 +319,11 @@ def check_registry(reg: dict, path: str) -> dict:
         if not NAME_RE.match(name) or name in handles:
             raise SlackError(f"registry {path}: bad or duplicate handle {name!r}")
         handles.add(name)
-        for k in ("remit", "charter"):
-            if not isinstance(h.get(k), str) or not h[k]:
-                raise SlackError(f"registry {path}: @{name} has no {k}")
-            if STORE_PATH in h[k]:
-                raise SlackError(f"registry {path}: @{name}'s {k} cites an agent store ({STORE_PATH}...), which is its agent's "
-                                 "scratch: cite a note (note:<id>), a ruling or a PR instead, or say it in plain words")
+        if not isinstance(h.get("remit"), str) or not h["remit"]:
+            raise SlackError(f"registry {path}: @{name} has no remit")
+        if STORE_PATH in h["remit"]:
+            raise SlackError(f"registry {path}: @{name}'s remit cites an agent store ({STORE_PATH}...), which is its agent's "
+                             "scratch: cite a note (note:<id>), a ruling or a PR instead, or say it in plain words")
         if "holder" in h and not (isinstance(h["holder"], str) and HOLDER_RE.fullmatch(h["holder"])):
             raise SlackError(f"registry {path}: @{name}'s holder {h['holder']!r}: its coordinator's agent id alone (bc-<8 hex>-"
                              "<4>-<4>-<4>-<12>, or a desktop agent's bare UUID), with no prose; the agents that post as it are "
@@ -392,10 +353,6 @@ def check_registry(reg: dict, path: str) -> dict:
             raise SlackError(f"registry {path}: @{name}'s staffs: the names of the agents its holder alone may register "
                              "(`research queue delegate`), as lower-case patterns such as `review-*`, each matching no handle, "
                              "so it can never hand a lane's own name to another")
-        lineage = h.get("lineage", [])
-        if not isinstance(lineage, list) or not all(isinstance(a, str) and AGENT_ID_RE.fullmatch(a) for a in lineage):
-            raise SlackError(f"registry {path}: @{name}'s lineage: the agent ids that held it before (bc-<8 hex> or its full "
-                             "form), so a handover's predecessor stays known without a second id in `holder`")
         old = h.get("retired_usergroups", [])
         current = {o.get("usergroup") for o in reg["handles"]}
         if not isinstance(old, list) or any(not isinstance(g, str) or not GROUP_ID_RE.match(g) or g in current
@@ -481,12 +438,18 @@ def people_names(reg: dict) -> set[str]:
     return {person_name(p) for p, _ in people(reg) if p.get("slack_user")}
 
 
+TESTS = "tests/"                                                 # the root every test is under, mirrored by path
+
+
 def owner(reg: dict, path: str) -> str | None:
-    """The handle that owns a checkout path: the one whose `owns` entry is its longest prefix (a directory ends in `/`)."""
+    """The handle that owns a checkout path: the one whose `owns` entry is its longest prefix (a directory ends in `/`).
+    A test, `tests/X`, that no entry under `tests/` names has the owner of `X`, the path it mirrors."""
     path = path.removeprefix("./")
     best = max(((p, h["handle"]) for h in reg["handles"] for p in h.get("owns", [])
                 if path == p.rstrip("/") or path.startswith(p if p.endswith("/") else p + "/")),
                key=lambda ph: len(ph[0]), default=None)
+    if path.startswith(TESTS) and (best is None or best[0] == TESTS):
+        return owner(reg, path[len(TESTS):]) or (best and best[1])
     return best and best[1]
 
 
@@ -914,8 +877,14 @@ def _footer(tags: tuple[str, ...] = ()) -> str:
 
 
 HEADER_TIME_RE = re.compile(r"^\W{0,4}((?:(?:<[^>\s]+>|[@*_\w().,-]+) ){0,4}?)\*?([01]?\d|2[0-3]):([0-5]\d)Z\*?(?=[:,)]| \(| [-\u2014])")
-DEADLINE_WORDS = {"by", "until", "till", "before", "after", "at", "from", "eta", "since", "to"}
 STAMP_SLACK_S = 120                                              # a hand-typed time this close to the send time is left alone
+
+
+def not_ahead(text: str) -> str:
+    """`text`, unless its first line's header time is ahead of the clock (`timefmt.stamp_ahead`): then the refusal, with the fix."""
+    if why := stamp_ahead(text, _now()):
+        raise SlackError(why)
+    return text
 
 
 def stamp_time(text: str, now: datetime) -> str:
@@ -1097,7 +1066,7 @@ def addressed(ev: dict, h: dict, reg: dict, key: str | None, api: Slack | None) 
 
 
 # --- routing: `@name` at the start of a post wakes that name's agent ---------------------------------------------------------
-# The rule is `route_targets`, a pure function pinned by tests/slack_routing_vectors.json.  Delivery is a doorbell: the post itself (`doorbell`), as a reply in the
+# The rule is `route_targets`, a pure function pinned by tests/tools/research/slack_routing_vectors.json.  Delivery is a doorbell: the post itself (`doorbell`), as a reply in the
 # target's inbox thread, which its agent subscribes to.
 
 def ours(msg: dict | None, reg: dict) -> bool:
@@ -1730,15 +1699,15 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, *, urgent
                    and (not reminder or f": reminder ({reminder}): " in (m.get("text") or "")) for m in rung):
                 continue
             n = sum(_mentions_thread(m.get("text") or "", src, where) and _from(m.get("text") or "", author) for m in rung)
-            if n >= CAP_PER_HOUR:                                        # a loop is one author; a roll call is many, once each
-                if n == CAP_PER_HOUR:
+            if n >= LIMIT_PER_HOUR:                                      # a loop is one author; a roll call is many, once each
+                if n == LIMIT_PER_HOUR:
                     if where is None:                                    # a person's channel gets no router notes
                         api.call("chat.postMessage", channel=ch, thread_ts=src, username="router", unfurl_links="false",
-                                 text=f"routing @{author} to {to} paused here for the hour ({CAP_PER_HOUR} doorbells) {QUIET}")
+                                 text=f"routing @{author} to {to} paused here for the hour ({LIMIT_PER_HOUR} doorbells) {QUIET}")
                     api.call("chat.postMessage", channel=ch, thread_ts=r["inbox_ts"], username="router", unfurl_links="false",
                              text=f"from router, {'#' + where + ' ' if where else ''}thread {src}: paused @{author} here "
-                                  f"for the hour ({CAP_PER_HOUR} doorbells)")
-                lines.append(f"@{to}: paused (cap of {CAP_PER_HOUR} an hour from @{author} in this thread)")
+                                  f"for the hour ({LIMIT_PER_HOUR} doorbells)")
+                lines.append(f"@{to}: paused (limit of {LIMIT_PER_HOUR} an hour from @{author} in this thread)")
                 continue
             api.call("chat.postMessage", channel=ch, thread_ts=r["inbox_ts"], username="router", unfurl_links="false",
                      unfurl_media="false", text=doorbell(author, src, msg.get("ts") or src, msg.get("text", ""), urgent, where,
@@ -1799,7 +1768,7 @@ def _body(ns: argparse.Namespace) -> str:
         text = sys.stdin.read()
     if not text.strip():
         raise SlackError("empty message")
-    return text.rstrip()
+    return not_ahead(text.rstrip())
 
 
 def cmd_handles(ns: argparse.Namespace, reg: dict) -> int:
@@ -1814,7 +1783,7 @@ def cmd_handles(ns: argparse.Namespace, reg: dict) -> int:
         print(f"#{key:<20} {ch.get('id') or 'id not recorded':<12} subscribers: {subs}\n  {ch['purpose']}")
     for h in reg["handles"]:
         print(f"@{h['handle']:<10} {h.get('usergroup') or '-':<12} {h['holder'] or 'no holder: its inbox is not open'}\n"
-              f"  {h['remit']}\n  charter: {h['charter']}")
+              f"  {h['remit']}")
     for p in reg.get("humans", []):
         print(f"human {p['name']} ({p.get('slack_user') or 'user id not recorded'})")
     for p in reg.get("collaborators", []):
@@ -1841,8 +1810,8 @@ def cmd_subscriptions(ns: argparse.Namespace, reg: dict) -> int:
                   f"expiresInSeconds={EXPIRES_S})   # #{key}")
     if key := h.get("linear"):
         print(f"# no Linear subscription on {key}: its events are nearly all @{h['handle']}'s own writes (every handle writes as "
-              "one app), and another handle's ask rings the inbox; a person's new issue rings it through the sweep's audit "
-              "(`unheard`)")
+              "one app), and another handle's ask rings the inbox; any other new issue in the team rings it through the Slack "
+              "events service's reconciliation, and the sweep's audit (`unheard`) is the backstop")
     print(f"# and subscribe_slack_thread(channelId, threadTs, expiresInSeconds={EXPIRES_S}) only for a thread a human may "
           f"answer in (@{h['handle']}'s #ask-daniel card, a thread a named human posted in); renew on every wake")
     print(f"# not for a thread between handles: the inbox already rings @{h['handle']} for each reply addressed to it, and "
@@ -2040,7 +2009,10 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
     blocks|blocked-by|related|duplicate OTHER`, `unrelate ISSUE OTHER`, `update PROJECT --health H --body-file F`,
     `project create NAME --team KEY... [--lead USER] [--target D] [--description-file F]`, `project edit PROJECT [--team
     KEY...] [--date D] [--status S]` and `milestone create|edit
-    PROJECT NAME [--date D] [--description-file F] [--rename NEW]`. Each prints one line; a refusal exits 2."""
+    PROJECT NAME [--date D] [--description-file F] [--rename NEW]` and `response [--since ISO|--hours N] [--lane HANDLE]
+    [--open-over MINUTES]` (the minutes each lane takes to answer a comment that rings it: `response`). Each prints one
+    line, but `audit`, `list` and `response`; a refusal exits 2, and a worker's comment that starts with @names it doesn't
+    ring exits 1 (`unrung_note`)."""
     from . import linear
 
     def need(value: str | None, what: str) -> str:
@@ -2065,7 +2037,7 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
         if owner and owner != worker_lane:
             raise SlackError(f"--worker {ns.worker}: this checkout's branch ends in @{owner}'s suffix, so its worker signs as "
                              f"{owner}/{worker_name}")
-    if ns.dry_run and ns.verb not in ("check", "list", "audit", "edit", "state", "place", "comment", "create"):
+    if ns.dry_run and ns.verb not in ("check", "audit", "edit", "state", "place", "comment", "create"):
         raise SlackError(f"linear {ns.verb} has no --dry-run (it would write): leave it off, or try `edit`, `state`, "
                          "`place` or `comment`, which have one")
     if ns.close_strays and (ns.verb != "audit" or ns.asks):
@@ -2080,11 +2052,6 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
             lines, ok = lin.check(ns.write, name_entry(ns, reg, ns.handle or "comms")["handle"])
             print("\n".join(lines))
             return 0 if ok else 1
-        if ns.verb == "list":
-            for i in lin.issues(need(ns.target, "the TEAM (a handle or its key)"), ns.state):
-                print(f"{i['identifier']}  {i['state']['name']}  {i['title']}")
-            print(f"states: {LINEAR_STATES}")
-            return 0
         if ns.verb == "audit":
             keys = {h["handle"]: h["linear"] for h in reg["handles"] if h.get("linear")}
             teams = [keys.get(t.lstrip("@"), t) for t in ([ns.target] if ns.target else []) + ns.value]
@@ -2115,6 +2082,18 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
                 print("\n".join([f"dry-run: would cancel {f['issue']}, a stray, with the comment: {linear.STRAY_NOTE}" for f in strays]
                                 if ns.dry_run else lin.close_strays(strays, author)) or "no strays to close", file=sys.stderr)
             return 1 if found else 0
+        if ns.verb == "response":
+            from . import response
+            from .timefmt import _utc
+            now = time.time() if ns.now is None else float(ns.now)
+            try:
+                since = _utc(ns.since).timestamp() if ns.since else now - ns.hours * 3600
+            except ValueError:
+                raise SlackError(f"--since {ns.since!r}: give a UTC time as ISO (2026-11-14T06:00Z)") from None
+            found, left = response.asks(lin.comments(response._iso(since)), reg, now, since)
+            rep = response.report(found, left, since, now, ns.open_over, ns.lane.lstrip("@") if ns.lane else None)
+            print(json.dumps(rep, indent=1) if ns.json else response.render(rep))
+            return 0
         if ns.verb == "update":
             print(lin.update(need(" ".join(filter(None, [ns.target, *ns.value])), "the PROJECT (a prefix of its name)"),
                              ns.health, brief))
@@ -2177,26 +2156,30 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
             i = lin.edit(issue, ns.title, ns.due, brief, ns.parent, send=not ns.dry_run)
             print(("dry-run: would set " if ns.dry_run else f"{issue} set ") + linear.said(i))
             return 0
-        text = need(value or brief, "the TEXT (or --file BODY.md)")
+        text = not_ahead(need(value or brief, "the TEXT (or --file BODY.md)"))
         if not ns.worker:
             author = acting_as(ns, reg, need(ns.handle, "--as HANDLE, the comment's sender (a lane's worker: --worker NAME)"))["handle"]
             warn_unrouted(text, reg, author)
-        info = lin.gql("query($id: String!) { issue(id: $id) { id identifier url team { key } } }", {"id": issue})["issue"]
+        info = lin.gql("query($id: String!) { issue(id: $id) { id identifier url team { key } labels { nodes { name } } } }",
+                       {"id": issue})["issue"]
         if ns.worker:
             lane = worker_lane or linear.owners(reg).get(info["team"]["key"])
             if not lane:
                 raise SlackError(f"--worker: {issue}'s team {info['team']['key']} has no handle in the registry, so there is "
                                  "no lane to comment as: sign as your own, --worker LANE/NAME")
             author = f"{lane}/{worker_name}"
+        unrung = lead_names(text, reg) if ns.worker else []
         if ns.dry_run:
             print(f"dry-run: would comment on {issue} as {author}: {text}")
+            if unrung:
+                print(unrung_note(unrung, worker_lane, reg, posted=False))
             return 0
         lin.comment(info["id"], author, text)
         if ns.worker:
             print(f"{issue} commented as {author}")
-            if names := lead_names(text, reg):
-                print(f"route: a worker's comment rings no one, so {', '.join('@' + n for n in names)} won't hear of it "
-                      "from here: ask your lead to", file=sys.stderr)
+            if unrung:
+                print(unrung_note(unrung, worker_lane, reg, posted=True))
+                return 1
             return 0
         print(f"{issue} commented")
         ring_comment(ns, reg, author, info, text)
@@ -2205,13 +2188,26 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
         raise SlackError(str(e)) from None
 
 
+def unrung_note(names: list[str], lane: str | None, reg: dict, posted: bool) -> str:
+    """What a worker's comment that starts with `names` tells it: none of them is rung (a worker holds no handle, and only
+    a holder's post rings), and how its lead rings them.  `lane` is the worker's own (`--worker LANE/NAME`, else the
+    handle whose branch suffix its checkout carries)."""
+    sfx = _branch_suffix()
+    lane = lane or next((h["handle"] for h in reg["handles"] if sfx and sfx in h.get("branch_suffixes", [])), None) or "LANE"
+    me = self_agent_id() or "BC_ID"
+    return (f"not rung: {', '.join('@' + n for n in names)}. A worker's comment rings no one"
+            + (", and this one is posted: don't post it again. " if posted else ". ")
+            + f"Return its text to your lead (@{lane}) to ring, or have your lead grant this run with `research msg names "
+            f"open --as {lane} --poster {me}` and post it with --as {lane}.")
+
+
 def ring_comment(ns: argparse.Namespace, reg: dict, author: str, issue: dict, text: str) -> list[str]:
-    """Ring the inbox of the issue's team's handle and of each name the comment starts with, as `send` would, so nobody
-    polls Linear for comments (no one subscribes to them: every handle writes as one app).  The author is never
-    rung.  One line per name."""
+    """Ring the inbox of the issue's lane (`linear.lane`: its `lane:` label's handle, else its team's handle) and of each
+    name the comment starts with, as `send` would, so nobody polls Linear for comments (no one subscribes to them: every
+    handle writes as one app).  The author is never rung.  One line per name."""
     from . import linear
 
-    owner = linear.owners(reg).get(issue["team"]["key"])
+    owner = linear.lane(issue, reg)
     names = list(dict.fromkeys(([owner] if owner else []) + lead_names(text, reg)))
     routes, api, lines = routes_of(ns), client(ns), []
     ch = channel_id(ns, reg, FRONT_DOOR)
@@ -2226,11 +2222,17 @@ def ring_comment(ns: argparse.Namespace, reg: dict, author: str, issue: dict, te
             lines.append(f"@{name}: {why}; the comment is on {issue['identifier']}")
             continue
         api.call("chat.postMessage", channel=ch, thread_ts=r["inbox_ts"], username="router", unfurl_links="false",
-                 unfurl_media="false", text=f"from {author}, Linear {issue['identifier']} ({issue['url']}): {body}")
+                 unfurl_media="false", text=linear_doorbell(author, issue, body))
         lines.append(f"@{to}: rang")
     for line in lines:
         print(f"route {line}", file=sys.stderr)
     return lines
+
+
+def linear_doorbell(author: str, issue: dict, body: str) -> str:
+    """A doorbell about a Linear issue ({identifier, url}): a comment's (`ring_comment`), or a new issue's (the Slack events
+    service's reconciliation)."""
+    return f"from {author}, Linear {issue['identifier']} ({issue['url']}): {body}"
 
 
 def announcement(h: dict, to: list[dict], body: str, verify: str | None, ships: list[str]) -> str:
@@ -2496,6 +2498,8 @@ def cmd_read(ns: argparse.Namespace, reg: dict) -> int:
         raise SlackError("read: --thread reads one thread; it doesn't take --as")
     if not (ns.thread or ns.since or ns.handle):
         raise SlackError("read: one of --thread TS, --since TS or --as NAME is required")
+    if ns.mark_through is not None and (not ns.handle or ns.peek or ns.urgent):
+        raise SlackError("read: --mark-through TS marks NAME's doorbells: pass --as NAME, and neither --peek nor --urgent")
     if ns.handle:
         name = ns.handle.lstrip("@")
         r = routes_of(ns).get_route(name, fresh=name not in routes_of(ns).local)
@@ -2846,15 +2850,42 @@ def render_unread(name: str, msgs: list[dict], reg: dict) -> str:
     return "\n".join(lines)
 
 
+def listed_through(name: str, msgs: list[dict]) -> str:
+    """The line a `--peek` listing ends with: the newest doorbell it showed, and the command that marks it and those before it
+    read and none that came after."""
+    newest = max((m["ts"] for m in msgs), key=float)
+    at = datetime.fromtimestamp(float(newest), UTC).strftime("%H:%M:%SZ")
+    return (f"listed through {newest} ({at}): `research msg read --as {name} --mark-through {newest}` marks these read, and "
+            "none that came after")
+
+
+def mark_through(name: str, msgs: list[dict], through: str, as_json: bool = False) -> int:
+    """Mark read the unread doorbells ``msgs`` at or before ``through`` (the ts a listing ended with), never one after it: a
+    doorbell that rang after the listing stays unread, however much later the mark is run."""
+    done = [m for m in msgs if float(m["ts"]) <= float(through)]
+    left = [m["ts"] for m in msgs if float(m["ts"]) > float(through)]
+    mark_read(name, done)
+    if as_json:
+        print(json.dumps({"marked": [m["ts"] for m in done], "unread": left}))
+    else:
+        at = datetime.fromtimestamp(float(through), UTC).strftime("%H:%M:%SZ")
+        print(f"SLACK @{name}: marked {len(done)} read through {through} ({at}); {len(left)} newer stay unread")
+    return 0
+
+
 def inbox_read(ns: argparse.Namespace, reg: dict, r: dict) -> int:
     r = {**r, "channel": r.get("channel") or channel_id(ns, reg, FRONT_DOOR)}
     api = client(ns)
     since = getattr(ns, "since", None)
     msgs = unread(api, r, since)
+    if (through := getattr(ns, "mark_through", None)) is not None:
+        return mark_through(r["name"], msgs, through, ns.json)
     if ns.json:
         print(json.dumps(msgs, indent=2, ensure_ascii=False))
     else:
         print(render_unread(r["name"], msgs, reg))
+        if ns.peek and msgs:
+            print(listed_through(r["name"], msgs))
     if not ns.peek:
         mark_read(r["name"], msgs)
     return 1 if ns.urgent and not any(urgent_doorbell(m, reg) for m in msgs) else 0
@@ -2875,25 +2906,30 @@ def comment_by(c: dict) -> str | None:
 RECORD_UNREADABLE = "unreadable"                                     # the record of an ask's answer (Linear, Notion) couldn't be read
 
 
-def issue_state(ident: str, asker: str | None, cache: dict[str, tuple[bool, str]]) -> tuple[bool, str]:
-    """Whether the Linear issue `ident` was taken up there: it left Backlog (accepted, started, done or canceled), or
-    someone other than `asker` commented on it; and the state that says so.  Not taken when Linear can't say, so a doubtful
-    ask still shows."""
-    if ident not in cache:
+def issue_state(ident: str, asker: str | None, to: list[str], cache: dict[tuple[str, tuple[str, ...]], tuple[bool, str]]
+                ) -> tuple[bool, str]:
+    """Whether the Linear issue `ident` was taken up there: it left Backlog (accepted, started, done or canceled), or a
+    handle in `to` (or its worker, `HANDLE/NAME`) commented on it, or, with `to` empty, anyone but `asker` did; and the state
+    that says so.  Not taken when Linear can't say, so a doubtful ask still shows."""
+    key = (ident, tuple(sorted(to)))
+    if key not in cache:
         from . import linear
         q = "query($id: String!) { issue(id: $id) { state { type } comments { nodes { botActor { userDisplayName } user { name } body } } } }"
         try:
             i = linear.Linear().gql(q, {"id": ident})["issue"]
-            other = next((w for c in i["comments"]["nodes"] if (w := comment_by(c)) and w != asker), None)
+            others = sorted({w for c in i["comments"]["nodes"] if (w := comment_by(c)) and w != asker})
+            asked = next((w for w in others if not to or w in to or w.split("/")[0] in to), None)
             if i["state"]["type"] != "backlog":
-                cache[ident] = (True, f"left Backlog ({i['state']['type']})")
-            elif other:
-                cache[ident] = (True, f"commented on by {other}")
+                cache[key] = (True, f"left Backlog ({i['state']['type']})")
+            elif asked:
+                cache[key] = (True, f"commented on by {asked}")
+            elif others:
+                cache[key] = (False, f"in Backlog, no comment by {', '.join('@' + h for h in to)} (commented on by {', '.join(others)})")
             else:
-                cache[ident] = (False, "in Backlog, no comment but the asker's")
+                cache[key] = (False, "in Backlog, no comment but the asker's")
         except (linear.LinearError, OSError, KeyError, TypeError, ValueError) as e:
-            cache[ident] = (False, f"{RECORD_UNREADABLE} ({e})")
-    return cache[ident]
+            cache[key] = (False, f"{RECORD_UNREADABLE} ({e})")
+    return cache[key]
 
 
 def issue_commenters(ident: str, cache: dict[str, set[str] | str]) -> set[str] | str:
@@ -2975,17 +3011,17 @@ class Pages:
     """Each card's page state, read once; the Notion client is made on the first read, and its absence (no $NOTION_API_KEY)
     is an error per page rather than for the whole report."""
 
-    def __init__(self, client: Callable[[], "Notion"] | None = None):
-        self.make, self.client, self.seen = client, None, {}
+    def __init__(self):
+        self.client, self.seen = None, {}
 
     def state(self, page: str) -> dict:
         if page not in self.seen:
-            if not (self.make or os.environ.get("NOTION_API_KEY")):
+            if not os.environ.get("NOTION_API_KEY"):
                 self.seen[page] = {"status": None, "answered": False, "at": None,
                                    "error": "no $NOTION_API_KEY (a Notion connection's token, shared on the Asks for Daniel database)"}
                 return self.seen[page]
             try:
-                self.client = self.client or (self.make or Notion)()
+                self.client = self.client or Notion()
                 self.seen[page] = page_state(self.client, page)
             except (SlackError, ValueError) as e:
                 self.seen[page] = {"status": None, "answered": False, "at": None, "error": str(e)}
@@ -2999,144 +3035,14 @@ def is_ask(m: dict) -> bool:
 
 
 ANSWER_REACTIONS = ("eyes", "white_check_mark", "x")
-LINEAR_ANSWER_Q = ("query($id: String!) { issue(id: $id) { createdAt history(first: 100) { nodes { createdAt fromState { type } toState { type } } } "
-                   "comments(first: 100) { nodes { createdAt user { name } botActor { userDisplayName } body } } } }")
 
 
 def _iso_epoch(stamp: str) -> float:
     return datetime.fromisoformat(stamp.replace("Z", "+00:00")).timestamp()
 
 
-def issue_answer(lin: Any, ident: str, asker: str | None) -> dict | None:
-    """When the Linear issue `ident` was first taken up: its first move out of Backlog (by anyone: every write is the
-    Verity Asks app's, so `by` is None), or the first comment by someone other than `asker`; {at, how, by}, or None when
-    neither happened.
-    An issue filed straight into another state shows that as a move out of Backlog at its creation, which times no answer:
-    with nothing later, it is answered but untimed (`linear-filed`, like an issue filed already Done)."""
-    i = lin.gql(LINEAR_ANSWER_Q, {"id": ident})["issue"]
-    born = _iso_epoch(i["createdAt"])
-    out = [{"at": _iso_epoch(h["createdAt"]), "how": "linear-state", "by": None}
-           for h in i["history"]["nodes"]
-           if (h.get("fromState") or {}).get("type") == "backlog" and (h.get("toState") or {}).get("type") not in (None, "backlog")
-           and _iso_epoch(h["createdAt"]) > born]
-    for c in i["comments"]["nodes"]:
-        if (who := comment_by(c)) and who != asker:
-            out.append({"at": _iso_epoch(c["createdAt"]), "how": "linear-comment", "by": who})
-    if not out and any((h.get("fromState") or {}).get("type") == "backlog" and (h.get("toState") or {}).get("type") not in (None, "backlog")
-                       for h in i["history"]["nodes"]):
-        return {"at": born, "how": "linear-filed", "by": None}
-    return min(out, key=lambda a: a["at"], default=None)
-
-
 def nearest_rank(xs: list[float], q: float) -> float | None:
     return sorted(xs)[max(math.ceil(q * len(xs)), 1) - 1] if xs else None
-
-
-def ask_latency(api: Slack, reg: dict, routes: Routes, ch: str, since: float, now: float, stale_s: float,
-                linear_client: Callable[[], Any] | None = None, notion_client: Callable[[], Any] | None = None) -> dict:
-    """Each ask posted in (since, now] that rang a lane's inbox, and each #ask-daniel card linking its page, and how long its
-    first answer took, as the ask's record shows it (`record`, `ref`):
-    - an ask linked to a Linear issue: the issue's first move out of Backlog or first comment by anyone but the asker
-      (`issue_answer`), with who gave it (`answer_by`), or the addressed lane's own reply in the thread, whichever came first.
-      An issue Linear can't read leaves the ask to Slack (`linear_errors`).
-    - a card to @daniel (lane `daniel`): its page's Status leaving PAGE_WAITING, at the page's last edit (`page_state`); `state`
-      is the Status.  A page Notion can't read leaves the card unanswered (`notion_errors`).
-    - any other ask: the first reply in its thread under a name of the lane's inbox (its own, or one it was renamed from).
-      One with no reply that carries 👀, ✅ or ❌ and rang only this lane counts as answered but untimed: Slack keeps no time
-      for a reaction, and every handle reacts as one bot.
-    Only a lane or a named person asks: a machine's alert (`vy-monitors`) isn't an ask.  Answers after `now` don't count.  Per lane: asks, answered (by Slack, Linear, Notion or untimed), the nearest-rank
-    median and p90 of the timed answers in minutes, the unanswered, and those unanswered for longer than `stale_s`."""
-    tops: dict[str, dict[str, dict]] = {}                            # channel -> ts -> top-level post
-    replies: dict[tuple[str, str], list[dict]] = {}
-    asks, counted, names = [], set(), {}
-    askers = {h["handle"] for h in reg["handles"]} | {poster({"user": p.get("slack_user")}, reg) for p in reg.get("humans", [])}
-    for r in routes.all().values():
-        names.setdefault(r.get("inbox_ts"), set()).add(r["name"])  # a renamed lane answers under its old name too
-    for r in sorted(routes.all().values(), key=lambda r: (bool(r.get("closed")), r["name"])):
-        if not r.get("inbox_ts") or r["inbox_ts"] in counted:
-            continue                                                 # a renamed name forwards into its successor's inbox
-        counted.add(r["inbox_ts"])
-        rch = r.get("channel") or ch
-        if rch not in tops:
-            tops[rch] = {m["ts"]: m for m in api.paged("conversations.history", "messages", channel=rch, oldest=f"{since:.6f}")
-                         if float(m["ts"]) <= now}
-        seen = set()
-        for b in api.paged("conversations.replies", "messages", channel=rch, ts=r["inbox_ts"], oldest=f"{since:.6f}"):
-            d = DOORBELL_RE.match(b.get("text") or "") if is_doorbell(b, reg) and b.get("ts") != r["inbox_ts"] else None
-            if not d or (d[4] and d[4] != d[3]) or d[3] in seen:
-                continue                                             # a reply's doorbell, or one `deliver` rang again
-            root = tops[rch].get(d[3])
-            if root and is_ask(root) and poster(root, reg) in askers and poster(root, reg) not in names[r["inbox_ts"]]:
-                seen.add(d[3])
-                asks.append({"lane": r["name"], "names": names[r["inbox_ts"]], "channel": rch, "root": root})
-    rang: dict[tuple[str, str], int] = {}
-    for a in asks:
-        rang[(a["channel"], a["root"]["ts"])] = rang.get((a["channel"], a["root"]["ts"]), 0) + 1
-    lin, issues, linear_errors = None, {}, []
-    out = []
-    for a in asks:
-        root, lane, t0 = a["root"], a["lane"], float(a["root"]["ts"])
-        key = (a["channel"], root["ts"])
-        asker, record, ref, found = poster(root, reg), "slack", None, None
-        if link := LINEAR_LINK_RE.search(root.get("text") or ""):
-            if (link[1], asker) not in issues:
-                from . import linear
-                try:
-                    lin = lin or (linear_client or linear.Linear)()
-                    issues[(link[1], asker)] = {"answer": issue_answer(lin, link[1], asker)}
-                except (linear.LinearError, OSError, KeyError, TypeError, ValueError) as e:   # the ask still counts, from Slack
-                    issues[(link[1], asker)] = None
-                    linear_errors.append(f"{link[1]}: {e}")
-            if (read := issues[(link[1], asker)]) is not None:
-                record, ref = "linear", link[1]
-                found = [ans] if (ans := read["answer"]) and ans["at"] <= now else []
-        if root.get("reply_count") and key not in replies:          # the addressee's own reply answers too, record or not
-            replies[key] = api.paged("conversations.replies", "messages", channel=a["channel"], ts=root["ts"], oldest=root["ts"])
-        found = (found or []) + [{"at": float(m["ts"]), "how": "slack-reply", "by": poster(m, reg)} for m in replies.get(key, [])
-                                 if m.get("ts") != root["ts"] and poster(m, reg) in a["names"] and t0 < float(m["ts"]) <= now]
-        first = min(found, key=lambda x: x["at"], default=None)
-        untimed = (record == "slack" and first is None and rang[key] == 1
-                   and any(x.get("name") in ANSWER_REACTIONS for x in root.get("reactions", [])))
-        out.append({"lane": lane, "ts": root["ts"], "by": asker, "linear": link[1] if link else None, "record": record, "ref": ref,
-                    "first": first["how"] if first else "reaction" if untimed else None, "answer_by": first["by"] if first else None,
-                    "minutes": round(max(first["at"] - t0, 0) / 60, 1) if first and first["how"] != "linear-filed" else None,
-                    "age_minutes": round((now - t0) / 60, 1)})
-    pages, notion_errors = Pages(notion_client), []
-    for c in daniel_cards(api, reg, since, now):
-        t0, st = float(c["ts"]), pages.state(c["page"])
-        if st.get("error"):
-            notion_errors.append(f"{c['url']}: {st['error']}")
-        done = st["answered"] and st["at"] is not None and st["at"] <= now
-        out.append({"lane": DANIEL, "ts": c["ts"], "by": c["by"], "linear": None, "record": "notion", "ref": c["url"],
-                    "state": st["status"], "first": "notion-status" if done else None, "answer_by": None,
-                    "minutes": round(max(st["at"] - t0, 0) / 60, 1) if done else None, "age_minutes": round((now - t0) / 60, 1)})
-    lanes = []
-    for lane in sorted({x["lane"] for x in out}):
-        mine = [x for x in out if x["lane"] == lane]
-        timed = [x["minutes"] for x in mine if x["minutes"] is not None]
-        unanswered = [x for x in mine if not x["first"]]
-        lanes.append({"lane": lane, "asks": len(mine), "answered": len(mine) - len(unanswered),
-                      "slack": sum(x["first"] == "slack-reply" for x in mine),
-                      "linear": sum((x["first"] or "").startswith("linear-") and x["first"] != "linear-filed" for x in mine),
-                      "notion": sum(x["first"] == "notion-status" for x in mine),
-                      "untimed": sum(x["first"] in ("reaction", "linear-filed") for x in mine),
-                      "median_min": nearest_rank(timed, 0.5), "p90_min": nearest_rank(timed, 0.9),
-                      "unanswered": len(unanswered), "stale": sum(x["age_minutes"] * 60 > stale_s for x in unanswered)})
-    return {"since": since, "now": now, "lanes": lanes, "asks": out, "linear_errors": linear_errors, "notion_errors": notion_errors}
-
-
-def render_latency(rep: dict, hours: float) -> str:
-    cols = ("asks", "answered", "slack", "linear", "notion", "untimed", "median_min", "p90_min", "unanswered", "stale")
-    lines = [f"ask latency over the last {hours:g} h (to {both(rep['now'])}): minutes from an ask to the first answer its record "
-             f"shows (Linear for a handle's linked ask, the Notion page's Status for Daniel's, else Slack)",
-             f"  {'lane':<26}" + "".join(f"{c:>11}" for c in cols)]
-    for x in rep["lanes"]:
-        lines.append(f"  @{x['lane']:<25}" + "".join(f"{'-' if x[c] is None else x[c]:>11}" for c in cols))
-    if rep["linear_errors"]:
-        lines.append(f"  linear: {len(rep['linear_errors'])} issue(s) unread, counted from Slack alone: {rep['linear_errors'][0]}")
-    if rep["notion_errors"]:
-        lines.append(f"  notion: {len(rep['notion_errors'])} page(s) unread, counted unanswered: {rep['notion_errors'][0]}")
-    return "\n".join(lines)
 
 
 VOLUME_WORDS = 80                                                # a post longer than this is a brief: it belongs in its issue
@@ -3245,18 +3151,13 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
     reply, or 👀, ✅ or ❌).  An ask unanswered after --stale-h hours is listed with its record's state; one whose record can't
     be read (no Linear or Notion credentials) is listed apart as unchecked, so a missing key is one finding, not a false alert
     per ask.  A mirrored machine alert (a post of kind `alert`) is no ask: it is listed once per alert, however often it
-    repeats (`alert_post`), as an alert to the names it addresses.  With --latency, how fast each lane first answered its
-    asks instead (`ask_latency`); with --volume, how much each poster wrote (`volume`)."""
+    repeats (`alert_post`), as an alert to the names it addresses.  With --volume, how much each poster wrote instead (`volume`)."""
     api, ch, routes = client(ns), channel_id(ns, reg, FRONT_DOOR), routes_of(ns)
     now = time.time() if ns.now is None else float(ns.now)
     since = now - ns.hours * 3600
     if ns.volume:
         rep = volume(api, reg, ch, since, now)
         print(json.dumps(rep, indent=2) if ns.json else render_volume(rep, ns.hours))
-        return 0
-    if ns.latency:
-        rep = ask_latency(api, reg, routes, ch, since, now, ns.stale_h * 3600)
-        print(json.dumps(rep, indent=2) if ns.json else render_latency(rep, ns.hours))
         return 0
     rows, counted = [], set()
     for r in sorted(routes.all().values(), key=lambda r: (bool(r.get("closed")), r["name"])):
@@ -3274,7 +3175,7 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
     handles = {h["handle"] for h in reg["handles"]} | {poster({"user": p.get("slack_user")}, reg) for p in reg.get("humans", [])}
     dropped, asks, groups, alerts = [], [], {g for h in reg["handles"] for g in group_ids(h)}, {}
     fresh: set[str] | None = None                                    # origin/main's group ids, fetched on the first unknown
-    taken: dict[str, tuple[bool, str]] = {}                          # Linear issue -> (taken, its state)
+    taken: dict[tuple[str, tuple[str, ...]], tuple[bool, str]] = {}   # (Linear issue, handles asked) -> (taken, its state)
     said: dict[str, set[str] | str] = {}                             # Linear issue -> who commented on it, or why unreadable
     for m in posts:
         for n in lead_names(m.get("text") or "", reg):
@@ -3296,7 +3197,7 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
             continue                                                 # a machine's alert (`vy-monitors`) isn't an ask
         x = {"ts": m["ts"], "by": poster(m, reg), "to": lead_names(m.get("text") or "", reg)}
         if link := LINEAR_LINK_RE.search(m.get("text") or ""):
-            answered, state = issue_state(link[1], x["by"], taken)
+            answered, state = issue_state(link[1], x["by"], x["to"], taken)
             answered = None if not answered and state.startswith(RECORD_UNREADABLE) else answered
             x.update(record="linear", ref=link[1], state=state)
         elif len(x["to"]) > 1 and (named := LINEAR_ISSUE_URL_RE.search(m.get("text") or "")):
@@ -3591,8 +3492,6 @@ def cmd_chat(ns: argparse.Namespace, reg: dict) -> int:
         raise SlackError(f"--email {ns.email!r} is not an address")
     if ns.start_here and not re.match(r"^https?://\S+$", ns.start_here):
         raise SlackError(f"--start-here {ns.start_here!r} is not an http(s) link")
-    if ns.cursor_bot and not SLACK_USER_RE.match(ns.cursor_bot):
-        raise SlackError(f"--cursor-bot {ns.cursor_bot!r} is not a Slack user id (U...)")
     members = api.paged("users.list", "members")
     if ns.user:
         user = next((m for m in members if m.get("id") == ns.user and not m.get("deleted")), None)
@@ -3625,14 +3524,13 @@ def cmd_chat(ns: argparse.Namespace, reg: dict) -> int:
     cid, new = chat_channel(api, key, (prev or {}).get("channel", {}).get("id"))
     rec["channel"]["id"] = cid
     print(f"{plan}#{key} {cid}: " + ("created, private" if new else "reused"))
-    bot = ns.cursor_bot or cursor_bot(members)
+    bot = cursor_bot(members)
     if bot:
         print(f"{plan}Cursor's bot {bot}: {chat_invite(api, cid, bot)}")
     elif api.dry_run:
-        print("plan: invite Cursor's bot, the users.list bot whose name says cursor (or --cursor-bot U...)")
+        print("plan: invite Cursor's bot, the users.list bot whose name says cursor")
     else:
-        print(f"Cursor's bot: no bot named cursor in users.list, so subscriptions to #{key} wake no one until it is in: rerun "
-              "with --cursor-bot U...")
+        print(f"Cursor's bot: no bot named cursor in users.list, so subscriptions to #{key} wake no one until it is in")
     daniel = None
     if uid:
         print(f"{plan}{name} {uid}: {chat_invite(api, cid, uid)}")
@@ -3830,6 +3728,8 @@ def cmd_slack_app(ns: argparse.Namespace, reg: dict) -> int:
     if ns.acmd == "diff":
         return 1 if lines else 0
     if not lines:
+        print("apply: sent nothing to Slack, and an unchanged manifest doesn't make Slack verify the Request URL again: "
+              f"Retry it at https://api.slack.com/apps/{app}/event-subscriptions")
         return 0
     api.call("apps.manifest.validate", app_id=app, manifest=repo)
     print("validate: Slack accepts the repo's manifest")
@@ -4135,9 +4035,14 @@ class RouteError(SlackError):
         self.status, self.error = status, error
 
 
-def http_json(method: str, url: str, data: bytes | None, headers: dict[str, str]) -> dict:
+def http_open(method: str, url: str, data: bytes | None, headers: dict[str, str]):
+    """One request to a site route, following no redirect, in 30 s: the response, open, for the caller to read or not."""
     req = urllib.request.Request(url, data=data, method=method, headers=headers)
-    with urllib.request.build_opener(_NoRedirect).open(req, timeout=30) as r:
+    return urllib.request.build_opener(_NoRedirect).open(req, timeout=30)
+
+
+def http_json(method: str, url: str, data: bytes | None, headers: dict[str, str]) -> dict:
+    with http_open(method, url, data, headers) as r:
         return json.load(r)
 
 
@@ -4251,16 +4156,16 @@ def _decided(out: dict) -> bool:
 
 
 def _await_card(ns: argparse.Namespace, reg: dict, route: "AskDaniel", cid: str, polls: int) -> int:
-    """`ask-daniel ... --wait`: poll card `cid` until it is decided or its page is answered, `polls` polls or WAIT_CAP_S run
-    out; a card still pending at the cap exits STILL_GOING with the command that reads it later (research.waitcap)."""
+    """`ask-daniel ... --wait`: poll card `cid` until it is decided or its page is answered, `polls` polls or WAIT_LIMIT_S run
+    out; a card still pending at the limit exits STILL_GOING with the command that reads it later (research.waitcap)."""
     follow = page_follower(ns, reg)
     out, capped = wait_for(lambda: follow(route.call("GET", "/" + urllib.parse.quote(cid, safe=""))), sleep=_sleep, every=ns.every,
-                           polls=polls, max_s=waitcap.WAIT_CAP_S, clock=_clock)
+                           polls=polls, max_s=waitcap.WAIT_LIMIT_S, clock=_clock)
     ring_decision(ns, reg, cid, out)
     rc = _show(out, ns.json)
     if not capped:
         return rc
-    print(waitcap.still_going(f"card {cid} (pending)", f"research msg ask-daniel status {cid}", waitcap.WAIT_CAP_S,
+    print(waitcap.still_going(f"card {cid} (pending)", f"research msg ask-daniel status {cid}", waitcap.WAIT_LIMIT_S,
                               end="End your turn now; a subscription to the card's thread (subscribe_slack_thread) wakes you "
                                   "when Daniel answers."), file=sys.stderr)
     return waitcap.STILL_GOING
@@ -4373,14 +4278,10 @@ def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
             if ns.choice == OTHERWISE and not 1 <= len((ns.note or "").strip()) <= OTHERWISE_NOTE_MAX:
                 raise SlackError(f"ask-daniel resolve --choice otherwise needs --note: what Daniel decided instead, in 1 to "
                                  f"{OTHERWISE_NOTE_MAX} characters")
-            if ns.on_page and provisional:
-                raise SlackError("ask-daniel resolve: --on-page records Daniel's word and --provisional the lane's own "
-                                 "decision; a resolve is one or the other")
             if ns.choice == OTHERWISE and provisional:
                 raise SlackError("ask-daniel resolve --choice otherwise is Daniel's word, never provisional: a lane decides only "
                                  "among its card's options")
-            body = {"choice": ns.choice, **({"note": ns.note} if ns.note else {}), **({"provisional": True} if provisional else {}),
-                    **({"page": True} if ns.on_page else {})}
+            body = {"choice": ns.choice, **({"note": ns.note} if ns.note else {}), **({"provisional": True} if provisional else {})}
             if ns.dry_run:
                 print(f"dry-run: POST {ASK_DANIEL}{path}/resolve {json.dumps(body, sort_keys=True)}", file=sys.stderr)
                 return 0
@@ -4557,9 +4458,9 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p = cmd("linear", "Linear issues, relations, projects and milestones, through the app (never the Linear MCP connector, "
                       "which acts as Daniel): `check` (what "
                       "the credentials reach; exit 0 when fit for asks), `state ISSUE STATE` (by name; " + LINEAR_STATES + "), "
-                      "`comment ISSUE TEXT --as HANDLE` (a lane's worker: `--worker NAME`), `list TEAM [--state S]` (open by "
-                      "default), `audit [TEAM ...] [--lane HANDLE]` (each open issue off its board or stale, and each person's "
-                      "ask parked, unstaffed, slipped or asked again, with its fix; exit 1 on any; `--asks [--asker NAME]`: "
+                      "`comment ISSUE TEXT --as HANDLE` (a lane's worker: `--worker NAME`), `audit [TEAM ...] [--lane HANDLE]` "
+                      "(each open issue off its board or stale, and each person's ask parked, unstaffed, slipped or asked "
+                      "again, with its fix; exit 1 on any; `--asks [--asker NAME]`: "
                       "the ledger of people's asks, delivered or not; `--close-strays --as HANDLE`: also cancel each stray "
                       "with a comment naming the rule), `place ISSUE PROJECT [--milestone M]` (by name "
                       "prefixes), `edit ISSUE [--title T] [--due YYYY-MM-DD|none] [--file BRIEF.md] [--parent ID] [--label L "
@@ -4568,15 +4469,16 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                       "PROJECT --health onTrack|atRisk|offTrack --body-file F` (a project update), `project create NAME --team "
                       "KEY... [--lead USER] [--target YYYY-MM-DD] [--description-file F]`, `project edit PROJECT [--team KEY...] [--date D] [--status S]` (adds teams, sets the target and status), `milestone create|edit PROJECT NAME "
                       "[--date YYYY-MM-DD] [--description-file F] [--rename NEW]`, `create --as HANDLE --title T --file BRIEF.md [--team KEY] "
-                      "[--due YYYY-MM-DD] [--parent ID]` (an issue in your own team, or KEY's); none sends a state")
-    p.add_argument("verb", choices=("check", "state", "comment", "list", "audit", "place", "edit", "relate", "unrelate", "update",
-                                    "project", "milestone", "create"))
-    p.add_argument("target", nargs="?", help="state, comment, place, edit, relate, unrelate: the issue (INF-12); list, audit: the "
+                      "[--due YYYY-MM-DD] [--parent ID]` (an issue in your own team, or KEY's), `response [--since ISO|--hours N] "
+                      "[--lane HANDLE] [--open-over MINUTES]` (how fast each lane answers the comments that ring it: "
+                      "research/response.py); none sends a state")
+    p.add_argument("verb", choices=("check", "state", "comment", "audit", "place", "edit", "relate", "unrelate", "update",
+                                    "project", "milestone", "create", "response"))
+    p.add_argument("target", nargs="?", help="state, comment, place, edit, relate, unrelate: the issue (INF-12); audit: the "
                                              "team (a handle or its key); update: the project; project, milestone: create or edit")
     p.add_argument("value", nargs="*", help="state: the state's name; comment: the text; place: the project; audit: more teams; "
                                             "relate: the kind and the other issue; unrelate: the other issue; project create: "
                                             "its name; project edit: the project; milestone: the project (one word or quoted) and the milestone's name")
-    p.add_argument("--state", default=None, metavar="NAME", help="list: only issues in this state (default: every open one)")
     p.add_argument("--write", default=None, metavar="TEAM", help="check: also file, comment on and cancel a test issue in TEAM")
     p.add_argument("--as", dest="handle", default=None, metavar="HANDLE",
                    help="comment: its sender, a handle you hold (or --worker); audit --close-strays: the closing comments' "
@@ -4584,7 +4486,8 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--worker", default=None, metavar="NAME",
                    help="comment: for a lane's workers, agents that hold no handle (never with --as): it shows as LANE/NAME "
                         "and rings no one. Give LANE/NAME to sign as your own lane on another lane's issue; with NAME "
-                        "alone, LANE is the handle of the issue's team")
+                        "alone, LANE is the handle of the issue's team. A comment that starts with @names posts, says "
+                        "which it didn't ring and how your lead rings them, and exits 1")
     p.add_argument("--title", default=None, metavar="T", help="edit: the issue's new title")
     p.add_argument("--due", default=None, metavar="YYYY-MM-DD", help="edit: its due date (`none` clears it)")
     p.add_argument("--file", "--body-file", "--description-file", dest="file", default=None, metavar="F.md",
@@ -4610,8 +4513,14 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--label", default=None, metavar="L", help="edit: add this label (`asker:NAME`, `asker-ok`)")
     p.add_argument("--remove", action="store_true", help="edit --label: remove it instead")
     p.add_argument("--milestone", default=None, metavar="M", help="place: the project's milestone, a prefix of its name (M3)")
-    p.add_argument("--json", action="store_true", help="audit: the findings and counts (--asks: the asks) as JSON")
-    p.add_argument("--now", default=None, metavar="EPOCH", help="audit: the time it audits at, in seconds since the epoch (default: now)")
+    p.add_argument("--json", action="store_true", help="audit: the findings and counts (--asks: the asks) as JSON; response: "
+                                                       "its figures and every ask")
+    p.add_argument("--now", default=None, metavar="EPOCH", help="audit, response: the time it reads at, in seconds since the "
+                                                                "epoch (default: now)")
+    p.add_argument("--since", default=None, metavar="ISO", help="response: the window's start, a UTC time (default: --hours before now)")
+    p.add_argument("--hours", type=float, default=24, metavar="N", help="response: the window, hours before now (default 24)")
+    p.add_argument("--open-over", type=float, default=30, metavar="MINUTES",
+                   help="response: list the open asks older than this (default 30)")
     p = cmd("reply", "a post in a thread; `@name` at its start also rings that name's doorbell", as_=True, thread=True, body=True)
     p.add_argument("--quiet", action="store_true", help="ring only the names it starts with: no reply needed")
     p.add_argument("--urgent", action="store_true", help="the doorbells say URGENT")
@@ -4635,9 +4544,6 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                    help="an ask its record doesn't show answered after this many hours is unanswered: its Linear issue still "
                         "in Backlog with no comment but the asker's, Daniel's page still Waiting on Daniel, or (no record) no "
                         "👀, ✅, ❌ or reply; one whose record can't be read is unchecked")
-    p.add_argument("--latency", action="store_true", help="instead: per lane (and @daniel), its asks, how many its record shows "
-                                                         "answered (Linear, Notion, or Slack where there's no record), and the "
-                                                         "median and p90 minutes to the first answer")
     p.add_argument("--volume", action="store_true", help="instead: per poster in #agent-coordination, its posts and their median, "
                                                         f"p90 and most words, and those over {VOLUME_WORDS} words; and the "
                                                         "threads with the most replies")
@@ -4681,7 +4587,10 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                         "with --as, NAME's doorbells since TS")
     p.add_argument("--as", dest="handle", default=None, metavar="NAME", help="NAME's unread doorbells")
     p.add_argument("--limit", type=int, default=None)
-    p.add_argument("--peek", action="store_true", help="--as: don't mark them read")
+    p.add_argument("--peek", action="store_true", help="--as: don't mark them read; the listing ends with the newest ts it showed")
+    p.add_argument("--mark-through", default=None, metavar="TS", type=since_ts,
+                   help="--as: list nothing, and mark read only the unread doorbells at or before TS (the ts a --peek listing "
+                        "ended with), never one that rang after it")
     p.add_argument("--urgent", action="store_true", help="--as: exit 1 unless an unread doorbell is URGENT")
     p.add_argument("--json", action="store_true")
     p = cmd("ask-daniel", "an ask's page in the Asks for Daniel database and its card in #ask-daniel; `status ID` reads the card's "
@@ -4697,16 +4606,13 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--link", default=None, metavar="NOTION_URL", help="the ask's page, made with the Notion MCP, in place of --page")
     p.add_argument("--hours", type=float, default=24, metavar="H", help="pages: edited in the last H hours (default 24)")
     p.add_argument("--wait", action="store_true",
-                   help=f"poll until the card is decided (or overdue) or its page is answered; exit 0 once decided, for at most {waitcap.WAIT_CAP_S} s (no tool "
+                   help=f"poll until the card is decided (or overdue) or its page is answered; exit 0 once decided, for at most {waitcap.WAIT_LIMIT_S} s (no tool "
                         f"call blocks longer than 20 minutes): a card still pending then exits {waitcap.STILL_GOING}, "
                         "naming `ask-daniel status ID` to check back")
     p.add_argument("--every", type=float, default=WAIT_EVERY_S, metavar="S", help=f"seconds between polls (default {WAIT_EVERY_S})")
     p.add_argument("--choice", default=None, metavar="VALUE",
                    help="resolve: the option Daniel chose in the thread, or `otherwise` (with --note: what he decided "
                         "instead), which also replaces a lane's provisional decision")
-    p.add_argument("--on-page", action="store_true",
-                   help="resolve: Daniel said it on the card's page, not in its thread (`status` names a card that differs "
-                        "from its page: record the page with `--choice otherwise --on-page --note ...`)")
     p.add_argument("--note", default=None, help="resolve: his words, or a link to them; extend: why; withdraw: why the ask no longer stands")
     p.add_argument("--provisional", action="store_true",
                    help="resolve: the lane decided it under the standing rule, so the card says the lane decided, not "
@@ -4725,7 +4631,6 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--lane", default=None, metavar="HANDLE",
                    help="open, expect: the lane they usually work with, which their posts that name no lane ring in place of "
                         f"@{CHAT_WATCHER} (default: kept; '' clears it)")
-    p.add_argument("--cursor-bot", default=None, metavar="U...", help="open: Cursor's bot user (default: users.list's bot named cursor)")
     p = sub.add_parser("groups", help="the handles' Slack user groups")
     gsub = p.add_subparsers(dest="gcmd", required=True)
     gsub.add_parser("sync", parents=[c], help="create or update a user group per handle; a plan unless --apply").add_argument("--apply", action="store_true")

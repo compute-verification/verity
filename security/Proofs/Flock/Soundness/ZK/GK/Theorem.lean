@@ -12,7 +12,7 @@ import VCVio.Prelude.Core
 The hybrid argument for the Goldreich–Kahan simulator (`GK/Sim.lean`) against one verifier `V*`, in four steps:
 
 * `sim_hyb₁`: the simulator's rewinds sample fresh dummy openings for the coins `V*` opened (`rwS`); hybrid 1's rewinds
-  are runs with the real witness (`rwR`). One rewind's law moves by at most `δ_B` (Lemma B, `RewindClose`), and the
+  are runs with the real witness (`rwR`). One rewind's sampling design moves by at most `δ_B` (Lemma B, `RewindClose`), and the
   expected number of rewinds is at most `4t` over the first run's completion (`estimate_runs`), so every test moves by
   at most `4t·δ_B`.
 * `hyb₁_hyb₂`: hybrid 2 rewinds with fresh real runs and never checks the coins. Hybrid 1's real-witness rewind is the

@@ -7,7 +7,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Game
 
 /-!
-# `δ_link` for the compiled `--zk` session, under expected-time collision resistance
+# `ε_bind` for the compiled `--zk` session, under expected-time collision resistance
 
 `Discharge/Exec/FlockLinkL.lean`'s link theorem for the compiled `--zk` session (`batchedSessionZC`), whose extractor
 fills each sampled proof block's level-0 oracle (68 lanes: the witness lanes and both reps' extra lanes) from the verifying
@@ -50,7 +50,7 @@ variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Verity.Boolean.Circuit} {n : 
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
 
-variable {L : Law n} {decode : DecoderZK (C := C) planZ tab} {Dh : Type}
+variable {L : SamplingDesign n} {decode : DecoderZK (C := C) planZ tab} {Dh : Type}
   {Hc : List UInt8 → Dh} (vb : ValueBindingZ A P planZ tab decode Hc)
   (R : Reg) (τ : Cont L Reg (batchedSessionZC A Hs planZ) R)
 
@@ -91,7 +91,7 @@ noncomputable def readsAtZC (ω : L.Ω) (bs : List (List (OutZC F D Sl))) (c : v
   Finset.univ.filter fun v => ∃ o, OpensAtZC A Hs P planZ tab vb R τ ω bs c v o
 
 /-- A trial's outcome: the sample, the fresh run, and the waits' runs. -/
-abbrev TrialOutZC (F : Type) (L : Law n) (D Sl : Type) := L.Ω × List (OutZC F D Sl) × List (List (List (OutZC F D Sl)))
+abbrev TrialOutZC (F : Type) (L : SamplingDesign n) (D Sl : Type) := L.Ω × List (OutZC F D Sl) × List (List (List (OutZC F D Sl)))
 
 /-- **The trial for commit string `c`**: a sample that reads `c`, a fresh session, and `k` waits of at
 most `Rw` reruns each. -/
@@ -102,7 +102,7 @@ noncomputable def trialGZC (c : vb.Pos) [Nonempty (ΩcZ A P planZ tab vb L c)] (
 /-- The prover's session strategy in every run. -/
 noncomputable def trialStratZC (c : vb.Pos) [Nonempty (ΩcZ A P planZ tab vb L c)] (k Rw : ℕ) :
     Strategy (trialGZC A Hs P planZ tab vb R τ c k Rw) :=
-  Strategy.bind _ _ (drawStrat _) fun w => Strategy.bind _ _ (stratωZC A Hs planZ R τ w.1).2 fun _ =>
+  Strategy.bind _ _ (sampleStrat _) fun w => Strategy.bind _ _ (stratωZC A Hs planZ R τ w.1).2 fun _ =>
     Strategy.map _ _ (runsStrat _ (runsStrat _ (stratωZC A Hs planZ R τ w.1).2 Rw) k)
 
 open Classical in
@@ -205,7 +205,7 @@ theorem expect_trialZC (c : vb.Pos) [Nonempty (ΩcZ A P planZ tab vb L c)] (k Rw
           (gameωZC A Hs planZ R τ w.1) (stratωZC A Hs planZ R τ w.1).2) /
         Fintype.card (ΩcZ A P planZ tab vb L c) := by
   unfold trialGZC trialStratZC
-  rw [expect_bind, Verity.Game.expect_draw]
+  rw [expect_bind, Verity.Game.expect_sample]
   congr 1
   refine Finset.sum_congr rfl fun w _ => ?_
   rw [expect_bind]
@@ -346,7 +346,7 @@ theorem Xval_maxZC (k Rw : ℕ) (c : vb.Pos) [hne : Nonempty (ΩcZ A P planZ tab
   exact (Classical.choose_spec (Finset.exists_max_image Finset.univ _ Finset.univ_nonempty)).2 v
     (Finset.mem_univ v)
 
-theorem readsAt_eq_emptyZC {c : vb.Pos} {ω : L.Ω} (h : ¬ ReadsDrawZ A P planZ tab vb c ω)
+theorem readsAt_eq_emptyZC {c : vb.Pos} {ω : L.Ω} (h : ¬ ReadsSampleZ A P planZ tab vb c ω)
     (bs : List (List (OutZC F D Sl))) : readsAtZC A Hs P planZ tab vb R τ ω bs c = ∅ := by
   classical
   unfold readsAtZC
@@ -486,13 +486,13 @@ theorem ideal_mass_le_atZC (x : vb.Val) (k Rw : ℕ) (hRw : 1 ≤ Rw) (c : vb.Po
   have hΩ : (0 : ℝ) < Fintype.card L.Ω := by exact_mod_cast Fintype.card_pos
   have hB : 0 ≤ E + k / (Real.exp 1 * Rw) := add_nonneg (errZC_nonneg A Hs P planZ tab vb R τ c k Rw x) (by positivity)
   -- off the samples that read `c`, the trace vanishes
-  have hoff : ∀ ω, ¬ ReadsDrawZ A P planZ tab vb c ω → f ω = 0 := by
+  have hoff : ∀ ω, ¬ ReadsSampleZ A P planZ tab vb c ω → f ω = 0 := by
     intro ω hω
     have hpsi : psiAtZC A Hs P planZ tab vb R τ x c ω = fun _ => 0 := funext fun bs => by
       simp [psiAtZC, readsAt_eq_emptyZC A Hs P planZ tab vb R τ hω bs]
     simp only [hf, hpsi, expectAcc_zero, mul_zero]
   have hsum : ∑ ω : L.Ω, f ω = ∑ w : ΩcZ A P planZ tab vb L c, f w.1 := by
-    rw [← Finset.sum_filter_of_ne (p := fun ω => ReadsDrawZ A P planZ tab vb c ω)
+    rw [← Finset.sum_filter_of_ne (p := fun ω => ReadsSampleZ A P planZ tab vb c ω)
       (fun ω _ hne => by by_contra h; exact hne (hoff ω h))]
     exact Finset.sum_subtype _ (fun ω => by simp) f
   rw [hsum, div_le_iff₀ hΩ]
@@ -723,7 +723,7 @@ theorem zk_linkSoundC_at
         ring
     _ ≤ _ := div_le_div_of_nonneg_right (Finset.sum_le_sum fun c _ => hc c) hρ1.le
 
-/-- **The link theorem: `δ_link` under expected-time collision resistance, prover by prover.** For the batched audit
+/-- **The link theorem: `ε_bind` under expected-time collision resistance, prover by prover.** For the batched audit
 with the expected-time extractor (`analysisZC`, at any knowledge bound) and the plurality value layer (`XplurZC`), given
 the binding of wires to commit strings (`ValueBindingZ`): at every prover whose explicit finder of each commit string satisfies A2 (`LinkCRZC`),
 $$\delta_{\rm link}\le\frac{Q_s}{1-\rho}\Big(\frac{2t'(1+k)}{2^{256}}+\frac{1}{eM}+\frac{k}{eR_w}\Big),$$

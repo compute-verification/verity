@@ -6,20 +6,20 @@ public import Proofs.Flock.SessionLoop.Level0SrcSat
 /-!
 # The loop's rep samples are satisfiable, and so is `Loop.Src`
 
-`Loop.RepSrc`, the rep-draw half of `Loop.Src` (`flock-firewall-os-src`), holds at every statement and witness, at a
+`Loop.RepSrc`, the rep-draw half of `Loop.Src` (`flock-zk-server-os-src`), holds at every statement and witness, at a
 release whose frames sample the tape's pads and pads-tree salts and a source that hands each rep the tape's salts for
 levels ≥ 1, each written in the layout the host reads it in: `Frame.Draws.ofBytes`'s for the frame's samples and
 `Finish.hiSaltsOf`'s, `192·2^d` bytes a level, for the salts.
 
-* `Frame.tapeBytes`: table `i`'s rep `r` samples from a tape at layout `l`, `drawBytes l` bytes: `h`, `μ`, the rows'
+* `Frame.tapeBytes`: table `i`'s rep `r` samples from a tape at layout `l`, `sampleBytes l` bytes: `h`, `μ`, the rows'
   padding (each word `lo ‖ hi`, little-endian), `τ`'s salt fitted to `TAU_SALT_BYTES` and each leaf's salt fitted to
   `192`. `Draws.ofBytes` reads back the tape's pads (`Frame.padsOf_tapeBytes`) and leaf salts
   (`Frame.innerSalt_tapeBytes`).
 * `Loop.hiBytes`: a rep's salts for levels ≥ 1 from a tape, each level's `2^d` salts in order; `Finish.saltAt` reads
   back each one of `192` bytes (`Loop.saltAt_hiBytes`), as the tape's are on a table's schedule
   (`Masked.tapeSalt_size`).
-* `Loop.tapeDraws`, `Loop.tapeSrcHi`: at statement `x`, the frames' samples, and `Loop.tapeSrc` with those salts.
-* **`Loop.src_tape`**: `Loop.Src` holds at every `x` and `w`, at every release whose samples are `Loop.tapeDraws x` and
+* `Loop.tapeSamples`, `Loop.tapeSrcHi`: at statement `x`, the frames' samples, and `Loop.tapeSrc` with those salts.
+* **`Loop.src_tape`**: `Loop.Src` holds at every `x` and `w`, at every release whose samples are `Loop.tapeSamples x` and
   the source `Loop.tapeSrcHi` (`Loop.level0Src_tapeSrcHi`, `Loop.repSrc_tape`).
 * **`LeanRelease.trustsStop_tape`**: so `trustsStop_finHonest` holds with no premise on the loop at such a release, at
   every relation over the one statement `x`. The samples read no statement, so one release serves one statement's
@@ -28,7 +28,7 @@ levels ≥ 1, each written in the layout the host reads it in: `Frame.Draws.ofBy
 
 @[expose] public section
 
-namespace Flock.Firewall.Frame
+namespace Flock.ZkServer.Frame
 
 open Claims.ZKServer (get!_list size_list)
 open Level0 (wordByte wordAt_of extract_of_get)
@@ -50,22 +50,22 @@ def tapeByte (T : FlockComplete.TapeZk) (i r : Nat) (l : Zk.PadLayout) (p : Nat)
         (T.innerSalt i r ((p - (32 * l.len + 32 * Zk.K_PAD + Zk.TAU_SALT_BYTES)) / 192))).get!
       ((p - (32 * l.len + 32 * Zk.K_PAD + Zk.TAU_SALT_BYTES)) % 192)
 
-/-- **Table `i`'s rep `r` samples from the tape `T`** at layout `l`: `drawBytes l` bytes in `Draws.ofBytes`'s layout. -/
+/-- **Table `i`'s rep `r` samples from the tape `T`** at layout `l`: `sampleBytes l` bytes in `Draws.ofBytes`'s layout. -/
 def tapeBytes (T : FlockComplete.TapeZk) (i r : Nat) (l : Zk.PadLayout) : ByteArray :=
-  ByteArray.mk ((List.range (drawBytes l)).map (tapeByte T i r l)).toArray
+  ByteArray.mk ((List.range (sampleBytes l)).map (tapeByte T i r l)).toArray
 
-theorem drawBytes_eq (l : Zk.PadLayout) :
-    drawBytes l = 32 * l.len + 32 * Zk.K_PAD + Zk.TAU_SALT_BYTES + 192 * codeLen l := by
+theorem sampleBytes_eq (l : Zk.PadLayout) :
+    sampleBytes l = 32 * l.len + 32 * Zk.K_PAD + Zk.TAU_SALT_BYTES + 192 * codeLen l := by
   show 16 * (2 * l.len + 2 * Zk.K_PAD) + Zk.TAU_SALT_BYTES + 192 * codeLen l = _
   omega
 
 theorem tapeBytes_size (T : FlockComplete.TapeZk) (i r : Nat) (l : Zk.PadLayout) :
-    (tapeBytes T i r l).size = drawBytes l := by
+    (tapeBytes T i r l).size = sampleBytes l := by
   unfold tapeBytes
   rw [size_list]
   simp
 
-theorem tapeBytes_get (T : FlockComplete.TapeZk) (i r : Nat) (l : Zk.PadLayout) {p : Nat} (hp : p < drawBytes l) :
+theorem tapeBytes_get (T : FlockComplete.TapeZk) (i r : Nat) (l : Zk.PadLayout) {p : Nat} (hp : p < sampleBytes l) :
     (tapeBytes T i r l).get! p = tapeByte T i r l p := by
   unfold tapeBytes
   rw [get!_list, getElem!_pos _ p (by simpa using hp)]
@@ -146,8 +146,8 @@ theorem words_of (b : ByteArray) (o n : Nat) (f : Nat → F128)
 /-- **The tape's samples read back as its pads**: `Draws.ofBytes` on `tapeBytes` has the tape's `h`, `μ`, rows' padding
 and `τ`'s salt, with `h_ab` and `w` set as `padsOf` sets them. -/
 theorem padsOf_tapeBytes (T : FlockComplete.TapeZk) (i r : Nat) (l : Zk.PadLayout) :
-    FlockComplete.padsOf T i r l = Claims.ZKServer.drawsPads (Draws.ofBytes l (tapeBytes T i r l)) := by
-  have hD := drawBytes_eq l
+    FlockComplete.padsOf T i r l = Claims.ZKServer.samplesPads (Draws.ofBytes l (tapeBytes T i r l)) := by
+  have hD := sampleBytes_eq l
   have hH : words (tapeBytes T i r l) 0 l.len = (Array.range l.len).map (T.h i r) :=
     words_of _ _ _ _ fun c hc k hk => by
       rw [tapeBytes_get T i r l (by rw [hD]; omega)]
@@ -175,7 +175,7 @@ theorem padsOf_tapeBytes (T : FlockComplete.TapeZk) (i r : Nat) (l : Zk.PadLayou
         rw [tapeBytes_get T i r l (by rw [hD]; omega)]
         exact tapeByte_tau T i r l hk
     rwa [FlockComplete.JsonRT.fitBytes_size] at e
-  unfold FlockComplete.padsOf Claims.ZKServer.drawsPads Draws.ofBytes
+  unfold FlockComplete.padsOf Claims.ZKServer.samplesPads Draws.ofBytes
   simp only [hH, hM, hPH, hPM, hT]
 
 /-- **The tape's samples read back as its leaf salts**: each of the `codeLen` leaves' `192` bytes of `Draws.ofBytes`'s
@@ -183,7 +183,7 @@ salts on `tapeBytes` is the tape's leaf salt, fitted. -/
 theorem innerSalt_tapeBytes (T : FlockComplete.TapeZk) (i r : Nat) (l : Zk.PadLayout) {q : Nat} (hq : q < codeLen l) :
     (Draws.ofBytes l (tapeBytes T i r l)).salts.extract (SALT * q) (SALT * q + SALT) =
       FlockComplete.fitBytes 192 (T.innerSalt i r q) := by
-  have hD := drawBytes_eq l
+  have hD := sampleBytes_eq l
   have hS : SALT = 192 := rfl
   have hq' : 192 * (q + 1) ≤ 192 * codeLen l := Nat.mul_le_mul (le_refl _) (Nat.succ_le_of_lt hq)
   show ((tapeBytes T i r l).extract (32 * l.len + 32 * Zk.K_PAD + Zk.TAU_SALT_BYTES)
@@ -199,7 +199,7 @@ theorem innerSalt_tapeBytes (T : FlockComplete.TapeZk) (i r : Nat) (l : Zk.PadLa
       exact tapeByte_salt T i r l hk
   rwa [FlockComplete.JsonRT.fitBytes_size] at e
 
-end Flock.Firewall.Frame
+end Flock.ZkServer.Frame
 
 namespace Claims.ZKMal.Masked
 
@@ -211,7 +211,7 @@ theorem tapeSalt_size (x : Msg) (t : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) {l p
     (h2 : l < (zkTab x j).sch.levels.size) (hp : p < 2 ^ ((zkTab x j).sch.levels.getD l default).d) :
     ((UE.tapeZk t).salt j.val r.val l p).size = 192 := by
   obtain ⟨-, -, -, -, -, -, hseam, -, -⟩ :=
-    FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ (zkTab x j).hz
+    FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ _ (zkTab x j).hz
   have hat : HiAt (zkTab x j).table.sch.levels l p := by
     have e : (zkTab x j).table.sch.levels.getD l default =
         FlockSoundness.Refine.levelOf ((zkTab x j).sch.levels.getD l default) := by
@@ -247,10 +247,10 @@ def Loop.saltBlocks (f : ℕ → ByteArray) (n : ℕ) : ByteArray :=
   ByteArray.mk ((List.range (192 * n)).map fun b => (f (b / 192)).get! (b % 192)).toArray
 
 theorem Loop.saltAt_saltBlocks (f : ℕ → ByteArray) {n p : ℕ} (hp : p < n) (hs : (f p).size = 192) :
-    _root_.Flock.Firewall.Finish.saltAt (Loop.saltBlocks f n) p = f p := by
-  unfold _root_.Flock.Firewall.Finish.saltAt Loop.saltBlocks
+    _root_.Flock.ZkServer.Finish.saltAt (Loop.saltBlocks f n) p = f p := by
+  unfold _root_.Flock.ZkServer.Finish.saltAt Loop.saltBlocks
   have h192 : 192 * (p + 1) ≤ 192 * n := Nat.mul_le_mul (le_refl _) (Nat.succ_le_of_lt hp)
-  have e := _root_.Flock.Firewall.Level0.extract_of_get
+  have e := _root_.Flock.ZkServer.Level0.extract_of_get
     (ByteArray.mk ((List.range (192 * n)).map fun b => (f (b / 192)).get! (b % 192)).toArray) (192 * p) (f p)
     (by rw [hs, size_list, List.length_map, List.length_range]; omega) fun k hk => by
       rw [hs] at hk
@@ -268,7 +268,7 @@ def Loop.hiBytes (T : FlockComplete.TapeZk) (i r : ℕ) (sch : _root_.Flock.Sche
 theorem Loop.saltAt_hiBytes (T : FlockComplete.TapeZk) (i r : ℕ) (sch : _root_.Flock.Schedule) {l p : ℕ}
     (h1 : 1 ≤ l) (h2 : l < sch.levels.size) (hp : p < 2 ^ (sch.levels.getD l default).d)
     (hs : (T.salt i r l p).size = 192) :
-    _root_.Flock.Firewall.Finish.saltAt ((Loop.hiBytes T i r sch).getD (l - 1) ByteArray.empty) p = T.salt i r l p := by
+    _root_.Flock.ZkServer.Finish.saltAt ((Loop.hiBytes T i r sch).getD (l - 1) ByteArray.empty) p = T.salt i r l p := by
   have hl : l - 1 < sch.levels.size - 1 := by omega
   have hg : (Loop.hiBytes T i r sch).getD (l - 1) ByteArray.empty =
       Loop.saltBlocks (T.salt i r l) (2 ^ (sch.levels.getD l default).d) := by
@@ -281,12 +281,12 @@ theorem Loop.saltAt_hiBytes (T : FlockComplete.TapeZk) (i r : ℕ) (sch : _root_
 
 /-- **The frames' samples at statement `x`**: rep stream `k`'s, of table `k / 2`, the tape's (`Frame.tapeBytes`) at its
 layout. -/
-noncomputable def Loop.tapeDraws (x : Msg)
+noncomputable def Loop.tapeSamples (x : Msg)
     (ρ : (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce ×
       (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand)
     (k : ℕ) : ByteArray :=
   if h : k / 2 < Masked.jOf x then
-    _root_.Flock.Firewall.Frame.tapeBytes (Masked.UE.tapeZk ρ.2) (k / 2) (k % 2) (Masked.layE x ⟨k / 2, h⟩)
+    _root_.Flock.ZkServer.Frame.tapeBytes (Masked.UE.tapeZk ρ.2) (k / 2) (k % 2) (Masked.layE x ⟨k / 2, h⟩)
   else ByteArray.empty
 
 /-- **A source that samples the tape's level 0 and levels ≥ 1's salts**: `Loop.tapeSrc`, with rep stream `k`'s salts for
@@ -296,7 +296,7 @@ noncomputable def Loop.tapeSrcHi (x : Msg) (w : Flock.Wit)
       (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand)
     (k : ℕ) : V (Array F128 × ByteArray × Array ByteArray) :=
   if h : k / 2 < Masked.jOf x then
-    .ok ((Masked.linkIn x w ρ.2 ⟨k / 2, h⟩).g, _root_.Flock.Firewall.Level0.inBytes (Masked.lv0 x ⟨k / 2, h⟩)
+    .ok ((Masked.linkIn x w ρ.2 ⟨k / 2, h⟩).g, _root_.Flock.ZkServer.Level0.inBytes (Masked.lv0 x ⟨k / 2, h⟩)
       (Masked.zkTab x ⟨k / 2, h⟩).tPad (Masked.linkIn x w ρ.2 ⟨k / 2, h⟩),
       Loop.hiBytes (Masked.UE.tapeZk ρ.2) (k / 2) (k % 2) (Masked.zkTab x ⟨k / 2, h⟩).sch)
   else .error "no table"
@@ -323,16 +323,16 @@ section Rep
 variable (x : Msg) (ν : (CoinLayer.session Loop.loopNr Masked.dataE).Nonce)
   (t : (CoinLayer.session Loop.loopNr Masked.dataE).Tape) (j : Fin (Masked.jOf x)) (r : Fin 2)
 
-theorem Loop.tapeDraws_rep :
-    Loop.tapeDraws x (ν, t) (2 * j.val + r.val) =
-      _root_.Flock.Firewall.Frame.tapeBytes (Masked.UE.tapeZk t) j.val r.val (Masked.layE x j) := by
+theorem Loop.tapeSamples_rep :
+    Loop.tapeSamples x (ν, t) (2 * j.val + r.val) =
+      _root_.Flock.ZkServer.Frame.tapeBytes (Masked.UE.tapeZk t) j.val r.val (Masked.layE x j) := by
   have hk : (2 * j.val + r.val) / 2 = j.val := by omega
   have hm : (2 * j.val + r.val) % 2 = r.val := by omega
   have hj : (2 * j.val + r.val) / 2 < Masked.jOf x := by
     have := j.isLt
     omega
   have hJ : (⟨(2 * j.val + r.val) / 2, hj⟩ : Fin (Masked.jOf x)) = j := Fin.ext hk
-  unfold Loop.tapeDraws
+  unfold Loop.tapeSamples
   rw [dite_eq_left hj, hJ, hk, hm]
 
 theorem Loop.tapeSrcHi_hi (w : Flock.Wit) {g : Array F128} {d : ByteArray} {hi : Array ByteArray}
@@ -351,29 +351,29 @@ theorem Loop.tapeSrcHi_hi (w : Flock.Wit) {g : Array F128} {d : ByteArray} {hi :
 end Rep
 
 /-- **`Loop.RepSrc` is satisfiable**: at every statement `x` and witness `w`, a release whose frames sample
-`Loop.tapeDraws x` and the source `Loop.tapeSrcHi` meet it. The samples are `drawBytes` long and read back as the tape's
+`Loop.tapeSamples x` and the source `Loop.tapeSrcHi` meet it. The samples are `sampleBytes` long and read back as the tape's
 pads and leaf salts (`Frame.padsOf_tapeBytes`, `Frame.innerSalt_tapeBytes`), and the source's salts for levels ≥ 1 read
 back as the tape's (`Loop.saltAt_hiBytes`, each `192` bytes: `Masked.tapeSalt_size`). -/
 theorem Loop.repSrc_tape
     (L : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce ×
         (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
-    (x : Msg) (w : Flock.Wit) (hd : L.draws = Loop.tapeDraws x) : Loop.RepSrc L Loop.tapeSrcHi x w := by
+    (x : Msg) (w : Flock.Wit) (hd : L.draws = Loop.tapeSamples x) : Loop.RepSrc L Loop.tapeSrcHi x w := by
   intro ν t j r
-  rw [hd, Loop.tapeDraws_rep x ν t j r]
-  refine ⟨_root_.Flock.Firewall.Frame.tapeBytes_size _ _ _ _, _root_.Flock.Firewall.Frame.padsOf_tapeBytes _ _ _ _,
-    fun q hq => (_root_.Flock.Firewall.Frame.innerSalt_tapeBytes _ _ _ _ hq).symm, ?_⟩
+  rw [hd, Loop.tapeSamples_rep x ν t j r]
+  refine ⟨_root_.Flock.ZkServer.Frame.tapeBytes_size _ _ _ _, _root_.Flock.ZkServer.Frame.padsOf_tapeBytes _ _ _ _,
+    fun q hq => (_root_.Flock.ZkServer.Frame.innerSalt_tapeBytes _ _ _ _ hq).symm, ?_⟩
   intro g d hi hs l h1 h2 p hp
   rw [Loop.tapeSrcHi_hi x ν t j r w hs]
   exact Loop.saltAt_hiBytes _ _ _ _ h1 h2 hp (Masked.tapeSalt_size x t j r h1 h2 hp)
 
 /-- **`Loop.Src` is satisfiable**: at every statement `x` and witness `w`, both halves hold at the source
-`Loop.tapeSrcHi` and every release whose frames sample `Loop.tapeDraws x`. -/
+`Loop.tapeSrcHi` and every release whose frames sample `Loop.tapeSamples x`. -/
 theorem Loop.src_tape
     (L : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce ×
         (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
-    (x : Msg) (w : Flock.Wit) (hd : L.draws = Loop.tapeDraws x) : Loop.Src L Loop.tapeSrcHi x w :=
+    (x : Msg) (w : Flock.Wit) (hd : L.draws = Loop.tapeSamples x) : Loop.Src L Loop.tapeSrcHi x w :=
   ⟨Loop.level0Src_tapeSrcHi x w, Loop.repSrc_tape L x w hd⟩
 
 namespace LeanRelease
@@ -381,9 +381,9 @@ namespace LeanRelease
 open Loop
 
 /-- **The transport's trusts at the honest session loop, with no premise on the loop**: `trustsStop_finHonest` at a
-release `L₁` whose frames sample the tape's samples at `x₀` (`Loop.tapeDraws`) and the source `Loop.tapeSrcHi`, which meet
+release `L₁` whose frames sample the tape's samples at `x₀` (`Loop.tapeSamples`) and the source `Loop.tapeSrcHi`, which meet
 `Loop.Src` there (`Loop.src_tape`), at every relation over `x₀` alone. -/
-theorem trustsStop_tape (L₁ : LeanRelease Flock.Wit Tp) (x₀ : Msg) (hd : L₁.draws = Loop.tapeDraws x₀)
+theorem trustsStop_tape (L₁ : LeanRelease Flock.Wit Tp) (x₀ : Msg) (hd : L₁.draws = Loop.tapeSamples x₀)
     (Rl : Rel Flock.Wit)
     (hRl : ∀ x w, Rl x w → Serves x ∧ Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x ∧
       Masked.RZk x w)

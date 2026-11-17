@@ -7,7 +7,7 @@
 //! ([`Challenger::tree_open`]) before the challenger's live-coin part answers the prover, so the session's record is the one a tree sampled
 //! here would give, and the challenger's release log is what the audit holds it to.
 //!
-//! The frames are `verity.protocols.proofs.spot.device.remote`'s: `u32be len(head) ‖ u32be 0 ‖ head`, the head a JSON
+//! The frames are `verity.protocols.proofs.spot.verifier.challenger.remote`'s: `u32be len(head) ‖ u32be 0 ‖ head`, the head a JSON
 //! object with its `type`. The client sends `hello` (with the session's `secret` in hex when it has one), then
 //! `tree {nonce, spec}` per session and `tree-open {after, n, round, stream, tree}` per round, then `close`. A refusal, a
 //! broken stream, a malformed answer or an opening that doesn't open its tree ends the connection, and every request after
@@ -66,8 +66,8 @@ fn word(s: &str) -> Option<F128> {
 
 impl Challenger {
     /// The challenger at `address` (`HOST:PORT`), greeted with the session's `secret` when it has one. Its answer to the
-    /// hello (the session's commitment, or a withheld session's layout) is checked for its form and not read: the coin
-    /// server asks it for coin trees alone.
+    /// hello (the session's commitment, or a withheld session's layout) is checked for its form and not read: the challenger's
+    /// live-coin part asks it for coin trees alone.
     pub fn connect(address: &str, secret: Option<&[u8]>) -> Result<Self, String> {
         let stream = TcpStream::connect(address).map_err(|e| format!("the challenger at {address}: {e}"))?;
         stream.set_nodelay(true).map_err(|e| format!("the challenger at {address}: {e}"))?;
@@ -172,8 +172,8 @@ impl Challenger {
     }
 }
 
-/// A challenger in this process, for tests: it serves one connection, samples each tree from a ChaCha20 tape as a coin
-/// server's test harness does (`coin_tape`), and returns every head the client sent.
+/// A challenger in this process, for tests: it serves one connection, samples each tree from a ChaCha20 tape as a live-coin
+/// part's test harness does (`coin_tape`), and returns every head the client sent.
 #[cfg(test)]
 pub(crate) mod fake {
     use super::*;

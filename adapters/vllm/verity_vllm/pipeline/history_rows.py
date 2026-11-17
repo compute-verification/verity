@@ -18,7 +18,7 @@ in step and row order, appended from the table's edge (`append`): every latent r
 window or not, since a later window's long rows read it. The window declares each table it appends to or reads as an
 `interface.History` (`declarations`): its runs are the positions it holds from the request's earlier windows (a held run),
 then this window's writer units. The verifier pins the table at its registered root and holds that root to the one it
-computes (`verity.commitments.windows.history`). A read template's units go table by table, in the order the tables first
+computes (`verity.commitments.periods.history`). A read template's units go table by table, in the order the tables first
 appear, then row by row, then j, so a table's declarations are three a run, and a member holds one table's units (`cut`).
 
 Not wired yet: ``in0`` is element j of the row's ``tok``, its index's output, and a wire takes a writer's whole output row,
@@ -29,15 +29,15 @@ from __future__ import annotations
 
 import bisect
 import re
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import replace
 from typing import Any
 
 import numpy as np
-
 from verity.commitments import history as HT
-from verity.commitments.windows import interface as IF
-from verity.commitments.windows import rows as CS
+from verity.commitments.periods import interface as IF
+from verity.commitments.periods import rows as CS
+
 from verity_vllm.commit import history_tables as H
 from verity_vllm.pipeline import slice_rows as SL
 from verity_vllm.pipeline.expert_rows import _digest_words, _entry
@@ -153,6 +153,9 @@ class Plan:
         """Every table the window appends to or reads: its writers' first, then the reads' others."""
         return list(dict.fromkeys([*self.written, *self.read_keys()]))
 
+    def __iter__(self) -> Iterator[tuple[str, int]]:
+        return iter(self.keys())
+
 
 def cut(ms: Sequence[CS.Member], plan: Plan) -> list[CS.Member]:
     """``ms`` (`serving_rows.members`') with each read template cut again where its units' table changes and at its chunk cap
@@ -202,7 +205,7 @@ def append(plan: Plan, ms: Sequence[CS.Member], got: Sequence[tuple[dict[str, An
 def strings_of(plan: Plan, ms: Sequence[CS.Member], histories: H.Histories,
                at: Mapping[tuple[str, int], range]) -> tuple[dict[str, bytes], dict[str, bytes]]:
     """Each writer member's ``o0`` salts and strings, its units' rows' at their positions in their tables (``at``, `append`'s),
-    by port: what `verity.commitments.windows.rows.commit` takes as ``salts_of`` and ``strings_of``."""
+    by port: what `verity.commitments.periods.rows.commit` takes as ``salts_of`` and ``strings_of``."""
     where: dict[tuple[str, int], tuple[tuple[str, int], int]] = {}
     for k, us in plan.written.items():
         for (t, u), pos in zip(us, at[k], strict=True):
@@ -303,6 +306,7 @@ class Reader:
                 root, dom = _digest_words(table.root), _digest_words(table.domain.domain_id)
             x = rs[p]
             e = int(self.tok(x)[j])
+            assert table is not None
             held = e < len(table.rows)
             row = table.rows[e] if held else np.zeros(table.words, dtype=np.uint16)
             salt = table.salts[e] if held else bytes(CS.SALT_BYTES)

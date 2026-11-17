@@ -148,7 +148,7 @@ theorem extras_pad (A : Arith F K) (hA : A.Correct)
         (l.padRadius t) e ρ (xrowsK A k0 e r l.logLen C) (foldAllRows k0 ch (rowsK A k0 l.logLen C)) ∧
         ∀ M ∈ padList A l t k0 e r C, s + ∑ i, ρ i * ev i ≠
           ∑ x ∈ Finset.range (2 ^ l.logCols), padFold A c₀ ch ρ M x * res x))
-      (drawKs A e) ≤
+      (sampleKs A e) ≤
       (e : ℝ≥0∞) * ENNReal.ofReal (l.padMcaA t / qK) +
         ((e * (padList A l t k0 e r C).card : ℕ) : ℝ≥0∞) / Fintype.card K := by
   classical
@@ -172,9 +172,9 @@ theorem extras_pad (A : Arith F K) (hA : A.Correct)
     rw [sum_padFold] at heq
     simp only [T0, g, mul_sub, Finset.sum_sub_distrib]
     linear_combination heq
-  · exact value_drawKs_extras_le A hA code (l.padRadius t) _
+  · exact value_sampleKs_extras_le A hA code (l.padRadius t) _
       (prCoin_pad_mca_le A hA l t hd64 hpad.hk1 hpad.hr) e _ _
-  · exact value_drawKs_affine_le A hA S e (fun M => s - T0 M) (fun M i => ev i - g M i)
+  · exact value_sampleKs_affine_le A hA S e (fun M => s - T0 M) (fun M i => ev i - g M i)
       fun M hM => sub_ne_zero.2 (hdoom M hM)
 
 /-- `phaseA0Pad` with the next level's variables named. -/
@@ -207,7 +207,7 @@ theorem ligeritoPad_eq (A : Arith F K) (m k0 : ℕ) (l₀ l₁ : Level) (rest : 
               (fromMsg msg (A.embed T + A.embed β₀ * A.embed y₀))).bind fun out =>
             match out with
             | (initial, s) =>
-                Game.send (Fin e → K) fun ev => (drawKs A e).bind fun ρ =>
+                Game.send (Fin e → K) fun ev => (sampleKs A e).bind fun ρ =>
                   Game.send (Fin t → K) fun ybar => Game.send (K × K) fun msg' =>
                     midRoundV A l₀ (m - 7 - k0 + 1)
                       (padColumn A l₀.logLen l₀.logCols t c₀ initial ρ (extraLane k0 e r) ybar C)

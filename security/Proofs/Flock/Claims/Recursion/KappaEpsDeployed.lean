@@ -334,7 +334,7 @@ theorem kappa_eps_deployed (rel : _root_.Flock.Readable.Parsed → _root_.Flock.
   · obtain ⟨i, spec', sts', hp, hp1⟩ := hO j j.isLt
     obtain ⟨-, hhi⟩ := N₀O_le hp
     rw [hp1, Nat.cast_one, one_mul] at hhi
-    exact k_le_one (N := N₀O (staged b.st x (pick b.st x j) j)) hhi
+    exact (numsOf_k _).le.trans (k_le_one (N := N₀O (staged b.st x (pick b.st x j) j)) hhi)
 
 /-- **The deployment's sizes at a statement `x`**, `kappa_eps_deployed`'s side conditions on `x`: its inner statement
 is one plain table, each V\* part it stages is one `--zk` table, and its inner setup has at most `2^32` calls. The

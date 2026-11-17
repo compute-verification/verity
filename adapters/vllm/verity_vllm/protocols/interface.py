@@ -12,9 +12,9 @@ An adapter is one module of this package (`spot`, `pous`, `pouw`) that defines:
   settings that select different kernels;
 * optionally ``EXECUTES: tuple[str, ...]``: the sites where the option replaces the computation rather than wrapping
   it (PoUW: ``LinearBase.quant_method.apply``).  A site has at most one executor, innermost; the others wrap it from
-  outside (`protocol_options.SITES`).  What sampled proofs traces an executed site as is not the adapter's to say: it
+  outside (`protocol_options.SITES`).  What SPOT traces an executed site as is not the adapter's to say: it
   is the protocol package's circuit (`protocol_options.CIRCUITS`, `protocol_options.traced_as`), and an executor whose
-  scheme has none is refused beside sampled proofs, since it would be traced as the stock computation.  An adapter
+  scheme has none is refused beside SPOT, since it would be traced as the stock computation.  An adapter
   whose sites depend on the scheme defines ``executes(scheme) -> tuple[str, ...]`` instead (PoUW's H1 executes nowhere);
 * optionally ``keeps_weight_copy(scheme, ctx) -> bool``: True when the installed option keeps a weight-derived copy
   (PoUW's prepared int7 or FP10 operands) resident across forwards.  With POUS enabled, the selector refuses such an
@@ -29,7 +29,7 @@ An adapter is one module of this package (`spot`, `pous`, `pouw`) that defines:
   (`Context.filled`), and the install's refusals read the filled settings, so a key left unfilled is refused there.
 
 An adapter holds no protocol logic: the scheme, its commitments, the salt and the audit are its protocol package's
-(`verity.protocols.accounting.pouw.verifier`, `verity.protocols.accounting.pous.verifier`, `verity.protocols.proofs.spot.verifier`), which never import this one.  It finds its hook sites by type,
+(`verity.protocols.resource_accounting.compute.pouw.verifier`, `verity.protocols.resource_accounting.memory.pous.verifier`, `verity.protocols.proofs.spot.verifier`), which never import this one.  It finds its hook sites by type,
 never by module name, and makes every patch and service through ``target.hooks(entry)``: an `engine.hooks.Hooks` tagged
 with its entry, so the composition uninstalls it and a committer recognises it (`engine.hooks.live(tag)`).
 """

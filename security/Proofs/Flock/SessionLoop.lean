@@ -9,7 +9,6 @@ public import Proofs.Flock.SessionLoop.TakenVals
 public import Proofs.Flock.SessionLoop.LiveInner
 public import Proofs.Flock.Claims.ZK.FrameUnrefused
 public import Proofs.Flock.SessionLoop.Link
-public import Proofs.Flock.SessionLoop.LiveRefine
 public import Proofs.Flock.Claims.ZK.FinishSwFrame
 public import Proofs.Flock.Claims.ZK.FinishSwRep
 public import Proofs.Flock.SessionLoop.FinishParts
@@ -74,7 +73,6 @@ public import Proofs.Flock.SessionLoop.RoundOff
 public import Proofs.Flock.SessionLoop.SchedSlot
 public import Proofs.Flock.SessionLoop.LiveSchedOwn
 public import Proofs.Flock.SessionLoop.LiveInnerOwn
-public import Proofs.Flock.SessionLoop.LiveOwn
 public import Proofs.Flock.SessionLoop.Phase
 public import Proofs.Flock.SessionLoop.ZkAny
 public import Proofs.Flock.SessionLoop.SampledAudit
@@ -84,7 +82,6 @@ public import Proofs.Flock.SessionLoop.LeafCap
 public import Proofs.Flock.SessionLoop.VsOfTakes
 public import Proofs.Flock.SessionLoop.VsOfBody
 public import Proofs.Flock.SessionLoop.SwCausalExe
-public import Proofs.Flock.SessionLoop.RowsHonest
 public import Proofs.Flock.SessionLoop.RoundsPassFrame
 public import Proofs.Flock.SessionLoop.ScheduleTotal
 public import Proofs.Flock.SessionLoop.SchedTotalWalk
@@ -135,7 +132,7 @@ after `Hello` as coins (`Loop.PhaseBlind`) is `Loop.phased` at an algebraic phas
 
 namespace Claims.ZKServer.Loop
 
-/-- **The loop's own tables are `RealTabs`**: each is `tabOfLevel0` at a level 0 `Level0.ofDraws` drew. -/
+/-- **The loop's own tables are `RealTabs`**: each is `tabOfLevel0` at a level 0 `Level0.ofSamples` drew. -/
 theorem realTabs_realOf {R : Type}
     (src : Msg → Flock.Wit → R → ℕ → _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))
     (x : Msg) (w : Flock.Wit) (ρ : R) {s0 : _} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}

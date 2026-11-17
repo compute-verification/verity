@@ -347,7 +347,7 @@ def _compose_tail(low: IL.Lowering, sub, vus_per_block: int | None = None, **kw)
     unit = len(layouts) - 1
     types = {R.digest(): R, Ut.digest(): Ut}
     dv = D.Derivation(types, layouts, unit, tables)
-    if D.netlist(dv.physical(0), low.name) != dict(secs)["unit"]:
+    if D.circuit_description(dv.physical(0), low.name) != dict(secs)["unit"]:
         raise AssertionError(f"{low.name}: derive does not reproduce the unit's rows")
     own = dv.unit.own
     root_log = C._slot_log(own)
@@ -382,8 +382,8 @@ def _compose_tail(low: IL.Lowering, sub, vus_per_block: int | None = None, **kw)
                 per_vu={C.SHA_NET: n_sha, C.HM_NET: n_hm, "root": 1, **{d: n for d, (_, n) in parts.items()}})
     head = f"{FORMAT} {low.name}\nMETA {json.dumps(meta, sort_keys=True, separators=(',', ':'))}\n"
     body = "".join(f"CIRCUIT {nm} {s.count(chr(10))}\n{s}" for nm, s in secs if nm in (C.SHA_NET, C.HM_NET))
-    rows = {"root": D.netlist(dv.unit, low.name), "delta": D.delta_text(dv),
-            **{layouts[j].digest(): D.netlist(dv.physical(j), layouts[j].digest()[:16]) for j in slot}}
+    rows = {"root": D.circuit_description(dv.unit, low.name), "delta": D.delta_text(dv),
+            **{layouts[j].digest(): D.circuit_description(dv.physical(j), layouts[j].digest()[:16]) for j in slot}}
     return Typed(head + body, rows["root"], types, layouts, rows, tables, dv)
 
 
@@ -394,7 +394,7 @@ def _compose_flat(low: IL.Lowering, sub, **kw) -> Typed:
     t = unit_type(low)
     types, layouts = {t.digest(): t}, [unit_layout(low, t)]
     dv = D.Derivation(types, layouts, 0, {})
-    rows = D.netlist(dv.unit, low.name)
+    rows = D.circuit_description(dv.unit, low.name)
     old = dict(secs)["unit"]
     if rows != old:
         raise AssertionError(f"{low.name}: derive does not reproduce the unit's rows")

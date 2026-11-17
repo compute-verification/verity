@@ -38,7 +38,7 @@ from .gates import git_env
 KIND = "commit-map/v1"
 LABEL = "commit_map"
 ACCEPTED, RETRACTED = "accepted", "retracted"
-#: Who may make a map apply: the rewrite's approver.  A map changes what the merge gate accepts, so no lane accepts its own.
+#: Who may make a map apply: the rewrite's approver.  A map changes which checks a commit passes (`merge.passing`), so no lane accepts its own.
 ACCEPTORS = ("daniel",)
 _SHA = re.compile(r"[0-9a-f]{40}")
 
@@ -203,7 +203,7 @@ def remap(repo: Path, maps: Maps, branches: list[str] | None = None, *, dry_run:
 def _maps(path: str | None, store_root: str | None) -> Maps:
     if path:
         return Maps.from_file(path)
-    from .store.local import LocalStore  # noqa: PLC0415
+    from .store.local import LocalStore
 
     return Maps.load(LocalStore(store_root))
 

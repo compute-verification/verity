@@ -1,12 +1,12 @@
 module
 
 /-!
-# The FP8 tensor-core steps: `verity.ml.circuits.silicon.total_fp8`
+# The FP8 tensor-core steps: `verity.circuits.silicon.total_fp8`
 
-A copy of Security's FP8 step, definition for definition: the E4M3 codec of `Security/Definitions/Pouw/Fp8Atom/E4M3.lean`
+A copy of Security's FP8 step, definition for definition: the E4M3 codec of `security/Definitions/Pouw/Fp8Atom/E4M3.lean`
 (its `decode` to `ℚ` left out), the grouped-sum step of `Fp8Atom/Atom.lean` (`tc_dot_total_e4m3`, its `Term.value` left out)
 and sm_120's pipeline of `PearlC/Sm120.lean`. Each definition names the Security definition it must equal, to be proved where
-the equalities live, since code never requires `Security/`.
+the equalities live, since code never requires `security/`.
 
 The E5M2 step (`total_fp8.tc_dot_total_e5m2`) is transcribed from the Python on the same terms, values and groups: its
 operand classes and product are `total_fp8.e5m2_class`, `e5m2_product_total` and `term.E5M2.product`. Security: none yet.

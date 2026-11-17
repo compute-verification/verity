@@ -29,7 +29,7 @@ namespace Claims.ZKServer
 
 open Claims Claims.ZKMal
 open _root_.Flock (V F128)
-open _root_.Flock.Firewall.Finish (Tab)
+open _root_.Flock.ZkServer.Finish (Tab)
 
 namespace LeanRelease
 
@@ -69,7 +69,7 @@ theorem release_sched_switch (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.W
   -- no refusal shows by the round
   have hjh : (2 * j.val + r.val) / 2 = j.val := by omega
   have hrm : (2 * j.val + r.val) % 2 = r.val := by omega
-  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
+  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((Masked.zkTab x j).sch, (Masked.zkTab x j).tPad) := by
     rw [Masked.stsOf_half x j r]
     exact (Masked.zkTab x j).hz

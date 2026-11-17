@@ -20,11 +20,11 @@ import Mathlib.Tactic.NormNum.Pow
 
 `Tile`, a tile unit's one statement: at `32 ∣ K` and `K < 2^17`, `PouwH1TileZy_v1{TILE}`'s `ok = true` gives every
 cell's record z as the exact dot of its rows' codes and its y as the dequant of it, over `PouwH1Tile_v1` or
-`PouwH1Tile_v3` at any noise (`Pouw.H1Zy.tileOk_spec`). `Proofs.Accounting.TS.Session.Tile.Computes` reads it as
+`PouwH1Tile_v3` at any noise (`Pouw.H1Zy.tileOk_spec`). `Proofs.Pouw.TS.Session.Tile.Computes` reads it as
 `TileChecks`.
 
 `Combine`: `PouwH1Combine_v1`'s `ok` is `true` exactly when the lanes' partials XOR, in lane order, to the receipt
-(`Pouw.H1Zy.combineOk_iff`). `Proofs.Accounting.TS.Session.Lanes.Combine` reads it as `LeafChecks`' combine field.
+(`Pouw.H1Zy.combineOk_iff`). `Proofs.Pouw.TS.Session.Lanes.Combine` reads it as `LeafChecks`' combine field.
 
 `ChainVectors`: `Pouw.H1Zy.h1Chain`'s pieces, seeds and noise stream, and its chain on a lane's noise, on values the
 Python computes, checked by the kernel.
@@ -37,7 +37,7 @@ the kernel.
 
 `Lane`: at `32 ∣ K` and `K < 2^17` (the bind's range), `PouwH1LaneZy_v1`'s `ok = true` gives the low index bits only,
 every lane cell's record z as the exact dot of its rows' codes and its y as the dequant of it, and every partial word as
-the masked chain word (`Pouw.H1Zy.laneOk_spec`). `Proofs.Accounting.TS.Session.Lanes.Lane` reads it as `LeafChecks`'
+the masked chain word (`Pouw.H1Zy.laneOk_spec`). `Proofs.Pouw.TS.Session.Lanes.Lane` reads it as `LeafChecks`'
 lane field.
 
 `LaneBits`: the lane's body on bits computes it on words (`Pouw.H1Zy.laneBits_bv`), each restated piece's lowering its

@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Assumptions.Zk
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
-public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundSampleOk
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundJ
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
@@ -24,18 +24,18 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
 /-!
 # `zk_session_soundHJ` at the challenger's live-coin part's custody
 
-`Composed/CustodyJ.lean` under hidden outputs. `zk_session_soundHJ` takes `RecordsLiveZKJ` (`hRec`) and `DrawOkZKHJ` at
-every sample of the live subset sampling design (`hDraw`); the record and its sample file are custody, and the rest of `DrawOkZKHJ` is
-flock-verify's own arithmetic:
+`Composed/CustodyJ.lean` under hidden outputs. `zk_session_soundHJ` takes `RecordsLiveZKJ` (`hRec`) and `SampleOkZKHJ` at
+every sample of the live subset sampling design (`hDraw`); the record and its sample file are custody, and the rest of `SampleOkZKHJ` is
+verity-verify-proof's own arithmetic:
 
-* `drawOkZKHJ_of_sizeG`: from `DrawFileZK` under any sampling design, at a sample whose file decodes only to `kd` units, with `nTab I`
-  dividing `kd`, `DrawOkZKHJ` holds at `mPtsOf g (kd / nTab I)` link points, at any `g` every table's session has;
-  `drawOkZKHJ_of_size` is it at the circuit file's `HmOut.parse`, `drawOkZKHJ_of_fileG` at the subset sampling design.
-* `drawOkZKHJ_of_size`: from `DrawFileZK` under any sampling design, at a sample whose file decodes only to `kd` units, with `nTab I`
-  dividing `kd`, `DrawOkZKHJ` holds at `mPtsOf c.g (kd / nTab I)` link points, `c` the circuit file's `HmOut.parse`
-  (setupHidden's `m_pts`, `setupHidden_mPts_drawn` and `setupHidden_mPts_of_proved`).
-* `drawOkZKHJ_of_file`: `drawOkZKJ_of_file` at setupHidden, `drawOkZKHJ_of_size` at `DrawFileZK dj (subset kd) pop`,
-  at every sample `S`; `drawOkZKHJ_of_fileSt` at the statement circuit (`HmOut.parseStmt`).
+* `sampleOkZKHJ_of_sizeG`: from `SampleFileZK` under any sampling design, at a sample whose file decodes only to `kd` units, with `nTab I`
+  dividing `kd`, `SampleOkZKHJ` holds at `mPtsOf g (kd / nTab I)` link points, at any `g` every table's session has;
+  `sampleOkZKHJ_of_size` is it at the circuit file's `HmOut.parse`, `sampleOkZKHJ_of_fileG` at the subset sampling design.
+* `sampleOkZKHJ_of_size`: from `SampleFileZK` under any sampling design, at a sample whose file decodes only to `kd` units, with `nTab I`
+  dividing `kd`, `SampleOkZKHJ` holds at `mPtsOf c.g (kd / nTab I)` link points, `c` the circuit file's `HmOut.parse`
+  (setupHidden's `m_pts`, `setupHidden_mPts_sampled` and `setupHidden_mPts_of_proved`).
+* `sampleOkZKHJ_of_file`: `sampleOkZKJ_of_file` at setupHidden, `sampleOkZKHJ_of_size` at `SampleFileZK dj (subset kd) pop`,
+  at every sample `S`; `sampleOkZKHJ_of_fileSt` at the statement circuit (`HmOut.parseStmt`).
 * `zk_session_soundHJ_custody`: `zk_session_soundHJ` with `RecordCustodyZKJ` (`live-verifier`) for `hRec` and `hDraw`,
   at `mPtsOf c.g (kd / nTab I)` link points and `nTab I ∣ kd`.
 -/
@@ -52,21 +52,21 @@ open scoped ENNReal
 
 variable {n : ℕ} {Reg : Type}
 
-/-- **The challenger's live-coin part's sample is `DrawOkZKHJ` at a sample of `kd` units, under any sampling design, at any `g` every table's session
-has.** When the record's sample file is the verifier's sample under `law` over `[0, pop)` (`DrawFileZK`), the sample file at
-`S` decodes only to a sample of `kd` units, and the session's tables divide `kd`, `S` is `DrawOkZKHJ` at
+/-- **The challenger's live-coin part's sample is `SampleOkZKHJ` at a sample of `kd` units, under any sampling design, at any `g` every table's session
+has.** When the record's sample file is the verifier's sample under `samplingDesign` over `[0, pop)` (`SampleFileZK`), the sample file at
+`S` decodes only to a sample of `kd` units, and the session's tables divide `kd`, `S` is `SampleOkZKHJ` at
 `mPtsOf g (kd / nTab I)` link points: each table proves its `kd / nTab I` consecutive units, whatever the sampling design. -/
-theorem drawOkZKHJ_of_sizeG (I : Inputs) {g : ℕ}
+theorem sampleOkZKHJ_of_sizeG (I : Inputs) {g : ℕ}
     (hg : ∀ (j : ℕ) (d : Lean.Json) (st : Flock.Stmt), Stmt.setupHidden (tagsAt (zkTags I) I.count j) I.circuitFile
       I.publicFile (zkCoins I) I.tables (some d) I.partition I.program = .ok st → st.c.g = g)
-    (law : Draw.Law) (kd pop : ℕ) (hdiv : kd % nTab I = 0)
-    (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj law pop) (S : Finset (Fin n))
-    (hsz : ∀ D, Draw.UnitDraw.ofJson (dj S) = .ok D → D.units.size = kd) :
-    DrawOkZKHJ I dj (mPtsOf g (kd / nTab I)) S := by
+    (samplingDesign : Draw.SamplingDesign) (kd pop : ℕ) (hdiv : kd % nTab I = 0)
+    (dj : Finset (Fin n) → Lean.Json) (hdj : SampleFileZK dj samplingDesign pop) (S : Finset (Fin n))
+    (hsz : ∀ D, Draw.UnitSample.ofJson (dj S) = .ok D → D.units.size = kd) :
+    SampleOkZKHJ I dj (mPtsOf g (kd / nTab I)) S := by
   intro j
-  by_cases hD : ∃ D, Draw.UnitDraw.ofJson (dj S) = .ok D
+  by_cases hD : ∃ D, Draw.UnitSample.ofJson (dj S) = .ok D
   swap
-  · have hj : ∀ D', Draw.UnitDraw.ofJson (drawJ I (dj S) j) ≠ .ok D' := by
+  · have hj : ∀ D', Draw.UnitSample.ofJson (drawJ I (dj S) j) ≠ .ok D' := by
       intro D' h'
       apply hD
       unfold drawJ at h'
@@ -77,7 +77,7 @@ theorem drawOkZKHJ_of_sizeG (I : Inputs) {g : ℕ}
         · exact ⟨_, ‹_›⟩
         · exact ⟨_, h'⟩
     refine ⟨fun D' h' => (hj D' h').elim, fun st hst => ?_⟩
-    obtain ⟨ud, hud, -⟩ := setupHidden_mPts_drawn hst
+    obtain ⟨ud, hud, -⟩ := setupHidden_mPts_sampled hst
     exact (hj ud hud).elim
   obtain ⟨D, hDj⟩ := hD
   have hDe := hdj S D hDj
@@ -93,13 +93,13 @@ theorem drawOkZKHJ_of_sizeG (I : Inputs) {g : ℕ}
       omega
     refine ⟨fun D' h' u hu => ?_, fun st hst => ?_⟩
     · rw [hdr, hDj] at h'
-      rw [← Except.ok.inj h', hDe, drawOf_proved, drawOf_mem]
+      rw [← Except.ok.inj h', hDe, sampleOf_proved, sampleOf_mem]
       exact ⟨u, by rwa [hpart] at hu, rfl⟩
     · rw [setupHidden_mPts_of_provedG (hg j _ _ hst) (fun D' h' => ?_) hst]
       rw [hdr, hDj] at h'
-      rw [← Except.ok.inj h', hn, Nat.div_one, hDe, drawOf_proved, ← hDe, hsz]
+      rw [← Except.ok.inj h', hn, Nat.div_one, hDe, sampleOf_proved, ← hDe, hsz]
   · have hn : nTab I = I.count := by simp [nTab, h1]
-    have hdr : drawJ I (dj S) j = Tables.partDraw D.population D.units I.count j := by
+    have hdr : drawJ I (dj S) j = Tables.partSample D.population D.units I.count j := by
       simp only [drawJ, h1, ite_false, partJson, hDj]
     have hq : kd = I.count * (kd / I.count) := by
       rw [hn] at hdiv
@@ -109,11 +109,11 @@ theorem drawOkZKHJ_of_sizeG (I : Inputs) {g : ℕ}
       have := Nat.mul_le_mul_right (kd / I.count) (Nat.succ_le_of_lt hj)
       rw [Nat.succ_mul] at this
       omega
-    have hpd : ∀ D', Draw.UnitDraw.ofJson (drawJ I (dj S) j) = .ok D' →
+    have hpd : ∀ D', Draw.UnitSample.ofJson (drawJ I (dj S) j) = .ok D' →
         D'.proved = D.units.extract (j.val * (kd / I.count)) (j.val * (kd / I.count) + kd / I.count) := by
       intro D' h'
       rw [hdr] at h'
-      rw [ofJson_partDraw h', hsz]
+      rw [ofJson_partSample h', hsz]
     refine ⟨fun D' h' u hu => ?_, fun st hst => ?_⟩
     · rw [hpd D' h']
       obtain ⟨huS, hpu⟩ := Finset.mem_filter.1 hu
@@ -147,50 +147,50 @@ theorem drawOkZKHJ_of_sizeG (I : Inputs) {g : ℕ}
     · rw [setupHidden_mPts_of_provedG (hg j _ _ hst) (fun D' h' => ?_) hst]
       rw [hpd D' h', Array.size_extract, hsz, Nat.min_eq_left hjq, Nat.add_sub_cancel_left, hn]
 
-/-- **The challenger's live-coin part's sample is `DrawOkZKHJ` at a sample of `kd` units, under any sampling design.** On untyped `--statement` tags
+/-- **The challenger's live-coin part's sample is `SampleOkZKHJ` at a sample of `kd` units, under any sampling design.** On untyped `--statement` tags
 whose circuit file `HmOut.parse` accepts under the `--zk` tags as `c`: when the record's sample file is the verifier's sample
-under `law` over `[0, pop)` (`DrawFileZK`), the sample file at `S` decodes only to a sample of `kd` units, and the session's
-tables divide `kd`, `S` is `DrawOkZKHJ` at `mPtsOf c.g (kd / nTab I)` link points: each table proves its `kd / nTab I`
+under `samplingDesign` over `[0, pop)` (`SampleFileZK`), the sample file at `S` decodes only to a sample of `kd` units, and the session's
+tables divide `kd`, `S` is `SampleOkZKHJ` at `mPtsOf c.g (kd / nTab I)` link points: each table proves its `kd / nTab I`
 consecutive units, whatever the sampling design. -/
-theorem drawOkZKHJ_of_size (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
-    (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (law : Draw.Law) (kd pop : ℕ) (hdiv : kd % nTab I = 0)
-    (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj law pop) (S : Finset (Fin n))
-    (hsz : ∀ D, Draw.UnitDraw.ofJson (dj S) = .ok D → D.units.size = kd) :
-    DrawOkZKHJ I dj (mPtsOf c.g (kd / nTab I)) S :=
-  drawOkZKHJ_of_sizeG I (fun _ _ _ h => congrArg Flock.Circuit.g (setupHidden_c_of_parse
-    ((parseH_tagsAt ((zkTags_typed I).trans ht) _ _ _ _).trans hc) h)) law kd pop hdiv dj hdj S hsz
+theorem sampleOkZKHJ_of_size (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
+    (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (samplingDesign : Draw.SamplingDesign) (kd pop : ℕ) (hdiv : kd % nTab I = 0)
+    (dj : Finset (Fin n) → Lean.Json) (hdj : SampleFileZK dj samplingDesign pop) (S : Finset (Fin n))
+    (hsz : ∀ D, Draw.UnitSample.ofJson (dj S) = .ok D → D.units.size = kd) :
+    SampleOkZKHJ I dj (mPtsOf c.g (kd / nTab I)) S :=
+  sampleOkZKHJ_of_sizeG I (fun _ _ _ h => congrArg Flock.Circuit.g (setupHidden_c_of_parse
+    ((parseH_tagsAt ((zkTags_typed I).trans ht) _ _ _ _).trans hc) h)) samplingDesign kd pop hdiv dj hdj S hsz
 
-/-- **The challenger's live-coin part's samples are `DrawOkZKHJ`, at any `g` every table's session has.** When the record's sample file
-is the verifier's sample under the subset sampling design `subset kd` over `[0, pop)` (`DrawFileZK`) and the session's tables divide
-`kd`, every sample `S` is `DrawOkZKHJ` at `mPtsOf g (kd / nTab I)` link points (`drawOkZKHJ_of_sizeG`: a subset sample has
+/-- **The challenger's live-coin part's samples are `SampleOkZKHJ`, at any `g` every table's session has.** When the record's sample file
+is the verifier's sample under the subset sampling design `subset kd` over `[0, pop)` (`SampleFileZK`) and the session's tables divide
+`kd`, every sample `S` is `SampleOkZKHJ` at `mPtsOf g (kd / nTab I)` link points (`sampleOkZKHJ_of_sizeG`: a subset sample has
 `kd` units, `ofJson_shape`). -/
-theorem drawOkZKHJ_of_fileG (I : Inputs) {g : ℕ}
+theorem sampleOkZKHJ_of_fileG (I : Inputs) {g : ℕ}
     (hg : ∀ (j : ℕ) (d : Lean.Json) (st : Flock.Stmt), Stmt.setupHidden (tagsAt (zkTags I) I.count j) I.circuitFile
       I.publicFile (zkCoins I) I.tables (some d) I.partition I.program = .ok st → st.c.g = g)
     (kd pop : ℕ) (hdiv : kd % nTab I = 0)
-    (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj (.subset kd) pop) (S : Finset (Fin n)) :
-    DrawOkZKHJ I dj (mPtsOf g (kd / nTab I)) S :=
-  drawOkZKHJ_of_sizeG I hg (.subset kd) kd pop hdiv dj hdj S fun D hD =>
+    (dj : Finset (Fin n) → Lean.Json) (hdj : SampleFileZK dj (.subset kd) pop) (S : Finset (Fin n)) :
+    SampleOkZKHJ I dj (mPtsOf g (kd / nTab I)) S :=
+  sampleOkZKHJ_of_sizeG I hg (.subset kd) kd pop hdiv dj hdj S fun D hD =>
     (ofJson_shape hD).2.2 kd (by rw [hdj S D hD]; rfl)
 
-/-- **The challenger's live-coin part's samples are `DrawOkZKHJ`.** On untyped `--statement` tags whose circuit file `HmOut.parse`
+/-- **The challenger's live-coin part's samples are `SampleOkZKHJ`.** On untyped `--statement` tags whose circuit file `HmOut.parse`
 accepts under the `--zk` tags as `c`: when the record's sample file is the verifier's sample under the subset sampling design
-`subset kd` over `[0, pop)` (`DrawFileZK`) and the session's tables divide `kd`, every sample `S` is `DrawOkZKHJ` at
+`subset kd` over `[0, pop)` (`SampleFileZK`) and the session's tables divide `kd`, every sample `S` is `SampleOkZKHJ` at
 `mPtsOf c.g (kd / nTab I)` link points. -/
-theorem drawOkZKHJ_of_file (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
+theorem sampleOkZKHJ_of_file (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (kd pop : ℕ) (hdiv : kd % nTab I = 0)
-    (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj (.subset kd) pop) (S : Finset (Fin n)) :
-    DrawOkZKHJ I dj (mPtsOf c.g (kd / nTab I)) S :=
-  drawOkZKHJ_of_fileG I (fun _ _ _ h => congrArg Flock.Circuit.g (setupHidden_c_of_parse
+    (dj : Finset (Fin n) → Lean.Json) (hdj : SampleFileZK dj (.subset kd) pop) (S : Finset (Fin n)) :
+    SampleOkZKHJ I dj (mPtsOf c.g (kd / nTab I)) S :=
+  sampleOkZKHJ_of_fileG I (fun _ _ _ h => congrArg Flock.Circuit.g (setupHidden_c_of_parse
     ((parseH_tagsAt ((zkTags_typed I).trans ht) _ _ _ _).trans hc) h)) kd pop hdiv dj hdj S
 
-/-- `drawOkZKHJ_of_file` at the statement circuit (`HmOut.parseStmt`, a templated file's template unrolled): each
+/-- `sampleOkZKHJ_of_file` at the statement circuit (`HmOut.parseStmt`, a templated file's template unrolled): each
 table's session commits the circuit the statement circuit unrolls (`stmt_g_of_setupHidden`). -/
-theorem drawOkZKHJ_of_fileSt (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
+theorem sampleOkZKHJ_of_fileSt (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c) (kd pop : ℕ) (hdiv : kd % nTab I = 0)
-    (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj (.subset kd) pop) (S : Finset (Fin n)) :
-    DrawOkZKHJ I dj (mPtsOf c.g (kd / nTab I)) S :=
-  drawOkZKHJ_of_fileG I (fun j _ _ h => (stmt_g_of_setupHidden (typedJ ht j)
+    (dj : Finset (Fin n) → Lean.Json) (hdj : SampleFileZK dj (.subset kd) pop) (S : Finset (Fin n)) :
+    SampleOkZKHJ I dj (mPtsOf c.g (kd / nTab I)) S :=
+  sampleOkZKHJ_of_fileG I (fun j _ _ h => (stmt_g_of_setupHidden (typedJ ht j)
     ((parseStmtH_tagsAt ((zkTags_typed I).trans ht) _ _ _ _).trans hc) h).symm) kd pop hdiv dj hdj S
 
 /-- **One hidden-output `--zk` sampled session of `J` tables is sound, at the challenger's live-coin part's custody.**
@@ -204,7 +204,7 @@ theorem zk_session_soundHJ_custody
     (hscope : Layout.scopeOkH c = true)
     (kd : ℕ) (hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
+    {d₀ : Lean.Json} (y₀ : SampleSetupZHJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
       LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf c.g (kd / nTab I)) → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
@@ -215,27 +215,27 @@ theorem zk_session_soundHJ_custody
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t') (K₀ : ℕ)
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
     {qF qS : ℝ} :
     let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
       (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
       (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
         (runsZCJH_live I ht hc (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags hCust.1
-          fun _ => drawOkZKHJ_of_file I ht hc kd n hdiv dj hCust.2 _)) τ
-    (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
+          fun _ => sampleOkZKHJ_of_file I ht hc kd n hdiv dj hCust.2 _)) τ
+    (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((SamplingDesign.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
     prob (fun o => LiveAcceptsZK I o ∧
-        K₀ ≤ (((keyProg c hU n).partition (Layout.outsOf c hU n)).wrong
+        K₀ ≤ (((keyProg c hU n).partition (Layout.outsOf c hU n)).incorrect
           (XplurZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ dj y₀) (tabZHJ dj y₀)
             ((rsZHJ dj y₀ ht hc hscope hU hpub hpt).bindingZ (rsZHJ_computes dj y₀ ht hc hscope hU hpub hpt))
             (reg σ) (cont σ) k Rw)).card)
-        (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
-      (Law.subset n kd hkd).miss K₀ +
-        ksAvgStrictZ (planZHJ dj y₀) (Law.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
+        (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
+      (SamplingDesign.subset n kd hkd).miss K₀ +
+        ksAvgStrictZ (planZHJ dj y₀) (SamplingDesign.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
         linkBoundZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ dj y₀) (tabZHJ dj y₀)
           ((rsZHJ dj y₀ ht hc hscope hU hpub hpt).bindingZ (rsZHJ_computes dj y₀ ht hc hscope hU hpub hpt))
           k Rw M ρ t' (reg σ) (cont σ) :=
   zk_session_soundHJ I ht dj y₀ wr dg N hc hU hpub hpt hscope kd hkd Lb src hA3
-    (fun _ => drawOkZKHJ_of_file I ht hc kd n hdiv dj hCust.2 _) hTags hCust.1 hk hRw hM hρ hr ht' K₀ τ
+    (fun _ => sampleOkZKHJ_of_file I ht hc kd n hdiv dj hCust.2 _) hTags hCust.1 hk hRw hM hρ hr ht' K₀ τ
 
 end FlockSoundness.Discharge.ZkHidden

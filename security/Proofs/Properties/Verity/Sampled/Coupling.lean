@@ -3,9 +3,9 @@ module
 public import Proofs.Properties.Verity.Sampled.Messages
 
 /-!
-# Sampled proofs' coupling: the target off the binding and the logged coupling
+# SPOT's coupling: the target off the binding and the logged coupling
 
-`CouplingTarget` at the leg's constructions with the messages' two-continuation finders (`Constructions.withMessages`,
+`CouplingTarget` at the subprotocol's constructions with the messages' two-continuation finders (`Constructions.withMessages`,
 whose finders are `msgFinder` and `recordFinder`, so `couplingTarget_of_noMiss` applies by `rfl`), from three bounds on
 the plays the sampled verdict accepts, cut by a property `P` of the play, the one the check's read of the device's log
 is held to (the binding's `Logged`: the log the check read is the device's), and by a property `Q` of the play at each
@@ -34,9 +34,9 @@ namespace Verity.Sampled
 open Verity.Game
 open scoped ENNReal
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
-/-- **The leg's constructions with the messages' two-continuation finders at the readings `rd`** (`msgFinder`,
+/-- **The subprotocol's constructions with the messages' two-continuation finders at the readings `rd`** (`msgFinder`,
 `recordFinder`): `K`'s coins, projection, read finder, forger and bound digests' finder. -/
 noncomputable def Constructions.withMessages {V : Vocab d α} (K : Constructions V) (rd : Readings) :
     Constructions V :=
@@ -65,7 +65,7 @@ def DigestBound (K : Constructions V) (A : Live) (θ : ByteArray) (F : Array Byt
 /-- **(b), the logged coupling, at the cut `P`**: at the session `A`, the parameters `θ` and the committed files `F`, a
 play whose sampled verdict at `k` accepts and that `P` at its commitment and strategy holds of, on a tape that misses at
 no round and not at the record at the readings `rd` (`NoMiss`), is at most as likely as the live audit's plays, at the
-session widened by the projection's coins and the strategy projected there, that flock-verify `--zk` accepts at `own`,
+session widened by the projection's coins and the strategy projected there, that verity-verify-proof `--zk` accepts at `own`,
 plus the hiding term. -/
 def LoggedCoupling (rd : Readings) (K : Constructions V) (A : Live) (θ : ByteArray) (F : Array ByteArray)
     (P : (c : ByteArray) → Game.Strategy (V.game θ F c) → Exchange → Prop) : Prop :=

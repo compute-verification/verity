@@ -48,10 +48,8 @@ after it) leads with the integrator's lane's handle and rings it, once per such 
 signed the comment, how many wait with it, and the command that signs a comment as the integrator's own, without which its
 answers don't count. A read of the watch's own that GitHub refused (`github_refused`: the open PRs, read with a
 token GitHub doesn't take or with none) leads with infra's handle and rings it, once until a read works again, saying
-what the watch misses meanwhile and how to find the reason on the pod. A handle
-renamed in the registry ("renamed from @OLD") is rung by its new
-name. The pod frees held runs whether or not this runs; this relay stops with the pod, and resumes from the offset it last
-posted.
+what the watch misses meanwhile and how to find the reason on the pod. The pod frees held runs whether or not this runs;
+this relay stops with the pod, and resumes from the offset it last posted.
 
 Each pass also writes /data/agent-watch/doorbells.json, which the watch's ready-to-wake rule reads: each open inbox's holder (the
 notes' routes.d) and its latest doorbell in the last day (a reply in the inbox thread, `from NAME, thread ...`, or a run's end,
@@ -64,7 +62,6 @@ $AGENT_WATCH_OFFSET the offset's file, default ~/agent-watch/offset):
 import hashlib
 import http.client
 import json
-import os
 import re
 import shlex
 import string
@@ -73,13 +70,13 @@ import sys
 import time
 from pathlib import Path
 
-from research import slack
+from research import settings, slack
 from research.pods import budgets, connect
 
 EVENTS = "/data/agent-watch/events.jsonl"
 BELLS = "/data/agent-watch/doorbells.json"
 BELLS_WINDOW_S = 24 * 3600
-OFFSET = Path(os.environ.get("AGENT_WATCH_OFFSET") or Path.home() / "agent-watch/offset")
+OFFSET = Path(settings.get("AGENT_WATCH_OFFSET") or Path.home() / "agent-watch/offset")
 SENT_KEEP_S = 3 * 86400     # the sent-set beside OFFSET (`sent_path`) keeps each line posted this long
 EVERY_S = 2 * 60
 DRY = "--dry-run" in sys.argv
@@ -152,10 +149,6 @@ RING_RUN = [sys.executable, "-m", "research", "msg", "ring-run"]
 RUNBELL_RE = re.compile(r"^from runs, run \S+ rc ")      # ring-run's doorbell
 RUN_ROLES = {"coordinator", "worker", "lane", "unknown"}
 RAW_MAX = 2500
-#: a renamed handle's old name -> its new one, from the registry's "renamed from @OLD" (hash -> kernels): lanes' notes
-#: and workers.d still carry the old name
-RENAMED = {old: h["handle"] for h in REG.get("handles") or []
-           for old in re.findall(r"renamed from @([a-z0-9-]+)", str(h.get("charter", "")) + str(h.get("holder", "")))}
 
 
 def log(msg: str) -> None:
@@ -169,8 +162,7 @@ def is_worker(rec: dict) -> bool:
 def lane_of(rec: dict) -> str | None:
     """A worker record's handle: its owner, its handle, else its lane when that is a handle; None when none is."""
     handles = {h["handle"] for h in REG.get("handles") or []}
-    return next((h for h in (RENAMED.get(x, x) for x in (rec.get("owner"), rec.get("handle"), rec.get("lane"))) if h in handles),
-                None)
+    return next((h for h in (rec.get("owner"), rec.get("handle"), rec.get("lane")) if h in handles), None)
 
 
 def renderable(rec: dict) -> bool:
@@ -201,14 +193,14 @@ def rung(rec: dict) -> str | None:
     if rec.get("kind") == "run_ended" and rec.get("sender_status") == "ACTIVE" and not rec.get("placed_by"):
         return None             # its sender is in a turn and sees its own run end; if it then idles, the watch resumes it
     handles = {h["handle"] for h in REG.get("handles") or []}
-    owner = RENAMED.get(rec.get("owner"), rec.get("owner"))
+    owner = rec.get("owner")
     if rec.get("kind") == "erroring" and owner in handles:
         return owner            # a worker's launcher, who relaunches it; a coordinator's owner is top, as one nobody owns goes
     if rec.get("kind") in TOP or (rec.get("kind") == "silent" and rec.get("owner") == "top"):
         return "top"
     if rec.get("kind") in FAIL and owner in handles:
         return owner
-    handle = RENAMED.get(rec.get("handle"), rec.get("handle"))
+    handle = rec.get("handle")
     if rec.get("kind") in HANDLE and handle in handles:
         return handle
     if is_worker(rec):
@@ -384,7 +376,7 @@ def text(rec: dict) -> str:
 
 def pod(cmd: str, data: str | None = None) -> str:
     """`cmd` on the control pod: over ssh, or in a local shell when $AGENT_WATCH_ON_POD is set (the watchers supervisor's loop)."""
-    argv = ["sh", "-c", cmd] if os.environ.get("AGENT_WATCH_ON_POD") else [*connect.ssh_base(budgets.GUARD_HOST), cmd]
+    argv = ["sh", "-c", cmd] if settings.get("AGENT_WATCH_ON_POD") else [*connect.ssh_base(budgets.GUARD_HOST), cmd]
     return subprocess.run(argv, input=data, capture_output=True, text=True, timeout=120, check=True).stdout
 
 
@@ -445,7 +437,7 @@ def bells(api: slack.Slack, now: float) -> dict:
 
 def once() -> None:
     try:
-        b = json.dumps(bells(slack.Slack(os.environ.get("SLACK_BOT_TOKEN")), time.time()))
+        b = json.dumps(bells(slack.Slack(settings.get("SLACK_BOT_TOKEN")), time.time()))
         if DRY:
             log(f"would write {BELLS}: {b}")
         else:
@@ -473,7 +465,7 @@ def once() -> None:
         elif DRY:
             log(f"would post: {text(rec)}" + (f" and ring @{to}" if (to := rung(rec)) else ""))
         else:
-            api = slack.Slack(os.environ.get("SLACK_BOT_TOKEN"))
+            api = slack.Slack(settings.get("SLACK_BOT_TOKEN"))
             ts = slack._post(api, ALERTS, "infra", post := text(rec))
             sent[key] = time.time()
             save_sent(sent)
@@ -499,9 +491,12 @@ def sent_path() -> Path:
 
 
 def load_sent() -> dict:
+    if not sent_path().exists():
+        return {}
     try:
         d = json.loads(sent_path().read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        log(f"{sent_path()} unreadable, so no line counts as posted before ({type(e).__name__}: {e})")
         return {}
     return d if isinstance(d, dict) else {}
 

@@ -45,7 +45,7 @@ Implementation notes
   narrower write) is dropped and its bytes become unwritten.
 - `read` of a view whose byte extent lies inside one `Affine` interval (the common case: one producer, any
   view of it) is answered from the view geometry alone, in the same normal form the authored frontend uses for
-  views (`verity_vllm/program/frontend/strided_views.py:_strided_refs`): `Affine` for a contiguous view, `Strided` for
+  views (`verity_torch/frontend/strided_views.py:_strided_refs`): `Affine` for a contiguous view, `Strided` for
   one strided axis or two collapsed axes (transposes, column slices, expands), a `Concat` over the leading axis
   beyond that.  Otherwise the read walks the element runs, collects the covering slices and compacts them
   (`compact_refs`): adjacent contiguous `Affine`s merge; equally spaced equal-length `Affine` rows of one

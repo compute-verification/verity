@@ -50,7 +50,7 @@ records (`ksRAt` with `ksB`), where the outer witnesses record no call, so `B_I`
 inner statement has no cap position, and `Fdev`'s tail `β₂/(M+1)` is below `1/4` at `M = ⌈4β₂⌉` (`tail_lt_quarter`);
 there `κ < 1/6` (`ksD_κ_lt_sixth`), so `λ₂ > 0` (`ksB_lamLin2_pos`). Their `meets` witnesses are `Inner.KSAbort`'s and
 `KSBound`'s: the claims read the same decoders. The toy records stage no V\* statement, so `B_I` and `Fdev` over the
-samples' evaluations (`BinnerV`, `FdevV`) find nothing either (`drawCalls_noCalls`).
+samples' evaluations (`BinnerV`, `FdevV`) find nothing either (`sampleCalls_noCalls`).
 -/
 
 @[expose] public section
@@ -134,11 +134,11 @@ theorem f0I_expectedCR_noCalls [DecidableEq Col'] (H : Msg → Msg) (D : Recursi
 
 /-- A sample's evaluations are none where the outer witnesses record no call and the compiled verifier stages no V\*
 statement. -/
-theorem drawCalls_noCalls [DecidableEq Col'] (H : Msg → Msg) (D : Recursion.Deploy Coin)
+theorem sampleCalls_noCalls [DecidableEq Col'] (H : Msg → Msg) (D : Recursion.Deploy Coin)
     (hc : ∀ x (r : Fin (D.V.k x) → Coin) ws, D.callsAt H x r ws = []) (hs : ∀ x ps, D.vstar x ps = []) (I : Recursion.Inner Coin W)
     (DO : Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T') {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
-    (d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) : drawCalls H D I DO decO P x ω d = [] := by
-  unfold drawCalls runStmts
+    (d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) : sampleCalls H D I DO decO P x ω d = [] := by
+  unfold sampleCalls runStmts
   rw [hc, hs]
   rfl
 
@@ -151,7 +151,7 @@ theorem binnerV_pr_noCalls [DecidableEq Col'] (H : Msg → Msg) (D : Recursion.D
   rw [Pr_congr fun s => iff_false_intro ?_]
   · exact Pr_false
   · rintro ⟨u, v, h, -⟩
-    simp only [BinnerV, drawCalls_noCalls H D hc hs, List.append_nil, findColl, reduceCtorEq] at h
+    simp only [BinnerV, sampleCalls_noCalls H D hc hs, List.append_nil, findColl, reduceCtorEq] at h
 
 /-- `Fdev` over the samples' evaluations finds nothing where there are none. -/
 theorem fdevV_pr_noCalls [DecidableEq Col'] (H : Msg → Msg) (D : Recursion.Deploy Coin)
@@ -162,7 +162,7 @@ theorem fdevV_pr_noCalls [DecidableEq Col'] (H : Msg → Msg) (D : Recursion.Dep
   rw [Pr_congr fun s => iff_false_intro ?_]
   · exact Pr_false
   · rintro ⟨u, v, h, -⟩
-    simp only [FdevV, linkOutV, drawCalls_noCalls H D hc hs, List.append_nil, findColl, ite_self, reduceCtorEq] at h
+    simp only [FdevV, linkOutV, sampleCalls_noCalls H D hc hs, List.append_nil, findColl, ite_self, reduceCtorEq] at h
 
 theorem prBinnerV_noCalls [DecidableEq Col'] (H : Msg → Msg) (D : Recursion.Deploy Coin)
     (hc : ∀ x (r : Fin (D.V.k x) → Coin) ws, D.callsAt H x r ws = []) (hs : ∀ x ps, D.vstar x ps = []) (I : Recursion.Inner Coin W)

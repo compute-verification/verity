@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Audit.Partitioning.Guarantees
 public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Unequal.Bounds
-import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Audit.SamplingDesign
 import Proofs.Flock.Soundness.Game
 
 /-!
@@ -18,9 +18,9 @@ namespace FlockSoundness.Audit.Partitioning.SecurityProofs
 open Finset Game
 open scoped ENNReal
 
-theorem incl_le_one {n : ℕ} (L : Law n) (u : Fin n) : L.incl u ≤ 1 := by
+theorem incl_le_one {n : ℕ} (L : SamplingDesign n) (u : Fin n) : L.incl u ≤ 1 := by
   classical
-  unfold Verity.Law.incl prCoin
+  unfold Verity.SamplingDesign.incl prCoin
   refine (avg_mono fun ω => ?_).trans (avg_const (C := L.Ω) 1).le
   split_ifs <;> simp
 
@@ -107,13 +107,13 @@ theorem ConverseExact : Guarantees.ConverseExact := by
     rw [ENNReal.toReal_sum fun ω _ => ENNReal.mul_ne_top (ENNReal.inv_ne_top.2 (by simp)) (hg ω)]
     refine Finset.sum_congr rfl fun ω _ => ?_
     rw [ENNReal.toReal_mul, ENNReal.toReal_inv, ENNReal.toReal_natCast]
-  have hmean : meanDraws L = ∑ ω, c * (S ω : ℝ) := by
-    unfold meanDraws
+  have hmean : meanSamples L = ∑ ω, c * (S ω : ℝ) := by
+    unfold meanSamples
     rw [← ENNReal.toReal_sum fun u _ => ne_top_of_le_ne_top ENNReal.one_ne_top (incl_le_one L u), ← L.avg_card,
       havg_toReal _ fun ω => ENNReal.natCast_ne_top _]
     simp [S]
   have havg : ∑ ω, c * (((n - S ω).choose K : ℝ) / (n.choose K : ℝ)) ≤ δ := by
-    have h2 : avg (fun B : (Law.subset n K hKn).Ω => L.escape B.1) ≤ L.miss K :=
+    have h2 : avg (fun B : (SamplingDesign.subset n K hKn).Ω => L.missProb B.1) ≤ L.miss K :=
       (avg_mono fun B => L.escape_le_miss B.2.ge).trans (avg_const _).le
     rw [L.avg_escape_subsets hKn] at h2
     have h3 := ENNReal.toReal_mono (ne_top_of_le_ne_top ENNReal.one_ne_top (L.miss_le_one K)) h2
@@ -141,10 +141,10 @@ theorem ConverseExact : Guarantees.ConverseExact := by
       rw [max_eq_left hMs, zero_pow hK.ne']
       positivity
   have hδ0 : 0 ≤ δ := ENNReal.toReal_nonneg.trans hδ
-  have key : 1 - meanDraws L / M ≤ δ ^ ((K : ℝ)⁻¹) := by
-    rcases le_or_gt (1 - meanDraws L / M) 0 with h | h
+  have key : 1 - meanSamples L / M ≤ δ ^ ((K : ℝ)⁻¹) := by
+    rcases le_or_gt (1 - meanSamples L / M) 0 with h | h
     · exact h.trans (Real.rpow_nonneg hδ0 _)
-    · set t₀ := 1 - meanDraws L / M with ht₀
+    · set t₀ := 1 - meanSamples L / M with ht₀
       have hsumt : ∑ ω, c * (1 - (S ω : ℝ) / M) = t₀ := by
         have e : ∀ ω, c * (1 - (S ω : ℝ) / M) = c - c * (S ω : ℝ) / M := fun ω => by ring
         rw [Finset.sum_congr rfl fun ω _ => e ω, Finset.sum_sub_distrib, hcsum, ← Finset.sum_div, ← hmean]
@@ -165,10 +165,10 @@ theorem ConverseExact : Guarantees.ConverseExact := by
           _ ≤ δ := havg
       have := Real.rpow_le_rpow (by positivity) hlow (by positivity : (0 : ℝ) ≤ (K : ℝ)⁻¹)
       rwa [Real.pow_rpow_inv_natCast h.le hK.ne'] at this
-  have h2 : 1 - δ ^ ((K : ℝ)⁻¹) ≤ meanDraws L / M := by linarith
+  have h2 : 1 - δ ^ ((K : ℝ)⁻¹) ≤ meanSamples L / M := by linarith
   rw [le_div_iff₀ hM] at h2
   calc M * (1 - δ ^ ((K : ℝ)⁻¹)) = (1 - δ ^ ((K : ℝ)⁻¹)) * M := mul_comm _ _
-    _ ≤ meanDraws L := h2
+    _ ≤ meanSamples L := h2
 
 /-- `e^{−x} ≤ 1 − x + x²/2` for `x ≥ 0`: `e^x ≥ 1 + x + x²/2`, and `(1 + x + x²/2)(1 − x + x²/2) = 1 + x⁴/4`. -/
 theorem exp_neg_le (x : ℝ) (hx : 0 ≤ x) : Real.exp (-x) ≤ 1 - x + x ^ 2 / 2 := by
@@ -217,7 +217,7 @@ theorem ServedGranularityOptimum : Guarantees.ServedGranularityOptimum := by
   exact ⟨L, hL, by linarith⟩
 
 /-- `A·s + B/s` over `s > 0` is least at `t` with `t² = B/A`: the difference is `A (s − t)²/s`. -/
-theorem root_law_le {A t s : ℝ} (hA : 0 ≤ A) (ht : 0 < t) (hs : 0 < s) :
+theorem root_samplingDesign_le {A t s : ℝ} (hA : 0 ≤ A) (ht : 0 < t) (hs : 0 < s) :
     A * t + A * (t * t) / t ≤ A * s + A * (t * t) / s := by
   have hs0 : s ≠ 0 := hs.ne'
   have ht0 : t ≠ 0 := ht.ne'
@@ -254,17 +254,17 @@ theorem ServedGranularityChoice : Guarantees.ServedGranularityChoice := by
     simp only [mul_zero, zero_mul, div_zero, zero_div, add_zero]
     nlinarith
   · rw [hcommit t h0.ne']
-    have key := root_law_le hA h0 hs
+    have key := root_samplingDesign_le hA h0 hs
     nlinarith [key]
 
 theorem HeavyUnit : Guarantees.HeavyUnit := by
   intro n w C δ L hL u hu
   have h := hL {u} (by simpa using hu)
-  rw [Law.escape_singleton, ENNReal.toReal_sub_of_le (incl_le_one L u) ENNReal.one_ne_top,
+  rw [SamplingDesign.escape_singleton, ENNReal.toReal_sub_of_le (incl_le_one L u) ENNReal.one_ne_top,
     ENNReal.toReal_one] at h
   linarith
 
-theorem UnequalDraws : Guarantees.UnequalDraws := Unequal.unequalDraws ConverseAsymptotic
+theorem UnequalSamples : Guarantees.UnequalSamples := Unequal.unequalSamples ConverseAsymptotic
 
 theorem UnequalCost : Guarantees.UnequalCost := fun _ w _ _ _ _ _ _ _ hρ ha haA hw hC hδ0 hδ1 hf ho hAΛ L hL =>
   Unequal.unequalCost_of_le ConverseAsymptotic w hρ ha haA hw hC hδ0 hδ1 hf ho hAΛ L hL

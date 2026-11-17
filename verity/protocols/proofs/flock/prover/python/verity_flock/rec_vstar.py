@@ -8,7 +8,7 @@ top. Its hashing part, which this module states over plain Python:
 * **Tops** (`tops`). Each tree's top (its Ligerito cap, ``2^c`` nodes) is the prover's (``private.json``); the challenger's live-coin part
   received each node's hiding commitment (`verity_flock.rec_live.commit_top`): level 0's at ``Commit`` (``root_B``, the one
   tree both reps share), level ``l >= 1``'s in the round that absorbed it. A top whose nodes and salts do not open those
-  commitments is refused (``FIREWALL-REFUSED: tree top``). The stacked table R has no root at ``Commit``: its level 0 is
+  commitments is refused (``ZK-SERVER-REFUSED: tree top``). The stacked table R has no root at ``Commit``: its level 0 is
   its binding round's top, which must be the top registered at staging (`registered`: the ``stacked`` entry of the
   circuit registration, ``verity/registration/v2``, `rec_live.REGISTRATION`, whose digest the statement's META binds).
 * **Openings** (`Flock.Ligerito`). Level ``l`` of a rep's Ligerito opening is ``Q_l`` queries into that tree. Query
@@ -22,7 +22,7 @@ top. Its hashing part, which this module states over plain Python:
 * **Message rows**: each round's free message rows open the ``b || c`` the challenger recorded for them before it flipped the
   round's coins (`verity_flock.rec_live.commit_rows`).
 
-`check` runs all three over a finished inner session (``public.json``, ``private.json`` and the proofs); `queries` lists the
+`check_twin` runs all three over a finished inner session (``public.json``, ``private.json`` and the proofs); `queries` lists the
 openings in the order the RecOpen gadgets take them, each with its public part (level, position, depth) and the top's node
 it climbs to.
 """
@@ -241,7 +241,7 @@ def opened_top(opening: dict, bcs: list[str], what: str) -> Top:
     salts = [bytes.fromhex(x) for x in opening["salts"]]
     if (not nodes or len(nodes) != len(bcs) or len(salts) != len(nodes) or any(len(n) != HASH for n in nodes)
             or [b.hex() for b in RL.commit_top(b"".join(nodes), salts)] != bcs):
-        raise ValueError(f"FIREWALL-REFUSED: tree top: {what} does not open its commitment")
+        raise ValueError(f"ZK-SERVER-REFUSED: tree top: {what} does not open its commitment")
     return Top(tuple(nodes), tuple(salts), tuple(bytes.fromhex(b) for b in bcs))
 
 
@@ -259,7 +259,7 @@ def tops(public: dict, private: dict, stream: str, table: str = "circuit") -> li
     for r in _stream_rounds(public, stream):
         got = prv.get((stream, r["k"]), {}).get("tops", [])
         if len(got) != len(r["tops"]):
-            raise ValueError(f"FIREWALL-REFUSED: tree top: {stream} round {r['k']} commits {len(r['tops'])} tops, the prover "
+            raise ValueError(f"ZK-SERVER-REFUSED: tree top: {stream} round {r['k']} commits {len(r['tops'])} tops, the prover "
                              f"opens {len(got)}")
         out += [opened_top(o, bcs, f"{stream} round {r['k']}'s top {i}") for i, (o, bcs) in enumerate(zip(got, r["tops"]))]
     return out
@@ -270,7 +270,7 @@ def registered(public: dict, registration: dict | None, bound: str | None, table
     staging): the record must be the one whose digest the statement's META binds (``bound``, one-stage
     ``registration.digest``), and its registered entry named ``table`` the entry its stream's binding round's salted top makes
     (`rec_live.top_entry` under the record's ``program``: root, leaves, words and domain); refused by name otherwise."""
-    from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+    from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
     stream = f"{table}/rep0"
     first = next((r for r in _stream_rounds(public, stream) if r["k"] == 0), None)
@@ -295,7 +295,7 @@ def queries(public: dict, private: dict, proofs: dict[int, bytes], table: str = 
     (`reps`; the stacked table R, `rec_live.STACKED`, its one) has its stream and its proof, and nothing else does."""
     want = [0] if table == RL.STACKED else reps(public)
     if not want or sorted(proofs) != want or any(f"{table}/rep{r}" not in public["streams"] for r in want):
-        raise ValueError(f"FIREWALL-REFUSED: proofs: the session declares {table}'s reps {want}; it has streams "
+        raise ValueError(f"ZK-SERVER-REFUSED: proofs: the session declares {table}'s reps {want}; it has streams "
                          f"{sorted(public['streams'])} and proofs of reps {sorted(proofs)}")
     out = []
     for rep, b in sorted(proofs.items()):
@@ -321,8 +321,8 @@ def opens(q: Query) -> bool:
     return len(q.sibs) == q.depth - q.c and climb(leaf(q.row, q.salt), q.pos, q.sibs) == q.cap_node
 
 
-def check(public: dict, private: dict, proofs: dict[int, bytes], table: str = "circuit") -> dict:
-    """V*'s hashing over a finished inner session: every top (`tops`, refused by name when one does not open), every
+def check_twin(public: dict, private: dict, proofs: dict[int, bytes], table: str = "circuit") -> dict:
+    """The Python twin of V*'s hashing over a finished inner session: every top (`tops`, refused by name when one does not open), every
     opening (`opens`) and every message row's commitment."""
     qs = queries(public, private, proofs, table)
     bad_q = [(q.rep, q.level, q.j) for q in qs if not opens(q)]
@@ -351,31 +351,36 @@ def load(d: Path, table: str = "circuit") -> tuple[dict, dict, dict[int, bytes]]
     return json.loads((d / "public.json").read_text()), json.loads((d / "private.json").read_text()), proofs
 
 
-def main(argv=None) -> int:
-    import argparse
-    import sys
+#: the goal under which V*'s verdict on an inner session gets an entry of record
+GOAL = "proofs/recursion-vstar-of-record"
 
-    ap = argparse.ArgumentParser()
-    ap.add_argument("inner", help="an inner session directory (public.json, private.json, session/)")
-    ap.add_argument("--circuit", help="the inner statement's circuit.txt, whose META binds the circuit registration (a "
-                    "session with the stacked table R is refused without it)")
-    a = ap.parse_args(argv)
+
+def session_twin(inner: Path, circuit: Path | None = None) -> dict:
+    """`check_twin` over the inner session directory ``inner`` and, where it has the stacked table R, R's, with the
+    registration ``circuit``'s META binds held to the staged top (`registered`); a ZK server refusal is a refusal. The
+    Python twin of V*'s verdict on the session, for tests only."""
     try:
-        public, private, proofs = load(Path(a.inner))
-        res = check(public, private, proofs)
+        public, private, proofs = load(Path(inner))
+        res = check_twin(public, private, proofs)
         if f"{RL.STACKED}/rep0" in public["streams"]:
-            reg = Path(a.inner) / RL.REGISTRATION
-            meta = json.loads(Path(a.circuit).read_text().split("\n", 2)[1][5:]) if a.circuit else {}
+            reg = Path(inner) / RL.REGISTRATION
+            meta = json.loads(Path(circuit).read_text().split("\n", 2)[1][5:]) if circuit else {}
             registered(public, json.loads(reg.read_text()) if reg.exists() else None, meta.get("registration"))
-            res["stacked"] = check(public, private, load(Path(a.inner), RL.STACKED)[2], RL.STACKED)
+            res["stacked"] = check_twin(public, private, load(Path(inner), RL.STACKED)[2], RL.STACKED)
             res["accepted"] = res["accepted"] and res["stacked"]["accepted"]
     except ValueError as e:
-        if not str(e).startswith("FIREWALL-REFUSED"):
+        if not str(e).startswith("ZK-SERVER-REFUSED"):
             raise
         res = {"accepted": False, "refused": str(e)}
-    json.dump(res, sys.stdout, sort_keys=True)
-    print()
-    return 0 if res["accepted"] else 1
+    return res
+
+
+def main(argv=None) -> int:
+    """V*'s verdict on an inner session: the Lean's, V*'s statements (`VStar`) proved and checked by
+    ``verity-verify-proof verify --zk --rec-part J`` and composed by ``verity-verify-proof rec-compose``
+    (`Flock.RecCompose.check`); no entry answers it on a session directory alone, so this raises. `session_twin` is its
+    Python twin."""
+    raise NotImplementedError(GOAL)
 
 
 if __name__ == "__main__":

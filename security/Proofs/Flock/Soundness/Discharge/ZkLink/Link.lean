@@ -5,9 +5,9 @@ import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Game
 
 /-!
-# `δ_link` for `--zk` sessions under expected-time collision resistance (interactive-oracle layer)
+# `ε_bind` for `--zk` sessions under expected-time collision resistance (interactive-oracle layer)
 
-`zk_flock_count_execOS_m1` leaves the binding error as the named hypothesis `BindSound δ_link`. It is discharged here in the
+`zk_flock_count_execOS_m1` leaves the binding error as the named hypothesis `BindSound ε_bind`. It is discharged here in the
 shape of `Audit.Partition.flock_batched_linkSoundE`, for the protocol as Lean defines it at the interactive-oracle layer
 (`sessionZK`), under expected-time collision resistance of SHA-512 for an explicit finder
 (`Assumptions.SHA512CRExpected`):
@@ -33,7 +33,7 @@ adds `k/(eR_w)` and the factor `1/(1 − ρ)`; here extraction is the oracle its
 (`LinkCRZ`), and the bound is `⊤` at any other (`linkBoundZ`).
 
 `zk_flock_count_execOS_m1_cr`: `zk_flock_count_execOS_m1` with the committed transcript the plurality value layer and
-`δ_link` that bound.
+`ε_bind` that bound.
 
 **What this does not cover.** The finder reads the oracle the prover sends at `Commit`; the protocol as run sends a Merkle
 cap, and the oracle is what extraction from the cap's openings recovers. The compiled counterpart, whose finder runs the
@@ -125,7 +125,7 @@ structure ValueBindingZ (decode : DecoderZK (C := C) planZ tab) {Dh : Type} (Hc 
 attribute [instance] ValueBindingZ.finPos ValueBindingZ.decPos ValueBindingZ.finVal ValueBindingZ.decVal
   ValueBindingZ.inhVal ValueBindingZ.inhOp
 
-variable {L : Law n} {decode : DecoderZK (C := C) planZ tab} {Dh : Type} {Hc : List UInt8 → Dh}
+variable {L : SamplingDesign n} {decode : DecoderZK (C := C) planZ tab} {Dh : Type} {Hc : List UInt8 → Dh}
   (vb : ValueBindingZ A P planZ tab decode Hc) (R : Reg) (τ : Cont L Reg (batchedSessionZK A planZ) R)
 
 /-- The level-0 oracles the prover's `Commit` sends on sample `ω`. -/
@@ -136,7 +136,7 @@ noncomputable abbrev oraclesω (ω : L.Ω) : Fin (planZ (L.draw ω) R).length �
 def ReadsZ (u : Fin n) (c : vb.Pos) : Prop := ∃ g ∈ P.io u, vb.pos g = c
 
 /-- A sample reads commit string `c`. -/
-def ReadsDrawZ (c : vb.Pos) (ω : L.Ω) : Prop := ∃ u ∈ L.draw ω, ReadsZ A P planZ tab vb u c
+def ReadsSampleZ (c : vb.Pos) (ω : L.Ω) : Prop := ∃ u ∈ L.draw ω, ReadsZ A P planZ tab vb u c
 
 /-- **On sample `ω`, commit string `c` opens to `v` by the opening `o`**: a sampled proof block that reads `c` opens it so from a
 padded witness near its table's oracle that satisfies the statement. -/
@@ -154,10 +154,10 @@ noncomputable def readsZ (ω : L.Ω) (c : vb.Pos) : Finset vb.Val :=
   Finset.univ.filter fun v => ∃ o, OpensAtZ A P planZ tab vb R τ ω c v o
 
 /-- The samples that read `c`. -/
-abbrev ΩcZ (L : Law n) (c : vb.Pos) : Type := {ω : L.Ω // ReadsDrawZ A P planZ tab vb c ω}
+abbrev ΩcZ (L : SamplingDesign n) (c : vb.Pos) : Type := {ω : L.Ω // ReadsSampleZ A P planZ tab vb c ω}
 
 open Classical in
-noncomputable instance instFintypeΩcZ (L : Law n) (c : vb.Pos) : Fintype (ΩcZ A P planZ tab vb L c) := Subtype.fintype _
+noncomputable instance instFintypeΩcZ (L : SamplingDesign n) (c : vb.Pos) : Fintype (ΩcZ A P planZ tab vb L c) := Subtype.fintype _
 
 /-- **The trial for commit string `c`**: a sample that reads `c`, uniform among such samples. -/
 noncomputable abbrev trialZ (c : vb.Pos) [Nonempty (ΩcZ A P planZ tab vb L c)] : Game (ΩcZ A P planZ tab vb L c) :=
@@ -184,7 +184,7 @@ noncomputable def XvalZ (c : vb.Pos) : vb.Val :=
   if h : Nonempty (ΩcZ A P planZ tab vb L c) then
     haveI := h
     Classical.choose (Finset.exists_max_image Finset.univ
-      (pRd (trialZ A P planZ tab vb c) (drawStrat _) (rdZ A P planZ tab vb R τ c)) Finset.univ_nonempty)
+      (pRd (trialZ A P planZ tab vb c) (sampleStrat _) (rdZ A P planZ tab vb R τ c)) Finset.univ_nonempty)
   else default
 
 /-- **The value layer**: each wire's bit in the plurality value of its commit string. -/
@@ -234,8 +234,8 @@ theorem psiZ_nonneg (c : vb.Pos) (ω : L.Ω) : 0 ≤ psiZ A P planZ tab vb R τ 
 
 omit [Fintype K] in
 theorem XvalZ_max (c : vb.Pos) [hne : Nonempty (ΩcZ A P planZ tab vb L c)] (v : vb.Val) :
-    pRd (trialZ A P planZ tab vb c) (drawStrat _) (rdZ A P planZ tab vb R τ c) v ≤
-      pRd (trialZ A P planZ tab vb c) (drawStrat _) (rdZ A P planZ tab vb R τ c)
+    pRd (trialZ A P planZ tab vb c) (sampleStrat _) (rdZ A P planZ tab vb R τ c) v ≤
+      pRd (trialZ A P planZ tab vb c) (sampleStrat _) (rdZ A P planZ tab vb R τ c)
         (XvalZ A P planZ tab vb R τ c) := by
   unfold XvalZ
   rw [dite_eq_left_of_eq_true (eq_true hne)]
@@ -243,7 +243,7 @@ theorem XvalZ_max (c : vb.Pos) [hne : Nonempty (ΩcZ A P planZ tab vb L c)] (v :
     (Finset.mem_univ v)
 
 omit [Fintype K] in
-theorem readsZ_eq_empty {c : vb.Pos} {ω : L.Ω} (h : ¬ ReadsDrawZ A P planZ tab vb c ω) :
+theorem readsZ_eq_empty {c : vb.Pos} {ω : L.Ω} (h : ¬ ReadsSampleZ A P planZ tab vb c ω) :
     readsZ A P planZ tab vb R τ ω c = ∅ := by
   classical
   unfold readsZ
@@ -256,19 +256,19 @@ continuation `τ`, for the finder built for each commit string a sample can read
 (`Audit.Partition.LinkCR`), A2 is asked only of the finders of the prover it bounds. -/
 def LinkCRZ (M : ℕ) (t' : ℝ) : Prop :=
   ∀ (c : vb.Pos) (_ : Nonempty (ΩcZ A P planZ tab vb L c)), Assumptions.SHA512CRExpected Hc
-    (finderG (trialZ A P planZ tab vb c) M) (finderStrat _ (drawStrat _) M) (outZ A P planZ tab vb R τ c)
+    (finderG (trialZ A P planZ tab vb c) M) (finderStrat _ (sampleStrat _) M) (outZ A P planZ tab vb R τ c)
     (finderCost (rdZ A P planZ tab vb R τ c) fun _ => t')
 
 omit [Fintype K] in
 /-- **The trial's link mass at `c`**, under A2 for the finder: at most `2t'/2^256 + 1/(eM)`. -/
 theorem trialZ_mass_le (M : ℕ) (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t') (c : vb.Pos)
     [Nonempty (ΩcZ A P planZ tab vb L c)]
-    (hCR : Assumptions.SHA512CRExpected Hc (finderG (trialZ A P planZ tab vb c) M) (finderStrat _ (drawStrat _) M)
+    (hCR : Assumptions.SHA512CRExpected Hc (finderG (trialZ A P planZ tab vb c) M) (finderStrat _ (sampleStrat _) M)
       (outZ A P planZ tab vb R τ c) (finderCost (rdZ A P planZ tab vb R τ c) fun _ => t')) :
     (∑ w : ΩcZ A P planZ tab vb L c, psiZ A P planZ tab vb R τ c w.1) / Fintype.card (ΩcZ A P planZ tab vb L c) ≤
       2 * t' / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) := by
   set T := trialZ (L := L) A P planZ tab vb c
-  set sT : Strategy T := drawStrat _
+  set sT : Strategy T := sampleStrat _
   set rd := rdZ A P planZ tab vb R τ c
   set Xv := XvalZ A P planZ tab vb R τ c
   have hmass := link_mass_le T sT rd Hc (outZ A P planZ tab vb R τ c) (fun _ => t') (fun _ => ht) M hM
@@ -281,7 +281,7 @@ theorem trialZ_mass_le (M : ℕ) (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t') (c : 
     split_ifs with h1 h2 h2 <;> first | rfl | exact absurd h1 h2 | exact absurd h2 h1
   have heq : (∑ w : ΩcZ A P planZ tab vb L c, psiZ A P planZ tab vb R τ c w.1) /
       Fintype.card (ΩcZ A P planZ tab vb L c) = sRd T sT rd + ((∑ v, pRd T sT rd v) - pRd T sT rd Xv) := by
-    rw [← Verity.Game.expect_draw (ΩcZ A P planZ tab vb L c) (fun w => psiZ A P planZ tab vb R τ c w.1), hpsi,
+    rw [← Verity.Game.expect_sample (ΩcZ A P planZ tab vb L c) (fun w => psiZ A P planZ tab vb R τ c w.1), hpsi,
       expect_sub]
     have := rRd_eq T sT rd
     unfold rRd at this
@@ -294,9 +294,9 @@ theorem trialZ_mass_le (M : ℕ) (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t') (c : 
 
 /-- **The link mass at `c`, over the sample**: the probability that a sample reads a value other than the plurality at `c`
 is at most `π c` times the trial's bound. -/
-theorem drawZ_mass_le (M : ℕ) (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t') (c : vb.Pos)
+theorem sampleZ_mass_le (M : ℕ) (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t') (c : vb.Pos)
     (hCR : ∀ _ : Nonempty (ΩcZ A P planZ tab vb L c), Assumptions.SHA512CRExpected Hc
-      (finderG (trialZ A P planZ tab vb c) M) (finderStrat _ (drawStrat _) M) (outZ A P planZ tab vb R τ c)
+      (finderG (trialZ A P planZ tab vb c) M) (finderStrat _ (sampleStrat _) M) (outZ A P planZ tab vb R τ c)
       (finderCost (rdZ A P planZ tab vb R τ c) fun _ => t')) :
     (∑ ω : L.Ω, psiZ A P planZ tab vb R τ c ω) / Fintype.card L.Ω ≤
       (Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω *
@@ -304,12 +304,12 @@ theorem drawZ_mass_le (M : ℕ) (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t') (c : v
   classical
   have hΩ : (0 : ℝ) < Fintype.card L.Ω := by exact_mod_cast Fintype.card_pos
   have hB : 0 ≤ 2 * t' / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) := by positivity
-  have hoff : ∀ ω, ¬ ReadsDrawZ A P planZ tab vb c ω → psiZ A P planZ tab vb R τ c ω = 0 := by
+  have hoff : ∀ ω, ¬ ReadsSampleZ A P planZ tab vb c ω → psiZ A P planZ tab vb R τ c ω = 0 := by
     intro ω hω
     simp [psiZ, readsZ_eq_empty A P planZ tab vb R τ hω]
   have hsum : ∑ ω : L.Ω, psiZ A P planZ tab vb R τ c ω =
       ∑ w : ΩcZ A P planZ tab vb L c, psiZ A P planZ tab vb R τ c w.1 := by
-    rw [← Finset.sum_filter_of_ne (p := fun ω => ReadsDrawZ A P planZ tab vb c ω)
+    rw [← Finset.sum_filter_of_ne (p := fun ω => ReadsSampleZ A P planZ tab vb c ω)
       (fun ω _ hne => by by_contra h; exact hne (hoff ω h))]
     exact Finset.sum_subtype _ (fun ω => by simp) _
   rw [hsum, div_le_iff₀ hΩ]
@@ -367,7 +367,7 @@ noncomputable def linkBoundZ (M : ℕ) (t' : ℝ) (R : Reg) (τ : Cont L Reg (ba
       (2 * t' / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M)))
   else ⊤
 
-/-- **The `--zk` link theorem: `δ_link` under expected-time collision resistance, prover by prover**
+/-- **The `--zk` link theorem: `ε_bind` under expected-time collision resistance, prover by prover**
 (interactive-oracle layer). For the batched `--zk` audit (`analysisZK`) with the plurality value layer (`XplurZ`), given
 the binding of wires to commit strings (`ValueBindingZ`): at every prover whose explicit finder of each commit string
 satisfies A2 at cost `t'` per trial (`LinkCRZ`),
@@ -407,7 +407,7 @@ theorem zk_linkSoundE (hlow : LoweringSoundZK A P planZ tab decode) {M : ℕ} (h
   apply ENNReal.ofReal_le_ofReal
   have hc : ∀ c, (∑ ω, psiZ A P planZ tab vb R τ c ω) / Fintype.card L.Ω ≤
       (Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω * B := fun c =>
-    drawZ_mass_le A P planZ tab vb R τ M hM ht c (hCR c)
+    sampleZ_mass_le A P planZ tab vb R τ M hM ht c (hCR c)
   calc (∑ ω, Λ ω) / Fintype.card L.Ω
       = ∑ c, (∑ ω, psiZ A P planZ tab vb R τ c ω) / Fintype.card L.Ω := by
         simp only [hΛ, div_eq_mul_inv, ← Finset.sum_mul]
@@ -426,27 +426,27 @@ variable (A : Arith F K) {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
 
-/-- **The `--zk` count curve at the live sample, every table at M1's parameters, `δ_link` under A2**
+/-- **The `--zk` count curve at the live sample, every table at M1's parameters, `ε_bind` under A2**
 (interactive-oracle layer): with the committed transcript the plurality value layer (`XplurZ`) of a binding of wires to
 registered commit strings (`ValueBindingZ`),
-`Pr[accept ∧ at least K wrong units] ≤ miss(K) + 2^-203 + Q_s·(2t'/2^256 + 1/(eM))` at every prover whose link finders
+`Pr[accept ∧ at least K incorrect proof blocks] ≤ miss(K) + 2^-203 + Q_s·(2t'/2^256 + 1/(eM))` at every prover whose link finders
 satisfy A2 (`LinkCRZ`), and `⊤` on the right at any other. -/
 theorem zk_flock_count_execOS_m1_cr (hA : A.Correct)
     (hM1 : ∀ S R (j : Fin (planZ S R).length), ((planZ S R).get j).M1)
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
+    (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     (place : ∀ S R u, u ∈ S → UnitPlace P (tabOfZ planZ tab S R u).S u)
     {Dh : Type} {Hc : List UInt8 → Dh}
     (vb : ValueBindingZ A P planZ tab (decodeOfPlace A P planZ tab place) Hc)
     {M : ℕ} (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t') (K : ℕ)
-    (σ : Strategy (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
+    (σ : Strategy (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (batchedSessionZK A planZ))) :
-    prob (fun o => o.1 = true ∧ K ≤ (P.wrong (XplurZ A P planZ tab vb (reg σ) (cont σ))).card)
-        (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (batchedSessionZK A planZ)) σ ≤
-      (Law.stratified σs ks hks).miss K + ENNReal.ofReal ((2 : ℝ) ^ (-(203 : ℝ))) +
-        linkBoundZ A P planZ tab (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) vb M t'
+    prob (fun o => o.1 = true ∧ K ≤ (P.incorrect (XplurZ A P planZ tab vb (reg σ) (cont σ))).card)
+        (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (batchedSessionZK A planZ)) σ ≤
+      (SamplingDesign.stratified σs ks hks).miss K + ENNReal.ofReal ((2 : ℝ) ^ (-(203 : ℝ))) +
+        linkBoundZ A P planZ tab (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) vb M t'
           (reg σ) (cont σ) :=
   zk_flock_count_execOS_m1 A P planZ tab hA hM1 σs ks hks St hS Kd pop Lb src hA3 place
     (fun R τ => XplurZ A P planZ tab vb R τ)

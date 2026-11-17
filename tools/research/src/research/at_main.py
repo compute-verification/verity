@@ -6,7 +6,7 @@ of its own, neither committed since its merge base with origin/main nor in the w
 `research` re-executes itself from a detached worktree of origin/main kept in a cache, moved to origin/main whenever that
 moves. Both are as of the checkout's last fetch: no network, so a credential prompt can't hang it. A branch that changes
 research code runs its own. `RESEARCH_AT_CHECKOUT=1` runs the checkout's copy (and marks the re-executed process, so it
-never loops). The working directory is kept, so `research run` still ships the caller's checkout.
+never loops), as does `RESEARCH_LAUNCHER_TREE` (research.launcher). The working directory is kept, so `research run` still ships the caller's checkout.
 
 Setting that worktree up never stops a command: all of it (every git call and the wait for the cache's lock) has `SETUP_S`
 together, and when that runs out, or git fails, or the cache can't be written, the checkout's own copy runs and one line
@@ -38,12 +38,25 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
+from types import SimpleNamespace
 from typing import IO, Callable
+
+if __package__:
+    from . import settings
+else:
+    #: the shim's script form has no package to import `research.settings` from: its `get` and `has`, which for a declared
+    #: name (each one this file reads is) are ``os.environ.get`` and ``in os.environ`` at the call
+    settings = SimpleNamespace(get=lambda name, default=None: os.environ.get(name, default))
+    settings.has = lambda name: settings.get(name) is not None
 
 PATHS = ("tools/research", "infra/ops", "infra/cluster")
 OPT_OUT = "RESEARCH_AT_CHECKOUT"
+#: research.launcher's trusted tree: set (present, even blank), the copy that runs is the one it names, and no other is
+#: re-executed (`-m research` would put the working directory, a launch's --source tree, first on the new process's sys.path)
+TRUSTED = "RESEARCH_LAUNCHER_TREE"
 #: what one command gives to setting up origin/main's copy, every git call and the wait for the cache's lock together,
 #: before it runs the checkout's own: many times a checkout of this repository on a busy machine, and short enough that
 #: the command isn't taken for hung
@@ -357,23 +370,79 @@ def prune(cache: Path, keep: Path | None, end: float) -> None:
 
 def start(src: Path, argv: list[str], execve: Callable = os.execve) -> None:
     """Replace this process with `research ARGV` run from the package under `src`."""
-    path = os.pathsep.join(p for p in (str(src), os.environ.get("PYTHONPATH", "")) if p)
+    path = os.pathsep.join(p for p in (str(src), settings.get("PYTHONPATH", "")) if p)
     execve(sys.executable, [sys.executable, "-m", "research", *argv], {**os.environ, OPT_OUT: "1", "PYTHONPATH": path})
+
+
+def checkout_of(d: Path) -> Path | None:
+    """The git checkout `d` is in: the nearest of it and its parents holding `.git` (a clone's directory, a worktree's
+    file)."""
+    return next((p for p in (d, *d.parents) if (p / ".git").exists()), None)
+
+
+def caches() -> Path:
+    """The at-main cache: under $XDG_CACHE_HOME, else ~/.cache (RuntimeError where no home can be found)."""
+    return Path(settings.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "research-at-main"
+
+
+def pythonpath_notice(cache: Path | None = None, here: Path | None = None, marks: Path | None = None) -> str | None:
+    """One line on stderr, once an agent's session, when an entry of PYTHONPATH put the `research` package that runs
+    (`here`) ahead of the checkout the command is for and of origin/main's: a startup file that exports one does so on
+    every command, through no command a shell hook reads. What was printed, or None.
+
+    Silent when the package that runs is one a command is meant to run: under the at-main cache (`start` puts a tree of
+    it first for its child), or in the checkout the command runs in (the working directory's, or the shim's
+    `RESEARCH_CHECKOUT`), or in the venv's own checkout. Only an agent's VM is judged, as `guard_notice` judges it: an
+    agent's `CURSOR_CONVERSATION_ID`, no test (`PYTEST_CURRENT_TEST`), and a package in a git checkout, which a node's
+    installed copies, run with a PYTHONPATH of their own, are not. The mark is per agent, under the temporary
+    directory, as guard_notice's is."""
+    from .guard_notice import AGENT_ID
+
+    here = (here or Path(__file__).parent).resolve()
+    root, agent = here.parents[3], (settings.get("CURSOR_CONVERSATION_ID") or "").strip()
+    entries = [Path(p) for p in (settings.get("PYTHONPATH") or "").split(os.pathsep) if p]
+    if (settings.get("PYTEST_CURRENT_TEST") or not AGENT_ID.fullmatch(agent) or not (root / ".git").exists()
+            or not any((p / "research").resolve() == here for p in entries)
+            or here.is_relative_to((cache or caches()).resolve())):
+        return None
+    owned = {Path(sys.prefix).resolve().parent}
+    if shim := settings.get("RESEARCH_CHECKOUT"):
+        owned.add(checkout_of(Path(shim).resolve()))
+    if os.path.isdir("."):
+        owned.add(checkout_of(Path.cwd().resolve()))
+    mark = (marks or Path(tempfile.gettempdir()) / "research-pythonpath-notice") / agent
+    if root in owned or mark.exists():
+        return None
+    line = (f"research: PYTHONPATH puts {root}'s research ahead of this checkout's and of origin/main's, so that copy "
+            f"runs; unset PYTHONPATH, or put it on the one command")
+    try:
+        mark.parent.mkdir(parents=True, exist_ok=True)
+        mark.touch()
+    except OSError as e:
+        line += f" ({mark} could not be written, so the next command says it again: {e})"
+    print(line, file=sys.stderr)
+    return line
 
 
 def reexec(argv: list[str], repo: Path | None = None, cache: Path | None = None, execve: Callable = os.execve) -> None:
     """Re-execute `research ARGV` from origin/main's code when `repo`'s is only behind it (module doc); else return, with
     one line on stderr when origin/main's should run and couldn't be set up. First, as `research`'s own module (not the
     shim's script, whose `research` comes here again), it says once a session when no shell hook runs on this agent's VM
-    (`guard_notice`): the other way a VM's branch is behind main without a word."""
+    (`guard_notice`), and when PYTHONPATH runs a third tree's research (`pythonpath_notice`): the other ways a VM runs
+    research other than main's without a word. A notice that raises OSError or RuntimeError is one line on stderr, and
+    the command goes on."""
     if __package__:
         from .guard_notice import notice
 
-        notice(os.environ)
+        for name, say in (("guard_notice", lambda: notice(os.environ)), ("pythonpath_notice", lambda: pythonpath_notice(cache))):
+            try:
+                say()
+            except (OSError, RuntimeError) as e:
+                print(f"research: {name} could not run, and the command goes on: {' '.join(str(e).split())}", file=sys.stderr)
     repo = repo or Path(__file__).resolve().parents[4]
-    if os.environ.get(OPT_OUT) or not (repo / ".git").exists():
+    if settings.get(OPT_OUT) or settings.has(TRUSTED) or not (repo / ".git").exists():
         return
-    cache = cache or Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "research-at-main"
+    cache = cache or caches()
     end = clock() + SETUP_S
     try:
         found = behind(repo, end)
@@ -399,4 +468,4 @@ def shim(argv: list[str], repo: Path, cache: Path | None = None, execve: Callabl
 
 
 if __name__ == "__main__":
-    shim(sys.argv[1:], Path(os.environ.get("RESEARCH_CHECKOUT") or "."))
+    shim(sys.argv[1:], Path(settings.get("RESEARCH_CHECKOUT") or "."))

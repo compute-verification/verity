@@ -1,7 +1,11 @@
-"""The agent guard's settings registry: each environment variable the inbox and its hooks share is read here, once.
+"""The agent guard's settings registry: each environment variable the inbox, its hooks and the OOM recorder read is
+declared once, in `DECLARED`, and read here.
 
-Standard library only, and read at import: every hook run and every `inbox.py` command is a fresh process. The hooks run
-this directory's files side by side (`boot.sh` and `hook.sh` copy it whole), so a sibling `import settings` finds it.
+Standard library only. The values below are read at import: every hook run and every `inbox.py` command is a fresh
+process. A file reads the others through `get`, `need` and `has`, which are ``os.environ.get``, ``os.environ[...]`` and
+``in os.environ`` of a declared name, at the call: a default, an empty string and an unset variable behave as they do
+there, and a name `DECLARED` lacks raises `Undeclared`. The hooks run this directory's files side by side (`boot.sh` copies it
+whole to /opt/agent-guard, and `hook.sh` extracts it whole on a laptop), so a sibling `import settings` finds it.
 """
 from __future__ import annotations
 
@@ -10,6 +14,56 @@ import os
 import re
 import sys
 import time
+from typing import TypeVar
+
+T = TypeVar("T")
+
+DECLARED: dict[str, str] = {
+    "AGENT_INBOX": "where queued messages wait (`INBOX`)",
+    "AGENT_INBOX_POLL_S": "seconds between the hook's background inbox pulls (`INBOX_POLL_S`)",
+    "AGENT_GUARD_EVENT_LOG": "the hook runs' log (`EVENT_LOG`)",
+    "AGENT_GUARD_PUSH_REMOTES": "a regex for the push URLs the push rules judge (`PUSH_REMOTES`)",
+    "AGENT_GUARD_REGISTRY": "the Slack registry `task_hook.py` reads holders from (default the checkout's)",
+    "AGENT_GUARD_TASK_LOG": "the log of the Task calls `task_hook.py` saw",
+    "AGENT_GUARD_STATE": "the directory of each checkout's owner (`worktree_guard.py`)",
+    "AGENT_GUARD_MEMINFO": "the meminfo file the shell hook reads memory from (default /proc/meminfo)",
+    "AGENT_GUARD_CGROUP": "the cgroup the shell hook reads a memory limit from (default the process's own)",
+    "AGENT_GUARD_MIN_AVAIL": "the share of memory the shell hook keeps free before it refuses heavy local work",
+    "CURSOR_CONVERSATION_ID": "this agent's conversation id, where Cursor's shell sets it (`CONVERSATION_ID`)",
+    "CLOUD_AGENT_INJECTED_SECRET_NAMES": "the secrets Cursor injects into this VM, by name (`INJECTED`)",
+    "CLOUD_AGENT_ALL_SECRET_NAMES": "every secret Cursor knows for this VM, by name: never printed",
+    "OOM_WATCH_LOG": "where the OOM recorder appends its records",
+    "OOM_WATCH_LOCK": "the OOM recorder's lock, one recorder a VM",
+    "OOM_WATCH_MIN_MB": "the smallest kill, in MB, the OOM recorder announces",
+    "OOM_WATCH_RESEARCH": "the `research` command the OOM recorder announces a kill with",
+    "RESEARCH_AGENT_URL": "this agent's URL, which an OOM record names",
+}
+
+
+class Undeclared(Exception):
+    """A read of a variable `DECLARED` lacks."""
+
+
+def _declared(name: str) -> str:
+    if name not in DECLARED:
+        raise Undeclared(f"{name} is not declared in tools/agent-guard/settings.py (DECLARED): declare it there with what it is")
+    return name
+
+
+def get(name: str, default: T = None) -> str | T:
+    """``os.environ.get(name, default)`` of a declared variable: an empty string is returned as it is."""
+    return os.environ.get(_declared(name), default)
+
+
+def need(name: str) -> str:
+    """``os.environ[name]`` of a declared variable: KeyError when it is unset."""
+    return os.environ[_declared(name)]
+
+
+def has(name: str) -> bool:
+    """``name in os.environ`` of a declared variable: set, even to an empty string."""
+    return _declared(name) in os.environ
+
 
 #: where queued messages wait, as `<conversation_id>.md`
 INBOX = os.environ.get("AGENT_INBOX", "/tmp/agent-inbox")
@@ -27,6 +81,14 @@ EVENT_VALUES = ("model", "generation_id")
 EVENT_VALUE_MAX = 64
 #: the head of a line `record_event` wrote for an agent's hook run: its time, the hook and the agent
 RUN = re.compile(r'^\{"t": (\d+), "hook": "([^"]*)", "event": (?:"[^"]*"|null), "conversation_id": "([^"]+)"', re.M)
+#: what a command carries, in its text, to pass where the model rule (`shell_hook.model_reason`) would refuse it: for a
+#: lead that has decided the turn stays on its model. Read in the command's text, as `AGENT_GUARD_LOCAL_OK=1` is, since
+#: a hook is handed the command and never the environment of the shell that runs it
+MODEL_OK = "AGENT_GUARD_MODEL_OK=1"
+#: the `event` of the line the model rule adds to EVENT_LOG for a turn it settles: refused once, or passed by MODEL_OK
+MODEL_REFUSAL, MODEL_PASS = "model_refusal", "model_ok"
+#: a model's family, the name a payload gives it without its effort: `claude-fable-5-2` of `claude-fable-5-2-xhigh`
+FAMILY = re.compile(r"claude-[a-z]+-\d+-\d+")
 #: this agent's conversation id where Cursor's shell sets it: the agent `inbox.py selftest` checks when none is named
 CONVERSATION_ID = os.environ.get("CURSOR_CONVERSATION_ID", "")
 #: a regex for the push URLs the push rules judge, in place of verity's and infra's on GitHub (`worktree_guard.QUEUE_URL`)
@@ -68,3 +130,52 @@ def recorded_runs() -> list[tuple[int, str, str]]:
             with open(path, errors="replace") as f:
                 runs += [(int(t), hook, agent) for t, hook, agent in RUN.findall(f.read())]
     return runs
+
+
+def agent_events(agent: str) -> list[dict]:
+    """EVENT_LOG's lines for `agent`, oldest first: those of the file it last rotated to, then its own. A line counts
+    when it parses as a JSON object whose `conversation_id` is `agent`; one that doesn't hold the id as text is skipped
+    unparsed, since this runs on a shell command and the log holds up to twice EVENT_LOG_MAX_BYTES, and one that holds it
+    but is not JSON is skipped and said on stderr. A missing file is no lines; any other OSError rises to the caller."""
+    events = []
+    for path in (EVENT_LOG + ".1", EVENT_LOG):
+        if not os.path.isfile(path):
+            continue
+        with open(path, errors="replace") as f:
+            lines = [line for line in f if agent in line]
+        for line in lines:
+            try:
+                e = json.loads(line)
+            except ValueError as err:
+                print(f"agent-guard: a line of {path} is not JSON, skipped: {err}", file=sys.stderr)
+                continue
+            if isinstance(e, dict) and e.get("conversation_id") == agent:
+                events.append(e)
+    return events
+
+
+def model_family(model: str) -> str:
+    """`model`'s family (FAMILY), which the model rule compares, so that a lead moved to another effort is never told; a
+    name of no family is its own."""
+    found = FAMILY.match(model)
+    return found.group() if found else model
+
+
+def launch_model(events: list[dict]) -> str | None:
+    """The model an agent was launched on, as this machine's log has it (`events`: its lines, oldest first): the model
+    its first turn here names. Its first line names that turn, and the first line of that turn that names a model, the
+    model. None where the agent has no line, its first line names no turn (a hook from before the log kept one recorded
+    it) or no line of its first turn names a model: then no launch model is on record, and the model rule
+    (`shell_hook.model_reason`) refuses nothing.
+
+    The rule is wrong where the log starts after the launch: it rotated the launch turn out, or the agent came to this
+    machine later (a wake or a resume boots a new machine, whose log holds none of its earlier turns). Nothing on the
+    machine tells such a first turn from a launch, so there the first turn the log holds stands for the launch. In that
+    turn the rule refuses nothing, since its model is the one on record; in a later turn here on another model it
+    refuses once and names the model on record, which is why the refusal says to go by the brief where the brief names
+    another launch model."""
+    first = events[0].get("generation_id") if events else None
+    if not isinstance(first, str) or not first:
+        return None
+    return next((e["model"] for e in events
+                 if e.get("generation_id") == first and isinstance(e.get("model"), str) and e["model"]), None)

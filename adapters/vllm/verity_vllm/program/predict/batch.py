@@ -12,6 +12,8 @@ So Inputs are labelled by provenance (`OWN_GROUPS` own, the registration's share
 role's launch statics are held to (b) across the launch shapes the registration allows (`templates`). In class G (`steps.CLASS_G`,
 no batch invariance) every token-count-dependent kernel choice reads the launch, so no template holds its statics to (b): each
 request's Program is built at its launch context, which the advice fixes, and the rules below hold its values to its own inputs.
+On a batch-invariant target FA3's tile is built so too: at its launches' max_seqlen_q, which the advice's steps fix
+(`steps.RequestUnit.seqlen_q`), never a batch-mate's value, so R2 compares the unit apart from it as it does class G's launch.
 
 `check_compiled` refuses (`BatchDependent`), deterministically:
 
@@ -48,23 +50,27 @@ request's Program is built at its launch context, which the advice fixes, and th
 from __future__ import annotations
 
 import sys
+from collections.abc import Callable, Mapping
 from functools import cache
-from typing import Any, Callable, Mapping
+from typing import Any
 
 from verity_vllm.check.batch import BATCH, SHARED, Fields, Template, own, separable
 from verity_vllm.pipeline import window_advice as WA
-from verity_vllm.program.frontend.seed_rule import PARAMS as SEED_PARAMS, rid_of_ids
+from verity_vllm.program.frontend.seed_rule import PARAMS as SEED_PARAMS
+from verity_vllm.program.frontend.seed_rule import rid_of_ids
 
 from .build import Unexpressible, _Specs, build_program, model_shape
 from .common import _ptypes, kind
 from .phi import Phi
+
+__all__ = ["check_compiled", "separable", "workload_labels"]
 
 #: the request-local Input groups a request's own certified body fixes, with its seed rule's (`seed_rule.PARAMS`: its body's seed
 #: and id, and the window's public seed salt); any other request-local group is the batch's
 OWN_GROUPS = ("prompt", "seed", *SEED_PARAMS)
 #: the Input groups of a request's history (`build.build_program`'s C: every layer's rows of its first C positions, and a resumed
 #: request's last token), its own where R2 checks it (`workload_labels`)
-HISTORY_GROUPS = ("prefix", "prefix_ik", "prefix_iks", "last_token")
+HISTORY_GROUPS = ("prefix", "prefix_scale", "prefix_rope", "prefix_ik", "prefix_iks", "last_token")
 
 
 class BatchDependent(Unexpressible):
@@ -181,7 +187,7 @@ def templates(phi: Phi, *, max_tokens: int = 2048, max_seqs: int = 64, max_model
     out.append(Template(f"token select (greedy) {fn.id}", fn, (own("r"),), own("r"), bind_at=lambda _req, n: fn,
                         shapes=tuple(((), n) for n in range(1, max_seqs + 1))))
     # (logits, top_p, seed, pos, temperature, S)
-    from verity.definitions.registry.topp_geometry import registered_splits
+    from verity_vllm.definitions.registry.topp_geometry import registered_splits
     S_reg = registered_splits(tp.num_sms)
     fn = kind("token_select_stochastic_split", V=V, S=S_reg)
     out.append(Template(f"token select (top-p, registered S) {fn.id}", fn, (own("r"), SHARED, own("r"), SHARED, SHARED, SHARED),
@@ -197,7 +203,7 @@ def templates(phi: Phi, *, max_tokens: int = 2048, max_seqs: int = 64, max_model
     return out
 
 
-# --- the compile-unit rule -------------------------------------------------------------------------------------------------------
+# --- the compile slice's proof block rule ----------------------------------------------------------------------------------------
 
 
 def _prompt(body: Any) -> tuple[int, ...] | None:
@@ -247,11 +253,13 @@ def _solo(advice: Any, ingress: Mapping[str, Any], r: int, chunks: tuple[int, ..
     k = int(any(src.request != r for src in rows[0][1].sources))
     own = sum(o.request == r for o in (WA if hasattr(advice, "carried") else sys.modules[type(advice).__module__]).outputs(advice))
     steps = [WA.StepAdvice((_row(row, k, tuple(WA.Source(k, src.n) for src in row.sources)),)) for _, row in rows]
+    requests: tuple[WA.RequestAdvice, ...]
     requests, bodies = (WA.RequestAdvice(q.id, q.prompt_len, q.output_len, q.finish),), {q.id: ingress[q.id]}
     if k:
         C, stand = rows[0][1].cache_hit, f"{q.id} (prefix)"
         requests, own = (WA.RequestAdvice(stand, C, 1, "length"), *requests), own + 1
-        bodies[stand] = {"prompt": list(_prompt(ingress[q.id])[:C]), "max_tokens": 1, "temperature": 0}
+        ids: Any = _prompt(ingress[q.id])   # as given: a body that carries no token ids is None's TypeError
+        bodies[stand] = {"prompt": list(ids[:C]), "max_tokens": 1, "temperature": 0}
         first = _row(rows[0][1], 1, (WA.Source(0, C),))
         if sum(chunks) not in (0, C):
             raise BatchDependent(f"request {r}: its hit's chunks {list(chunks)} don't sum to its hit of {C} tokens")
@@ -295,8 +303,8 @@ def check_compiled(registered: Any, advice: Any, ingress: Mapping[str, Any], com
         if _unit(a) != _unit(u):
             raise BatchDependent(f"request {r}: compiled alone it's (LP, T, policy, seed, id, C, recomputed, chunks, carried out, edge) = {_unit(a)}, "
                                  f"in its batch {_unit(u)}")
-        mine = [(rr.start, rr.n, rr.samples) for rows in compiled.steps for rr in rows if rr.request == r]
-        theirs = [(start, n, m) for rows in alone.steps for req, start, n, m in rows if req == k]
+        mine: list[tuple[Any, ...]] = [(rr.start, rr.n, rr.samples) for rows in compiled.steps for rr in rows if rr.request == r]
+        theirs: list[tuple[Any, ...]] = [(start, n, m) for rows in alone.steps for req, start, n, m in rows if req == k]
         if mine != theirs:
             raise BatchDependent(f"request {r}: its rows (start, n, samples) are {theirs} alone, {mine} in its batch")
         mine = [(start, n) for _, req, start, n in compiled.discarded if req == r]

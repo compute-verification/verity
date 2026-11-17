@@ -302,7 +302,7 @@ theorem reps_of_readAt {e : ExecHolo} {l : List Step} {u : C3Run e} (hs : RepSta
   exact Fin.forall_fin_two.mpr ⟨rep_at hts₀ hp₀ (hr₀ _ rfl) hT₀ hv₀ (ho₀ _), rep_at hts₁ hp₁ (hr₁ _ rfl) hT₁ hv₁ (ho₁ _)⟩
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
+  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
 /-- **(n2's read fact) Each rep's accepting run is on the inner transcript**: at every accepted outcome, the inner
 transcript's steps (V*'s layers' messages zipped with the rounds' coins) hold, past the cap's and the points' steps,

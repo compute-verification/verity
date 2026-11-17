@@ -43,7 +43,7 @@ Each is a `def … : Prop` over `Bridge.Defs` and `Bridge.Deployed`, so a proof 
   string, their value in the evaluation on `Xr`'s inputs (`RightRegZ`'s second conjunct), and each of whose registered
   openings at a wire the constants `κ` don't fix opens its wire's claims position under `Cm` (`TransportsLive`'s
   conclusion), and whose evaluation is `κ`'s constant at each constant wire, is not faulty in `witDep Xr`, at every
-  design and every strata of the population. So `faulty ⊆ wrongRegZ`.
+  design and every strata of the population. So `faulty ⊆ incorrectRegZ`.
 * `PartBlocksTarget`: `partOf P κ ns` has `n` slots, one per unit, each the unit's proof block with the input rows it
   owns, at strata `ns` that sum to `n`.
 * `PaTarget` (M4): on `partOf P κ ns`, a one-stage design `r` misses a set `B` of population slots with `r`'s own miss on

@@ -299,8 +299,8 @@ theorem regionsOf_mem (st : Stmt) :
 open FlockSoundness.Discharge in
 /-- **A sampled table's hm96 slot holds its instance's public `b ‖ c`**: at a statement `setupOne` sets up at a sample, in
 either branch, a witness satisfying the table's model (at the regions the soundness proof reads) holds at instance
-`o · g + g`'s port-`p` slot the statement's `b ‖ c` of that instance's row `p` (`Layout.bc_drawnS`,
-`Hidden.bc_drawnW`, with `Hidden.drawn_digestW`). -/
+`o · g + g`'s port-`p` slot the statement's `b ‖ c` of that instance's row `p` (`Layout.bc_sampledS`,
+`Hidden.bc_sampledW`, with `Hidden.sampled_digestW`). -/
 theorem bc_setupOne {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {d : Json} {partition : Option Json} {program : Option ByteArray} {st : Stmt}
     (h : HiddenExec.setupOne tags cf pf coins tables (some d) partition program = .ok st)
@@ -317,17 +317,17 @@ theorem bc_setupOne {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : 
   · have s := Hidden.setupHidden_spec' h
     obtain ⟨pop, hpop, -, hdr⟩ := s.pub
     have hdrawn : HmRow.drawn { st.c with outPorts := #[] } pop d = .ok st.pub := hdr d rfl
-    obtain ⟨D, hD, -, hn, -⟩ := Layout.drawn_spec hdrawn
+    obtain ⟨D, hD, -, hn, -⟩ := Layout.sampled_spec hdrawn
     have hlt := Layout.proved_lt_population hD
     have hr' : o.val * st.c.g + g < D.proved.size := by omega
-    rw [Hidden.drawn_digestW (Hidden.loadPublic_nil hpop) hdrawn hD hlt hr' hp]
-    exact Hidden.bc_drawnW h hpop hD hlt L _ (regionsOf_mem st) hz o hg hg2 hp hr'
-  · obtain ⟨pop, hpop, hdr⟩ := Layout.setupH_drawn h
-    obtain ⟨D, hD, -, hn, -⟩ := Layout.drawn_spec hdr
+    rw [Hidden.sampled_digestW (Hidden.loadPublic_nil hpop) hdrawn hD hlt hr' hp]
+    exact Hidden.bc_sampledW h hpop hD hlt L _ (regionsOf_mem st) hz o hg hg2 hp hr'
+  · obtain ⟨pop, hpop, hdr⟩ := Layout.setupH_sampled h
+    obtain ⟨D, hD, -, hn, -⟩ := Layout.sampled_spec hdr
     have hlt := Layout.proved_lt_population hD
     have hr' : o.val * st.c.g + g < D.proved.size := by omega
-    rw [Hidden.drawn_digestW hpop hdr hD hlt hr' hp]
-    exact Layout.bc_drawnS h hpop hD hlt L _ (regionsOf_mem st) hz o hg hg2 hp hr'
+    rw [Hidden.sampled_digestW hpop hdr hD hlt hr' hp]
+    exact Layout.bc_sampledS h hpop hD hlt L _ (regionsOf_mem st) hz o hg hg2 hp hr'
 
 /-! ## Where a rep's commit string sits in the record -/
 

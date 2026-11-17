@@ -31,11 +31,11 @@ namespace Flock.SecurityProofs
 
 /-- **Flock's one-stage audit under hidden outputs is zero knowledge**, at the pinned key's hiding gap, where hm96
 hiding holds with no premise (`CROnly.hm96Hiding_gap`), and every table set up avoids the mask slot
-(`FailClosed.DrawSetupZHJ.avoidsMask`). -/
+(`FailClosed.SampleSetupZHJ.avoidsMask`). -/
 theorem ZeroKnowledgeHidden : Flock.Guarantees.ZeroKnowledgeHidden :=
   fun _ _ P I ht _ dj _ _ y₀ S R ys =>
     FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ P I dj y₀ ht
-      (fun _ _ y => FlockSoundness.Discharge.FailClosed.DrawSetupZHJ.avoidsMask y)
+      (fun _ _ y => FlockSoundness.Discharge.FailClosed.SampleSetupZHJ.avoidsMask y)
       (FlockSoundness.CROnly.hm96Hiding_gap FlockSoundness.Discharge.ZkView.My FlockSoundness.Discharge.ZkView.saltHash)
       S R ys
 

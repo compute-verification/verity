@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import numpy as np
 
+from verity_vllm.observe.events import ViewDesc
 
-def _as_f32(words: np.ndarray, dtype: str) -> np.ndarray:
+
+def as_f32(words: np.ndarray, dtype: str) -> np.ndarray:
     if dtype == "bfloat16":
         return (words.astype(np.uint32) << np.uint32(16)).view(np.float32)
     if dtype == "float16":
@@ -17,8 +19,7 @@ def _as_f32(words: np.ndarray, dtype: str) -> np.ndarray:
     raise ValueError(dtype)
 
 
-def _small_arg(store, launch, name: str, dtype):
-    from verity_vllm.observe.events import ViewDesc
+def small_arg(store, launch, name: str, dtype):
     v = launch.args.get(name)
     if not isinstance(v, ViewDesc):
         return None
@@ -27,14 +28,13 @@ def _small_arg(store, launch, name: str, dtype):
         return None
     w = store.extract(snap, v)
     if dtype is np.float32:
-        return _as_f32(w, v.dtype).reshape(-1)
+        return as_f32(w, v.dtype).reshape(-1)
     return w.reshape(-1)
 
 
-def _small_int_arg(store, launch, name: str):
-    from verity_vllm.observe.events import ViewDesc
+def small_int_arg(store, launch, name: str):
     v = launch.args.get(name)
-    w = _small_arg(store, launch, name, None)
+    w = small_arg(store, launch, name, None)
     if w is None or not isinstance(v, ViewDesc):
         return None
     np_dt = {"int64": np.int64, "int32": np.int32, "uint32": np.uint32, "int16": np.int16, "uint8": np.uint8}.get(v.dtype)

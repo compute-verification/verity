@@ -67,6 +67,8 @@ namespace FlockComplete.ZkTables.Level0
 
 open Flock Transcript FlockComplete FlockComplete.Replay FlockSoundness.Discharge.ZkView
 
+variable {wideLeaf : Bool}
+
 /-! ## Shapes and closed forms -/
 
 /-- **A masked Ligerito proof's lengths at a shape**: `ZkView.Shaped`'s Ligerito conjuncts, level 0's rows
@@ -132,16 +134,19 @@ structure LaneForm (resp : ℕ → Claims.Msg) (sch : Schedule) (T : F128) (tb b
       (pairLane extra (2 * rep) (Lg.foldKs (laneCh resp sch.k0 L) (embedF tb)).size)
       (pairLane extra (2 * rep + 1) (Lg.foldKs (laneCh resp sch.k0 L) (embedF tb)).size))
 
-/-! ## The premises -/
+/-! ## The premises
+
+Each is at a `--zk` schedule of either statement version (`Zk.schedule wideLeaf m`). -/
 
 /-- **The masked prover's Ligerito returns** wherever its pair coins are independent: at a `--zk` schedule, from any
 transcript and `L` sends, on any claim, level-0 commitment, table, weights, pads, extra lanes, paddings, salts and
 nonces, where the replies to sends `L + 2 + k_0` and `L + 3 + k_0` are independent over F (`Zk.rhoIndependent`). -/
 def ProverRuns : Prop :=
-  ∀ (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (m : ℕ) (v : Schedule × ℕ) (T : F128) (cm0 : Commit)
+  ∀ (wideLeaf : Bool) (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray)
+    (m : ℕ) (v : Schedule × ℕ) (T : F128) (cm0 : Commit)
     (tb b : Array F128) (lay : Zk.PadLayout) (hv : Array F128) (rep : ℕ) (extra lanePad : ℕ → ℕ → F128)
     (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (t : Transcript) (l : Array Claims.Msg),
-    (∀ x, (h x).size = 64) → 25 ≤ m → m ≤ 35 → Zk.schedule m = .ok v →
+    (∀ x, (h x).size = 64) → 25 ≤ m → m ≤ 35 → Zk.schedule wideLeaf m = .ok v →
     Zk.rhoIndependent (laneRho resp v.1.k0 l.size) = true →
     ∃ res l', ((ligeritoPZk (asksS resp) (Hashes.ofSha512 h) MerkleScheme.hm96Sha512 v.1 T cm0 tb b lay hv rep v.2
       extra lanePad salt nonce).run t).go l = (.ok res, l')
@@ -150,11 +155,12 @@ def ProverRuns : Prop :=
 commitment of its table, its proof has the lengths `Zk.decode` checks at any shape of the schedule and hm96-SHA-512's
 digest and salt lengths (`LgShaped`), and `t_pad` padding coefficients. -/
 def ProverShape : Prop :=
-  ∀ (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (m : ℕ) (v : Schedule × ℕ) (sh : Shape) (T : F128)
+  ∀ (wideLeaf : Bool) (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray)
+    (m : ℕ) (v : Schedule × ℕ) (sh : Shape) (T : F128)
     (cm0 : Commit) (tb b : Array F128) (lay : Zk.PadLayout) (hv : Array F128) (rep : ℕ)
     (extra lanePad : ℕ → ℕ → F128) (salt0 : ℕ → ByteArray) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
     (t t' : Transcript) (l l' : Array Claims.Msg) (P : LigeritoProof) (zl : Zk.Level0Msgs) (rc : Zk.L0Rec),
-    (∀ x, (h x).size = 64) → 25 ≤ m → m ≤ 35 → Zk.schedule m = .ok v → sh.sched = v.1 →
+    (∀ x, (h x).size = 64) → 25 ≤ m → m ≤ 35 → Zk.schedule wideLeaf m = .ok v → sh.sched = v.1 →
     sh.hashLen = MerkleScheme.hm96Sha512.digestLen →
     sh.saltLen = (if MerkleScheme.hm96Sha512.saltBytes = 0 then none else some MerkleScheme.hm96Sha512.saltBytes) →
     tb.size = 2 ^ v.1.n → b.size = 2 ^ v.1.n →
@@ -168,11 +174,12 @@ def ProverShape : Prop :=
 on a table and weights of `2^n` entries, its record, masked out-of-domain value, lane messages, pair's sums and blinded
 claim are `LaneForm`'s. -/
 def Lanes : Prop :=
-  ∀ (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (m : ℕ) (v : Schedule × ℕ) (T : F128) (cm0 : Commit)
+  ∀ (wideLeaf : Bool) (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray)
+    (m : ℕ) (v : Schedule × ℕ) (T : F128) (cm0 : Commit)
     (tb b : Array F128) (lay : Zk.PadLayout) (hv : Array F128) (rep : ℕ) (extra lanePad : ℕ → ℕ → F128)
     (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (t t' : Transcript) (l l' : Array Claims.Msg)
     (P : LigeritoProof) (zl : Zk.Level0Msgs) (rc : Zk.L0Rec),
-    25 ≤ m → m ≤ 35 → Zk.schedule m = .ok v → tb.size = 2 ^ v.1.n → b.size = 2 ^ v.1.n →
+    25 ≤ m → m ≤ 35 → Zk.schedule wideLeaf m = .ok v → tb.size = 2 ^ v.1.n → b.size = 2 ^ v.1.n →
     ((ligeritoPZk (asksS resp) (Hashes.ofSha512 h) MerkleScheme.hm96Sha512 v.1 T cm0 tb b lay hv rep v.2 extra
       lanePad salt nonce).run t).go l = (.ok ((P, zl, rc), t'), l') →
     LaneForm resp v.1 T tb b lay hv rep extra l.size P zl rc
@@ -185,12 +192,13 @@ masked Ligerito, on rounds that carry the prover's from its position on, from th
 bytes, returns the prover's record and ends at the prover's final position and pending bytes, which is its round count
 (as plain's `ligeritoWith_of` ends at its model's). -/
 def Verifier : Prop :=
-  ∀ (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (m : ℕ) (v : Schedule × ℕ) (T : F128) (cm0 : Commit)
+  ∀ (wideLeaf : Bool) (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray)
+    (m : ℕ) (v : Schedule × ℕ) (T : F128) (cm0 : Commit)
     (tb b : Array F128) (lay : Zk.PadLayout) (hv : Array F128) (rep : ℕ) (extra lanePad : ℕ → ℕ → F128)
     (salt0 : ℕ → ByteArray) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
     (basisAt : Array F256 → ℕ → Array F256) (L : ℕ) (t t' : Transcript) (l l' : Array Claims.Msg)
     (P : LigeritoProof) (zl : Zk.Level0Msgs) (rc : Zk.L0Rec) (R : Array Round),
-    (∀ x, (h x).size = 64) → 25 ≤ m → m ≤ 35 → Zk.schedule m = .ok v → rep < 2 →
+    (∀ x, (h x).size = 64) → 25 ≤ m → m ≤ 35 → Zk.schedule wideLeaf m = .ok v → rep < 2 →
     tb.size = 2 ^ v.1.n → b.size = 2 ^ v.1.n → dot tb b = T →
     commitPZk (Hashes.ofSha512 h : Hashes V) MerkleScheme.hm96Sha512 (v.1.levels.getD 0 default) v.2 tb extra
       lanePad salt0 = .ok cm0 →

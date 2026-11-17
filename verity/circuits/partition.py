@@ -976,8 +976,8 @@ class CutVerdict:
 
 
 #: the unit holding every input gate (weights, request inputs, randomness): it certifies them by checking each input commitment root
-#: against its external anchor (the declared model's weights root, the client's request commitment, the randomness source), always,
-#: never sampled
+#: against its external anchor (the declared model's weights root, the client's request commitment, the challenger's
+#: live-coin part), always, never sampled
 INPUT_UNIT = "input"
 
 

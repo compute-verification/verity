@@ -8,8 +8,8 @@ public import Definitions.Pous.Model.Audit
 Verbatim copies of the definitions the public-encoder pins (`BandPubMeets64`, `BandPubMeets14`,
 `BandPubMeets14Global`) read, from the module `PubEncoderModel`. That module already uses the trusted layer's names
 (namespace `Pous`): everything but `PubMeets` is in this file, and `PubMeets` in
-`Security/Definitions/Pous/Accounting/PubMeets.lean`. So there is no renaming. `Scheme.EncDec`, which no pinned
-statement reads, is in the module's section of `Security/Proofs/Pous/Chain/Flat.lean`.
+`Security/Definitions/Pous/Accounting/PubMeets.lean`. So there is no renaming. `Scheme.EncDec`, which no
+guarantee reads, is in the module's section of `Security/Proofs/Pous/Chain/Flat.lean`.
 
 An untrusted server encodes: its encoder `E` outputs `(pp*, C*)` from `(W, ω, r)`, a setup check `V` with its own coins
 `ξ` accepts or rejects it as the encoding of the committed `W`, and preprocessing and the audit run on `(pp*, C*)`.

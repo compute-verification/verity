@@ -18,7 +18,7 @@ zero; and `vals` elsewhere.
 * `linkEvB_of_pub`: at a sampled proof block, when the public wires decode to their values in every satisfying message of its
   table (`PubDecodes`), the link event at `Xpub ones zeros vals` is the link event at `vals`. So the link theorem's bound holds
   unchanged for `Xpub ones zeros XplurL` (`flock_batched_linkSoundE_pubL`), and with it the count curve and the drawn-unit
-  bound (`flock_batched_count_publicL`, `flock_batched_drawn_publicL`).
+  bound (`flock_batched_count_publicL`, `flock_batched_sampled_publicL`).
 * `pubDecodes_of_place`: `PubDecodes` for the decoder that reads each sampled proof block from its place. Two facts about the
   statement suffice:
   - `ConstCols`: only a unit's constant column sits on a gate of `ones`. No input column of a unit reads a constant,
@@ -44,7 +44,7 @@ variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D H) {mPts : ℕ}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
-  {L : Law n}
+  {L : SamplingDesign n}
 
 /-- **The binding error is monotone in the link event**: if at every sampled proof block the link event at `Xc'` implies the one at
 `Xc`, every bound on the binding error at `Xc` bounds it at `Xc'`. -/
@@ -53,9 +53,9 @@ theorem linkSoundE_monoL {decode : DecoderB (C := C) (Reg := Reg) plan tab}
     (hr : ∀ S R j, rateB (plan S R) j k < 1) (hlow : P.LoweringSoundB plan tab decode)
     (hsub : ∀ R τ S u, u ∈ S → ∀ T, P.LinkEvB plan tab decode S R u (Xc' R τ) T →
       P.LinkEvB plan tab decode S R u (Xc R τ) T)
-    {δlink : (R : Reg) → Cont L Reg (batchedSessionL H E Lf plan) R → ℝ≥0∞}
-    (h : (analysisBEL P H E Lf plan tab decode Xc k hk hr hlow).BindSound δlink) :
-    (analysisBEL P H E Lf plan tab decode Xc' k hk hr hlow).BindSound δlink := by
+    {εbind : (R : Reg) → Cont L Reg (batchedSessionL H E Lf plan) R → ℝ≥0∞}
+    (h : (analysisBEL P H E Lf plan tab decode Xc k hk hr hlow).BindSound εbind) :
+    (analysisBEL P H E Lf plan tab decode Xc' k hk hr hlow).BindSound εbind := by
   classical
   intro R τ tgt
   refine le_trans (avg_mono fun ω => ?_) (h R τ tgt)
@@ -110,7 +110,7 @@ theorem flock_batched_count_publicL (ones zeros : Finset (Fin C.N)) (hpub : P.Pu
     (K : ℕ) (σ : Strategy (audit L Reg (batchedSessionL H E Lf plan)))
     (hCR : LinkCRL P H E Lf plan tab vb (reg σ) (cont σ) k Rw M t') :
     prob (fun o => o.1 = true ∧
-        K ≤ (P.wrong (Xpub ones zeros (XplurL P H E Lf plan tab vb (reg σ) (cont σ) k Rw))).card)
+        K ≤ (P.incorrect (Xpub ones zeros (XplurL P H E Lf plan tab vb (reg σ) (cont σ) k Rw))).card)
         (audit L Reg (batchedSessionL H E Lf plan)) σ ≤
       L.miss K + ksAvgBEL H E Lf plan k (reg σ) (cont σ) + P.linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
   (flock_batched_countEL P H E Lf plan tab decode (fun R τ => Xpub ones zeros (XplurL P H E Lf plan tab vb R τ k Rw)) hk
@@ -118,19 +118,19 @@ theorem flock_batched_count_publicL (ones zeros : Finset (Fin C.N)) (hpub : P.Pu
     (flock_batched_linkSoundE_pubL P H E Lf plan tab vb ones zeros hpub hlow hk hRw hM hρ hr ht) K σ).trans_eq
     (by rw [linkBoundCR_eqL P H E Lf plan tab vb hCR])
 
-/-- **Sampled proof blocks at the public transcript**: `flock_batched_drawn_linkedL` with the committed transcript 1 on `ones`,
+/-- **Sampled proof blocks at the public transcript**: `flock_batched_sampled_linkedL` with the committed transcript 1 on `ones`,
 0 on `zeros` and the plurality elsewhere, when the public wires decode to their values. -/
-theorem flock_batched_drawn_publicL (ones zeros : Finset (Fin C.N)) (hpub : P.PubDecodes plan tab decode ones zeros)
+theorem flock_batched_sampled_publicL (ones zeros : Finset (Fin C.N)) (hpub : P.PubDecodes plan tab decode ones zeros)
     (hlow : P.LoweringSoundB plan tab decode)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t')
     (σ : Strategy (audit L Reg (batchedSessionL H E Lf plan)))
     (hCR : LinkCRL P H E Lf plan tab vb (reg σ) (cont σ) k Rw M t') :
     prob (fun o => o.1 = true ∧
-        ¬ Disjoint (P.wrong (Xpub ones zeros (XplurL P H E Lf plan tab vb (reg σ) (cont σ) k Rw))) o.2)
+        ¬ Disjoint (P.incorrect (Xpub ones zeros (XplurL P H E Lf plan tab vb (reg σ) (cont σ) k Rw))) o.2)
         (audit L Reg (batchedSessionL H E Lf plan)) σ ≤
       ksAvgBEL H E Lf plan k (reg σ) (cont σ) + P.linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
-  (flock_batched_drawnEL P H E Lf plan tab decode (fun R τ => Xpub ones zeros (XplurL P H E Lf plan tab vb R τ k Rw)) hk
+  (flock_batched_sampledEL P H E Lf plan tab decode (fun R τ => Xpub ones zeros (XplurL P H E Lf plan tab vb R τ k Rw)) hk
     (fun S R j => (hr S R j).trans_lt hρ) hlow
     (flock_batched_linkSoundE_pubL P H E Lf plan tab vb ones zeros hpub hlow hk hRw hM hρ hr ht) σ).trans_eq
     (by rw [linkBoundCR_eqL P H E Lf plan tab vb hCR])

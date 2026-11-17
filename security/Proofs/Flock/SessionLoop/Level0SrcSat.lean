@@ -6,15 +6,15 @@ public import Proofs.Flock.Claims.ZK.FrameParse
 /-!
 # The loop's level-0 source is satisfiable
 
-`Loop.Level0Src`, the level-0 half of `Loop.Src` (`flock-firewall-os-src`), holds at every statement and witness for
+`Loop.Level0Src`, the level-0 half of `Loop.Src` (`flock-zk-server-os-src`), holds at every statement and witness for
 some source: the one that hands each rep stream its table's packed witness at the tape's mask words and the tape's
-level-0 samples, written in `Level0.ofDraws`'s layout.
+level-0 samples, written in `Level0.ofSamples`'s layout.
 
-* `Level0.inBytes`: a `Link.In`'s extra lanes, lane paddings and salts at level `lv` with `t_pad` paddings, as `ofDraws`
+* `Level0.inBytes`: a `Link.In`'s extra lanes, lane paddings and salts at level `lv` with `t_pad` paddings, as `ofSamples`
   reads them: each extra lane's `2^cols` words, each of the `2^lanes + 4` lanes' `t_pad` words, every word `lo ‖ hi`
   little-endian, then `192` bytes of salt for each of the `2^d` tree positions.
-* **`Level0.ofDraws_inBytes`**: where a `Link.In`'s packed table has `2^(lanes + cols)` words, its extra lanes and lane
-  paddings are `0` past those sizes and its salts are `192` bytes at the tree positions and empty past them, `ofDraws`
+* **`Level0.ofSamples_inBytes`**: where a `Link.In`'s packed table has `2^(lanes + cols)` words, its extra lanes and lane
+  paddings are `0` past those sizes and its salts are `192` bytes at the tree positions and empty past them, `ofSamples`
   on its packed table and `inBytes` returns a level 0 whose inputs (`toIn`) are it.
 * `Masked.linkIn` has that shape at every table, so **`Loop.level0Src_tapeSrc`**: the source `Loop.tapeSrc` meets
   `Loop.Level0Src` at every `x` and `w`.
@@ -22,7 +22,7 @@ level-0 samples, written in `Level0.ofDraws`'s layout.
 
 @[expose] public section
 
-namespace Flock.Firewall.Level0
+namespace Flock.ZkServer.Level0
 
 open Claims.ZKServer (get!_list size_list u64OfLE_of_get)
 
@@ -30,7 +30,7 @@ open Claims.ZKServer (get!_list size_list u64OfLE_of_get)
 def wordByte (a : F128) (b : Nat) : UInt8 :=
   if b < 8 then (a.lo >>> (8 * b).toUInt64).toUInt8 else (a.hi >>> (8 * (b - 8)).toUInt64).toUInt8
 
-/-- Byte `p` of `i`'s level-0 samples at level `lv` with `t_pad` paddings, in `ofDraws`'s layout: the four extra lanes'
+/-- Byte `p` of `i`'s level-0 samples at level `lv` with `t_pad` paddings, in `ofSamples`'s layout: the four extra lanes'
 `2^cols` words, every lane's `t_pad` padding words, then a `192`-byte salt per tree position. -/
 def inByte (lv : Level) (tPad : Nat) (i : Link.In) (p : Nat) : UInt8 :=
   if p < 16 * Zk.EXTRA_LANES * 2 ^ lv.cols then
@@ -42,29 +42,29 @@ def inByte (lv : Level) (tPad : Nat) (i : Link.In) (p : Nat) : UInt8 :=
     (i.salt ((p - (16 * Zk.EXTRA_LANES * 2 ^ lv.cols + 16 * (2 ^ lv.lanes + Zk.EXTRA_LANES) * tPad)) / 192)).get!
       ((p - (16 * Zk.EXTRA_LANES * 2 ^ lv.cols + 16 * (2 ^ lv.lanes + Zk.EXTRA_LANES) * tPad)) % 192)
 
-/-- **`i`'s level-0 samples** at level `lv` with `t_pad` paddings: `drawSize lv tPad` bytes in `ofDraws`'s layout. -/
+/-- **`i`'s level-0 samples** at level `lv` with `t_pad` paddings: `sampleSize lv tPad` bytes in `ofSamples`'s layout. -/
 def inBytes (lv : Level) (tPad : Nat) (i : Link.In) : ByteArray :=
-  ByteArray.mk ((List.range (drawSize lv tPad)).map (inByte lv tPad i)).toArray
+  ByteArray.mk ((List.range (sampleSize lv tPad)).map (inByte lv tPad i)).toArray
 
-/-- The extra lanes `ofDraws` reads from the samples `d` at level `lv`. -/
-def drawnExtra (lv : Level) (d : ByteArray) : Array (Array F128) :=
+/-- The extra lanes `ofSamples` reads from the samples `d` at level `lv`. -/
+def sampledExtra (lv : Level) (d : ByteArray) : Array (Array F128) :=
   (Array.range Zk.EXTRA_LANES).map fun e => Link.wordsAt d (16 * 2 ^ lv.cols * e) (2 ^ lv.cols)
 
-/-- The lane paddings `ofDraws` reads from the samples `d` at level `lv` with `t_pad` paddings. -/
-def drawnPads (lv : Level) (tPad : Nat) (d : ByteArray) : Array (Array F128) :=
+/-- The lane paddings `ofSamples` reads from the samples `d` at level `lv` with `t_pad` paddings. -/
+def sampledPads (lv : Level) (tPad : Nat) (d : ByteArray) : Array (Array F128) :=
   (Array.range (2 ^ lv.lanes + Zk.EXTRA_LANES)).map fun l =>
     Link.wordsAt d (16 * Zk.EXTRA_LANES * 2 ^ lv.cols + 16 * tPad * l) tPad
 
-/-- The salts `ofDraws` reads from the samples `d` at level `lv` with `t_pad` paddings. -/
-def drawnSalts (lv : Level) (tPad : Nat) (d : ByteArray) : ByteArray :=
+/-- The salts `ofSamples` reads from the samples `d` at level `lv` with `t_pad` paddings. -/
+def sampledSalts (lv : Level) (tPad : Nat) (d : ByteArray) : ByteArray :=
   d.extract (16 * Zk.EXTRA_LANES * 2 ^ lv.cols + 16 * (2 ^ lv.lanes + Zk.EXTRA_LANES) * tPad) d.size
 
-theorem inBytes_size (lv : Level) (tPad : Nat) (i : Link.In) : (inBytes lv tPad i).size = drawSize lv tPad := by
+theorem inBytes_size (lv : Level) (tPad : Nat) (i : Link.In) : (inBytes lv tPad i).size = sampleSize lv tPad := by
   unfold inBytes
   rw [size_list]
   simp
 
-theorem inBytes_get (lv : Level) (tPad : Nat) (i : Link.In) {p : Nat} (hp : p < drawSize lv tPad) :
+theorem inBytes_get (lv : Level) (tPad : Nat) (i : Link.In) {p : Nat} (hp : p < sampleSize lv tPad) :
     (inBytes lv tPad i).get! p = inByte lv tPad i p := by
   unfold inBytes
   rw [get!_list, getElem!_pos _ p (by simpa using hp)]
@@ -98,20 +98,20 @@ theorem wordsAt_out (b : ByteArray) (o n c : Nat) (hc : ¬ c < n) : (Link.wordsA
   rfl
 
 theorem wordsAt_inBytes (lv : Level) (tPad : Nat) (i : Link.In) {o n c : Nat} (a : F128) (hc : c < n)
-    (hlt : o + 16 * c + 16 ≤ drawSize lv tPad) (hb : ∀ b < 16, inByte lv tPad i (o + 16 * c + b) = wordByte a b) :
+    (hlt : o + 16 * c + 16 ≤ sampleSize lv tPad) (hb : ∀ b < 16, inByte lv tPad i (o + 16 * c + b) = wordByte a b) :
     (Link.wordsAt (inBytes lv tPad i) o n)[c]! = a := by
   unfold Link.wordsAt
   rw [rangeMap_get! _ hc]
   exact wordAt_of _ _ _ fun b hb' => by rw [inBytes_get _ _ _ (by omega), hb b hb']
 
-theorem drawPos_lt {A B b nA nB : Nat} (hA : A < nA) (hB : B < nB) (hb : b < 16) :
+theorem samplePos_lt {A B b nA nB : Nat} (hA : A < nA) (hB : B < nB) (hb : b < 16) :
     16 * nB * A + 16 * B + b < 16 * nA * nB := by
   have h1 : 16 * nB * (A + 1) ≤ 16 * nB * nA := Nat.mul_le_mul (le_refl _) (Nat.succ_le_of_lt hA)
   have h2 : 16 * nB * nA = 16 * nA * nB := by ring
   rw [Nat.mul_add, Nat.mul_one] at h1
   omega
 
-theorem drawDivmod {A B b nB : Nat} (hB : B < nB) (hb : b < 16) :
+theorem sampleDivmod {A B b nB : Nat} (hB : B < nB) (hb : b < 16) :
     (16 * nB * A + 16 * B + b) / (16 * nB) = A ∧ (16 * nB * A + 16 * B + b) % (16 * nB) / 16 = B ∧
       (16 * nB * A + 16 * B + b) % 16 = b := by
   have h0 : 0 < 16 * nB := by omega
@@ -144,69 +144,73 @@ theorem rows_size (lv : Level) (tPad : Nat) (g : Array F128) (extra lanePad : Na
   unfold Link.rows Link.rowsFft Link.rowsDirect
   split <;> simp
 
-theorem In_ext {a b : Link.In} (h1 : a.m = b.m) (h2 : a.g = b.g) (h3 : a.extra = b.extra)
-    (h4 : a.lanePad = b.lanePad) (h5 : a.salt = b.salt) : a = b := by
+theorem In_ext {a b : Link.In} (h0 : a.wideLeaf = b.wideLeaf) (h1 : a.m = b.m) (h2 : a.g = b.g)
+    (h3 : a.extra = b.extra) (h4 : a.lanePad = b.lanePad) (h5 : a.salt = b.salt) : a = b := by
   cases a
   cases b
   simp only [Link.In.mk.injEq]
-  exact ⟨h1, h2, h3, h4, h5⟩
+  exact ⟨h0, h1, h2, h3, h4, h5⟩
+
+variable {wideLeaf : Bool}
 
 set_option maxHeartbeats 1000000 in
-/-- **`ofDraws` on a table's inputs written in its layout gives them back**: where `i`'s packed table has
+/-- **`ofSamples` on a table's inputs written in its layout gives them back**: where `i`'s packed table has
 `2^(lanes + cols)` words, its extra lanes and lane paddings are `0` past level 0's sizes, and its salts are `192` bytes at
-the `2^d` tree positions and empty past them, `ofDraws` on `i.g` and `inBytes` returns a level 0 whose inputs are `i`. -/
-theorem ofDraws_inBytes {m : Nat} {s : _root_.Flock.Schedule} {tPad : Nat} {lv : Level}
-    (hz : Zk.schedule m = .ok (s, tPad))
-    (hlv : s.levels.getD 0 default = lv) (i : Link.In) (hm : i.m = m) (hg : i.g.size = 2 ^ (lv.lanes + lv.cols))
+the `2^d` tree positions and empty past them, `ofSamples` on `i.g` and `inBytes` returns a level 0 whose inputs are `i`. -/
+theorem ofSamples_inBytes {m : Nat} {s : _root_.Flock.Schedule} {tPad : Nat} {lv : Level}
+    (hz : Zk.schedule wideLeaf m = .ok (s, tPad))
+    (hlv : s.levels.getD 0 default = lv) (i : Link.In) (hw : i.wideLeaf = wideLeaf) (hm : i.m = m)
+    (hg : i.g.size = 2 ^ (lv.lanes + lv.cols))
     (he : ∀ e c, ¬ (e < Zk.EXTRA_LANES ∧ c < 2 ^ lv.cols) → i.extra e c = 0)
     (hp : ∀ l k, ¬ (l < 2 ^ lv.lanes + Zk.EXTRA_LANES ∧ k < tPad) → i.lanePad l k = 0)
     (hs : ∀ q, q < 2 ^ lv.d → (i.salt q).size = 192) (hs' : ∀ q, ¬ q < 2 ^ lv.d → i.salt q = .empty) :
-    ∃ l, ofDraws m i.g (inBytes lv tPad i) = .ok l ∧ l.toIn = i := by
+    ∃ l, ofSamples wideLeaf m i.g (inBytes lv tPad i) = .ok l ∧ l.toIn = i := by
   have h1 : (i.g.size != 2 ^ (lv.lanes + lv.cols)) = false := by rw [hg]; simp
-  have h2 : ((inBytes lv tPad i).size != drawSize lv tPad) = false := by rw [inBytes_size]; simp
-  have h3 : ∀ g E P S, ((build m lv tPad g E P S).rows.size != 2 ^ lv.d) = false := fun g E P S => by
-    have hr : (build m lv tPad g E P S).rows.size = 2 ^ lv.d := by
+  have h2 : ((inBytes lv tPad i).size != sampleSize lv tPad) = false := by rw [inBytes_size]; simp
+  have h3 : ∀ g E P S, ((build wideLeaf m lv tPad g E P S).rows.size != 2 ^ lv.d) = false := fun g E P S => by
+    have hr : (build wideLeaf m lv tPad g E P S).rows.size = 2 ^ lv.d := by
       first
         | exact rows_size _ _ _ _ _
         | exact (congrArg Array.size (build_rows rfl)).trans (rows_size _ _ _ _ _)
     rw [hr]
     simp
-  have hok : ofDraws m i.g (inBytes lv tPad i) = .ok (build m lv tPad i.g (drawnExtra lv (inBytes lv tPad i))
-      (drawnPads lv tPad (inBytes lv tPad i)) (drawnSalts lv tPad (inBytes lv tPad i))) := by
+  have hok : ofSamples wideLeaf m i.g (inBytes lv tPad i) = .ok (build wideLeaf m lv tPad i.g
+      (sampledExtra lv (inBytes lv tPad i)) (sampledPads lv tPad (inBytes lv tPad i))
+      (sampledSalts lv tPad (inBytes lv tPad i))) := by
     subst hlv
-    unfold ofDraws
+    unfold ofSamples
     rw [hz]
     simp only [bind, Except.bind, pure, Except.pure, h1, h2, h3, Bool.false_eq_true, ↓reduceIte]
     all_goals rfl
-  have hE : ∀ e c, ((drawnExtra lv (inBytes lv tPad i))[e]!)[c]! = i.extra e c := by
+  have hE : ∀ e c, ((sampledExtra lv (inBytes lv tPad i))[e]!)[c]! = i.extra e c := by
     intro e c
-    unfold drawnExtra
+    unfold sampledExtra
     by_cases he4 : e < Zk.EXTRA_LANES
     · rw [rangeMap_get! _ he4]
       by_cases hc : c < 2 ^ lv.cols
       · refine wordsAt_inBytes lv tPad i _ hc ?_ fun b hb => ?_
-        · have := drawPos_lt (b := 15) he4 hc (by norm_num)
-          unfold drawSize
+        · have := samplePos_lt (b := 15) he4 hc (by norm_num)
+          unfold sampleSize
           omega
-        · obtain ⟨d1, d2, d3⟩ := drawDivmod (A := e) hc hb
+        · obtain ⟨d1, d2, d3⟩ := sampleDivmod (A := e) hc hb
           unfold inByte
-          rw [if_pos (drawPos_lt he4 hc hb), d1, d2, d3]
+          rw [if_pos (samplePos_lt he4 hc hb), d1, d2, d3]
       · rw [wordsAt_out _ _ _ _ hc]
         exact (he e c fun h => hc h.2).symm
     · rw [getElem!_neg ((Array.range Zk.EXTRA_LANES).map _) e (by simpa using he4), getElem!_default]
       exact (he e c fun h => he4 h.1).symm
-  have hP : ∀ l k, ((drawnPads lv tPad (inBytes lv tPad i))[l]!)[k]! = i.lanePad l k := by
+  have hP : ∀ l k, ((sampledPads lv tPad (inBytes lv tPad i))[l]!)[k]! = i.lanePad l k := by
     intro l k
-    unfold drawnPads
+    unfold sampledPads
     by_cases hl : l < 2 ^ lv.lanes + Zk.EXTRA_LANES
     · rw [rangeMap_get! _ hl]
       by_cases hk : k < tPad
       · refine wordsAt_inBytes lv tPad i _ hk ?_ fun b hb => ?_
-        · have := drawPos_lt (b := 15) hl hk (by norm_num)
-          unfold drawSize
+        · have := samplePos_lt (b := 15) hl hk (by norm_num)
+          unfold sampleSize
           omega
-        · have hlt := drawPos_lt hl hk hb
-          obtain ⟨d1, d2, d3⟩ := drawDivmod (A := l) hk hb
+        · have hlt := samplePos_lt hl hk hb
+          obtain ⟨d1, d2, d3⟩ := sampleDivmod (A := l) hk hb
           have hn1 : ¬ (16 * Zk.EXTRA_LANES * 2 ^ lv.cols + 16 * tPad * l + 16 * k + b <
               16 * Zk.EXTRA_LANES * 2 ^ lv.cols) := by omega
           have hn2 : 16 * Zk.EXTRA_LANES * 2 ^ lv.cols + 16 * tPad * l + 16 * k + b <
@@ -220,12 +224,12 @@ theorem ofDraws_inBytes {m : Nat} {s : _root_.Flock.Schedule} {tPad : Nat} {lv :
     · rw [getElem!_neg ((Array.range (2 ^ lv.lanes + Zk.EXTRA_LANES)).map _) l (by simpa using hl),
         getElem!_default]
       exact (hp l k fun h => hl h.1).symm
-  have hS : ∀ q, (if q < 2 ^ lv.d then (drawnSalts lv tPad (inBytes lv tPad i)).extract (192 * q) (192 * (q + 1))
+  have hS : ∀ q, (if q < 2 ^ lv.d then (sampledSalts lv tPad (inBytes lv tPad i)).extract (192 * q) (192 * (q + 1))
       else ByteArray.empty) = i.salt q := by
     intro q
     by_cases hq : q < 2 ^ lv.d
     · rw [if_pos hq]
-      unfold drawnSalts
+      unfold sampledSalts
       rw [ByteArray.extract_extract]
       have h192 : 192 * (q + 1) ≤ 192 * 2 ^ lv.d := Nat.mul_le_mul (le_refl _) (Nat.succ_le_of_lt hq)
       have hsq := hs q hq
@@ -234,10 +238,10 @@ theorem ofDraws_inBytes {m : Nat} {s : _root_.Flock.Schedule} {tPad : Nat} {lv :
           16 * Zk.EXTRA_LANES * 2 ^ lv.cols + 16 * (2 ^ lv.lanes + Zk.EXTRA_LANES) * tPad + 192 * q +
             (i.salt q).size := by
         rw [inBytes_size, hsq]
-        unfold drawSize
+        unfold sampleSize
         omega
       rw [hmin]
-      refine extract_of_get _ _ _ (by rw [inBytes_size, hsq]; unfold drawSize; omega) fun k hk => ?_
+      refine extract_of_get _ _ _ (by rw [inBytes_size, hsq]; unfold sampleSize; omega) fun k hk => ?_
       rw [hsq] at hk
       have hn1 : ¬ (16 * Zk.EXTRA_LANES * 2 ^ lv.cols + 16 * (2 ^ lv.lanes + Zk.EXTRA_LANES) * tPad + 192 * q + k <
           16 * Zk.EXTRA_LANES * 2 ^ lv.cols) := by omega
@@ -245,15 +249,15 @@ theorem ofDraws_inBytes {m : Nat} {s : _root_.Flock.Schedule} {tPad : Nat} {lv :
           16 * Zk.EXTRA_LANES * 2 ^ lv.cols + 16 * (2 ^ lv.lanes + Zk.EXTRA_LANES) * tPad) := by omega
       have hsub : 16 * Zk.EXTRA_LANES * 2 ^ lv.cols + 16 * (2 ^ lv.lanes + Zk.EXTRA_LANES) * tPad + 192 * q + k -
           (16 * Zk.EXTRA_LANES * 2 ^ lv.cols + 16 * (2 ^ lv.lanes + Zk.EXTRA_LANES) * tPad) = 192 * q + k := by omega
-      rw [inBytes_get _ _ _ (by unfold drawSize; omega)]
+      rw [inBytes_get _ _ _ (by unfold sampleSize; omega)]
       unfold inByte
       rw [if_neg hn1, if_neg hn2, hsub, show (192 * q + k) / 192 = q by omega, show (192 * q + k) % 192 = k by omega]
     · rw [if_neg hq]
       exact (hs' q hq).symm
-  exact ⟨_, hok, In_ext hm.symm rfl (funext fun e => funext fun c => hE e c) (funext fun l => funext fun k => hP l k)
-    (funext fun q => hS q)⟩
+  exact ⟨_, hok, In_ext hw.symm hm.symm rfl (funext fun e => funext fun c => hE e c)
+    (funext fun l => funext fun k => hP l k) (funext fun q => hS q)⟩
 
-end Flock.Firewall.Level0
+end Flock.ZkServer.Level0
 
 namespace Claims.ZKServer
 
@@ -265,12 +269,12 @@ set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as i
 
 /-- **A level-0 source that samples the tape's level 0**: at rep stream `k`, of table `k / 2`, the table's packed witness at
 the tape's mask words (`Masked.linkIn`'s) and the tape's extra lanes, lane paddings and level-0 salts at level 0's sizes,
-in `Level0.ofDraws`'s layout (`Level0.inBytes`); no salts for levels ≥ 1. -/
+in `Level0.ofSamples`'s layout (`Level0.inBytes`); no salts for levels ≥ 1. -/
 noncomputable def Loop.tapeSrc (x : Msg) (w : Flock.Wit)
     (ρ : (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand)
     (k : ℕ) : V (Array F128 × ByteArray × Array ByteArray) :=
   if h : k / 2 < Masked.jOf x then
-    .ok ((Masked.linkIn x w ρ.2 ⟨k / 2, h⟩).g, _root_.Flock.Firewall.Level0.inBytes (Masked.lv0 x ⟨k / 2, h⟩)
+    .ok ((Masked.linkIn x w ρ.2 ⟨k / 2, h⟩).g, _root_.Flock.ZkServer.Level0.inBytes (Masked.lv0 x ⟨k / 2, h⟩)
       (Masked.zkTab x ⟨k / 2, h⟩).tPad (Masked.linkIn x w ρ.2 ⟨k / 2, h⟩), #[])
   else .error "no table"
 
@@ -285,7 +289,7 @@ theorem Loop.level0Src_tapeSrc (x : Msg) (w : Flock.Wit) : Loop.Level0Src Loop.t
     omega
   have hJ : (⟨(2 * j.val + r.val) / 2, hj⟩ : Fin (Masked.jOf x)) = j := Fin.ext hk
   have hsrc : Loop.tapeSrc x w (ν, t) (2 * j.val + r.val) = .ok ((Masked.linkIn x w t j).g,
-      _root_.Flock.Firewall.Level0.inBytes (Masked.lv0 x j) (Masked.zkTab x j).tPad (Masked.linkIn x w t j), #[]) := by
+      _root_.Flock.ZkServer.Level0.inBytes (Masked.lv0 x j) (Masked.zkTab x j).tPad (Masked.linkIn x w t j), #[]) := by
     unfold Loop.tapeSrc
     rw [dif_pos hj, hJ]
     all_goals rfl
@@ -331,8 +335,8 @@ theorem Loop.level0Src_tapeSrc (x : Msg) (w : Flock.Wit) : Loop.Level0Src Loop.t
   rw [hsrc]
   simp only [bind, Except.bind]
   rw [Masked.stsOf_half x j r]
-  exact _root_.Flock.Firewall.Level0.ofDraws_inBytes (m := (Masked.stAt x j).m) (s := (Masked.zkTab x j).sch)
-    (tPad := (Masked.zkTab x j).tPad) (lv := Masked.lv0 x j) (Masked.zkTab x j).hz rfl (Masked.linkIn x w t j) rfl hg
+  exact _root_.Flock.ZkServer.Level0.ofSamples_inBytes (m := (Masked.stAt x j).m) (s := (Masked.zkTab x j).sch)
+    (tPad := (Masked.zkTab x j).tPad) (lv := Masked.lv0 x j) (Masked.zkTab x j).hz rfl (Masked.linkIn x w t j) rfl rfl hg
     he hp hs hs'
 
 end Claims.ZKServer

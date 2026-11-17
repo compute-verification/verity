@@ -83,7 +83,7 @@ queries don't make.
 namespace Flock.Bridge
 
 open Claims Claims.Sampling
-open Properties.NetworkCertifier.Bytes (bs)
+open Properties.Certifier.Bytes (bs)
 
 /-- **A wire's registered row**: its port, its leaf index there (the row's unit), the row's width in bits and the
 wire's bit in it. -/

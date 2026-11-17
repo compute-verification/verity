@@ -74,7 +74,7 @@ __all__ = ["HOLO_KEY", "InnerRepCheck", "MAX_LONE_SLOTS", "MAX_REGIONS", "MAX_SL
 U16 = Array(16, BL.BIT)
 OUT_WORDS = 128
 F_WORDS = 8
-ROW_BLOCK = 64
+ROW_CHUNK = 64
 LEAVES = 3 ** 7
 ZERO_SALT = b"verity/rec-v1/zero-residual-salt/v1"
 VERIFIER_SALT = b"verity/rec-v1/verifier-salt/v1"
@@ -102,7 +102,7 @@ MAX_LONE_SLOTS = 223
 
 
 def port_words(n: int) -> int:
-    return -(-F_WORDS * n // ROW_BLOCK) * ROW_BLOCK
+    return -(-F_WORDS * n // ROW_CHUNK) * ROW_CHUNK
 
 
 def v_words(S: dict) -> int:

@@ -31,6 +31,9 @@ F=${FLOCK_WORK:-/workspace}/flock-gpu-link/flock; FEAT="--features sha512 --feat
 (cd $F && git apply $REPO/verity/protocols/proofs/flock/prover/flock-zk-b684b12.patch) || exit 1
 # the session verifier's phase timers in the opening (session_verify.rs): clocks only, no check changes
 (cd $F && git apply $REPO/verity/protocols/proofs/flock/prover/flock-vtime-b684b12.patch) || exit 1
+# the wide level-0 leaf's Ligerito configs for tables of 2^32 to 2^35 bits (flock-circuit --wide-leaf), beside fast100's
+(cd $F && rm -f crates/flock-core/configs/ligerito/m3[2-5]_fast100_wide.toml \
+  && git apply $REPO/verity/protocols/proofs/flock/prover/flock-wide-b684b12.patch) || exit 1
 if [ $G = 1 ]; then (cd $F && python3 $REPO/verity/protocols/proofs/flock/prover/cuda_circuit_patch.py && python3 $REPO/verity/protocols/proofs/flock/prover/cuda_sha512_patch.py) || exit 1; FEAT="$FEAT --features gpu"; fi
 # the selftest's harness injects seeds (determinism check); a proving build (bench, cells) never has the feature
 [ "$MODE" = selftest ] && FEAT="$FEAT --features seed-injection"
@@ -39,7 +42,7 @@ B=$F/target/release/flock-circuit; sha256sum $B | tee $O/binary.sha256
 [ "$MODE" = build ] && exit 0
 [ -x $HOME/.local/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 [ -x $W/py/bin/python ] || { $HOME/.local/bin/uv venv -q --python 3.12 $W/py && $HOME/.local/bin/uv pip install -q --python $W/py/bin/python numpy blake3; }
-export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm
+export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch
 # the challengers' Lean, built while the sets stage: bench's --zk sessions, and m0's under FC_COINS=tree, take their coin trees
 # from a challenger each (pod/challenger.sh)
 CH=0; [ "$MODE" = bench ] && { [ "$FC_COINS" = tree ] || [[ " ${MODES:-m0} " == *" zk"* ]]; } && CH=1

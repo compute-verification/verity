@@ -17,9 +17,9 @@ commit-and-open's extraction (`Definitions.Pouw.Assumptions.ShaRealize.ExtractAd
   machines;
 * `ProofSystemSound`: the service's verdict accepts only periods whose rounds' checks pass, but with probability `κ_S`
   (Flock sound and zero knowledge, live coins from the auditor's challenger);
-* `ImportWithinCertifier`: an accepted period exchanged at most `K` bits, the network certifier's count (class L).
+* `ImportWithinCertifier`: an accepted period exchanged at most `K` bits, the network attester's count (class L).
 
-`CertifierSeesImports`, the network certifier's counts take in every exchanged bit (class L, the auditor's devices), is
+`CertifierSeesImports`, the network attester's counts take in every exchanged bit (class L, the auditor's devices), is
 the device premise under it: a verdict that refuses counts past `K` (`CountedWithin`) accepts only periods that
 exchanged at most `K` bits. `Definitions.Pouw.Guarantees.OnsiteFreed.OnsiteFreed` and the card instance read it.
 
@@ -133,7 +133,7 @@ def SAKSha (G : Accel) (P : RoundProto) (k : ℕ) (Reg : Fin k → Set P.Inst) (
       ¬ ∃ Deg : P.Draw → Prop, prob Deg ≤ κdeg B ∧
         commitMoment G P μ (pub w) (η w) ox.1 (A.inst ox.1 ox.2 w) (adv ox.1 ox.2 w) (Mw w) (Mh w) Deg ≤ 1) ≤ κsha A
 
-/-- `pouw-outsource-egress` (proposed; class L, conditional on the network certifier streaming the call's coin side `b`
+/-- `pouw-outsource-egress` (proposed; class L, conditional on the network attester streaming the call's coin side `b`
 itself). **An exchanged bit replaces at most `β` of priced work**: in the model at its device premises, every program
 has one that computes the same thing on every input, exchanges no bits with outside machines, and costs at most its cost
 plus `β` a bit it exchanged (`Accel.ext`, in either direction, other than the challenger's signed coin stream).
@@ -153,7 +153,7 @@ system's verdict accepts only periods whose sampling blocks' checks pass** at th
 with probability `κ_S` over the oracle and the verifier's coins, for every prover: every block's committed instance is
 one of its registrable ones and its check passes (`Prover.Accepted`). The checks run inside Flock's zero-knowledge
 proofs (sound and zero knowledge), on live coins flipped by the auditor's challenger after each block's commitments
-(`trusted-host`). The verdict reads the transcript and the devices' readings, never the prover's
+(`trusted-device`). The verdict reads the transcript and the devices' readings, never the prover's
 code. It assumes nothing of the prover's algorithms. -/
 def ProofSystemSound (G : Accel) (P : RoundProto) (k : ℕ) (Reg : Fin k → Set P.Inst) {Obs : Type}
     (verdict : Verdict P k Obs) (dev : Readings G P k Obs) (κS : ℝ) : Prop :=
@@ -161,7 +161,7 @@ def ProofSystemSound (G : Accel) (P : RoundProto) (k : ℕ) (Reg : Fin k → Set
     A.Passes verdict dev ox.1 ox.2 ∧ ¬ A.Accepted Reg ox.1 ox.2) ≤ κS
 
 /-- `pouw-certifier-sees-imports` (proposed; class L, the auditor's devices, trust base item 3). **The network
-certifier counts every exchanged bit**: it watches the replica's boundary, every link of the period's devices, on a
+attester counts every exchanged bit**: it watches the replica's boundary, every link of the period's devices, on a
 machine the prover doesn't control, so the bits a prover's sampling blocks' work and answers exchange with outside
 machines (`Prover.ext`, in either direction, other than the challenger's coin stream) are at most the bits it signs
 as entering (`cin`) and leaving (`cout`) the devices, as the verdict reads them from its readings `dev`.
@@ -185,8 +185,8 @@ def CertifierSeesImports (G : Accel) (P : RoundProto) (k : ℕ) {Obs : Type} (de
     (cin cout : Obs → ℝ) : Prop :=
   ∀ (A : Prover G P k) (o : P.Orc) (x : Fin k → P.Draw × P.Chk), A.ext o x ≤ cin (dev A o x) + cout (dev A o x)
 
-/-- `pouw-dither-import` (proposed; class L, the network certifier's count on `trusted-host`). **An accepted period
-exchanged at most `K` bits**: the network certifier sits on the period's devices' links, on a machine the prover doesn't
+/-- `pouw-dither-import` (proposed; class L, the network attester's count on `trusted-device`). **An accepted period
+exchanged at most `K` bits**: the network attester sits on the period's devices' links, on a machine the prover doesn't
 control, and signs the bits that cross them in either direction (its readings `dev`); the period's verdict reads its
 signed count and refuses a period past `K`. The challenger's coin stream isn't counted, and nothing else is left out
 (`CertifierSeesImports`, which gives it at the verdict `CountedWithin verdict cin cout K`). Open: the per-period form
@@ -196,7 +196,7 @@ def ImportWithinCertifier (G : Accel) (P : RoundProto) (k : ℕ) {Obs : Type} (v
     (dev : Readings G P k Obs) (K : ℝ) : Prop :=
   ∀ (A : Prover G P k) (o : P.Orc) (x : Fin k → P.Draw × P.Chk), A.Passes verdict dev o x → A.ext o x ≤ K
 
-/-- `pouw-own-dither` (proposed; the challenger on `trusted-host`). **Each
+/-- `pouw-own-dither` (proposed; the challenger on `trusted-device`). **Each
 replica's coins are its own**: the challenger issues every replica of a fleet of `N` its own dither and check coins,
 flipped fresh for it, so its randomness `Ω` gives every replica's coins together the uniform distribution (`coin`
 carries the uniform measure on `Ω` to the uniform measure on `Fin N → Fin k → Draw × Chk`). With each replica's own
@@ -205,7 +205,7 @@ coins uniform, as `MomentSound`'s sample space has them, this makes the replicas
 It rests on the coins' derivation: the challenger derives each coin as
 `derive(K_ch, "verity/pouw-accel/<kind>/v1", {period, replica, sampling block index, root receipt digest})`, its key
 `K_ch` never leaving the challenger, so no two of the fleet's coins share a context, and the derivation is taken as
-uniform. `verity.ml.randomness.derive` is deterministic, so a coin keyed by its roots alone would repeat with them.
+uniform. `verity.commitments.randomness.derive` is deterministic, so a coin keyed by its roots alone would repeat with them.
 
 A dither broadcast to several replicas puts a replica's own dither in the others' coins, which `FleetSound` hands to
 its strategy, and then its moment fails. The check coins are in it too: `FleetSound`'s strategies read every other
@@ -215,11 +215,11 @@ def OwnDither (P : RoundProto) (k N : ℕ) {Ω : Type} [Fintype Ω] (coin : Ω �
     Prop :=
   ∀ f : (Fin N → Fin k → P.Draw × P.Chk) → ℝ, avg (fun ω => f (coin ω)) = avg f
 
-/-- `pouw-coins-confidential` (proposed; the network certifiers on `trusted-host`). **A
+/-- `pouw-coins-confidential` (proposed; the network attesters on `trusted-device`). **A
 replica's coins reach no machine outside it before it has them**: a sampling block's dither and check coin are
 readable only inside its replica's certifier boundary until its root. For the MVP it holds by one device: the device
-that runs a server's network certifier also produces that server's live coins, so the challenger issues them inside
-the boundary the certifier counts, and trust in that device and its host provider is `trusted-host`.
+that runs a server's network attester also produces that server's live coins, so the challenger issues them inside
+the boundary the certifier counts, and trust in that device and its host provider is `trusted-device`.
 
 So the strategy a fleet runs on replica `u` (its prover `A u ω` at the challenger's randomness `ω`) may read every
 other replica's coins, past and future (a coalition at its worst), but none of its own: those reach `u` only through

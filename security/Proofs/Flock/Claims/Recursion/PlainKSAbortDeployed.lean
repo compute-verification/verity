@@ -224,7 +224,7 @@ theorem plain_tableBoundθAccAtR_of_simDU {x : Claims.Msg} {ins : Ins} {spec : S
 theorem plain_tableBoundθAccAtR_all {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (V false) x) :
     Claims.Flock.TableBoundθAccAtR sha512 (deployPlain Readable.relation) (wordLen false) (wide false) x := by
   obtain ⟨s, hs, hin⟩ := acc_inScope Readable.relation hno
-  obtain ⟨ins, spec, sts, d, hset, hd⟩ := acc_draw hno
+  obtain ⟨ins, spec, sts, d, hset, hd⟩ := acc_sample hno
   have h1 := plain_one hs hin hset
   have h0 : 0 < sts.size := by omega
   have hm := parse_m hs hset h0
@@ -418,7 +418,7 @@ theorem plain_tableBoundθAccAtR_of_simDUK (keep : Bool → Bool) {x : Claims.Ms
 theorem plain_tableBoundθAccAtR_allK (keep : Bool → Bool) {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (VK keep) x) :
     Claims.Flock.TableBoundθAccAtR sha512 (deployPlainK keep Readable.relation) (wordLen false) (wide false) x := by
   obtain ⟨s, hs, hin⟩ := accK_inScope keep Readable.relation hno
-  obtain ⟨ins, spec, sts, d, hset, hd⟩ := accK_draw keep hno
+  obtain ⟨ins, spec, sts, d, hset, hd⟩ := accK_sample keep hno
   have h1 := plain_one hs hin hset
   have h0 : 0 < sts.size := by omega
   have hm := parse_m hs hset h0

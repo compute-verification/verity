@@ -7,11 +7,11 @@ from typing import Any
 @dataclass(frozen=True)
 class Verdict:
     """A check's outcome: `ok`, the failure `codes` in the order found, and a `detail` per code. `verifiers`, when the
-    check ran through `verifier`, is both verifiers' outcomes and which one is of record. `fanout`, what a registration
+    check ran through `verifier`, is both verifiers' outcomes and which one is of record. `fanout`, what a docket
     check publishes under a template query: the fan-out F it computed on its own program (R8, `partition.fanout`).
     `rests_on_period_check`, what it publishes beside F: the tied parameters whose run Input R8 let through though
     several proof blocks read it (`registration.check`'s `tied`). Its acceptance rests on the network period check,
-    which ties their rows to the registrations that computed them (`NetworkCheck.Period`'s `wired`): with any, `ok` is
+    which ties their rows to the dockets that computed them (`NetworkCheck.Period`'s `wired`): with any, `ok` is
     no acceptance on its own."""
 
     ok: bool

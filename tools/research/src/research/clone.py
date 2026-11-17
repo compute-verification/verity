@@ -61,21 +61,33 @@ RECORD_DRIVER = {"merge.lean-audit.name": "lean-audit.json: each side's guarante
                  "merge.lean-imports.driver": _lean_driver("--lean "),
                  "merge.lakefile-lists.name": "lakefile.toml: each side's requires and roots (tools/verity/lean/merge.py)",
                  "merge.lakefile-lists.driver": _lean_driver("--lakefile "),
-                 "merge.fixture-map.name": "artifacts.json: each side's fixtures (tools/verity/check/merge_map.py)",
-                 "merge.fixture-map.driver": "python3 tools/verity/check/merge_map.py %O %A %B %P",
-                 "merge.markdown-rows.name": "Markdown: each side's rows of a table (tools/verity/check/merge_rows.py)",
-                 "merge.markdown-rows.driver": "python3 tools/verity/check/merge_rows.py %O %A %B %P",
+                 "merge.fixture-map.name": "artifacts.json: each side's fixtures (tools/check/merge_map.py)",
+                 # a branch cut before tools/verity/check moved to tools/check holds the script only at its old place
+                 "merge.fixture-map.driver": "f=tools/check/merge_map.py; [ -f \"$f\" ] || f=tools/verity/check/merge_map.py; "
+                                             "python3 \"$f\" %O %A %B %P",
+                 "merge.markdown-rows.name": "Markdown: each side's rows of a table (tools/check/merge_rows.py)",
+                 "merge.markdown-rows.driver": "f=tools/check/merge_rows.py; [ -f \"$f\" ] || f=tools/verity/check/merge_rows.py; "
+                                               "python3 \"$f\" %O %A %B %P",
                  "merge.vllm-allowlist.name": "the vLLM lints' allowlists and dead-code keep map: each side's entries "
-                                              "(adapters/vllm/tests/lint/merge_allowlist.py)",
-                 # a crossing of the layout move merges once in each layout, so the script is found at either place
-                 "merge.vllm-allowlist.driver": "f=adapters/vllm/tests/lint/merge_allowlist.py; "
+                                              "(tests/adapters/vllm/tests/lint/merge_allowlist.py)",
+                 # a crossing of a layout move merges once in each layout, so the script is found at each of its places:
+                 # the tests' own tree, beside the adapter, and the older integrations/ (the second in two pieces, so
+                 # no move rewrites it to the first)
+                 "merge.vllm-allowlist.driver": "f=tests/adapters/vllm/tests/lint/merge_allowlist.py; "
+                                                "[ -f \"$f\" ] || f=adapters/vllm/"
+                                                "tests/lint/merge_allowlist.py; "
                                                 "[ -f \"$f\" ] || f=integrations/vllm/tests/lint/merge_allowlist.py; "
                                                 "python3 \"$f\" %O %A %B %P",
-                 "merge.lean-caps.name": "tests/test_lean_packages.py: each side's change to the ratchet caps "
-                                         "(tools/verity/lean/merge.py)",
-                 "merge.lean-caps.driver": _lean_driver("--caps "),
+                 # `--caps `: origin/main's merge.py, which the command runs, knows `--limits` only once it holds it (merge.LIMITS_FLAG)
+                 "merge.lean-limits.name": "tests/test_lean_packages.py: each side's change to the ratchet limits "
+                                           "(tools/verity/lean/merge.py)",
+                 "merge.lean-limits.driver": _lean_driver("--caps "),
                  "merge.pyproject-test-lists.name": "pyproject.toml: each side's [tool.verity.tests] lists (tools/verity/lean/merge.py)",
-                 "merge.pyproject-test-lists.driver": _lean_driver("--pyproject ")}
+                 "merge.pyproject-test-lists.driver": _lean_driver("--pyproject "),
+                 # the driver's name before the rename, with the same command, while a branch's `.gitattributes` names it
+                 "merge.lean-caps.name": "tests/test_lean_packages.py: each side's change to the ratchet limits "
+                                         "(tools/verity/lean/merge.py)",
+                 "merge.lean-caps.driver": _lean_driver("--caps ")}
 
 
 CWD_CLONE = "clone"
@@ -121,15 +133,19 @@ def sweep(runs_root: Path, scratch: Path) -> None:
     """Remove each scratch/<run id> whose run is over (`not_over`): a runner that could not remove its clone, or was killed before
     it did, leaves it on the machine's disk, and only this and a node's eviction pass (`store.leftovers.evict_clones`) remove it.
     A live run's clone is never touched.  Each removal, and each failure, is one line on stderr."""
+    if not os.path.isdir(scratch):
+        return
     try:
         entries = list(os.scandir(scratch))
-    except OSError:
+    except OSError as e:
+        print(f"clone: {scratch} unlisted, so no clone is removed ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return
     for e in entries:
         try:
             if e.is_symlink() or not e.is_dir(follow_symlinks=False) or not_over(runs_root / e.name) is not None:
                 continue
-        except OSError:
+        except OSError as err:
+            print(f"clone: {e.path} not checked, so it stays ({type(err).__name__}: {err})", file=sys.stderr, flush=True)
             continue
         why = remove(Path(e.path))
         print(f"research: --cwd clone: removed {e.path}, the clone of finished run {e.name}" if why is None else

@@ -1,5 +1,5 @@
 """The landing's policy over what the runners (`suites.py`, `circuit-check`, check.py's steps) report (`PATH`,
-`tools/verity/check/policy.toml`): which ci.toml jobs are off the merge gate (`off_gate`) and which failures aren't taken as red
+`tools/check/policy.toml`): which ci.toml jobs are off the merge gate (`off_gate`) and which failures aren't taken as red
 until a deadline (`allow`):
 
     schema = "policy/v0"
@@ -16,7 +16,7 @@ step whose every `FAIL` line's key (`circuit_keys`: `CHECK/CODE FAMILY`, the Def
 is as if absent, and the judge names it (each Coverage's ``expired``).
 
 The verified queue's loop reads its allowances at the base of the candidate it judges (`at`; `Landing._allowed` and
-`Landing._task_allowed` judge its failures), so no candidate's own allowance covers its own failure; `research merge` reads
+`Landing._task_allowed` judge its failures), so no candidate's own allowance covers its own failure; `research.merge` reads
 `off_gate` at the commit it merges (`merge.declared_jobs`), and the quick tier's judge reads it at the tier's base, a commit of
 `main`.  Stdlib only."""
 from __future__ import annotations
@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-PATH = "tools/verity/check/policy.toml"
+PATH = "tools/check/policy.toml"
 SCHEMA = "policy/v0"
 #: what an allowance's ``id`` names: a suite, one of its tests, or one circuit-check failure by its key
 ID_RE = re.compile(r"suite [^\s:]+(::\S.*)?|circuit-check \S+/\S+ [^\s{]+")

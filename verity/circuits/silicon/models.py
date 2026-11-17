@@ -428,10 +428,10 @@ BLACKWELL_SM120_E5M2_M16N8K32 = GroupSum(
 # exact product carried at PRODUCT_WIDTH), and ``kind::mxf8f6f4.block_scale.scale_vec::1X`` (E4M3, E5M2, E4M3 x E5M2), whose
 # UE8M0 pair adds (sa - 127) + (sb - 127) to the exponent of every product of the step before alignment; a group leaving
 # the FP32 range is the sticky infinity of its sign, as here.  The executable reference for those kinds is
-# benchmarks/tc_probe_fp4/f8_model.py (held to this class word for word by its tests).
+# calibration/tc_probe_fp4/f8_model.py (held to this class word for word by its tests).
 _B200_F8_PIN = (
     "NVIDIA B200 (sm_100, cc 10.0, driver 580.173.02, nvcc 13.0.88 -gencode compute_100a/sm_100a, GPU `device`), "
-    "probe kernel benchmarks/tc_probe_fp4/tcgen05_f8.cu: one tcgen05.mma.cta_group::1 (M128 N32 K32, K-major "
+    "probe kernel calibration/tc_probe_fp4/tcgen05_f8.cu: one tcgen05.mma.cta_group::1 (M128 N32 K32, K-major "
     "no-swizzle smem descriptors, one SASS UTCQMMA a kernel) per K step, issued by one thread, arbitrary FP32 accumulators "
     "preloaded into tensor memory with tcgen05.st (and enable_input_d = 0 tiles), 1, 2, 4 or 8 steps on one TMEM accumulator; "
     "an exact-integer layout gate passed on every kind before the capture. Run `run` (f8_sm100.sh, seeds "
@@ -869,7 +869,7 @@ BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED = BlockScaledAlignAdd(
 # names the architecture it was measured on; their parameters are BLACKWELL_SM120_*'s to the bit.
 _TCGEN05_PIN = (
     "NVIDIA B200 (sm_100, cc 10.0, driver 580.126.09, nvcc 12.9.86 -gencode compute_100a/sm_100a, GPU `device`), "
-    "CUTLASS-free probe kernel benchmarks/tc_probe_fp4/tcgen05_fp4.cu: ONE tcgen05.mma.cta_group::1 (M128 N8 K64, "
+    "CUTLASS-free probe kernel calibration/tc_probe_fp4/tcgen05_fp4.cu: ONE tcgen05.mma.cta_group::1 (M128 N8 K64, "
     "SASS UTCOMMA) per tile with the 16 harness rows replicated into all 8 groups of 16 TMEM lanes (every replica agreed), "
     "arbitrary FP32 accumulators preloaded into TMEM with tcgen05.st and enable_input_d = 1 (all-+0 accumulators also run with "
     "enable_input_d = 0 and through the TMEM path: identical), K-major no-swizzle smem descriptors, scale factors in TMEM; the "
@@ -922,7 +922,7 @@ BLACKWELL_SM100_MXF4 = BlockScaledAlignAdd(
 # The K=32 E2M1 row of Blackwell consumer (sm_120), ``kind::f8f6f4`` (SASS QMMA.16832): Hopper's BF16 adder (26 bits, floor
 # 2^-133) over one group of all 32 exact E2M1 products, not the block-scaled adder of the K=64 rows (OMMA) -- the instruction
 # fixes the arithmetic, not the element format.  autoproof's 1,400 RTX 5090 vectors of this instruction (zero accumulators)
-# do not tell the two apart; the RTX PRO 6000 capture does (verity/circuits/ops/tests/test_models.py).  Also measured with 0 mismatches, and
+# do not tell the two apart; the RTX PRO 6000 capture does (tests/verity/circuits/ops/test_models.py).  Also measured with 0 mismatches, and
 # outside this object because a GroupSum has one dtype and no scales: e2m1 x e4m3 and e4m3 x e2m1, and kind::mxf8f6f4
 # .scale_vec::1X (QMMA.SF, UE8M0 entering as an exponent shift of each product).
 BLACKWELL_SM120_E2M1_M16N8K32 = GroupSum(
@@ -936,14 +936,14 @@ BLACKWELL_SM120_E2M1_M16N8K32 = GroupSum(
     validated=(
         "NVIDIA RTX PRO 6000 Blackwell Server Edition (sm_120a, cc 12.0, driver 580.173.02, nvcc 13.0.88) "
         "mma.sync.aligned.m16n8k32.row.col.kind::f8f6f4.f32.e2m1.e2m1.f32, one SASS QMMA.16832.F32.E2M1.E2M1 per tile, "
-        "benchmarks/tc_probe_fp4 (k32.py) sweeps with arbitrary finite FP32 accumulators: run `run` "
+        "calibration/tc_probe_fp4 (k32.py) sweeps with arbitrary finite FP32 accumulators: run `run` "
         "(GPU `device`, seed 20260930) 1,671,168 gated elements, 0 mismatches, while two groups of 16 miss 88,660, the "
         "unscaled block-scaled adder (group 16 / 32) 193,027 / 192,566 and autoproof's model5 268,267; fresh-seed "
         "confirmation `confirmation` (seed 20261003, gated on this model) 3,309,568 gated elements, 0 mismatches "
         "(the alternatives miss 176,662 / 385,736 / 384,745), both on GPU `device`; a 1024-step register chain (K = 32,768) "
         "on a second die, `chain.run` (GPU `chain.device`, seed 20261004, gated on this model), 1,408 end words, "
         "0 mismatches. "
-        "NaN/inf accumulators are outside the model (record-only). Capture sample: verity/circuits/ops/tests/fixtures/tc-sm120-k32-e2m1-2026-09-30"
+        "NaN/inf accumulators are outside the model (record-only). Capture sample: tests/verity/circuits/ops/fixtures/tc-sm120-k32-e2m1-2026-09-30"
     ),
 )
 

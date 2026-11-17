@@ -25,7 +25,7 @@ step alone:
 namespace Claims.ZKServer
 
 open _root_.Flock (V F128 Stmt SessionSpec)
-open _root_.Flock.Firewall.Frame (Cfg Masker)
+open _root_.Flock.ZkServer.Frame (Cfg Masker)
 
 namespace LeanRelease
 
@@ -193,7 +193,7 @@ theorem ofLoop_frameAnswerR_same (T : ZKMal.CoinLayer.TableData)
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
     (real : Msg → Flock.Wit →
       (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
-      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+      ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (x : Msg) (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
     (e0 : Msg × Msg) (h1 : List (Msg × Msg)) {s0 : _} {spec : SessionSpec} {sts : Array Stmt} {q j : ℕ}
     (hx : FlockDeploy.setupOf true x = some (s0, spec, sts)) (hq : h1.length = q + 1)

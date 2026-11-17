@@ -1,6 +1,6 @@
 """The native collector's hidden M1 taps: `hidden_source`'s FA2 and FA3 sources with their Python wrapper of the tapped kernel
 replaced by one C++ callable each (`Fa2Wrap`, `Fa3Wrap` in native_collect.cpp, built from the committer's extension), and the FA2 tap's
-bounded split driver, which taps a multi-sequence launch in sequence groups when its tap buffer would exceed the cap."""
+bounded split driver, which taps a multi-sequence launch in sequence groups when its tap buffer would exceed the bound."""
 from __future__ import annotations
 
 import time
@@ -22,7 +22,7 @@ class NativeHiddenM1Source(HiddenM1Source):
     """The FA2 M1 tap glue as ONE C++ callable (`Fa2Wrap`, native_collect.cpp) in place of the Python `varlen_fwd`
     wrapper.  Same tapped kernel, same per-geometry buffer rule, same names/order into the same collector; stats synced at uninstall."""
 
-    #: default cap on the FA2 tap's device residency (MiB); VERITY_FA2_TAP_CAP_MB=0 restores the unbounded buffers
+    #: default bound on the FA2 tap's device residency (MiB); VERITY_FA2_TAP_CAP_MB=0 restores the unbounded buffers
     DEFAULT_TAP_CAP_MB = 2048
 
     def __init__(self, committer: Any, so_path: str, ns: str = "verity_fa2_matAll") -> None:
@@ -32,11 +32,11 @@ class NativeHiddenM1Source(HiddenM1Source):
         self._w.compact = settings.VERITY_FA2_COMPACT
         self._w.zero_after = settings.VERITY_FA2_ZERO
         self.short_name, self._w.ms = "hidden_m1", self.ms              # the MS class sizes every buffer and is a seventh compacted plane
-        # bounded tap: one device buffer of <= cap bytes; a multi-sequence launch whose padded tap buffer exceeds it is
+        # bounded tap: one device buffer within the bound; a multi-sequence launch whose padded tap buffer exceeds it is
         # split into consecutive sequence groups (hidden_source.plan_fa2_tap_groups) tapped one after another into that buffer (C++ Fa2Wrap
         # seq_base / hold_launch / bound_words).  Names and bytes of the staged compacted rectangles are those of the unsplit launch.
-        cap = settings.VERITY_FA2_TAP_CAP_MB
-        cap_mb = self.DEFAULT_TAP_CAP_MB if cap is None else cap
+        given = settings.VERITY_FA2_TAP_CAP_MB
+        cap_mb = self.DEFAULT_TAP_CAP_MB if given is None else given
         self.tap_cap_bytes = max(0, cap_mb) << 20
         self._w.bound_words = self.tap_cap_bytes // 4
         self.telemetry_path: str | None = None           # commit_delta: <out>/fa2_tap_windows.jsonl (one line per tapped window / group)
@@ -191,7 +191,7 @@ class NativeHiddenM1Source(HiddenM1Source):
         self.stats["compact"] = bool(st.get("compact", False))
         self.stats["refused"] = int(st.get("refused", 0))       # launches expected but not bound (uncovered tile / kernel skip) -> errors
         self.stats["tap_layout"] = int(st.get("tap_layout", 7))
-        # the bounded-tap record: cap, the one bounded allocation, peaks, split counts (all bytes, all measured)
+        # the bounded-tap record: the bound, the one bounded allocation, peaks, split counts (all bytes, all measured)
         self.stats["bounded_tap"] = {
             "cap_bytes": int(self.tap_cap_bytes), "bound_alloc_bytes": int(st.get("bound_alloc_bytes", 0)),
             "bound_used_peak_bytes": int(st.get("bound_used_peak_bytes", 0)), "geometry_buffers_bytes": int(st.get("geometry_buffers_bytes", 0)),

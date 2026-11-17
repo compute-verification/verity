@@ -7,7 +7,7 @@ public import Mathlib.Data.Fin.VecNotation
 # A `(c, k)`-partition and a partition that is none (trusted)
 
 The instances the honest and nontrivial lemmas of `Verity.Guarantees.CKSize` and `Verity.Guarantees.Counting` are
-stated at (`Security/Definitions/Core/Guarantees/Formalism/Witnesses.lean`), on one small Boolean declaration `d`: gate
+stated at (`security/Definitions/Core/Guarantees/Formalism/Witnesses.lean`), on one small Boolean declaration `d`: gate
 0 is its one registered input, and gates 1, 2 and 3 each read the gate before.
 
 * `Honest`: the proof blocks `{1, 2}` and `{3}`, a `(2, 1)`-partition whose second proof block has one gate, under

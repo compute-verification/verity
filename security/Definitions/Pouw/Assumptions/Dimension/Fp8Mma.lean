@@ -97,7 +97,7 @@ def Shape4090.regPrice (s : Shape4090) : ℕ := s.k * s.elems * s.mac2 / 2
 def mmaOp {G : Type} (s : Shape4090) (outs : List (G → ℚ)) : M4090Instr G :=
   M4090Instr.mma outs (s.regPrice * outs.length)
 
-/-! ## Pinned statements (draft semantics, pending review) -/
+/-! ## Guarantees (draft semantics, pending review) -/
 
 /-- **The shape table** (Round 1): every shape costs at least 16 per register written, int8 m16n8k16 costs exactly
 16, and FP8 m16n8k32 with FP32 accumulate costs 64. -/

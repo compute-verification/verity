@@ -19,9 +19,9 @@ Each comparison is a function returning a JSON-able dict with a `status` in {"pa
                           grouped into named CLASSES (never forced to isomorphism), and node counts per specialization
                           id in the derived body vs the family's expanded leaves.
 
-Everything here is torch-free.  Resource discipline (DESIGN §11): the M1 run measured 0.93 GB max RSS / 8 s on the
-laptop (fold + Program() + digest alone: 0.21 GB / 2.4 s); comparison 3 deliberately excludes Embedding and lm_head
-instances, whose `FunctionCall.args` would materialise 28M-element tuples (~1 GB each).  Snapshots follow DESIGN §3: `<snapshots>/snapshots.json` is an index of entries
+Everything here is torch-free.  Resource discipline: every full-size run documents its footprint (the report's
+`max_rss_gb`), and comparison 3 deliberately excludes Embedding and lm_head
+instances, whose `FunctionCall.args` would materialise 28M-element tuples.  Snapshots: `<snapshots>/snapshots.json` is an index of entries
 `{event, arg, view: {"$v": [...]}, file, sha256, step?}` and each file holds the raw element bytes of the view in
 row-major logical order (a storage-order dump of the view's byte extent is also accepted).  Weights come from the
 SmolLM2-135M safetensors in the HF cache (`_LAYER_FIELDS`) and the cos/sin cache from the
@@ -48,7 +48,6 @@ from verity.circuits.evaluation.reference import evaluate_call
 from verity.circuits.layout import FunctionCall
 from verity.circuits.refs import Refs, runs
 from verity.circuits.types import Tuple as TupleT
-from verity.definitions.registry import b1
 
 from verity_vllm.check.fold_sources import _EXTRA_NORM_SOURCES as _EXTRA_NORM_SOURCES
 from verity_vllm.check.fold_sources import _LAYER_FIELDS as _LAYER_FIELDS
@@ -77,6 +76,7 @@ from verity_vllm.check.fold_sources import _qkv_neox_permute as _qkv_neox_permut
 from verity_vllm.check.fold_sources import _storage_indices as _storage_indices
 from verity_vllm.check.fold_sources import hf_safetensors_glob as hf_safetensors_glob
 from verity_vllm.config import option
+from verity_vllm.definitions.registry import b1
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.fold import FoldResult, summarize
 from verity_vllm.program.frontend.rules.family import (
@@ -557,7 +557,7 @@ def main(a: Options) -> int:
         report["subcircuits"] = {"status": "skipped", "reason": "no snapshots.json"}
     report["structure"] = compare_structure(result, C=dict(profile.config), LP=a.lp, STEPS=a.steps, BN=a.bn)
     report["seconds"] = round(time.time() - t0, 3)
-    report["max_rss_gb"] = round(_max_rss_gb(), 3)   # DESIGN §11: every full-size run documents its footprint
+    report["max_rss_gb"] = round(_max_rss_gb(), 3)   # every full-size run documents its footprint
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(_jsonable(report), indent=1, sort_keys=False))

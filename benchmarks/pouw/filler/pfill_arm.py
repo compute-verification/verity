@@ -27,7 +27,7 @@ from arms import FILL_V1_SPLIT, NONE, Colocation, Filler, point_lookup
 if TYPE_CHECKING:
     from fused_arm import FusedStep
 
-SOURCES = ("benchmarks/pouw/filler/dcap.cu", "benchmarks/pouw/filler/pfill.cuh",
+SOURCES = ("verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler/dcap.cu", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler/pfill.cuh",
            "benchmarks/pouw/filler/pfill_arm.py")
 
 
@@ -167,7 +167,7 @@ PHASE_K = {
 
 @dataclass
 class PFillKPhase(PFillK):
-    """pfill-k on the leader's placement (psched's fill-v1-phase-att, SCORER's port): its split, re-chosen per point,
+    """pfill-k on the phase placement: its split, re-chosen per point,
     plus pfill-k's own dfill_p at 4 warps (-DPF_PW=4) forked into each decode layer's attention on the step's SMs, at the
     graph's highest node priority, joined before o. Prefill keeps pfill-k's 4-SM split. Run through psched_score.py:
 
@@ -239,7 +239,7 @@ class PFillKFused(PFillK):
         "hypothesis": "FILL's step without filler warps runs B <= 32 decode on 48 SMs at 0.92-1.0 of cuBLASLt's, so "
                       "pfill-k's pump takes 140 SMs there and 76-100 at B 128-144: Theorem K's 0.9 on more SMs, with no "
                       "fixed work"})
-    sources: tuple = SOURCES + ("benchmarks/pouw/filler/flin.cuh", "benchmarks/pouw/filler/fscore.cu",
+    sources: tuple = SOURCES + ("verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler/flin.cuh", "benchmarks/pouw/filler/fscore.cu",
                                 "benchmarks/pouw/filler/fused_arm.py", "benchmarks/pouw/filler/fused_score.py")
     choice: str = ("an offline table of 18 (B, L) points (split SMs, FILL's step or cuBLASLt's) from FILL's FusedPump rows "
                    "and POWER_SPLIT; a lookup, a green split and one graph a step at serving time")

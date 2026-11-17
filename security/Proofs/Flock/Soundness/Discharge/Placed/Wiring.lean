@@ -1,6 +1,7 @@
 module
 
 public import Properties.Flock.Circuit.Keyed
+public import Properties.Flock.Circuit.ProgRows
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Discharge.Placed.Setup
 
@@ -61,11 +62,5 @@ theorem insOf_eq_unit {u u' : ℕ} (hu : u < nU) (hu' : u' < nU) {x x' : Fin nIn
           _ = (u' + 1) * B := by ring
           _ ≤ u * B := Nat.mul_le_mul_right _ hl
       omega
-
-/-- Every unit of the circuit's program has the circuit's template instance rows. -/
-theorem rows_circuitProg (c : Flock.Circuit) (hU : Built c.unit) (nU B : ℕ)
-    (src : Fin (circuitRows c hU).nIn → Option (Fin B)) (u : Fin nU) :
-    (circuitProg c hU nU B src).rows u = circuitRows c hU :=
-  rows_uniform _ _ _ _ _ nU u
 
 end FlockSoundness.Discharge.Placed

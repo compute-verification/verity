@@ -12,11 +12,11 @@ read off `Hidden.SpecP` (`Hidden.setupHidden_specP`) and the walk of `setupTable
 
 * `Hidden.regionsIn_wf`: every region `HmIn.regions` builds is `mkRegion`'s, so well formed;
 * `Hidden.setupHidden_tagsP`, `setupHidden_hm96P`, `setupHidden_wfP`, `setupHidden_parseCP`, `setupHidden_nP`,
-  `setupHidden_drawnP`: `setupHidden_tags`, `setupHidden_hm96`, `setupHidden_wf`, `setupHidden_parseC`,
-  `setupHidden_n` and `setupHidden_drawn` (the sample over the public input ports, `HmIn.drawn`);
+  `setupHidden_sampledP`: `setupHidden_tags`, `setupHidden_hm96`, `setupHidden_wf`, `setupHidden_parseC`,
+  `setupHidden_n` and `setupHidden_sampled` (the sample over the public input ports, `HmIn.drawn`);
 * `setupTables_retainHP`, `setupTables_pointsHP`: `setupTables_retainH` and `setupTables_pointsAny` under hidden
   outputs;
-* `drawSetupHP_of_setupHiddenI`: `drawSetupH_of_setupHiddenI`.
+* `sampleSetupHP_of_setupHiddenI`: `sampleSetupH_of_setupHiddenI`.
 -/
 
 @[expose] public section
@@ -87,7 +87,7 @@ theorem setupHidden_nP (h : Stmt.setupHidden tags cf pf coins tables draw partit
   exact ⟨s.n, by rw [s.nbl, s.blocksReal]⟩
 
 /-- `SpecP.pub` at a sample: the statement's public file is the population's sampled over the public input ports. -/
-theorem setupHidden_drawnP {d : Json}
+theorem setupHidden_sampledP {d : Json}
     (h : Stmt.setupHidden tags cf pf coins tables (some d) partition program own = .ok st) :
     ∃ pi pop, HmIn.parse st.c = .ok pi ∧ HmIn.loadPublic tags st.c pi pf = .ok pop ∧
       HmIn.drawn st.c pi pop d = .ok st.pub := by
@@ -163,22 +163,22 @@ variable {I : Inputs} {own : Option ByteArray} {mPts n : ℕ} {S : Finset (Fin n
   (ht : I.tags.typed = false)
 include ht
 
-/-- **A `DrawSetupHP` from setupHidden's acceptance at `own` at a sample** (`drawSetupH_of_setupHiddenI`), a `fast100`
+/-- **A `SampleSetupHP` from setupHidden's acceptance at `own` at a sample** (`sampleSetupH_of_setupHiddenI`), a `fast100`
 schedule of its `m`, the sample proving `S`, and its link points `mPts`. -/
-theorem drawSetupHP_of_setupHiddenI {st : Flock.Stmt}
+theorem sampleSetupHP_of_setupHiddenI {st : Flock.Stmt}
     (h : Stmt.setupHidden I.tags I.circuitFile I.publicFile I.coins I.tables (some d) I.partition I.program own =
       .ok st)
-    {sch : Flock.Schedule} (hf : Flock.fast100 st.m = some sch) {D : Draw.UnitDraw}
-    (hD : Draw.UnitDraw.ofJson d = .ok D) (hS : ∀ u ∈ S, u.val ∈ D.proved) (hmPts : st.mPts = mPts) :
-    ∃ x : DrawSetupHP I own mPts S d, x.st = st := by
+    {sch : Flock.Schedule} (hf : Flock.fast100 st.m = some sch) {D : Draw.UnitSample}
+    (hD : Draw.UnitSample.ofJson d = .ok D) (hS : ∀ u ∈ S, u.val ∈ D.proved) (hmPts : st.mPts = mPts) :
+    ∃ x : SampleSetupHP I own mPts S d, x.st = st := by
   have hg : 0 < st.c.g := by
     obtain ⟨hty, ⟨ls, hls⟩, -⟩ :=
       Hidden.Committed.check ht (Hidden.committed_of_commit (Hidden.setupHidden_specP h).choose_spec.parse)
     have hp := (check_facts hty hls).g_pow2
     simp only [isPow2, Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at hp
     exact hp.1
-  obtain ⟨pi, pop, -, -, hdr⟩ := Hidden.setupHidden_drawnP h
-  obtain ⟨D', hD', -, hn, -⟩ := Layout.drawn_spec
+  obtain ⟨pi, pop, -, -, hdr⟩ := Hidden.setupHidden_sampledP h
+  obtain ⟨D', hD', -, hn, -⟩ := Layout.sampled_spec
     (c := { st.c with outPorts := if pi.ports.isEmpty then #[] else #[("public inputs", pi.words)] }) hdr
   rw [hD] at hD'
   cases hD'

@@ -1,4 +1,11 @@
-/-
+module
+
+public import Flock.JsonParse
+public import Flock.KnownRead
+meta import Flock.JsonParse
+meta import Flock.KnownRead
+
+/-!
 `KnownRead.check` on a unit of one input word, eight 16-bit ports: circuit ports `k0` (2 words) and `k1` (1 word),
 copy 0's leaf ports 0–2 their three words, the rest forced zeros, and an output row `o` (1 word). A known input port passes
 where the unit's computed rows read every bit of its row, at some copy, and is refused at the first bit none reads; a
@@ -9,12 +16,6 @@ computed column, and is refused at the first bit none does. A known port that is
 known rows are not its words, is refused. A port marked `read_in_full` is checked as one row of its registered row's
 words (`fullRows`): refused at another width, or at a bit no computed row reads.
 -/
-module
-
-public import Flock.JsonParse
-public import Flock.KnownRead
-meta import Flock.JsonParse
-meta import Flock.KnownRead
 
 @[expose] public section
 

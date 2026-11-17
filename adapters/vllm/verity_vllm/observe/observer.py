@@ -193,7 +193,7 @@ class Recorder:
 
 class Observer(TorchDispatchMode):
     """Records every dispatcher call while entered (`Recorder.active` must be True; otherwise pass-through).
-    `reenter=False` disables the nested re-entry of custom ops (M0 rung c)."""
+    `reenter=False` disables the nested re-entry of custom ops (the overhead ladder's rung c)."""
 
     def __init__(self, rec: Recorder, *, reenter: bool = True) -> None:
         super().__init__()
@@ -284,7 +284,7 @@ def _pop(rec: Recorder, eid: int) -> None:
 
 
 class EmptyMode(TorchDispatchMode):
-    """M0 rung (b): a mode that only forwards the call."""
+    """The overhead ladder's rung (b): a mode that only forwards the call."""
 
     def __torch_dispatch__(self, func, types, args=(), kwargs=None):
         return func(*args, **(kwargs or {}))

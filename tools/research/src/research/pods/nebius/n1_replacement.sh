@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# vy-nebius-1's replacement: n1 stops at its deadline; its CPU work (two train slots, Lean slots, lean's
+# vy-nebius-1's replacement: n1 stops at its deadline; its CPU work (two candidate slots, Lean slots, lean's
 # cache publisher, the merge mirror, research runs at nice 19) goes to vy-nebius-cpu-4/5, and its GPU and Kueue services retire.
 #
 #   n1_replacement.sh [plan] [PATH]     print every live step in order, each command as it is to be run; runs nothing
@@ -9,13 +9,16 @@
 #                                       n1's custody backlog and the data on n1 nothing else holds
 #
 # PATH is where the nodes come from, each a list of nodes below (NODES_<PATH>):
-#   now       two 192vcpu-768gb nodes (cpu-1's shape: one full train slot each), in regions whose quota has room today
+#   now       two 192vcpu-768gb nodes (cpu-1's shape: one full candidate slot each), in regions whose quota has room today
 #   quota     two 256vcpu-1024gb nodes (cpu-2's shape) in us-central1, once Nebius quota request C291564672 is granted
 #   reattach  one 192vcpu-768gb node in uk-south2 that boots on n1's data disk as it is (vy-nebius-1-data: hf, runs, usage, Lean
 #             caches, nothing copied); needs n1's VM and cpu-1's deleted after their stop, for the disk, 192 vCPU and two IPv4s
 #
 # Every create, start, stop and delete here is printed for the coordinator, whose call spend and new instances are; this script
 # makes only Nebius list/get calls and read-only ssh. The nodes' deploy entries are deploy.toml's [nodes.vy-nebius-cpu-4/5].
+# The provider's ids and n1's address are the environment's, and preflight ends naming the first it lacks before any call:
+# each region's project id (NEBIUS_PROJECT_ID_<REGION>, as NODES_<PATH> names it), the tenant's (NEBIUS_TENANT_ID, or
+# N1R_TENANT) and n1's address (VY_NEBIUS_1_HOST, or N1R_N1_HOST).
 set -euo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 repo=$(cd "$here/../../../../../.." && pwd)
@@ -28,12 +31,13 @@ DEADLINE=${N1R_DEADLINE:-2026-10-21T21:00:00Z}   # cpu-2/3's, the fleet's curren
 MAX_HOURS=${N1R_MAX_HOURS:-72}
 CUSTODY_PY=/workspace/custody/python/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12   # n1's custody tree's interpreter
 
-# NAME REGION PROJECT PRESET RATE DATA_GIB DATA_TYPE DATA_DISK
-NODES_now="vy-nebius-cpu-4 uk-south1 project-e03yeqz7lc00cg4kesj06a 192vcpu-768gb 6.34 2046 network_ssd_non_replicated -
-vy-nebius-cpu-5 eu-west2 project-e04qzbhvbc0093k7dhq008 192vcpu-768gb 6.34 2046 network_ssd_non_replicated -"
-NODES_quota="vy-nebius-cpu-4 us-central1 project-u00tvvtxkc00mdpbnexc70 256vcpu-1024gb 8.45 2048 network_ssd -
-vy-nebius-cpu-5 us-central1 project-u00tvvtxkc00mdpbnexc70 256vcpu-1024gb 8.45 2048 network_ssd -"
-NODES_reattach="vy-nebius-cpu-4 uk-south2 project-e05mvq7kln00dvsa5xj2mg 192vcpu-768gb 6.34 5022 network_ssd_non_replicated vy-nebius-1-data"
+# NAME REGION PROJECT PRESET RATE DATA_GIB DATA_TYPE DATA_DISK. PROJECT is the name of the environment variable that holds the
+# id of the region's project (no file holds an id): plan prints it as the launch reads it, and preflight needs it set
+NODES_now="vy-nebius-cpu-4 uk-south1 NEBIUS_PROJECT_ID_UK_SOUTH1 192vcpu-768gb 6.34 2046 network_ssd_non_replicated -
+vy-nebius-cpu-5 eu-west2 NEBIUS_PROJECT_ID_EU_WEST2 192vcpu-768gb 6.34 2046 network_ssd_non_replicated -"
+NODES_quota="vy-nebius-cpu-4 us-central1 NEBIUS_PROJECT_ID_US_CENTRAL1 256vcpu-1024gb 8.45 2048 network_ssd -
+vy-nebius-cpu-5 us-central1 NEBIUS_PROJECT_ID_US_CENTRAL1 256vcpu-1024gb 8.45 2048 network_ssd -"
+NODES_reattach="vy-nebius-cpu-4 uk-south2 NEBIUS_PROJECT_ID_UK_SOUTH2 192vcpu-768gb 6.34 5022 network_ssd_non_replicated vy-nebius-1-data"
 # a live node of each preset, which preflight reads each node's deploy install against
 TWIN_192vcpu_768gb=vy-nebius-cpu-1
 TWIN_256vcpu_1024gb=vy-nebius-cpu-2
@@ -48,7 +52,7 @@ launch_env() {  # NAME REGION PROJECT PRESET RATE DATA_GIB DATA_TYPE DATA_DISK
        "NEBIUS_IMAGE_FAMILY=ubuntu24.04-driverless NEBIUS_DATA_GIB=$6 NEBIUS_DATA_TYPE=$7 NEBIUS_RATE_USD_PER_HOUR=$5$disk"
 }
 
-slot_line() {  # PRESET: the train slot's line, as on the live node of that shape
+slot_line() {  # PRESET: the candidate slot's line, as on the live node of that shape
   case $1 in
     192vcpu-768gb) echo "b 54-191 only=trains mem=560   # one full check (peak ~584G) in the 700G user slice, as on cpu-1" ;;
     256vcpu-1024gb) echo "t 4-171 only=trains mem=560   # one full check, as on cpu-2; research runs at nice 19 on the rest" ;;
@@ -60,7 +64,7 @@ plan() {
   names=$(printf '%s\n' "$NODES" | cut -d' ' -f1 | tr '\n' ' ')
   read -r first _ <<< "$NODES"
   quota_note=""
-  [ "$path" != quota ] || quota_note=$'\n    On 1024 GB nodes, give cpu-4/5 their own user-slice and session caps too (cpu-1\'s 700G and 600G are for 755 GB).'
+  [ "$path" != quota ] || quota_note=$'\n    On 1024 GB nodes, give cpu-4/5 their own user-slice and session limits too (cpu-1\'s 700G and 600G are for 755 GB).'
   cat <<EOF
 # n1's replacement, path "$path": ${names}from $REF
 # Each step: who runs it, about how long, then the commands. Steps marked (coordinator) spend or create.
@@ -77,32 +81,35 @@ EOF
   echo
   echo "L1  (coordinator, ~10 min each, in parallel) create, start and register each node, its lease ${MAX_HOURS} h and deadline $DEADLINE:"
   while read -r n r p pre rate gib typ disk; do
-    echo "    (cd tools/research/src/research/pods/nebius && $(launch_env "$n" "$r" "$p" "$pre" "$rate" "$gib" "$typ" "$disk") \\"
+    echo "    (cd tools/research/src/research/pods/nebius && $(launch_env "$n" "$r" "\$$p" "$pre" "$rate" "$gib" "$typ" "$disk") \\"
     echo "      bash launch.sh --max-hours $MAX_HOURS --yes --register --deadline $DEADLINE)"
   done <<< "$NODES"
   cat <<EOF
 
-L2  (infra, 15 min) a PR: drop \`staged\` from [nodes.$first]$( [ "$names" = "$first " ] || echo " and the others'") in deploy.toml; add each node's line
-    to pods/nebius/peers (outside uk-south2 a node has no private address there: its public IP, port 22 open to all); mark it ready.
-    Until it lands, install from the PR's pushed head (--ref origin/BRANCH): install reads that commit's own deploy.toml.$quota_note
+L2  (infra, 15 min) a PR: drop \`staged\` from [nodes.$first]$( [ "$names" = "$first " ] || echo " and the others'") in deploy.toml; mark it ready.
+    No file takes a node's address: /etc/vy/peers is made at each install from the register of machines, where L1's --register
+    put the node. Until it lands, install from the PR's pushed head (--ref origin/BRANCH): install reads that commit's own deploy.toml.$quota_note
 
-L3  (infra, 5 min a node) install every entry, then prepare the check pod:
+L3  (infra, 5 min a node) the peers' key, then every entry (the node's own /etc/vy/peers among them, and the key taken from each
+    machine it names), then every other node's list, then prepare the check pod:
 EOF
   for n in $names; do
+    echo "    research pods ssh vy-nebius-2 -- 'tar -C ~/.ssh -cf - vy-cluster vy-cluster.pub' | research pods ssh $n -- 'umask 077; tar -C ~/.ssh -xf -'   # peers' key and its .pub, node to node: copied, never printed"
     echo "    research deploy install $n --by infra --ref $REF --apply"
     echo "    research pods ssh $n -- 'cd /etc/systemd/system && for t in vy-*.timer; do sudo systemctl enable --now \$t; done'   # install enables none"
-    echo "    research pods ssh vy-nebius-2 -- 'tar -C ~/.ssh -cf - vy-cluster vy-cluster.pub' | research pods ssh $n -- 'umask 077; tar -C ~/.ssh -xf -'   # peers' key and its .pub, node to node: copied, never printed"
-    echo "    research pods ssh $n -- 'echo from=\\\"IPS\\\" \$(cat ~/.ssh/vy-cluster.pub) >> ~/.ssh/authorized_keys'   # IPS: each node's egress (curl ifconfig.me)"
-    echo "    research run --on $n --project verity --source . --cwd source -- bash tools/verity/check/pod_setup.sh"
+  done
+  echo "    research deploy roll /etc/vy/peers --by infra --ref $REF           # a dry run: the machines each node's list names now and after"
+  echo "    research deploy roll /etc/vy/peers --by infra --ref $REF --apply   # every node takes the key from the new one, then each node's list, one at a time"
+  for n in $names; do
+    echo "    research run --on $n --project verity --source . --cwd source -- bash tools/check/pod_setup.sh"
   done
   echo
-  echo "L4  (infra, 2 min a node) the slot files, one train slot a node, Lean slots on $first (cpu-1's form):"
+  echo "L4  (infra, 2 min a node) the slot files, one candidate slot a node, Lean slots on $first (cpu-1's form):"
   while read -r n r p pre rate gib typ disk; do
     echo "    research pods ssh $n -- 'printf \"%s\\n\" \"# NAME CPUS [windows=FILE] [lead=MIN] [only=trains] [mem=GB]: check slots slot.py takes (infra)\" \"$(slot_line "$pre")\" > /workspace/research/locks/slots'"
   done <<< "$NODES"
   cat <<EOF
     research pods ssh $first -- 'printf "%s\n" "# NAME N: Lean audit slots (tools/check/lean_slot.py), n1s moved here (INF-57)" "check 3" "audit 2" "build 3" > /workspace/research/locks/lean-slots'
-    and every node's /etc/vy/peers from L2's file: research deploy install NODE --by infra --ref $REF --apply on each live node.
 
 L5  (infra for lean, 10 min, then the first build ~40 min in the background) lean's cache publisher on $first: its R2 key goes
     root to root, never through a terminal (it is 401 until lean's re-carded key lands; copy it after):
@@ -110,11 +117,11 @@ L5  (infra for lean, 10 min, then the first build ~40 min in the background) lea
     research pods ssh $first -- 'sudo /usr/local/sbin/vy-lean-build-setup && sudo systemctl start vy-lean-cache-daily.service'
 
 L6  (ci, 10 min) the merge mirror beside lean's sandbox: seed the bare repository on $first as n1's was seeded, then
-    RESEARCH_MERGE_MIRROR=$first for \`research merge\` (merge.py MIRROR's default changes in the retire PR, L12).
+    RESEARCH_MERGE_MIRROR=$first for the verified queue's push (\`merge.push_mirror\`; merge.py MIRROR's default changes in the retire PR, L12).
 
-L7  (ci, 2 min) drive's machines: \`research queue drive --on ...\` gains $(echo "$names" | sed 's/ $//; s/ /,/g') and loses $N1 (before 13:00Z, n1's drain).
+L7  (ci, 2 min) the verified queue's machines gain $(echo "$names" | sed 's/ $//; s/ /,/g') and loses $N1 (before 13:00Z, n1's drain).
 
-L8  (infra, 13:00Z-14:30Z) n1 drains: no new check (L7), Kueue admits nothing after 13:00Z (drain_s), the running trains end;
+L8  (infra, 13:00Z-14:30Z) n1 drains: no new check (L7), Kueue admits nothing after 13:00Z (drain_s), the running candidates' checks end;
     \`research queue status\` shows nothing on $N1.
 
 L9  (infra, ~20 min, from 14:00Z) n1's custody to backlog 0, then once more after the last run ends:
@@ -135,10 +142,17 @@ EOF
 }
 
 preflight() {
-  local regions
+  local regions v tenant n1
+  for v in $(printf '%s\n' "$NODES" | cut -d' ' -f3 | sort -u); do
+    [ -n "${!v:-}" ] || { echo "n1_replacement: $v is unset: the id of the project path $path's nodes of that region are in" >&2; exit 2; }
+  done
+  tenant=${N1R_TENANT:-${NEBIUS_TENANT_ID:-}}
+  [ -n "$tenant" ] || { echo "n1_replacement: NEBIUS_TENANT_ID is unset: the id of the tenant whose quotas are read (or N1R_TENANT)" >&2; exit 2; }
+  n1=${N1R_N1_HOST:-${VY_NEBIUS_1_HOST:-}}
+  [ -n "$n1" ] || { echo "n1_replacement: VY_NEBIUS_1_HOST is unset: $N1's address (or N1R_N1_HOST)" >&2; exit 2; }
   regions=$(printf '%s\n' "$NODES" | cut -d' ' -f2 | sort -u | tr '\n' ' ')
   echo "== quota (non-GPU vCPU, IPv4, disks) in $regions"
-  bash -c ". '$here/common.sh' && nebius_auth && nb quotas quota-allowance list --parent-id ${N1R_TENANT:-tenant-e00g3zymmem3epgq3a} --page-size 999" \
+  bash -c ". '$here/common.sh' && nebius_auth && nb quotas quota-allowance list --parent-id $tenant --page-size 999" \
     | python3 -c '
 import json, sys
 want = set(sys.argv[1].split())
@@ -152,7 +166,7 @@ for q in json.load(sys.stdin).get("items", []):
         region, unit = s["region"], " GiB" if scale > 1 else ""
         print(f"  {region:12} {n:46} {use // scale:>6} of {lim // scale:>6}{unit}  free {(lim - use) // scale}")' "$regions"
   echo "== rights in each node's project: the launcher needs editor (its VPC writes come first), the VM's account a power role (its lease)"
-  projects=$(printf '%s\n' "$NODES" | cut -d' ' -f3 | sort -u | tr '\n' ' ')
+  projects=$(for v in $(printf '%s\n' "$NODES" | cut -d' ' -f3 | sort -u); do printf '%s ' "${!v}"; done)
   bash -c ". '$here/common.sh' && nebius_auth && ids='import json, sys; [print(x[\"metadata\"][\"id\"]) for x in json.load(sys.stdin).get(\"items\", [])]'
     permits='import json, sys; [print(sys.argv[1], p[\"spec\"].get(\"resource_id\"), p[\"spec\"].get(\"role\")) for p in json.load(sys.stdin).get(\"items\", [])]'
     for who in launcher:\$NEBIUS_SA_ID vm:\${NEBIUS_VM_SA_ID:-\$NEBIUS_SA_ID}; do
@@ -167,6 +181,7 @@ for p in sys.argv[1].split():
           "can stop the VM" if pw else "CANNOT STOP THE VM (no power role: launch.sh stops it at the probe)")' "$projects"
   echo "== presets and launch.sh --dry-run"
   while read -r n r p pre rate gib typ disk; do
+    p=${!p}
     bash -c ". '$here/common.sh' && nebius_auth && nb compute platform list --parent-id $p" | python3 -c '
 import json, sys
 ok = any(x.get("name") == sys.argv[2] for p in json.load(sys.stdin).get("items", []) if p["metadata"]["name"] == "cpu-d3"
@@ -202,7 +217,7 @@ PY
     )
   done <<< "$NODES"
   echo "== n1: custody backlog, and recorded data R2 doesn't hold that nothing regenerates"
-  ssh_n1=$(cd "$repo" && python3 -c 'import shlex, sys; sys.path.insert(0, "tools/research/src"); from research import remote; print(shlex.join(remote.ssh_argv(sys.argv[1], 22, user="research")))' "${N1R_N1_HOST:-81.85.2.165}")
+  ssh_n1=$(cd "$repo" && python3 -c 'import shlex, sys; sys.path.insert(0, "tools/research/src"); from research import remote; print(shlex.join(remote.ssh_argv(sys.argv[1], 22, user="research")))' "$n1")
   eval "SSH=($ssh_n1)"
   "${SSH[@]}" 'sudo -n /usr/local/bin/vy-custody --dry-run 2>&1 | grep -E "^(would|no Job)" | sed "s/^/  custody: /" | tail -20; df -h /workspace | tail -1 | sed "s/^/  /"'
   if [ "${N1R_RETENTION:-0}" = 1 ]; then   # it walks all of /workspace: ~15 min at n1's load

@@ -18,29 +18,29 @@ the session's next round reads the rep's frame the coins put back:
 namespace Claims.ZKServer.Relay
 
 open _root_.Flock (F128)
-open _root_.Flock.Firewall.Session (State Placed byte?)
-open _root_.Flock.Firewall.Frames (Sessions Rep)
-open _root_.Flock.Firewall.Frame (Req Place)
+open _root_.Flock.ZkServer.Session (State Placed byte?)
+open _root_.Flock.ZkServer.Frames (Sessions Rep)
+open _root_.Flock.ZkServer.Frame (Req Place)
 
 /-- **The rep's frame at the session's next round, and its run**: at a `RoundRun` whose round releases and whose
 coins the rep's frame took, the frame the session's next round finds is `Loop.coinsOf` of the round's put on the coins
 `Frames.feedOf` reads off the auditor's answer, and it is the run of the frame `roundPlace` readied one round on. -/
 theorem roundRun_next {sid : Nat} {st : State} {pl : Placed} {stream : String} {n i r : Nat}
-    {dom content : ByteArray} {e : Env} {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {R₃ : Sessions}
+    {dom content : ByteArray} {e : Env} {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {R₃ : Sessions}
     (hr : RoundRun sid st pl stream n i r dom content e R L0 R₃) (hreq : st.request pl (.round stream n) = none)
     (hfr : (frameAt R sid i r).isSome) {q p₁ : Rep} {pl' : Place} {f : Bool} {nd : Option String} {o : ByteArray}
-    (hrp : _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl', f, nd))
-    (ho : (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dom content n).out = .ok o)
-    (hput : (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dom content n).put = some p₁) {a : ByteArray}
+    (hrp : _root_.Flock.ZkServer.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl', f, nd))
+    (ho : (_root_.Flock.ZkServer.Frames.roundStep R L0 sid i r dom content n).out = .ok o)
+    (hput : (_root_.Flock.ZkServer.Frames.roundStep R L0 sid i r dom content n).put = some p₁) {a : ByteArray}
     (ha : e.ans = some a) (hb : byte? a 0 = some 2) (hs : (st.answer (.round stream n) a).1.stop = none)
     (hc : e.coins = .ok ()) {pre : List Req} {ev : List (Nat × ByteArray × Place × Array F128)}
     (hR : RepRun pre ev q) :
-    ∃ st₂, _root_.Flock.Firewall.Frame.step p₁.cfg p₁.st
-        (.coins (.ok (_root_.Flock.Firewall.Frames.feedOf n a.data.toList))) = (.ok, st₂) ∧
-      frameAt R₃ sid i r = some (Loop.coinsOf p₁ st₂ (_root_.Flock.Firewall.Frames.feedOf n a.data.toList)) ∧
+    ∃ st₂, _root_.Flock.ZkServer.Frame.step p₁.cfg p₁.st
+        (.coins (.ok (_root_.Flock.ZkServer.Frames.feedOf n a.data.toList))) = (.ok, st₂) ∧
+      frameAt R₃ sid i r = some (Loop.coinsOf p₁ st₂ (_root_.Flock.ZkServer.Frames.feedOf n a.data.toList)) ∧
       RepRun pre (ev ++ [(n, if nd.isSome then ByteArray.empty else content, pl',
-          _root_.Flock.Firewall.Frames.feedOf n a.data.toList)])
-        (Loop.coinsOf p₁ st₂ (_root_.Flock.Firewall.Frames.feedOf n a.data.toList)) := by
+          _root_.Flock.ZkServer.Frames.feedOf n a.data.toList)])
+        (Loop.coinsOf p₁ st₂ (_root_.Flock.ZkServer.Frames.feedOf n a.data.toList)) := by
   obtain ⟨R₁, R₂, R₂', p', h01, h12, hcs, h22, h23⟩ :=
     hr.coins hreq ((hr.round hreq).trans ho) hput ha hb hs hc
   have hfa : frameAt R₂ sid i r = some p₁ := frameAt_own hfr (roundStep_key hput) (h01.1 i r) (h12.1 i r)

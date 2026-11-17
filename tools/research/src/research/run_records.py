@@ -20,14 +20,24 @@ from pathlib import Path
 
 #: a run directory's name
 RUN_ID = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}$")
-#: slot.py's line when what it waits behind changes (tools/verity/check/slot.py)
+#: slot.py's line when what it waits behind changes (tools/check/slot.py)
 WAITS = re.compile(r"^slot: (.+); retrying every \d+ s$", re.M)
 #: how much of stderr.log is read for it (slot.py writes there before the job does)
 STDERR_HEAD = 1 << 18
 KINDS = ("quick suites", "Lean records", "check shards", "GPU jobs", "other")
 #: a pool's slots file in a command (research.pods.nebius.slot_only.POOL, with the pool's name captured)
 POOL = re.compile(r"CHECK_SLOTS=/workspace/research/locks/([A-Za-z0-9_-]+)/slots")
-SLOT_PY, OWN_POOL, NO_POOL = "tools/verity/check/slot.py", "check", "-"
+OWN_POOL, NO_POOL = "check", "-"
+#: the check's directory either way a tree spells it (research.pods.nebius.slot_only.CHECK_DIRS; this file is sent alone)
+CHECK_DIRS = ("tools/check/", "tools/verity/check/")
+
+
+def _check_file(name: str) -> re.Pattern[str]:
+    """``name`` under either of CHECK_DIRS as a whole path (slot_only.check_file)."""
+    return re.compile(rf"(?<![\w.-])(?:{'|'.join(map(re.escape, CHECK_DIRS))}){re.escape(name)}(?![\w.-])")
+
+
+SLOT_PY, CHECK_PY, SUITES_PY = _check_file("slot.py"), _check_file("check.py"), _check_file("suites.py")
 STATUS = ("state", "started_utc", "ended_utc", "rc", "timed_out")
 SLOT = ("state", "since", "took", "left", "slot", "why", "priority", "twin")
 REFUSED = ("at_utc", "fault", "reason")
@@ -40,11 +50,11 @@ def kind(command: list[str]) -> str:
     text = " ".join(command)
     if "gpu-lease" in text:
         return "GPU jobs"
-    if "tools/verity/check/check.py" in text:
+    if CHECK_PY.search(text):
         return "check shards"
     if "lean_changed.py" in text and "--records" in command:
         return "Lean records"
-    if "quick_tier.py" in text or ("tools/verity/check/suites.py" in text and "--quick" in text):
+    if "quick_tier.py" in text or (SUITES_PY.search(text) and "--quick" in text):
         return "quick suites"
     return "other"
 
@@ -54,7 +64,7 @@ def pool(command: list[str]) -> str:
     text = " ".join(command)
     if m := POOL.search(text):
         return m[1]
-    return OWN_POOL if SLOT_PY in text else NO_POOL
+    return OWN_POOL if SLOT_PY.search(text) else NO_POOL
 
 
 def asked_by(command: list[str]) -> str | None:

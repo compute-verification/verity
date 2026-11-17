@@ -1,7 +1,7 @@
 module
 
 public import Spot.OneStageZk
-public import Proofs.Properties.NetworkCertifier.Check.Bytes
+public import Proofs.Properties.Certifier.Check.Bytes
 
 /-!
 # A member's session's evidence decodes one way
@@ -22,7 +22,7 @@ as lists of bytes (`bs`):
 namespace Verity.Sampled.MemberForm
 
 open Flock (be64)
-open Properties.NetworkCertifier.Bytes (bs bs_append bs_length bs_inj be64_bs be64_size byte_toNat toNat_toUInt8 ofBytes
+open Properties.Certifier.Bytes (bs bs_append bs_length bs_inj be64_bs be64_size byte_toNat toNat_toUInt8 ofBytes
   ofBytes_be)
 
 /-! ## Lists -/

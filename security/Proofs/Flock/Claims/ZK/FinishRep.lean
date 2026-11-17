@@ -39,7 +39,7 @@ import Std.Tactic.BVDecide.Normalize.Bool
 /-!
 # The ZK server's rep in the analysis's terms
 
-`Flock.Firewall.Finish.repFw` is the analysis's phases one for one, its copies held to them in `FinishCommit`,
+`Flock.ZkServer.Finish.repFw` is the analysis's phases one for one, its copies held to them in `FinishCommit`,
 `FinishPiop`, `FinishLig` and `FinishInner`. Here they are put together:
 
 * `repFwC`: the ZK server's rep in `FlockComplete`'s terms. `piopCut`'s zerocheck, lincheck and ring switch at the masked
@@ -55,12 +55,12 @@ import Std.Tactic.BVDecide.Normalize.Bool
   of its forms (`linAt`), whatever their lengths, so where none fails on the pads the batched constraint holds, with no
   premise on the constraints' lengths.
 * `tmw_throw_bind`, `throw_bind_sv`: a throw ends a run in the transcript monad over a monad where it does, as it does
-  in `flock-firewall finish`'s own (`StateT Nat V`).
+  in `flock-zk-server finish`'s own (`StateT Nat V`).
 -/
 
 @[expose] public section
 
-namespace Flock.Firewall.Finish
+namespace Flock.ZkServer.Finish
 
 open FlockLevel3 FlockSoundness.Discharge.Composed.ZerocheckMasked
 open FlockSoundness.Discharge.Composed.Zerocheck (eq_of_of of_foldl_dot mul_sum')
@@ -171,7 +171,7 @@ theorem tmw_throw_bind (hthrow : ∀ {α β : Type} (e : String) (f : α → M �
 
 end
 
-/-- **A throw ends a run of `flock-firewall finish`'s own monad** (`proofFile`'s `StateT Nat V`). -/
+/-- **A throw ends a run of `flock-zk-server finish`'s own monad** (`proofFile`'s `StateT Nat V`). -/
 theorem throw_bind_sv {α β : Type} (e : String) (f : α → StateT ℕ V β) :
     (throw e : StateT ℕ V α) >>= f = throw e := rfl
 
@@ -255,4 +255,4 @@ theorem repFw_eq (io : Asks M) (hs : Hashes M) (st : Setup) (hm : st.merkle = Me
 
 end
 
-end Flock.Firewall.Finish
+end Flock.ZkServer.Finish

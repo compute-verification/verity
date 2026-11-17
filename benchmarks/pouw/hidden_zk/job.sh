@@ -4,7 +4,7 @@
 # root (`research run --cwd source --declared-output 'out/*'`); results go to $RESEARCH_RUN_DIR/out, scratch to a
 # `mktemp -d` directory the job removes, builds to $HZ_CACHE (kept, keyed by their inputs) or the scratch directory.
 #   1. builds flock-circuit twice from Flock b684b12 and verity/protocols/proofs/flock/prover's patches (the proving build: sha512, glue; the
-#      selftest build: + seed-injection), the Lean flock-verify, and a venv with numpy and blake3
+#      selftest build: + seed-injection), the Lean verity-verify-proof, and a venv with numpy and blake3
 #   2. per config ROLE:K in HZ_CONFIGS (ROLE row_a, row_b or tile, stage.py's): stage N instances, one loopback --zk session
 #      sampling all N (subset:N; HZ_WARM warm + HZ_RUNS timed proofs) with the proving build, the selftest build's recorded
 #      controls, sampled the same way, and the Lean
@@ -12,7 +12,7 @@
 #        honest-own     the honest session, the verifier's own anchors file                REFUSED (below)
 #        honest-wrong   the honest session, one bit of one anchor wrong in the verifier's file      REJECT
 #        honest-chosen  the honest session, the same anchor bit chosen by the prover (public file)  REJECT
-#        st-<case>      the selftest build's records under verity/flock-circuit+seed-injection, a statement flock-verify
+#        st-<case>      the selftest build's records under verity/flock-circuit+seed-injection, a statement verity-verify-proof
 #                       refuses once every check has passed (`ProvedScope.servedForm`): honest gets through every check
 #                       before its config's refusal (below); output_row_committed_false (a tampered output row),
 #                       output_claim_false, unit_internal_bit_flipped and public_input_claim_false (a false anchor
@@ -62,8 +62,19 @@ vlimit() { echo "ulimit -v $(( $1 * 1024 * 1024 ));"; }
 tree_key() { (cd "$SRC" && find "$@" -type f -not -path '*/.lake/*' -not -path '*/__pycache__/*' -print0 | sort -z \
   | xargs -0 sha256sum | sha256sum | cut -c1-16); }
 
+# check's Rust pin (check_build.sh's RUST_TOOLCHAIN default): a machine's default toolchain, or a home with none, doesn't decide it
+RUST_TOOLCHAIN=${RUST_TOOLCHAIN:-$(sed -n 's/^RUST_TOOLCHAIN=\${RUST_TOOLCHAIN:-\(.*\)}$/\1/p' \
+  "$SRC/verity/protocols/proofs/flock/prover/check_build.sh")}
+
 build_circuit() {   # build_circuit DEST: DEST/flock-circuit-prove and DEST/flock-circuit-selftest
   export PATH="$HOME/.cargo/bin:$PATH"
+  [ -n "$RUST_TOOLCHAIN" ] || { echo "no RUST_TOOLCHAIN pin in verity/protocols/proofs/flock/prover/check_build.sh" >&2; return 1; }
+  command -v rustup >/dev/null \
+    || curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none >/dev/null || return 1
+  # --no-self-update: a rustup on PATH from outside $HOME installs the toolchain and then exits 1 looking for itself here
+  rustup toolchain list | grep -q "^$RUST_TOOLCHAIN-" \
+    || rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --no-self-update >/dev/null || return 1
+  export RUSTUP_TOOLCHAIN=$RUST_TOOLCHAIN
   local D=$1 F=$W/flock
   rm -rf "$F" "$D.tmp"
   git clone -q https://github.com/succinctlabs/flock "$F" && cd "$F" && git checkout -q b684b12 || return 1
@@ -71,7 +82,7 @@ build_circuit() {   # build_circuit DEST: DEST/flock-circuit-prove and DEST/floc
   cp -r "$SRC/verity/protocols/proofs/flock/prover/live" crates/flock-live
   grep -q '"crates/flock-live"' Cargo.toml || sed -i 's|    "crates/flock-transcript",|    "crates/flock-transcript",\n    "crates/flock-live",|' Cargo.toml
   rm -f crates/flock-merkle/src/hm96.rs
-  for p in sha512 glue zk vtime; do git apply "$SRC/verity/protocols/proofs/flock/prover/flock-$p-b684b12.patch" || return 1; done
+  for p in sha512 glue zk vtime wide; do git apply "$SRC/verity/protocols/proofs/flock/prover/flock-$p-b684b12.patch" || return 1; done
   mkdir -p "$D.tmp"
   CARGO_TARGET_DIR=$W/target cargo build -q --release -p flock-live --features sha512,glue --bin flock-circuit -j "$TH" \
     && cp "$W/target/release/flock-circuit" "$D.tmp/flock-circuit-prove" || return 1
@@ -87,7 +98,7 @@ lean_copy() {       # lean_copy DEST: those packages copied under DEST, with DES
   P=$(python3 "$SRC/verity/protocols/proofs/flock/prover/pod/lake_closure.py" copy "$SRC/verity/protocols/proofs/flock/verifier" "$1") \
     && ln -s "${P#"$1/"}/.lake" "$1/.lake" && echo "$P"
 }
-build_lean() {      # build_lean DEST: DEST/.lake/build/bin/flock-verify
+build_lean() {      # build_lean DEST: DEST/.lake/build/bin/verity-verify-proof
   command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
   local D=$1 P
   rm -rf "$D.tmp" && P=$(lean_copy "$D.tmp") \
@@ -97,7 +108,7 @@ build_tmpl_unit() { # build_tmpl_unit DEST: DEST/.lake/build/bin/flock-tmpl-unit
   command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
   local D=$1 P
   rm -rf "$D.tmp" && P=$(lean_copy "$D.tmp") \
-    && cp "$SRC/verity/protocols/proofs/flock/prover/tests/lean/TmplUnit.lean" "$P/" \
+    && cp "$SRC/tests/verity/protocols/proofs/flock/prover/lean/TmplUnit.lean" "$P/" \
     && printf '\n[[lean_exe]]\nname = "flock-tmpl-unit"\nroot = "TmplUnit"\n' >> "$P/lakefile.toml" \
     && (cd "$P" && lake build flock-tmpl-unit) && rm -rf "$D" && mv "$D.tmp" "$D"
 }
@@ -121,12 +132,12 @@ setup() {
   { lscpu | grep -E 'Model name|^CPU\(s\)'; echo "threads $TH"; grep -E 'MemTotal|MemAvailable' /proc/meminfo; cat /proc/self/cgroup
     taskset -pc $$; df -h "${HZ_CACHE:-$W}" "$W"; } > "$OUT/host.txt" 2>&1
   local fail=0 p
-  [ -n "${FLOCK_PROVE:-}" ] || cached flock "$(tree_key verity/protocols/proofs/flock/prover/live verity/protocols/proofs/flock/prover/*.patch)" build_circuit > "$W/flock.dir" &
+  [ -n "${FLOCK_PROVE:-}" ] || cached flock "$(tree_key verity/protocols/proofs/flock/prover/live verity/protocols/proofs/flock/prover/*.patch)-rust$RUST_TOOLCHAIN" build_circuit > "$W/flock.dir" &
   [ -n "${FLOCK_VERIFY:-}" ] || cached lean "$(lean_key)" build_lean > "$W/lean.dir" &
   [ -n "${HZ_PYTHON:-}" ] || cached venv numpy2.5.3-blake3-1.0.9 build_python > "$W/venv.dir" &
   wait
   [ -n "${FLOCK_PROVE:-}" ] || { FLOCK_PROVE=$(cat "$W/flock.dir")/flock-circuit-prove; FLOCK_SELFTEST=$(cat "$W/flock.dir")/flock-circuit-selftest; }
-  [ -n "${FLOCK_VERIFY:-}" ] || FLOCK_VERIFY=$(cat "$W/lean.dir")/.lake/build/bin/flock-verify
+  [ -n "${FLOCK_VERIFY:-}" ] || FLOCK_VERIFY=$(cat "$W/lean.dir")/.lake/build/bin/verity-verify-proof
   [ -n "${HZ_PYTHON:-}" ] || HZ_PYTHON=$(cat "$W/venv.dir")/bin/python
   BIN=$FLOCK_PROVE SBIN=${FLOCK_SELFTEST:?} LEAN=$FLOCK_VERIFY PY=$HZ_PYTHON
   for p in "$BIN" "$SBIN" "$LEAN" "$PY"; do [ -x "$p" ] || { log "missing: $p"; fail=1; }; done
@@ -134,7 +145,7 @@ setup() {
     log "build FAILED"; for f in "$OUT"/build-*.log; do echo "== $f"; tail -20 "$f"; done | tee -a "$OUT/job.log"; exit 1
   fi
   sha256sum "$BIN" "$SBIN" "$LEAN" | tee "$OUT/binaries.sha256" | tee -a "$OUT/job.log"
-  "$PY" -c "import numpy, blake3, verity.protocols.accounting.pouw.verifier, verity_flock; print('python', numpy.__version__, blake3.__version__)" | tee -a "$OUT/job.log"
+  "$PY" -c "import numpy, blake3, verity.protocols.resource_accounting.compute.pouw.verifier, verity_flock; print('python', numpy.__version__, blake3.__version__)" | tee -a "$OUT/job.log"
   TIME="$PY $J/timed.py"
   log "built"
 }

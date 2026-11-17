@@ -33,7 +33,7 @@ theorem prob_cast_game {α : Type} (p : α → Prop) {g₁ g₂ : Verity.Game α
 /-- One position of a batch prover in the class `BoundedByInduced Cls`: a bound for every strategy in `Cls` holds
 there. -/
 theorem prob_getD_le_of_boundedByInduced {O : Type}
-    (Cls : Transcript → O → (g : Verity.Game Bool) → Verity.Game.Strategy g → ℕ → Prop) (τ : Transcript) (o : O)
+    (Cls : Trace → O → (g : Verity.Game Bool) → Verity.Game.Strategy g → ℕ → Prop) (τ : Trace) (o : O)
     (G : Verity.Game (List Bool)) (σ : Verity.Game.Strategy G) (q : ℕ) (hσ : BoundedByInduced Cls τ o G σ q)
     (pre : List (Verity.Game Bool)) (g : Verity.Game Bool) (post : List (Verity.Game Bool))
     (e : Verity.Game.batch (pre ++ g :: post) = G) (n : ℕ) (hn : pre.length = n) (p : Bool → Prop) (ε : ℝ≥0∞)
@@ -48,8 +48,8 @@ theorem prob_getD_le_of_boundedByInduced {O : Type}
 `Cls` at `q`. -/
 theorem TileGame.prob_le [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {P : Protocol Q R S}
     {TR : TileRules Q R S} {HA : HiddenAudit Q R S}
-    {Cls : Transcript → HA.Opening → (g : Verity.Game Bool) → Verity.Game.Strategy g → ℕ → Prop} {δzk : ℕ → ℝ}
-    {U : Workload} {τ : Transcript} {o : HA.Opening} {H : Q → R} {s : S} {g : ℕ}
+    {Cls : Trace → HA.Opening → (g : Verity.Game Bool) → Verity.Game.Strategy g → ℕ → Prop} {δzk : ℕ → ℝ}
+    {U : Workload} {τ : Trace} {o : HA.Opening} {H : Q → R} {s : S} {g : ℕ}
     (T : TileGame P TR HA Cls δzk U τ o H s g) (h0 : ∀ q, 0 ≤ δzk q)
     (hbad : g ∉ goodTiles P TR U H s τ ∪ blankTiles TR U τ) (q : ℕ)
     (s' : Verity.Game.Strategy (HA.game H s U (HA.root U τ o) g)) (hs : Cls τ o _ s' q) :
@@ -83,9 +83,9 @@ is within `BoundedByInduced Cls`, with a `TileGame` for every tile of every in-d
 meets `TileProofSoundAll` at `δzk`, given `0 ≤ δzk`. -/
 theorem tileProofSoundAll_of_tileGame [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P : Protocol Q R S)
     (TR : TileRules Q R S) (D : Layout → Prop) (HA : HiddenAudit Q R S)
-    (Cls : Transcript → HA.Opening → (g : Verity.Game Bool) → Verity.Game.Strategy g → ℕ → Prop) (δzk : ℕ → ℝ)
+    (Cls : Trace → HA.Opening → (g : Verity.Game Bool) → Verity.Game.Strategy g → ℕ → Prop) (δzk : ℕ → ℝ)
     (h0 : ∀ q, 0 ≤ δzk q) (hB : ∀ τ o G σ q, HA.Bounded τ o G σ q → BoundedByInduced Cls τ o G σ q)
-    (tg : ∀ U : Workload, U.InDomain P D → ∀ (τ : Transcript) (o : HA.Opening) (H : Q → R) (s : S) (g : ℕ),
+    (tg : ∀ U : Workload, U.InDomain P D → ∀ (τ : Trace) (o : HA.Opening) (H : Q → R) (s : S) (g : ℕ),
       TileGame P TR HA Cls δzk U τ o H s g) :
     TileProofSoundAll P TR D HA δzk := by
   intro U hU τ op w t q σ hσ i

@@ -1,8 +1,8 @@
 module
 
-public import Spot.Registration
+public import Spot.Docket
 public import Proofs.Flock.Claims.Sampling.Code
-public import Proofs.Flock.Claims.Sampling.Select.DrawLaw
+public import Proofs.Flock.Claims.Sampling.Select.SampleDesign
 public import Properties.Spot.Second
 
 /-!
@@ -34,7 +34,7 @@ open Lean (Json)
 verifier's own copies (`Run.Input.params.verifier`, whose program, query and work table the sample reads), the selection
 rule and the challenger's closure map. -/
 structure Reg where
-  verifier : Spot.Registration.Verifier
+  verifier : Spot.Docket.Verifier
   rule : Spot.Select.Rule
   closure : Option (Array (Int × Array Int))
 
@@ -51,9 +51,9 @@ def Reg.layout (g : Reg) : Spot.Slots.SlotOrder :=
   | .error _ => default
 
 /-- **The sample of record's checked units** on the bytes `src`: `Slots.select`'s, and every slot of the layout where it
-is refused (`drawChecked`). -/
+is refused (`sampleChecked`). -/
 def Reg.checked (g : Reg) (src : ByteArray) : List ℕ :=
-  (drawChecked g.rule g.program g.query g.table g.closure g.layout src).toList
+  (sampleChecked g.rule g.program g.query g.table g.closure g.layout src).toList
 
 /-- **A two-stage registration as the samples of record read it**: the boundary registration the first stage samples on
 (`first`), each template's proof blocks in a replay block (`ns`, a cell each) and the second stage's count in each of
@@ -123,7 +123,7 @@ structure Order (k : ℕ) where
 session's rounds those of `c`'s after the second stage's coin. -/
 def Code.atOrder (c : Code) (j : (x : Msg) → Order (c.V.k x)) : Code :=
   { c with
-    stage2 := fun x => univ.filter fun t => (j x).first < t
+    secondStage := fun x => univ.filter fun t => (j x).first < t
     rounds := fun x u => (c.rounds x u).filter fun t => (j x).second < t }
 
 section At

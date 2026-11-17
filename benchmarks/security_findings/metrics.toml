@@ -1,0 +1,16 @@
+# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
+# enforces it.
+
+# a research run on any CPU machine: it reads the checkout it runs in and the machine it runs on, as the agents' login, with
+# no secret and no reach to another machine; the other machines, an agent VM's environment and the store key come from the
+# readings beside it
+[[metric]]
+id = "infra/security-findings-open"
+title = "Serious security findings still open"
+axis = "Serious findings of the security review still open, of the six it lists, each closed only by a check the script runs."
+owner = "infra"
+unit = "findings"
+better = "lower"
+command = "research run --on auto --cwd source -- uv run python benchmarks/security_findings/open_findings.py"
+every = "1d"
+goal = "infra/security-posture-finalized"

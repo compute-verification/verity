@@ -39,7 +39,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The verifier's statement, read as `Claims.Flock.Stmt`
 
-What `flock-verify verify` reads of a statement besides the session directory (`Read`), what its setup makes of it
+What `verity-verify-proof verify` reads of a statement besides the session directory (`Read`), what its setup makes of it
 (`Read.parse`: `Stmt.setupTables`, and under `--zk` every table's `Zk.shapeOk`, as `Main.verifyCmd`'s `setupOf` runs
 them), and that statement in readable form (`toReadable`): `m` and `kLog` of the first table's statement, the
 relation's fields, and the `Form` the scope check reads, each field the value `ProvedScope.check` tests.
@@ -62,7 +62,7 @@ namespace Flock.Readable
 
 open FlockSoundness.Discharge
 
-/-- What `flock-verify verify` reads of a statement besides the session directory: its flags' values (`I`, as
+/-- What `verity-verify-proof verify` reads of a statement besides the session directory: its flags' values (`I`, as
 `Exec.Inputs` holds them: `--statement`'s tags and `--coins`, which `verify --zk` replaces by
 `zkTags I` and `zkCoins I`), whether it is the masked verifier (`--zk`), the record's sample (`Main.recordDraw`, none
 without one), its own public input words (`--public-inputs`) and whether it holds its own registered reads

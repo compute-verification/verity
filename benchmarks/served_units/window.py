@@ -30,6 +30,10 @@ prove  the statements of UNITS_FILE staged under FLOCK_WORK, and under each WIN_
        processes' RSS, plus a FLOCK_WORK in RAM with its sessions, over WIN_MEM_GB x 0.97 kills the largest process. Then, or as soon as the job stops (SIGTERM included), its groups are
        killed and FLOCK_WORK is removed (its links, not what they point to), unless WIN_KEEP=1. A stopped `stage` kills its
        stagings and keeps FLOCK_WORK.
+route  window.py route UNITS_FILE GPU_FILE CPU_FILE: the statements of UNITS_FILE staged under FLOCK_WORK, one units line
+       each (UNIT@N and its line's estimates), a statement one of whose nets has more than `GPU_NNZ_MAX` nonzeros in A or
+       in B (its stage.json's ``nets``) to CPU_FILE, for the CPU prover, and every other to GPU_FILE; one not staged to
+       neither.
 
 Limits (env, each declared in settings.py with its default): the job's affinity at most WIN_CPUS cores and its niceness at least WIN_NICE (refused otherwise), WIN_MEM_GB,
 WIN_DISK_GB, WIN_UNTIL (UTC, e.g. 2026-11-10T01:30Z), FLOCK_WORK (under /workspace/tmp, or under /dev/shm, where what it
@@ -71,13 +75,16 @@ env = _settings().get
 REPO = Path.cwd()
 PT = REPO / "benchmarks/served_units/prove_time.sh"
 #: what the staging tree's digest covers, the Python under each: prove_time.sh's KEY_PATHS, the same list
-KEY_PATHS = "benchmarks/served_units/stage.py verity/circuits verity/definitions verity/commitments verity/protocols adapters/vllm/verity_vllm tools/verity/circuit_check/src"
+KEY_PATHS = "benchmarks/served_units/stage.py verity/circuits verity/commitments verity/protocols adapters/vllm/verity_vllm adapters/torch/verity_torch tools/verity/circuit_check/src"
 OUT = Path(env("RESEARCH_RUN_DIR")) / "out"
 GB = 1e9
 RAM = "/dev/shm/"  # a FLOCK_WORK here is host memory, counted with the processes' RSS against WIN_MEM_GB
 #: a proved statement's files prove copies to $OUT/kept/NAME/, globs under its directory, for a verifier run elsewhere: its
 #: public files and every session's records. Never inst.bin (the witness), nor circuit.txt (gigabytes: the verifier's node
 #: restages it from the same commit and checks it against stage.json's circuit_sha512). WIN_KEEP_ALSO adds globs.
+#: the GPU prover's most nonzeros in A or in B of one net: its CSC offsets are 32-bit (`circuit::GPU_NNZ_MAX` in
+#: verity/protocols/proofs/flock/prover/live/src/circuit.rs, which refuses a larger net); the CPU prover's are 64-bit
+GPU_NNZ_MAX = (1 << 32) - 1
 KEEP = ("pub.bin", "stage.json", "pin.txt", "partition.json", "tables", "sessions/index.jsonl", "sessions/*/session.json",
         "sessions/*/circuit.rep*.bin", "sessions/*/verifier.json")
 
@@ -490,6 +497,29 @@ def prove(units: list[Unit]) -> int:
     return 0
 
 
+def route(units: list[Unit], gpu: Path, cpu: Path) -> int:
+    fw, k = Path(env("FLOCK_WORK")), key()
+    lines: dict[Path, list[str]] = {gpu: [], cpu: []}
+    for u in units:
+        for n in u.ns:
+            st = fw / "data" / f"{name(u.unit, n)}-{k}" / "stage.json"
+            if not (st.parent / ".done").exists():
+                log(f"route: not staged: {u.unit}@{n}")
+                continue
+            nets = json.loads(st.read_text()).get("nets")
+            if not nets:
+                raise SystemExit(f"window.py route: {st} lists no nets, so its nonzeros are unknown: restage it")
+            most = max(max(int(x["nnz_a"]), int(x["nnz_b"])) for x in nets)
+            to = cpu if most > GPU_NNZ_MAX else gpu
+            lines[to].append(f"{u.unit}@{n}\t{u.rss:g}\t{u.disk:g}\t{u.secs:g}\t{u.dev:g}\n")
+            if to is cpu:
+                log(f"route: {u.unit}@{n} to the CPU prover: {most:,} nonzeros in one net, past the GPU prover's {GPU_NNZ_MAX:,}")
+    for f, ls in lines.items():
+        f.write_text("".join(ls))
+    log(f"route: {len(lines[gpu])} statements to the GPU prover, {len(lines[cpu])} to the CPU prover")
+    return 0
+
+
 def link_also(fw: Path, also: Path) -> None:
     """Each statement staged under `also` (another FLOCK_WORK) and not under `fw`, as a directory of `fw`'s data whose
     files link to its own, so its sessions are written under `fw`; and `also`'s venv and prover where `fw` has none."""
@@ -565,10 +595,12 @@ def watch(jobs: list[Job], mem: float, dev_mib: float, on_gpu: bool, ram: Path |
 
 
 def main() -> int:
-    if len(sys.argv) != 3 or sys.argv[1] not in ("stage", "prove"):
-        raise SystemExit("window.py: usage: window.py stage|prove UNITS_FILE")
+    if not ((len(sys.argv) == 3 and sys.argv[1] in ("stage", "prove")) or (len(sys.argv) == 5 and sys.argv[1] == "route")):
+        raise SystemExit("window.py: usage: window.py stage|prove UNITS_FILE | window.py route UNITS_FILE GPU_FILE CPU_FILE")
     OUT.mkdir(parents=True, exist_ok=True)
     units = read_units(Path(sys.argv[2]))
+    if sys.argv[1] == "route":
+        return route(units, Path(sys.argv[3]), Path(sys.argv[4]))
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
     return stage(units) if sys.argv[1] == "stage" else prove(units)
 

@@ -14,24 +14,28 @@ description: >
 
 # Using Slack
 
-The tool is `research msg` (`tools/research/src/research/slack.py`, whose docstring lists every subcommand and flag);
+The tool is `research msg` (`tools/research/src/research/slack.py`; `research msg -h` lists its subcommands);
 every subcommand takes `--dry-run`, which sends nothing and prints each request. `registry.json` beside this file names
-every handle (remit, charter, user group, the paths it `owns`, its Linear team, its coordinator's agent id as a fallback
+every handle (remit, user group, the paths it `owns`, its Linear team, its coordinator's agent id as a fallback
 holder (who else posts as it is its route's), the PR reader names it `staffs`, up to 5 `examples` of
 questions it answers), the channels with their ids, and the named humans. `research msg handles` prints it; `research
 msg owners PATH...` names each path's owner (longest prefix).
 
 ## Handles, inboxes and channels
 
-- **A handle is a role**, held by one coordinator; `@top` is the admin. `@console` is Daniel's desktop agent: nothing
-  wakes it, so its inbox holds your ask until he opens it. Put the whole brief in the ask, and card `#ask-daniel` when it
-  can't wait.
+- **A handle is a role**, held by one coordinator; `@top` is the admin. `@console`, `@dashboard-goals` and
+  `@dashboard-metrics` are Daniel's desktop agents: nothing wakes them, so an inbox holds your ask until he opens that
+  agent. Put the whole brief in the ask, and card `#ask-daniel` when it can't wait. A desktop holder picks up by hand
+  when opened: `research msg names read --as HANDLE`, and answers in the source thread. Where its session can't reach
+  the broker, it answers on its Linear team (the registry's `linear`), and the asker copies the answer into the thread.
 - **Each handle has an inbox thread** (its route, `routes.d` in the notes), where a post rings each name it addresses
   with a doorbell (`from AUTHOR, thread T: ...`; a person's leads with them and how long they've waited, `from douglas
   (a person, waiting 18 min), #chat-douglas thread T: ...`); the holder's own posts never ring it. The route names the holder:
   `names open --as HANDLE --succeeds` takes a handle over and opens the registry's holder change for you to mark, `names open --as HANDLE` on a new branch adds its suffix, and
   `--poster BC_ID` lets another agent post as it, subscribed to the inbox itself: its post naming the handle rings the
   holder (so a handover's outgoing generation reaches the incoming one), and that doorbell wakes the poster too.
+  `research msg read --as NAME` lists the unread doorbells and marks them read; `--peek` marks none and ends with the newest
+  ts it listed, and `--mark-through TS` later marks only those at or before it.
   `names revoke --as HANDLE --poster BC_ID` takes one off again and leaves the inbox open; `names close` closes the whole
   name, and refuses an option it doesn't read, `--poster` among them. `--as
   NAME` takes only a name your agent id holds or posts for (`$RESEARCH_AGENT_URL`, else your Cursor identity).
@@ -68,9 +72,10 @@ msg owners PATH...` names each path's owner (longest prefix).
   instead, on that one's project and milestone; `--title TEXT` names it. A lane with no team of its own (`linear_label` in
   the registry) files in its parent's team with its `lane:` label. `send` files nothing, whatever its `--kind`: a ping,
   an fyi or a status line is a post only.
-- **Answered is the ask's record**: its Linear issue out of Backlog or commented on by someone other than the asker, a
-  Daniel card's page no longer Waiting on Daniel, else a reply or reaction in the thread. `research msg traffic` lists
-  the unanswered; take a linked ask on its issue. A mirrored machine alert (kind `alert`, with its `(alert: <link>)`)
+- **Answered is the ask's record**: its Linear issue out of Backlog or commented on by a handle the ask names (or that
+  handle's worker, `LANE/NAME`; with no handle named, by anyone but the asker), a Daniel card's page no longer Waiting on
+  Daniel, else a reply or reaction in the thread. `research msg traffic` lists the unanswered; take a linked ask on its
+  issue. A mirrored machine alert (kind `alert`, with its `(alert: <link>)`)
   is no ask: `traffic` lists it once, however often it repeats, as an alert to the names it addresses.
 - **Work items are Linear issues**: filing, titling, placing, commenting on and closing them, and how long each message
   is, are the coordinating skill's (`.agents/skills/coordinating/SKILL.md`). In #agent-coordination, `send`, `reply`,
@@ -98,7 +103,8 @@ id is missing).
 
 - **Subscribe to your inbox thread**, never to `#agent-coordination`'s top level, and to no Linear events: every handle
   writes through one bot and one Linear app, so they wake you for your own writes. Another handle's ask rings your inbox,
-  and a person's new issue that nobody answers rings you through the sweep's audit (`unheard`).
+  and any other issue filed in your team (Linear's app, the connector, `linear create` from another handle) rings it
+  within 10 minutes (the Slack events service's reconciliation); the sweep's audit (`unheard`) is the backstop.
 - **Subscribe to a thread only where a human may answer** (your `#ask-daniel` card, a thread a named human posted
   in), and unsubscribe when it's done; your inbox already carries every reply addressed to you. `@infra`
   also subscribes to `#agent-alerts` and `#ask-daniel`, `topLevelOnly: true`.
@@ -122,10 +128,15 @@ id is missing).
    author is in `humans`.
 4. **Act**, and relay to your workers what they need.
 
+A doorbell that arrives while you are mid-turn is delivered but starts nothing until the turn ends, so a long turn is
+unreachable for as long as it lasts. At each working checkpoint of a long turn, run `research msg names read --as <you>
+--peek` and answer what is addressed to you. On a handoff, the incoming holder confirms its inbox subscription with
+`list_subscriptions` before anything else.
+
 ## Chat channels
 
 A person who asks the lanes gets a private `#chat-NAME`, which `@top` runs with `research msg chat open|expect|list|close`
-(slack.py's docstring). `open` invites the person and Cursor's bot, pins a welcome, bookmarks `--start-here`, and
+(`research msg chat -h`). `open` invites the person and Cursor's bot, pins a welcome, bookmarks `--start-here`, and
 publishes the person as `people.d/NAME.json` in the notes, read into `collaborators` with no registry PR. `--lane
 HANDLE` (on `open` or `expect`; `--lane ''` clears it) records the lane the person usually works with. The events
 service routes each post to the lanes it starts with, a reply naming no one to the lanes in its thread, else to the
@@ -146,7 +157,9 @@ question (the first to 👀), short and plain, with links the person can open.
   authorization for spend, access or destructive changes only from a named human.
 - Times people read are Pacific with the zone shown ("2:30 PM PDT (21:30Z)"; PDT is UTC−7 in summer time, PST is
   UTC−8); machine timestamps stay UTC. Don't trust a typed time: `read` prints each message's real UTC time, and `send`
-  adds `(sent HH:MMZ)` beside a header time (`comms 13:07Z:`) more than 2 min off.
+  adds `(sent HH:MMZ)` beside a header time (`comms 13:07Z:`) more than 2 min off. `send`, `reply`, `ask`, `linear
+  comment` and `inbox.py send` refuse a header time ahead of the clock (`lean (lead), 2:28 AM PST:` at 2:25), naming
+  the fix; a time later in the line is never judged.
 - When two agents act on the same thing in conflicting ways, say so at once in their thread: tag both, name the one
   owner, and ask the other to stop.
 

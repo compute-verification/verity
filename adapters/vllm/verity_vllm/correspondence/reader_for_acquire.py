@@ -8,7 +8,7 @@ identity row (`op_path`, `output_member`, ...), a Program instance row (`name`, 
 WHERE the owning module comes from -- `source`:
 
   correspondence   the `runtime-correspondence/v1` record the frontend emitted into `annotations["correspondence"]` of the Build's request
-                   Program descriptors (`verity_vllm.correspondence.runtime.load_correspondence`; one table per component Program).  A
+                   Program descriptors (`verity_torch.correspondence.runtime.load_correspondence`; one table per component Program).  A
                    Value's module path is the record's owning module (`occurrences[occ].module`, the source module's own vocabulary)
                    mapped to the implementation's `named_modules()` name by the manifest's `wrapper_prefix` (`collector_path`) and
                    `op_path_aliases` -- the SAME mapping the manifest applied to the naming hints.
@@ -20,7 +20,7 @@ Under `correspondence` every module-site Value is CONFIRMED against the record (
 listed `unconfirmed` in the plan -- a finding, not a changed site: the manifest's op_path stands either way, so the plan's content is the
 same under both sources and the plan digest (which excludes the `correspondence` provenance block) says whether anything changed.
 
-The runtime side is `records.runtime_tree.RuntimeTree` (module-tree facts: which modules the runtime HAS; re-exported here for callers).
+The runtime side is `records.runtime_tree.RuntimeTree` (module-tree facts: which modules the runtime HAS).
 """
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from verity_vllm.correspondence.runtime import (
+from verity_torch.correspondence.runtime import (
     NAMESPACE,
     SCHEMA,
     RuntimeCorrespondence,
@@ -38,7 +38,6 @@ from verity_vllm.records.runtime_tree import (
     RUNNER_PATH,
     RuntimeTree,
     runtime_tree_from_paths,
-    runtime_tree_of,
 )
 
 FALLBACK_READ = "the identity row's op_path: required_manifest.split_name(annotations.node_hints)[0] -> collector_path(wrapper_prefix) -> op_path_aliases"
@@ -140,7 +139,7 @@ class AcquireCorrespondence:
             return None                                          # an input of the module: no return slot
         if port == "out":
             return ReturnSlot()
-        if port.isdigit():
+        if port.isdecimal():
             return ReturnSlot(index=int(port))
         if self.owning_module(call) == RUNNER_PATH:
             return ReturnSlot(attr=port)                         # `sampled_token_ids` / `seed` / `splits` of the runner's sample()
@@ -186,4 +185,4 @@ class AcquireCorrespondence:
 
 
 __all__ = ["FALLBACK_READ", "ReturnSlot", "ArgSlot", "AcquireCorrespondence",
-           "RuntimeTree", "RUNNER_PATH", "runtime_tree_of", "runtime_tree_from_paths", "RuntimeCorrespondence"]
+           "RuntimeTree", "RUNNER_PATH", "runtime_tree_from_paths", "RuntimeCorrespondence"]

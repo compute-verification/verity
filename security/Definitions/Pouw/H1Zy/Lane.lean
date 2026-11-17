@@ -9,7 +9,7 @@ import Mathlib.Algebra.GroupWithZero.Nat
 /-!
 # `PouwH1LaneZy_v1{TILE}` on words, at a 32 × 32 leaf over `PouwH1Tile_v1` (trusted)
 
-Lane `l` of a sampled H1 leaf (`verity/ml/protocols/pouw/circuit/h1zy.py`, `PouwH1LaneZy`, `_lane_body`) reads its 4 A
+Lane `l` of a sampled H1 leaf (`verity/protocols/accounting/pouw/prover/circuit/h1zy.py`, `PouwH1LaneZy`, `_lane_body`) reads its 4 A
 rows by row slot and 8 B rows by column slot (`K` s8 codes and an f32 scale each), the leaf's 32 admit bits, the leaf's
 whole z/y record (cell `(i, j)` its s32 z and bf16 y), its committed partials row (`nw` u32 words), the leaf's salt,
 position and roots, and its index, a 16-bit word, and returns `ok`. On its primitives' word views:
@@ -30,7 +30,7 @@ position and roots, and its index, a 16-bit word, and returns `ok`. On its primi
 * `ok` is the `PouwAndBit` tree of the cell check and the `nw` comparisons, unless a high index bit is set.
 
 The dequant (`PouwZyDequant_v2`'s word view, `PouwZyDequant_v1`, three float roundings; `Pouw.H1Zy.zyDequant`, which
-`Accounting.Guarantees.TS.LeafLanesSound` reads) is the parameter `dqW`, and the
+`ResourceAccounting.Guarantees.TS.LeafLanesSound` reads) is the parameter `dqW`, and the
 chain's words the parameter `chain` (`chainOf (h1Chain K)` in `LeafLanesSound`); everything else is stated here. The leaf's `PouwH1Tile_v3` form computes z from the
 chain's words instead of EXACT, and is not stated here.
 -/

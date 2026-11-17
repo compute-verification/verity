@@ -10,7 +10,7 @@ import Proofs.Core.TC.Sound
 /-!
 # The unit boundary: the committed BF16 word
 
-A verification unit starts from `zero_state`, chains its k16 steps (`ChainHolds`), and packs its final state
+A proof block starts from `zero_state`, chains its k16 steps (`ChainHolds`), and packs its final state
 (`pack_relation`: the FP32 word, then `cvt.rn.bf16.f32`). `hopper_unit_bf16` and `ampere_unit_bf16`: every such unit the
 relation accepts commits `cvt_rn_bf16_f32` of the semantics' accumulator, and its FP32 word is that accumulator.
 `pack_sound` and `pack_complete` are the boundary alone.
@@ -54,7 +54,7 @@ theorem ampere_chain_value : ∀ (steps : List (List Nat × List Nat)) (acc : Na
 
 theorem zero_admissible : Admissible (.fin ZERO) := by simp [Admissible, ZERO]
 
-/-- A verification unit on the Hopper pipeline, from `zero_state` to the committed BF16 word: the relation's steps and
+/-- A proof block on the Hopper pipeline, from `zero_state` to the committed BF16 word: the relation's steps and
 boundary accept only `cvt_rn_bf16_f32` of the semantics' accumulator, whose FP32 word is the accumulator itself. -/
 theorem hopper_unit_bf16 (align : Align) (steps : List (List Nat × List Nat × Witness))
     (hin : ∀ s ∈ steps, s.1.length = 16 ∧ s.2.1.length = 16 ∧ (∀ x ∈ s.1, x < 2 ^ 16) ∧ (∀ x ∈ s.2.1, x < 2 ^ 16))

@@ -167,7 +167,7 @@ def topsAt (src : Src) (level : Nat) : Except String Tops := do
     let k := (runs.findIdx? (sameTop t)).getD runs.size
     if k == runs.size then runs := runs.push t
     first := first.push ((runs.extract 0 k).foldl (· + ·.size) 0)
-  pure { rows := runs.flatMap fun t => t.flatMap fun (n, _) => (Firewall.topRows n).toArray,
+  pure { rows := runs.flatMap fun t => t.flatMap fun (n, _) => (ZkServer.topRows n).toArray,
          salts := runs.flatMap fun t => t.map (·.2), first }
 
 /-- A table of `rows` under `salts`, instance `i` reading row `i`. -/

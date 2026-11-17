@@ -32,7 +32,7 @@ amplification is unbounded).
   an accepted run lies in that set at `M ≥ C ε` but with probability at most `(1 − ε)^k`. `wide_egress`, **what bounded
   width buys**: under the count sample one incorrect proof block writing `N` slots shows `2^N` values, so a width bound is
   what the count sample needs, and the width-weighted sample needs none.
-* **Skippable work.** `fan_skips`, **the late cone is necessary**: in a checked population of `N + 1` unit-weight units,
+* **ε_skip work.** `fan_skips`, **the late cone is necessary**: in a checked population of `N + 1` unit-weight units,
   one incorrect proof block (`x := false`) makes every unit's work skippable with no unit lucky, `N + 1` skipped at
   incorrect weight `1`, which is the cone `F = N + 1` (`fan_down`). `late_operand` and `early_operand`, **commit before
   the work coin is necessary**: an operand chosen after the coin `c` zeroes `(x + c) · b` at every coin, and one
@@ -211,7 +211,7 @@ theorem wide_egress (N : ℕ) (a : Fin N → Bool) :
 
 end Wide
 
-/-! ## Skippable work: the late cone, and the operand before the coin -/
+/-! ## ε_skip work: the late cone, and the operand before the coin -/
 
 section Fan
 

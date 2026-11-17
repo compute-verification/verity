@@ -6,8 +6,7 @@ public import Definitions.Core.Partition
 /-!
 # The tile check as a circuit, and what it computes (trusted; L3's statement)
 
-A proof system's accepted run on a tile (`TileGame.good_of_accept`) has to end on a good or blank tile of `τ`. Sampled
-proofs gives less: every sampled proof block of the tile-check Program is correct in the witness `X`, and `X` holds the
+A proof system's accepted run on a tile (`TileGame.good_of_accept`) has to end on a good or blank tile of `τ`. SPOT gives less: every sampled proof block of the tile-check Program is correct in the witness `X`, and `X` holds the
 registered values. L3 is the step between: the tile check computes the good-tile predicate. It is stated here over a
 **tile check** (`TileCheck`), the Program as a core circuit for each unit shape (`Verity.Circuit`, cut into proof blocks
 by a `Verity.Partition`), with
@@ -23,7 +22,7 @@ by a `Verity.Partition`), with
   which is completeness, not L3;
 * `reg sh`, the registered wires, at `rowsOf U u c`: the values unit `u`'s commitment `c` gives them, its activation
   rows, its weight's rows and its tiles' checked words (under hiding, their digests). These are `valueAt`, the values
-  `τ`'s commitment binds. Some are outputs of a unit (a tile's words or digest), so the agreement sampled proofs gives
+  `τ`'s commitment binds. Some are outputs of a unit (a tile's words or digest), so the agreement SPOT gives
   has to cover registered outputs, not only the circuit's inputs (`Verity.Circuit.InputsAgree`);
 * `Collides`: the event outside which the registered values bind the words the circuit computes. It is `False` for the
   plain Program, whose checked words are registered wires. The hiding Program registers a tile by its TurboSHAKE128 leaf
@@ -35,7 +34,7 @@ prover supplies it.
 
 The cap, `TileGood`'s first conjunct, reads only the committed activations; its weight rows, the second, are the check's
 own last conjunct; the words read the circuit's outputs. So L3 is the cap and the words (`TileCheck.Computes`,
-`TileCheck.ComputesCap`, `TileCheck.ComputesWords`). L3 is exact: the Program
+`TileCheck.ComputesInertBound`, `TileCheck.ComputesWords`). L3 is exact: the Program
 recomputes A′, B̃, P_A, P_B, C̃ and U from the anchors and checks no projection, so the tile check has no soundness error
 of its own (L7). `δPearlC` stays TT_OUT's, and a proof system's error stays in its `δzk` (`GGapHidden`).
 
@@ -69,7 +68,7 @@ structure TileCheck (Q R S : Type) where
 
 /-- The registered values of unit `u` in `τ`: its commitment's, and zero for a blank unit, whose tiles are never
 checked. -/
-def TileCheck.valueAt (TC : TileCheck Q R S) (U : Workload) (τ : Transcript) (u : ℕ) :
+def TileCheck.valueAt (TC : TileCheck Q R S) (U : Workload) (τ : Trace) (u : ℕ) :
     (TC.C (U.layout.shape u)).Trace :=
   match τ u with
   | some c => TC.rowsOf U u c
@@ -113,10 +112,10 @@ def TileCheck.Computes (TC : TileCheck Q R S) (P : Protocol Q R S) (TR : TileRul
 debit or cap yet (the replay shortcut), so its check leaves the activations' debit free: this holds of it
 only once a cap unit returns the cap's verdict on a public wire, as under hiding it must, since the verifier never sees
 the activations. -/
-def TileCheck.ComputesCap (TC : TileCheck Q R S) (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) :
+def TileCheck.ComputesInertBound (TC : TileCheck Q R S) (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) :
     Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ (H : Q → R) (s : S) (g : ℕ), g < (TR.tiling U.layout).NT → ∀ (c : Commit) X,
-    TC.Accepts P TR H s U g c X → TR.capOK H s U g c.act
+    TC.Accepts P TR H s U g c X → TR.inertBoundOK H s U g c.act
 
 /-- **L3's words**: an accepted tile's checked words have the reference values on its credited rows, unless the
 registered values fail to bind the circuit's words. -/

@@ -1,4 +1,5 @@
-"""lean-lock: one task per audited Lake package (a `lean-audit.json`, the auditor's fixtures aside: `lean_audit.packages`),
+"""lean-lock: one task per audited Lake package (a `lean-audit.json`, the auditor's fixtures aside: `lean_audit.packages`
+less `lean_module.auditor`),
 which recomputes the records of the guarantees its lock lists from the package's built modules and compares them with the
 committed lock (`runners/lean_lock.py`).
 
@@ -43,7 +44,7 @@ def tasks(root: Path, files: list[str]) -> list[dict]:
     pkgs, owner, _, system, _ = lm.imports(root, files)
     tool = lm.la.tool_files(files)
     out = []
-    for pkg in lm.la.packages(files):
+    for pkg in (p for p in lm.la.packages(files) if not (p + "/").startswith(lm.auditor())):
         cl = closure(root, pkg, pkgs)
         out.append({"id": task_id(pkg), "vars": {"package": pkg},
                     "inputs": sorted({*(f for q in cl for f in lm.la.own_files(q, files)), *tool}),

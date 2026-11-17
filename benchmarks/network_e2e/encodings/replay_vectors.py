@@ -1,4 +1,4 @@
-"""The difftest of the replay step circuit (`verity.protocols.accounting.certifier.verifier.replay_step`) against the replay itself.
+"""The difftest of the replay step circuit (`verity_vllm.compiler.replay_step`) against the replay itself.
 
 `vectors(trace, R=, W=, A=)` replays a trace (`replay.replay` with the trace's own decisions, sync or async scheduling)
 with its scheduler instrumented, and returns each executed step as the step circuit sees it (under async scheduling a
@@ -13,14 +13,14 @@ circuit's state rests on, that a running request holds ⌈computed / B⌉ blocks
 checks `replay_step.reference` on every step that fits the size class (the rest are counted, out of class), and with
 `--circuit` the Definition on them too; with `--EW` each step's `looked` against the lookups the scheduler made (the
 candidates whose `BlockPool.hit` it called), each of whose hits past the pool bound is the pool's; `--fixture N` writes each trace's N consecutive fitting steps with the most
-preemptions, cache hits, admissions and stops (`window`) as the vectors the certifier's test reads
-(`verity/protocols/accounting/certifier/verifier/tests/fixtures/replay_step_vectors.json`).
+preemptions, cache hits, admissions and stops (`window`) as the vectors network attestation's test reads
+(`tests/verity/protocols/resource_accounting/network/verifier/fixtures/replay_step_vectors.json`).
 
 **A served window as the compile slice's input.** `served_window` cuts one window out of a served run's step trace (the
 server's `window` open and close records, `verity_vllm.engine.step_trace`), renumbered from its first step, and
 refuses a window that doesn't open on a drained engine, since the slice's replay starts from the empty one.
 `slice_inputs` gives `compile_slice.CompileSlice_v1`'s inputs for such a window in `compile_slice_smallkv.json`'s
-layout: the statics, the certified arrivals (id, P, O, and cap at AS = 1), the decisions in the scan's order, the
+layout: the statics, the attested arrivals (id, P, O, and cap at AS = 1), the decisions in the scan's order, the
 executed step count and each step's rows (slot, request, kind, start, n). The scheduler (AS) is the engine class's, the
 trace's own unless the class is the sync one (AS = 0), and it refuses a window whose schedule at that AS isn't the
 served one.
@@ -42,7 +42,7 @@ import replay as RP  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[3]
 
-from verity.protocols.accounting.certifier.verifier import replay_step as RS  # noqa: E402
+from verity_vllm.compiler import replay_step as RS  # noqa: E402
 
 
 class _Recorder:

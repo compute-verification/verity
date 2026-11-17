@@ -14,7 +14,7 @@ after one round, samples nothing and opens nothing, with the two-stage design `t
 (`FlockDeploy.sha512`) the nontrivial lemmas of `CompilerKSRegTwo` and `CompilerHeadlineTwo`.
 
 * `sksLTwo`'s committed boundary trace opens nothing (`sksL_regVal`), so its one proof block is incorrect there at any
-  interior (`toy_wrongInAt`), the footprint is at least `1` in the one cell, and the design's `P̄_a` is `0` at every
+  interior (`toy_incorrectInAt`), the footprint is at least `1` in the one cell, and the design's `P̄_a` is `0` at every
   interior: the footprint is outside `M̄_0` (`sksLTwo_notM`).
 * Its sessions make no call, so `B_conf,2` finds nothing (`sksLTwo_bconfTwo`), and with `ε_reg = 0` (`sksL_εreg`) the
   committed form's error at two stages is `0` (`sksLTwo_εregTwo`).
@@ -27,14 +27,14 @@ after one round, samples nothing and opens nothing, with the two-stage design `t
 namespace Claims.Witness.SamplingGeneric
 
 open Claims.SamplingGeneric
-open Claims.Sampling (wrongInAt footprintAt)
+open Claims.Sampling (incorrectInAt footprintAt)
 open Claims.Witness.Sampling (ownLog_noHash toyStmt toyPart toyPart_blocks)
 
 /-- At boundary values that commit nothing at the input, the toy's proof block is incorrect at any interior values. -/
-theorem toy_wrongInAt {val : ℕ → Option Bool} (hv : val 0 = none) (ι : ℕ → Bool) :
-    0 ∈ wrongInAt toyStmt toyPart toyPart val 0 0 ι := by
+theorem toy_incorrectInAt {val : ℕ → Option Bool} (hv : val 0 = none) (ι : ℕ → Bool) :
+    0 ∈ incorrectInAt toyStmt toyPart toyPart val 0 0 ι := by
   classical
-  unfold wrongInAt
+  unfold incorrectInAt
   refine Finset.mem_filter.2 ⟨by decide, ?_⟩
   rintro ⟨u, r, hu, hr, hc⟩
   rw [toyPart_blocks] at hu hr
@@ -46,7 +46,7 @@ theorem toy_wrongInAt {val : ℕ → Option Bool} (hv : val 0 = none) (ι : ℕ 
 
 theorem toy_footprintAt {val : ℕ → Option Bool} (hv : val 0 = none) (ι : ℕ → ℕ → Bool) :
     1 ≤ footprintAt toyStmt toyPart toyPart val ι 0 0 :=
-  Finset.card_pos.2 ⟨0, toy_wrongInAt hv (ι 0)⟩
+  Finset.card_pos.2 ⟨0, toy_incorrectInAt hv (ι 0)⟩
 
 /-- `sksLTwo`'s committed boundary trace's footprint is outside `M̄_0` at every interior. -/
 theorem sksLTwo_notM {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) {Ω : Type}

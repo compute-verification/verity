@@ -47,8 +47,8 @@ import Std.Tactic.BVDecide.Normalize.Prop
 /-!
 # The rebuilt sample: one value per equivalence class
 
-`Flock.JsonParse.parse` builds an object's tree in the order its keys arrived, so two samples that `drawEq` passes on (`JsonEquiv`: the same fields, whatever their order) can be different terms
-(`FlockDeploy.KS.drawEq_ne`). Where the verifier keeps a sample, the record's (`Exec.recordDraw`) and the statement's
+`Flock.JsonParse.parse` builds an object's tree in the order its keys arrived, so two samples that `sampleEq` passes on (`JsonEquiv`: the same fields, whatever their order) can be different terms
+(`FlockDeploy.KS.sampleEq_ne`). Where the verifier keeps a sample, the record's (`Exec.recordDraw`) and the statement's
 (`Raw.ins`), it keeps `Flock.norm` of what it parsed: every object rebuilt by inserting its fields into an empty map,
 and that map's fields into another. So:
 

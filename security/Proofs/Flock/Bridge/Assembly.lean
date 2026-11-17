@@ -79,7 +79,7 @@ theorem _root_.Flock.Bridge.assemblyTargetC : Bridge.AssemblyTargetC := by
   have hsub : (Claims.Sampling.faulty Claims.Sampling.sha512Msg Cd (Bridge.stmtOf P κ (.subset kd) desc q roots)
       (Bridge.partOf P κ (Bridge.nsOf desc qr)) (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr)).filter
         (· < n) ⊆
-      (wrongRegZc execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb
+      (incorrectRegZc execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb
         (fun g o => Bridge.canonAt rows κ g (vb.bit (vb.val o) g) (vb.val o) o.2.2) (reg σ) Xr).map
         Fin.valEmbedding := by
     classical
@@ -87,7 +87,7 @@ theorem _root_.Flock.Bridge.assemblyTargetC : Bridge.AssemblyTargetC := by
     obtain ⟨hv, hlt⟩ := Finset.mem_filter.1 hv
     refine Finset.mem_map.2 ⟨⟨v, hlt⟩, ?_, rfl⟩
     by_contra hu
-    obtain ⟨-, op, hop⟩ := not_not.1 (mt (mem_wrongRegZc _ _ _ _ _ _).2 hu)
+    obtain ⟨-, op, hop⟩ := not_not.1 (mt (mem_incorrectRegZc _ _ _ _ _ _).2 hu)
     refine hF P vb.pos (fun o g => vb.bit (vb.val o) g) id vb.com (vb.cs (reg σ))
       (fun g o => Bridge.canonAt rows κ g (vb.bit (vb.val o) g) (vb.val o) o.2.2)
       Claims.Sampling.sha512Msg Cd roots Xr κ ⟨v, hlt⟩ hκin ⟨op, hop⟩
@@ -97,7 +97,7 @@ theorem _root_.Flock.Bridge.assemblyTargetC : Bridge.AssemblyTargetC := by
     exact hbit.symm.trans (hcan.1 b hb)
   have hcard : ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ (.subset kd) desc q roots)
       (Bridge.partOf P κ (Bridge.nsOf desc qr)) (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr) →
-      min K₀ (n - kd + 1) ≤ (wrongRegZc execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb
+      min K₀ (n - kd + 1) ≤ (incorrectRegZc execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb
         (fun g o => Bridge.canonAt rows κ g (vb.bit (vb.val o) g) (vb.val o) o.2.2) (reg σ) Xr).card := fun hrel =>
     (hC P _ hns kd K₀ hkd1 hkd _ _ κ desc q roots _ hrel).trans
       ((Finset.card_le_card hsub).trans (Finset.card_map _).le)

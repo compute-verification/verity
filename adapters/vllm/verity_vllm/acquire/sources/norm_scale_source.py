@@ -13,7 +13,7 @@ norm computes it (`query.norm_scales.site_of`):
 * `aten` (`RsqrtF32_v1`, an ATen-chain norm): the output of `torch.rsqrt` inside the module.
 
 Outside a committed step, or outside the manifest's norm modules, the installed kernels run.  The tapped kernels compute exactly the
-installed kernels' outputs and write every row's scale, which equals the circuit's (`properties.norm_tap_exactness`).  Every patch goes
+installed kernels' outputs and write every row's scale, which equals the circuit's (`tests.properties.norm_tap_exactness`).  Every patch goes
 through `engine.hooks` and `uninstall` undoes it.  A norm kernel of another kind inside a norm module is a collector error.
 """
 from __future__ import annotations
@@ -243,7 +243,7 @@ class NormScaleSource:
                  "tensors": self.stats["tensors"], "kinds": dict(self.stats["by_kind"]), "errors": self.stats["errors"],
                  "evidence": (f"norm-scale source: `<norm module>/{NS.MEMBER}` of {len(self.modules)} norm modules (sites {', '.join(self.kinds)}); "
                               f"tap build {self.so_path} (sha256 {self.stats['so_sha256']}), Triton source {self.stats['triton_source']}; outputs "
-                              "bit-identical to the installed kernels and every scale == the IR model's: verity_vllm.properties.norm_tap_exactness")}]
+                              "bit-identical to the installed kernels and every scale == the IR model's: tests.properties.norm_tap_exactness")}]
 
 
 def attach(com: Any, so: str | None, manifest: Mapping[str, Any] | None, required_classes: tuple[str, ...], *,

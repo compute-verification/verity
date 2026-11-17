@@ -52,7 +52,7 @@ def stepColSum (acc : Fin 32 → Bool) (a b : Fin 32 → Fin 8 → Bool) : ℕ :
 
 /-- `forms.compress_columns`' contract, not its gates: the low `W` bits of the columns' weighted sum. The lowering's
 constant folding, Wallace passes and final ripple are not restated here; that they compute this is part of what
-`Accounting.TS.Lanes.LaneLowers` takes. -/
+`ResourceAccounting.TS.Lanes.LaneLowers` takes. -/
 def compressCols (W S : ℕ) : Fin W → Bool := fun i => S.testBit i.val
 
 /-- **`BlackwellS8ImmaDot32_v2`'s lowering** (`integer.step_s8_bits` at `BLACKWELL_SM120_S8_M16N8K32`, `.satfinite`):

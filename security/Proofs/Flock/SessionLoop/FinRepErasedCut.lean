@@ -107,7 +107,7 @@ def FinPiop : Prop :=
           (FlockComplete.MaskRank.masksOf (Masked.stsOf x))[k / 2]!).run
           (_root_.Flock.Transcript.init #[] (spec.domain spec.tables[k / 2]! (k % 2)).toUTF8)).go l =
           (.ok (p, tr), l') ∧ l'.size = Masked.repBase x (k + 1)) →
-  ∀ {tb : _root_.Flock.Firewall.Finish.Tab} {hi : Array ByteArray} {q : _root_.Flock.Firewall.Finish.RepIn}
+  ∀ {tb : _root_.Flock.ZkServer.Finish.Tab} {hi : Array ByteArray} {q : _root_.Flock.ZkServer.Finish.RepIn}
     {f : ByteArray}, RepAt L₀.draws src x w (ν, t) ((m₀, ρ₀) :: ops) spec (2 * j.val + r.val) tb hi q f →
   ∀ {extras : Array _root_.Flock.Claim},
     (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.extra (viewPoints x ops spec) = .ok extras →
@@ -162,7 +162,7 @@ def FinFc : Prop :=
           (FlockComplete.MaskRank.masksOf (Masked.stsOf x))[k / 2]!).run
           (_root_.Flock.Transcript.init #[] (spec.domain spec.tables[k / 2]! (k % 2)).toUTF8)).go l =
           (.ok (p, tr), l') ∧ l'.size = Masked.repBase x (k + 1)) →
-  ∀ {tb : _root_.Flock.Firewall.Finish.Tab} {hi : Array ByteArray} {q : _root_.Flock.Firewall.Finish.RepIn}
+  ∀ {tb : _root_.Flock.ZkServer.Finish.Tab} {hi : Array ByteArray} {q : _root_.Flock.ZkServer.Finish.RepIn}
     {f : ByteArray}, RepAt L₀.draws src x w (ν, t) ((m₀, ρ₀) :: ops) spec (2 * j.val + r.val) tb hi q f →
   ∀ {extras : Array _root_.Flock.Claim},
     (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.extra (viewPoints x ops spec) = .ok extras →
@@ -187,7 +187,7 @@ def FinFc : Prop :=
     ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t j.val).rep r.val).masked
         (_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0).fc =
       q.vals[(_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0).fc]! +
-        (_root_.Flock.Firewall.Finish.padsOf q.draws).toC.h[(_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog
+        (_root_.Flock.ZkServer.Finish.padsOf q.draws).toC.h[(_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog
           tb.sch.k0).fc]!
 
 set_option maxHeartbeats 1000000 in
@@ -223,26 +223,26 @@ theorem finRepErased_step_cut (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _r
     (hex : (FlockDeploy.tabsOf (Masked.stsOf x))[k / 2]!.extra (viewPoints x ops spec) = .ok extras)
     {ic : FlockComplete.InnerCommit} {l : Array Msg}
     (hic : (padsView vs x w ν t ops schs k).go l = (.ok ic, l)) (hl : l.size = Masked.repBase x k)
-    {tb : _root_.Flock.Firewall.Finish.Tab} {hi : Array ByteArray} {q : _root_.Flock.Firewall.Finish.RepIn}
+    {tb : _root_.Flock.ZkServer.Finish.Tab} {hi : Array ByteArray} {q : _root_.Flock.ZkServer.Finish.RepIn}
     {f : ByteArray} (hRep : RepAt L₀.draws src x w (ν, t) ((m₀, ρ₀) :: ops) spec k tb hi q f)
-    {ic' : _root_.Flock.Firewall.Finish.InnerCommit}
-    (hic' : (_root_.Flock.Firewall.Finish.innerCommitP (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash)
-        (_root_.Flock.Firewall.Finish.padsOf q.draws) (_root_.Flock.Firewall.Finish.saltAt q.draws.salts) :
-        V _root_.Flock.Firewall.Finish.InnerCommit) = .ok ic')
+    {ic' : _root_.Flock.ZkServer.Finish.InnerCommit}
+    (hic' : (_root_.Flock.ZkServer.Finish.innerCommitP (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash)
+        (_root_.Flock.ZkServer.Finish.padsOf q.draws) (_root_.Flock.ZkServer.Finish.saltAt q.draws.salts) :
+        V _root_.Flock.ZkServer.Finish.InnerCommit) = .ok ic')
     {p : _root_.Flock.Zk.ZkProof} {tr : _root_.Flock.Transcript}
-    (hrun : (((_root_.Flock.Firewall.Finish.repFwC
+    (hrun : (((_root_.Flock.ZkServer.Finish.repFwC
         (FlockComplete.asksCut (fun k i => Masked.slotAt (finCoins x ops) k i) (refK x))
         (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash) tb.st tb.sch tb.tPad (k % 2)
         (spec.domain spec.tables[k / 2]! (k % 2)).toUTF8 tb.g tb.cm0.toC
-        (_root_.Flock.Firewall.Finish.claimsOf q.xs) (_root_.Flock.Firewall.Finish.padsOf q.draws).toC ic'.toC q.vals
-        tb.extra tb.lanePad (fun l => _root_.Flock.Firewall.Finish.saltAt (q.hiSalts.getD (l - 1) ByteArray.empty))).run
+        (_root_.Flock.ZkServer.Finish.claimsOf q.xs) (_root_.Flock.ZkServer.Finish.padsOf q.draws).toC ic'.toC q.vals
+        tb.extra tb.lanePad (fun l => _root_.Flock.ZkServer.Finish.saltAt (q.hiSalts.getD (l - 1) ByteArray.empty))).run
         (_root_.Flock.Transcript.init #[] (spec.domain spec.tables[k / 2]! (k % 2)).toUTF8)).go l).1 =
       .ok (p, tr)) :
     ∃ p' l', (viewRep vs x w ν t m₀ ρ₀ ops spec schs cms k extras ic).go l = (.ok (p', tr), l') ∧
       FlockComplete.eraseZ p' = FlockComplete.eraseZ p := by
   have hmk : ∀ i < (_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0).zp 64,
       ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t (k / 2)).rep (k % 2)).masked i =
-        q.vals[i]! + (_root_.Flock.Firewall.Finish.padsOf q.draws).toC.h[i]! := by
+        q.vals[i]! + (_root_.Flock.ZkServer.Finish.padsOf q.draws).toC.h[i]! := by
     have hA := admits_of_finCtx L₀ src (realOf src) wk hServe hF
     have hjk : k / 2 < Masked.jOf x := by
       have hx : Masked.Live x := Masked.live_of hsc hR
@@ -388,7 +388,7 @@ theorem finRepErased_of_cut (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _roo
             l'.size = Masked.repBase x (k' + 1) :=
       fun k' hk' => ih k' hk' (by omega)
     obtain ⟨tb, hi, q, hRep⟩ := proofsOf_at hp (by rw [hrs]; exact hk)
-    obtain ⟨ic', p, tr, hic', hfw, -⟩ := _root_.Flock.Firewall.Finish.proofFile_ok hRep.2.2
+    obtain ⟨ic', p, tr, hic', hfw, -⟩ := _root_.Flock.ZkServer.Finish.proofFile_ok hRep.2.2
     have hcut := finRepCut L₀ src (realOf src) wk x w hsc ν t κ m₀ ρ₀ ops hF s0 spec hsx k hk tb hi q _ hRep ic' p tr
       hic' hfw l hl
     obtain ⟨p', l', hv, -⟩ := finRepErased_step_cut vs L₀ src wk x w hsc hR hServe hS hS0 hL0 hE hc hPiop hFc hF

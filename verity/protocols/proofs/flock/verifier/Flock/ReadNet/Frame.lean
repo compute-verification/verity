@@ -1,5 +1,5 @@
 /-
-`FrameV3Read_v1{D, SCHEMA}` on the verifier's builder (`Flock.HmNets`), as `verity/ml/commitments/gates/frame_v3.py`
+`FrameV3Read_v1{D, SCHEMA}` on the verifier's builder (`Flock.HmNets`), as `verity/commitments/gates/frame_v3.py`
 builds it, row for row: the leaf part (`Frame.leafHash`, `FrameV3Leaf_v1{B, SCHEMA}`), a node part a level
 (`Frame.nodeHash`, `FrameV3Node_v1{B}`) and the comparison with the root (`Frame.eqDigest`, `LmsEqual_v1{N = 64}`), each
 a traced Definition whose ANDs are `HmNets.and`s in Python's order, and the read's body (`frameWith`), which takes its

@@ -17,7 +17,7 @@ writes, connects), or refuses by its own check after a parse that left words for
 
 A mention is not a command line, so these pass: `research run` without `--`; a chain of subcommand words, alone or
 before one placeholder (`research tele SUBCOMMAND`), unless the CLI has no such subcommand, or no runner of the name a
-`verity bench` or `verity demo` is given (a directory that moved keeps no command under its old name); outside a code
+`verity bench` or `verity calibrate` is given (a directory that moved keeps no command under its old name); outside a code
 block, a span that leaves out a required argument or a flag's value (`research status --also`); and an upper-case
 placeholder (`RUN`, `NAME`) the CLI's refusal names back. KNOWN lists the command lines that didn't parse when this test
 landed, each with its owner (the handle whose `owns` covers the file) and why; it only shrinks, and an entry this tree no
@@ -51,7 +51,6 @@ KNOWN = {
     ("tools/research/README.md", "research keeper set NAME --on NODE"):
         "infra: names set, stop and status at once, and `set` takes its command after `--`",
     ("tools/research/src/research/slack.py", "research msg router"): "comms: a subcommand to come, named as one",
-    ("verity/protocols/compose/verifier/remote/README.md", "verity verify proof"): "soundness: a command to come, named as one",
     ("verity/protocols/compose/verifier/remote/README.md", "verity verify remote"): "soundness: a command to come, named as one",
 }
 
@@ -404,7 +403,7 @@ def judge(r: dict) -> str | None:
     if any(re.search(rf"(?<![\w-]){re.escape(t)}(?![\w-])", why) for t in a[1:] if PLACEHOLDER.fullmatch(t)):
         return None
     rest = list(itertools.dropwhile(WORD.fullmatch, a[1:]))
-    # `verity bench|demo` lists its runners' names to refuse one it has no directory for, and to say it was given none
+    # `verity bench|calibrate` lists its runners' names to refuse one it has no directory for, and to say it was given none
     unknown = r"invalid choice|unknown command|no command|no such|has no run" + ("|NAME is one of" if len(a) > 2 else "")
     if (not rest or rest == [rest[0]] and PLACEHOLDER.fullmatch(rest[0])) and not re.search(unknown, why):
         return None
@@ -476,8 +475,8 @@ def test_a_verdict_reads_the_tree_alone(tmp_path):
     (tmp_path / "refuses.py").write_text("import sys\nopen(sys.argv[1]).read()\nsys.exit('none of its slots is within these cores')\n")
     (tmp_path / "bad.py").write_text("import sys\nsys.exit('bad: no such option')\n")
     probe = "".join(json.dumps({"file": "-", "line": 0, "argv": a, "block": True}) + "\n" for a in (
-        ["tools/verity/check/check.py", "--record", "--on", "auto", "--pool", "research"],
-        ["tools/verity/check/check.py", "--agreement-files"], ["tools/verity/check/check.py", "--preflight"],
+        ["tools/check/check.py", "--record", "--on", "auto", "--pool", "research"],
+        ["tools/check/check.py", "--agreement-files"], ["tools/check/check.py", "--preflight"],
         ["research", "notes", "sync", "--path", "kb"], [str(tmp_path / "refuses.py"), str(tmp_path / "slots")],
         [str(tmp_path / "bad.py")]))
     bare = {"PATH": "/usr/bin:/bin", "HOME": str(tmp_path),

@@ -87,9 +87,9 @@ namespace Claims.ZKServer
 namespace Bind
 
 open _root_.Flock (F128 Transcript TMW)
-open _root_.Flock.Firewall.Frame (Cfg Masker)
-open _root_.Flock.Firewall.Drive (Step OpenM stepAsks openStep)
-open _root_.Flock.Firewall.Finish (repOpening repPiop commitFw claimsOf ringSwitchP_eq switchVec)
+open _root_.Flock.ZkServer.Frame (Cfg Masker)
+open _root_.Flock.ZkServer.Drive (Step OpenM stepAsks openStep)
+open _root_.Flock.ZkServer.Finish (repOpening repPiop commitFw claimsOf ringSwitchP_eq switchVec)
 open FlockSoundness.Refine (Frame encs)
 open FlockComplete (PS asksCut ringSwitchCut)
 open FlockComplete.Replay (bind_go liftTM_ok)
@@ -100,12 +100,12 @@ open Loop
 /-- **The loop schedules the opening's binding at its own target** (`sched_binding`): the target is `rsTarget` at the
 schedule's coins past the algebraic phase, over the table's switched vectors of its zerocheck's and lincheck's claims,
 which are at the points of the algebraic phase's coins (`repPiop_rec`), and the extra claims. -/
-theorem sched_openBind {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
+theorem sched_openBind {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray} {cr : Array (Array F128)} {alg sched : Array (ByteArray × ℕ)}
-    (hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom =
+    (hal : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) dom =
       .ok alg)
     (hs : schedSoFar t rep dom xs hi cr = .ok sched) (hdom : dom.size < 2 ^ 64)
-    (hdg : t.st.digest.size < 2 ^ 64) (hcn : (_root_.Flock.Firewall.Finish.flat t.cm0.cap).size < 2 ^ 64)
+    (hdg : t.st.digest.size < 2 ^ 64) (hcn : (_root_.Flock.ZkServer.Finish.flat t.cm0.cap).size < 2 ^ 64)
     (hm : t.st.m < 2 ^ 64) (hmk : t.st.merkle = _root_.Flock.MerkleScheme.hm96Sha512) (hx : xs.size + 2 < 2 ^ 64)
     (hk : 1 ≤ t.sch.k0) (hn : t.sch.n < 2 ^ 62) (hq : ∀ i, (t.sch.levels.getD i default).q < 2 ^ 63)
     (hn0 : t.sch.n ≠ 0) (hcr : cr.size = alg.size + (xs.size + 2) + 1) (hm14 : 14 ≤ t.st.m) {p : ℕ}
@@ -145,7 +145,7 @@ theorem sched_openBind {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom :
     (by intro h0; rw [h0] at hlenF; simp at hlenF)
   have hna : r.1.1.2.2.size = xs.size + 2 := by
     have := Count.piop_na (cr.extract 0 alg.size) t.st (_root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0)
-      (_root_.Flock.Firewall.Finish.flat t.cm0.cap) ByteArray.empty (claimsOf xs) (fun _ => 0) hdg hcn (by decide) hm _
+      (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) ByteArray.empty (claimsOf xs) (fun _ => 0) hdg hcn (by decide) hm _
       (Sched.trAlike_init dom hdom) #[]
     rw [hp] at this
     have h' : r.1.1.2.2.size = (claimsOf xs).size + 2 := this
@@ -181,7 +181,7 @@ end Bind
 
 open Claims Claims.ZKMal
 open _root_.Flock (V F128 SessionSpec)
-open _root_.Flock.Firewall.Finish (Tab)
+open _root_.Flock.ZkServer.Finish (Tab)
 open FlockSoundness.Refine (Frame encs)
 
 namespace LeanRelease
@@ -195,7 +195,7 @@ theorem unrefused_open (T : ZKMal.CoinLayer.TableData)
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
     (real : Msg → Flock.Wit →
       (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
-      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+      ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (wk : (ofLoop T L₀ real).toSrv.Worker) (x : Msg) (w : Flock.Wit) (hx : Masked.Live x) (hSv : Serves x)
     (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
     (κ : (ofLoop T L₀ real).toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) (hl : ops.length ≤ refK x)
@@ -207,7 +207,7 @@ theorem unrefused_open (T : ZKMal.CoinLayer.TableData)
       (ops.map fun p => (ZKMal.CoinLayer.session loopNr T).decOf p.2)) ops.length := by
   obtain ⟨s0, spec, hsx⟩ := Masked.setupOf_of_pos (lt_of_le_of_lt (Nat.zero_le _) hj)
   obtain ⟨y⟩ := hx.2 j hj
-  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j + r) / 2]!.m = .ok (y.sch, y.tPad) := by
+  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j + r) / 2]!.wideLeaf (Masked.stsOf x)[(2 * j + r) / 2]!.m = .ok (y.sch, y.tPad) := by
     rw [show (2 * j + r) / 2 = j by omega, getElem!_pos (Masked.stsOf x) j hj]
     exact y.hz
   have Sq := Masked.slots_order hx hsx hj hr2
@@ -328,7 +328,7 @@ theorem runCut_openBody {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.
   have hk6 := hwf.hk6
   have hkm := hwf.hk
   have hst : (stsOf x)[j.val]! = stAt x j := getElem!_pos _ _ _
-  have hz : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.m =
+  have hz : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((zkTab x j).sch, (zkTab x j).tPad) := by
     rw [show (2 * j.val + r.val) / 2 = j.val by omega, hst]
     exact (zkTab x j).hz
@@ -422,7 +422,7 @@ namespace Claims.ZKServer
 
 open Claims Claims.ZKMal
 open _root_.Flock (V F128 SessionSpec)
-open _root_.Flock.Firewall.Finish (Tab)
+open _root_.Flock.ZkServer.Finish (Tab)
 open FlockSoundness.Refine (Frame encs)
 
 namespace Loop
@@ -505,7 +505,7 @@ theorem enc_openBind (vs : finS.SwVals) (w : Flock.Wit) {x : Msg} (hx : Masked.L
   have hlv : schs[j.val]!.1.levels.getD 0 default = Masked.lv0 x j := by
     rw [hschs j]
     try rfl
-  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
+  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((Masked.zkTab x j).sch, (Masked.zkTab x j).tPad) := by
     rw [Masked.stsOf_half]
     exact (Masked.zkTab x j).hz
@@ -568,11 +568,11 @@ theorem openBind_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
         zc lc ∧
       T = FlockComplete.rsTarget (fun p e => (wordsAt x (ops.map fun p => CoinLayer.rd p.2) p)[e]!)
         (Masked.rankSlot x j.val r.val)
-        (fun k => _root_.Flock.Firewall.Finish.switchVec tr.g
-          (_root_.Flock.abcClaims tr.st.m tr.st.kLog zc lc ++ _root_.Flock.Firewall.Finish.claimsOf
-            (_root_.Flock.Firewall.Drive.extras (Masked.stAt x j) (_root_.Flock.Firewall.Drive.linkPoints
+        (fun k => _root_.Flock.ZkServer.Finish.switchVec tr.g
+          (_root_.Flock.abcClaims tr.st.m tr.st.kLog zc lc ++ _root_.Flock.ZkServer.Finish.claimsOf
+            (_root_.Flock.ZkServer.Drive.extras (Masked.stAt x j) (_root_.Flock.ZkServer.Drive.linkPoints
               (Masked.stAt x j) (wordsAt x (ops.map fun p => CoinLayer.rd p.2) 0))))[k]!)
-        ((_root_.Flock.Firewall.Drive.extras (Masked.stAt x j) (_root_.Flock.Firewall.Drive.linkPoints
+        ((_root_.Flock.ZkServer.Drive.extras (Masked.stAt x j) (_root_.Flock.ZkServer.Drive.linkPoints
           (Masked.stAt x j) (wordsAt x (ops.map fun p => CoinLayer.rd p.2) 0))).size + 2) ∧
       (ofLoop Masked.dataE L₁ real).release x (ν, t) ((m₀, ρ₀) :: ops) false v =
         0 :: (encs (openBind T (FlockComplete.flat tr.cm0.toC.cap)) ++ (Frame.sq 2 tr.sch.n).enc) := by
@@ -583,7 +583,7 @@ theorem openBind_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
   have hq2 : 2 * j.val + r.val < spec.repStreams.size := by rw [FlockDeploy.repStreams_size, hspec]; omega
   have hst : (Masked.stsOf x)[(2 * j.val + r.val) / 2]! = Masked.stAt x j := Masked.stsOf_half x j r
   have hstj : (Masked.stsOf x)[j.val]! = Masked.stAt x j := getElem!_pos (Masked.stsOf x) j.val hj
-  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
+  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((Masked.zkTab x j).sch, (Masked.zkTab x j).tPad) := by
     rw [hst]
     exact (Masked.zkTab x j).hz
@@ -627,19 +627,19 @@ theorem openBind_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     have e := wordsAt_size x ops (s := ops.length) (p := 0) hpos le_rfl
     rw [List.take_length] at e
     rw [e, hl0, Nat.min_eq_left hpc]
-  have hXS : (_root_.Flock.Firewall.Drive.extras (Masked.stAt x j) (_root_.Flock.Firewall.Drive.linkPoints
+  have hXS : (_root_.Flock.ZkServer.Drive.extras (Masked.stAt x j) (_root_.Flock.ZkServer.Drive.linkPoints
       (Masked.stAt x j) (wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2) 0))).size =
       spec.points * (Masked.stAt x j).regions.size := by
     rw [Count.extras_size, Count.linkPoints_size, hW0, hmp', Nat.mul_div_cancel _ hmp0]
     exact Nat.mul_comm _ _
   obtain ⟨-, hdom', hxr, -⟩ := sizesOk_at (sizesOk_of_serves hSv s0 spec _ hsx) hq2
   rw [hst] at hxr
-  have hXb : (_root_.Flock.Firewall.Drive.extras (Masked.stAt x j) (_root_.Flock.Firewall.Drive.linkPoints
+  have hXb : (_root_.Flock.ZkServer.Drive.extras (Masked.stAt x j) (_root_.Flock.ZkServer.Drive.linkPoints
       (Masked.stAt x j) (wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2) 0))).size + 2 < 2 ^ 64 := by
     rw [Count.extras_size]
     have := Nat.mul_le_mul_left (Masked.stAt x j).regions.size
       ((Loop.linkPoints_size_le (Masked.stAt x j) (wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2) 0)).trans
-        (show _ ≤ _root_.Flock.Firewall.Frames.COIN_MAX by rw [hW0]; exact hpc))
+        (show _ ≤ _root_.Flock.ZkServer.Frames.COIN_MAX by rw [hW0]; exact hpc))
     omega
   -- the located round
   obtain ⟨NR, hNd⟩ : ∃ NR, NR = FlockComplete.piopRoundsZk spec (Masked.stsOf x)[(2 * j.val + r.val) / 2]! +
@@ -708,7 +708,7 @@ theorem openBind_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
   have hmkt : tb.st.merkle = _root_.Flock.MerkleScheme.hm96Sha512 := by rw [hts']; exact hmk
   have hcc : ∀ p, p < c'.order.size → c'.order[p]! < c'.h.size := by
     rw [hc']
-    exact Claims.ZKServer.ofDraws_order _ _ _
+    exact Claims.ZKServer.ofSamples_order _ _ _
   have hAA : alg.size = A := by
     rw [(Ranked.alg_cnt (by rw [htm]; omega) (by rw [htk]; omega) hmb hal).1, htm, htk, hAd]
   -- past the ring switch the frame is outside every masked phase, the algebraic phase done
@@ -733,8 +733,8 @@ theorem openBind_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
   obtain ⟨hT1, hT2, -, -, -, hcapR⟩ := Count.real_tabAlike hRT hph0 hre'
   have hs'' : schedSoFar tr ((2 * j.val + r.val) % 2)
       (spec.domain (spec.tables[(2 * j.val + r.val) / 2]!) ((2 * j.val + r.val) % 2)).toUTF8
-      (_root_.Flock.Firewall.Drive.extras (Masked.stsOf x)[(2 * j.val + r.val) / 2]!
-        (_root_.Flock.Firewall.Drive.linkPoints (Masked.stsOf x)[(2 * j.val + r.val) / 2]!
+      (_root_.Flock.ZkServer.Drive.extras (Masked.stsOf x)[(2 * j.val + r.val) / 2]!
+        (_root_.Flock.ZkServer.Drive.linkPoints (Masked.stsOf x)[(2 * j.val + r.val) / 2]!
           (wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2) 0))) hir
       ((Array.range (a + 1)).map fun q =>
         wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2) (i + 1 - (a + 1) + q + 1)) = .ok sched' := by
@@ -821,7 +821,7 @@ theorem release_sched_openBind_pf (vs : Loop.finS.SwVals) (L₀ : LeanRelease Fl
   have hq2 : 2 * j.val + r.val < spec.repStreams.size := by rw [FlockDeploy.repStreams_size, hspec]; omega
   have hst : (Masked.stsOf x)[(2 * j.val + r.val) / 2]! = Masked.stAt x j := Masked.stsOf_half x j r
   have hstj : (Masked.stsOf x)[j.val]! = Masked.stAt x j := getElem!_pos (Masked.stsOf x) j.val hj
-  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
+  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((Masked.zkTab x j).sch, (Masked.zkTab x j).tPad) := by
     rw [hst]
     exact (Masked.zkTab x j).hz
@@ -870,8 +870,8 @@ theorem release_sched_openBind_pf (vs : Loop.finS.SwVals) (L₀ : LeanRelease Fl
     have hsw := Loop.switch_sv vs hR hx hsx hL0 ν t ops hpos hlt.le hcs j r hre hst' hpts (k := 0) (by omega) hN0
       hext
     rw [hTL, hTR, hsw.1]
-    have hCM : _root_.Flock.Firewall.Frames.COIN_MAX = 65536 := rfl
-    have hW : ∀ p e, p < ops.length → e < min (loopNr x p) _root_.Flock.Firewall.Frames.COIN_MAX →
+    have hCM : _root_.Flock.ZkServer.Frames.COIN_MAX = 65536 := rfl
+    have hW : ∀ p e, p < ops.length → e < min (loopNr x p) _root_.Flock.ZkServer.Frames.COIN_MAX →
         (wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2) p)[e]! =
           Masked.slotAt (Loop.finS.pad (K := refK x) cs) p e := by
       intro p e hp he

@@ -34,8 +34,8 @@ switch's:
 namespace Claims.ZKServer.Count
 
 open _root_.Flock (V F128 Transcript TMW liftTM)
-open _root_.Flock.Firewall.Drive (Step OpenM stepAsks)
-open _root_.Flock.Firewall.Finish (squeezeP sampleP sampleVecP sampleKP LP LigState liftT)
+open _root_.Flock.ZkServer.Drive (Step OpenM stepAsks)
+open _root_.Flock.ZkServer.Finish (squeezeP sampleP sampleVecP sampleKP LP LigState liftT)
 
 /-- A step program's answers so far. -/
 abbrev Hist := List (Array F128)
@@ -320,18 +320,20 @@ theorem spw_getThe_bind {β : Type} {R : β × Flock.Transcript × Got → Hist 
     {t : Flock.Transcript} {got : Got} {hs : Hist} (h : SPW (fun r => R (r.1.1, r.1.2, r.2)) (((f got).run t).run got) hs) :
     SPW (fun r => R (r.1.1, r.1.2, r.2)) (((getThe Got >>= f).run t).run got) hs := h
 
-open _root_.Flock.Firewall.Finish (sendMsg powP) in
+variable {wideLeaf : Bool}
+
+open _root_.Flock.ZkServer.Finish (sendMsg powP) in
 /-- **Where the masked Ligerito ends, its `ρ₀, ρ₁` answers are independent**: after `z`'s, `β₀`'s and the `k₀` lanes'
 asks from the answers' position `m`, the prover stops at `ρ₀, ρ₁` dependent. -/
 theorem ligeritoPZk_rho (coins : Got) (ms : _root_.Flock.MerkleScheme) (sch : _root_.Flock.Schedule) (T : F128)
-    (cm0 : _root_.Flock.Firewall.Finish.Commit) (t b : Array F128) (lay : _root_.Flock.Zk.PadLayout) (h : Array F128)
+    (cm0 : _root_.Flock.ZkServer.Finish.Commit) (t b : Array F128) (lay : _root_.Flock.Zk.PadLayout) (h : Array F128)
     (rep tPad : ℕ) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
     (hk : 1 ≤ sch.k0) (hn : sch.n < 2 ^ 62) (m : ℕ) :
     OW (fun g hs => Past coins g ∧ hs.length = m) (fun _ _ hs => Rho (m + (sq sch.n).length + 1 + sch.k0) hs)
-      (_root_.Flock.Firewall.Finish.ligeritoPZk (stepAsks coins true)
-        (fun lv g s => pure (_root_.Flock.Firewall.Finish.commitFw lv g s)) ms sch T cm0 t b lay h rep tPad extra
+      (_root_.Flock.ZkServer.Finish.ligeritoPZk (stepAsks coins true)
+        (fun lv g s => pure (_root_.Flock.ZkServer.Finish.commitFw lv g s)) ms sch T cm0 t b lay h rep tPad extra
         lanePad salt nonce) := by
-  unfold _root_.Flock.Firewall.Finish.ligeritoPZk
+  unfold _root_.Flock.ZkServer.Finish.ligeritoPZk
   apply ow_step (ot_liftTM _) (m' := m) rfl; intro _ _
   apply ow_step (ot_liftTM _) (m' := m) rfl; intro _ _
   apply ow_step (ot_liftTM _) (m' := m) rfl; intro _ _
@@ -395,15 +397,15 @@ theorem ligeritoPZk_rho (coins : Got) (ms : _root_.Flock.MerkleScheme) (sch : _r
 
 /-- **Where a rep's opening ends past its PIOP, its `ρ₀, ρ₁` answers are independent**: past the ring switch's asks. -/
 theorem repOpening_rho (coins : Got) (st : _root_.Flock.Setup) (sch : _root_.Flock.Schedule)
-    (lay : _root_.Flock.Zk.PadLayout) (tPad rep : ℕ) (g : Array F128) (cm0 : _root_.Flock.Firewall.Finish.Commit)
+    (lay : _root_.Flock.Zk.PadLayout) (tPad rep : ℕ) (g : Array F128) (cm0 : _root_.Flock.ZkServer.Finish.Commit)
     (claims : Array _root_.Flock.Claim) (h : Array F128) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
     (hc : claims.size < 2 ^ 64) (hc0 : claims.size ≠ 0) (hk : 1 ≤ sch.k0) (hn : sch.n < 2 ^ 62) :
     OW (fun g' hs => Past coins g' ∧ hs.length = 0)
       (fun _ _ hs => Rho (claims.size + 1 + (sq sch.n).length + 1 + sch.k0) hs)
-      (_root_.Flock.Firewall.Finish.repOpening (stepAsks coins true)
-        (fun lv g s => pure (_root_.Flock.Firewall.Finish.commitFw lv g s)) st sch lay tPad rep g cm0 claims h extra
+      (_root_.Flock.ZkServer.Finish.repOpening (stepAsks coins true)
+        (fun lv g s => pure (_root_.Flock.ZkServer.Finish.commitFw lv g s)) st sch lay tPad rep g cm0 claims h extra
         lanePad salt) := by
-  unfold _root_.Flock.Firewall.Finish.repOpening
+  unfold _root_.Flock.ZkServer.Finish.repOpening
   apply ow_step (ringSwitchP_ot coins _ claims hc) (m' := claims.size + 1)
     (by simp [sq, hc0]); intro r _
   obtain ⟨ss, T, sws⟩ := r
@@ -412,14 +414,14 @@ theorem repOpening_rho (coins : Got) (st : _root_.Flock.Setup) (sch : _root_.Flo
 
 /-- **Where a rep's opening ends, its `ρ₀, ρ₁` answers are independent**: after the ring switch's `|xs| + 2` claims'
 asks and their batching's, `z`'s, `β₀`'s and the `k₀` lanes'. -/
-theorem openStep_rho (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom : ByteArray) (xs : Array (Array F128))
+theorem openStep_rho (t : _root_.Flock.ZkServer.Finish.Tab) (rep : ℕ) (dom : ByteArray) (xs : Array (Array F128))
     (hi : Array ByteArray) (coins : Got) (hdom : dom.size < 2 ^ 64) (hdg : t.st.digest.size < 2 ^ 64)
-    (hcn : (_root_.Flock.Firewall.Finish.flat t.cm0.cap).size < 2 ^ 64) (hm : t.st.m < 2 ^ 64)
+    (hcn : (_root_.Flock.ZkServer.Finish.flat t.cm0.cap).size < 2 ^ 64) (hm : t.st.m < 2 ^ 64)
     (hx : xs.size + 2 < 2 ^ 64) (hk : 1 ≤ t.sch.k0) (hn : t.sch.n < 2 ^ 62) :
     SPW (fun _ hs => Rho (xs.size + 2 + 1 + (sq t.sch.n).length + 1 + t.sch.k0) hs)
-      (_root_.Flock.Firewall.Drive.openStep t rep dom xs hi coins) [] := by
+      (_root_.Flock.ZkServer.Drive.openStep t rep dom xs hi coins) [] := by
   obtain ⟨st, sch, tPad, g, extra, lanePad, cm0⟩ := t
-  unfold _root_.Flock.Firewall.Drive.openStep
+  unfold _root_.Flock.ZkServer.Drive.openStep
   dsimp only
   refine spw_run' ?_
   rw [StateT.run_bind, StateT.run_bind]
@@ -427,7 +429,7 @@ theorem openStep_rho (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom : B
     (spw_of_na _ [] (piop_na coins st _ _ _ _ _ hdg hcn (by decide) hm _ (Sched.trAlike_init dom hdom) _))
   obtain ⟨hr, rfl⟩ := h
   have hc : r.1.1.2.2.size = xs.size + 2 := by
-    simp only [_root_.Flock.Firewall.Finish.claimsOf, Array.size_map] at hr
+    simp only [_root_.Flock.ZkServer.Finish.claimsOf, Array.size_map] at hr
     exact hr
   refine spw_getThe_bind (R := fun _ hs => Rho (xs.size + 2 + 1 + (sq sch.n).length + 1 + sch.k0) hs) ?_
   split
@@ -438,27 +440,27 @@ theorem openStep_rho (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom : B
       unfold Past; omega
     have ho := repOpening_rho coins st sch (_root_.Flock.Zk.PadLayout.new st.m st.kLog sch.k0) tPad rep g cm0 r.1.1.2.2
       (Array.replicate (_root_.Flock.Zk.PadLayout.new st.m st.kLog sch.k0).len 0) extra lanePad
-      (fun l => _root_.Flock.Firewall.Finish.saltAt (hi.getD (l - 1) ByteArray.empty)) (by omega) (by omega) hk hn
+      (fun l => _root_.Flock.ZkServer.Finish.saltAt (hi.getD (l - 1) ByteArray.empty)) (by omega) (by omega) hk hn
       r.1.2 r.2 [] ⟨hP, rfl⟩
     rw [hc] at ho
     rw [StateT.run_bind, StateT.run_bind]
     exact spw_bind (fun _ _ h => h) _ _ ho
 
 /-- Every `--zk` schedule asks `z`'s coins, and Ligerito's rounds `k₀ + 2` and `k₀ + 3` (`ρ₀`'s and `ρ₁`'s) two each. -/
-def rhoOk (m : ℕ) : Bool :=
-  match _root_.Flock.Zk.schedule m with
+def rhoOk (wideLeaf : Bool) (m : ℕ) : Bool :=
+  match _root_.Flock.Zk.schedule wideLeaf m with
   | .ok (sch, _) => decide (1 ≤ sch.n) &&
-      ((_root_.Flock.Firewall.Session.ligeritoCoins sch).toList.filter (· != 0))[sch.k0 + 2]? == some 2 &&
-      ((_root_.Flock.Firewall.Session.ligeritoCoins sch).toList.filter (· != 0))[sch.k0 + 3]? == some 2
+      ((_root_.Flock.ZkServer.Session.ligeritoCoins sch).toList.filter (· != 0))[sch.k0 + 2]? == some 2 &&
+      ((_root_.Flock.ZkServer.Session.ligeritoCoins sch).toList.filter (· != 0))[sch.k0 + 3]? == some 2
   | .error _ => true
 
-/-- Every `--zk` schedule, `m < 36`, by the kernel's evaluation. -/
-theorem rhoOk_lt : ∀ m, m < 36 → rhoOk m = true := by decide +kernel
+/-- Every `--zk` schedule, `m < 36` at either statement version, by the kernel's evaluation. -/
+theorem rhoOk_lt : ∀ (w : Bool) (m : Fin 36), rhoOk w m.val = true := by decide +kernel
 
-theorem sched_rho {m tp : ℕ} {sch : _root_.Flock.Schedule} (h : _root_.Flock.Zk.schedule m = .ok (sch, tp)) :
+theorem sched_rho {m tp : ℕ} {sch : _root_.Flock.Schedule} (h : _root_.Flock.Zk.schedule wideLeaf m = .ok (sch, tp)) :
     1 ≤ sch.n ∧ ∀ e < 2,
-      ((_root_.Flock.Firewall.Session.ligeritoCoins sch).toList.filter (· != 0))[sch.k0 + 2 + e]? = some 2 := by
-  have hok := rhoOk_lt m (sched_facts h).1
+      ((_root_.Flock.ZkServer.Session.ligeritoCoins sch).toList.filter (· != 0))[sch.k0 + 2 + e]? = some 2 := by
+  have hok := rhoOk_lt wideLeaf ⟨m, (sched_facts h).1⟩
   unfold rhoOk at hok
   rw [h] at hok
   simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at hok
@@ -468,9 +470,9 @@ theorem sched_rho {m tp : ℕ} {sch : _root_.Flock.Schedule} (h : _root_.Flock.Z
   · rw [Nat.add_zero]; exact h2
   · rw [show sch.k0 + 2 + 1 = sch.k0 + 3 by omega]; exact h3
 
-theorem openList_length {m tp : ℕ} {sch : _root_.Flock.Schedule} (h : _root_.Flock.Zk.schedule m = .ok (sch, tp))
+theorem openList_length {m tp : ℕ} {sch : _root_.Flock.Schedule} (h : _root_.Flock.Zk.schedule wideLeaf m = .ok (sch, tp))
     {c : ℕ} (hc : c ≠ 0) : (openList c sch).length = c + 1 + (sch.k0 + 7 + 11 * (sch.levels.size - 1)) := by
-  have hlig := Loop.ligOk_all m
+  have hlig := Loop.ligOk_all (wideLeaf := wideLeaf) m
   unfold Loop.ligOk at hlig
   rw [h] at hlig
   simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at hlig
@@ -481,7 +483,7 @@ theorem openList_length {m tp : ℕ} {sch : _root_.Flock.Schedule} (h : _root_.F
 
 /-- **The opening's `ρ₀, ρ₁` rounds ask two coins each**: past the ring switch's `c + 1` rounds, Ligerito's `k₀ + 2`
 and `k₀ + 3`. -/
-theorem openList_rho {m tp : ℕ} {sch : _root_.Flock.Schedule} (h : _root_.Flock.Zk.schedule m = .ok (sch, tp))
+theorem openList_rho {m tp : ℕ} {sch : _root_.Flock.Schedule} (h : _root_.Flock.Zk.schedule wideLeaf m = .ok (sch, tp))
     {c : ℕ} (hc : c ≠ 0) {e : ℕ} (he : e < 2) : (openList c sch)[c + 1 + (sch.k0 + 2 + e)]? = some 2 := by
   have hlen : ((List.replicate c [7]).flatten ++ sq c).length = c + 1 := by simp [sq, hc]
   unfold openList
@@ -490,13 +492,13 @@ theorem openList_rho {m tp : ℕ} {sch : _root_.Flock.Schedule} (h : _root_.Floc
 
 /-- **A rep's plan asks two coins at its `ρ₀, ρ₁` rounds.** -/
 theorem repPlan_rho {spec : _root_.Flock.SessionSpec} {st : _root_.Flock.Stmt} {sch : _root_.Flock.Schedule} {tp : ℕ}
-    (h : _root_.Flock.Zk.schedule st.m = .ok (sch, tp)) {e : ℕ} (he : e < 2) :
-    (_root_.Flock.Firewall.Session.repPlan spec st).getD
-      (((_root_.Flock.Firewall.Session.replayCoins st.m st.c.kLog).toList.filter (· != 0)).length +
+    (h : _root_.Flock.Zk.schedule st.wideLeaf st.m = .ok (sch, tp)) {e : ℕ} (he : e < 2) :
+    (_root_.Flock.ZkServer.Session.repPlan spec st).getD
+      (((_root_.Flock.ZkServer.Session.replayCoins st.m st.c.kLog).toList.filter (· != 0)).length +
         ((2 + spec.points * st.regions.size) + 1 + (sch.k0 + 2 + e))) 0 = 2 := by
-  have hlt : ((_root_.Flock.Firewall.Session.replayCoins st.m st.c.kLog).toList.filter (· != 0)).length +
+  have hlt : ((_root_.Flock.ZkServer.Session.replayCoins st.m st.c.kLog).toList.filter (· != 0)).length +
       ((2 + spec.points * st.regions.size) + 1 + (sch.k0 + 2 + e)) <
-      (((_root_.Flock.Firewall.Session.replayCoins st.m st.c.kLog).toList.filter (· != 0)) ++
+      (((_root_.Flock.ZkServer.Session.replayCoins st.m st.c.kLog).toList.filter (· != 0)) ++
         openList (2 + spec.points * st.regions.size) sch).length := by
     rw [List.length_append, openList_length h (by omega)]
     omega
@@ -526,12 +528,12 @@ theorem rho_extract (cr : Array (Array F128)) (a P k : ℕ) (h : Rho P (((cr.ext
 /-- **The schedule so far, complete, ends past independent `ρ₀, ρ₁`**: fed the coins of the algebraic phase's rounds
 and of all the opening's, a rep's schedule so far reached the opening's end (`feed_full`), which it does only past
 independent answers at `ρ₀`'s and `ρ₁`'s rounds (`openStep_rho`). -/
-theorem schedSoFar_rho (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom : ByteArray) (xs : Array (Array F128))
+theorem schedSoFar_rho (t : _root_.Flock.ZkServer.Finish.Tab) (rep : ℕ) (dom : ByteArray) (xs : Array (Array F128))
     (hi : Array ByteArray) (cr : Array (Array F128)) {alg sched : Array (ByteArray × ℕ)}
-    (ha : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom =
+    (ha : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) dom =
       .ok alg)
     (h : Loop.schedSoFar t rep dom xs hi cr = .ok sched) (hdom : dom.size < 2 ^ 64)
-    (hdg : t.st.digest.size < 2 ^ 64) (hcn : (_root_.Flock.Firewall.Finish.flat t.cm0.cap).size < 2 ^ 64)
+    (hdg : t.st.digest.size < 2 ^ 64) (hcn : (_root_.Flock.ZkServer.Finish.flat t.cm0.cap).size < 2 ^ 64)
     (hm : t.st.m < 2 ^ 64) (hx : xs.size + 2 < 2 ^ 64) (hk : 1 ≤ t.sch.k0) (hn : t.sch.n < 2 ^ 62)
     (hq : ∀ i, (t.sch.levels.getD i default).q < 2 ^ 63)
     (hle : alg.size + (openList (xs.size + 2) t.sch).length ≤ cr.size) :
@@ -545,7 +547,7 @@ theorem schedSoFar_rho (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom :
       (openStep_end t rep dom xs hi (cr.extract 0 alg.size) hdom hdg hcn hm hx hk hn hq)
       (by simp only [Array.length_toList, Array.size_extract]; omega)
     have ho := openStep_rho t rep dom xs hi (cr.extract 0 alg.size) hdom hdg hcn hm hx hk hn
-    rcases hfe : (_root_.Flock.Firewall.Drive.openStep t rep dom xs hi (cr.extract 0 alg.size)).feed
+    rcases hfe : (_root_.Flock.ZkServer.Drive.openStep t rep dom xs hi (cr.extract 0 alg.size)).feed
       (cr.extract alg.size cr.size).toList #[] with ⟨s', rs⟩
     rw [hfe] at h hf
     cases s' with
@@ -572,7 +574,7 @@ independent answers at its `ρ₀, ρ₁` rounds (`schedSoFar_rho`), Ligerito's 
 each (`repPlan_rho`), and those answers are the opened coins (`wordsAt_slot`). -/
 theorem rho_of_prog (T : ZKMal.CoinLayer.TableData) (x : Msg) (hx : Masked.Live x) (hSv : Serves x)
     (ops : List (Msg × Msg)) (hl : ops.length ≤ refK x) {j r e : ℕ} (hj : j < (Masked.stsOf x).size) (hr2 : r < 2)
-    (he : e < _root_.Flock.Firewall.Frame.INNER_ROUNDS)
+    (he : e < _root_.Flock.ZkServer.Frame.INNER_ROUNDS)
     (hsl : Masked.repSlot x (2 * j + r) (fun sch => sch.k0 + 7 + 11 * (sch.levels.size - 1) + e) ≤ ops.length)
     (d : FlockDeploy.Coin)
     (ho : (progOf x ((ops.take (Masked.repSlot x (2 * j + r) fun sch => sch.k0 + 7 + 11 * (sch.levels.size - 1) + e)).map
@@ -590,7 +592,7 @@ theorem rho_of_prog (T : ZKMal.CoinLayer.TableData) (x : Msg) (hx : Masked.Live 
   have hst : (Masked.stsOf x)[(2 * j + r) / 2]! = (Masked.stsOf x)[j] := by
     rw [hjj]
     exact getElem!_pos _ j hj
-  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j + r) / 2]!.m = .ok (y.sch, y.tPad) := by
+  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j + r) / 2]!.wideLeaf (Masked.stsOf x)[(2 * j + r) / 2]!.m = .ok (y.sch, y.tPad) := by
     rw [hst]; exact y.hz
   have hk6 : 6 ≤ (Masked.stsOf x)[(2 * j + r) / 2]!.c.kLog := by rw [hst]; exact y.wf.1.hk6
   obtain ⟨N, hN⟩ : ∃ N, N = FlockComplete.piopRoundsZk spec (Masked.stsOf x)[(2 * j + r) / 2]! +
@@ -619,7 +621,7 @@ theorem rho_of_prog (T : ZKMal.CoinLayer.TableData) (x : Msg) (hx : Masked.Live 
   rw [hrR _ rfl] at hend
   have hs1 : 1 ≤ FlockComplete.repStartZk spec (Masked.stsOf x) (2 * j + r) := by
     unfold FlockComplete.repStartZk; omega
-  have hI4 : _root_.Flock.Firewall.Frame.INNER_ROUNDS = 4 := rfl
+  have hI4 : _root_.Flock.ZkServer.Frame.INNER_ROUNDS = 4 := rfl
   obtain ⟨s, hsd⟩ : ∃ s, s = Masked.repSlot x (2 * j + r) fun sch => sch.k0 + 7 + 11 * (sch.levels.size - 1) + e :=
     ⟨_, rfl⟩
   rw [← hsd] at hsl ho
@@ -650,11 +652,11 @@ theorem rho_of_prog (T : ZKMal.CoinLayer.TableData) (x : Msg) (hx : Masked.Live 
   obtain ⟨hts', ⟨tp, htp⟩, hxs⟩ := Count.placeholder_tab hph
   rw [hz, Except.ok.injEq, Prod.mk.injEq] at htp
   obtain ⟨htsch, -⟩ := htp
-  obtain ⟨hm36, hk0, hn, hq⟩ := Count.sched_facts (htsch ▸ hz : _root_.Flock.Zk.schedule _ = .ok (t.sch, y.tPad))
+  obtain ⟨hm36, hk0, hn, hq⟩ := Count.sched_facts (htsch ▸ hz : _root_.Flock.Zk.schedule _ _ = .ok (t.sch, y.tPad))
   obtain ⟨⟨hmp, hmp0, hpc⟩, hdom', hxr, -⟩ := sizesOk_at (sizesOk_of_serves hSv s0 spec _ hsx) hq2
   obtain ⟨-, -, -, -, hdm, -⟩ := placeholder_ok hph
   have hls : (wordsAt x ((ops.take s).map fun p => ZKMal.CoinLayer.rd p.2) 0).size =
-      min (loopNr x 0) _root_.Flock.Firewall.Frames.COIN_MAX := by
+      min (loopNr x 0) _root_.Flock.ZkServer.Frames.COIN_MAX := by
     obtain ⟨p0, rest, hpr⟩ : ∃ p0 rest, ops.take s = p0 :: rest := by
       cases h' : ops.take s with
       | nil => rw [h', List.length_nil] at hts; omega
@@ -680,16 +682,16 @@ theorem rho_of_prog (T : ZKMal.CoinLayer.TableData) (x : Msg) (hx : Masked.Live 
     simp only [_root_.Flock.Setup.ofCircuit, ByteArray.size_extract]
     omega
   have hmb : t.st.m < 2 ^ 64 := by rw [hts']; exact Nat.lt_trans hm36 (by decide)
-  have hA : alg.size = ((_root_.Flock.Firewall.Session.replayCoins (Masked.stsOf x)[(2 * j + r) / 2]!.m
+  have hA : alg.size = ((_root_.Flock.ZkServer.Session.replayCoins (Masked.stsOf x)[(2 * j + r) / 2]!.m
       (Masked.stsOf x)[(2 * j + r) / 2]!.c.kLog).toList.filter (· != 0)).length := by
     have eA := congrArg List.length (Count.rounds_counts hmb hal)
     rw [Count.piop_counts, hts', List.length_map, Array.length_toList] at eA
     exact eA
   have hplan := congrArg List.length (Count.repPlan_list (spec := spec) (htsch ▸ hz :
-    _root_.Flock.Zk.schedule _ = .ok (t.sch, y.tPad)))
+    _root_.Flock.Zk.schedule _ _ = .ok (t.sch, y.tPad)))
   rw [Array.length_toList, repPlan_size] at hplan
   simp only [repRounds_true, hz, List.length_append] at hplan
-  have h4 : ([1, _root_.Flock.Firewall.Session.INNER_CONS, 1, _root_.Flock.Zk.Q].filter (· != 0)).length = 4 := by
+  have h4 : ([1, _root_.Flock.ZkServer.Session.INNER_CONS, 1, _root_.Flock.Zk.Q].filter (· != 0)).length = 4 := by
     decide
   have hFO : alg.size + (Count.openList (2 + spec.points * (Masked.stsOf x)[(2 * j + r) / 2]!.regions.size)
       t.sch).length = N := by
@@ -701,7 +703,7 @@ theorem rho_of_prog (T : ZKMal.CoinLayer.TableData) (x : Msg) (hx : Masked.Live 
     rw [e1]
     exact (Nat.add_right_cancel hplan).symm
   have hx2 : xs.size + 2 = 2 + spec.points * (Masked.stsOf x)[(2 * j + r) / 2]!.regions.size := by omega
-  have hzt : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j + r) / 2]!.m = .ok (t.sch, y.tPad) := htsch ▸ hz
+  have hzt : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j + r) / 2]!.wideLeaf (Masked.stsOf x)[(2 * j + r) / 2]!.m = .ok (t.sch, y.tPad) := htsch ▸ hz
   obtain ⟨hn1, -⟩ := Count.sched_rho hzt
   have hsq : (Count.sq t.sch.n).length = 1 := by simp [Count.sq, show t.sch.n ≠ 0 by omega]
   have hkk : y.sch.k0 = t.sch.k0 := by rw [htsch]
@@ -775,7 +777,7 @@ theorem rho_unrefused (T : ZKMal.CoinLayer.TableData)
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
     (real : Msg → Flock.Wit →
       (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
-      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+      ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (wk : (ofLoop T L₀ real).toSrv.Worker) (x : Msg) (w : Flock.Wit) (hx : Masked.Live x) (hSv : Serves x)
     (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
     (κ : (ofLoop T L₀ real).toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) (hl : ops.length ≤ refK x)
@@ -789,7 +791,7 @@ theorem rho_unrefused (T : ZKMal.CoinLayer.TableData)
   have hs1 : 1 ≤ s := by
     obtain ⟨s0, spec, hsx⟩ := Masked.setupOf_of_pos (lt_of_le_of_lt (Nat.zero_le _) hj)
     obtain ⟨y⟩ := hx.2 j hj
-    have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j + r) / 2]!.m = .ok (y.sch, y.tPad) := by
+    have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j + r) / 2]!.wideLeaf (Masked.stsOf x)[(2 * j + r) / 2]!.m = .ok (y.sch, y.tPad) := by
       rw [show (2 * j + r) / 2 = j by omega, getElem!_pos _ j hj]
       exact y.hz
     rw [hs]

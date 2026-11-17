@@ -3,10 +3,10 @@
 read of a case's parameters and evidence, and nothing of the audit.
 
 It runs the form's two parsers (`membersParamsOfJson`, `membersEvidenceOf`) and the statements' public structure
-(`membersHeld`). It reads no registration, no blob and no coin, and it never runs the form's check (`checkMembersAt`),
-whose acceptance stays refused (`MULTI_REFUSED`): `protocol` reads `paramsOfJson` and `evidenceOf`, which refuse the
-form's keys, and this command is outside `protocol`. Its line says `parsed, not checked` (`PARSED`) and holds no
-outcome of the audit, so nothing reads it as one: it holds a writer of the form's keys to the parsers.
+(`membersHeld`, and `sampledHeld` at the evidence's `proved_units`: each statement's member is one the sample holds).
+It reads no registration, no blob and no coin, and it never runs the form's check (`checkMembersAt`), which `check`
+runs on a case of the form (`protocol` reads either form's keys). Its line says `parsed, not checked` (`PARSED`) and
+holds no outcome of the audit, so nothing reads it as one: it holds a writer of the form's keys to the parsers.
 -/
 module
 
@@ -49,7 +49,8 @@ def StatementFiles.parsed (st : StatementFiles) : Json :=
 
 /-- **What the per-member form's parsers read** of the parameters `params` and the evidence `evidence`, each canonical
 JSON: the members (`membersParamsOfJson`), the statements (`membersEvidenceOf`), and the statements as public
-structure (`membersHeld`: each names a member no earlier one named, in the members' order, with exactly one session).
+structure (`membersHeld`: each names a member no earlier one named, in the members' order, with exactly one session;
+`sampledHeld`: the evidence's `proved_units` hold a unit of each statement's member).
 One object, exactly `{"members", "parsed", "statements"}`, its `parsed` the words `PARSED`; a refusal says which file
 refused, as the audit's does. -/
 def membersParsed (params evidence : ByteArray) : V Json := do
@@ -57,7 +58,8 @@ def membersParsed (params evidence : ByteArray) : V Json := do
   let e ← (membersEvidenceOf evidence).mapError ("evidence: " ++ ·)
   let (some ms, some sts) := (p.members, e.statements)
     | throw "proofs: the parameters and the evidence are not the per-member form's"
-  let _ ← (membersHeld ms sts).mapError ("proofs: " ++ ·)
+  let held ← (membersHeld ms sts).mapError ("proofs: " ++ ·)
+  (sampledHeld held e.base.provedUnits).mapError ("proofs: " ++ ·)
   pure (Json.mkObj [("members", Json.arr (ms.map Member.parsed)), ("parsed", .str PARSED),
     ("statements", Json.arr (sts.map StatementFiles.parsed))])
 
@@ -96,6 +98,6 @@ private def parsedWhy (r : V Json) : String :=
   "params: the parameters name no proofs (the members and their statements' files)"
 #guard parsedWhy (membersParsed "{\"proofs\":{\"circuit\":\"\",\"public\":\"\",\"registered\":null}}".toUTF8
     "{}".toUTF8) ==
-  "params: the keys of proofs are not members"
+  "params: the keys of proofs are not members, or members and wiring"
 
 end Spot.OneStageZk

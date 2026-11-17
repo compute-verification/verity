@@ -34,7 +34,7 @@ class ModelShape:
     NH: int
     KVH: int
     D: int
-    I: int
+    INTER: int
     EPS: float
     tie: bool
     max_pos: int
@@ -154,7 +154,7 @@ def model_shape(hf: dict) -> ModelShape:
     if facts:
         raise Unexpressible("vocabulary cannot express: " + "; ".join(facts))
     return ModelShape(arch=family, model_class=served_class(ff["vllm_class"]), H=int(C["H"]), V=int(C["V"]), NL=int(C["NL"]), NH=int(C["NH"]), KVH=int(C["KVH"]),
-                      D=int(C["D"]), I=inter, EPS=float(C["EPS"]), tie=bool(fv.get("tie_word_embeddings", C["tie_word_embeddings"])),
+                      D=int(C["D"]), INTER=inter, EPS=float(C["EPS"]), tie=bool(fv.get("tie_word_embeddings", C["tie_word_embeddings"])),
                       max_pos=int(C["MAX_POS"]), rot=int(C["D"]), qkv_bias=qkv_bias, window=int(window) - 1 if window else None,
                       qk_norm=qk_norm, E=E, TOPK=TOPK, renorm=bool(fv.get("RENORMALIZE")), act=act, norm_chain=norm_chain,
                       extra_norms=bool(extra), embed_scale="embed_normalizer" in fv, attn_softcap=softcaps[0], final_softcap=softcaps[1], int8=int8)
@@ -176,13 +176,13 @@ def rank_shape(C: ModelShape, world: int) -> ModelShape:
     if C.NH % world or (C.KVH % world and not replicated_kv):
         facts.append(f"{C.NH} query and {C.KVH} key/value heads over {world} ranks (an even split, or each key/value head on "
                      f"world // KVH ranks)")
-    if C.I % world:
-        facts.append(f"an MLP width of {C.I} over {world} ranks")
+    if C.INTER % world:
+        facts.append(f"an MLP width of {C.INTER} over {world} ranks")
     if C.V % VOCAB_PADDING or C.V % world:
         facts.append(f"a vocabulary of {C.V} over {world} ranks (padded to a multiple of {VOCAB_PADDING}: the padding rows' trim)")
     if facts:
         raise Unexpressible("vocabulary cannot express: " + "; ".join(facts))
-    return replace(C, NH=C.NH // world, KVH=1 if replicated_kv else C.KVH // world, I=C.I // world)
+    return replace(C, NH=C.NH // world, KVH=1 if replicated_kv else C.KVH // world, INTER=C.INTER // world)
 
 
 def weight_leaves(C: ModelShape, world: int = 1) -> list[tuple[str, Type]]:
@@ -217,10 +217,10 @@ def weight_leaves(C: ModelShape, world: int = 1) -> list[tuple[str, Type]]:
         if C.qk_norm == "head":
             out += [(p + "self_attn.q_norm.weight", bf(C.D)), (p + "self_attn.k_norm.weight", bf(C.D))]
         if C.E:
-            out += [(p + "mlp.gate.weight", bf(C.E, C.H)), (p + "mlp.experts.w13_weight", bf(C.E, 2 * C.I, C.H)),
-                    (p + "mlp.experts.w2_weight", bf(C.E, C.H, C.I))]
+            out += [(p + "mlp.gate.weight", bf(C.E, C.H)), (p + "mlp.experts.w13_weight", bf(C.E, 2 * C.INTER, C.H)),
+                    (p + "mlp.experts.w2_weight", bf(C.E, C.H, C.INTER))]
         else:
-            out += linear(p + "mlp.gate_up_proj", 2 * C.I, C.H) + linear(p + "mlp.down_proj", C.H, C.I)
+            out += linear(p + "mlp.gate_up_proj", 2 * C.INTER, C.H) + linear(p + "mlp.down_proj", C.H, C.INTER)
         out += [(p + "input_layernorm.weight", bf(C.H)), (p + "post_attention_layernorm.weight", bf(C.H))]
         if C.extra_norms:
             out += [(p + "pre_feedforward_layernorm.weight", bf(C.H)), (p + "post_feedforward_layernorm.weight", bf(C.H))]

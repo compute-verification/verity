@@ -80,7 +80,7 @@ noncomputable def acc : AcceptedHP x.T.S where
 
 end TableHP
 
-variable (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupHP I own mPts S₀ (dj S₀))
+variable (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupHP I own mPts S₀ (dj S₀))
   {Reg : Type}
 
 /-- **The sites of the one-table hidden plan at `own`** (`sitesAtH`). -/

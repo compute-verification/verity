@@ -5,7 +5,7 @@ public import Proofs.Flock.Soundness.Assumptions.ZkP
 /-!
 # The `--zk` session's premises that are instances of its named ones
 
-`shape.premises` in `Security/lean-audit.json` names this module, and none of it sits in an `Assumptions` module, so the
+`shape.premises` in `security/lean-audit.json` names this module, and none of it sits in an `Assumptions` module, so the
 audit reads each abbrev here as the premise it unfolds to.
 
 * `RecordCustodyZKJ` (`live-verifier`): `Assumptions.Zk.RecordCustodyZKJPLaw` at no public inputs, every sample under the
@@ -22,7 +22,7 @@ open FlockSoundness
 /-- **The record is the live session's, at `J` tables** (`live-verifier`, as `RecordCustodyZK`): the record
 `verify --zk --session-tables J` reads is the one the challenger wrote for the live session
 (`RecordsLiveZKJ`: its sample, proofs and link points, and each table's root and rounds, are the live outcome's), and its
-sample file the one `flock-verify draw` printed for the verifier's own sample under the subset sampling design (`DrawFileZK` at
+sample file the one `verity-verify-proof draw` printed for the verifier's own sample under the subset sampling design (`SampleFileZK` at
 `subset kd` over the `n` units; `RecordCustodyZKJS` is its stratified form): `RecordCustodyZKJPLaw` at no public inputs
 and `subset kd` at every sample (`recordCustodyZKJ_iff`). -/
 abbrev RecordCustodyZKJ {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) (dj : Finset (Fin n) → Lean.Json)
@@ -37,7 +37,7 @@ theorem recordCustodyZKJ_iff {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inp
     (wr : (S : Finset (Fin n)) → (R : Reg) → Discharge.Tables.LiveOutJ (Jf S R) mPts → Discharge.Exec.Transcript)
     (kd : ℕ) :
     RecordCustodyZKJ I dj Jf wr kd ↔
-      Discharge.Composed.RecordsLiveZKJ I dj Jf wr ∧ Discharge.ZkLink.DrawFileZK dj (.subset kd) n :=
+      Discharge.Composed.RecordsLiveZKJ I dj Jf wr ∧ Discharge.ZkLink.SampleFileZK dj (.subset kd) n :=
   Iff.rfl
 
 /-- At no public inputs, `RecordCustodyZKJP` is `RecordCustodyZKJ`. -/

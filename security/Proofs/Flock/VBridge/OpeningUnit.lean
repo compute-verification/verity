@@ -108,7 +108,7 @@ open FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge FlockSoundness
 open FlockVBridge.Decode
 
 variable {mPts nU J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nU} (zo : ZkOuter mPts nU J Reg' c hU hscope Lv)
+  {Lv : SamplingDesign nU} (zo : ZkOuter mPts nU J Reg' c hU hscope Lv)
 
 /-- **An opening part the verifier pinned computes its residuals at the whole ports, in a layer agreeing with the
 registrant** (`decode_resUnit` at `check_opening`'s net). Let `RecOpening.check` accept `c`, its unit named for part `p`

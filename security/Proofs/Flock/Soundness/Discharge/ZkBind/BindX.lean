@@ -173,26 +173,26 @@ theorem zk_flock_countC_execOS_keyProgX (hA : A.Correct) {c : Flock.Circuit} (hU
     (lay : LayoutZ A ((keyProg c hU n).partition outs) planZ tab
       (decodeOfPlace A ((keyProg c hU n).partition outs) planZ tab (si.placeKey hU hparse outs)))
     (rs : HmRowsZX lay) (hHm : rs.Computes)
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
+    (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t') (K : ℕ)
-    (σ : Strategy (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
+    (σ : Strategy (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (batchedSessionZC A Hs planZ)))
     {qF qS : ℝ}
-    (hCR : ∀ ω j, TableCRZ A Hs (planZ ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) (reg σ))
+    (hCR : ∀ ω j, TableCRZ A Hs (planZ ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) (reg σ))
       j (zcStrat A Hs planZ (cont σ ω)) qF qS)
     {execAccept : Bool × Finset (Fin n) → Prop}
-    (tr : StrictCR.TreeRewind Hs.H (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
+    (tr : StrictCR.TreeRewind Hs.H (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (batchedSessionZC A Hs planZ)) σ fun o => execAccept o ∧ o.1 = false)
     {qT : ℝ} (hT : tr.finder.CR Hs.H qT) :
-    prob (fun o => execAccept o ∧ K ≤ (((keyProg c hU n).partition outs).wrong
+    prob (fun o => execAccept o ∧ K ≤ (((keyProg c hU n).partition outs).incorrect
         (XplurZC A Hs ((keyProg c hU n).partition outs) planZ tab (rs.bindingZ hHm) (reg σ) (cont σ) k Rw)).card)
-        (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (batchedSessionZC A Hs planZ)) σ ≤
-      (Law.stratified σs ks hks).miss K +
-        ksAvgStrictZ planZ (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS (reg σ) +
+        (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (batchedSessionZC A Hs planZ)) σ ≤
+      (SamplingDesign.stratified σs ks hks).miss K +
+        ksAvgStrictZ planZ (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS (reg σ) +
         linkBoundZC A Hs ((keyProg c hU n).partition outs) planZ tab (rs.bindingZ hHm) k Rw M ρ t' (reg σ) (cont σ) +
         ENNReal.ofReal (tr.bound qT) :=
   zk_flock_countC_execOS_cr A Hs ((keyProg c hU n).partition outs) planZ tab hA σs ks hks St hS Kd pop Lb src hA3

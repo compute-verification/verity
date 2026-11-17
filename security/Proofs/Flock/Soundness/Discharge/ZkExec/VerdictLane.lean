@@ -537,7 +537,7 @@ theorem foldZK_rel {e : ℕ} (lay : Zk.PadLayout) (P : ZkSession.Pads0 lay.len e
       rw [List.range'_succ, List.foldl_cons]
       exact hrel
 
-theorem plays_drawK (c : Array F128) (hc : c.size = 2) :
+theorem plays_sampleK (c : Array F128) (hc : c.size = 2) :
     Plays fOf (Model.drawK execArith) [] [c] (execArith.ofLimbs (fOf (c)[0]!) (fOf (c)[1]!)) := by
   unfold Model.drawK
   exact Plays.bind' (ms₂ := []) (cs₂ := []) (Plays.drawVec c hc (by omega)) (Plays.pure _) (by simp) (by simp)
@@ -603,11 +603,11 @@ theorem ligeritoPadZC_row (lay : Zk.PadLayout) (P : ZkSession.Pads0 lay.len 2) (
   have h := plays_bind_split (ms₁ := kMsgs lg (0 + 1) (lay.k0 - 1)) (cs₁ := lanes) h hfold
   dsimp only at h
   have h := plays_bind_split (ms₁ := [evMsg zl]) (cs₁ := []) h (Plays.recv _ _)
-  have hρs : Plays fOf (Model.drawKs execArith 2) [] [c₁, c₂]
+  have hρs : Plays fOf (Model.sampleKs execArith 2) [] [c₁, c₂]
       (Fin.cons (execArith.ofLimbs (fOf c₁[0]!) (fOf c₁[1]!))
         (Fin.cons (execArith.ofLimbs (fOf c₂[0]!) (fOf c₂[1]!)) Fin.elim0)) := by
-    simp only [Model.drawKs]
-    exact Plays.bind' (plays_drawK c₁ hc₁) (Plays.bind' (Plays.bind' (plays_drawK c₂ hc₂)
+    simp only [Model.sampleKs]
+    exact Plays.bind' (plays_sampleK c₁ hc₁) (Plays.bind' (Plays.bind' (plays_sampleK c₂ hc₂)
       (Plays.bind' (Plays.pure _) (Plays.pure _) rfl rfl) rfl rfl) (Plays.pure _) rfl rfl) rfl rfl
   have h := plays_bind_split (ms₁ := []) (cs₁ := [c₁, c₂]) h hρs
   have h := plays_bind_split (ms₁ := [tMsg zl]) (cs₁ := []) h (Plays.recv _ _)

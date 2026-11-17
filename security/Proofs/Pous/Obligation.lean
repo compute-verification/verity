@@ -238,7 +238,7 @@ end Pous.SecurityProofs
 
 namespace Pous.Period.SecurityProofs
 
-open Pous.EndToEnd PousCheck PousCheck.Properties
+open Pous.EndToEnd PousVerifier PousVerifier.Properties
 open scoped ENNReal
 
 set_option exponentiation.threshold 20000
@@ -256,8 +256,8 @@ theorem obligationHeld : ObligationHeld := by
 
 /-- **`obligationHeld` holds at the honest instance**: its device premises, `periodHeld_honest`, with the other tags'
 keys among the other audits' coins. -/
-theorem obligationHeld_honest {ι : Type} [Fintype ι] {d : Accounting.Device ι} {α ΩW ΩQ : Type} [Fintype α]
-    (r : Accounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+theorem obligationHeld_honest {ι : Type} [Fintype ι] {d : ResourceAccounting.Device ι} {α ΩW ΩQ : Type} [Fintype α]
+    (r : ResourceAccounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
     (P : Audits ΩW ΩQ) (D Q L round : ℕ) (hs : P.sid.size = 32)
     (hfull : ∀ ω, ∃ t ∈ (r.win .capacity).ticks, FULL ≤ (r.schedule ω t).mem (r.acct .capacity)) :
     DeviceModel r P (lookup ΩW ΩQ) D Q L round ∧ Instantiates P (lookup ΩW ΩQ) :=

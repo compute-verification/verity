@@ -2,9 +2,9 @@
 //! `verity/flock-vllm-block/v1`), proved by the CPU prover or by Flock-CUDA (`--gpu`, feature `gpu`) in a flock-128-r2
 //! live session. The CLI and output lines are flock-pure-gpu's, so `flock-pure`'s bench.py drives it.
 //!
-//!   flock-vllm-v1 serve    --listen ADDR --out DIR --instances FILE --netlist FILE --pin SHA256 [--sessions N] [--operator LANE]
-//!   flock-vllm-v1 prove    --verifier ADDR --instances FILE --netlist FILE [--gpu] [--runs N] [--warm W] [--dump DIR]
-//!   flock-vllm-v1 selftest --instances FILE --netlist FILE [--gpu] [--only CASE]
+//!   flock-vllm-v1 serve    --listen ADDR --out DIR --instances FILE --circuit-description FILE --pin SHA256 [--sessions N] [--operator LANE]
+//!   flock-vllm-v1 prove    --verifier ADDR --instances FILE --circuit-description FILE [--gpu] [--runs N] [--warm W] [--dump DIR]
+//!   flock-vllm-v1 selftest --instances FILE --circuit-description FILE [--gpu] [--only CASE]
 //!
 //! Session: `Hello(Σ)`, `Commit(root_f = Σ, root_B, publics = each VU's x and W position-leaf digests)`, two verifier
 //! points (the public regions' claims), `Link(y = 0, 0)`, then Flock's coins. Σ names the three bound roots and the
@@ -596,7 +596,7 @@ fn selftest(st: &Arc<VllmStmt>, inst: &Arc<Instances>, gpu: bool) {
     for &(name, want_accept, _) in CASES {
         let v = if gpu {
             let out = std::process::Command::new(std::env::current_exe().unwrap())
-                .args(["selftest", "--gpu", "--instances", &arg("--instances", ""), "--netlist", &arg("--netlist", ""), "--only", name])
+                .args(["selftest", "--gpu", "--instances", &arg("--instances", ""), "--circuit-description", &arg("--circuit-description", ""), "--only", name])
                 .output()
                 .expect("spawn a case");
             let text = String::from_utf8_lossy(&out.stdout);
@@ -624,12 +624,12 @@ fn main() {
     let cmd = std::env::args().nth(1).unwrap_or_default();
     let tb = Instant::now();
     let inst = Arc::new(Instances::load(&arg("--instances", "instances.bin")));
-    let net = UnitNet::load(&arg("--netlist", "net.txt"));
+    let net = UnitNet::load(&arg("--circuit-description", "net.txt"));
     let pin = arg("--pin", "");
     if !pin.is_empty() {
-        assert_eq!(v1::hex(&net.sha256), pin, "the netlist's sha256 is not the pinned lowering");
+        assert_eq!(v1::hex(&net.sha256), pin, "the circuit description's sha256 is not the pinned lowering");
     }
-    assert_eq!(inst.relation, net.relation, "instances and netlist name different relations");
+    assert_eq!(inst.relation, net.relation, "instances and circuit description name different relations");
     let lay = Layout::of(inst.row_bytes, inst.units);
     let st = Arc::new(VllmStmt::new(net, inst.vus, lay));
     eprintln!("statement {} vus={} nbl={} m={} k_log={} built in {:.2}s", inst.relation, inst.vus, st.nbl, st.m, lay.k_log(), tb.elapsed().as_secs_f64());
@@ -673,7 +673,7 @@ fn main() {
                 }
             }
         }
-        _ => eprintln!("usage: flock-vllm-v1 serve|prove|selftest|replay --instances FILE --netlist FILE [--pin SHA256] ..."),
+        _ => eprintln!("usage: flock-vllm-v1 serve|prove|selftest|replay --instances FILE --circuit-description FILE [--pin SHA256] ..."),
     }
 }
 

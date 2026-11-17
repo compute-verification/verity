@@ -358,12 +358,12 @@ theorem served_sound (hc : Properties.Spot.Covers s Pt d ρ cs) (S : ℕ) (θ σ
   set w : ℕ × ℕ → ℝ := fun k => Real.exp (-((θ : ℝ) * σ * (rateOf (cs.getD k.1 default) : ℝ))) with hwdef
   have hw : ∀ k, 0 ≤ w k := fun k => (Real.exp_pos _).le
   have hK := fin_keys_mem hc
-  set X : Finset ℕ → ℝ := fun U => (2 : ℝ) ^ min (bitsOf s Pt U) S * Real.exp (-((θ : ℝ) * σ * yOf Pt cs U))
-  have hX0 : X ∅ = 1 := by simp [X, bitsOf, yOf]
-  have hXn : ∀ U, 0 ≤ X U := fun U => by positivity
-  have herase : ∑ U ∈ Bf.powerset.erase ∅, X U = ∑ U ∈ Bf.powerset, X U - 1 := by
+  set Xs : Finset ℕ → ℝ := fun U => (2 : ℝ) ^ min (bitsOf s Pt U) S * Real.exp (-((θ : ℝ) * σ * yOf Pt cs U))
+  have hX0 : Xs ∅ = 1 := by simp [Xs, bitsOf, yOf]
+  have hXn : ∀ U, 0 ≤ Xs U := fun U => by positivity
+  have herase : ∑ U ∈ Bf.powerset.erase ∅, Xs U = ∑ U ∈ Bf.powerset, Xs U - 1 := by
     rw [Finset.sum_erase_eq_sub (Finset.empty_mem_powerset Bf), hX0]
-  have h0 : 0 ≤ ∑ U ∈ Bf.powerset.erase ∅, X U := Finset.sum_nonneg fun U _ => hXn U
+  have h0 : 0 ≤ ∑ U ∈ Bf.powerset.erase ∅, Xs U := Finset.sum_nonneg fun U _ => hXn U
   set gs := (Kf.map G).map fun g => (g, -(θ * σ * g.r))
   have hgs : ∀ x ∈ gs, groupOk x.1 S := by
     intro x hx
@@ -385,12 +385,12 @@ theorem served_sound (hc : Properties.Spot.Covers s Pt d ρ cs) (S : ℕ) (θ σ
     refine List.map_congr_left fun k _ => ?_
     rw [hwk]
     rfl
-  have hall : ∑ U ∈ Bf.powerset, X U ≤ (Kf.map fun k => servVal k.2 (G k).n S (w k)).prod := by
-    calc ∑ U ∈ Bf.powerset, X U
+  have hall : ∑ U ∈ Bf.powerset, Xs U ≤ (Kf.map fun k => servVal k.2 (G k).n S (w k)).prod := by
+    calc ∑ U ∈ Bf.powerset, Xs U
         ≤ ∑ U ∈ Bf.powerset, ∏ k ∈ Kf.toFinset,
             ((2 : ℝ) ^ min (cntOf (keyOf s Pt) U k * k.2) S * w k ^ cntOf (keyOf s Pt) U k) :=
           Finset.sum_le_sum fun U hU => by
-            simp only [X]
+            simp only [Xs]
             rw [capped_exp S ((θ : ℝ) * σ) U]
             exact capped_term_le Kf.toFinset (keyOf s Pt) U (fun v hv => hK v (Finset.mem_powerset.1 hU hv))
               (fun k => k.2) w hw S
@@ -411,10 +411,10 @@ theorem served_sound (hc : Properties.Spot.Covers s Pt d ρ cs) (S : ℕ) (θ σ
     congr 1
     refine List.map_congr_left fun k _ => ?_
     rw [hwk]
-  have hgrow : ∑ U ∈ Bf.powerset.erase ∅, X U ≤ (2 : ℝ) ^ S * ((Kf.map fun k => (1 + w k) ^ (G k).n).prod - 1) := by
-    have hle : ∀ U ∈ Bf.powerset, X U ≤ (2 : ℝ) ^ S * ∏ v ∈ U, w (keyOf s Pt v) := by
+  have hgrow : ∑ U ∈ Bf.powerset.erase ∅, Xs U ≤ (2 : ℝ) ^ S * ((Kf.map fun k => (1 + w k) ^ (G k).n).prod - 1) := by
+    have hle : ∀ U ∈ Bf.powerset, Xs U ≤ (2 : ℝ) ^ S * ∏ v ∈ U, w (keyOf s Pt v) := by
       intro U _
-      simp only [X]
+      simp only [Xs]
       rw [capped_exp S ((θ : ℝ) * σ) U]
       exact mul_le_mul_of_nonneg_right (pow_le_pow_right₀ (by norm_num) (min_le_right _ _))
         (Finset.prod_nonneg fun v _ => hw _)
@@ -423,7 +423,7 @@ theorem served_sound (hc : Properties.Spot.Covers s Pt d ρ cs) (S : ℕ) (θ σ
     have hkeys := prod_le_keys Kf (finKeys_nodup cs reads) Bf (keyOf s Pt) (fin_keys hc).1 (fun k => (G k).n)
       (fun k _ => (fin_keys hc).2 k) (fun k => 1 + w k) (fun k => by linarith [hw k])
     rw [herase]
-    calc ∑ U ∈ Bf.powerset, X U - 1 ≤ ∑ U ∈ Bf.powerset, X U - X ∅ := by rw [hX0]
+    calc ∑ U ∈ Bf.powerset, Xs U - 1 ≤ ∑ U ∈ Bf.powerset, Xs U - Xs ∅ := by rw [hX0]
       _ ≤ (2 : ℝ) ^ S * ∑ U ∈ Bf.powerset, ∏ v ∈ U, w (keyOf s Pt v) - (2 : ℝ) ^ S * 1 := by
           rw [← Finset.add_sum_erase _ _ (Finset.empty_mem_powerset Bf),
             ← Finset.add_sum_erase _ _ (Finset.empty_mem_powerset Bf), Finset.prod_empty, mul_add, mul_one]
@@ -575,10 +575,10 @@ theorem wholeCapped_sound (hc : Properties.Spot.Covers s Pt d ρ cs) {q θ : ℚ
   set B := blocksIn Pt d.part ρ
   set Bf := finBlocks Pt d ρ cs
   set Bi := infBlocks Pt d ρ cs
-  set X := ∑ U ∈ B.powerset.filter (fun U => ¬ U ⊆ Bf), (2 : ℝ) ^ min (bitsOf s Pt U) S
+  set Xs := ∑ U ∈ B.powerset.filter (fun U => ¬ U ⊆ Bf), (2 : ℝ) ^ min (bitsOf s Pt U) S
   have hL : ln2Ok L := ln2Ok_of p
   have hpq : (0 : ℝ) ≤ (1 - (q : ℝ)) ^ (θ : ℝ) := Real.rpow_nonneg (by linarith) _
-  have hX0 : 0 ≤ X := Finset.sum_nonneg fun _ _ => by positivity
+  have hX0 : 0 ≤ Xs := Finset.sum_nonneg fun _ _ => by positivity
   by_cases hKe : Ki = []
   · have hBie : Bi = ∅ := Finset.eq_empty_of_forall_notMem fun w hw => by
       have := (inf_keys hc).1 w hw
@@ -587,7 +587,7 @@ theorem wholeCapped_sound (hc : Properties.Spot.Covers s Pt d ρ cs) {q θ : ℚ
     have : (Ki.map G).isEmpty = true := by rw [hKe]; rfl
     rw [if_pos this]
     show _ = (0 : ℝ)
-    have hXz : X = 0 := by
+    have hXz : Xs = 0 := by
       refine Finset.sum_eq_zero fun U hU => absurd ?_ (Finset.mem_filter.1 hU).2
       intro v hv
       have hvB := Finset.mem_powerset.1 (Finset.mem_filter.1 hU).1 hv

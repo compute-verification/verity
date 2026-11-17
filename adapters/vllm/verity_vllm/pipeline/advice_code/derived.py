@@ -1,4 +1,4 @@
-"""The derived rules: the fields of advice v0 (I1, `verity.protocols.accounting.certifier.verifier.advice`) that cost zero bits,
+"""The derived rules: the fields of advice v0 (I1, `verity.protocols.resource_accounting.network.verifier.advice`) that cost zero bits,
 because the certified I/O, the committed values, the registered config or the advice's own history already fix them, and
 the advice that remains.
 
@@ -11,7 +11,7 @@ field is sent and charged, a *forced* one (fixed by witness, but by a rule no un
 **What each checker holds.** In the clear: the residual below and the registered config (`Config`: block size, the KV
 pool's size, the token budget, the stop ids, the scheduler mode). As witness, inside proofs only: the certified ingress
 (each request's `user` id, prompt ids and `max_tokens`, in ingress order), the certified egress and the committed values
-(each kept row's sampled id). The compile unit holds every request's tokens (its prompt ids, then its kept sampled ids).
+(each kept row's sampled id). The compile slice's proof block holds every request's tokens (its prompt ids, then its kept sampled ids).
 
 **The derivations** are one walk over the steps (`walk_steps`), the same for the encoder and the decoder, so they can't drift
 apart. It takes each step's rows in vLLM d9105ea8's scheduling order: the rows' own (`row_order` "scheduling"), or, for
@@ -54,7 +54,7 @@ import hashlib
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-from verity.protocols.accounting.certifier.verifier.advice import RequestAdvice, Row, Source, StepAdvice
+from verity.protocols.resource_accounting.network.verifier.advice import RequestAdvice, Row, Source, StepAdvice
 
 __all__ = ["CertifiedRequest", "Config", "Holdings", "pool_bound", "PREFIX_ROOT", "Prefixes", "Residual", "stop_rule",
     "tie_fields", "TOKEN_BYTES", "unit_key", "Walk", "walk_steps"]
@@ -168,11 +168,11 @@ def _units(lo: int, start: int, end: int, unit: int) -> range:
 
 
 class Prefixes:
-    """Witness, in the compile unit: every request's tokens (its prompt ids, then its kept sampled ids), I1-numbered as
+    """Witness, in the compile slice's proof block: every request's tokens (its prompt ids, then its kept sampled ids), I1-numbered as
     the walk numbers them, and for each prefix of whole hit units whose last unit some request has computed KV at so far
     (all of it, in one run from a unit boundary), the requests that did. A prefix is keyed by `unit_key`'s chain; a key
     names a request only where that request's tokens through the prefix are the asking one's, so no collision can change
-    what is derived, and the prover and the compile unit derive the same on any interpreter."""
+    what is derived, and the prover and the compile slice's proof block derive the same on any interpreter."""
 
     def __init__(self, tokens: Sequence[Sequence[int]], unit: int) -> None:
         if type(unit) is not int or unit < 1:

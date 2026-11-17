@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.NonVacuousJ
-public import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOk
+public import Proofs.Flock.Soundness.Discharge.ZkLink.SampleOk
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
 import all Lean.Data.Json.Basic
@@ -90,23 +90,23 @@ theorem witnessV2_scope :
   decide +kernel
 
 /-- **The hidden-output headlines' circuit premises and sample hypotheses hold together at `witnessV2`.** At the challenger's
-live-coin part's sample file (`DrawFileZK`, `subset kd`, the tables dividing `kd`) and one session `verify --zk` accepts at the
+live-coin part's sample file (`SampleFileZK`, `subset kd`, the tables dividing `kd`) and one session `verify --zk` accepts at the
 sample `dj S`, on untyped inputs under `TagsOkZHJ`'s tags whose circuit file parses as `witnessV2`: its unit is built,
 `scopeOkH` admits it and `scopeOk` refuses it, its rows fit with every row a `sha512/row/v2` row
 (`Hidden.Any.RowsFitS`, `Hidden.rowV2`), and at `mPtsOf witnessV2.g (kd / nTab I)` link points there is a `y₀` (table
-0's setup), every table is set up, and `DrawOkZKHJ` holds at every sample (`zk_session_soundHJ_nonvacuous`, which applies
+0's setup), every table is set up, and `SampleOkZKHJ` holds at every sample (`zk_session_soundHJ_nonvacuous`, which applies
 `zk_session_soundHJ` to them). -/
 theorem zk_session_soundHJ_nonvacuous_v2 (I : Inputs) (ht : I.tags.typed = false) (hTags : TagsOkZHJ I)
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok witnessV2) (kd : ℕ) (hdiv : kd % nTab I = 0)
-    (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj (.subset kd) n)
+    (dj : Finset (Fin n) → Lean.Json) (hdj : SampleFileZK dj (.subset kd) n)
     {S : Finset (Fin n)} {t : Exec.Transcript} (h : AcceptsZK I t) (hd : recordDraw t.record = some (dj S)) :
     Built witnessV2.unit ∧ Layout.scopeOkH witnessV2 = true ∧ Layout.scopeOk witnessV2 = false ∧
       Hidden.Any.RowsFitS witnessV2 ∧ Hidden.rowV2 witnessV2 = true ∧
-      Nonempty (DrawSetupZHJ (inputsJ I 0) (mPtsOf witnessV2.g (kd / nTab I)) (partS I (dj S) S ⟨0, nTab_pos I⟩)
+      Nonempty (SampleSetupZHJ (inputsJ I 0) (mPtsOf witnessV2.g (kd / nTab I)) (partS I (dj S) S ⟨0, nTab_pos I⟩)
         (drawJ I (dj S) 0)) ∧
       (∀ j : Fin (nTab I), Nonempty
-        (DrawSetupZHJ (inputsJ I j) (mPtsOf witnessV2.g (kd / nTab I)) (partS I (dj S) S j) (drawJ I (dj S) j))) ∧
-      ∀ S', DrawOkZKHJ I dj (mPtsOf witnessV2.g (kd / nTab I)) S' := by
+        (SampleSetupZHJ (inputsJ I j) (mPtsOf witnessV2.g (kd / nTab I)) (partS I (dj S) S j) (drawJ I (dj S) j))) ∧
+      ∀ S', SampleOkZKHJ I dj (mPtsOf witnessV2.g (kd / nTab I)) S' := by
   have ht' : (zkTags I).typed = false := (zkTags_typed I).trans ht
   have P := parse_facts (parse_untyped ht' hc).1
   obtain ⟨ls, hls⟩ := P.check

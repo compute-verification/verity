@@ -20,8 +20,8 @@ message (`Refusable`). So Flock meets `Inner.KSAbort` at `Inner.ofFlock` from th
   there (`refuser_run`): kept, it is `P`'s run (`stepWith_refuser_keep`), which accepts at `r` exactly where it does at
   `r` with any last coin, and is the same run there (`run_eq_of_acc`); refused, the verifier rejects its last message
   (`stepWith_refuser_rej`).
-* **The coupling** (`Pr_refDraw`, `Pr_fork_refDraw_le`): over a uniform `g`, that sample is uniform, and two forked runs'
-  samples are `forkDraw`'s, except where the two runs share their coins before the last round: there they share `g`'s
+* **The coupling** (`Pr_refSample`, `Pr_fork_refSample_le`): over a uniform `g`, that sample is uniform, and two forked runs'
+  samples are `forkSample`'s, except where the two runs share their coins before the last round: there they share `g`'s
   value, and a collision among one run's calls twice over is one among that run's.
 * **The bound** (`tableBoundθAbort_of_onAcc`): the refuser's bound, averaged over `g`, with its escapes on accepted runs
   read at the runs as they abort (each fork event's root by Jensen).
@@ -126,7 +126,7 @@ theorem Ex_setLast [Fintype Coin] [Nonempty Coin] (hn : 0 < n) (h : (Fin n → C
   exact congrArg Ex (funext fun r => Ex_const (h r))
 
 /-- **The sample at coins with a fresh last coin and abort coins is uniform.** -/
-theorem Ex_drawOf {A : Type} [Fintype Coin] [Nonempty Coin] [Fintype A] (hn : 0 < n)
+theorem Ex_sampleOf {A : Type} [Fintype Coin] [Nonempty Coin] [Fintype A] (hn : 0 < n)
     (k : (Fin n → Coin) × A → ℝ) :
     (Ex fun r : Fin n → Coin => Ex fun y : Coin × A => k (drawOf r y)) = Ex k :=
   calc (Ex fun r : Fin n → Coin => Ex fun y : Coin × A => k (drawOf r y))
@@ -183,7 +183,7 @@ def refuser (P : Prover Ω) (x : Msg) (n : ℕ) (decC : Msg → Msg → Coin) (k
 
 /-- The refuser's sample at coins `r`: `r` with `g`'s last coin, and `g`'s abort coins, `g` read at `r` before its last
 coin. -/
-def refDraw {n : ℕ} (g : (Fin n → Coin) → Coin × A) (r : Fin n → Coin) : (Fin n → Coin) × A :=
+def refSample {n : ℕ} (g : (Fin n → Coin) → Coin × A) (r : Fin n → Coin) : (Fin n → Coin) × A :=
   drawOf r (g (setLast r default))
 
 /-- What the rounds keep at coins `r`: `M` of `n` rounds left, a message per round, and the coins the history shows are
@@ -228,7 +228,7 @@ theorem stepWith_refuser_keep (H : Msg → Msg) (P : Prover Ω) (x : Msg) {n : �
     (keep : Ω → (Fin n → Coin) → A → Bool) (m₀ : Msg) (ω : Ω) (g : (Fin n → Coin) → Coin × A) (r : Fin n → Coin)
     (vn : List Msg → OC Out)
     (hshow : ∀ (as : List Msg) (a m : Msg), ((vn (as ++ [a])).eval H).1 = .msg m → decC x m = coinSeq r as.length)
-    (hk : keep ω (refDraw g r).1 (refDraw g r).2 = true) :
+    (hk : keep ω (refSample g r).1 (refSample g r).2 = true) :
     ∀ M hist as t, RefInv decC x r M hist as →
       stepWith H (refuser P x n decC keep m₀) x (ω, g) vn M hist as t = stepWith H P x ω vn M hist as t :=
   stepWith_congr H (refuser P x n decC keep m₀) P x (ω, g) ω vn (fun M hist as => RefInv decC x r M hist as)
@@ -237,7 +237,7 @@ theorem stepWith_refuser_keep (H : Msg → Msg) (P : Prover Ω) (x : Msg) {n : �
         simp only [refuser]
         refine ite_eq_right fun ⟨hl, hk'⟩ => ?_
         simp only [histCoins_eq h hl] at hk'
-        unfold refDraw drawOf at hk
+        unfold refSample drawOf at hk
         rw [hk] at hk'
         exact Bool.noConfusion hk'
       rw [hn])
@@ -251,7 +251,7 @@ theorem stepWith_refuser_rej (H : Msg → Msg) (P : Prover Ω) (x : Msg) {n : �
     (hshow : ∀ (as : List Msg) (a m : Msg), ((vn (as ++ [a])).eval H).1 = .msg m → decC x m = coinSeq r as.length)
     (hlast : ∀ as : List Msg, ((vn as).eval H).1 = .acc → as.length = n)
     (href : ∀ as : List Msg, ((vn (as ++ [m₀])).eval H).1 ≠ .acc)
-    (hk : keep ω (refDraw g r).1 (refDraw g r).2 = false) :
+    (hk : keep ω (refSample g r).1 (refSample g r).2 = false) :
     ∀ M hist as t, RefInv decC x r M hist as →
       (stepWith H (refuser P x n decC keep m₀) x (ω, g) vn M hist as t).out ≠ .acc
   | 0, _, _, _, _ => by simp [stepWith]
@@ -352,9 +352,9 @@ theorem refuser_run (H : Msg → Msg) (P : Prover Ω) (V : Verifier Coin) (x : M
     (hm₀ : ∀ (as : List Msg) (cs : List Coin), ((V.next x (as ++ [m₀]) cs).eval H).1 ≠ .acc)
     (ω : Ω) (g : (Fin (V.k x) → Coin) → Coin × A) (r : Fin (V.k x) → Coin) :
     ((run H (refuser P x (V.k x) decC keep m₀) V x (ω, g) r).out = .acc ↔
-      (abortRun H P V x keep ω (refDraw g r)).out = .acc) ∧
+      (abortRun H P V x keep ω (refSample g r)).out = .acc) ∧
     ((run H (refuser P x (V.k x) decC keep m₀) V x (ω, g) r).out = .acc →
-      run H (refuser P x (V.k x) decC keep m₀) V x (ω, g) r = abortRun H P V x keep ω (refDraw g r)) := by
+      run H (refuser P x (V.k x) decC keep m₀) V x (ω, g) r = abortRun H P V x keep ω (refSample g r)) := by
   have hshow : ∀ (as : List Msg) (a m : Msg),
       ((V.next x (as ++ [a]) ((List.range (as ++ [a]).length).map (coinSeq r))).eval H).1 = .msg m →
         decC x m = coinSeq r as.length := by
@@ -362,9 +362,9 @@ theorem refuser_run (H : Msg → Msg) (P : Prover Ω) (V : Verifier Coin) (x : M
     rw [List.length_append, List.length_singleton, List.range_succ, List.map_append,
       List.map_singleton] at hv
     exact hpc x _ _ _ m (by simp) hv
-  have hagree : ∀ i : Fin (V.k x), i.val + 1 < V.k x → (refDraw g r).1 i = r i := fun i hi => by
-    simp only [refDraw, drawOf, setLast, hi, ↓reduceIte]
-  by_cases hk : keep ω (refDraw g r).1 (refDraw g r).2 = true
+  have hagree : ∀ i : Fin (V.k x), i.val + 1 < V.k x → (refSample g r).1 i = r i := fun i hi => by
+    simp only [refSample, drawOf, setLast, hi, ↓reduceIte]
+  by_cases hk : keep ω (refSample g r).1 (refSample g r).2 = true
   · have hrun : run H (refuser P x (V.k x) decC keep m₀) V x (ω, g) r = run H P V x ω r :=
       stepWith_refuser_keep H P x decC keep m₀ ω g r
         (fun as => V.next x as ((List.range as.length).map (coinSeq r))) hshow hk (V.k x) [] []
@@ -375,14 +375,14 @@ theorem refuser_run (H : Msg → Msg) (P : Prover Ω) (V : Verifier Coin) (x : M
       exact h
     · rw [run_eq_of_acc H P V x hfree ω (fun i hi => (hagree i hi).symm) h]
       exact h
-  · have hk' : keep ω (refDraw g r).1 (refDraw g r).2 = false := by simpa using hk
+  · have hk' : keep ω (refSample g r).1 (refSample g r).2 = false := by simpa using hk
     have hrej : (run H (refuser P x (V.k x) decC keep m₀) V x (ω, g) r).out ≠ .acc :=
       stepWith_refuser_rej H P x decC keep m₀ ω g r
         (fun as => V.next x as ((List.range as.length).map (coinSeq r))) hshow
         (fun as ha => hlast x as ((List.range as.length).map (coinSeq r)) (by simp) ha)
         (fun as => hm₀ as ((List.range (as ++ [m₀]).length).map (coinSeq r))) hk' (V.k x) [] []
         ⟨[], [], [], .rej⟩ (refInv_start decC x r)
-    have hab : (abortRun H P V x keep ω (refDraw g r)).out = .rej := by
+    have hab : (abortRun H P V x keep ω (refSample g r)).out = .rej := by
       unfold abortRun
       rw [ite_eq_right hk]
       rfl
@@ -399,24 +399,24 @@ section Coupling
 variable {Coin A : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [Fintype A] [Nonempty A] {n : ℕ}
 
 /-- **The refuser's sample is uniform** over a uniform `g`. -/
-theorem Ex_refDraw [DecidableEq (Fin n → Coin)] (hn : 0 < n) (k : (Fin n → Coin) × A → ℝ) :
-    (Ex fun g : (Fin n → Coin) → Coin × A => Ex fun r : Fin n → Coin => k (refDraw g r)) = Ex k :=
-  calc (Ex fun g : (Fin n → Coin) → Coin × A => Ex fun r : Fin n → Coin => k (refDraw g r))
-      = Ex fun r : Fin n → Coin => Ex fun g : (Fin n → Coin) → Coin × A => k (refDraw g r) :=
-        Claims.Bridge.Ex_comm fun (g : (Fin n → Coin) → Coin × A) (r : Fin n → Coin) => k (refDraw g r)
+theorem Ex_refSample [DecidableEq (Fin n → Coin)] (hn : 0 < n) (k : (Fin n → Coin) × A → ℝ) :
+    (Ex fun g : (Fin n → Coin) → Coin × A => Ex fun r : Fin n → Coin => k (refSample g r)) = Ex k :=
+  calc (Ex fun g : (Fin n → Coin) → Coin × A => Ex fun r : Fin n → Coin => k (refSample g r))
+      = Ex fun r : Fin n → Coin => Ex fun g : (Fin n → Coin) → Coin × A => k (refSample g r) :=
+        Claims.Bridge.Ex_comm fun (g : (Fin n → Coin) → Coin × A) (r : Fin n → Coin) => k (refSample g r)
     _ = Ex fun r : Fin n → Coin => Ex fun y : Coin × A => k (drawOf r y) :=
         congrArg Ex (funext fun r => Ex_fun_at (setLast r default) fun y => k (drawOf r y))
-    _ = Ex k := Ex_drawOf hn k
+    _ = Ex k := Ex_sampleOf hn k
 
-theorem Pr_refDraw [DecidableEq (Fin n → Coin)] (hn : 0 < n) (p : (Fin n → Coin) × A → Prop) :
-    (Ex fun g : (Fin n → Coin) → Coin × A => Pr fun r : Fin n → Coin => p (refDraw g r)) = Pr p := by
+theorem Pr_refSample [DecidableEq (Fin n → Coin)] (hn : 0 < n) (p : (Fin n → Coin) × A → Prop) :
+    (Ex fun g : (Fin n → Coin) → Coin × A => Pr fun r : Fin n → Coin => p (refSample g r)) = Pr p := by
   classical
-  calc (Ex fun g : (Fin n → Coin) → Coin × A => Pr fun r : Fin n → Coin => p (refDraw g r))
+  calc (Ex fun g : (Fin n → Coin) → Coin × A => Pr fun r : Fin n → Coin => p (refSample g r))
       = Ex fun g : (Fin n → Coin) → Coin × A => Ex fun r : Fin n → Coin =>
-          if p (refDraw g r) then (1 : ℝ) else 0 :=
-        congrArg Ex (funext fun g => (Ex_ind fun r : Fin n → Coin => p (refDraw g r)).symm)
+          if p (refSample g r) then (1 : ℝ) else 0 :=
+        congrArg Ex (funext fun g => (Ex_ind fun r : Fin n → Coin => p (refSample g r)).symm)
     _ = Ex fun d : (Fin n → Coin) × A => if p d then (1 : ℝ) else 0 :=
-        Ex_refDraw hn fun d => if p d then (1 : ℝ) else 0
+        Ex_refSample hn fun d => if p d then (1 : ℝ) else 0
     _ = Pr p := Ex_ind p
 
 /-- A collision among one run's calls twice over is one among its calls and any others'. -/
@@ -426,27 +426,27 @@ theorem TiedColl.of_dup {H : Msg → Msg} {l : List (Msg × Msg)} (h : TiedColl 
   simp only [List.map_append, List.mem_append, or_self] at hu hv
   exact TiedColl.append_right ⟨u, v, hc, hu, hv⟩ l'
 
-/-- **Two forked refuser samples are at most `forkDraw`'s** over a uniform `g`, for a value at least as large at any
+/-- **Two forked refuser samples are at most `forkSample`'s** over a uniform `g`, for a value at least as large at any
 second sample as at the first sample twice: where the two runs' coins before the last round differ, `g`'s values there are
 independent, and where they agree, the two samples are one. -/
-theorem Ex_fork_refDraw_le [DecidableEq (Fin n → Coin)] (j : Fin n)
+theorem Ex_fork_refSample_le [DecidableEq (Fin n → Coin)] (j : Fin n)
     (F : (Fin n → Coin) × A → (Fin n → Coin) × A → ℝ) (hF : ∀ d d', F d d ≤ F d d') :
     (Ex fun g : (Fin n → Coin) → Coin × A => Ex fun s : (Fin n → Coin) × (Fin n → Coin) =>
-        F (refDraw g s.1) (refDraw g (forkCoins j s.1 s.2))) ≤
-      Ex fun s : ((Fin n → Coin) × A) × ((Fin n → Coin) × A) => F s.1 (forkDraw j s.1 s.2) := by
+        F (refSample g s.1) (refSample g (forkCoins j s.1 s.2))) ≤
+      Ex fun s : ((Fin n → Coin) × A) × ((Fin n → Coin) × A) => F s.1 (forkSample j s.1 s.2) := by
   have hn : 0 < n := j.pos
   have hpt : ∀ s : (Fin n → Coin) × (Fin n → Coin),
-      (Ex fun g : (Fin n → Coin) → Coin × A => F (refDraw g s.1) (refDraw g (forkCoins j s.1 s.2))) ≤
+      (Ex fun g : (Fin n → Coin) → Coin × A => F (refSample g s.1) (refSample g (forkCoins j s.1 s.2))) ≤
         Ex fun y : Coin × A => Ex fun y' : Coin × A => F (drawOf s.1 y) (drawOf (forkCoins j s.1 s.2) y') := by
     intro s
     by_cases hp : setLast s.1 default = setLast (forkCoins j s.1 s.2) default
-    · have hd : ∀ g : (Fin n → Coin) → Coin × A, refDraw g (forkCoins j s.1 s.2) = refDraw g s.1 := fun g => by
-        unfold refDraw drawOf
+    · have hd : ∀ g : (Fin n → Coin) → Coin × A, refSample g (forkCoins j s.1 s.2) = refSample g s.1 := fun g => by
+        unfold refSample drawOf
         rw [← hp]
         exact Prod.ext (setLast_congr hp _).symm rfl
-      calc (Ex fun g : (Fin n → Coin) → Coin × A => F (refDraw g s.1) (refDraw g (forkCoins j s.1 s.2)))
-          = Ex fun g : (Fin n → Coin) → Coin × A => F (refDraw g s.1) (refDraw g s.1) :=
-            congrArg Ex (funext fun g => congrArg (F (refDraw g s.1)) (hd g))
+      calc (Ex fun g : (Fin n → Coin) → Coin × A => F (refSample g s.1) (refSample g (forkCoins j s.1 s.2)))
+          = Ex fun g : (Fin n → Coin) → Coin × A => F (refSample g s.1) (refSample g s.1) :=
+            congrArg Ex (funext fun g => congrArg (F (refSample g s.1)) (hd g))
         _ = Ex fun y : Coin × A => F (drawOf s.1 y) (drawOf s.1 y) :=
             Ex_fun_at (setLast s.1 default) fun y => F (drawOf s.1 y) (drawOf s.1 y)
         _ ≤ Ex fun y : Coin × A => Ex fun y' : Coin × A => F (drawOf s.1 y) (drawOf (forkCoins j s.1 s.2) y') :=
@@ -454,42 +454,42 @@ theorem Ex_fork_refDraw_le [DecidableEq (Fin n → Coin)] (j : Fin n)
               (Ex_mono fun y' => hF (drawOf s.1 y) (drawOf (forkCoins j s.1 s.2) y'))
     · exact le_of_eq (Ex_fun_at₂ hp fun y y' => F (drawOf s.1 y) (drawOf (forkCoins j s.1 s.2) y'))
   have hfork : ∀ (r r' : Fin n → Coin) (y y' : Coin × A),
-      drawOf (forkCoins j r r') y' = forkDraw j (drawOf r y) (drawOf r' y') := fun r r' y y' =>
+      drawOf (forkCoins j r r') y' = forkSample j (drawOf r y) (drawOf r' y') := fun r r' y y' =>
     Prod.ext (forkCoins_setLast j r r' y.1 y'.1).symm rfl
   calc (Ex fun g : (Fin n → Coin) → Coin × A => Ex fun s : (Fin n → Coin) × (Fin n → Coin) =>
-        F (refDraw g s.1) (refDraw g (forkCoins j s.1 s.2)))
+        F (refSample g s.1) (refSample g (forkCoins j s.1 s.2)))
       = Ex fun s : (Fin n → Coin) × (Fin n → Coin) => Ex fun g : (Fin n → Coin) → Coin × A =>
-          F (refDraw g s.1) (refDraw g (forkCoins j s.1 s.2)) :=
+          F (refSample g s.1) (refSample g (forkCoins j s.1 s.2)) :=
         Claims.Bridge.Ex_comm fun (g : (Fin n → Coin) → Coin × A) (s : (Fin n → Coin) × (Fin n → Coin)) =>
-          F (refDraw g s.1) (refDraw g (forkCoins j s.1 s.2))
+          F (refSample g s.1) (refSample g (forkCoins j s.1 s.2))
     _ ≤ Ex fun s : (Fin n → Coin) × (Fin n → Coin) => Ex fun y : Coin × A => Ex fun y' : Coin × A =>
           F (drawOf s.1 y) (drawOf (forkCoins j s.1 s.2) y') := Ex_mono hpt
     _ = Ex fun r : Fin n → Coin => Ex fun r' : Fin n → Coin => Ex fun y : Coin × A => Ex fun y' : Coin × A =>
-          F (drawOf r y) (forkDraw j (drawOf r y) (drawOf r' y')) :=
+          F (drawOf r y) (forkSample j (drawOf r y) (drawOf r' y')) :=
         (Ex_prod fun s : (Fin n → Coin) × (Fin n → Coin) => Ex fun y : Coin × A => Ex fun y' : Coin × A =>
           F (drawOf s.1 y) (drawOf (forkCoins j s.1 s.2) y')).trans
           (congrArg Ex (funext fun r => congrArg Ex (funext fun r' => congrArg Ex (funext fun y =>
             congrArg Ex (funext fun y' => congrArg (F (drawOf r y)) (hfork r r' y y'))))))
     _ = Ex fun r : Fin n → Coin => Ex fun y : Coin × A => Ex fun r' : Fin n → Coin => Ex fun y' : Coin × A =>
-          F (drawOf r y) (forkDraw j (drawOf r y) (drawOf r' y')) :=
+          F (drawOf r y) (forkSample j (drawOf r y) (drawOf r' y')) :=
         congrArg Ex (funext fun r => Claims.Bridge.Ex_comm fun (r' : Fin n → Coin) (y : Coin × A) =>
-          Ex fun y' : Coin × A => F (drawOf r y) (forkDraw j (drawOf r y) (drawOf r' y')))
+          Ex fun y' : Coin × A => F (drawOf r y) (forkSample j (drawOf r y) (drawOf r' y')))
     _ = Ex fun r : Fin n → Coin => Ex fun y : Coin × A => Ex fun d' : (Fin n → Coin) × A =>
-          F (drawOf r y) (forkDraw j (drawOf r y) d') :=
+          F (drawOf r y) (forkSample j (drawOf r y) d') :=
         congrArg Ex (funext fun r => congrArg Ex (funext fun y =>
-          Ex_drawOf hn fun d' => F (drawOf r y) (forkDraw j (drawOf r y) d')))
-    _ = Ex fun d : (Fin n → Coin) × A => Ex fun d' : (Fin n → Coin) × A => F d (forkDraw j d d') :=
-        Ex_drawOf hn fun d => Ex fun d' : (Fin n → Coin) × A => F d (forkDraw j d d')
-    _ = Ex fun s : ((Fin n → Coin) × A) × ((Fin n → Coin) × A) => F s.1 (forkDraw j s.1 s.2) :=
-        (Ex_prod fun s : ((Fin n → Coin) × A) × ((Fin n → Coin) × A) => F s.1 (forkDraw j s.1 s.2)).symm
+          Ex_sampleOf hn fun d' => F (drawOf r y) (forkSample j (drawOf r y) d')))
+    _ = Ex fun d : (Fin n → Coin) × A => Ex fun d' : (Fin n → Coin) × A => F d (forkSample j d d') :=
+        Ex_sampleOf hn fun d => Ex fun d' : (Fin n → Coin) × A => F d (forkSample j d d')
+    _ = Ex fun s : ((Fin n → Coin) × A) × ((Fin n → Coin) × A) => F s.1 (forkSample j s.1 s.2) :=
+        (Ex_prod fun s : ((Fin n → Coin) × A) × ((Fin n → Coin) × A) => F s.1 (forkSample j s.1 s.2)).symm
 
-/-- **Two forked refuser samples are at most `forkDraw`'s** over a uniform `g`, for an event that holds at any second
+/-- **Two forked refuser samples are at most `forkSample`'s** over a uniform `g`, for an event that holds at any second
 sample where it holds at the first sample twice. -/
-theorem Pr_fork_refDraw_le [DecidableEq (Fin n → Coin)] (j : Fin n)
+theorem Pr_fork_refSample_le [DecidableEq (Fin n → Coin)] (j : Fin n)
     (Q : (Fin n → Coin) × A → (Fin n → Coin) × A → Prop) (hQ : ∀ d d', Q d d → Q d d') :
     (Ex fun g : (Fin n → Coin) → Coin × A => Pr fun s : (Fin n → Coin) × (Fin n → Coin) =>
-        Q (refDraw g s.1) (refDraw g (forkCoins j s.1 s.2))) ≤
-      Pr fun s : ((Fin n → Coin) × A) × ((Fin n → Coin) × A) => Q s.1 (forkDraw j s.1 s.2) := by
+        Q (refSample g s.1) (refSample g (forkCoins j s.1 s.2))) ≤
+      Pr fun s : ((Fin n → Coin) × A) × ((Fin n → Coin) × A) => Q s.1 (forkSample j s.1 s.2) := by
   classical
   have hF : ∀ d d' : (Fin n → Coin) × A, (if Q d d then (1 : ℝ) else 0) ≤ if Q d d' then (1 : ℝ) else 0 :=
     fun d d' => by
@@ -498,16 +498,16 @@ theorem Pr_fork_refDraw_le [DecidableEq (Fin n → Coin)] (j : Fin n)
       · simp only [h, ↓reduceIte]
         split_ifs <;> norm_num
   calc (Ex fun g : (Fin n → Coin) → Coin × A => Pr fun s : (Fin n → Coin) × (Fin n → Coin) =>
-        Q (refDraw g s.1) (refDraw g (forkCoins j s.1 s.2)))
+        Q (refSample g s.1) (refSample g (forkCoins j s.1 s.2)))
       = Ex fun g : (Fin n → Coin) → Coin × A => Ex fun s : (Fin n → Coin) × (Fin n → Coin) =>
-          if Q (refDraw g s.1) (refDraw g (forkCoins j s.1 s.2)) then (1 : ℝ) else 0 :=
+          if Q (refSample g s.1) (refSample g (forkCoins j s.1 s.2)) then (1 : ℝ) else 0 :=
         congrArg Ex (funext fun g => (Ex_ind fun s : (Fin n → Coin) × (Fin n → Coin) =>
-          Q (refDraw g s.1) (refDraw g (forkCoins j s.1 s.2))).symm)
+          Q (refSample g s.1) (refSample g (forkCoins j s.1 s.2))).symm)
     _ ≤ Ex fun s : ((Fin n → Coin) × A) × ((Fin n → Coin) × A) =>
-          if Q s.1 (forkDraw j s.1 s.2) then (1 : ℝ) else 0 :=
-        Ex_fork_refDraw_le j (fun d d' => if Q d d' then (1 : ℝ) else 0) hF
-    _ = Pr fun s : ((Fin n → Coin) × A) × ((Fin n → Coin) × A) => Q s.1 (forkDraw j s.1 s.2) :=
-        Ex_ind fun s : ((Fin n → Coin) × A) × ((Fin n → Coin) × A) => Q s.1 (forkDraw j s.1 s.2)
+          if Q s.1 (forkSample j s.1 s.2) then (1 : ℝ) else 0 :=
+        Ex_fork_refSample_le j (fun d d' => if Q d d' then (1 : ℝ) else 0) hF
+    _ = Pr fun s : ((Fin n → Coin) × A) × ((Fin n → Coin) × A) => Q s.1 (forkSample j s.1 s.2) :=
+        Ex_ind fun s : ((Fin n → Coin) × A) × ((Fin n → Coin) × A) => Q s.1 (forkSample j s.1 s.2)
 
 end Coupling
 
@@ -539,7 +539,7 @@ abbrev Escapes.toAbortD {Ω A : Type} {H : Msg → Msg} {P : Prover Ω} {V : Ver
     c := e.c
     j := e.j
     ev := fun i ω d d' => TiedColl H ((abortRun H P V x keep ω d).vLog ++
-      (abortRun H P V x keep ω (forkDraw (e.j i) d d')).vLog)
+      (abortRun H P V x keep ω (forkSample (e.j i) d d')).vLog)
     L := e.L
     β := e.β
     ev₁ := fun _ ω d => TiedColl H (abortRun H P V x keep ω d).vLog
@@ -578,14 +578,14 @@ theorem accPrD_le_of_refuser {Ω A : Type} [Fintype Ω] [Nonempty Ω] [Fintype A
   have hL : (Ex fun g : (Fin (V.k x) → Coin) → Coin × A =>
       accPr H V (refuser P x (V.k x) decC keep m₀) x (ω, g)) = accPrD (abortRun H P V x keep ω) := by
     unfold accPr accPrD
-    rw [← Pr_refDraw hVk]
+    rw [← Pr_refSample hVk]
     exact congrArg Ex (funext fun g => Pr_congr fun r => (hrun ω g r).1)
   have hO : (Ex fun g : (Fin (V.k x) → Coin) → Coin × A =>
       Pr fun r : Fin (V.k x) → Coin => (run H (refuser P x (V.k x) decC keep m₀) V x (ω, g) r).out = .acc ∧
         Q (run H (refuser P x (V.k x) decC keep m₀) V x (ω, g) r).seen) =
       Pr fun d : (Fin (V.k x) → Coin) × A => (abortRun H P V x keep ω d).out = .acc ∧
         Q (abortRun H P V x keep ω d).seen := by
-    rw [← Pr_refDraw hVk]
+    rw [← Pr_refSample hVk]
     refine congrArg Ex (funext fun g => Pr_congr fun r => ?_)
     constructor
     · rintro ⟨ha, rest⟩
@@ -603,7 +603,7 @@ theorem accPrD_le_of_refuser {Ω A : Type} [Fintype Ω] [Nonempty Ω] [Fintype A
       rw [Ex_mul_left]
       refine Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left ?_ (e.c_nonneg i))
       refine (Ex_mono fun g => Pr_mono fun s hs => ?_).trans
-        (Pr_fork_refDraw_le (e.j i) (fun d d' => TiedColl H ((abortRun H P V x keep ω d).vLog ++
+        (Pr_fork_refSample_le (e.j i) (fun d d' => TiedColl H ((abortRun H P V x keep ω d).vLog ++
           (abortRun H P V x keep ω d').vLog)) fun d d' h => TiedColl.of_dup h _)
       obtain ⟨h1, h2 | h2⟩ := hon i (ω, g) s.1 s.2 hs
       · have ht := e.tied i (ω, g) s.1 s.2 hs
@@ -614,7 +614,7 @@ theorem accPrD_le_of_refuser {Ω A : Type} [Fintype Ω] [Nonempty Ω] [Fintype A
     · rw [Ex_mul_left]
       refine mul_le_mul_of_nonneg_left ?_ (e.β_nonneg l)
       refine (Ex_mono fun g => Pr_mono fun r hr => ?_).trans
-        (le_of_eq (Pr_refDraw hVk fun d => TiedColl H (abortRun H P V x keep ω d).vLog))
+        (le_of_eq (Pr_refSample hVk fun d => TiedColl H (abortRun H P V x keep ω d).vLog))
       have ht := e.tied₁ l (ω, g) r hr
       rw [(hrun ω g r).2 (hon₁ l (ω, g) r hr)] at ht
       exact ht

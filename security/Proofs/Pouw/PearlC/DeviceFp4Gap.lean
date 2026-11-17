@@ -2,8 +2,10 @@ module
 
 public import Proofs.Pouw.PearlC.TileGap
 public import Definitions.Pouw.Assumptions.PearlC.TTOutFp4
+public import Definitions.Pouw.PearlC.NoiseSha512
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
+public import Proofs.Pouw.PearlC.Records
 
 /-!
 # g at an FP4 record, and Pearl-C4's headline on sm_120 (staged, nothing pinned)
@@ -17,6 +19,10 @@ import Mathlib.Tactic.Positivity.Finset
   `5473473967/895794400000` (0.61102%) at 16384³, per unit (`pearlCGapFp4Sm120_8192`, `_16384`) and per audit tile
   (`pearlCSampledFp4Sm120_8192`, `_16384`). They are `fp4-delta/README.md`'s `lut256` values at 8.376. Per `m·k`, the
   credit is `n + 32 + 256·n/k + fs` and `W_ref` adds `qa`. At `fs = 97.76` they were 0.71761% and 0.61112%.
+* **The registered scheme's noise is in the domain** (`pearl-c-nvfp4-v0`, h0): `sha512Fp4Sem` meets D-SK at any injective salt encoding
+  (`sha512Fp4Sem_saltKeyedB`), the 32-byte salt's bytes are one (`salt32_bytes_injective`), and a workload whose units
+  all have one shape D₄ admits is in the one-shape domain there (`sha512Fp4Sem_inDomain`), at 8192³ and 16384³ among
+  others (`sha512Fp4Sem_inDomain_headline`). So the headline instances at `sha512Fp4Sem` are not vacuous on the noise.
 * **The sub-grid flags read the ticket's chain:** on rows `cTilde` accepts, the firings they replay fold to `cTilde`'s
   chain (`fires_fold_eq_cTilde`).
 * **Sanity checks**, by the kernel: the forming's E2M1 cast (`e2m1Mag_ties`, `e2m1Mag_grid`, `e2m1Word_examples`), the
@@ -27,7 +33,7 @@ import Mathlib.Tactic.Positivity.Finset
   corner, rectangular shapes, shapes between and past the table's points (`cL_corner`, `cL_rectangular`, `cL_between`,
   `cL_beyond`), and the table's shape and fall in each dimension (`cLTable_dims`, `cLTable_falls`).
 * **Neither the base-split fix nor its restage moves g.** F1′, F2 and R1 are debit terms
-  (`Fp4Sem.tileDebit`), and the g statements hold at any debit within the cap. They take TT_OUT on the domain
+  (`Fp4Sem.tileInertWork`), and the g statements hold at any debit within the cap. They take TT_OUT on the domain
   `pearlCDomainFp4`, now bounded to the grant's shapes, and read only its one-shape clause, so the instances are
   unchanged.
 -/
@@ -53,16 +59,16 @@ theorem pearlCGapFp4At {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [F
     GGap CM (pearlCProtocolFp4 d sem ρ) (pearlCDomainFp4At sem s) (g : ℝ) δPearlC := by
   have hW : ∀ U : Workload, U.InDomain (pearlCProtocolFp4 d sem ρ) (pearlCDomainFp4At sem s) → ∀ (H : Q → R) (s' : S),
       ∀ u < U.layout.N, ∀ act : Codes, (pearlCProtocolFp4 d sem ρ).actOK (U.layout.shape u) act →
-        (pearlCProtocolFp4 d sem ρ).capOK H s' U u act →
+        (pearlCProtocolFp4 d sem ρ).inertBoundOK H s' U u act →
           (pearlCProtocolFp4 d sem ρ).Wref U.layout u ≤ (ω : ℝ) * (pearlCProtocolFp4 d sem ρ).credit H s' U u act := by
     intro U hU H s' u hu act _ hcap
     have hsh : U.layout.shape u = s := hU.2.2 u hu
-    have hc : sem.unitDebit d H s' U u act ≤ ρ * creditFp4 d (U.layout.shape u) := hcap
+    have hc : sem.unitInertWork d H s' U u act ≤ ρ * creditFp4 d (U.layout.shape u) := hcap
     show (wrefFp4 d (U.layout.shape u) : ℝ) ≤
-      (ω : ℝ) * ((creditFp4 d (U.layout.shape u) - sem.unitDebit d H s' U u act : ℚ) : ℝ)
+      (ω : ℝ) * ((creditFp4 d (U.layout.shape u) - sem.unitInertWork d H s' U u act : ℚ) : ℝ)
     rw [hsh] at hc ⊢
     rw [hω]
-    have : ω * ((1 - ρ) * creditFp4 d s) ≤ ω * (creditFp4 d s - sem.unitDebit d H s' U u act) :=
+    have : ω * ((1 - ρ) * creditFp4 d s) ≤ ω * (creditFp4 d s - sem.unitInertWork d H s' U u act) :=
       mul_le_mul_of_nonneg_left (by linarith) hω0.le
     exact_mod_cast this
   have key := gapFromTTOut CM (pearlCProtocolFp4 d sem ρ) (pearlCDomainFp4At sem s) (1 / 400) (ω : ℝ) δPearlC
@@ -79,7 +85,7 @@ theorem pearlCSampledFp4At {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R
     (hTT : TTOutTileFp4 CM d sem ρ) :
     GGapSampled CM (pearlCProtocolFp4 d sem ρ) (pearlCTilesFp4 d sem ρ) (pearlCDomainFp4At sem s) (γ : ℝ) δPearlC := by
   have hW : ∀ U : Workload, U.InDomain (pearlCProtocolFp4 d sem ρ) (pearlCDomainFp4At sem s) → ∀ (H : Q → R) (s' : S),
-      ∀ g < ((pearlCTilesFp4 d sem ρ).tiling U.layout).NT, ∀ act : Codes, (pearlCTilesFp4 d sem ρ).capOK H s' U g act →
+      ∀ g < ((pearlCTilesFp4 d sem ρ).tiling U.layout).NT, ∀ act : Codes, (pearlCTilesFp4 d sem ρ).inertBoundOK H s' U g act →
         (pearlCTilesFp4 d sem ρ).Wcred U.layout g act ≤ (ω : ℝ) * (pearlCTilesFp4 d sem ρ).credit H s' U g act := by
     intro U hU H s' g hg act _
     have hu := auditTiling_unit_lt 64 64 U.layout hg
@@ -240,6 +246,43 @@ on shape grounds. -/
 theorem pearlCShapeFp4_headline : pearlCShapeFp4 sh8192 ∧ pearlCShapeFp4 sh16384 := by
   unfold pearlCShapeFp4 sh8192 sh16384
   decide +kernel
+
+/-- **The registered scheme's noise meets D-SK** (`pearl-c-nvfp4-v0`, h0): `sha512Fp4Sem` at any injective encoding of
+the salt. -/
+theorem sha512Fp4Sem_saltKeyedB {Q R S : Type} (base : Fp4Sem Q R S) {salt : S → List ℕ}
+    (hs : Function.Injective salt) (rootA : List ℕ → ℕ → Codes → List ℕ) (rootB : ℕ → List ℕ) :
+    (sha512Fp4Sem base salt rootA rootB).SaltKeyedB :=
+  ⟨salt, rootB, hs, fun _ _ _ _ _ => rfl⟩
+
+/-- The 32-byte salt's bytes are an injective encoding. -/
+theorem salt32_bytes_injective : Function.Injective NoiseSha512.Salt32.bytes := by
+  intro a b h
+  have h' : (fun i => (a i).val) = fun i => (b i).val := List.ofFn_inj.mp h
+  funext i
+  exact Fin.ext (congrFun h' i)
+
+/-- **D₄ is not empty at the registered scheme's noise**: a workload of at most `2^64` units, all of one shape `s` that D₄ admits,
+is in the one-shape domain at `sha512Fp4Sem` over the 32-byte salt, for any base scales, roots, record and cap. -/
+theorem sha512Fp4Sem_inDomain {Q R : Type} (d : Fp4Device) (base : Fp4Sem Q R NoiseSha512.Salt32) (ρ : ℚ)
+    (rootA : List ℕ → ℕ → Codes → List ℕ) (rootB : ℕ → List ℕ) (s : Shape) (hs : pearlCShapeFp4 s) (N : ℕ) (hN : N ≤ 2 ^ 64)
+    (fixedId : ℕ → ℕ) (fixed : ℕ → Codes) :
+    (⟨⟨N, fun _ => s, fixedId⟩, fixed⟩ : Workload).InDomain
+      (pearlCProtocolFp4 d (sha512Fp4Sem base NoiseSha512.Salt32.bytes rootA rootB) ρ)
+      (pearlCDomainFp4At (sha512Fp4Sem base NoiseSha512.Salt32.bytes rootA rootB) s) :=
+  ⟨hN, ⟨sha512Fp4Sem_saltKeyedB base salt32_bytes_injective rootA rootB, fun _ _ => hs⟩, fun _ _ => rfl⟩
+
+/-- **The headline domains are not empty at the registered scheme's noise**: one unit of 8192³, and one of 16384³, on sm_120 at
+the cap `1/400`. -/
+theorem sha512Fp4Sem_inDomain_headline {Q R : Type} (base : Fp4Sem Q R NoiseSha512.Salt32)
+    (rootA : List ℕ → ℕ → Codes → List ℕ) (rootB : ℕ → List ℕ) (fixed : ℕ → Codes) :
+    (⟨⟨1, fun _ => sh8192, fun _ => 0⟩, fixed⟩ : Workload).InDomain
+        (pearlCProtocolFp4 devFp4Sm120 (sha512Fp4Sem base NoiseSha512.Salt32.bytes rootA rootB) (1 / 400))
+        (pearlCDomainFp4At (sha512Fp4Sem base NoiseSha512.Salt32.bytes rootA rootB) sh8192) ∧
+      (⟨⟨1, fun _ => sh16384, fun _ => 0⟩, fixed⟩ : Workload).InDomain
+        (pearlCProtocolFp4 devFp4Sm120 (sha512Fp4Sem base NoiseSha512.Salt32.bytes rootA rootB) (1 / 400))
+        (pearlCDomainFp4At (sha512Fp4Sem base NoiseSha512.Salt32.bytes rootA rootB) sh16384) :=
+  ⟨sha512Fp4Sem_inDomain _ base _ rootA rootB _ pearlCShapeFp4_headline.1 1 (by norm_num) _ fixed,
+    sha512Fp4Sem_inDomain _ base _ rootA rootB _ pearlCShapeFp4_headline.2 1 (by norm_num) _ fixed⟩
 
 /-- **D-NF rejects a negative β** (`pearl_c4`'s `test_dnf_rejects_a_negative_beta_whose_byte_would_be_zero_noise`).
 `β = −1/4096` casts to `0x80`, whose significand under sm_120's low-7-bit decode is `0`, a zero scale; `β = −1` casts

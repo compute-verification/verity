@@ -2,8 +2,8 @@
 and node 1's unreplayed Commit bundles. Read-only: every command it sends a node (`COMMANDS`) only reads, through
 `kubectl get`, `df`, `find` and `du`, or `ls` and `cat`.
 
-`read` takes a node's snapshot over SSH (`HOSTS`, as `machines.d/<node>.toml` registers them); `node1` and `node2` are the
-pure half, snapshot and `now` in, report out, and `render` prints reports as text.
+`read` takes a node's snapshot over SSH (`reach`: the node's address is the environment's, no file's); `node1` and
+`node2` are the pure half, snapshot and `now` in, report out, and `render` prints reports as text.
 
 **Node 1** is Kueue's (`nebius1`'s mapping, from the same `kubectl get -o json`, plus the Jobs and queues). A Workload
 that isn't finished is one job: held when `spec.active` is false, running once Kueue reserved its quota (`admitted` until
@@ -34,14 +34,14 @@ import shlex
 import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 from typing import Any, Callable
 
-from . import ledger, model, nebius1, nebius2
+from . import ledger, model, nebius1, nebius2, settings
 
 NODES = {"nebius-1": nebius1.NODE, "nebius-2": nebius2.NODE}
-HOSTS = {nebius1.NODE: "research@81.85.2.165", nebius2.NODE: "research@81.85.2.121"}
+#: a node's address is the environment's (`reach`): no file holds it
 SSH_KEY = Path.home() / ".ssh" / "research_key"
 LIVE = "/workspace/pouw/infra/cluster/live"
 BUNDLE_ROOTS = ("/workspace/jobs/cov", "/workspace/jobs/probe-jit")
@@ -51,11 +51,12 @@ STALE_S = 60
 COMMANDS = {
     "kueue": shlex.join([*nebius1.KUBECTL, "get", "pods,workloads,jobs,clusterqueues,localqueues", "-n", "default", "-o", "json"]),
     "df": "df -P /workspace",
-    # release.py's bundles_gb, one line per bundle; `sudo -n true` first, so a refused sudo is an error and not 0 GB. vy-sudo's
-    # du-bundles is the same find, the form the node's sudoers allows once research has no blanket root (pods/nebius/lockout)
-    "bundles": f"sudo -n true && {{ if [ -x {VY_SUDO} ]; then sudo -n {VY_SUDO} du-bundles 2>/dev/null; else"
-               f" sudo -n find {' '.join(BUNDLE_ROOTS)} -xdev -name 'replay_bundle_p*' -prune -print0 2>/dev/null"
-               " | sudo -n xargs -0r du -sb 2>/dev/null; fi; true; }",
+    # release.py's bundles_gb, one line per bundle; the grant is probed first, so a refused sudo is an error and not 0 GB.
+    # vy-sudo's du-bundles is the same find, the form a node's sudoers allows once research has no blanket root
+    # (pods/nebius/lockout); there `sudo -n true` still passes, so only `sudo -n -l` of the form itself says it will run
+    "bundles": f"if [ -x {VY_SUDO} ]; then sudo -n -l {VY_SUDO} du-bundles >/dev/null && {{ sudo -n {VY_SUDO} du-bundles"
+               f" 2>/dev/null; true; }}; else sudo -n true && {{ sudo -n find {' '.join(BUNDLE_ROOTS)} -xdev -name"
+               " 'replay_bundle_p*' -prune -print0 2>/dev/null | sudo -n xargs -0r du -sb 2>/dev/null; true; }; fi",
     # the agent's state: <live>/state.json with --roll, else its run's <live>/<stamp>/state.json; the newest
     "state": f'cd {LIVE} && f=$(ls -t state.json */state.json 2>/dev/null | head -1) && test -n "$f" && echo "{LIVE}/$f"'
              ' && cat "$f"',
@@ -76,6 +77,18 @@ def ssh(dest: str, key: Path | None = SSH_KEY) -> Callable[[str], str]:
         if r.returncode:
             raise ReadError(f"{dest}: `{cmd[:60]}` exited {r.returncode}: {r.stderr.strip()[-300:]}")
         return r.stdout
+    return run
+
+
+def reach(node: str, key: Path | None = SSH_KEY) -> Callable[[str], str]:
+    """A runner of one shell command on `node`, as `ssh`'s. The node's address is the environment's, in the variable the
+    node's name gives (vy-nebius-1's is VY_NEBIUS_1_HOST), as `machines.d/<node>.toml` registers it (``host``): no file
+    here holds it, and with it unset each command fails as a read does (`ReadError`), naming the variable."""
+    def run(cmd: str) -> str:
+        if not (host := settings.host(node)):
+            raise ReadError(f"{settings.host_var(node)} is unset: {node}'s address, which machines.d/{node}.toml "
+                            "registers as host")
+        return ssh(f"research@{host}", key)(cmd)
     return run
 
 
@@ -275,7 +288,7 @@ def render(reports: list[dict[str, Any]]) -> str:
         if "error" in rep:
             out += [f"{rep['node']}: could not read: {rep['error']}", ""]
             continue
-        when = datetime.fromtimestamp(rep["t"], timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        when = datetime.fromtimestamp(rep["t"], UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         out.append(f"{rep['node']} at {when}" + (f", owner {rep['owner']}" if rep["owner"] else ""))
         out.append(f"  disk: {rep['disk']['path']} {rep['disk']['use_pct']}% used (df)")
         if "bundles" in rep:
@@ -314,7 +327,7 @@ def main(nodes: list[str], owner: str | None, as_json: bool, key: Path | None = 
          runner: Callable[[str], Callable[[str], str]] | None = None) -> int:
     """Read `nodes` at once, print their reports; 1 when a node couldn't be read."""
     now = int(clock())
-    runner = runner or (lambda node: ssh(HOSTS[node], key))
+    runner = runner or (lambda node: reach(node, key))
 
     def one(node: str) -> dict[str, Any]:
         try:
@@ -331,5 +344,5 @@ def main(nodes: list[str], owner: str | None, as_json: bool, key: Path | None = 
     return 1 if any("error" in r for r in reps) else 0
 
 
-__all__ = ["NODES", "HOSTS", "COMMANDS", "READS", "BUNDLE_ROOTS", "ReadError", "ssh", "read", "disk_pct", "bundles", "batch",
+__all__ = ["NODES", "COMMANDS", "READS", "BUNDLE_ROOTS", "ReadError", "ssh", "reach", "read", "disk_pct", "bundles", "batch",
            "node1", "node2", "report", "render", "span", "main"]

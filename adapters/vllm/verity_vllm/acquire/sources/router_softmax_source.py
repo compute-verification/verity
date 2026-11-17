@@ -7,7 +7,7 @@ the block source's attribution) mark the layer that runs.  Inside a committed st
 is replaced by the tapped op of `ops/pod_router_tap.sh`, `verity_router_tap.topk_softmax_tap`: vLLM's `topkGating`, launched the same way,
 whose threads also store the row's max, exponentials, reciprocal sum and probabilities (and under renormalize the selected probabilities
 and the scale) into a float32 [rows, words] buffer.  Everywhere else the installed op runs.  The tapped op computes exactly the installed
-op's outputs and every word equals the ordered router's committed value in the circuit (`properties.router_tap_exactness`).  The patch goes
+op's outputs and every word equals the ordered router's committed value in the circuit (`tests.properties.router_tap_exactness`).  The patch goes
 through `engine.hooks` and `uninstall` undoes it.  A launch inside a manifest layer whose geometry is not the manifest's, or that carries a
 correction bias (not in the circuit's router), runs the installed op and is a collector error.  vLLM's padding mask (`is_padding`, under
 VLLM_MOE_SKIP_PADDING) is passed through: it changes a padding row's ids, never the softmax, and a padded launch has more rows than the
@@ -152,7 +152,7 @@ class RouterSoftmaxSource:
                  "evidence": (f"router-softmax source: `moe/L<k>/{RS.MEMBER}` of {len(self.layers)} MoE layers ({self.words_per_token} words "
                               f"per token row); tap build {self.so_path} (sha256 {self.stats['so_sha256']}); outputs bit-identical to the "
                               "installed topk_softmax and every word == the ordered router's committed value in the IR: "
-                              "verity_vllm.properties.router_tap_exactness")}]
+                              "tests.properties.router_tap_exactness")}]
 
 
 def attach(com: Any, so: str | None, manifest: Mapping[str, Any] | None, required_classes: tuple[str, ...], *,

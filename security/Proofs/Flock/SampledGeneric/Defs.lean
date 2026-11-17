@@ -102,7 +102,7 @@ def Covers (Correct : Reg → B.Trace → Fin n → Prop) : Prop :=
 
 /-- **The knowledge term the audit pays**: on each sample, the largest knowledge term over its proof blocks, averaged
 over the sample. The audit charges it at one sampled proof block, fixed before the session's first coin. -/
-noncomputable def ksAvg (L : Law n) (R : Reg) (τ : Cont L Reg PS.session R) : ℝ≥0∞ :=
+noncomputable def ksAvg (L : SamplingDesign n) (R : Reg) (τ : Cont L Reg PS.session R) : ℝ≥0∞ :=
   avg fun ω => ⨆ u ∈ L.draw ω, Ex.ks (L.draw ω) R (τ ω) u
 
 end Extractor
@@ -114,7 +114,7 @@ that some sample reads (`Read c`), a game the prover's state plays (`T`, by `sT`
 session and the extractor's reruns. It reads values at `c` (`rd`), each with an opening (`op`), and costs `cost` SHA-512
 calls. `wt c` weighs `c` (the probability that a sample reads it), and `ρ` and `slack` are what the extractor loses to its
 waits (both `0` for an extractor that is a game, `JointExtractor.toTrials`). -/
-structure Trials (L : Law n) (PS : ProofSystem n Reg) (B : Binding Reg Hc) where
+structure Trials (L : SamplingDesign n) (PS : ProofSystem n Reg) (B : Binding Reg Hc) where
   Out : Type
   Read : B.Pos → Prop
   T : (R : Reg) → Cont L Reg PS.session R → (c : B.Pos) → Read c → Game Out
@@ -128,7 +128,7 @@ structure Trials (L : Law n) (PS : ProofSystem n Reg) (B : Binding Reg Hc) where
 
 namespace Trials
 
-variable {L : Law n} {PS : ProofSystem n Reg} (Tr : Trials L PS B)
+variable {L : SamplingDesign n} {PS : ProofSystem n Reg} (Tr : Trials L PS B)
 
 /-- **Each reading comes with an opening of the registered commitment** to the value read. -/
 def Opens : Prop :=
@@ -245,15 +245,15 @@ noncomputable def toExtractor : Extractor PS B where
     ∃ c ∈ J.reads u, B.val (J.opens S R u w c) ≠ X c) (J.G S R) (J.strat S R τ)
 
 /-- The samples that read `c`. -/
-abbrev ReadsAt (L : Law n) (c : B.Pos) : Type := {ω : L.Ω // ∃ u ∈ L.draw ω, c ∈ J.reads u}
+abbrev ReadsAt (L : SamplingDesign n) (c : B.Pos) : Type := {ω : L.Ω // ∃ u ∈ L.draw ω, c ∈ J.reads u}
 
 open Classical in
-noncomputable instance instFintypeReadsAt (L : Law n) (c : B.Pos) : Fintype (J.ReadsAt L c) := Subtype.fintype _
+noncomputable instance instFintypeReadsAt (L : SamplingDesign n) (c : B.Pos) : Fintype (J.ReadsAt L c) := Subtype.fintype _
 
 open Classical in
 /-- What the extractor's game, after sample `ω`, reads at `c`: the values the witnesses it extracted for the sampled
 proof blocks that read `c` open `c` to, when the judged session accepted. -/
-noncomputable def readsOut (L : Law n) (R : Reg) (c : B.Pos) (e : L.Ω × (Bool × (Fin n → Option J.Wit))) :
+noncomputable def readsOut (L : SamplingDesign n) (R : Reg) (c : B.Pos) (e : L.Ω × (Bool × (Fin n → Option J.Wit))) :
     Finset B.Val :=
   Finset.univ.filter fun v => e.2.1 = true ∧ ∃ u ∈ L.draw e.1, c ∈ J.reads u ∧
     ∃ w, e.2.2 u = some w ∧ J.Rel (L.draw e.1) R u w ∧ B.val (J.opens (L.draw e.1) R u w c) = v
@@ -261,13 +261,13 @@ noncomputable def readsOut (L : Law n) (R : Reg) (c : B.Pos) (e : L.Ω × (Bool 
 /-- **The trials of an extractor that is a game**: a sample that reads `c`, uniform among those, then the extractor's
 game against the prover's session strategy on it; it reads what `readsOut` reads, at the weight `wt c` the probability
 that a sample reads `c`, with no slack (`ρ = 0`, `slack = 0`). -/
-noncomputable def toTrials (L : Law n) : Trials L PS B where
+noncomputable def toTrials (L : SamplingDesign n) : Trials L PS B where
   Out := L.Ω × (Bool × (Fin n → Option J.Wit))
   Read c := Nonempty (J.ReadsAt L c)
   T R _ c h := haveI : Nonempty (J.ReadsAt L c) := h
     (Game.draw (J.ReadsAt L c)).bind fun w => (J.G (L.draw w.1) R).map fun o => (w.1, o)
   sT R τ c h := haveI : Nonempty (J.ReadsAt L c) := h
-    Strategy.bind _ _ (drawStrat _) fun w => Strategy.map _ _ (J.strat (L.draw w.1) R (τ w.1))
+    Strategy.bind _ _ (sampleStrat _) fun w => Strategy.map _ _ (J.strat (L.draw w.1) R (τ w.1))
   rd R _ c e := J.readsOut L R c e
   op R _ c e v := Classical.epsilon fun o => ∃ u ∈ L.draw e.1, c ∈ J.reads u ∧
     ∃ w, e.2.2 u = some w ∧ J.Rel (L.draw e.1) R u w ∧ o = J.opens (L.draw e.1) R u w c ∧ B.val o = v

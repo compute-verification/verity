@@ -32,7 +32,7 @@ attempt id = run id (r20260922-105905-2021)
 pr:<number>@<40-hex commit>                             a pull request at one head; only labels target it
 ckpt:<HF repo id>@<40-hex revision>                     a checkpoint at one revision; only labels target it
 task:<sha512 hex of a task's key>                       a check's task: the executor's verdicts (pass, fail or error; a fail stands until an error after it, else the newest is the key's) and results on it; only labels target it
-commit:<40-hex commit>                                  a commit: the executor's task graphs of it and drive's shadow record of its check; only labels target it
+commit:<40-hex commit>                                  a commit: the executor's task graphs of it and its verdicts; only labels target it
 ~~~
 
 Two agents freezing the same member set produce the same snapshot id (members are sorted and de-duplicated; `name`, `note`
@@ -87,7 +87,7 @@ steward/lease.json                   REMOTE ONLY, not a store record: the stewar
                                      PUT only (research/steward.py); the store never reads, lists or indexes it
 packs/labels/latest.{tar.gz,json}    REMOTE ONLY, not a store record: the labels pack (§8), replaced in place
 live/<run id>/<seq>.json             REMOTE ONLY, not a store record: a running check's live record, a new immutable object per
-                                     write with the run's custody key (tools/verity/check/live.py, read by `verity ci`); the store
+                                     write with the run's custody key (tools/check/live.py, read by `verity ci`); the store
                                      never reads, lists or indexes it, and gc leaves it
 ~~~
 
@@ -117,7 +117,7 @@ Published by `research run` at completion or failure (both — a failed attempt 
   "conditions": {"hw.family": "h100", "hw.sku": "NVIDIA H100 80GB HBM3", "driver": "...", "cuda": "...", "...": "..."},
   "key_conditions": ["hw.family"],
   "source": {"commit": "<sha>", "tree": "<sha>", "dirty": false, "dirty_digest": null, "lockfiles": {"uv.lock": "<sha256>"}},
-  "closure": {"benchmarks/tc_probe/tc_probe.py": "<sha256>", "...": "path -> content sha256 of every declared source file"},
+  "closure": {"calibration/tc_probe/tc_probe.py": "<sha256>", "...": "path -> content sha256 of every declared source file"},
   "execution": {"start_utc": "...", "end_utc": "...", "wall_s": 12.3, "exclusive": false, "load_start": 1.2, "load_end": 1.1,
                 "host": "vy-g5", "project": "verity", "campaign": "r21-silicon", "run_dir": "/workspace/research/runs/r...",
                 "stage": "bench", "remote": {"machine": "vy-g5", "pod_id": "...", "root": "...", "source_sha": "..."} },
@@ -224,8 +224,8 @@ from research.store.tool import Tool
 
 TC_PROBE = Tool(
     name="tc_probe", version="1",
-    command=["python", "benchmarks/tc_probe/tc_probe.py"],
-    closure=["benchmarks/tc_probe/**", "verity/circuits/silicon/**"],   # repo-relative globs -> file manifest at run time
+    command=["python", "calibration/tc_probe/tc_probe.py"],
+    closure=["calibration/tc_probe/**", "verity/circuits/silicon/**"],   # repo-relative globs -> file manifest at run time
     key_params=["instruction", "families", "seed", "n_random", "replay_golden"],
     key_conditions=["hw.family"],
     param_artifacts=["replay_golden", "replay_instances"],  # path-valued params: identity = content, never pathname
@@ -234,7 +234,7 @@ TC_PROBE = Tool(
 )
 ~~~
 
-Declarations live next to the tool they describe (`benchmarks/tc_probe/tool.py`; the example above is
+Declarations live next to the tool they describe (`calibration/tc_probe/tool.py`; the example above is
 illustrative, the files follow the scripts' argparse) and are found by `research run --tool <dotted.module:NAME>` or
 `--tool <name>` via the registry in `research/store/tools_registry.py` (name -> dotted path; keep it tiny; in a tree from before a
 layout move, at the path `moves.json` gives). A declaration
@@ -386,8 +386,9 @@ TTLs are `gc.TTL_DAYS`, by the manifest's LastModified: run-record/v1, vllm-repl
 run-files/v1 and vllm-row-meta/v1 14, telemetry/v1 30; every other kind keeps no TTL. Kept: an artifact or run that a label
 (target, ref or value), a citing tree (`--cite`: the notes repository, a checkout of the code with its fixture registry), Linear
 (`--cite-linear`, required with `--apply`: issues and comments, projects, project updates, documents) or a cited artifact's `meta` names, every `art:` id a cited run's attempt names, whatever a kept manifest's `refs` name, young and
-untimed artifacts. Manifests, attempts and labels stay, so an expired id still resolves and `fetch` reports its blob absent.
-A blob is deleted only after it has been a candidate for `gc.GRACE_S` (24 h, the longest custody upload) and is one still,
+untimed artifacts. Manifests, attempts and labels stay, so an expired id still resolves and `fetch` reports its blob absent;
+a candidate is therefore also a blob the remote still holds, by one listing of `objects/sha256/` each pass (one that fails
+deletes nothing). A blob is deleted only after it has been a candidate for `gc.GRACE_S` (24 h, the longest custody upload) and is one still,
 after a fresh listing of `manifests/` before each batch of `gc.BATCH` (1,000) deletes, so an upload that reused it meanwhile
 keeps it; a blob deleted under an upload that landed during its batch is reported `lost` (the pass exits 1). Cite what you need before its TTL: a
 label (`research data label ART note ...`) or a note naming its id. The control pod runs it (`infra/control/store_gc.sh`).
@@ -416,7 +417,7 @@ one; `reindex --remote`, `labels-sync` and `pull --from MACHINE` bring remote/ma
 `preserved` is a three-part gate (attempt manifest, artifacts, labels) naming the part that fails. `labels TARGET --remote`
 marks each both / LOCAL ONLY / REMOTE ONLY.
 Conflicting ones coexist on both sides. A landing is a `landed` label by `research-merge` on each run its `Check:`
-trailer names, valued main's commit (`research merge`; `--label-landed REV` backfills).
+trailer names, valued main's commit (`merge.label_landed`, from the verified queue's after-landing job).
 
 The labels pack (§3) is every assertion of the remote's `labels/` as one tarball beside its sha256, which `labels-pack`
 rebuilds and replaces, hourly on the control pod; a sync that lacks more than 5,000 assertions takes it first and pulls only
@@ -459,12 +460,14 @@ prints the table; the groups are:
   carries no verdict — ignored; `verdict` (enum: pass | fail | error, error when no run gave a result) and `result` (a result/v1 document) on `task:<key>`, by the
   executor's worker; on `commit:<sha>`, `tasks_graph` and `verity_graph` (`art:` id of the `tasks-graph/v1` or
   `verity-graph/v2` graph it listed on a worker) and `ready_verdict` (its `ready:` verdict), by the executor;
-  `executor_shadow`, by drive (`research.executor`); `nightly_check`, by the control pod's nightly check;
+  `executor_shadow`, by the old path's drive, which nothing writes now; `nightly_check`, by the control pod's nightly check;
   `label_auth` beside a ready mark or land verdict on `pr:<n>@<head>`, by that label's author, and `label_delegation` on an
   agent's delegation target (`task:<sha512>`), by a handle (`research.labelauth`).
 - **evidence** — probe captures and input sets: `instruction`, `model`, `model_agrees` (bool), `model_status`,
   `model_rejected`, `evidence`, `family`, `instances_dataset`, `instances_tier`, `mismatches`, `target`, `component`, `jobs`, `dtype`;
-  `staged` on `ckpt:<repo>@<revision>`, when a host finished staging a checkpoint's weights (`verity-vllm records staged`).
+  `staged` on `ckpt:<repo>@<revision>`, when a host finished staging a checkpoint's weights (`verity-vllm records staged`);
+  `goals_dump` on the `drv:` of `research goals show --json`, by `research velocity`'s save: one copy of the Goals page's
+  `art:` id, its `ts` the minute it was taken (`research.velocity`).
 - **approach** — the registry's labels on `approach/v1` records (`research/approaches.py`; `tools/research/README.md`).
 
 Enum and bool values are compared as the catalog stores them (`scalar_text`: strings raw, everything else JSON), so `true` and
@@ -494,7 +497,7 @@ research data labels TARGET [--history] [--key K] [--by PAT] [--remote] [--json 
                                               --remote: both / LOCAL ONLY (not durable) / REMOTE ONLY per assertion; exit 1 if any is local only
 research data label  TARGET KEY VALUE --by WHO [--ref REF] [--value-json] [--off-vocab]   refuses what the vocabulary (§8.1) cannot place
 research data preserved (RUN|ART)... [--mode head|readback|recorded] [--jobs N] [--json]
-                                              the durability gate: attempt manifest + artifacts + labels on the remote, else the failing legs;
+                                              the durability gate: attempt manifest + artifacts + labels on the remote, else the parts that fail;
                                               exit 4: WITHDRAWN (§7.4)
 research data vocab [--json]                  the label vocabulary (§8.1): key, asserter group, value form, enum values, status
 research data vocab-check [--json]            what in labels/ is off the vocabulary, read-only (`vocab_check.py`)
@@ -585,7 +588,7 @@ telemetry/v1             events.jsonl or resources.jsonl of an attempt
 redteam-findings/v1      meta {findings: [...]}; refs.target
 ledger-row/v1            one frozen overhead-ledger row whose run is not an attempt here: meta = the ledger/v1 row; payload null;
                          the lane's claims are labels on it
-trust-dossier/v1         the computed trust level of one numerical target (`python benchmarks/tc_probe/trust.py --publish`): meta =
+trust-dossier/v1         the computed trust level of one numerical target (`python calibration/tc_probe/trust.py --publish`): meta =
                          the TrustReport (level, criteria with evidence ids, D-entries, references, missing items, triggers, procedure);
                          refs.cited = every artifact it rests on, refs.previous = earlier dossiers; payload null; labels target,
                          instruction, level, anchor
