@@ -4,14 +4,13 @@ the Python values the kernel self-check binds, so each family is checked here on
 Definition's word reference, every port in the Definition's return order."""
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 import numpy as np
 import pytest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.evaluation.batch import type_dtype, type_shape
 from verity.circuits.evaluation.reference import signature_of, statics_of
+
 from verity_vllm.definitions.numerics import dsv4_rows, rows
 from verity_vllm.definitions.numerics.dsa_norm_rows import block_rmsnorm_rows
 from verity_vllm.definitions.numerics.kernel_registry import Declined
@@ -27,7 +26,6 @@ from verity_vllm.definitions.registry import (
     mhc,
 )
 from verity_vllm.definitions.registry.hopper import HopperBF16WgmmaDot16
-
 from verity_vllm.query.manifest import format as RM
 
 #: the 19 families the per-rank no-evaluator rule failed DeepSeek-V4-Pro B1's deferred replay on

@@ -4,7 +4,7 @@
 # one-GPU preemptible lease.
 #   research run --on MACHINE --project verity --source <tree> --cwd source --declared-output 'out/*' \
 #     --env GPU_LEASE_WHO=LANE -- bash verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/bench.sh
-# env: CALLS, REPS, PREFILL (rows_bench.py's), MAX_MIN (the lease's minutes, default 20)
+# env: CALLS, REPS, PREFILL (rows_bench.py's --calls, --reps, --prefill), MAX_MIN (the lease's minutes, default 20)
 set -uo pipefail
 OUT=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$OUT"
 WORK=/workspace/pouw/mvp-e2e; PY=$WORK/venv312/bin/python; CUDA=/usr/local/cuda-13.0
@@ -22,6 +22,7 @@ fi
 UUID=${GPU_LEASE_UUID:?run under gpu-lease}; UUID=${UUID%%,*}
 export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES%%,*} CUDA_DEVICE_ORDER=PCI_BUS_ID
 nvidia-smi --query-gpu=uuid,name,compute_cap,clocks.sm,clocks.mem,driver_version --format=csv,noheader -i "$UUID" | tee "$OUT/identity.csv"
-PEARLC_EXPECT_UUID=$UUID PYTHONPATH=$PWD "$PY" verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/rows_bench.py --cubin "$S/pearl_c_sm120.cubin" \
-  --rows-cubin "$S/hm96_rows.cubin" --out "$OUT/rows-bench.json" 2>&1 | tee "$OUT/rows-bench.log"
+PYTHONPATH=$PWD "$PY" verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/rows_bench.py --cubin "$S/pearl_c_sm120.cubin" \
+  --rows-cubin "$S/hm96_rows.cubin" --out "$OUT/rows-bench.json" --expect-uuid "$UUID" --run "$(basename "$RESEARCH_RUN_DIR")" \
+  ${CALLS:+--calls "$CALLS"} ${REPS:+--reps "$REPS"} ${PREFILL:+--prefill "$PREFILL"} 2>&1 | tee "$OUT/rows-bench.log"
 exit "${PIPESTATUS[0]}"

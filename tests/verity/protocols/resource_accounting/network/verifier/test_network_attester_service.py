@@ -64,7 +64,7 @@ def ingress_records(arrivals=([1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0])):
 
 class Run:
     """A network attester's link (an LMS signer on a small tree, its records under `NETWORK_CERTIFIER_DIGEST`), the protocol's
-    parameters, and the challenger's stream. The certifier's coins give each record a fresh salt, the same in every
+    parameters, and the challenger's stream. The attester's coins give each record a fresh salt, the same in every
     run."""
 
     def __init__(self, tmp_path, *, proof_deadline=60.0, coins=b"\x07") -> None:
@@ -472,7 +472,7 @@ def test_a_bad_signature_is_a_reject(tmp_path):
 
 
 def test_a_certificate_from_another_session_is_a_reject(tmp_path):
-    """The cross-session replay: the certifier's own key signed the execution phase in an earlier session, and its
+    """The cross-session replay: the attester's own key signed the execution phase in an earlier session, and its
     certificate signs another message than this session's, so it is rejected."""
     run = Run(tmp_path)
     earlier = LmsSigner(run.signer.key, run.signer.state)
@@ -616,7 +616,7 @@ def test_a_link_is_a_network_certifiers_with_both_heads_under_its_digest_and_no_
     assert reject(standin.decide(lw, run.stream, run.stream.select(run.register(other)), other, (), tmp_path / "p1"))
     verdict = run.stream.records[-1]["audit"]["verdicts"][SVC.VERIFIER]
     assert verdict["by"] == "lean" and verdict["reference"] == {"accepted": False}
-    with pytest.raises(ValueError, match="the network certifier's"):
+    with pytest.raises(ValueError, match="the network attester's"):
         replace(lw, network_attester=None)
     with pytest.raises(ValueError, match="one grid"):
         replace(lw, ingress=replace(PARAMS, buckets=PARAMS.buckets + 1))

@@ -14,7 +14,7 @@ document's `value` is null with the reason under `no_bound`.
     verity bench memory --loopback                both processes on this machine: a test of this command
     verity bench memory --local                   the node's session on one card of this machine, audited beside it
 
-The node run is `benchmarks/remote_session/gate_run.sh PERIOD` with one honest session: the prover on the whole GPU
+The node run is `benchmarks/poub_session/gate_run.sh PERIOD` with one honest session: the prover on the whole GPU
 node serving ROLE (default Llama 3.2 1B as upstream holds it, the role core's pin names `LLAMA32_1B_BF16`), each
 engine's weights arena the store, the verifier on the auditor's verifier host, the coins from the challenger host.
 The verifier holds no checkpoint, so the store is the developer's choice, which the text and the JSON (`bound`) say.
@@ -27,16 +27,16 @@ leaf pass on that many reading CTAs. It waits for the fire run to reach the evid
 prints from it as `--from` does; `--dry-run` sends nothing to either gate and prints no number.
 
 `--from RUN` reads the verifier's record of a run in the store: a gate run's fire run (its host run's `verifier.json`)
-or a run of `remote_session/run.sh` that held the verifier. The number is the verifier's alone: nothing the prover
+or a run of `poub_session/run.sh` that held the verifier. The number is the verifier's alone: nothing the prover
 recorded is read, so the session is named by its index (`--session K`, where the run holds several) and not by what
 the prover says it did. A withdrawn run is refused before any of it is fetched. The text says whether the verifier ran
 on the auditor's verifier host, what the store was bound to, that a share of 1 or more certifies nothing, and, of a
 run this command's `--loopback` left, that it was one.
 
-`--loopback` runs `remote_session/run.sh` with ROLE=both and the prover the driver's CPU reference over a small test
+`--loopback` runs `poub_session/run.sh` with ROLE=both and the prover the driver's CPU reference over a small test
 store. No node is audited, so it certifies nothing, and its output says so.
 
-`--local` is the node's session on one card of a machine of your own: `remote_session/run.sh` with ROLE=both,
+`--local` is the node's session on one card of a machine of your own: `poub_session/run.sh` with ROLE=both,
 SERVE=node and GPUS=1, a vLLM engine (VLLM_PY's) serving ROLE's pinned checkpoint with its weights in one arena of
 most of the card's memory (`arena_of`), which is the store; the node prover reads the whole arena in paced, timed
 passes beside the serving, and the Lean verifier and its coins run in processes beside them, in one session form
@@ -98,7 +98,9 @@ from verity_config.settings import of
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-RS = ROOT / "benchmarks" / "remote_session"
+CARD_FILES = ROOT / "hardware/cards"
+NODE_FILES = ROOT / "hardware/nodes"
+RS = ROOT / "benchmarks" / "poub_session"
 
 #: this directory's registry: PACED, UNPACED, and the variables a research run sets
 SETTINGS = of(__file__)
@@ -285,7 +287,7 @@ def session(record: Path, k: int | None, *, python_ledger: bool = False) -> dict
     """Session `k` (the only one when `k` is None) of the verifier's record at `record`, as the printer reads it:
     `NoNumber` unless the Lean verifier accepted it (`accepted`, with `verdict` `lean`) and its ledger holds γ at the
     specification's rate, which is
-    `remote_session/summary.py`'s `gamma_spec` of the session. Where the Lean's answer for γ's terms isn't written,
+    `poub_session/summary.py`'s `gamma_spec` of the session. Where the Lean's answer for γ's terms isn't written,
     the reading is undecided and there is no number, unless `python_ledger`, which only `--loopback` and `--local`
     pass: then γ and its error are the Python ledger's reading the record carries beside it (`python_ledger`), and
     `gamma_decided_by` says so (`PYTHON_LEDGER`); else it is `lean`.  `numbers_decided_by` names which of the
@@ -531,12 +533,12 @@ def one_card(kind: str) -> tuple[dict, int]:
     (`timing.Figures.of_sheets`) at one card, so the share is of that card's read rate and its host's. A host card
     that states no measured disk read is taken at its ceiling (`disk.read_max`); the figures no sheet states are
     `timing`'s."""
-    node = load_node(kind)
+    node = load_node(kind, directory=NODE_FILES, cards_directory=CARD_FILES)
     node = {**node, "device": {**node["device"], "count": {**node["device"]["count"], "value": 1}}}
-    host = load_card(node["host"]["sku"])
+    host = load_card(node["host"]["sku"], directory=CARD_FILES)
     if "read" not in host.get("disk", {}):
         host = {**host, "disk": {**host["disk"], "read": host["disk"]["read_max"]}}
-    figures = timing.Figures.of_sheets(node, load_card(node["device"]["sku"]), host)
+    figures = timing.Figures.of_sheets(node, load_card(node["device"]["sku"], directory=CARD_FILES), host)
     return poub_ledger.Node.stated(figures).to_json(), figures.hbm_bytes
 
 

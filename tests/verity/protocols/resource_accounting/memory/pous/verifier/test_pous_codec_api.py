@@ -8,7 +8,7 @@ import random
 import pytest
 
 from verity.commitments.identity import canonical_json_bytes, tagged_sha512
-from verity.protocols.resource_accounting.memory.pous.attester.memory_challenger import block_digest
+from verity.protocols.resource_accounting.memory.pous.attester.memory_attester import block_digest
 from verity.protocols.resource_accounting.memory.pous.prover.responder import HonestResponder
 from verity.protocols.resource_accounting.memory.pous.verifier import setup
 from verity.protocols.resource_accounting.memory.pous.verifier.audit import (

@@ -37,20 +37,39 @@ writes it), and `length` its length in bytes, least significant bit first. Bits 
 """
 from __future__ import annotations
 
-from functools import lru_cache
+from collections.abc import Sequence
+from functools import cache
 from types import SimpleNamespace
-from typing import Sequence
 
 from verity.circuits import boolean as BL
-from verity.circuits.boolean.forms import ONE, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
+from verity.circuits.boolean import BIT
+from verity.circuits.boolean.forms import (
+    ONE,
+    ZERO,
+    add,
+    and_reduce,
+    const_bits,
+    mux,
+    or_reduce,
+    sub,
+)
+from verity.circuits.boolean.trace import part as _part
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array, Tuple
-from verity.protocols.resource_accounting.network.verifier.advice import FINISHES, VERSION, WIDTH_BITS, MalformedAdvice, _Reader
-from verity.circuits.boolean import BIT
-from verity.circuits.boolean.trace import part as _part
 from verity.commitments.gates.frame_v3 import _refs
-from verity.protocols.resource_accounting.network.verifier.head_check import _coll, _Consts, ands
+from verity.protocols.resource_accounting.network.verifier.advice import (
+    FINISHES,
+    VERSION,
+    WIDTH_BITS,
+    MalformedAdvice,
+    _Reader,
+)
+from verity.protocols.resource_accounting.network.verifier.head_check import (
+    _coll,
+    _Consts,
+    ands,
+)
 
 #: the refusals of `advice.decode` the circuit doesn't make yet, by the start of decode's message for each
 DEFERRED = {
@@ -88,11 +107,11 @@ def _check(data: bytes) -> None:
             bytes(rd.get(8) for _ in range(size)).decode("utf-8")
         except UnicodeDecodeError:
             raise _Refused from None
-        P, O = rd.get(w_len), rd.get(w_len)
+        P, n_out = rd.get(w_len), rd.get(w_len)
         FINISHES[rd.get(1)]
-        _need(P >= 1 and O >= 1)
-        lens += [P, O]
-        reqs.append((P, O))
+        _need(P >= 1 and n_out >= 1)
+        lens += [P, n_out]
+        reqs.append((P, n_out))
     first = 0
     computed, known, kept, last = [0] * n_req, [0] * n_req, [0] * n_req, [-1] * n_req
     srcs = []
@@ -104,19 +123,19 @@ def _check(data: bytes) -> None:
             pre = rd.get(1)
             lens += [start, n, hit]
             _need(n >= 1 and r <= first and r < n_req)
-            P, O = reqs[r]
+            P, n_out = reqs[r]
             if r == first:
                 _need(not pre and start == hit)
                 first += 1
                 known[r] = P
             else:
                 _need(pre or not hit)
-                _need(kept[r] < O if pre else start == computed[r])
+                _need(kept[r] < n_out if pre else start == computed[r])
             _need(not (hit or pre) or start == hit)
             end = start + n
             _need(end <= known[r] and kind == int(n == 1 and start >= P) and last[r] != s)
             last[r], computed[r] = s, end
-            if end == known[r] and kept[r] < O:
+            if end == known[r] and kept[r] < n_out:
                 kept[r] += 1
                 known[r] += 1
             if hit:
@@ -131,7 +150,7 @@ def _check(data: bytes) -> None:
                 _need(total == hit)
         _need(need <= first)
     _need(first == n_req and all(kept[r] == reqs[r][1] for r in range(n_req)))
-    rels = [rd.get(w_rel) for _ in range(sum(O for _, O in reqs))]
+    rels = [rd.get(w_rel) for _ in range(sum(n_out for _, n_out in reqs))]
     _need(rd.left() < 8 and not rd.get(rd.left()))
     _need(w_len == max(lens, default=0).bit_length() and w_rel == max(rels, default=0).bit_length()
           and w_src == max(srcs, default=0).bit_length())
@@ -681,7 +700,7 @@ def evaluate(L: int, datas: Sequence[bytes]) -> list[int]:
     return [int(b) for b in evaluate_bits(unit(L), *args).reshape(-1).tolist()]
 
 
-@lru_cache(maxsize=None)
+@cache
 def part_ands(L: int) -> dict[str, int]:
     """Each part's ANDs at L."""
     return {d.name: ands(bind(d, L=L)) for d in PARTS}

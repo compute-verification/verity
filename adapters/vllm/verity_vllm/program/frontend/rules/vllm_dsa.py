@@ -32,8 +32,6 @@ vocabulary lacks refuses by name.  The leaf the shim exports in dsa_indexer_attn
 
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import numpy as np
 import torch
 from verity.circuits.refs import Coll, PartLog, Refs, array_of, concat

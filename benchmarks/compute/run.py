@@ -39,12 +39,13 @@ and what the run wrote under `out/`. `--from` takes a directory or a run id (`ma
 record from there through no store (`kit.record_dir`): nothing of research's is imported, no credential is looked up
 and nothing goes over the network. DIR must hold the answer and the policy below (exit 2 naming the file it lacks). The
 run printed is the `run.id` its `job.json` states and the commit its `store.conditions` state (`source.commit`,
-`-dirty` when `source.dirty`), as the store's attempt states them; without them, the directory's name and no commit.
-Nothing is withdrawn from a directory. Given a run id (`kit_report.RUN_ID`) that names no directory, it reads that
-run's record from the evidence store, through research's client. Anything else is refused (exit 2). A record whose
-`job.json` says it is made up (``made_up``, as the tests' fixture does) is reported as made up through the kit
-(`kit.report`'s ``made_up``): its line under the number, ``made_up: true``, what the record says of itself
-(``made_up_says``), and `result.json`'s entries marked modeled and made up, never measured.
+`-dirty` when `source.dirty`), as the store's attempt states them; without them, the directory's name and the commit
+`out/compute-run.json` states. Nothing is withdrawn from a directory. Given a run id (`kit_report.RUN_ID`) that names
+no directory, it reads that run's record from the evidence store, through research's client. Anything else is refused
+(exit 2). `result.json`'s entries are written only by the run whose record it reads (`kit.report`'s ``from_run``): a
+reprint of another run writes none. A record whose `job.json` says it is made up (``made_up``, as the tests' fixture
+does) is reported as made up through the kit (`kit.report`'s ``made_up``): its line under the number, ``made_up:
+true``, and what the record says of itself (``made_up_says``), and it writes no entry of `result.json`.
 
 Either way it reads the verifier's side of the record, and nothing the developer's node reports of what it served:
 
@@ -79,6 +80,10 @@ challenger's signature against a pinned key. DETAIL is what the record states of
 coins (``coin_source``), and whether the Lean verifier ran as of record (``--of-record`` in
 `pearlplus-lean-check.json`'s ``argv``; with a ``local`` challenger, ``of record against the local challenger's key``,
 the test key the run made), each ``not stated`` where the record holds none. None of them refuses a number.
+
+The passes the credit counts are those of W, the window record the Pearl+ verdict holds them to (`serve.sh`'s
+``verify --tie W``): W is the developer's own record of its passes, and nothing here holds it to the bytes the requests
+received or to the checkpoint, which a line under the share says (`HELD_TO_W`).
 
 The record holds neither the tokens the run served nor the seconds it served them in (both stay on the developer's
 node). So the tokens are the class's, and the capacity share (the credited MACs over the card's rate times the seconds
@@ -121,7 +126,8 @@ fields every resource's benchmark reports (`amounts`), each stamped with this ru
 recorded run: the metric (the printed number, its unit and target), the two shares it is the product of (`CREDITABLE`,
 `OF_CREDITABLE`: the model's MACs Pearl+ can credit at the load, and the share of those credited, each printed too),
 the verified MACs (the credit), the capacity and
-the free MACs at each data-sheet reading, and the error beside them (the answer's δ_s, sampling's alone). The metric is
+the free MACs at each data-sheet reading, and beside them the answer's ε_s and the error (its δ_s, a parameter the run
+chose, marked modeled: neither is more than sampling's). The metric is
 named by its id in `metrics.toml` beside this file (`METRIC`), where the console reads it; the rest are every
 resource's names: `verified`, `capacity`, `free` and `error`. A reading is a clock of a
 registered device's card file (`clock.tensor`, `clock.sm`; `verity.device.load_card`), capacity the registered devices'
@@ -147,7 +153,9 @@ from verity.device import Site, load_card, rate
 from verity_bench import kit
 from verity_bench.kit_report import RUN_ID
 
-__all__ = ["ABSENT", "ANSWER", "CREDITABLE", "OF_CREDITABLE", "RAN", "SHARE", "DELTA_S", "DEVELOPMENT", "JOB", "LEAN", "LEAN_CHECK", "METRIC", "MODELS", "NO_SITE", "NO_SPAN", "OPTIONAL",
+CARD_FILES = Path(__file__).resolve().parents[2] / "hardware/cards"
+
+__all__ = ["ABSENT", "ANSWER", "CREDITABLE", "OF_CREDITABLE", "RAN", "SHARE", "DELTA_S", "DELTA_S_MARK", "DEVELOPMENT", "EPSILON_S", "HELD_TO_W", "JOB", "LEAN", "LEAN_CHECK", "METRIC", "MODELS", "NO_SITE", "NO_SPAN", "OPTIONAL",
            "POLICY",
            "RECORDS", "RESTS_ON", "ROWS", "SAMPLING_ALONE", "TERMS", "UNIT", "VERDICTS", "VERIFY", "EvidenceStore", "Shape", "Unreadable",
            "amounts", "capacity", "coins", "from_dir", "from_run", "main", "model_macs", "uncredited_words"]
@@ -213,6 +221,9 @@ SOURCE = {"node": "the serving machine", "challenger": "a challenger"}
 #: what the credit rests on, printed under the answer's verdict
 RESTS_ON = ("  the credit rests on Pearl's conjecture TT_OUT rev1, which this repository's red-team rates refuted: that "
             "a credited MAC was computed is an open assumption, not a proved guarantee")
+#: what holds the passes the share counts, printed under the share
+HELD_TO_W = ("  the passes the share counts are W's, the window record the verdict holds them to: W is the developer's own "
+             "record of its passes, and nothing here holds it to the bytes the requests received or to the checkpoint")
 #: the data sheet's readings of a device's peak, each a clock of its card file (`clock.tensor`, `clock.sm`)
 READINGS = ("tensor", "sm")
 #: the operand format of the MACs Pearl+ credits
@@ -220,7 +231,13 @@ FORMAT = "e4m3"
 NO_SITE = "the run's record holds no registration of its hardware: no site entry naming its devices and their sheets"
 NO_SPAN = ABSENT.removeprefix("absent: ")
 DELTA_S = ("probability that a sample that accepts misses more than the share ε_s of the credited MACs: the answer's δ_s, "
-           "sampling's alone (not a failure of the conjecture or the hash the credit rests on)")
+           "sampling's alone (not a failure of the conjecture or the hash the credit rests on), a parameter the run "
+           "chose (serve.sh's DELTA), not measured")
+#: `DELTA_S`'s mark in result.json: a stated figure no run measured
+DELTA_S_MARK = "modeled"
+EPSILON_S = ("share of the credited MACs a sample that accepts may miss, except with probability δ_s: the answer's ε_s, "
+             "the verifier's from its sample at δ_s, sampling's alone (not a failure of the conjecture or the hash the "
+             "credit rests on)")
 #: how the store ends the reason of a withdrawal of only the files under some prefixes of a record
 SCOPED = re.compile(r" \(only ([^()]+)\)$")
 
@@ -485,7 +502,9 @@ def row(tree: Path) -> dict:
     try:
         held = _held(tree, VERDICTS)
         work = {} if held is None else held["protocols"].get("work") or {}
-        return {"verdict": work.get("verdict"), "why": work.get("why") or work.get("reason")}
+        weaker = ((work.get("answer") or {}).get("profile") or {}).get("weaker_tie")
+        return {"verdict": work.get("verdict"), "why": work.get("why") or work.get("reason")} | (
+            {"weaker_tie": weaker} if weaker else {})
     except (OSError, KeyError, TypeError, ValueError, AttributeError) as e:
         raise Unreadable(f"the run's composed record doesn't read as one ({type(e).__name__}: {e})") from e
 
@@ -653,7 +672,7 @@ def capacity(site: Site, span_s: Fraction) -> dict[str, int]:
         if (sheet := site.sheet(d)) is None:
             raise Unreadable(f"the registered device {d} names no registered sheet")
         try:
-            card = load_card(sheet.sku)
+            card = load_card(sheet.sku, directory=CARD_FILES)
         except KeyError as e:
             raise Unreadable(f"the registered device {d}'s SKU has no card file: {e}") from e
         for r in READINGS:
@@ -667,7 +686,9 @@ def amounts(doc: dict, site: Site | None = None, span_s: Fraction | None = None)
     product of (`CREDITABLE`, `OF_CREDITABLE`, the printed line's "Pearl+ credits ..."), the verified amount
     (`verified`, the credited MACs), at each data-sheet reading the capacity (`capacity at clock.tensor`, ..., from the
     registered hardware `site` over the run's span `span_s`) and the free amount (`free at ...`, capacity less verified),
-    and the probability the verified amount holds except with (`error`, the answer's δ_s, which its `inputs` name).
+    the share of the credited MACs the answer's sample may miss (`epsilon_s`, the answer's ε_s), and the probability
+    the verified amount holds except with (`error`, the answer's δ_s, which its `inputs` name), a parameter the run
+    chose and marked so (`DELTA_S_MARK`), never measured.
     Where `site` or `span_s` is None, capacity and free are one entry each, with no value and why. Each is computed from
     the recorded run."""
     inputs = [doc["run"]] if doc["run"] else []
@@ -686,9 +707,11 @@ def amounts(doc: dict, site: Site | None = None, span_s: Fraction | None = None)
         for r, c in capacity(site, span_s).items():
             out += [{"name": f"capacity at clock.{r}", "value": c, "unit": "MAC", "inputs": inputs},
                     {"name": f"free at clock.{r}", "value": c - verified, "unit": "MAC", "inputs": inputs}]
-    delta = doc["delta_s"]
-    out.append({"name": "error", "value": None if delta is None else float(Fraction(str(delta))), "unit": DELTA_S,
-                "inputs": [*inputs, "delta_s"], **({"why": "the answer states no δ_s"} if delta is None else {})})
+    for name, key, unit, said, extra in (("epsilon_s", "epsilon_s", EPSILON_S, "ε_s", {}),
+                                         ("error", "delta_s", DELTA_S, "δ_s", {"mark": DELTA_S_MARK})):
+        v = doc[key]
+        out.append({"name": name, "value": None if v is None else float(Fraction(str(v))), "unit": unit,
+                    "inputs": [*inputs, key], **extra, **({"why": f"the answer states no {said}"} if v is None else {})})
     return out
 
 
@@ -739,13 +762,18 @@ def from_dir(record: Path, per_call: bool = False, given: Path | None = None, to
             raise Unreadable(f"the record directory {record} holds no {path} ({what})"
                              + (": it is a run's out/ directory; name the directory holding it" if moved else ""))
     try:
-        job = _held(record, JOB) or {}
-        run = (job.get("run") or {}).get("id") or record.resolve().name
+        job, run = _held(record, JOB) or {}, record_run(record)
         conds = (job.get("store") or {}).get("conditions") or {}
-        commit = commit_of({"source": {"commit": conds.get("source.commit"), "dirty": conds.get("source.dirty")}})
+        ran = (_optional(record, RAN) or {}).get("commit")
+        commit = (commit_of({"source": {"commit": conds.get("source.commit"), "dirty": conds.get("source.dirty")}})
+                  or (ran if ran != "unknown" else None))
     except (OSError, ValueError, AttributeError) as e:
         raise Unreadable(f"the record's {JOB} doesn't read as the run's ({type(e).__name__}: {e})") from e
-    return _with_split(document(record, commit, str(run), [], given), record, per_call, given, top)
+    return _with_split(document(record, commit, run, [], given), record, per_call, given, top)
+
+
+def record_run(record: Path) -> str:
+    return str(((_held(record, JOB) or {}).get("run") or {}).get("id") or record.resolve().name)
 
 
 def _with_split(doc: dict, tree: Path, per_call: bool, given: Path | None, top: int) -> dict:
@@ -808,6 +836,8 @@ def text(doc: dict) -> str:
                  (f"is `{record['verdict']}`, not an accept" if record["verdict"] else "is absent")
                  + ": PoUW credits nothing of this run, and the number above is the Pearl+ verifier's answer alone"
                  + (f" (the record's reason for PoUW's verdict: {record['why']})" if record["why"] else "")))
+    if record.get("weaker_tie"):
+        lines.append(f"  PoUW's accept is {record['weaker_tie']}")
     if doc["withdrawn"]:
         lines.append(f"  part of the run's record was withdrawn, none of it a file read here: {'; '.join(doc['withdrawn'])}")
     lines.append(f"  {doc['model']} at revision {doc['revision']}, {cls['slots']} slots of {cls['prompt']} prompt and "
@@ -820,6 +850,7 @@ def text(doc: dict) -> str:
                  + f"{100 * share:.2f}% of the model's MACs at this class: "
                  + (f"its passes hold {doc['passes_macs']:,} of them and " if doc["passes_macs"] is not None else "")
                  + f"its credit is {100 * doc['credited_macs'] / can:.2f}% of them all")
+    lines.append(HELD_TO_W)
     lines.append(f"  tokens, the class's since the record holds no count of those served: {tokens['prompt']:,} prompt "
                  f"and {tokens['output']:,} output, over {tokens['positions']:,} positions")
     lines.append(f"  capacity share: {ABSENT}")
@@ -867,13 +898,14 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], EvidenceStore]
         said, line = stated(getattr(e, "tree", None) or tree)
         return kit.report("compute", "\n".join(x for x in (made_up_text(up) if up else "", line) if x),
                           none | {"made_up_says": up},
-                          not_an_audit([{"name": METRIC, "unit": UNIT, "target": float(TARGET)}]), ran_with=said,
-                          accepted=False, why=str(e), made_up=bool(up))
+                          [] if up else not_an_audit([{"name": METRIC, "unit": UNIT, "target": float(TARGET)}]),
+                          ran_with=said, accepted=False, why=str(e), made_up=bool(up),
+                          from_run=record_run(tree) if tree else a.source)
     except Unreadable as e:
         print(f"compute: {e}", file=sys.stderr)
         return 2
-    return kit.report("compute", text(doc), doc, not_an_audit(measured), ran_with=said, accepted=True,
-                      made_up=bool(doc["made_up_says"]))
+    return kit.report("compute", text(doc), doc, [] if doc["made_up_says"] else not_an_audit(measured), ran_with=said,
+                      accepted=True, made_up=bool(doc["made_up_says"]), from_run=doc["run"])
 
 
 def not_an_audit(measured: list[dict]) -> list[dict]:

@@ -12,6 +12,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -73,7 +74,7 @@ def channel(cfg, source, to):
     return next(c for c in cfg["channel"] if (c["from"], c["to"]) == (source, to))
 
 
-#: a pin the toy's onsite configuration accepts: the network attester's key for the certifier's sessions
+#: a pin the toy's onsite configuration accepts: the network attester's key for the network attester's sessions
 PIN = {"party": "network-certifier", "protocol": "certifier", "scheme": K.SCHEMES[0], "key-sha512": "5a" * 64}
 
 
@@ -481,14 +482,56 @@ def test_remotes_development_composite_is_no_composite():
     assert "verity/remote/v0" not in K.COMPOSITES and "verity/remote/v0" not in SP.SUBPROTOCOLS
 
 
+def verifier_says(line: dict) -> R.Registry:
+    def live(cfg, state, here):
+        out = {p: {"outcome": {}, "refused": None} for p in here}
+        out[R.VERIFIER] = {"outcome": {"verdicts": [line]}, "refused": None}
+        return SimpleNamespace(outcomes=out)
+
+    return dataclasses.replace(registry(), live=live)
+
+
+def accepting(cfg: dict, product: str) -> dict:
+    return {"block": 0, "components": dict.fromkeys(cfg["protocols"], "accept"), "product": product, "reason": None,
+            "registration": None, "coins": "simulated", "verdict": "accept"}
+
+
 @pytest.mark.parametrize("cid", sorted(K.UNACCEPTED))
-def test_onsites_smaller_sets_are_read_and_hashed_and_verity_run_runs_neither(tmp_path, cid):
-    """Each of onsite's two smaller sets is a deployment with an id of its own, never onsite's: `check` reads it and
-    `verity run` stops before any party with the goal that brings it."""
+def test_onsites_smaller_sets_are_read_and_hashed_and_their_verdict_is_undecided_under_their_own_id(tmp_path, capsys,
+                                                                                                    cid):
+    """Each of onsite's two smaller sets is a deployment with an id of its own, never onsite's: `check` reads it, and
+    `verity run` runs its parties and records each period's verdict under that id, undecided, since no composite
+    takes it, even where every subprotocol's verifier accepts."""
     cfg = config(K.UNACCEPTED[cid])
     assert K.composite(cfg["protocols"], REG.components) == cid and K.digest(cfg) != K.digest(config())
-    with pytest.raises(NotImplementedError, match="demos/onsite-demo"):
-        run(tmp_path, registry(), cfg=cfg)
+    rc, lines = run(tmp_path, verifier_says(accepting(cfg, cid)), cfg=cfg)
+    assert rc == 2 and [(x["product"], x["verdict"]) for x in lines] == [(cid, "undecided")]
+    assert lines[0]["components"] == dict.fromkeys(cfg["protocols"], "accept") and cid in lines[0]["reason"]
+    assert said(capsys.readouterr().out, "VERDICT") == lines
+
+
+@pytest.mark.parametrize("cid", sorted(K.UNACCEPTED))
+def test_a_smaller_sets_record_never_carries_onsites_id(tmp_path, capsys, cid):
+    cfg = config(K.UNACCEPTED[cid])
+    rc, lines = run(tmp_path, verifier_says(accepting(cfg, "verity/onsite/v0")), cfg=cfg)
+    out = capsys.readouterr().out
+    assert rc == 2 and [(x["product"], x["verdict"]) for x in lines] == [(cid, "undecided")]
+    assert "verity/onsite/v0" not in (tmp_path / "state" / "record" / "verdicts.jsonl").read_text()
+    assert "verity/onsite/v0" not in out
+
+
+@pytest.mark.parametrize("verdict, rc", [("accept", 0), ("reject", 1)])
+@pytest.mark.parametrize("cid", sorted(K.UNACCEPTED))
+def test_a_smaller_sets_verdict_the_table_combined_is_passed_through_with_who_combined_it(tmp_path, capsys, cid,
+                                                                                          verdict, rc):
+    cfg = config(K.UNACCEPTED[cid])
+    by = f"python: no Lean verifier takes {cid}"
+    line = {**accepting(cfg, "verity/onsite/v0"), "verdict": verdict, "combined_by": by}
+    got, lines = run(tmp_path, verifier_says(line), cfg=cfg)
+    captured = capsys.readouterr()
+    assert got == rc and [(x["product"], x["verdict"], x["combined_by"]) for x in lines] == [(cid, verdict, by)]
+    assert f"verity run: block 0's verdict {verdict} is combined by {by}; no composite takes {cid}" in captured.err
+    assert said(captured.out, "VERDICT") == lines and "verity/onsite/v0" not in captured.out
 
 
 def test_verity_run_refuses_a_configuration_that_is_no_composite(tmp_path, capsys):

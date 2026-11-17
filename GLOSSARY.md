@@ -74,11 +74,14 @@ Code, docs, CLI help and output fields use these terms. When a term changes, thi
 - **Assumption**: a named `Prop` that guarantees take as a hypothesis and nothing proves, stated once with its rationale in its area's `Definitions/<Area>/Assumptions` (Flock's in `Proofs/Flock/Soundness/Assumptions` until its spec is extracted) and listed by name in its package's lock; the Lean check admits no other unproved fact. One cited by id carries its claim id in its lock entry (`property/instance` for one about a primitive, such as `cr/sha-512`), and `verity/commitments/claim_ids.json`, written from the locks, maps each id to its Lean names. Proving an assumption removes it from every guarantee that took it.
 - **Trusted computing base (TCB)**: what a guarantee's conclusion about the running system depends on beyond its assumptions: each spec, and the code implementing it for every role, verifier and prover, reference and fast. It is trusted, not certified: code that doesn't implement its spec degrades security, soundness for the auditor or zero knowledge and completeness for the developer. The *assurance TCB* makes "proved" and "passed `check`" believable: Lean's kernel and toolchain, the pinned Mathlib and ArkLib, the Lean check (`tools/verity/lean/`), `check`'s gates, and upstream's Rust verifier through lean-agreement.
 - **Adapter**: what makes Verity work end to end with a real system (`ARCHITECTURE.md`'s section 4, "The parts and their interfaces"). Code keeps its older names, integration and frontend (`verity_torch.frontend` is the PyTorch adapter's translator to circuits, `verity_vllm.program.frontend` its vLLM half).
-- **Configuration**: the file `verity run` reads, a `.toml` in `demos/`, the only Verity artifact: the protocols it runs on one registration, where each party runs, its channels, and the keys the auditor pinned for its devices, by party and protocol. A machine runs `verity run CONFIG --party ROLE`, or every role it is given, and `verity config new|check|hash` writes, checks and hashes one. Verity has no deploy verb; its code reaches a machine by ordinary packaging. Remote and onsite are compose's two lists of protocols with their ties (Lean's `Composite`); a configuration names one.
+- **Configuration**: the file `verity run` reads, a `.toml` in `applications/`, the only Verity artifact: the protocols it runs on one registration, where each party runs, its channels, and the keys the auditor pinned for its devices, by party and protocol. A machine runs `verity run CONFIG --party ROLE`, or every role it is given, and `verity config new|check|hash` writes, checks and hashes one. Verity has no deploy verb; its code reaches a machine by ordinary packaging. Remote and onsite are compose's two lists of protocols with their ties (Lean's `Composite`); a configuration names one.
+- **Parameter**: a value a protocol's behaviour depends on and does not fix: a sampling rate, a period's length, a size class, a hardware figure. A protocol takes every parameter as a public input and holds none. `security/` states what holds as a function of the parameters, calibration chooses them, and an application sets them all.
+- **Calibration**: choosing parameters from measurements and data sheets (`calibration/`): the hardware's data sheets, the probes of a card, and the harnesses that test an assumption a parameter rests on. Its output is a parameter's value with its source: a data sheet, a measurement of ours, or a named premise. Nothing imports calibration code.
+- **Application**: a configuration that sets every parameter of a run, one file in `applications/`; `verity run NAME` runs `applications/NAME.toml`. Remote and onsite are applications.
 - **Channel**: what two parties exchange messages over, declared in a configuration.
 - **Serving** and **proving**: serving is the live inference path, whose cost (computing commitments while serving, say) is serving overhead; proving is proof generation, whose cost is proving overhead. Neither is called "production".
 - **Approach**: a line of work (a scheme, a route or an attack) with a hypothesis, an owning lane and a status: live, parked, killed, superseded or merged. Each is a record in the evidence store (`research notes approach`), rendered into its campaign's `APPROACHES.md`, and every status but live gives its reason and evidence. A dead end is a killed or superseded approach, kept so nobody goes down it again unknowingly.
-- **Project**, **milestone** and **issue**: project management's only words, Linear's. A milestone is a set of end-to-end examples, each at a degree of doneness: (example, run, proof) triples, how far each runs and how far its guarantee is proved (`demos/README.md`).
+- **Project**, **milestone** and **issue**: project management's only words, Linear's. A milestone is a set of end-to-end examples, each at a degree of doneness: (example, run, proof) triples, how far each runs and how far its guarantee is proved (`applications/README.md`).
 
 ## Notation
 
@@ -311,7 +314,9 @@ run side by side are one workload. vLLM's workload files (`adapters/vllm/workloa
   needs; the *fan-out* F is the most replay blocks one group joined by such reads holds, 1 when all are closed, and a
   served cap of S bits charges each replay block at most F S.
 - **Benchmark**: one command that measures and records its numbers (`verity bench NAME`, a directory's runner under
-  `benchmarks/`).
+  `benchmarks/`). A benchmark measures performance or cost and nothing else: it decides no verdict and chooses no
+  parameter, and a run that chooses a parameter or tests an assumption one rests on is calibration. What a guarantee
+  gives at an application's parameters is a security figure, not a benchmark.
 - **Metric**: one named number a benchmark records, declared as one `[[metric]]` of its directory's `metrics.toml`
   (`benchmarks/README.md`).
 - **Benchmark result**: what one run of a benchmark recorded in one configuration. A proof benchmark's
@@ -378,7 +383,7 @@ run side by side are one workload. vLLM's workload files (`adapters/vllm/workloa
   - **Landing gate**: a script at `main` that a head must pass at its mark's preflight (drive.toml's `landing_gates`).
   - **Warn gate**: a script run as a landing gate is, whose failure only warns (drive.toml's `warn_gates`).
   - **Off-gate step**: a step of the check off the merge gate (policy.toml's `off_gate` and drive.toml's `warn_steps`:
-    circuit-check, ratchet-gate); a candidate's check still runs it, and its red holds nothing. Under `--gate check`, a
+    circuit-check, ratchet-gate, added-lines); a candidate's check still runs it, and its red holds nothing. Under `--gate check`, a
     red the run beside its base's check doesn't share rings who acts on it.
   - **Low-risk lane**: the verified queue taking a PR on its ready mark alone, when its change touches nothing drive.toml's
     `lowrisk_excludes` names (no Lean, lock, soundness-path or `tools/move/` change); a layout move's PR only once its move

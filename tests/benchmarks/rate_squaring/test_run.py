@@ -46,3 +46,42 @@ def test_every_name_of_the_usage_has_its_script_in_the_directory():
     assert run(HERE).stderr == USAGE
     assert USAGE.split()[4].split("|") == list(SCRIPTS)
     assert all((HERE / script).is_file() for script in SCRIPTS.values())
+
+
+ROOT = HERE.parent.parent
+#: sq.sh's build on an RTX PRO 6000 before ARCH, word for word but the build directory
+RTX_BUILD = ["-O3", "-gencode", "arch=compute_120a,code=sm_120a", "-std=c++17", "-Xptxas", "-v", "-DSQ_BITS=512",
+             "-DSQ_C=569", "-o", "B/sq", "benchmarks/rate_squaring/sq.cu"]
+
+
+def build_line(tmp_path: Path, card: str, **env: str) -> tuple[subprocess.CompletedProcess, list[str] | None]:
+    """sq.sh with `nvcc` and `nvidia-smi` stand-ins (exported functions, ahead of the toolkit sq.sh puts on PATH): the
+    card `nvidia-smi` names, and the arguments nvcc was handed (None when it wasn't), its build failing so nothing runs."""
+    argv = tmp_path / "nvcc.argv"
+    fns = {"BASH_FUNC_nvcc%%": f'() {{ printf "%s\\n" "$@" > {argv}; return 1; }}',
+           "BASH_FUNC_nvidia-smi%%": f'() {{ echo "{card}"; }}'}
+    done = subprocess.run(["bash", str(HERE / "sq.sh")], cwd=ROOT, capture_output=True, text=True,
+                          env={"PATH": "/usr/bin:/bin", "RESEARCH_RUN_DIR": str(tmp_path), **fns, **env})
+    if not argv.is_file():
+        return done, None
+    return done, [("B/sq" if a.endswith("/sq") else a) for a in argv.read_text().splitlines()]
+
+
+@pytest.mark.parametrize("card,env", [("NVIDIA RTX PRO 6000 Blackwell Server Edition", {}),
+                                      ("NVIDIA H200", {"ARCH": "120a"})])
+def test_the_build_at_120a_is_the_rtx_pro_6000_build_word_for_word(tmp_path, card, env):
+    done, got = build_line(tmp_path, card, **env)
+    assert (done.returncode, got) == (4, RTX_BUILD)
+
+
+@pytest.mark.parametrize("card,env", [("NVIDIA H200", {}), ("NVIDIA H100 80GB HBM3", {}),
+                                      ("NVIDIA RTX PRO 6000 Blackwell Server Edition", {"ARCH": "90a"})])
+def test_hopper_or_arch_90a_builds_for_sm_90a(tmp_path, card, env):
+    done, got = build_line(tmp_path, card, **env)
+    assert (done.returncode, got) == (4, [a.replace("120a", "90a") for a in RTX_BUILD])
+
+
+def test_a_card_the_name_does_not_tell_is_refused_before_the_build(tmp_path):
+    done, got = build_line(tmp_path, "NVIDIA L40S")
+    assert (done.returncode, got) == (3, None)
+    assert "sq: ARCH (90a, 120a) is not given and the card's name does not tell it" in done.stderr
