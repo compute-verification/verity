@@ -30,16 +30,7 @@ import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
 import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
 import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 
-/-!
-# The registered check at an accepted hidden-output `--zk --registered` outcome of `J` tables
-
-`checked_of_acceptsHJ`. `AcceptsZKR` runs `checkRegistered` on every table's statement, and table `j`'s is setupHidden's
-under its tags at its part of the record's sample, `drawJ I d j` (`ZkHidden.setupOf_tableJH`, from `setupTables_partsH`),
-over `HmOut.drawn c pub (drawJ I d j)`. A read `(u, q)` is at the table `u` is sampled into (`OwnReadsHJ`), so it is that
-table's registered check at its sample (`checkRegistered_ok`, `checkPort_at`): the sampled instance at `u`'s rank in the
-table's sample holds the population's row of `u` (`Hidden.sampled_digestW`), whose leaf is the hidden layout's registered
-leaf at `(u, q)`, which reads the population alone, whatever the table.
--/
+/-! The registered check at an accepted hidden-output `--zk --registered` outcome of `J` tables. -/
 
 @[expose] public section
 
@@ -50,10 +41,6 @@ open FlockSoundness.Discharge.Exec (Inputs recordDraw)
 
 variable {mPts n : ℕ} {Reg : Type}
 
-/-- **The registered reads are checked at every accepted hidden-output outcome of `J` tables.** At an outcome
-`verify --zk --registered F` accepts over hidden outputs (`own` F's ports), each registered read of the hidden shadow
-layout of `J` tables that is the verifier's own at the sample of the table its unit is sampled into (`OwnReadsHJ`) has its
-registered leaf open the root `own` holds at the position `own` gives, through `regPathsHJ`. -/
 theorem checked_of_acceptsHJ (I : Inputs) (ht : I.tags.typed = false) (own : Array Registered.Port)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀)

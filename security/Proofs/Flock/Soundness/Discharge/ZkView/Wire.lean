@@ -2,18 +2,7 @@ module
 
 public import Flock.ZkProof
 
-/-!
-# A `--zk` proof file's bytes
-
-`verity-verify-proof verify --zk` reads each rep's proof file with `Flock.Zk.decode sh`: `bincode 1.3` of
-`(Commitment, R1csProofLigerito, InnerProof)` with the `--zk` differences (`Flock/ZkProof.lean`). `encZk sh p` is the
-file the prover writes for the decoded proof `p`: each `Vec` as its `u64` length then its elements, each `F128` as
-`le64(lo) ‖ le64(hi)`, the vectors the verifier requires empty (`matrix_evals`, the grinding nonces but the query, claim and
-consistency nonces, `sumcheck_transcript`) empty, each ring switch's grinding nonce `0`, and level 0's hiding messages
-`Some`. `Shaped sh p` is what the decoder checks of the lengths: every fixed-length vector at its length for the shape, every
-digest `hashLen` bytes, every opened salt `saltLen` bytes, the inner proof's salts 192 bytes and its path entries 64; and
-every query, claim and consistency nonce `0` (`NoncesZero`, R4).
--/
+/-! A `--zk` proof file's bytes. -/
 
 @[expose] public section
 
@@ -56,8 +45,6 @@ def CapOk (sh : Shape) (l : Level) (c : Array ByteArray) : Prop := c.size = 2 ^ 
 def NoncesZero (lg : LigeritoProof) : Prop :=
   (∀ x ∈ lg.queryNonces, x = 0) ∧ (∀ x ∈ lg.claimNonces, x = 0) ∧ (∀ x ∈ lg.consistencyNonces, x = 0)
 
-/-- **The lengths `Zk.decode sh` checks**, its grinding nonces `0`, and a file short enough for its lengths to fit a
-`u64`. -/
 def Shaped (sh : Shape) (p : ZkProof) : Prop :=
   let s := sh.sched
   let R := s.levels.size - 1

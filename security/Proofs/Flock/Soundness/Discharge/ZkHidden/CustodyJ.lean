@@ -21,24 +21,7 @@ import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
 
-/-!
-# `zk_session_soundHJ` at the challenger's live-coin part's custody
-
-`Composed/CustodyJ.lean` under hidden outputs. `zk_session_soundHJ` takes `RecordsLiveZKJ` (`hRec`) and `SampleOkZKHJ` at
-every sample of the live subset sampling design (`hDraw`); the record and its sample file are custody, and the rest of `SampleOkZKHJ` is
-verity-verify-proof's own arithmetic:
-
-* `sampleOkZKHJ_of_sizeG`: from `SampleFileZK` under any sampling design, at a sample whose file decodes only to `kd` units, with `nTab I`
-  dividing `kd`, `SampleOkZKHJ` holds at `mPtsOf g (kd / nTab I)` link points, at any `g` every table's session has;
-  `sampleOkZKHJ_of_size` is it at the circuit file's `HmOut.parse`, `sampleOkZKHJ_of_fileG` at the subset sampling design.
-* `sampleOkZKHJ_of_size`: from `SampleFileZK` under any sampling design, at a sample whose file decodes only to `kd` units, with `nTab I`
-  dividing `kd`, `SampleOkZKHJ` holds at `mPtsOf c.g (kd / nTab I)` link points, `c` the circuit file's `HmOut.parse`
-  (setupHidden's `m_pts`, `setupHidden_mPts_sampled` and `setupHidden_mPts_of_proved`).
-* `sampleOkZKHJ_of_file`: `sampleOkZKJ_of_file` at setupHidden, `sampleOkZKHJ_of_size` at `SampleFileZK dj (subset kd) pop`,
-  at every sample `S`; `sampleOkZKHJ_of_fileSt` at the statement circuit (`HmOut.parseStmt`).
-* `zk_session_soundHJ_custody`: `zk_session_soundHJ` with `RecordCustodyZKJ` (`live-verifier`) for `hRec` and `hDraw`,
-  at `mPtsOf c.g (kd / nTab I)` link points and `nTab I ∣ kd`.
--/
+/-! `zk_session_soundHJ` at the challenger's live-coin part's custody. -/
 
 @[expose] public section
 
@@ -52,10 +35,6 @@ open scoped ENNReal
 
 variable {n : ℕ} {Reg : Type}
 
-/-- **The challenger's live-coin part's sample is `SampleOkZKHJ` at a sample of `kd` units, under any sampling design, at any `g` every table's session
-has.** When the record's sample file is the verifier's sample under `samplingDesign` over `[0, pop)` (`SampleFileZK`), the sample file at
-`S` decodes only to a sample of `kd` units, and the session's tables divide `kd`, `S` is `SampleOkZKHJ` at
-`mPtsOf g (kd / nTab I)` link points: each table proves its `kd / nTab I` consecutive units, whatever the sampling design. -/
 theorem sampleOkZKHJ_of_sizeG (I : Inputs) {g : ℕ}
     (hg : ∀ (j : ℕ) (d : Lean.Json) (st : Flock.Stmt), Stmt.setupHidden (tagsAt (zkTags I) I.count j) I.circuitFile
       I.publicFile (zkCoins I) I.tables (some d) I.partition I.program = .ok st → st.c.g = g)
@@ -147,11 +126,6 @@ theorem sampleOkZKHJ_of_sizeG (I : Inputs) {g : ℕ}
     · rw [setupHidden_mPts_of_provedG (hg j _ _ hst) (fun D' h' => ?_) hst]
       rw [hpd D' h', Array.size_extract, hsz, Nat.min_eq_left hjq, Nat.add_sub_cancel_left, hn]
 
-/-- **The challenger's live-coin part's sample is `SampleOkZKHJ` at a sample of `kd` units, under any sampling design.** On untyped `--statement` tags
-whose circuit file `HmOut.parse` accepts under the `--zk` tags as `c`: when the record's sample file is the verifier's sample
-under `samplingDesign` over `[0, pop)` (`SampleFileZK`), the sample file at `S` decodes only to a sample of `kd` units, and the session's
-tables divide `kd`, `S` is `SampleOkZKHJ` at `mPtsOf c.g (kd / nTab I)` link points: each table proves its `kd / nTab I`
-consecutive units, whatever the sampling design. -/
 theorem sampleOkZKHJ_of_size (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (samplingDesign : Draw.SamplingDesign) (kd pop : ℕ) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (hdj : SampleFileZK dj samplingDesign pop) (S : Finset (Fin n))
@@ -160,10 +134,6 @@ theorem sampleOkZKHJ_of_size (I : Inputs) (ht : I.tags.typed = false) {c : Flock
   sampleOkZKHJ_of_sizeG I (fun _ _ _ h => congrArg Flock.Circuit.g (setupHidden_c_of_parse
     ((parseH_tagsAt ((zkTags_typed I).trans ht) _ _ _ _).trans hc) h)) samplingDesign kd pop hdiv dj hdj S hsz
 
-/-- **The challenger's live-coin part's samples are `SampleOkZKHJ`, at any `g` every table's session has.** When the record's sample file
-is the verifier's sample under the subset sampling design `subset kd` over `[0, pop)` (`SampleFileZK`) and the session's tables divide
-`kd`, every sample `S` is `SampleOkZKHJ` at `mPtsOf g (kd / nTab I)` link points (`sampleOkZKHJ_of_sizeG`: a subset sample has
-`kd` units, `ofJson_shape`). -/
 theorem sampleOkZKHJ_of_fileG (I : Inputs) {g : ℕ}
     (hg : ∀ (j : ℕ) (d : Lean.Json) (st : Flock.Stmt), Stmt.setupHidden (tagsAt (zkTags I) I.count j) I.circuitFile
       I.publicFile (zkCoins I) I.tables (some d) I.partition I.program = .ok st → st.c.g = g)
@@ -173,10 +143,6 @@ theorem sampleOkZKHJ_of_fileG (I : Inputs) {g : ℕ}
   sampleOkZKHJ_of_sizeG I hg (.subset kd) kd pop hdiv dj hdj S fun D hD =>
     (ofJson_shape hD).2.2 kd (by rw [hdj S D hD]; rfl)
 
-/-- **The challenger's live-coin part's samples are `SampleOkZKHJ`.** On untyped `--statement` tags whose circuit file `HmOut.parse`
-accepts under the `--zk` tags as `c`: when the record's sample file is the verifier's sample under the subset sampling design
-`subset kd` over `[0, pop)` (`SampleFileZK`) and the session's tables divide `kd`, every sample `S` is `SampleOkZKHJ` at
-`mPtsOf c.g (kd / nTab I)` link points. -/
 theorem sampleOkZKHJ_of_file (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (kd pop : ℕ) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (hdj : SampleFileZK dj (.subset kd) pop) (S : Finset (Fin n)) :
@@ -184,8 +150,6 @@ theorem sampleOkZKHJ_of_file (I : Inputs) (ht : I.tags.typed = false) {c : Flock
   sampleOkZKHJ_of_fileG I (fun _ _ _ h => congrArg Flock.Circuit.g (setupHidden_c_of_parse
     ((parseH_tagsAt ((zkTags_typed I).trans ht) _ _ _ _).trans hc) h)) kd pop hdiv dj hdj S
 
-/-- `sampleOkZKHJ_of_file` at the statement circuit (`HmOut.parseStmt`, a templated file's template unrolled): each
-table's session commits the circuit the statement circuit unrolls (`stmt_g_of_setupHidden`). -/
 theorem sampleOkZKHJ_of_fileSt (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c) (kd pop : ℕ) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (hdj : SampleFileZK dj (.subset kd) pop) (S : Finset (Fin n)) :
@@ -193,10 +157,6 @@ theorem sampleOkZKHJ_of_fileSt (I : Inputs) (ht : I.tags.typed = false) {c : Flo
   sampleOkZKHJ_of_fileG I (fun j _ _ h => (stmt_g_of_setupHidden (typedJ ht j)
     ((parseStmtH_tagsAt ((zkTags_typed I).trans ht) _ _ _ _).trans hc) h).symm) kd pop hdiv dj hdj S
 
-/-- **One hidden-output `--zk` sampled session of `J` tables is sound, at the challenger's live-coin part's custody.**
-`zk_session_soundHJ` with `RecordCustodyZKJ` (`live-verifier`: the record is the live session's, and its sample file the
-verifier's sample under the subset sampling design) in place of `hRec` and `hDraw`, at `mPtsOf c.g (kd / nTab I)` link points, the
-session's tables dividing `kd`. -/
 theorem zk_session_soundHJ_custody
     (I : Inputs) (ht : I.tags.typed = false)
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
@@ -210,7 +170,6 @@ theorem zk_session_soundHJ_custody
     (dg : ByteArray → ByteArray) (N : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the verify command's tags, and the challenger's live-coin part's custody of the record and its sample file
     (hTags : TagsOkZHJ I)
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)

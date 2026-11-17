@@ -8,20 +8,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Game
 import VCVio.Prelude.Core
 
-/-!
-# A masked rep followed by the inner proof (live/PROTOCOL.md §5, VEIL Lemma 4.3)
-
-Under `--zk` a rep starts by committing its pads (`Ch, Cμ`, §3), runs its masked phases, which end with the rows the
-verifier could not check itself (affine forms in the pads, §4), and closes with the inner proof on those rows (§5).
-`repZK phase` is that composition for any masked phase `phase : Game (rows × verdict)`; the verdict is what the
-verifier still checks in the clear.
-
-`zk_compose`: if for every pad vector `h` with `h_ab = h_fa·h_fb` the masked phase ends with a true verdict and rows
-vanishing at `h` with probability at most `ε` (the coupling: VEIL's "`v' − h` is a prover strategy for the unmasked
-protocol", which bounds it by the clear protocol's soundness), then the rep accepts with probability at most
-`ε + εInner`. The pads are fixed by the commitment before the phase starts, and in the unique-decoding regime the
-inner proof's `InnerGood` names one pad vector, the decoding of `Ch`.
--/
+/-! A masked rep followed by the inner proof (`repZK`), sound when its masked phase couples. -/
 
 @[expose] public section
 
@@ -32,7 +19,6 @@ open scoped ENNReal NNReal
 
 variable {F : Type} [Field F] [Fintype F] [DecidableEq F]
 
-/-- **A `--zk` rep**: the pads commitment, the masked phase, and the inner proof on the phase's rows. -/
 def repZK {N : ℕ} (dom : Fin N ↪ F) (s nP q : ℕ) (pos : F → Fin N) {nA : ℕ} (tr : Triple s)
     (phase : Game ((Fin nA → Lin F s) × Bool)) : Game Bool := do
   let C ← recv ((Fin N → F) × (Fin N → F))
@@ -41,7 +27,6 @@ def repZK {N : ℕ} (dom : Fin N ↪ F) (s nP q : ℕ) (pos : F → Fin N) {nA :
   pure (o.2 && b)
 
 omit [Fintype F] in
-/-- In the unique-decoding regime a word is `δ`-close to at most one codeword. -/
 theorem agree_unique {N L : ℕ} (dom : Fin N ↪ F) (hL : L ≤ N) (δ : ℝ≥0) (hδ1 : δ ≤ 1)
     (hud : 2 * (δ : ℝ) * N ≤ N - L) {u : Fin N → F} {m m' : Fin L → F}
     (h1 : Agree δ u (enc dom m)) (h2 : Agree δ u (enc dom m')) : m = m' := by
@@ -62,8 +47,6 @@ theorem agree_unique {N L : ℕ} (dom : Fin N ↪ F) (hL : L ≤ N) (δ : ℝ≥
   exact ReedSolomon.eq_of_agree_of_card_le (enc_mem dom m) (enc_mem dom m') hI fun j hj => by
     rw [← hu₁ j (Finset.mem_inter.1 hj).1, hu₂ j (Finset.mem_inter.1 hj).2]
 
-/-- **Composition.** If the masked phase, at every pad vector whose product pad is the product, ends with a true verdict
-and vanishing rows with probability at most `ε`, the `--zk` rep accepts with probability at most `ε + εInner`. -/
 theorem zk_compose [CharP F 2] {N : ℕ} (dom : Fin N ↪ F) (s nP q : ℕ) [NeZero (s + nP)] (pos : F → Fin N)
     (hpos : ∀ D : Finset (Fin N), prCoin (fun x => pos x ∈ D) ≤ (D.card : ℝ≥0∞) / N)
     {nA : ℕ} (tr : Triple s) (δ : ℝ≥0) (hL : s + nP ≤ N)

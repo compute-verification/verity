@@ -40,27 +40,7 @@ import Proofs.Flock.Soundness.Refine.Walk
 
 set_option Elab.async false
 
-/-!
-# One hidden-output `--zk` sampled session of `J` tables: the pieces `zk_session_soundHJ` reads
-
-`Composed/DefsJ.lean`'s pieces at `J` tables, under hidden outputs (`Stmt.setupHidden`, the default `--statement`), each
-the one-table hidden-output piece (`ZkHidden/Defs.lean`, `SoundBind.lean`, `SoundRuns.lean`) at table `j`:
-
-* `setupTables_partsH`: `Tables.setupTables_parts` under hidden outputs. At `count > 1`, table `j` is `setupHidden`'s
-  statement under `Tags.tableIdentity count j` at the subset sample of part `j`; `setupOf_tableJH` is `setupOf_tableJ`'s
-  counterpart.
-* `parseH_tagsAt`, `loadPublicH_tagsAt`: `HmOut.parse` (untyped) and `HmOut.loadPublic` read no identity.
-* `SampleSetupZHJ`, `tableZHJ`, `planZHJ`, `tabZHJ`: `SampleSetupZJ`, `tableZJ`, `planZJ`, `tabZJ` with a `SampleSetupH` at
-  table `j`'s inputs (`inputsJ I j`), and the refused table of the reference setup `y₀ : SampleSetupZHJ` at table 0's
-  inputs.
-* `tableShHJ`, `planShHJ`, `tabShHJ`, `sitesShHJ`: the public hidden-output tables (`HiddenExec.TableH`) at the same
-  samples, each at the inputs it is set up on (table `j`'s, or table 0's, `y₀`'s, at a refused table), and their sites.
-* `placeZHJ`, `layZHJ`, `rsZHJ`, `rsZHJ_computes`: `keyPlaceH`, `keyLayoutH` and `keyRowsH` at those sites, moved to the
-  `--zk` tables (`SoundBind.lean`'s `placeZH`, `layZH`, `rsZH` at `J` tables).
-* `TagsOkZHJ`, `SampleOkZKHJ`, `opnAtZHJ`, `runsZCJH_live`: `TagsOkZJ` with hidden outputs, `SampleOkZKJ` and `opnAtZJ` with
-  `setupHidden`, and `runsZCJ_live` under hidden outputs. It holds from the sessions alone (`runsZCJH_liveU`), so
-  `runsZCJH_liveSt` and `runsZCJH_liveISt` state it at the statement circuit (`HmOut.parseStmt`).
--/
+/-! One hidden-output `--zk` sampled session of `J` tables: the pieces `zk_session_soundHJ` reads. -/
 
 namespace FlockSoundness.Discharge.ZkHidden
 
@@ -73,8 +53,6 @@ open scoped ENNReal
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
-/-! ## verity-verify-proof's tables at `count > 1` under hidden outputs -/
-
 section Parts
 
 open Lean (Json)
@@ -84,8 +62,6 @@ variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ} {tables
   {stratified : Option ℕ} {closure : Option (Std.HashMap ℕ (Array ℕ))} {spec : SessionSpec} {sts : Array Flock.Stmt}
 
 set_option maxHeartbeats 4000000 in
-/-- **`setupTables`'s tables at `count > 1` under hidden outputs** (`Tables.setupTables_parts` with `hh = true`): the
-same split, and table `j` is `setupHidden`'s statement under `Tags.tableIdentity count j` at part `j`'s subset sample. -/
 theorem setupTables_partsH (hh : tags.hiddenOutputs = true) (hc1 : 1 < count)
     (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure =
       .ok (spec, sts)) :
@@ -145,9 +121,6 @@ theorem setupTables_partsH (hh : tags.hiddenOutputs = true) (hc1 : 1 < count)
 
 end Parts
 
-/-- **`verify --zk` sets table `j` up under its tags at its sample, under hidden outputs** (`setupOf_tableJ` with
-`setupHidden`): at the record's sample `d`, `setupTables` at `zkInputs I` has `nTab I` tables, table `j` setupHidden's
-statement under `tagsAt` at `drawJ` (`setupTables_okH` at one table, `setupTables_partsH` at several). -/
 theorem setupOf_tableJH {I : Inputs} {record : String} {d : Lean.Json} {spec : SessionSpec} {sts : Array Flock.Stmt}
     (hh : I.tags.hiddenOutputs = true) (hd : recordDraw record = some d)
     (hs : setupOf (zkInputs I) record = .ok (spec, sts)) :
@@ -180,14 +153,11 @@ theorem setupOf_tableJH {I : Inputs} {record : String} {d : Lean.Json} {spec : S
     rw [e1, hpart]
     exact hall j hj
 
-/-! ## Table `j`'s tags under hidden outputs -/
-
 theorem parseH_identity {tags : Tags} (ht : tags.typed = false) (x : Lean.Json) (b : ByteArray)
     (t : List (String × ByteArray)) : HmOut.parse { tags with identity := x } b t = HmOut.parse tags b t := by
   simp only [HmOut.parse, parse_identity, Tags.isTmpl]
   simp only [ht, Bool.not_false, ite_true]
 
-/-- An untyped `HmOut.parse` reads no identity, so it agrees at every table's tags. -/
 theorem parseH_tagsAt {tags : Tags} (ht : tags.typed = false) (count j : ℕ) (b : ByteArray)
     (t : List (String × ByteArray)) : HmOut.parse (tagsAt tags count j) b t = HmOut.parse tags b t := by
   unfold tagsAt
@@ -195,15 +165,12 @@ theorem parseH_tagsAt {tags : Tags} (ht : tags.typed = false) (count j : ℕ) (b
   · rfl
   · exact parseH_identity ht _ _ _
 
-/-- `HmOut.loadPublic` reads no identity, so it agrees at every table's tags. -/
 theorem loadPublicH_tagsAt (tags : Tags) (count j : ℕ) (c : Flock.Circuit) (b : ByteArray) :
     HmOut.loadPublic (tagsAt tags count j) c b = HmOut.loadPublic tags c b := by
   unfold tagsAt
   split_ifs <;> rfl
 
 variable {n mPts : ℕ} {Reg : Type}
-
-/-! ## The tables -/
 
 /-- **A hidden-output table `verify --zk` sets up**, on table `j`'s inputs `I'` (`inputsJ I j`): `SampleSetupZKH`'s
 fields at a `SampleSetupH` of `I'`, and the statement passes the `--zk` shape check (`Zk.shapeOk`). -/
@@ -283,7 +250,6 @@ noncomputable def table : TabZK 𝔽 mPts := y.tabAt (regionsOf y.x.st) (stmtOf_
 noncomputable def refused : TabZK 𝔽 mPts :=
   y.tabAt (regionsOf y.x.st ++ Integrate.SampleSetup.contra y.x.st.c.kLog (y.x.st.m - y.x.st.c.kLog)) y.x.refused_wf
 
-/-- A table's `--zk` table is the same at every `SampleSetupZHJ` of it. -/
 theorem table_eq (y₁ y₂ : SampleSetupZHJ I' mPts S d) : y₁.table = y₂.table := by
   obtain ⟨⟨st₁, h₁, D₁, hD₁, hS₁, hg₁, hb₁, m₁, k₁, a₁, b₁, r₁, e₁, hs₁, hm₁, hp₁, w₁⟩, sch₁, t₁, hz₁, _, _, _, _, _, _⟩ :=
     y₁
@@ -301,8 +267,6 @@ theorem table_lay : ZkTabLay y.table (Setup.ofCircuit y.x.st) y.sch := by
 
 end SampleSetupZHJ
 
-/-- A `SampleSetupH` whose statement passes the `--zk` shape check, with `Zk.schedule`'s schedule at its `m`, is a
-`SampleSetupZHJ` (`ZkSchedOK`). -/
 theorem sampleSetupZHJ_of {I' : Inputs} {S : Finset (Fin n)} {d : Lean.Json} (x : SampleSetupH I' mPts S d)
     (hshape : Flock.Zk.shapeOk x.st = .ok ()) {sch : Flock.Schedule} {tPad : ℕ}
     (hz : Zk.schedule x.st.wideLeaf x.st.m = .ok (sch, tPad)) :
@@ -338,8 +302,6 @@ theorem tabOfZHJ_eq (S : Finset (Fin n)) (R : Reg) (u : Fin n) :
     tabOfZ (planZHJ dj y₀) (tabZHJ dj y₀) S R u = tableZHJ dj y₀ S (partOf I (dj S) u.val) := by
   simp only [tabOfZ, planZHJ, tabZHJ, List.get_ofFn]
   rfl
-
-/-! ## The public shadow, the sites, the layout and the rows -/
 
 open Classical in
 /-- **The public hidden-output table at table `j`'s sample**, with the inputs it is set up on: its `SampleSetupZHJ`'s
@@ -408,8 +370,6 @@ theorem tableShHJ_typed (S : Finset (Fin n)) (j : Fin (nTab I)) : (tableShHJ dj 
 variable {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
 
 include ht hc in
-/-- **One circuit per session, at every table**: each public table's inputs parse the session's circuit file to `c`
-(table `j`'s tags differ from the session's in the identity alone, which an untyped `HmOut.parse` does not read). -/
 theorem tableShHJ_parse (S : Finset (Fin n)) (j : Fin (nTab I)) :
     HmOut.parse (tableShHJ dj y₀ S j).1.tags (tableShHJ dj y₀ S j).1.circuitFile (tableShHJ dj y₀ S j).1.tables =
       .ok c := by
@@ -446,7 +406,6 @@ noncomputable def sitesShHJ : SitesH (planShHJ (Reg := Reg) dj y₀) (tabShHJ dj
   o S R u h := Fin.cast (congrArg (fun T : TabSpec mPts => 2 ^ T.S.nbl) (tabOfShHJ_eq dj y₀ S R u)).symm
     ((tableShHJ dj y₀ S (partOf I (dj S) u.val)).2.o u (mem_partS h))
 
-/-- **One circuit per session**: every site's statement circuit is the session's one circuit `c`. -/
 theorem sitesShHJ_parse :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S),
       HmOut.unrolled ((sitesShHJ dj y₀ ht hc hscope).acc S R u h).st.c = c :=
@@ -464,7 +423,6 @@ theorem bcSiteH_recast {T T' : Model.Statement} {A B : Matrix (Fin (2 ^ T.kLog))
   hs
 
 include hU hpub hpt in
-/-- `BcSiteH` at a table set up at table `j`'s inputs (`tableH_bcSite` at `inputsJ I j`). -/
 theorem tableShHJ_bcSite {S' : Finset (Fin n)} (Tb : (I' : Inputs) × TableH I' mPts S')
     (p₁ : Tb.1.tags.typed = false) (p₂ : HmOut.parse Tb.1.tags Tb.1.circuitFile Tb.1.tables = .ok c)
     (hX : ∃ (j : ℕ) (d : Lean.Json) (x : SampleSetupH (inputsJ I j) mPts S' d), Tb = ⟨inputsJ I j, x.table⟩)
@@ -474,8 +432,6 @@ theorem tableShHJ_bcSite {S' : Finset (Fin n)} (Tb : (I' : Inputs) × TableH I' 
   exact tableH_bcSite p₁ p₂ hscope (fun _ => d) hU ((loadPublicH_tagsAt _ _ _ _ _).trans hpub) hpt x h
 
 include hU hpub hpt in
-/-- **`BcSiteH` at every satisfiable public site** at `J` tables (`sitesShH_bcSite`): at a table `verify --zk` sets up
-by `tableH_bcSite` at table `j`'s inputs; at a refused one no message satisfies the table. -/
 theorem sitesShHJ_bcSite :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S)
       (M : Binding.Msg (planShHJ dj y₀) (tabShHJ dj y₀) S R u),
@@ -525,7 +481,6 @@ noncomputable def placeZHJ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈
   placeCast (planZHJ_S dj y₀ S R u)
     (keyPlaceH (sitesShHJ_parse dj y₀ ht hc hscope) (Layout.outsOf c hU n) S R u h)
 
-/-- **The decoders agree**: the `--zk` places and the public places read one witness alike. -/
 theorem decAgreeHJ :
     DecAgree (P := (keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ_S (Reg := Reg) dj y₀)
       (decZ := decodeOfPlace execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ dj y₀)
@@ -548,14 +503,11 @@ noncomputable abbrev layZHJ :
 noncomputable abbrev rsZHJ : HmRowsZX (layZHJ dj y₀ ht hc hscope hU (pub := pub) (Reg := Reg)) :=
   HmRowsZX.ofShadow (planZHJ_S dj y₀) (decAgreeHJ dj y₀ ht hc hscope hU) (rsShHJ dj y₀ ht hc hscope hU hpub hpt)
 
-/-- **`hHm` at the hidden-output `--zk` tables' rows, at `J` tables** (`rsShHJ_computes`, moved along). -/
 theorem rsZHJ_computes : (rsZHJ dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).Computes :=
   HmRowsZX.ofShadow_computes (planZHJ_S dj y₀) (decAgreeHJ dj y₀ ht hc hscope hU) _
     (rsShHJ_computes dj y₀ ht hc hscope hU hpub hpt)
 
 end Shadow
-
-/-! ## The tags, the challenger's live-coin part's samples, and the openings -/
 
 /-- **The verify command's tags at any number of tables, under hidden outputs** (`TagsOkZJ` with hidden outputs):
 hidden outputs, retained rounds, `hm96-sha512/v1` leaves. -/
@@ -584,14 +536,6 @@ noncomputable def opnAtZHJ (planZ : Finset (Fin n) → Reg → List (TabZK 𝔽 
     | .error _ => default
   | .error _ => default
 
-/-! ## The message half at the live hidden-output tables -/
-
-/-- **`RunsZC` at the live hidden-output `--zk` tables of a session of `J` tables, at the sampling design's samples**
-(`runsZCJ_live` under hidden outputs): on untyped inputs under the tags `TagsOkZHJ` fixes, whose circuit file
-`HmOut.parse` accepts, with `wr` the challenger's live-coin part's record of the live session and each of the sampling design's samples setting each
-table up at `mPts` link points, `RunsOnZCJ` holds at the tables `planZHJ` under `hm96-sha512/v1`, with the decoder
-`decAtZJ`, the openings `opnAtZHJ`, no tail and table `j`'s cap from `root_B[j]`. `runsZCJH_liveU` is it from the
-sessions alone: each table's sample setup reads only its own session's committed circuit (`sampleSetupH_of_setupHiddenU`). -/
 theorem runsZCJH_liveU (I : Inputs) (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀)
@@ -717,7 +661,6 @@ theorem runsZCJH_liveU (I : Inputs) (ht : I.tags.typed = false)
     exact outZC_of_accZ hacc'
 
 set_option linter.unusedVariables false in
-/-- `runsZCJH_liveU` on every circuit `HmOut.parse` accepts, wherever the outputs are returned. -/
 theorem runsZCJH_liveI (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
@@ -730,7 +673,6 @@ theorem runsZCJH_liveI (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circu
   runsZCJH_liveU I ht dj y₀ wr L hT hRec hDraw
 
 set_option linter.unusedVariables false in
-/-- `runsZCJH_liveI` where the unit returns the outputs. -/
 theorem runsZCJH_live (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
@@ -743,7 +685,6 @@ theorem runsZCJH_live (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circui
   runsZCJH_liveU I ht dj y₀ wr L hT hRec hDraw
 
 set_option linter.unusedVariables false in
-/-- `runsZCJH_liveI` at the statement circuit (`HmOut.parseStmt`, a templated file's template unrolled). -/
 theorem runsZCJH_liveISt (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
@@ -756,7 +697,6 @@ theorem runsZCJH_liveISt (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Cir
   runsZCJH_liveU I ht dj y₀ wr L hT hRec hDraw
 
 set_option linter.unusedVariables false in
-/-- `runsZCJH_live` at the statement circuit (`HmOut.parseStmt`, a templated file's template unrolled). -/
 theorem runsZCJH_liveSt (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}

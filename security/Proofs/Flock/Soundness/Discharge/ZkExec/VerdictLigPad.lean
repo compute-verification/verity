@@ -22,18 +22,7 @@ import Proofs.Flock.Soundness.NovelBasis
 import Proofs.Flock.Soundness.Refine.Arith
 import Proofs.Flock.Soundness.Refine.Final
 
-/-!
-# Level 0's padded column, as `Zk.ligerito` computes it
-
-The model's padded level-0 column (`ZkLink.padColumnO`) at an opened row is three terms: the witness lanes folded by the
-lane challenges, rep `r`'s extra pair weighted by `ρ`, and the padding's codeword `Model.padCorr` at `ȳ`. The executable
-computes the same three at each query `j` of level 0 (`Zk.ligerito`): the fold over the first `2^lanes` entries in
-`Zk.queryLevel0`, then `ρ₁·row[2^lanes + 2r] + ρ₂·row[2^lanes + 2r + 1] + padAt(…)` in its extra loop.
-
-* `padAt_eq`: the executable's `Zk.padAt` is `Model.padCorr` at `c₀ = PAD_C`: its `xs` are the novel-basis monomials
-  `X̂_i(ω_p)` (`padFold_inv`, from `X̂_i = X̂_{i − 2^⌊log₂ i⌋}·Ŵ_{⌊log₂ i⌋}`), and `X̂_{2^cols + j} = X̂_j·Ŵ_cols` for
-  `j < 2^cols`.
--/
+/-! Level 0's padded column, as `Zk.ligerito` computes it. -/
 
 @[expose] public section
 
@@ -44,8 +33,6 @@ open Flock Refine FlockLevel3 Model
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
-/-! ## The novel basis -/
-
 theorem Xhat_lift {L c : ℕ} (hc : c < 2 ^ L) (ω : 𝔽) :
     ∀ L', L ≤ L' → execArith.Xhat c L' ω = execArith.Xhat c L ω := by
   intro L' hL
@@ -54,7 +41,6 @@ theorem Xhat_lift {L c : ℕ} (hc : c < 2 ^ L) (ω : 𝔽) :
   | succ n hn ih =>
       rw [Xhat_succ_low execArith n c (lt_of_lt_of_le hc (Nat.pow_le_pow_right (by norm_num) hn)) ω, ih]
 
-/-- `X̂_i = X̂_{i − 2^⌊log₂ i⌋}·Ŵ_{⌊log₂ i⌋}`, the executable's recursion for the padding's monomials. -/
 theorem Xhat_top {L i : ℕ} (h0 : 0 < i) (hi : i < 2 ^ L) (ω : 𝔽) :
     execArith.Xhat i L ω = execArith.Xhat (i - 2 ^ i.log2) L ω * execArith.What i.log2 ω := by
   have hle : 2 ^ i.log2 ≤ i := Nat.log2_self_le (by omega)
@@ -70,9 +56,6 @@ theorem Xhat_zero (L : ℕ) (ω : 𝔽) : execArith.Xhat 0 L ω = 1 := by
   unfold Arith.Xhat
   simp
 
-/-! ## The padding's codeword -/
-
-/-- One step of `Zk.padAt`'s loop: the next monomial (after the first), and its term of the sum. -/
 def padStep (ws : Array F128) (ybar : Array F256) (s : Array F128 × F256) (i : ℕ) : Array F128 × F256 :=
   if i > 0 then
     (s.1.push (s.1[i - 2 ^ i.log2]! * ws[i.log2]!),
@@ -95,8 +78,6 @@ theorem padAt_foldl (ws : Array F128) (logMsg : ℕ) (ybar : Array F256) :
   rw [List.forIn_pure_yield_eq_foldl]
   rfl
 
-/-- `Zk.padAt`'s loop after `n` steps: its monomials are `X̂_k(ω)` and its sum is `Σ_{k<n} ȳ_k·X̂_k(ω)`, when its
-`Ŵ`s are `Ŵ_b(ω)`. -/
 theorem padFold_inv (ws : Array F128) (ybar : Array F256) (L : ℕ) (ω : 𝔽)
     (hws : ∀ b < L, fOf ws[b]! = execArith.What b ω) : ∀ n, n ≤ 2 ^ L →
       ((List.range' 0 n).foldl (padStep ws ybar) (#[1], 0)).1.size = max n 1 ∧
@@ -144,8 +125,6 @@ theorem padFold_inv (ws : Array F128) (ybar : Array F256) (L : ℕ) (ω : 𝔽)
         rw [gOf_add, hacc, gOf_smul, hxs 0 (by omega)]
         simp
 
-/-- **The padding's codeword** at position `p` (live PROTOCOL.md §7): the executable's `Zk.padAt` on level 0's `Ŵ`s at
-`ω_p` is `Model.padCorr` at `c₀ = PAD_C`, for `t ≤ 2^cols` and a level of `2^(cols + 1)` positions. -/
 theorem padAt_eq (p cols tPad : ℕ) (ybar : Array F256) (hy : ybar.size = tPad) (ht : tPad ≤ 2 ^ cols) :
     gOf (Zk.padAt (whats (svTable (cols + 1)) p (cols + 1)) cols ybar) =
       padCorr execArith (cols + 1) cols tPad (fOf Zk.PAD_C) (fun i => gOf ybar[i.val]!) p := by
@@ -168,26 +147,17 @@ theorem padAt_eq (p cols tPad : ℕ) (ybar : Array F256) (hy : ybar.size = tPad)
   show _ = _ * _ + FlockLevel3.What cols (FlockLevel3.omega p) * _
   ring
 
-/-! ## Level 0's consistency value -/
-
-/-- Level 0's consistency value as `Zk.queryLevel0` folds it: query `j`'s row, its first `W` entries folded by
-`eq_K(fold)`, weighted by `eq(α)[j]`. -/
 def consE0 (rows : Array (Array F128)) (q W : ℕ) (alpha : Array F128) (fold : Array F256) : F256 :=
   (List.range q).foldl (fun e j =>
     e + F256.smul ((List.range W).foldl
       (fun acc l => acc + F256.smul (eqTableK fold)[l]! (rows[j]!)[l]!) 0) (eqTable alpha)[j]!) 0
 
-/-- The extra terms `Zk.ligerito` adds to level 0's consistency value: query `j`'s rep-`r` pair weighted by `ρ` and
-the padding's codeword at its position, weighted by `eq(α)[j]`. -/
 def extraE (rows : Array (Array F128)) (pos : Array ℕ) (W rep cols : ℕ) (rho : F256 × F256) (alpha : Array F128)
     (ybar : Array F256) : F256 :=
   (List.range' 0 pos.size).foldl (fun extra j => extra +
     (rho.1.smul (rows[j]!)[W + 2 * rep]! + rho.2.smul (rows[j]!)[W + 2 * rep + 1]! +
       Zk.padAt (whats (svTable (cols + 1)) pos[j]! (cols + 1)) cols ybar).smul (eqTable alpha)[j]!) 0
 
-/-- **Level 0's padded consistency value** (live PROTOCOL.md §7): the model's batched padded column, at openings
-whose rows are the proof's (`hR`, rows `2^k₀ + 4` wide), is the executable's fold of the first `2^k₀` entries plus its
-extra terms, at `ρ` the executable's pair, `c₀ = PAD_C` and a level of `2^(cols + 1)` positions. -/
 theorem consPad_eq (rows : Array (Array F128)) (R : ℕ → List 𝔽) (pos : Array ℕ) (alpha : Array F128)
     (fold : Array F256) (k0 rep cols tPad : ℕ) (rho : F256 × F256) (ρ : Fin 2 → 𝕂) (ybar : Array F256)
     (hk : fold.size = k0) (hrows : ∀ j < pos.size, rows[j]!.size = 2 ^ k0 + 4)

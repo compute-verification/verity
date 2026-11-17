@@ -7,13 +7,7 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.Verdict
 
 set_option Elab.async false
 
-/-!
-# The message half at the live hidden-output tables at the verifier's public inputs
-
-`runsZCJH_liveI` at `own`: `RunsOnZCJA` at verity-verify-proof `--zk --public-inputs`'s acceptance (`AcceptsZKP I own`), at the
-tables `planZHJP`, from the record's custody at that acceptance (`RecordsLiveZKJA` at `setupOfP (zkInputs I) own`) and
-the challenger's live-coin part's samples (`SampleOkZKHJP`). `decodesOnZKJA_of_runsOnZCJA` turns it into the decoder `simZJA` reads.
--/
+/-! The message half at the live hidden-output tables at the verifier's public inputs. -/
 
 namespace FlockSoundness.Discharge.ZkHidden
 
@@ -26,7 +20,6 @@ local notation "𝕂" => FlockLevel3.GF256
 
 variable {n mPts : ℕ} {Reg : Type}
 
-/-- **`RunsZC` at the live hidden-output `--zk` tables of a session of `J` tables at `own`** (`runsZCJH_liveI`). -/
 theorem runsZCJH_liveIP (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (y₀ : SampleSetupZHJP (inputsJ I 0) own mPts S₀ d₀)
@@ -156,7 +149,6 @@ theorem runsZCJH_liveIP (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed
     rw [hTy, hopn, ← hroot]
     exact outZC_of_accZ hacc'
 
-/-- **The decoder at the live hidden-output tables at `own`** (`decodesOnZKJA_of_runsOnZCJA` at `runsZCJH_liveIP`). -/
 theorem decodesZCJH_liveIP (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (y₀ : SampleSetupZHJP (inputsJ I 0) own mPts S₀ d₀)

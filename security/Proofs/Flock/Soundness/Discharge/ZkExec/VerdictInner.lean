@@ -23,19 +23,7 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysDet
 import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysInner
 import Proofs.Flock.Soundness.Refine.Plays
 
-/-!
-# The inner proof's check holds on its openings (`ZkInnerAccepts`)
-
-`zk_inner_accepts`: when `Zk.verifyInner` accepts, the compiled inner proof's one result (`plays_det`), at the coins of
-the four rounds it read (`zk_inner_peel`), is a check that holds on the proof's inner openings:
-
-* `τ` opens its commitment: `encTau`'s `hm96` leaf is `Zk.tauCommitment` (`leaf_tau`).
-* The batched constraint: `Lin.combo`'s coefficients and constant are the `γ`-sums of the constraints' (`combo_a`,
-  `combo_c`); the model's rows are the seven constraints (`LinRel`) and the sacrifice's three rows (`triple_rel`, at
-  the pads layout's distinct positions); `batchT`'s sign is characteristic 2's.
-* Each query: `codeAt` is `enc` at the point `j + 1` (`fOf_codeAt`), and the pair's path climbs to the pads' root
-  under `encPair`'s `hm96` leaf (`leaf_pair`).
--/
+/-! The inner proof's check holds on its openings when `Zk.verifyInner` accepts (`ZkInnerAccepts`). -/
 
 @[expose] public section
 
@@ -44,8 +32,6 @@ namespace FlockSoundness.Discharge.ZkExec
 open Flock Refine Exec Game Model DecodeZL Transcript
 
 local notation "𝔽" => FlockLevel3.GF128
-
-/-! ## Arrays -/
 
 theorem set_get {α : Type} [Inhabited α] (a : Array α) {j : ℕ} (v : α) (hj : j < a.size) {i : ℕ} (hi : i < a.size) :
     (a.set! j v)[i]! = if i = j then v else a[i]! := by
@@ -72,8 +58,6 @@ theorem append_get!_right {α : Type} [Inhabited α] (a b : Array α) {k j : ℕ
   rw [getElem!_pos _ _ (by simp; omega), Array.getElem_append_right (by omega), getElem!_pos b j hj]
   simp only [Nat.add_sub_cancel_left]
 
-/-! ## `Lin.combo` -/
-
 theorem setLoop_size (w : F128) (x : Array F128) : ∀ (n : ℕ) (a : Array F128),
     (List.foldl (fun b j => b.set! j (b[j]! + w * x[j]!)) a (List.range n)).size = a.size
   | 0, _ => rfl
@@ -96,7 +80,6 @@ theorem setLoop_get (w : F128) (x : Array F128) : ∀ (n : ℕ) (a : Array F128)
         · simp [hin, h, show i < n + 1 by omega]
         · simp [hin, h, show ¬ i < n + 1 by omega]
 
-/-- One term of `Lin.combo`'s loop: the constant and the coefficients after adding `w_k·l_k`. -/
 def comboStep (ws : Array F128) (ls : Array Zk.Lin) (s : ℕ) (b : F128 × Array F128) (k : ℕ) : F128 × Array F128 :=
   (b.1 + ws[k]! * ls[k]!.c,
     List.foldl (fun a j => a.set! j (a[j]! + ws[k]! * ls[k]!.a[j]!)) b.2 (List.range (min s ls[k]!.a.size)))
@@ -141,14 +124,12 @@ theorem combo_size (ws : Array F128) (ls : Array Zk.Lin) (s : ℕ) : (Zk.Lin.com
   rw [combo_eq]
   exact (comboLoop_size ws ls s _ _).trans (Array.size_replicate ..)
 
-/-- **`Lin.combo`'s constant** is the `w`-sum of the forms' constants. -/
 theorem combo_c (ws : Array F128) (ls : Array Zk.Lin) (s m : ℕ) (hw : ws.size = m) (hl : ls.size = m) :
     fOf (Zk.Lin.combo ws ls s).c = ∑ k : Fin m, fOf ws[k.val]! * fOf (ls[k.val]!).c := by
   rw [combo_eq]
   dsimp only
   rw [hw, hl, Nat.min_self, comboLoop_c, fOf_zero, zero_add]
 
-/-- **`Lin.combo`'s coefficients** are the `w`-sums of the forms' coefficients, for forms on `s` pads. -/
 theorem combo_a (ws : Array F128) (ls : Array Zk.Lin) (s m : ℕ) (hw : ws.size = m) (hl : ls.size = m)
     (hls : ∀ k < m, (ls[k]!).a.size = s) (i : ℕ) (hi : i < s) :
     fOf (Zk.Lin.combo ws ls s).a[i]! = ∑ k : Fin m, fOf ws[k.val]! * fOf (ls[k.val]!).a[i]! := by
@@ -156,8 +137,6 @@ theorem combo_a (ws : Array F128) (ls : Array Zk.Lin) (s m : ℕ) (hw : ws.size 
   dsimp only
   rw [hw, hl, Nat.min_self, comboLoop_a ws ls s m (0, Array.replicate s 0) (Array.size_replicate ..) hls i hi,
     repl_get s hi, fOf_zero, zero_add]
-
-/-! ## The code -/
 
 theorem horner_list (x : F128) : ∀ l : List F128,
     fOf (l.foldr (fun c acc => acc * x + c) 0) = ∑ i ∈ Finset.range l.length, fOf (l.getD i 0) * fOf x ^ i
@@ -168,7 +147,6 @@ theorem horner_list (x : F128) : ∀ l : List F128,
       · rw [List.getD_cons_succ, pow_succ, mul_assoc]
       · simp
 
-/-- **The inner code at column `j`** is `Σ y_i·X^i` at `X = j + 1`. -/
 theorem fOf_codeAt (y : Array F128) (j n : ℕ) (hn : y.size = n) :
     fOf (Zk.codeAt y j) = ∑ i : Fin n, fOf y[i.val]! * fOf ⟨(j + 1).toUInt64, 0⟩ ^ (i : ℕ) := by
   show fOf (y.foldr (fun c acc => acc * (⟨(j + 1).toUInt64, 0⟩ : F128) + c) 0) = _
@@ -180,9 +158,6 @@ theorem fOf_codeAt (y : Array F128) (j n : ℕ) (hn : y.size = n) :
     simp [List.getD_eq_getElem?_getD, hi]
   rw [e]
 
-/-! ## The leaves -/
-
-/-- hm96's leaf at the executable's key, for any inner bytes `x`, is `Hm96.Default512.leaf` of `SHA-512(x)`. -/
 theorem hm96_bytes (x : List UInt8) (salt : ByteArray) :
     (H512 (K512.leafPrefix ++ (Merkle.xorBytes (enc512.dig (H512 x)) (K512.mask salt.data.toList) ++
       enc512.dig (H512 (K512.saltPrefix ++ salt.data.toList))))).1 =
@@ -226,13 +201,11 @@ theorem tau_col (τ : F128) : encTau.col (fOf τ) = Zk.TAU_TAG.data.toList ++ co
   rw [encTau_col]
   exact congrArg (Zk.TAU_TAG.data.toList ++ ·) (col_eq _)
 
-/-- **The pads pair's leaf** is the executable's: `hm96` of `SHA-512(a.toBytes ‖ b.toBytes)` under the salt. -/
 theorem leaf_pair (o : F128 × F128) (salt : ByteArray) :
     ((Merkle.Leaf.hm96 H512 encPair K512 hL512).leaf (pairOf o) salt.data.toList).1 =
       Hm96.Default512.leaf (Sha512.hash (o.1.toBytes ++ o.2.toBytes)) salt := by
   rw [leafPair_eq, Merkle.hm96Leaf, pair_col, encPair_dig, encPair_dig, hm96_bytes, pair_bytes]
 
-/-- **`τ`'s leaf** is the executable's `τ` commitment. -/
 theorem leaf_tau (τ : F128) (salt : ByteArray) :
     ((Merkle.Leaf.hm96 H512 encTau K512 hL512).leaf (fOf τ) salt.data.toList).1 = Zk.tauCommitment τ salt := by
   rw [leafTau_eq, Merkle.hm96Leaf, tau_col, encTau_dig, encTau_dig, hm96_bytes, tau_bytes, Zk.tauCommitment]
@@ -243,8 +216,6 @@ theorem walk_pair : ∀ (sibs : List Dig) (idx : ℕ) (acc : Dig),
   | s :: rest, idx, acc => by
       simp only [Merkle.walk]
       exact walk_pair rest (idx / 2) _
-
-/-! ## The triple's rows -/
 
 theorem lay_order (l : Zk.PadLayout) : l.fa + 1 = l.fb ∧ l.fb < l.hab ∧ l.hab + 1 = l.tx ∧ l.tx + 1 = l.ty ∧
     l.ty + 1 = l.tw ∧ l.tw + 1 = l.len := by
@@ -321,7 +292,6 @@ theorem rel_sacrifice (hseam : ZkTabSeam T st sch tPad) (htab : ZkTabLay T st sc
   · simp only [ite_eq_left h4, ite_eq_right h1, ite_eq_right h2, ite_eq_right h3, zero_add]
   · simp only [ite_eq_right h1, ite_eq_right h2, ite_eq_right h3, ite_eq_right h4, add_zero, fOf_zero]
 
-/-- **The sacrifice's three rows are the executable's `triple`**, at the pads layout's positions. -/
 theorem triple_rel (hseam : ZkTabSeam T st sch tPad) (htab : ZkTabLay T st sch) (e r s : F128) :
     ∀ k : Fin 3, LinRel (ZkSession.tripleRows T.tr (fOf e) (fOf r) (fOf s) k)
       ((Zk.triple (layZ st sch) e r s)[k.val]!).2 := by
@@ -333,10 +303,6 @@ theorem triple_rel (hseam : ZkTabSeam T st sch tPad) (htab : ZkTabLay T st sch) 
 
 end Triple
 
-/-! ## The run -/
-
-/-- **`Zk.verifyInner`'s run, with its coins**: it reads four rounds, `ε`'s (one coin), the ten batching coins,
-`β`'s (one coin) and the `Q` query words, and its checks hold at them. -/
 theorem zk_inner_peel {lay : Zk.PadLayout} {pr : Zk.InnerProof} {finalC : F128} {cons : Array (String × Zk.Lin)}
     {t t' : Flock.Transcript} (hcons : cons.size = 7) (hwf : RoundsWF t.rounds)
     (h : Zk.verifyInner lay pr finalC cons t = .ok ((), t')) :
@@ -413,8 +379,6 @@ theorem zk_inner_peel {lay : Zk.PadLayout} {pr : Zk.InnerProof} {finalC : F128} 
   · rw [getElem!_eq_getD (t₆.rounds[t₆.k]!).coins]
     exact hk k (List.mem_range'_1.2 ⟨Nat.zero_le _, by simpa using hk'⟩)
 
-/-! ## The check -/
-
 theorem zk_inner_accepts : ZkInnerAccepts := by
   intro lay pr finalC cons t t' mPts T st sch tPad rows hlay hseam htab hcons hrows hpaths hwf h v hv
   subst hlay
@@ -445,12 +409,10 @@ theorem zk_inner_accepts : ZkInnerAccepts := by
     refine Plays.bind' (ms₂ := []) (cs₂ := []) (Plays.drawVec c₃ (hs₃.trans hseam.hq.symm) hq1) ?_ rfl rfl
     exact Plays.pure (ι := fOf) _
   obtain rfl := plays_det hv hv₀
-  -- `τ` opens its commitment.
   have hT : (Merkle.Leaf.hm96 H512 encTau K512 hL512).leaf (fOf pr.tau) pr.tauSalt.data.toList =
       toDig pr.tauCommit := by
     apply Subtype.ext
     rw [toDig_val htc, leaf_tau, htau]
-  -- The batched constraint.
   have hts : (Zk.triple (layZ st sch) c₀[0]! pr.rho pr.sigma).size = 3 := rfl
   have hcs7 : (cons ++ Zk.triple (layZ st sch) c₀[0]! pr.rho pr.sigma).size = 7 + 3 := by
     rw [Array.size_append, hcons, hts]
@@ -493,7 +455,6 @@ theorem zk_inner_accepts : ZkInnerAccepts := by
     rw [hconst, ← hdot']
     exact Finset.sum_congr rfl fun i _ => congrArg₂ (· * ·) (hcoef i) rfl
   subst hRdef
-  -- Each query.
   have hC : ∀ j : Fin T.q,
       ZkSession.enc T.dom (vecOf (T.np + T.nP) pr.y) (T.pos (fOf c₃[j.val]!)) =
         fOf (pr.opened[j.val]!).1 + fOf c₂[0]! * fOf (pr.opened[j.val]!).2 ∧
