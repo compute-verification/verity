@@ -11,7 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 COMMITTED = ROOT / "tools" / "verity" / "cli" / "verity_cli" / "configurations.toml"
 #: the places whose code reads or passes a device's pin
-SCANNED = ("verity/protocols/resource_accounting", "verity/protocols/registration", "benchmarks/pous", "benchmarks/one_stage", "demos",
+SCANNED = ("verity/protocols/resource_accounting", "verity/protocols/registration", "benchmarks/pous", "benchmarks/one_stage", "applications",
            "adapters/vllm/verity_vllm/protocols", "tools/verity/cli/verity_cli")
 CODE = (".py", ".sh", ".lean")
 SKIPPED = {".lake", "__pycache__", ".venv", "target", "node_modules"}

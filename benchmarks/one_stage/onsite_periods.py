@@ -1,4 +1,4 @@
-"""The onsite demo's record (``verity/onsite-network-record/v1``) restated per monitoring period: a table for a week, a
+"""The onsite application's record (``verity/onsite-network-record/v1``) restated per monitoring period: a table for a week, a
 month and a year, columns the node, a datacenter and the world, each cell its leak bound K over the period, its share of
 the weights, δ_net and K over one execution phase beside it, marked **proved** or **scaled** with its rule and sources.
 It reads the record as JSON and nothing else (the lock aside), imports no module of its writer, and computes nothing the
