@@ -5,130 +5,14 @@ public import Properties.Pouw.PearlPlusSample
 public import Definitions.Core.Interaction
 public import Flock.Hash
 
-/-!
-# Pearl+'s served y at the registration record's entries (`PouwCheck.PearlPlus.tieOf`, `checkTile`, `todo`)
-
-What an accepted run establishes about the values its registration record W registers, stated against the verdict's own
-functions. These are statements only: none is proved here, and none is a guarantee yet. W is the
-`verity/registration/v2` record `--tie W` names, the one `served_passes.py retain` writes for an execution phase.
-
-A run tied to W registers, for pass `s`'s call `c` and each weight `b`, three trees in W: the call's A rows
-(`pearl-a/{s}/{c}`), its served y (`pearl-y/{s}/{c}`) and the weight's B rows (`pearl-b/{b}`). A cell is a position
-(round, call, row, column). The y word of a cell depends only on A's row, the weight's row, the pass's salt, the weight's
-root and the call's index: `yCell`, the unscale (`Rule.yOf`) of the tile's U at that row and column, formed as
-`checkTile` forms it (`Words.encode`, `Words.checked`), one row and one column at a time.
-
-* `TieMeans`: what `tieOf` establishes. W is a `verity/registration/v2` record, the answer names its digest, and for
-  every call of every pass W registers once the A rows and the y under the roots the pass published (the ones
-  `checkTile` opens against), at the call's shape and under the call's domains; at W's version 2, the same for each
-  weight's B rows under the pass's weight root. W registers no other value under the tie's prefixes but a dropped
-  round's calls.
-* `AcceptedIsHeldToW`: an accepted verdict on an input that names W is a run held to W (`Run.HeldToW`) whose every
-  opened tile is accepted (`TilesAccepted`): the bridge from `check` to the statements below, which are on `tieOf`,
-  `todo` and `checkTile`.
-* `YAtWIsTheCall`, **the run's statement**: over `t` uniform work-weighted tickets, with the prover's openings any
-  function of the tickets, the run is accepted on openings its table holds while the tiles that are not tied at W's
-  entries (`TileTiedAtW`) hold more than ε of the run's ticket weight with probability at most δ + q / 2^256, wherever
-  (1 − ε)^t ≤ δ and the play's finder (`Run.finder`, declared at `q` SHA-512 calls) meets `ecr/sha-512`
-  (`Claims.ExpectedCR`). The share is of ticket weight, not of tiles. `CoinBytesGiveUniformTickets` and
-  `DrawIsOnItsStreams` carry the tickets to the streams of the run's sample key.
-* `PeriodYAtWIsTheCall`, **the period's statement for one sequence of runs**: over the coins of a monitoring period's
-  execution phases, each run committed before its own coin (`Runs.CommittedBeforeCoin`) and each sample `t` tickets on
-  its phase's coin (`Runs.DrawIsTickets`), the runs of one sequence accepted up to some phase have ∏ (1 − wrong share)
-  below 1 − ε with probability at most δ + q / 2^256, wherever (1 − ε)^t ≤ δ, however many phases the period has. So a
-  sequence's accepted prefix holds wrong shares summing to at most −ln(1 − ε): at 459 samples and δ = 1/100, about 1.0%
-  of one phase's ticket weight over the whole period.
-* `FleetYAtWIsTheCall`, **the period's statement pooled across sequences**: for prefix ends fixed before the period's
-  coins, over the same coins, some nonempty set `K` of them is accepted while (∏ over `K` of the prefix's
-  ∏ (1 − wrong share))^t is below (|K| δ / |ends|)^|K| with probability at most δ + q / 2^256. With each sequence's
-  last phase as its end, `N` of them, it is `Pouw.Guarantees.Dither.FleetSound`'s convex pooling at equal weights: the
-  sequences of any `K`, `s` of `N` accepted throughout, together hold wrong shares summing to at most
-  (s / t) (ln (N / s) + ln (1 / δ)).
-* `UntiedCellsAtW` and `PeriodUntiedCellsAtW`, **the same as a count of cells**: a cell is one y word of one call,
-  (pass, call, row, column). The run's untied cells (`Run.untiedCells`) are its real cells whose y its table does not
-  tie (`CellAtW`); those of the give-up (`givenUpCells`, the real cells the records do not credit) are untied with
-  certainty, and the rest number at most n(ε) (`cellsAt`), except with probability δ + q / 2^256; over a sequence's
-  accepted prefix, at most `Runs.cellsUpTo`, the most cells shares whose ∏ (1 − share) is at least 1 − ε can hold.
-  n(ε) is the most credited cells ε of the run's ticket weight can hold: a record's credited cells each carry the
-  ticket `wref(1, |K|, n) / n` (`cellTicket`), and the fill (`atBy`) takes ε of the run's ticket weight from the
-  records with the most cells a ticket first. At |K| a cell the same fill is the MACs `creditAtAssumption` takes off
-  (`macsAt`). `UntiedCellsAtMost`, with no probability in it, carries the share to the count: every credited untied
-  cell lies in a tile that is not tied.
-
-**The table and the opener.** A run's commitment fixes its values before the coin: `Run.table` holds them, for each of
-W's values and each leaf position at most one opening. It is the prover's, a field of the run, which the verifier never
-reads. The prover's openings are any function of the coin (`Opener`, one for each coin): the statements quantify over an
-opener that sees the coin, as the real prover does. A tile is tied at W's entries (`TileTiedAtW`) by the table alone.
-An accepted opening is held to the table through `OpeningBinds`, which is the lemma here and no hypothesis: where a row
-the verdict opens at the coin differs from the table's opening of the same position of the same root, two openings of
-one of W's roots are accepted, and SHA-512 collides on the messages checking them hashes (`rowsHashed`). The play's
-finder (`Run.finder`, `Runs.finder`) is the first such collision among those messages (`collisionIn`, the
-challenger's finder's), a `Claims.Finder` over the play's coins whose cost is declared at the budget `q` for the play's
-whole SHA-512 work, the prover's own included, as `Claims.BAt`'s is. Its premise is `Claims.ExpectedCR` at the compiled
-SHA-512 (`sha512Msg`, the composite's), what `Verity.Vocab.FinderCR` reads at a subprotocol's
-finder, and the bound reads δ plus its term, the budget over 2^256 (`Verity.Vocab.finderPr_le_crBound`'s form). There
-is no fork and no knowledge form.
-
-The statements count a coin only where the table holds what the opener opens (`Run.Holds`): an opening of each opened
-row's position that opens against the same root. They hold for every table. A table that holds every row the opener
-opens on any coin always exists (the opener's own opening on one such coin), so the reader loses nothing; a real
-prover's table is the data it committed.
-
-**The period.** A monitoring period's execution phases are numbered in time order and each belongs to one sequence
-(`Runs.seq`). A node's runs of record are one sequence when they are in time order: execution phase i + 1 is committed
-after phase i's verdict, and each phase's coin is flipped after its own commitment. A node whose phases overlap in time
-has no such order, so each of its phases is a sequence of its own, and those are pooled convexly (`FleetYAtWIsTheCall`)
-and never multiplied. `Runs.CommittedBeforeCoin` is all the statements need of the order: a phase's run (its manifests,
-W, its table) reads no coin of its own phase or of a later phase of its sequence. It may read any coin of another
-sequence, so nothing is assumed between sequences. That each phase's coin is uniform given everything before is
-`Runs.DrawIsTickets` over a uniform coin, which the challenger's log gives a real run
-(`FlockSoundness.Assumptions.UniformRandomBytes`, `Properties.Challenger.CoinsFromLog` and `SampledByDevice`).
-
-The two period statements are separate because their conjunction at one δ is false. A prefix end chosen after the
-coins (`PeriodYAtWIsTheCall`'s ∃) is the maximal inequality's, which bounds a tail and no mean; convex pooling needs a
-mean, so its ends are fixed before the coins. At two sequences and δ = 1/100, a prover whose every phase is wrong on a
-small share reaches the pooled event at ends of its choice with probability 0.010039. `PeriodYAtWIsTheCall` counts
-each sequence's accepted prefix to any end, at its own δ; `FleetYAtWIsTheCall` counts the prefixes to the ends it is
-given, which may be several of one sequence (each week's last phase), each counting in |ends|.
-
-**What is not tied.**
-
-* The tiles of the wrong share: at most ε of the ticket weight, except with probability δ + q / 2^256.
-* The cells that are not credited (`UnitRecord.credited`): filler rows past the call's real rows, which have no y row;
-  excluded A rows; the rows of a band that holds a voluntary A row; the columns of a block that holds an excluded or
-  voluntary B row. That is the give-up, within V-EX's caps (`LoadedGivesUp`). A tile of no credited cell holds no
-  ticket and is never sampled; the exclusion tiles a pass opens are checked as sampled ones are, and the statements
-  count ticket weight alone. The check itself holds every real row and every column of a tile it opens
-  (`Rule.yReason`); the statements claim the credited cells alone.
-* The calls of dropped rounds, which W may register and the run does not hold.
-* A version-1 W, which registers no weight's B rows: the statements take a tie whose weights are tied
-  (`Tied.weights = none`).
-* Whether A's rows at W's entry are the model's activations: the statements say y is the call's function of whatever A
-  and B rows the table holds at W's entries.
-
-**Over the bound.** A tile over its inert-work bound that is accepted under `over_cap` `uncredited` passed every other
-check, y's included, so it is tied. The wrong share here is therefore at no sample on a wrong tile, (1 − ε)^t ≤ δ,
-whatever X_O the run's credit is taken at (`creditAtAssumption`).
-
-**y words are whole.** A cell's y word is the word the table's y row holds at the cell's column (`[j]?`): a row that
-ends before the column ties no cell, and `Rule.yReason` refuses such a row before it reads any word of it.
-
-**Proofs, all of them the next step.** `TieMeans` and `AcceptedIsHeldToW` unfold `tieOf` and `check`. The run's
-statement: an accepted tile's rows are the table's or the finder outputs a collision (`TileAcceptMeans`, `TieMeans`,
-`openingBinds`, and `collisionIn` finding a collision where its list holds one); `yCell` is the tile's cell (`encode`
-and `checked` act row by row and column by column); so on accept without a collision no sample is on a wrong tile, and
-`Pouw.MissBound` gives (1 − ε)^t. The period's: the product over a sequence is a supermartingale in its own coins, the
-others held (`expect_prod_adapted`), with the maximal inequality for the prefix; the pooled one is Markov's inequality
-on the ends' mean and AM–GM (`prob_convex_pool_accepted`).
--/
+/-! What an accepted Pearl+ run establishes about the values its registration record W registers: statements only,
+none proved and none a guarantee. -/
 
 @[expose] public section
 
 namespace Properties.Pouw.PearlPlus
 
 open PouwCommit PouwCheck.PearlPlus PouwCheck.PearlPlus.Words
-
-/-! ## The tie to W -/
 
 /-- **W registers `v` once, as this tree**: exactly one entry of W's `registered` holds the value `v`, and it names the
 root `root` (as hex), `leaves` rows of `words` 32-bit words, and the domain `d`'s frame id. -/
@@ -147,17 +31,9 @@ def Registers (w : Lean.Json) (v : String) (root : ByteArray) (leaves words : �
 /-- The round W registers pass `pi` of `n` as: `rounds[pi]`, or `pi` where the run names no rounds. -/
 def roundOf (rounds : Option (List ℕ)) (n pi : ℕ) : ℕ := ((rounds.getD (List.range n))[pi]?).getD pi
 
-/-- **What `tieOf` establishes**: for the passes `load` reads from the manifests, an answer `tied` means
-
-* W is a `verity/registration/v2` record and `tied.record` is its digest;
-* the rounds, where the run names them, are one per pass;
-* W's version is 2 and the weights are tied (`tied.weights = none`), or it states none (version 1) and they are not;
-* for each call (pass `pi`, position `pos`) W registers once, as round `roundOf rounds passes.length pi`, the call's A
-  rows under the pass's `rootsA[pos]` (`m` rows of `k` words, `activationBinding`'s domain) and its y under the pass's
-  `yRoots[pos]`, which the call commits (its real rows of `n` words, `yBinding`'s domain); and, where the weights are
-  tied, the weight's B rows under the pass's weight root (`n` rows of `k` words, `weightBinding`'s domain);
-* `tied.tables` counts the values the tie wants (`tieEntries`), and every value W registers under one of the tie's
-  prefixes is one of them or a call's of a dropped round. -/
+/-- **What `tieOf` establishes**: W is a `verity/registration/v2` record with digest `tied.record`, of version 2
+exactly when the weights are tied, registering once each call's A rows and y and each tied weight's B rows under
+the pass's roots; any other value under the tie's prefixes is a dropped round's call. -/
 def TieMeans : Prop :=
   ∀ (coins : EpochCoins) (manifests : List Lean.Json) (passes : List Pass) (w : Lean.Json)
     (rounds : Option (List ℕ)) (dropped : List ℕ) (tied : Tied),
@@ -188,8 +64,6 @@ def TieMeans : Prop :=
           (TIE_CALLS.any (fun t => v.startsWith t) = true ∧
             (dropped.map toString).contains ((v.splitOn "/")[1]?.getD "") = true)
 
-/-! ## A cell at W's entries -/
-
 /-- The words of the cell (row `i`, column `j`) of a call of index `index` and width `k`, from A's row and the weight's
 row: `checkTile`'s forming (`fixedNoise`, `encode`, `checked`) on the one row and the one column. -/
 def cellWords (salt rootB : ByteArray) (index k i j : ℕ) (aRow bRow : ByteArray) : Reject (Ops × Checked) := do
@@ -197,10 +71,9 @@ def cellWords (salt rootB : ByteArray) (index k i j : ℕ) (aRow bRow : ByteArra
   let ops ← encode salt rootB wn index k [i] [aRow] [j] [bRow]
   pure (ops, ← checked ops)
 
-/-- **The call's function at one cell**: the y word of (row `i`, column `j`) as its tree stores it, the unscale
-(`Rule.yOf`) of the cell's U at its row's and column's α, in the high half of a 32-bit word; `none` where Pearl rejects
-the rows or the unscale leaves the finite range. It reads A's row, the weight's row, the salt, the weight's root and the
-call's index and width, and nothing else of the call. -/
+/-- **The call's function at one cell**: the y word of (row `i`, column `j`) as its tree stores it, the unscale of
+the cell's U in a 32-bit word's high half, `none` where Pearl rejects the rows or the unscale leaves the finite
+range. It reads nothing of the call but its index and width. -/
 def yCell (salt rootB : ByteArray) (index k i j : ℕ) (aRow bRow : ByteArray) : Option ℕ :=
   match cellWords salt rootB index k i j aRow bRow with
   | .ok (ops, ch) => (Rule.yOf (ch.u[0]!)[0]! ops.a.alpha[0]! ops.b.alpha[0]!).map (· <<< 16)
@@ -214,11 +87,9 @@ abbrev Opener : Type := ℕ → ℕ → Except String TileOpening
 `pearl-b/{b}`) and each leaf position, at most one opening. It is fixed with the run, before the coin. -/
 abbrev Table : Type := String → ℕ → Option LeafOpening
 
-/-- **The cell (row `i`, column `j`) of round `s`'s call `c` is tied at W's entries by the table `T`**: W registers the
-call's A rows, its y and its weight's B rows (`Registers`, at the record `r`'s shape and under its domains, the salt
-`salt`'s), `T` holds an opening of A's row `i`, of the weight's row `j` and of y's row `i` at those values, each opens
-against the root W registers, and y's word at column `j` is `yCell` of the two rows under the salt and the weight's
-registered root. -/
+/-- **The cell (row `i`, column `j`) of round `s`'s call `c` is tied at W's entries by `T`**: W registers the call's
+A rows, its y and its weight's B rows, `T` opens A's row `i`, the weight's row `j` and y's row `i` against W's
+roots, and y's word at column `j` is `yCell` of the two rows. -/
 def CellAtW (w : Lean.Json) (T : Table) (salt : ByteArray) (s c : ℕ) (r : UnitRecord) (i j : ℕ) : Prop :=
   ∃ (da db dy : RowsDomain) (rootA rootB yRoot : ByteArray) (oa ob oy : LeafOpening) (y : ℕ),
     rowsDomain (activationBinding salt r.matmul.index) r.matmul.index r.matmul.m HM96 false = .ok da ∧
@@ -244,12 +115,9 @@ def TileTiedAtW (w : Lean.Json) (rounds : Option (List ℕ)) (passes : List Pass
     ∀ i ∈ (p.records[pos]!.credited rows cols).1, ∀ j ∈ (p.records[pos]!.credited rows cols).2,
       CellAtW w T p.salt (roundOf rounds passes.length id.1) pos p.records[pos]! i j
 
-/-! ## An accepted run -/
-
-/-- **Every tile the verdict opens is accepted**: of the tiles `todo` names for the sample `drawn` (each pass's sampled
-tiles, then its exclusion tiles), the prover opens each and `checkTile` passes it on its weight's noise, or, under
-`over_cap` `uncredited`, finds it only over its inert-work bound. It is what `AcceptMeans` gives of an accepted
-verdict's tiles. -/
+/-- **Every tile the verdict opens is accepted**: of the tiles `todo` names for the sample `drawn`, the prover opens
+each and `checkTile` passes it on its weight's noise, or, under `over_cap` `uncredited`, finds it only over its
+inert-work bound. -/
 def TilesAccepted (passes : List Pass) (m : OverInertBound) (opener : Opener) (drawn : List (ℕ × ℕ)) : Prop :=
   ∀ (pi tid : ℕ), (pi, tid) ∈ todo passes drawn → ∃ (p : Pass) (o : TileOpening),
     passes[pi]? = some p ∧ opener pi tid = .ok o ∧
@@ -290,10 +158,8 @@ def tileRows (s : ℕ) (p : Pass) (tid : ℕ) (o : TileOpening) : List RowAtW :=
       | _, _ => []
     a ++ b ++ y
 
-/-- **A run and the registration record it is tied to**, all of it fixed before the run's coin: the epoch's coins, the
-retained passes' manifests and the passes read from them, W with the passes' rounds and the dropped rounds, the rule on
-a tile over its bound, and the values the commitment fixes (`Table`). The prover's openings are not of it: they are a
-function of the coin. -/
+/-- **A run and the registration record it is tied to**, all of it fixed before the run's coin. The prover's openings
+are not of it: they are a function of the coin. -/
 structure Run where
   coins : EpochCoins
   manifests : List Lean.Json
@@ -310,8 +176,6 @@ def Run.HeldToW (R : Run) : Prop :=
   R.manifests.mapM (load R.coins) = .ok R.passes ∧
     ∃ tied : Tied, tieOf R.w (R.manifests.zip R.passes) R.rounds R.dropped = .ok tied ∧ tied.weights = none
 
-/-- **The run is accepted on the sample `drawn` with the openings `o`**: it is held to W and every tile the verdict
-opens is accepted. -/
 def Run.Accepts (R : Run) (o : Opener) (drawn : List (ℕ × ℕ)) : Prop :=
   R.HeldToW ∧ TilesAccepted R.passes R.overInertBound o drawn
 
@@ -347,10 +211,8 @@ def collisionIn (xs : List ByteArray) : Option (ByteArray × ByteArray) :=
 (`Claims.ExpectedCR`) read. -/
 def sha512Msg (m : _root_.Claims.Msg) : _root_.Claims.Msg := (Flock.Sha512.hash ⟨m.toArray⟩).data.toList
 
-/-- A pair of byte strings as a pair of messages, as `Claims.Finder` outputs one. -/
 def msgPair (xy : ByteArray × ByteArray) : _root_.Claims.Msg × _root_.Claims.Msg := (xy.1.data.toList, xy.2.data.toList)
 
-/-- The run a verdict's input is, with its loaded passes, the registration record it names and a table. -/
 def runOf (i : Input) (passes : List Pass) (w : Lean.Json) (T : Table) : Run :=
   { coins := i.coins, manifests := i.manifests, passes := passes, w := w, rounds := i.rounds, dropped := i.dropped,
     overInertBound := i.overInertBound, table := T }
@@ -364,12 +226,9 @@ def AcceptedIsHeldToW : Prop :=
       tieOf w (i.manifests.zip pl.passes) i.rounds i.dropped = .ok tied ∧ (check i opener).tie = some tied ∧
       (tied.weights = none → ∀ T : Table, (runOf i pl.passes w T).Accepts opener pl.picks)
 
-/-! ## The run's statement -/
-
 /-- `t` tickets of the tiles `tk`: one sample of the run. -/
 abbrev TicketDraws (tk : List ((ℕ × ℕ) × ℕ)) (t : ℕ) : Type := Fin t → _root_.Pouw.Ticket (weightsOf tk) tk.length
 
-/-- The tiles `t` tickets name, in the sample's order. -/
 def drawnAt (tk : List ((ℕ × ℕ) × ℕ)) {t : ℕ} (c : TicketDraws tk t) : List (ℕ × ℕ) :=
   List.ofFn fun j => tileOf tk (c j)
 
@@ -384,23 +243,18 @@ noncomputable def Run.incorrectWeight (R : Run) : ℕ :=
 noncomputable def Run.incorrectShare (R : Run) : ℝ :=
   (R.incorrectWeight : ℝ) / (ticketTotal (tickets R.passes) : ℝ)
 
-/-- **The run's finder**: on the tickets `c`, the first SHA-512 collision (`collisionIn`) among
-the messages checking the opener's rows on `c` and the table's hashes (`Run.hashed`). Its coins are the play's, `t`
-tickets, and its cost is declared at the budget `q` for the play's whole SHA-512 work, the prover's own included, which
-the reader computes from the prover's time (as `Claims.BAt`). -/
+/-- **The run's finder**: on the tickets `c`, the first SHA-512 collision (`collisionIn`) among the messages
+`Run.hashed` gives; its cost is declared at the budget `q` for the play's whole SHA-512 work, the prover's own
+included. -/
 noncomputable def Run.finder (R : Run) (t : ℕ) [Nonempty (TicketDraws (tickets R.passes) t)]
     (O : TicketDraws (tickets R.passes) t → Opener) (q : ℕ) : _root_.Claims.Finder where
   S := TicketDraws (tickets R.passes) t
   out c := (collisionIn (R.hashed (O c) (drawnAt (tickets R.passes) c))).map msgPair
   cost _ := q
 
-/-- **PoUW's guarantee at W's entries, over every tile, for an opener that sees the coin.** For every run, number of
-samples `t`, opener `O` (the prover's openings on each `t` tickets), budget `q` and ε, δ with (1 − ε)^t ≤ δ, where the
-play's finder (`Run.finder`) meets `ecr/sha-512` (`Claims.ExpectedCR` at the compiled SHA-512): over `t` uniform
-work-weighted tickets, the run is accepted on the tiles they name with openings its table holds (`Run.Holds`) while
-the tiles its table does not tie at W's entries hold more than ε of its ticket weight, with probability at most
-δ + q / 2^256. So except with that, on accept, every credited cell's y at W's entries is the call's function of the A
-row and the weight's row at W's entries (`yCell`), apart from tiles of at most ε of the ticket weight. -/
+/-- **PoUW's guarantee at W's entries, for an opener that sees the coin**: where (1 − ε)^t ≤ δ and the run's finder
+meets `ecr/sha-512`, over `t` uniform work-weighted tickets the run is accepted with openings its table holds
+while its untied tiles hold over ε of its ticket weight with probability at most δ + q / 2^256. -/
 def YAtWIsTheCall : Prop :=
   ∀ (R : Run) (t : ℕ) [Nonempty (TicketDraws (tickets R.passes) t)]
     (O : TicketDraws (tickets R.passes) t → Opener) (q : ℕ) (ε δ : ℝ),
@@ -410,23 +264,17 @@ def YAtWIsTheCall : Prop :=
       R.Accepts (O c) (drawnAt (tickets R.passes) c) ∧ R.Holds (O c) (drawnAt (tickets R.passes) c) ∧
         ε < R.incorrectShare) ≤ δ + (q : ℝ) / 2 ^ (256 : ℝ)
 
-/-! ## The period's statements -/
-
-/-- **The runs of a monitoring period's execution phases on its coins**: the phases numbered in time order, one coin a
-phase. `seq k` is the sequence phase `k` belongs to: a node's runs of record in time order are one sequence, and a
-phase that overlaps another of its node in time is a sequence of its own. On the period's coins `x`, phase `k`'s run,
-the tiles its coin samples (`none` where the sample refuses) and the prover's openings, each any function of the
-coins. -/
+/-- **The runs of a monitoring period's execution phases on its coins**, one coin a phase: `seq k` is phase `k`'s
+sequence; a node's runs of record in time order are one, and a phase that overlaps another of its node is one of
+its own. -/
 structure Runs (Ω : Type) (n : ℕ) where
   seq : Fin n → ℕ
   run : (Fin n → Ω) → Fin n → Run
   drawn : (Fin n → Ω) → Fin n → Option (List (ℕ × ℕ))
   opener : (Fin n → Ω) → Fin n → Opener
 
-/-- **Each phase's run is committed before its coin**: phase `k`'s run (its manifests, W, its rounds and its table) is
-one function of the coins other than its own and its sequence's later ones, and its sample of those and its own. A run
-may read every earlier coin of its sequence and any coin of another sequence, never its own before it commits. The
-opener is not held to it: it may read every coin. -/
+/-- **Each phase's run is committed before its coin**: phase `k`'s run reads every coin but its own and its
+sequence's later ones. The opener is not held to it: it may read every coin. -/
 def Runs.CommittedBeforeCoin {Ω : Type} {n : ℕ} (P : Runs Ω n) : Prop :=
   (∀ (x x' : Fin n → Ω) (k : Fin n), (∀ v : Fin n, (P.seq v = P.seq k → v < k) → x v = x' v) →
     P.run x k = P.run x' k) ∧
@@ -434,9 +282,8 @@ def Runs.CommittedBeforeCoin {Ω : Type} {n : ℕ} (P : Runs Ω n) : Prop :=
     P.drawn x k = P.drawn x' k
 
 /-- **Each phase's sample is `t` tickets on its coin**: over the phase's own coin, the others held, the tiles it
-samples fall in any event no more often than the tiles of `t` uniform tickets of its run do. A coin on which the sample
-refuses falls in none. For the verdict's sample it is `DrawIsOnItsStreams` with `CoinBytesGiveUniformTickets`, the
-phase's coin its sample key's streams. -/
+samples fall in any event no more often than `t` uniform tickets' do; a coin on which the sample refuses falls in
+none. -/
 def Runs.DrawIsTickets {Ω : Type} [Fintype Ω] {n : ℕ} (P : Runs Ω n) (t : ℕ) : Prop :=
   ∀ (x : Fin n → Ω) (k : Fin n) (E : List (ℕ × ℕ) → Prop),
     _root_.Pouw.pr (fun ω : Ω => ∃ d : List (ℕ × ℕ), P.drawn (Function.update x k ω) k = some d ∧ E d) ≤
@@ -475,15 +322,9 @@ noncomputable def Runs.finder {Ω : Type} [Fintype Ω] [Nonempty Ω] {n : ℕ} (
   out x := (collisionIn (P.hashed x)).map msgPair
   cost _ := q
 
-/-- **PoUW's period bound for the tile sample, one sequence.** For a monitoring period of `n` execution phases, each
-run committed before its coin (`Runs.CommittedBeforeCoin`) and each sample `t` tickets on its phase's coin
-(`Runs.DrawIsTickets`), ε, δ with (1 − ε)^t ≤ δ and a budget `q` at which the period's finder meets `ecr/sha-512`: for
-each sequence `a`, over the period's coins, some phase of `a` and every earlier one of `a` are accepted while those
-phases' ∏ (1 − wrong share) is below 1 − ε, with probability at most δ + q / 2^256, whatever `n` is. So except with
-that, the phases of a sequence before its first refusal together hold wrong shares summing to at most −ln(1 − ε), each
-a share of its own phase's ticket weight. It bounds the accepted prefix alone: a phase accepted after a refused one of
-its sequence is not counted. A node whose phases overlap in time has one-phase sequences, for which this is the run's
-statement; `FleetYAtWIsTheCall` pools them. -/
+/-- **PoUW's period bound for the tile sample, one sequence**: some prefix of a sequence is accepted while its ∏ (1 −
+wrong share) is below 1 − ε with probability at most δ + q / 2^256, whatever `n` is. A phase accepted after a
+refused one of its sequence is not counted. -/
 def PeriodYAtWIsTheCall : Prop :=
   ∀ {Ω : Type} [Fintype Ω] [Nonempty Ω] {n : ℕ} (P : Runs Ω n) (t q : ℕ) (ε δ : ℝ),
     0 ≤ ε → ε ≤ 1 → (1 - ε) ^ t ≤ δ →
@@ -492,15 +333,9 @@ def PeriodYAtWIsTheCall : Prop :=
     ∀ a : ℕ, _root_.Pouw.pr (fun x : Fin n → Ω => ∃ k : Fin n, P.seq k = a ∧ P.AcceptedUpTo x k ∧
       P.tiedUpTo x k < 1 - ε) ≤ δ + (q : ℝ) / 2 ^ (256 : ℝ)
 
-/-- **PoUW's period bound for the tile sample, pooled convexly across sequences.** For a monitoring period as in
-`PeriodYAtWIsTheCall`, prefix ends `ends` fixed before its coins and 0 < δ: over the period's coins, some nonempty
-`K ⊆ ends` has every prefix accepted while (∏ over `K` of the prefix's ∏ (1 − wrong share))^t is below
-(|K| δ / |ends|)^|K|, with probability at most δ + q / 2^256. With `ends` each sequence's last phase, `N` of them, it is
-`Pouw.Guarantees.Dither.FleetSound`'s pooling at equal weights: except with that, the sequences of any `K`, `s` of them
-accepted throughout, together hold wrong shares summing to at most (s / t) (ln (N / s) + ln (1 / δ)). Nothing is
-assumed between sequences, so a node whose phases overlap in time enters as one-phase sequences and is pooled here,
-never multiplied. A sequence refused before its end in `ends` is not counted; giving it earlier ends counts its
-prefixes to them, each end counting in |ends|. -/
+/-- **PoUW's period bound for the tile sample, pooled convexly across sequences**, at prefix ends fixed before the
+coins: some nonempty `K ⊆ ends` is accepted while (∏ over `K` of ∏ (1 − wrong share))^t is below (|K| δ /
+|ends|)^|K| with probability at most δ + q / 2^256. A sequence refused before its end is not counted. -/
 def FleetYAtWIsTheCall : Prop :=
   ∀ {Ω : Type} [Fintype Ω] [Nonempty Ω] {n : ℕ} (P : Runs Ω n) (ends : Finset (Fin n)) (t q : ℕ) (δ : ℝ), 0 < δ →
     P.CommittedBeforeCoin → P.DrawIsTickets t →
@@ -508,8 +343,6 @@ def FleetYAtWIsTheCall : Prop :=
     _root_.Pouw.pr (fun x : Fin n → Ω => ∃ K : Finset (Fin n), K ⊆ ends ∧ K.Nonempty ∧
       (∀ k ∈ K, P.AcceptedUpTo x k) ∧
       (∏ k ∈ K, P.tiedUpTo x k) ^ t < ((K.card : ℝ) * δ / (ends.card : ℝ)) ^ K.card) ≤ δ + (q : ℝ) / 2 ^ (256 : ℝ)
-
-/-! ## The untied cells and n(ε) -/
 
 /-- **A cell**: one y word of one call, (pass, the call's position in its pass, row, column). -/
 abbrev Cell : Type := ℕ × ℕ × ℕ × ℕ
@@ -577,19 +410,13 @@ noncomputable def cellsAt (passes : List Pass) (ε : ℝ) : ℝ := atBy (fun _ =
 `creditAtAssumption` takes off the run's credit at ε, its `wrong`. -/
 noncomputable def macsAt (passes : List Pass) (ε : ℝ) : ℝ := atBy (fun r => (r.kKept : ℚ)) passes ε
 
-/-- **The wrong share counts the untied cells**: a run whose wrong share is at most ε has at most n(ε) untied credited
-cells. Every untied credited cell is a credited cell of a tile its table does not tie, whose ticket counts in the wrong
-share, and the fill bounds the credited cells of tiles of that share. No probability: it is about the run's passes and
-table alone, and it needs no premise that the run is held to W. The tile a credited cell lies in is tile `x` of its
-record, whose id is the record's offset plus `x` (`Pass.tile?`'s numbering), and every tile has a width `n > 0`, so
-its ticket is its cells at `cellTicket`. Proved: `untiedCellsAtMost` (`Proofs.Properties.Pouw.PearlPlus.Tie`). -/
+/-- **The wrong share counts the untied cells**: a run whose wrong share is at most ε has at most n(ε) untied
+credited cells. It needs no premise that the run is held to W. -/
 def UntiedCellsAtMost : Prop :=
   ∀ (R : Run) (ε : ℝ), R.incorrectShare ≤ ε → (R.untiedCredited.card : ℝ) ≤ cellsAt R.passes ε
 
-/-- **PoUW's guarantee at W's entries, as cells.** On `YAtWIsTheCall`'s premises: over `t` uniform work-weighted
-tickets, the run is accepted on the tiles they name with openings its table holds while more than n(ε)
-(`cellsAt R.passes ε`) of its credited cells are untied, with probability at most δ + q / 2^256. So except with that,
-on accept, the run's untied cells are the give-up (`givenUpCells`) and at most n(ε) credited cells. -/
+/-- **PoUW's guarantee at W's entries, as cells**: on `YAtWIsTheCall`'s premises, the run is accepted with openings
+its table holds while more than n(ε) of its credited cells are untied, with probability at most δ + q / 2^256. -/
 def UntiedCellsAtW : Prop :=
   ∀ (R : Run) (t : ℕ) [Nonempty (TicketDraws (tickets R.passes) t)]
     (O : TicketDraws (tickets R.passes) t → Opener) (q : ℕ) (ε δ : ℝ),
@@ -612,11 +439,9 @@ noncomputable def Runs.cellsUpTo {Ω : Type} {n : ℕ} (P : Runs Ω n) (x : Fin 
       1 - ε ≤ ∏ w : Fin n, (if P.seq w = P.seq k ∧ w ≤ k then 1 - s w else 1)},
     ∑ w : Fin n, (if P.seq w = P.seq k ∧ w ≤ k then cellsAt (P.run x w).passes (s.1 w) else 0)
 
-/-- **PoUW's period bound as cells, one sequence.** On `PeriodYAtWIsTheCall`'s premises: for each sequence `a`, over
-the period's coins, some phase of `a` and every earlier one of `a` are accepted while those phases hold more untied
-credited cells than `Runs.cellsUpTo` at ε, with probability at most δ + q / 2^256, whatever `n` is. Since the shares
-of the prefix sum to at most −ln(1 − ε), that is at most −ln(1 − ε) times the largest, over the prefix's phases, of a
-phase's ticket weight times its most cells a unit of ticket weight. -/
+/-- **PoUW's period bound as cells, one sequence**: on `PeriodYAtWIsTheCall`'s premises, some prefix of a sequence is
+accepted while its phases hold more untied credited cells than `Runs.cellsUpTo` at ε, with probability at most δ
++ q / 2^256, whatever `n` is. -/
 def PeriodUntiedCellsAtW : Prop :=
   ∀ {Ω : Type} [Fintype Ω] [Nonempty Ω] {n : ℕ} (P : Runs Ω n) (t q : ℕ) (ε δ : ℝ),
     0 ≤ ε → ε ≤ 1 → (1 - ε) ^ t ≤ δ →

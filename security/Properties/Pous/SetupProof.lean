@@ -2,16 +2,8 @@ module
 
 public import PousCheck.SetupInProofs
 
-/-!
-# What the setup check in proofs reads, stated against the Lean code
-
-`verity/pous/p2/v4/setup-in-proofs` (`PousCheck.SetupInProofs.protocol`) takes, in place of `C*`, the store's registered
-root, the setup unit's Program digest, the sampling design and SPOT's outcome. `CheckReads` says what an acceptance
-means of those inputs: valid parameters, a 24-byte salt, the sampling design `samplingDesign q`, and `SetupProtocol.Public` with the
-store's root as `root`. With SPOT's acceptance of the sampled audit over the unit at `samplingDesign q` it is the hypothesis side of
-`SetupGives` (`PousCheck.Properties.InProofs`), at `right` the unit's circuit and `W` the registered rows padded to whole
-blocks; that composition is not stated here. It is stated, not proved, and no guarantee of the lock.
--/
+/-! What the setup check in proofs reads (`CheckReads`), stated against the Lean code: stated, not proved, and no
+guarantee of the lock. -/
 
 @[expose] public section
 

@@ -3,13 +3,8 @@ module
 public import Definitions.Core.Hash
 public import Flock.Hash
 
-/-!
-# SHA-512, the compiled one, in the hash area's terms
-
-`Verity.sha512` is `Flock.Sha512.hash` as a 64-byte digest of a message, the hash every statement about the compiled
-verifier's SHA-512 reads. It sits in a module of its own, importing only the hash area and Flock's hash, so a property
-reads it without importing the composites' game (`Properties.Verity.Game`) and everything that imports.
--/
+/-! `Verity.sha512`, the compiled SHA-512 as a 64-byte digest, in a module of its own so that a property reads it
+without importing the composites' game. -/
 
 @[expose] public section
 

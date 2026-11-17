@@ -4,28 +4,8 @@ public import Properties.Pous.PeriodAt
 public import Definitions.Assumptions.Hash
 public import Definitions.Pous.Guarantees.Obligation
 
-/-!
-# PoUS over one period in the shared coin game
-
-`PeriodHeld` and `PeriodHeldAt` bound the period's event in the ring model: over the primitive `ω`, the memory
-challenger's hm96 coins and its streams. The shared coin game (`Verity.Game`) has no primitive: its coins are uniform
-bytes. The event never reads `ω` once the session, the device record and the schedule don't (`ReadsNoPrimitive`: the
-run comes from the coin game, which has no `ω`), so `ω` averages out exactly, and the game reads the bound at any `ω`
-with no premise. The certificate's fit (`Fits`) and the 105-round bound (`Pous.Guarantees.RoundsBound`) are
-`PeriodHeld`'s and `PeriodHeldAt`'s, named. What the game's coins are decides the rest:
-
-* `PeriodHeldCoins`, `PeriodHeldCoinsAt`: the coins are the challenger's hm96 coins and its streams, uniform bytes. The
-  event's probability over them is at most `δ + ε_max`, the ring model's bound, with no premise on SHA-512.
-* `PeriodHeldSha512`, `PeriodHeldSha512At`: the coins are the challenger's hm96 coins and its 64-byte secret source, and
-  its streams are the deployed derivation's (`challengerStreams`: `derive(source, COIN_DOMAIN, {session, blocks, k})`,
-  then `stream(key, ("u", j), DRAW_BYTES)` for each round `j`, `MemoryChallenger.sampleIndices`'s). Under
-  `Hash.Assumptions.Sha512Prf` (`prf/sha-512`) at the two tests the event gives, the key derivation (one input) and the
-  streams' 105 · 64 blocks, the bound is `δ + ε_max + ε_prf(t, 1) + ε_prf(t, 6720)`.
-
-The session id is fixed for the period (`Audits.sid`, the one the auditor designated), before the source. The deployed
-auditor derives it from the same coins (`pous.period`, `challenger_party`): reading that would make the coin key's input
-depend on an earlier answer, an adaptive query, which `Sha512Prf` (non-adaptive) doesn't cover.
--/
+/-! PoUS over one period in the shared coin game, over uniform coins (`PeriodHeldCoins`) and over the memory
+challenger's SHA-512 derivation (`PeriodHeldSha512`). -/
 
 @[expose] public section
 
@@ -36,8 +16,6 @@ open Pous.EndToEnd PousCheck PousCheck.Properties MemoryChallenger
 open scoped ENNReal
 
 set_option exponentiation.threshold 20000
-
-/-! ## The memory challenger's derivation, on SHA-512 -/
 
 /-- SHA-512 of a message, as a digest: the verifier's FIPS 180-4 SHA-512 (`Flock.Sha512.hash`) on its bytes. -/
 def sha512Digest (m : Hash.Msg) : Hash.Digest := fun i => (Flock.Sha512.hash ⟨m.toArray⟩).data.getD i.val 0
@@ -80,8 +58,6 @@ def streamInputs (jc : Fin 105 × Fin 64) : Hash.Msg :=
 def streamsOfBlocks (U : Fin 105 × Fin 64 → Hash.Digest) : Streams := fun j b =>
   (U (j, ⟨b.val / 64, by have := b.isLt; unfold DRAW_BYTES at this; omega⟩) ⟨b.val % 64, by omega⟩).toFin
 
-/-! ## The premises the coin game adds, named -/
-
 /-- **The certificate fits the state bound `S₀`**: `S · len + S_chip + ∑ cap_i · round ≤ S₀`, the capacity account's
 `S` bits a tick over a window of `len` ticks beside the device's on-chip state and its side channels' capacity over
 `round` ticks (`PeriodHeld`'s fit). -/
@@ -92,8 +68,6 @@ def Fits {ι : Type} [Fintype ι] (d : ResourceAccounting.Device ι) (len round 
 for every two primitives `ω, ω'`, as in a run of the shared coin game, which has none. -/
 def ReadsNoPrimitive {ΩW ΩQ Ω Y X : Type} (f : ΩW × ΩQ × (Ω × Y) → X) (o : ΩW × ΩQ) : Prop :=
   ∀ (ω ω' : Ω) (y : Y), f (o.1, o.2, (ω, y)) = f (o.1, o.2, (ω', y))
-
-/-! ## The event, at the deployed point and at any point -/
 
 /-- `PeriodHeld`'s event at the coins `x`: the verifier's whole decision accepts with no break in the period's own data
 while the capacity account held fewer than `S · len` bit-ticks over the capacity window. -/
@@ -110,8 +84,6 @@ def AcceptedShortAt (pt : Run.Point) (N : ℕ) [NeZero N] {ι : Type} [Fintype �
     (P : AuditsAt N ΩW ΩQ) (S : ℝ) (x : ΩW × ΩQ × ((ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams)) :
     Prop :=
   P.Accepts pt x ∧ ¬ P.Break pt x ∧ (r.held x : ℝ) < S * (r.win .capacity).len
-
-/-! ## The coin game's bounds -/
 
 /-- **PoUS's per-period guarantee in the coin game, at uniform streams.** Under `PeriodHeld`'s premises (its fit
 `Fits`), at every value `o` of the other audits' coins where the session, the device record and the schedule don't read

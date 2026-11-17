@@ -5,58 +5,14 @@ public import Properties.Pous.MemoryChallenger
 public import Definitions.Pous.Model.StreamedWipe
 import Mathlib.Basic.ENNReal.Real
 
-/-!
-# An accepted wipe is the memory challenger's own run, and that run is the streamed wipe's accepted session
-
-`MemoryChallenger.WipeProtocol.protocol` (`verity/wipe/v0`, the wipe's component) accepts a signed session whose
-signature verifies under a trusted memory challenger's key. `WipeSigned` says what that acceptance means, over a model
-of the memory challengers (`SignedWipeParty`): the session is a wipe the challenger holding the key ran itself, and
-that run is the streamed-label wipe's accepted session (`WipeRun.Accepted`): the challenger recorded an answer to each
-of its `k` reads, revealed one at a time after the fill, each answer its read's label and within the deadline, so every
-prover of the game of `Pous.StreamedWipe` that plays the run is accepted there (`Pous.StreamedWipe.Accepts`). Or the run
-carries a break (`WipeBreak`), an event of one of two adversaries built from it: the collision finder (`wipeFinder`)
-hashes the strings the run hashes and outputs two distinct ones with one SHA-512 digest (`cr/sha-512`), or the forger
-(`wipeForger`) outputs the prover's signature and the message it signs, which verifies under the trusted key and which
-the challenger never signed under it (`euf-cma/lms-sha512-n64`).
-
-It is the step from the code to the game that `MemoryChallenger.Properties.WipeSurvivorBound` and the composition
-read: the accepted wipe is the game's accepted session at the run's labels and reads, so the streamed
-wipe's guarantees (`Pous.Guarantees.StreamedWipe` and its instances at 2152 reads) bound it, with nothing between the
-code and the game but the game's shape (C5, C6 and every tier declared), which the challenger's deployment makes true.
-
-## The memory challenger, as `wipe_challenger` runs a wipe
-
-`wipe_challenger.WipeMemoryChallenger`, as `wipe_challenger.serve` drives it (their module docstrings): it claims the session id and
-publishes the commitment (`__init__`); it takes its start mark, the SHA-512 of the start certificate its mark source
-returns for the commitment's start message, empty with no source; it reads its clock, streams the labels
-`L_i = SHA-512(LABEL_TAG ‖ K ‖ u64 i)` of its key `K` (`fill`, or `fill_by` through the native streamer) and reads its
-clock again; once the fill has ended it
-samples its `k` reads and reveals them one at a time (`challenge`, reading its clock: the send time), each only after the
-previous one's answer arrived (`challenge` refuses while a batch is open); `receive(answer)` reads its clock (the receipt
-time), refuses an answer that is not one label long, and records batch `b` as `(b, b, 1, send, receipt, wrong,
-SHA-512(u64 index ‖ answer))`, `wrong` 1 when the answer is not the read's label; the first late batch ends the session
-`late`, the first wrong one `wrong`, the `k`-th `complete`; `close()` signs the ended session once, the message
-`memoryChallengerMessage(I, session, message(commitment, ended, start_mark, fill_start, fill_end, batches))` under its
-key. It signs no egress count: the challenger is given none, and the wipe's check takes its one count as evidence
-beside the signed session (`WipeProtocol.Evidence.egress`).
-
-The wipe party reveals one index a batch (`wipe_party.params_of`): a wipe at another batch size under the key is outside
-the model. The model takes the challenger's clock readings and the answers it receives as they came, and assumes
-nothing of them. It takes the start mark as the bytes the challenger held, and does not model the certificate or who
-made it. It does not model what refuses a session before it starts. The challenger may run any number of wipes
-under a key, each signed once, and the key signs PoUS's sessions too: `wipe_challenger.main` signs with
-`onsite.device_key`, the memory challenger's key, in PoUS's role (`memory-challenger-record`). So
-`SignedWipeParty.Signed`, all the model's key signs, holds both. A key also used for another role is outside the model, and the forgery disjunct
-is an EUF-CMA break only under that one-role reading, as for PoUS's sessions (`Challengers`).
--/
+/-! An accepted wipe is the memory challenger's own run and the streamed wipe's accepted session (`WipeSigned`), or
+the run carries a break; a key also used for another role is outside the model. -/
 
 @[expose] public section
 
 namespace MemoryChallenger.Properties
 
 open Flock
-
-/-! ## The challenger's wipes -/
 
 /-- `streamed_wipe.LABEL_TAG`. -/
 def WIPE_LABEL_TAG : ByteArray := "verity-pous/streamed-wipe/label/v1".toUTF8.push 0
@@ -140,8 +96,6 @@ its `message`. -/
 def wipeMessage (s : StreamedWipe.Signed) : Option ByteArray :=
   (s.message >>= memoryChallengerMessage (s.publicKey.extract 0 16) s.commitment.session).toOption
 
-/-! ### The strings a wipe hashes -/
-
 /-- What SHA-512 hashes for a wipe's records tree over `values` under the domain `d`: each leaf, and each node of each
 level below the root (`treeStrings` at the wipe's record schema). -/
 def wipeTreeStrings (d : FV3.Sha512.Domain) (values : Array ByteArray) : List ByteArray :=
@@ -181,8 +135,6 @@ def wipeRunStrings (s : StreamedWipe.Signed) (dev : SignedWipeParty) : List Byte
       | some e => challengePhaseStrings s.publicKey r.commitment e r.recorded.rounds
       | none => []
 
-/-! ### The break's two adversaries -/
-
 /-- **A collision finder over the strings `L`** under the hash `H`: it hashes each string once, in order, and outputs
 the first string that has another of its digest, with the first such other, if there is one. -/
 def collisionIn (H : ByteArray → ByteArray) (L : List ByteArray) : Option (ByteArray × ByteArray) :=
@@ -207,8 +159,6 @@ def WipeBreak (schemes : Schemes) (trusted : List ByteArray) (s : StreamedWipe.S
   (∃ x y, wipeFinder s dev = some (x, y) ∧ x ≠ y ∧ Sha512.hash x = Sha512.hash y) ∨
     ∃ m sig, wipeForger s = some (m, sig) ∧ ∃ p, schemes.lookup s.scheme = some p ∧ s.publicKey ∈ trusted ∧
       LmsVerifies p s.publicKey m sig ∧ ¬ dev.Signed s.publicKey m
-
-/-! ## The streamed wipe's accepted session -/
 
 /-- A label's 512 bits as the game reads them (`Pous.Bits 512`): bit `i` is bit `7 - i % 8` of byte `i / 8`, most
 significant first, the order SHA-512 writes its digest in. -/
@@ -265,13 +215,6 @@ def WipeSigned : Prop :=
   ∀ (p : WipeProtocol.Params) (c : StreamedWipe.Commitment) (e : WipeProtocol.Evidence) (out : WipeProtocol.Public)
     (prof : StreamedWipe.Params × Int) (dev : SignedWipeParty),
     WipeProtocol.protocol.check p c e = .accept out prof → WipeRanAccepted dev p c e
-
-/-! ## The honest wipe as measured, and a wipe that is no run
-
-The instances `WipeSigned`'s two lemmas read (`Proofs.Properties.Pous.WipeSigned`). Its honest lemma: the compiled
-check accepts the honest challenger's session at the deployed parameters, the deployed LMS scheme and the clock readings
-of the wipe of record. Its nontrivial lemma: a session a verifier that accepts everything accepts is no run of the
-challenger's and carries no break, so `WipeRanAccepted` fails there. -/
 
 /-- The server of the honest wipe of record, named by its role: the prover's host. -/
 def MEASURED_SERVER : ByteArray := "prover-host".toUTF8

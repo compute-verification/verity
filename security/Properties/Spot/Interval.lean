@@ -4,25 +4,8 @@ public import Spot.Interval
 public import Spot.Bound
 public import Mathlib.Analysis.SpecialFunctions.Pow.Real
 
-/-!
-# Interval bounds on `e^x`, `ln y` and `c^θ`: what they bound (`Spot.Interval`, `Spot.Bound`)
-
-`Spot.Interval` computes rationals, each a multiple of `2^-p`, around `Real.exp`, `Real.log` and `Real.rpow`;
-`Spot.Bound` bounds the logarithms its harm checks read (`densityBound`, `maxHarmCheck`). These properties say
-each bound is on its side at every input and precision:
-
-* `ExpLowerSound`, `ExpUpperSound`: `expLower x p ≤ e^x ≤ expUpper x p` for every rational `x`;
-* `LnLowerSound`, `LnUpperSound`: `lnLower y p ≤ ln y ≤ lnUpper y p` for every rational `y`;
-* `PowLowerSound`, `PowUpperSound`: `powLower c θ p ≤ c^θ ≤ powUpper c θ p` for every rational `c` and `θ`;
-* `BoundLnUpperSound`: `ln(1/δ) ≤ Bound.lnUpper δ` for `0 < δ < 1`, the budget `densityBound` fills;
-* `BoundLnBoundSound`: `Bound.lnBound a b false ≤ ln(a/b) ≤ Bound.lnBound a b true` for `0 < b ≤ a`.
-
-`ln` is `Real.log` and `c^θ` is `Real.rpow`, with Mathlib's values at `y ≤ 0` and `c ≤ 0`. `Bound`'s helpers hold only
-on their ranges, so those two statements range over them: `δ = (n + 1)/(n + k + 2)` is every rational in `(0, 1)`,
-and `b = m + 1`, `a = m + 1 + k` every pair with `0 < b ≤ a`.
-
-How tight a bound is (within `2^-p` of its value at the points the module's `#guard`s check) is not stated.
--/
+/-! The interval bounds on `e^x`, `ln y` and `c^θ` (`Spot.Interval`, `Spot.Bound`) are on their side at every input
+and precision; how tight they are is not stated. -/
 
 @[expose] public section
 

@@ -8,71 +8,8 @@ public import Properties.Hash.Identity
 public import Definitions.Pous.Assumptions.P2
 public import Definitions.Pous.P2.Cost
 
-/-!
-# PoUS end to end: what an accepted run certifies, and P2's audit in the ring model
-
-Two kinds of statement at P2's deployed point (`P2.Params.deployed`: `p = 2^16448 − 21065`, `B = 2^19` blocks of 2,056
-bytes, `k = 105` rounds, `Δ + RTT ≤ 854,000 ns`), which nothing joins inside Lean.
-
-* `RunCheckAccepts` and `RunCertifies`, about the deployed code, deterministic and assumption free. The composed check
-  of a run (`PousCheck.Run.check`, `pous-run`, Python `run.check`) reads the verifier's list of memory-challenger keys,
-  the setup's public outputs, the memory challenger's table of `C*`'s row digests, its signed session and the id the
-  auditor designated for the session; when it accepts, the session audits that setup at the deployed point
-  (`AuditsSetup`: every block, `k = 105`, within `Δ + RTT`, blocks of 2,056 bytes, bound to the published root), runs
-  under the designated id and is signed under a key of the verifier's list, and for every `C*` of the point's shape
-  (`Shaped`) whose leaves have the published root, the memory
-  challenger holding that key ran a session with that commitment in which every one of the 105 answers it received was
-  the challenged block of that `C*`, within `Δ + RTT` on its own clock; or the run's own data holds a SHA-512
-  collision (`RunBreak`, `TableBreak`) or an LMS forgery (`RunBreak`). `RunCertifies` adds the
-  setup check's acceptance of `C*` (`Accepted`): `C*` decodes to the committed `W` and setup published its root, so
-  every `C*` setup accepts is one `RunCheckAccepts` speaks of. Both are proved: `RunCertifies` from `RunCheckAccepts`
-  and the setup check's `AcceptsDecodes` and `PublishesRoot` (`Properties.Pous`).
-* `EndToEndRing`, `EndToEndRingDeployed` and `DrawExact`, **in the ring model, with `ω` uniform**: P2's
-  square–mask–square over `Z/p` with a uniformly random odd labeling and uniformly random per-block keys (`p2ring`),
-  against a server that is a `Server S D Q L` of this module, with the memory challenger's coins flipped as the code
-  samples them (`CoinTree.make`, `FlockSoundness.Randomness.uniformOn` at `DRAW_BYTES`) from uniform bytes. The honest
-  full-state server's lemmas, `HonestPassesRing` and `HonestPassesAccepts`, are in
-  `security/Proofs/Pous/Lemmas/EndToEnd.lean`.
-
-The step from the ring game to the deployed system is four claims, each its own id in `verity.core.claims`, cited
-separately so that each can be rejected alone:
-
-1. `pous-ring-device` (the model): the deployed server is a `Server`: a ring-model server whose state is bounded between
-   setup, the session and its rounds, with one session per audit (the memory challenger's `SessionLog`, of which its
-   host never restores an earlier copy: `trusted-device`) and the coins flipped online, after its state is fixed. It
-   names no number.
-2. `pous-ring-speed` (the numbers, by measurement): no allowed hardware finishes a `(D + 1)`-th sequential
-   multiplication round, `Q + 1` key queries or `L + 1` ring operations within `Δ + RTT`, at the corollary's
-   `D = 16,446`, `Q = 2^20` and `L = 2^64`; `EndToEndRingDeployed`'s docstring derives `D` and its margin.
-3. `pous-ring-instantiation`: P2 with the identity labeling (`φ = id`), SHA-512-CTR keys and its published Merkle root of
-   `C*` is no easier than `p2ring` with uniform `ω`. Every model in which P2 is secure hides structure the deployed code
-   computes with, so "the real P2 resists every Lean function" is false (a server storing nothing recomputes `C*`
-   locally, which a Lean function does for free): this step is a claim, never a theorem.
-4. `prf/sha-512`: the indices the memory challenger derives from its secret source (`Randomness.derive`, then the
-   counter-mode SHA-512 stream that `Randomness.uniform` reads) are as good as uniform: each stream is replaced here by
-   `DRAW_BYTES` uniform bytes, and `uniformOn` reads them exactly as the code does. Over the challenger's own
-   derivation it is the premise `Hash.Assumptions.Sha512Prf`, its advantage `ε_prf(t, Q)` explicit, which
-   `Pous.Period.PeriodHeldSha512` (`Properties.Pous.PeriodGame`) takes at the derivation's two tests.
-
-The ring game takes one named assumption, `P2RingAuditSecure`, the conjecture that P2 is secure in the ring model. It
-takes none on the coin tree's hiding: the memory challenger releases the tree's root and key only after the session's
-last answer (`memory_challenger.MemoryChallenger.commitment`), so the server sees each index as its round opens and
-nothing else of the coins. The challenger is held to its coins by being an auditor-trusted device that runs its stated
-code (`pous-ring-device`), not by an early commitment.
-
-Two gaps stood between these statements and the deployed verifier:
-
-* **G-1**: the check's half is fixed in code; one session per id is the memory challenger's `SessionLog` under its host
-  presumption, which `trusted-device` covers once it is widened to the challenger's host. The check's half: a session's
-  `binding` is required and is the setup's root (`Run.check` refuses any other), so a session names the setup it audits,
-  and its id is the one the
-  auditor designated for the audit (`Run.check` refuses any other); `RunCheckAccepts` states it. The memory challenger
-  runs at most one session under an id (`memory_challenger.SessionLog`, a file of its own, recorded before the session's
-  first challenge), so an audit has at most one session the check accepts; that refusal is the device's code and log,
-  not modeled here;
-* **G-2**, fixed: the composed setup-to-challenger check is `PousCheck.Run.check`, and `RunCheckAccepts` is what its
-  acceptance gives.
--/
+/-! PoUS end to end at P2's deployed point: what an accepted run certifies, and P2's audit in the ring model, which
+nothing joins inside Lean. -/
 
 @[expose] public section
 
@@ -83,15 +20,11 @@ namespace Pous.EndToEnd
 
 open scoped ENNReal
 
-/-! ## The deployed point -/
-
 /-- P2's registered parameters (`p2-p16448-c21065`, `p2-2054B`, 8 segments of `2^16` blocks). -/
 def q : P2.Params := P2.Params.deployed
 
 /-- The memory challenger's limit at the operating point: `Δ + RTT` with the RTT allowance at its cap, in ns. -/
 def LIMIT_NS : Nat := DELTA_NS + RTT_CAP_NS
-
-/-! ## A run's blocks and what a run hashes -/
 
 /-- `C*`'s blocks in block order: block `i` is block `i mod 2^16` of segment `⌊i / 2^16⌋` when every segment has
 `2^16` blocks, which `Decodes` requires. -/
@@ -135,14 +68,10 @@ def RunBreak (trusted : List ByteArray) (s : SignedChallengePhase) (dev : Challe
       LmsVerifies p s.publicKey m s.signature ∧ ¬ Signed dev s.publicKey m
 
 /-- `C*` decodes to a payload other than `W` whose commitment is `W`'s: two distinct strings `Commit.commit` hashes,
-both of the run, with one SHA-512 digest (`cr/sha-512`). A server that commits to a payload other than the one it was
-given is caught here, not by the audit: `RunCertifies` concludes `DecodesToCommitment`, and a commitment the decoded
-`W` does not match is this break. -/
+both of the run, with one SHA-512 digest (`cr/sha-512`). -/
 def CommitBreak (W : ByteArray) (c : SetupProtocol.Commitment) (C : Array (Array ByteArray)) : Prop :=
   ∃ W', Decodes q c.salt C W' ∧ W' ≠ W ∧ ∃ x y, commitInput W = some x ∧ commitInput W' = some y ∧
     Flock.Sha512.hash x = Flock.Sha512.hash y
-
-/-! ## The composed check -/
 
 /-- The session audits the setup `pub` at the deployed point: the setup published `2^19` blocks under a 24-byte salt,
 and the session audits every one of them in `k = 105` rounds, within `Δ + RTT`, with answers of the point's 2,056
@@ -207,15 +136,9 @@ def Accepted (trusted : List ByteArray) (c : SetupProtocol.Commitment) (C : Arra
     (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.ChallengePhaseRecord) (sid : ByteArray) : Prop :=
   SetupProtocol.protocol.check q c C = .accept pub () ∧ Run.check trusted pub digests r sid = .ok ()
 
-/-- **An accepted run certifies `C*`.** For every verifier's list `trusted` of memory-challenger keys (never the run's
-record) and every device, if setup and the composed check accept a run (`Accepted`), then `C*` decodes to a payload
-with the server's commitment, setup published its root (`Published`: `Merkle.root (leaves c.salt C) = some pub.root`,
-so the session's `binding` is the root of the `C*` setup checked), the session audits that setup at the deployed point
-under the designated id and is signed under a key in `trusted`, and that key's holder ran a session with the accepted
-commitment in which every recorded answer is the challenged block of `C*`, on time on its own clock; or the run's own
-data holds a SHA-512 collision or an LMS forgery under a key in `trusted`. A dishonest commitment (`C*` decoding to a
-`W'` other than the `W` the server was handed) is `CommitBreak`'s. It follows from `RunCheckAccepts` and the setup
-check's `AcceptsDecodes` and `PublishesRoot`, all proved. -/
+/-- **An accepted run certifies `C*`**: `C*` decodes to a payload with the server's commitment, setup published its
+root, and a trusted key's holder ran a session whose every recorded answer is the challenged block of `C*`, on
+time; or the run's data holds a SHA-512 collision or an LMS forgery. -/
 def RunCertifies : Prop :=
   ∀ (trusted : List ByteArray) (c : SetupProtocol.Commitment) (C : Array (Array ByteArray))
     (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.ChallengePhaseRecord) (sid : ByteArray)
@@ -225,8 +148,6 @@ def RunCertifies : Prop :=
         r.signed.publicKey ∈ trusted ∧
         ((∃ run ∈ dev.sessions r.signed.publicKey, run.commitment = r.commitment ∧ AnsweredOnTime run C) ∨
           RunBreak trusted r.signed dev C ∨ TableBreak pub digests C)
-
-/-! ## The ring game -/
 
 /-- P2 in the ring model at the deployed point: square–mask–square over `Z/p` with a random odd labeling, `2^19`
 blocks of 16,448 bits, each carrying 16,432 payload bits (2,054 bytes); `P2RingAuditSecure`'s scheme. -/

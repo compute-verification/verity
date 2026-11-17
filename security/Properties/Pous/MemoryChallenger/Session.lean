@@ -3,38 +3,8 @@ module
 public import Definitions.Compose.Assumptions.Parties
 public import Properties.Pous.MemoryChallenger
 
-/-!
-# What the auditor sees of the memory challenger in a session
-
-In a session the memory challenger takes the prover's answers, each a whole block of `C*`, the encoding of the node's
-store. This module states what of those answers reaches the auditor from the device: one statement,
-`AuditorSeesSkeletonAt`, whose parameter says where the device's messages end, and its instance as PoUS runs a session,
-`AuditorSeesDigests`. No soundness statement takes either as a premise.
-
-**The device** is an auditor party (`ResourceAccounting.Assumptions.Parties`), stated as code (`code`) over the record
-soundness reads of a session (`MemoryChallenger.Properties.Observed`, `Recorded.round`): the party
-`challenger_party.Challenger` driving `memory_challenger.MemoryChallenger`, one session a run. An input is one exchange:
-a warm-up's answer, which the device drops, or a timed round, its clock's two readings and the answer. It sends
-challenges to the prover (a warm-up's frame, a round's index, the frame that ends the session) and, once a round has
-ended the session, its report: the session it signed, the commitment it releases with it and the opening of every coin
-it revealed.
-
-**The statement.** `Recorded.round` reads an answer only through its size and its `blockDigest`. So an exchange's
-skeleton (`Step.skeleton`) holds nothing of a warm-up's answer and, of a round, the two readings, the answer's size and
-its `blockDigest`, and `seenCode` is the same code taking skeletons: no answer's bytes are among its inputs.
-`AuditorSeesSkeletonAt dest` says that under `Faithful`, `Confined` (at `dest`) and `WitnessPathPrivate`, what the
-auditor sees of the device is what `seenCode` sends in the clear on the device's coins and the skeleton of its true
-inputs.
-
-* `AuditorSeesDigests`, at `reportPublic`: the session's verdict is checked in the clear on the device's report, so
-  the report is public, while the challenges stay with the prover. Of the answers the auditor then learns at most each
-  round's size and `blockDigest`.
-* At a `dest` where every channel ends with the prover, the statement says the auditor sees nothing of the device.
-  That is the path on which the prover proves the session's verdict instead of showing the report; no instance is
-  stated for it.
-
-What neither covers is in `AuditorSeesDigests`'s docstring.
--/
+/-! What the auditor sees of the memory challenger's answers in a session; no soundness statement takes it as a
+premise. -/
 
 @[expose] public section
 
@@ -42,8 +12,6 @@ namespace MemoryChallenger.Session.Properties
 
 open ResourceAccounting.Assumptions
 open MemoryChallenger.Properties (Observed Recorded)
-
-/-! ## The device's code in a session -/
 
 /-- What the device's code in a session reads besides its inputs. From its coins `ω`, which stand for all the device
 holds of its own, its key and the one-time key it signs at among them: the session's coin tree `coins ω`
@@ -151,8 +119,6 @@ def code {Ω : Type} (p : Params Ω) : Parties.Code Ω (Ω × Recorded) (Step By
 takes nothing, of a round the two readings, the answer's size and its `blockDigest`. -/
 def seenCode {Ω : Type} (p : Params Ω) : Parties.Code Ω (Ω × Recorded) (Step Unit Seen) Ch Msg :=
   codeOn p roundSeen
-
-/-! ## What the auditor sees -/
 
 /-- What a list of messages puts in the clear, where `dest` says each channel ends. -/
 def inClear (dest : Ch → Parties.Dest) (ms : List (Ch × Msg)) : List (Ch × Msg) :=

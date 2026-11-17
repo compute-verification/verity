@@ -19,132 +19,8 @@ public import Properties.Remote
 public import Properties.Verity.Sha512
 public import Properties.Verity.ExecutionPhaseFiles
 
-/-!
-# Soundness as a causal game at a composite's compiled verifier, and each subprotocol's target
-
-A composite is the list of its subprotocols' ids (`Verity.Registration.Composite`), and its verifier is one compiled
-Lean function of that list (`verifier`): the composition of the listed subprotocols over the blobs the prover sent,
-under the code's one rule (`Core.Composition.tiedSameB`), with the ties between those it lists (`ties`). Onsite and
-remote are two lists (`Composite.onsite`, `Composite.remote`), whose verifiers are the two the code builds
-(`Core.Composites.composites`): `Core.Onsite.protocol` (`verity/onsite/v0`) and remote's composite of record
-`Core.Remote.V1.protocol` (`verity/remote/v1`). Remote's development composite, `Core.Remote.protocol`
-(`verity/remote/v0`, H1's period as its work), is no composite's verifier, and `Core.Composites.ofIds` refuses its
-subprotocols. A subprotocol is listed by its compiled check's id (`Subprotocol.idAt`): every subprotocol but PoUW and
-the inference-only policy has one compiled check, the same in every composite that lists it; PoUW's is Pearl+'s run
-verdict in a composite that lists Pearl+'s id and H1's period credit in any other, and the inference-only policy's is
-the rows check in a composite that lists its id and v0 in any other (`Subprotocol.protocolAt`, `component`). So a
-composite's subprotocols are read off its list (`subprotocols`): onsite's seven and remote's three of them, and the
-three of remote's plain sibling (`Composite.plain`). No compiled check carries the rows check's id yet: the game reads
-it as `rowsCheck`, whose behavior nothing here states (`rowsUnbuilt`), its claim is `rowsHeld`, which nothing here
-states either, and the code refuses the plain sibling's list (`Core.Composites.ofIds`). The five that decide a period are one per `ResourceAccounting.Audit` (`Subprotocol.ofAudit`):
-
-| subprotocol | `Audit` | its compiled check | onsite | remote | plain |
-| --- | --- | --- | --- | --- | --- |
-| SPOT | `.sampled` | `VStar.Recursive.Sampled.protocol` (`verity/sampled-proofs/v1`: one-stage v2's audit; one-stage v1 and the recursive audit refused) | yes | yes | yes |
-| PoUW | `.pouw` | `PouwCheck.Period.protocol` (`verity/pouw/period/v1`, its period credit) | yes | | |
-| | | `PouwCheck.PearlPlus.Protocol.protocol` (`verity/pouw/pearl-plus/v1`: Pearl+'s run verdict, its credit at Pearl's assumption) | | yes | yes |
-| the inference-only policy | | `InferenceOnlyCheck.Protocol.protocol` (`verity/inference-only/v0`) | yes | yes | |
-| | | `rowsCheck` (`verity/inference-only/rows/v1`, the rows check, not yet compiled) | | | yes |
-| PoUS | `.pous` | `PousCheck.RunProtocol.protocol` (`verity/pous/p2/v4/run`) | yes | | |
-| PoUB-P2 | `.poub` | `Poub.P2Protocol.protocol` (`verity/remote-bandwidth/p2/v0`) | yes | | |
-| the network attester | `.network` | `NetworkCheck.Period.protocol` (`verity/certifier/v0`) | yes | | |
-| the wipe | | `MemoryChallenger.WipeProtocol.protocol` (`verity/wipe/v0`) | yes | | |
-
-The statement's form is the causal game, the committed files, one fixed extractor and one adversary form:
-
-* **A causal game.** The prover sends the parameters `θ`, the committed files `F` (any number of blobs) and the
-  commitment `c` first, before any coin, so every statement is `∀ θ F c`, and then plays
-  `play (families θ) (signer θ) θ F c`, a `Verity.Game` in which the prover drives the device. It sends its request
-  (`Exchange.request`), then its frames (`releases`): the parameters fix only the coin commitment's families and the
-  device's signer, and the frames are the prover's, in any order and number. Each frame names what the device releases
-  and carries the bytes the release answers (a root, a transcript digest), and then the device samples and releases its
-  coins: a family's next coin (`Frame.fresh`), a coin tree sampled at its `Hello` with its root and key
-  (`Frame.hello`), or an opening of a tree the device holds open, its stream's next unopened round (`Frame.opening`), so
-  no round is opened twice. A frame the device refuses ends its releases, as the prover's close does. At the close
-  (`finish`) the device flips each coin's salt and the coins it committed to and didn't release, and releases its
-  signatures on what the play fixed (`Signer`): its record, its close over its log and its ledger lines, as the
-  deployed device does once a withheld session's signed close is written. The evidence comes last, with its own blobs
-  (the record, its rep files, the proofs). A strategy (`Verity.Game.Strategy`) is a function of the coins released so
-  far and never of later ones. The composite reads the committed files and then the evidence's blobs
-  (`Exchange.sent`), so every input whose blobs begin with the committed files is what some strategy sends
-  (`Verity.sent_reachable`).
-* **The claims read the committed files the parameters name.** The circuit file and the public file are the committed
-  files the parameters name by their digests (`programDigest`, `publicDigest`, `namedFile`, as v2 looks them up). The
-  circuit, its units and its constants are what the verifier reads from the two (`Flock.Bridge.circuitOfFile`,
-  `unitsOfFile`, `partsOfFile` at v2's reading of the files, `read`), so the units are the public file's population,
-  and the positions are the files' and the commitment's (`place`), never the prover's world. The reading is a
-  window's (`ExecutionPhaseFiles`): one statement's files are a window of one member, and at a window of several members the
-  circuit is the members' side by side, their units in the members' order. Committed files without a
-  file of each digest are refused (`Registered`, conjoined beside the composite's acceptance).
-* **SPOT's claim reads one fixed extractor's transcript.** The extractor (`extract`, the one
-  `SampledKSLive*` is stated with, `XplurZC`) is a construction applied to the strategy, never chosen per strategy.
-  The claim is that at most an `ε` share of the file's units are unbound in its transcript (`ResourceAccounting.unbound`): wrong
-  in it, or with a committed input or output the commitment doesn't open to its value there (`Opens`: a registered
-  constant to its constant, any other wire by an opening of its row leaf that `Hash.RowLeaf.accepts` passes under the
-  compiled SHA-512).
-* **One adversary form: every prover, and collisions a fixed finder outputs.** There is no strategy class and no break
-  in the event. The finder `B` (`finder a`, a `Claims.Finder`) is a fixed construction applied to the strategy whose
-  SHA-512 calls are at most `c · calls(τ) + d` (`finder_calls`). Subprotocol `a`'s error at a strategy (`error`) is,
-  where `B^τ` meets `ecr/sha-512` (`FinderCR`, `Claims.ExpectedCR` at the finder), its published `δ` at the strategy's
-  calls plus its loss at `Pr[B^τ]`, the form of `ResourceAccounting.PeriodLive.error`; elsewhere `⊤`. There `B^τ` outputs a
-  SHA-512 collision with probability at most its budget over `2^256` (`crBound`), which a bound reads as `ε_cr`. That
-  admits Flock's conditional bound (`loss = 0`). A bound that reads further finders built from the strategy lists them (`finders`, each a
-  `FinderSpec`: the finder, its budget as a function of the strategy's calls that bounds its calls, and its claim), and
-  the error is `⊤` where one of them beats its claim (`finderCR`, built by `finderCROf`): a collision with probability
-  above its budget over `2^256`, the bound `ecr/sha-512` gives it, or above the strict birthday bound `cr/sha-512` gives
-  it. A bound that reads Flock's premises at the strategy projected into a session asks them as `premises`. Each is
-  asked of the finders built from this strategy alone: some strategy hard-codes a SHA-512 collision, so none is asked
-  of every strategy. Two openings of one position
-  and a second file with a registered digest (`fileFinder`, `publicFinder`) each enter that way. The named assumption
-  `ecr/sha-512` is asked only of the finder. A forged device release enters the same way through a fixed forger
-  (`forger a`, a `Hash.Assumptions.LmsForger` applied to the strategy, its calls bounded as the finder's are). It sees
-  the device's signatures a play releases, on each of its coins on at most the published `Q` messages, the most the
-  device signs in a play (`signs_le`, `forger_signed`), so it is a forger of the standard EUF-CMA game, its queries
-  chosen adaptively by the strategy's moves. Where it meets `Hash.Assumptions.LmsUnforgeable` at the compiled LMS
-  verifier (`lmsVerify`), the error adds the published `ε_forge(t, Q)` (`epsForge`).
-* **The one vocabulary.** The period is `ResourceAccounting.PeriodLive` (`live`), and the five period claims are its `Holds`.
-  The wipe's claim is that the run, read at the wipe's boundary as the wipe's game (`Verity.Wipe.OfRun`, `wipeRun`),
-  doesn't keep foreign content past the survivor threshold the wipe publishes (`Verity.Wipe.OfRun.Kept` at
-  `foreignBits`).
-* **The inference-only policy's claim is on the Program its check judges.** Every case of the policy in what the prover
-  sent (`PolicyCase`: its parameters, its record and its evidence as they decode) is
-  `Properties.Remote.PolicyHeld`: the record names the Program the parameters carry by its SHA-512, θ holds what the
-  log's first record registers, and the Program lays out a registered circuit whose inference blocks each have at most
-  `Γ` gates and read at most `α` fresh input bits per gate, `Γ` and `α` the policy's own parameters. The claim reads
-  the play's messages alone: no field of the vocabulary enters it, and it says nothing of the committed files' circuit
-  until two missing checks hold the case's wires to the committed record's and the case's unit to the committed `Γ`'s
-  (`Vocab.Holds` names both, and lists what else it leaves unsaid).
-* **Each compiled check's acceptance in what the prover sent.** Subprotocol `a`'s verdict at composite `k` (`Verdict`) is the
-  file check, the composite's own acceptance as a `same` composition (`SameAccepts`: an accepted composition of its
-  subprotocols whose record subprotocols committed to one record, `Properties.Composition.AcceptSame`'s conclusion, and
-  each tie between subprotocols it lists: every window of PoUW's period on the record and PoUS and PoUB-P2 on one
-  store at onsite, and Pearl+'s run on the policy's record and its window record the one the record is chained after at
-  remote, `AcceptTied`'s),
-  and `a`'s compiled check's acceptance of its own case. The device's log as each compiled check read it
-  (`coinsRead`) is the targets' to bind to the device's whole log (`Logged`).
-* **PoUW counts gates at onsite and MACs at remote.** In a composite that doesn't list Pearl+'s id (onsite), gates of
-  the committed circuit the play computed after their window's coin, over the period's windows (`computed`), with no
-  pricing. In one that does (remote), Pearl+'s claim reads the
-  credit its compiled check publishes on its case (`PearlPlusCredits`): the play computed at least `(1 − ρ)(1 − ε) · W`
-  MACs on the served run's matmul tiles after the run's coin, each tile that passes Pearl+'s rule at its credited
-  cells' MACs (`macs`), for the run's claimed MACs `W`, the cap's share `ρ` and the sample's `ε` it published: the
-  tolerant audit's event (`Pouw.GγSampledTol`) with no sampled tile credited nothing.
-
-Each subprotocol's target (`SpotSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`, `BandwidthAuditSound`,
-`NetworkAttesterSound`, `WipeSound`) is `Target k a`: at every `θ`, `F`, `c` and strategy, the probability that `a`'s
-verdict at `k` accepts while its claim fails is at most its error there: one function of the subprotocol, so a composite's
-targets are those of the subprotocols it lists. `Verity.SoundnessOf` (`Properties.Verity.Soundness`) composes them at
-any composite, and `Verity.Soundness` and `Verity.PlainSoundness` are it at onsite's seven and the plain sibling's three.
-`Verity.RemoteSoundness` composes remote's from SPOT's and PoUW's and, in the policy's place, the two statements that tie
-its clause to the committed files (`Properties.Verity.Committed`).
-
-The names a subprotocol defines are `Vocab`'s fields: `read` (v2's reading of the committed files), `place`,
-`programDigest`, `publicDigest` and `registered`, `families`, `signer` and `coinsRead`, `extract`, the finders and the
-forgers, `computed` and `macs`, `world` (the runs PoUS, PoUB-P2 and the network attester realize), the wipe at the
-period's boundary and the run read as its game, and `certOf`, `foreignBits`, `signatures`, `delta`, `epsForge` and
-`loss` (what the composite publishes, functions of the parameters alone). The inference-only policy defines none: its
-claim reads its own case in the play's messages.
--/
+/-! Soundness as a causal game at a composite's compiled verifier, and each subprotocol's target; no compiled check
+carries the rows check's id, and nothing here states its behavior or its claim. -/
 
 @[expose] public section
 
@@ -759,9 +635,7 @@ structure Vocab {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
   /-- **`Q`**, fixed by the parameters: the most messages the device signs in a play, its records, closes and ledger
   lines -/
   signatures : ByteArray → ℕ
-  /-- the device signs at most `Q` messages in every play -/
   signs_le : ∀ θ a log b ρ, ((signer θ).signs a log b ρ).length ≤ signatures θ
-  /-- the forger has at most `Q` of the device's messages signed on each of its coins -/
   forger_signed : ∀ a θ F c σ (x : (forger a θ F c σ).S), ((forger a θ F c σ).signed x).length ≤ signatures θ
   computed : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
     Game.Strategy (play (families θ) (signer θ) θ F c) → Exchange → Finset (Fin (read θ F).circuit.N)

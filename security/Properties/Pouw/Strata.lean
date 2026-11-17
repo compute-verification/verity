@@ -2,16 +2,8 @@ module
 
 public import PouwCheck.Credit
 
-/-!
-# A served window's work strata tile its units (`PouwCheck.Credit.strata`)
-
-The property of `strata` (`credit.strata`) that makes `established`'s two numbers the sample's: the strata it builds from a
-window's layout hold the window's units call by call, in `h1window.program`'s order, each unit at its call's work, and no
-other unit. `callWork` (`credit.call_work`) lists each call's units and the work of each of them; call `i`'s units are
-`[callStart i, callStart (i + 1))`. So the credited calls' work `established` passes `epsAt` as `C` is the work of their
-units in the strata the sample runs over (`unitWork`), and the window's work it passes as `W` is the strata's
-(`Flock.Draw.totalWork`). Each is a `Prop`, and `Proofs.Properties.Pouw.Strata` proves every one, on Lean core.
--/
+/-! A served window's work strata tile its units (`PouwCheck.Credit.strata`), so `established`'s two numbers are the
+sample's. -/
 
 @[expose] public section
 

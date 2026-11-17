@@ -2,31 +2,7 @@ module
 
 public import Properties.Poub.Remote.Subprotocol
 
-/-!
-# The bandwidth component's properties at the deployed verifier (`Poub.Protocol`)
-
-The properties `Properties.Poub.Remote.Subprotocol` describes, each a closed statement: its form over the
-verifier there at the deployed one, `AcceptIsVerifiedFor` and `PublishedEpsFor` at `Poub.Protocol.check`,
-`LineHeldAtSubprotocolBy` at `Plays`, `Verified` and `Record.summary`, and `QBytesAtSubprotocolBy` at `Publishes`,
-`Verified` and `Record.summary`; `PublishedQBytes` is stated at the deployed check alone.
-
-* **AcceptIsVerified**: what the component's check accepts is a session the parameters and the log decode to, which
-  `Shared.run g` runs to an accepted state with a record `sm`, and the public outputs are `certify params g sm`'s.
-* **PublishedEps**: what the component publishes as `eps` on acceptance is `δ + Σ_c s/2^64`, at least the sample's
-  term of `LineHeldAtSubprotocol`'s bound, `δ + Σ_c s/2^256`, or nothing certified at all.
-* **LineHeldAtSubprotocol**: `Properties.Poub.Line.LineHeld` with the component's acceptance in the event in
-  place of `Verified`, at `LineHeld`'s bound.
-* **PublishedQBytes**: what the check itself gives of a record it accepts, with no premise: `q_bytes` and `BLOCK_BYTES`
-  times the pooled bound of the record's samples at `DELTA` are together at most `BLOCK_BYTES · U`.
-* **QBytesAtSubprotocol**: under the samples' three premises of `LineHeldAtSubprotocol`, the subprotocol accepts a
-  `q_bytes` that the trace's wrong receipts, a block each, would take past `BLOCK_BYTES · U` with probability at most the
-  samples' part of the line's bound at `DELTA`: `PublishedQBytes` read through the samples' bound
-  (`ResourceAccounting.Guarantees.Remote.PooledSample`).
-
-Each reads the deployed verifier, so it is no claim of `Subprotocol`'s, whose forms over the verifier carry the
-witnesses. `LineHeld` stands the same way: closed in `Properties.Poub.Remote.Line`, its form `LineHeldBy` in
-`Subprotocol`.
--/
+/-! The bandwidth component's properties as closed statements at the deployed verifier (`Poub.Protocol.check`). -/
 
 @[expose] public section
 
@@ -73,16 +49,9 @@ def PublishedEps : Prop :=
           (pub.eps.num : ℚ) / pub.eps.den =
             (node.delta : ℚ) + ((∑ _c : Fin node.samples, node.params.samples : ℕ) : ℚ) / 2 ^ 64)
 
-/-- **What the subprotocol's check gives of the `q_bytes` it publishes.** Whenever bytes that play record `rec` on the
-node are accepted publishing `pub` (`Publishes`, spelled out: the bytes decode to parameters `p`, the registration and a
-log `ev` whose session is the record's, and the check accepts them with `pub`), `q_bytes` and `BLOCK_BYTES` times the pooled bound at
-`Poub.Protocol.DELTA` of the record's samples (`ResourceAccounting.Remote.Sample.pooled`) are together at most
-`BLOCK_BYTES · U`, over the reals. The samples' sizes and counts are `recordSample`'s: sample `c` holds the receipts its
-windows have in the state the record's run reaches (`Record.sampleReceiptsAt`), capped at `receiptMax`, and opens
-`min(s, U_c)` of them at the run's `samples` s; `U` is the receipts of the Lean verifier's record of the run
-(`Record.receipts`), the count `certify` subtracts from. It takes no premise: it is a property of the compiled check,
-and it holds what the code gives and the bound reads, that the samples the code pooled are the record's, each opening
-`min(s, U_c)`, and that the cap at `receiptMax` raises no bound. -/
+/-- **What the subprotocol's check gives of the `q_bytes` it publishes**, with no premise: on bytes that play record
+`rec` accepted with `pub`, `q_bytes` and `BLOCK_BYTES` times the pooled bound at `DELTA` of the record's samples
+are together at most `BLOCK_BYTES · U`, `U` the receipts of the Lean verifier's record. -/
 def PublishedQBytes : Prop :=
   ∀ (node : Node) (rec : Record) (a b e : ByteArray) (pub : Poub.Protocol.Public)
     (p : Poub.Protocol.Params) (ev : Poub.Protocol.Evidence) (prof : Lean.Json),
@@ -104,22 +73,9 @@ def QBytesAt {Ω : Type} (T : Trace Ω) (ω : Ω) (node : Node) (r : Record) (pu
   pub.qBytes + Poub.Codec.BLOCK_BYTES * T.incorrect ω ≤
     Poub.Codec.BLOCK_BYTES * (r.receipts node).toList.sum
 
-/-- **The `q_bytes` the subprotocol publishes, at its acceptance.** `LineHeldAtSubprotocol`'s node, coins, records, trace
-of record and bytes verbatim, and of its premises the samples' three alone (`Live` at every fixed coin commitment,
-`Refused` at the receipts `R` and `Counted`): the probability that the subprotocol accepts bytes that play the record of
-`ω` on the node with public outputs `pub` while `pub.qBytes` and the trace's wrong receipts, a block each, together
-exceed the record's receipts (the event `∃ pub, Publishes … pub ∧ ¬ QBytesAt … pub`, written as the acceptance and then
-what fails) is at most `δ + Σ_c s / 2^256 + Σ_c adv_c + Σ_c hide_c + bind` over the run's samples at
-`δ = Poub.Protocol.DELTA`, the δ `certify` reads its pooled bound at: the samples' part of
-`LineHeldAtSubprotocol`'s bound. Its first two terms are at most the `eps` the subprotocol publishes
-(`PublishedEps`); the PRF advantages, the hiding terms and the receipts' binding term are in no published figure. A
-hiding term is 0 where the records and their correct receipts read no commitment.
-
-**What it says.** On acceptance, except with the bound, `q_bytes ≤ BLOCK_BYTES × (U − the trace's wrong receipts)`
-(`BLOCK_BYTES` is 4096): `U` is the verifier's own count of the receipts in its record, and the wrong receipts are those
-of registered blocks in the trace's credited passes. It bounds wrong receipts among the verifier's count. It does not
-say that `q_bytes` bytes were read on the node, nor that the `U` receipts are of blocks the trace planned: bits read on
-the node are `LineHeldAtSubprotocol`'s, under `Paced`, `Covers`, `SketchBoundAt`, `Covered` and `IngressCounted`. -/
+/-- **The `q_bytes` the subprotocol publishes**: under `LineHeldAtSubprotocol`'s sample premises, it accepts
+`pub.qBytes` and the trace's wrong receipts, a block each, past the record's receipts with at most that bound's
+samples' part at `DELTA`. It does not say that `q_bytes` bytes were read on the node. -/
 def QBytesAtSubprotocol : Prop :=
   ∀ (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax)
     (rest : SampleCoins node.samples κ X → Fin node.samples → ℕ → ℕ) (recs : Cm → SampleCoins node.samples κ X → Record)

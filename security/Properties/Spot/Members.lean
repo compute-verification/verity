@@ -3,35 +3,7 @@ module
 public import Properties.Spot.Bits
 public import Spot.Slots
 
-/-!
-# An audit's members side by side, as the claims' program (`Spot.Bits.Members`)
-
-`Bits.Members` lists an audit's members, each a circuit file over some of the partition's units, their programs side by
-side, member `m`'s positions from `Bits.base ms m`. This is that program as the claims read it: the program of a
-statement over several templates' circuit files, each template's units lowered from its own file.
-
-* `shiftGate b x`: the claims' gate `x`, every gate it reads `b` later.
-* `sideBySide ps`: programs side by side, each program's gates after the earlier programs', every gate it reads and
-  every output it returns `offsetOf ps m` later, the earlier programs' gates.
-* `memberProg c n`: a member's program, the circuit file `c`'s key program for `n` units lowered at its constants
-  (`bitsProg` at `Bits.keyProg c n` and `Bits.consts c n`).
-* `bitsProgs ms`: the members' programs side by side.
-* `unitBase`, `memberBlocks`, `membersPart ms`: the members' proof blocks, one class whose stratum `m` is member `m`'s
-  units' blocks (`Bits.blockOf`) at its positions, member `m`'s unit `u` slot `unitBase ms m + u`.
-* `membersConsts ms`: each member's constants (`Bits.consts`) at its positions.
-* `filesBlockOf ms ns`, `filesUnits`, `filesBlock`, `filesReplay ms ns l`: the members' replay partition over the replay
-  layout `l`, each member `t` holding `n_t` units (`ns`) per request: request `ρ`'s replay block is its units of every
-  member together, member `t`'s units `ρ·n_t + p` for `p < n_t`, slot `filesBlockOf ms ns ρ t p`; an input slot's block
-  holds none.
-* `memberProgFast`, `memberBlocksFast`, `membersBlocksFrom`, `membersPartFast`, `filesBlockAt`, `filesReplayFast`:
-  `memberProg`, `memberBlocks`, `membersPart` and `filesReplay` with what each rebuilds per gate, per unit or per member
-  built once, equal to them and compiled in their place (`@[csimp]`).
-
-`Proofs.Flock.Bridge.Members` proves that member `m` sits at `Bits.base ms m`, that no member's gate reads another's,
-that each unit of a member is lowered there as Bridge's lowering of the member's circuit lowers it, and where each
-member's proof blocks and constants sit; and that the members' replay partition has the replay layout's shape and
-request `ρ`'s cell of member `t` is `filesBlockOf ms ns ρ t` on `[0, n_t)`.
--/
+/-! An audit's members side by side, as the claims' program (`Spot.Bits.Members`). -/
 
 @[expose] public section
 

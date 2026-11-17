@@ -2,35 +2,8 @@ module
 
 public import Properties.Pous.EndToEnd
 
-/-!
-# PoUS end to end at any point: the composed check and the ring game
-
-`Pous.EndToEnd` states the composed check's property (`RunCheckAccepts`, `RunCertifies`) at `Run.DEPLOYED` and the ring
-game (`Server`, `Passes`, `coinView`, `DrawExact`, `EndToEndRing`) at `2^19` blocks, because it fixes the deployed point
-and P2's scheme there. Nothing else in them reads the point: the code's check (`Run.checkAt SCHEMES pt`), its sampler
-(`FlockSoundness.Randomness.uniformOn N`), its coin tree (`CoinTree.make session N`) and the ring model take the point
-or `N` as an argument. This module states both at every point and block count, for stores such as Demo B's,
-`1038·2^16 ≈ 2^26.02` blocks.
-
-* `AuditsSetupAt`, `ShapedAt`, `tableStringsAt`, `TableBreakAt`, `AcceptedAt`: their namesakes at a point `pt` (or its
-  parameters); `RunCheckAcceptsAt` and `RunCertifiesAt`: `RunCheckAccepts` and `RunCertifies` at every point.
-
-* `schAt N`, `SAt N`, `coinViewAt N`, `ServerAt N`, `PassesAt N`: `sch`, `S`, `coinView`, `Server` and `Passes` with
-  `N` in place of `2^19`; at `N = 2^19` each is its deployed-point namesake.
-* `DrawAtMost`: the code's sampler favors no index at any `N`. At `2^19` it never rejects (`DrawExact`); at an `N` that
-  is not a power of two it reads `width N` bytes per word and rejects a word with probability below `N / 2^(8·width N)`
-  (`2^-70` at Demo B's `N`), and a rejection only lowers the chance of each index, so each still has at most `1/N`.
-* `EndToEndRingAt`: at every `N`, every bound `c` on P2's sequential audit in the ring model at `N` (`seqAcceptsOn`)
-  gives `pr (PassesAt N …) ≤ c`. The sampler's term is `0` at every `N`, by `DrawAtMost`, and there is no hiding
-  term: the coin tree's root and key reach no server before its last answer.
-* `EndToEndRingOfRoundSecure`: from `P2RingRoundSecure` (`2^19 ≤ N ≤ 2^25`), the deployed budget `1% + 2^-128` at every
-  `N` in that range, as `EndToEndRing` gives it at `2^19`.
-* `EndToEndRingOfRoundSecureWide`, `EndToEndRingDemo`: the same from `P2RingRoundSecureWide` (`2^19 ≤ N ≤ 2^27`), and
-  its instance at Demo B's `N = 1038·2^16`, with the state bound `⌊ρ·|C|⌋ = 1,060,008,348,186` bits.
-
-The claims that carry the game to the deployed system are `Pous.EndToEnd`'s four (`pous-ring-device`,
-`pous-ring-speed`, `pous-ring-instantiation`, `prf/sha-512`), read at `N`; none of them names a block count.
--/
+/-! PoUS's composed check and ring game at every point and block count, which `Pous.EndToEnd` states at the deployed
+point. -/
 
 @[expose] public section
 
@@ -40,8 +13,6 @@ open PousCheck PousCheck.Properties
 namespace Pous.EndToEnd
 
 open scoped ENNReal
-
-/-! ### The composed check at any point -/
 
 /-- The session audits the setup `pub` at the point `pt`: the setup published `pt`'s blocks under a 24-byte salt, and
 the session audits every one of them in `pt.k` rounds, within `pt.limitNs`, with answers of `pt`'s block size, bound
@@ -99,9 +70,7 @@ def AcceptedAt (pt : Run.Point) (trusted : List ByteArray) (c : SetupProtocol.Co
     (sid : ByteArray) : Prop :=
   SetupProtocol.protocol.check pt.params c C = .accept pub () ∧ Run.checkAt SCHEMES pt trusted pub digests r sid = .ok ()
 
-/-- **An accepted run certifies `C*` at every point**: `RunCertifies` with `pt` in place of `Run.DEPLOYED`. It follows
-from `RunCheckAcceptsAt` and the setup check's `AcceptsDecodes` and `PublishesRoot`, which quantify over every parameter
-set, all proved. -/
+/-- **An accepted run certifies `C*` at every point**: `RunCertifies` with `pt` in place of `Run.DEPLOYED`. -/
 def RunCertifiesAt : Prop :=
   ∀ (pt : Run.Point) (trusted : List ByteArray) (c : SetupProtocol.Commitment) (C : Array (Array ByteArray))
     (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.ChallengePhaseRecord) (sid : ByteArray)
@@ -111,8 +80,6 @@ def RunCertifiesAt : Prop :=
         r.commitment.session = sid ∧ r.signed.publicKey ∈ trusted ∧
         ((∃ run ∈ dev.sessions r.signed.publicKey, run.commitment = r.commitment ∧ AnsweredOnTime run C) ∨
           RunBreak trusted r.signed dev C ∨ TableBreakAt pt.params pub digests C)
-
-/-! ### The ring game at any block count -/
 
 /-- P2 in the ring model at `N` blocks of 16,448 bits, each carrying 16,432 payload bits; `sch` at `N = 2^19`. -/
 noncomputable abbrev schAt (N : ℕ) [NeZero N] : Scheme (ringRO N 16448 (2 ^ 16448 - 21065)) :=

@@ -5,47 +5,7 @@ public import MemoryChallenger.WipeProtocol
 public import Properties.Pous.EndToEndAt
 import Mathlib.Basic.ENNReal.Real
 
-/-!
-# PoUS and the wipe as components: what their compiled checks' acceptance gives the guarantees
-
-`Pous.Period.PeriodHeldAt` bounds the probability that the verifier's whole decision at a point `pt`
-(`Pous.EndToEnd.AcceptedAt`, read by `AuditsOf.Accepts`) accepts a period with no break while the node held too few
-bit-ticks, over an audit whose verifier's keys and session id are fixed and whose setup commitment, `C*`, setup outputs
-and table are functions of the coins flipped before the memory challenger's (`AuditsOf`). Onsite's verifier
-runs `PousCheck.RunProtocol.protocol` on bytes instead: protocol soundness's subprotocol for PoUS turns that protocol's
-acceptance into `AcceptedAt` on fields of that kind.
-Each statement below is one step of it, about one function of the code, in the shape of the code's properties.
-
-* `RunAccepts`: what the compiled check accepts is `AcceptedAt` at the auditor's point, keys and session id, on the
-  case's setup, table and session, and what it publishes is `certify` of the point alone. With
-  `Properties.Composition.DecodedAccepted` at `Verity.Subprotocol.protocolAt .pous`, which yields `RunProtocol.protocol.Accepts`, it
-  gives the event `PeriodHeldAt` bounds.
-* `RunDigest`: the digest the composition binds for PoUS's case is SHA-512 of the commitment's bytes, so the
-  composition's commitment, fixed before the coins, fixes those bytes outside a SHA-512 collision, and they decode to
-  one setup output `pub`.
-* `RunBinds`: two runs the check accepts on one `pub` carry one setup commitment, one `C*` and one table, or the two
-  runs' trees and blocks hold a SHA-512 collision (`forkStrings`): the fork form of the commit-then-coin step, which
-  makes `AuditsOf`'s `commitment`, `store` and `digests` functions of the coins before PoUS's.
-
-The wipe (`MemoryChallenger.WipeProtocol.protocol`, `verity/wipe/v0`) is onsite's component too
-(`Core.Onsite.components`); its statements are the same steps.
-
-* `WipeChecked`: the signed session passes every check of the wipe judge of record (`StreamedWipe.verdict`), as
-  propositions: a signature under a trusted key on the session's message, the session's commitment, batch size 1,
-  every batch present, in order, with no wrong answer and within the deadline, the first sent after the fill.
-* `WipeAccepts`: what the compiled check accepts is of the period's server and session and carries a signed session
-  that is `WipeChecked`, and it publishes `certify` of the commitment's parameters at `EGRESS_MAX_UNITS`, which
-  certifies nothing, whatever egress count the evidence names (`WipeProtocol.Evidence.egress`; no session and no
-  network attester signs one). It is the accepted session that `MemoryChallenger.Properties.WipeSurvivorBound` reads.
-* `WipeDigest`: the wipe's `RunDigest`.
-
-Each is proved in `Proofs.Properties.Pous.Component` (`Pous.Component.SecurityProofs`) and listed in the lock.
-
-`RunAcceptsBy`, `RunBindsBy` and `WipeAcceptsBy` are `RunAccepts`, `RunBinds` and `WipeAccepts` about any `check` of
-the compiled check's type: at the compiled check each is its guarantee (`Iff.rfl`), and at a check that accepts
-everything (`AcceptsAll`) each is false, which is each guarantee's nontrivial lemma. The digests have none: they are
-equations about the code's digest, and no check takes part in them.
--/
+/-! What the compiled checks of PoUS and the wipe, onsite's components, give the guarantees when they accept. -/
 
 @[expose] public section
 
@@ -54,8 +14,6 @@ open PousCheck PousCheck.Properties
 open Pous.EndToEnd
 
 namespace Pous.Component
-
-/-! ### PoUS: `verity/pous/p2/v4/run`, onsite's component -/
 
 /-- **An accepted run is `AcceptedAt`.** Deterministic and assumption free: if PoUS's compiled check
 (`RunProtocol.protocol.check`, the check onsite runs on PoUS's case) accepts the setup outputs `pub` and the evidence
@@ -99,8 +57,6 @@ def RunBinds : Prop :=
         (let xs := forkStrings p.point.params pub e e'
          ∃ x ∈ xs, ∃ y ∈ xs, x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y)
 
-/-! ### The wipe: `verity/wipe/v0` -/
-
 /-- **The signed session `s` passes every check of the wipe judge against the commitment `c`**
 (`StreamedWipe.verdict` under `schemes` and the verifier's keys `trusted`), each as a proposition: its scheme is
 known, its key is trusted and its signature verifies on its message; it is of `c`; `c` reveals one index a batch; it
@@ -137,8 +93,6 @@ no honest or nontrivial lemma: no check takes part in it. -/
 def WipeDigest : Prop :=
   ∀ (b : ByteArray) (c : StreamedWipe.Commitment),
     WipeProtocol.decodeCommitment b = .ok c → WipeProtocol.digest c = Flock.Sha512.hash b
-
-/-! ### The statements about any check -/
 
 /-- `check` accepts every input, whatever it publishes. -/
 def AcceptsAll {P C E O R : Type} (check : P → C → E → Core.Outcome O R) : Prop :=

@@ -3,39 +3,7 @@ module
 public import Definitions.Pouw.Dither
 public import Properties.Pouw.ServedWork
 
-/-!
-# The served PoUW protocol's freed compute, in the onsite form
-
-`ServedWork` is the remote form: the prover's whole inventory is one machine of 𝓜 whose programs exchange nothing
-outside it, and an accepted period's priced work on it is at least `p` a credited word, less the luck allowances.
-`ServedFreed` is the onsite form at the same check (the J10-R period, `PouwCheck.Credit.window` on each window): the
-inventory is the registered devices, a network attester counts the bits their window programs exchange with machines
-outside them, and an accepted period that the certifier also accepts frees at most `ε C` of the registered devices'
-capacity at the period's dual price (`Pouw.Dither.Period.FreedWithin`). It composes:
-
-* `ServedWork` at an exchange-free replacement of the window programs;
-* the price of an exchanged bit over the period's window programs together (`OutsourceWithinEgressServed`): the
-  window programs have exchange-free ones, each fixed before its window's salt, with the same outputs at the windows'
-  inputs, whose priced work is at most `β` a bit the originals exchanged more;
-* the certifier's count (`CertifiedExchange`): it accepts a period whose window programs exchanged more than `K` bits
-  but with probability `δ`;
-* weak duality (`Pouw.Guarantees.Dither.FreedOfFloor`): a floor on the credited work at the dual price bounds what
-  the period frees.
-
-`ε` is the period's own: an accepted period's credit (`creditPrefix`) depends on its prefix, so the bound reads
-`ε(x) C = max(0, C − (p · creditPrefix(x) − Σ_w lam_w) + β K)`.
-
-**Non-vacuity is open,** as `ServedWork`'s: whether its `SAKServed` holds on 𝓜 as written, which prices register
-reductions, is open.
-
-**The coins stay in the boundary.** `OutsourceWithinEgressServed` is claimed where a window's salt
-reaches a machine outside the registered devices only through a bit their programs exchange (`CoinsConfidential`).
-For the MVP that holds by placement: the device that runs a server's network attester produces that server's live
-coins, and private messages travel only on private links (`WitnessPathPrivate`). Trust in that device and its host
-provider is `trusted-device`.
-
-The proof is `Proofs.Pouw.ServedFreed`; `Proofs.Pouw.ServedFreed.Honest` has its honest and nontrivial lemmas.
--/
+/-! The served PoUW protocol's freed compute in the onsite form (`ServedFreed`), whose non-vacuity is open. -/
 
 @[expose] public section
 

@@ -4,58 +4,8 @@ public import PouwPearlPlus
 public import Definitions.Pouw.PearlC.Unscale
 public import Properties.Pouw.Commit
 
-/-!
-# Pearl+'s run verdict: what its Lean code (`PouwCheck.PearlPlus.check`) does
-
-The properties of the executable verdict (`verity/protocols/accounting/pouw/verifier/lean/pearlplus/`, the port of
-`benchmarks/pouw/pearl_c_vllm/verify_run.verify_passes`), stated against `check` and the functions it runs, for every input:
-the epoch's coin commitment, the retained passes' manifests, the number of samples, the verifier's coin (a source, or its
-record of the coin) and the prover's openings. Each has one shape, the input, the acceptance, then what it establishes.
-`Proofs.Properties.Pouw.PearlPlus` proves every one of them, on Lean core, each as its name in lower camel case
-(`WorkIsTheCredit` as `workIsTheCredit`).
-
-What they compose into is the remote theorem's useful-work part: on an accepted run, under Pearl's Assumption 1 at the H100
-record per sampled tile (`TTOutTilePearlCH100Rev1`), the run's credit is at most its cost up to the sample's ε at δ, or a
-SHA-512 break on the run's trees. These properties are the code's side of it:
-
-* `AcceptMeans`: an accepted run is a plan (`PlanMeans`) whose every sampled and exclusion tile passes `checkTile`, or,
-  under `over_cap` `uncredited` (CMP-311 option A, the default), is over its inert-work bound with every other check
-  passed and is credited nothing.
-* `PlanMeans`: the plan's passes are the loaded passes, all of one salt and, but on a test instance's input, of the served
-  instance (`k_min` 1,024, 64 × 64 tiles), its commitment theirs, its source the coin record's when there is one (retention and give-up fixed before
-  the coin, `after-coin`), and its tiles the sample's over their tickets, keyed by the source and the commitment.
-* `LoadedGivesUp`: a loaded pass's records are its published root's, and V-EX's give-up is within its caps.
-* `TileAcceptMeans`: a tile that passes, or is only over its inert-work bound, opens against the pass's roots, its
-  checked words are the committed leaf's, its rows keep the per-row rules, its credited cells' replayed inert work, P3's
-  forming term included, is within the inert-work share ρ = 1/400 of their credit (as a tile and per credited A row)
-  where it passes and over it where it doesn't, and its served y rows are the unscale of its U.
-* `YIsTheUnscale`: the unscale the check holds y to is `Pouw.PearlC.unscale`, the served y's Definition
-  (`PearlCUnscale_v1` at `BIAS` off).
-* `WorkIsTheCredit`: the work an accepted run publishes is its credit at Pearl's assumption (`creditAtAssumption`) over
-  the plan's passes, at the run's samples, the samples over the inert-work bound (X_O) and δ = 1/100; a test instance's
-  credits nothing.
-* `OpeningBinds`: two openings of one position of a tree both accepted open one value, or two different messages hashed
-  in checking them (`rowsHashed`) collide under SHA-512.
-
-The window record's tie is ported (`tieOf`, `PouwPearlPlus.Tie`, which `plan` runs before the sample), but no property
-here states what it establishes on an accepted run, that W registers the run's calls and fixed operands: that is open.
-
-**The device record.** The premise is read at the H100's record, `devH100` (`Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1`,
-and at W1 `TTOutTilePearlCH100Rev1W1` on `W1Device.h100`), and the run it is applied to served on an H200. Every field of
-that record the premise reads is the H200's, so the properties are stated at it and there is no H200 instance:
-
-* the promotion period G = 4 (`d.G`, which is all the tile domain `pearlCDomainDev` reads): the scheme's own, and the H200
-  serves the one scheme, `pearl-c-h100-v1-h3`;
-* the prices (`Prices.h100`: an FP32 add 32, a BF16 MAC 2, `Costs.adopted`) and W1's (`W1Prices.h100`: an E4M3 or S8 MAC 1,
-  a BF16 MAC 2, FP32 32, a conversion 64, INT32 64), per tensor-core clock: the H200 is the same GH100 at sm_90a, the same
-  4,096 E4M3 MACs per SM a clock and half that in BF16 (`hardware/cards/h200-sxm-141gb.toml`), and its data sheet's
-  FP8 and BF16 rates are the H100 SXM's;
-* the steps (`hopperE4m3K32` at G = 4, the BF16 k16 peel, `PeelExact`, `Skip.unitFlags`, `SaltDead`) and W1's fragments
-  (`h100Frags`: wgmma E4M3 m64nNk32 and BF16 m64nNk16, N = 64 to 256, each priced whole): the same wgmma on the same die,
-  and the verifier recomputes an H200 run's sampled tiles bit for bit at `HOPPER_E4M3_K32`;
-* W1's `sha` and `fetch` prices are not the record's but the cost model's parameters, taken at the H200's measured ones
-  (they differ from the H100's in its memory, which W1 does not otherwise price, and the bound only weakens as they grow).
--/
+/-! The properties of Pearl+'s executable run verdict (`PouwCheck.PearlPlus.check`), each proved in
+`Proofs.Properties.Pouw.PearlPlus`; none states what the window record's tie establishes. -/
 
 @[expose] public section
 
@@ -70,8 +20,6 @@ def noiseOf (p : Pass) (tid : Nat) : Reject FixedNoise :=
     let u := p.records[pos]!.matmul
     fixedNoise p.salt ((p.weightRoots.lookup u.weight).getD ByteArray.empty) u.k
   | none => throw "tile does not match the verifier's own enumeration"
-
-/-! ## The run -/
 
 /-- **What `plan` establishes**: the run's passes are `load`'s of its manifests under the epoch's coins, all of one salt
 and, unless the input is a test instance's, each at the served instance, `k_min` `K_MIN` and `TILE × TILE` tiles; its commitment is `runCommitment` of them, its source is the coin record's where the verifier holds one (whose commitment is this run's)
@@ -107,8 +55,6 @@ def RefusedBeforeTheCoin : Prop :=
   ∀ (i : Input) (opener : Nat → Nat → Except String TileOpening) (r : Refusal), plan i = .error r →
     check i opener = { accept := false, reason := some r.reason, refused := r.refused, overInertBound := i.overInertBound, tie := r.tie }
 
-/-! ## A pass's records and give-up (V-EX) -/
-
 /-- **What a loaded pass's records are**: each keeps `UnitRecord`'s own rule, together they keep `check_records` (every
 unit at its fixed operand's split, one set of excluded and of voluntary B rows per fixed operand, V-EX's count caps ⌈m/64⌉ of A and
 ⌈n/64⌉ of B), and they are the ones whose root the pass published, under its salt and fixed operands' root. -/
@@ -117,8 +63,6 @@ def LoadedGivesUp : Prop :=
     (∀ r ∈ p.records, r.reason = none ∧ r.voluntaryA.length ≤ voluntaryCap r.matmul.m ∧
       r.voluntaryB.length ≤ voluntaryCap r.matmul.n) ∧
     ∃ splits, checkRecords splits p.records = none ∧ recordsRoot p.salt p.weightsRoot splits p.records = p.recordsRoot
-
-/-! ## A tile -/
 
 /-- The tile's operands and checked values, as `checkTile` forms them from its openings. -/
 def formed (p : Pass) (wn : Reject FixedNoise) (rows cols : List Nat) (u : Matmul) (o : TileOpening) :
@@ -183,8 +127,6 @@ def TileKeepsTheInertBound : Prop :=
       ∀ d ∈ rowInertWork, d * Rule.INERT_BOUND_DEN ≤
         Rule.INERT_BOUND_NUM * credit * cc.length * (if s.censusKs.contains r.matmul.k then 4 else 1)
 
-/-! ## The served y and the work -/
-
 /-- **The unscale the check holds y to is the served y's Definition**: wherever `Rule.yOf` gives a word (each step finite),
 it is `Pouw.PearlC.unscale` of the same U and α (`PearlCUnscale_v1` at `BIAS` off), and the check's copy is that
 Definition everywhere. -/
@@ -202,8 +144,6 @@ def WorkIsTheCredit : Prop :=
         some (testCredit i.testInstance (creditAtAssumption pl.passes i.draws (overInertBoundDraws pl (check i opener).verdicts) DELTA))) ∧
   (∀ (i : Input) (opener : Nat → Nat → Except String TileOpening),
     (check i opener).accept = false → (check i opener).work = none)
-
-/-! ## The trees -/
 
 /-- The messages `sha512/row-seg/v1` hashes for the row `row`: each 1024-byte segment's under its first block, then the outer
 one over their digests. -/

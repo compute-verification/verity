@@ -3,44 +3,8 @@ module
 public import Properties.Poub.Remote.Coins
 public import Poub.Shared
 
-/-!
-# One openings coin per sample (`Poub.Shared`)
-
-`Properties.Poub.Coins` and the sample's statement in `Properties.Poub.Remote`, for a session that samples its
-openings `g` windows at a time (`audit.Params.groups_per_coin`, `Poub.Shared.run g`): sample `c` is windows
-`c·g … min(c·g + g, W) − 1` (`sampleWindows`), sampled together at the close of the last of them by one coin,
-`coins[W + c]`, on the openings key of `c`, over the sample's receipts in order, numbered across its windows
-(`sampleLengths`). Each window gets the samples in its passes, renumbered to its own (`shareOf`, `passesBefore`), and
-`verify` checks them against its own record. Where `Coins` indexes by window `t`'s coin `W + t`, these index by
-sample `c`'s, `W + c`.
-
-* `SampleIsSubset` (`Shared.close`, the sample): the sample's values are the sampler's `min(s, U)`-subset of `[0, U)`,
-  `U` the sample's receipts, each mapped to the receipt with that number, and each window of the sample holds its share.
-* `AcceptSamplesOpenable` (`Refused`, per sample): the sample's values are the sampler's, and once each window's check of its
-  share accepts, each value is an openable receipt of the window it falls in (`receiptCount`). Like today's, which is
-  on `verifyWindow` (`draws`, then `checkWindow`), it is on `draws` and `checkWindow` alone, over the records `ws` of
-  the sample's windows, whose passes number its receipts (`lengthsOf`, `passCount`).
-* `RunSamplesRecords` (`Shared.run`, the session link), for every `g ≥ 1`: in a run, a sample taken is `draws` over
-  its windows' records (`sampleRecords`, `State.record`), each window holding its share, and a window of it is accepted
-  only with an empty share (which the close accepts at `g ≥ 2`) or with `checkWindow` of its share passing on the
-  session's appends: the hypotheses `AcceptSamplesOpenable` reads, each window's on the one array of appends. It needs
-  `min_passes ≥ 1`.
-* `AcceptedSamplesOpenable` (`Shared.run`, the two joined): in a run that has accepted every window of sample `c`, each
-  value of the sample's sampler is an openable receipt, on the session's appends, of the window it falls in.
-* `OpeningsUnreadUntilSampled` (`Live`, the coin order): a run that leaves sample `c`'s first window unsampled reads no
-  coin at `W + c` or above.
-* `RecordKeptAfterSample`: once a window is sampled, the rest of the session keeps its samples, its record and its openable
-  receipts, as at `g = 1`.
-* `ReleaseOrder`, `LiveUnder`: the deployment's premise and `Live` as the code states it, per sample: on coins that
-  agree below `W + c`, wherever two sessions have taken sample `c`, each window of it has the same record and the same
-  openable receipts.
-
-At `g = 1`, `Shared.run 1` is `Session.run` (`Poub.Shared.run_one`), `c` is the window, and sample `c` is window
-`c` alone (`sampleWindows_one`, `sampleLengths_one`): `OpeningsUnreadUntilSampled` and `RecordKeptAfterSample` give today's,
-`ReleaseOrder 1` and `LiveUnder 1` are today's, and `AcceptSamplesOpenable` on a sample of one window gives today's
-(`Proofs.Properties.Poub.Remote.Shared`'s `*_one`). Today's `SampleIsSubset` is on `draws` alone, which knows no `g`;
-this one states it for `Shared.close`'s sample.
--/
+/-! PoUB's coin and sample properties for a session that samples its openings `g` windows at a time on one openings
+coin. -/
 
 @[expose] public section
 
@@ -176,9 +140,8 @@ def RecordKeptAfterSample : Prop :=
       sampledOf s' t = some d ∧ s'.record t = s.record t ∧
         ∀ u, Openable reg s'.appends (s'.record t) u ↔ Openable reg s.appends (s.record t) u
 
-/-- **The release order**, per sample (the deployment's, which the code cannot give): `D` gives the events a session
-sees on its coins, and sample `c`'s openings coin reaches none of them before the one that samples it. While the first
-`k` events leave sample `c`'s first window unsampled, the next is the same on coins that agree below `W + c`. -/
+/-- **The release order**, per sample, the deployment's, which the code cannot give: sample `c`'s openings coin
+reaches none of the events `D` gives a session before the one that samples it. -/
 def ReleaseOrder (g : Nat) (params : Session.Params) (reg : Registration) (appendCoins : Array ByteArray)
     (notBeforeNs : Nat) (D : Array ByteArray → Array Session.Event) : Prop :=
   ∀ (coins coins' : Array ByteArray) (c k : Nat) (rs : Array Session.Result) (s : Session.State),

@@ -3,24 +3,14 @@ module
 public import PouwCommit.Samples
 public import PouwCommit.Rows
 
-/-!
-# PoUW's commitments: properties of the port (`PouwCommit`)
-
-What the executable Lean of PoUW's commitments does, stated against its own functions, for every input. The numbers are
-the protocol's: digests of 64 bytes (SHA-512) or 32 (SHA-256), hm96 salts of 192 bytes, coins of 32, two coins an epoch
-and so a one-sibling path, and derived keys and epoch salts of 32. Where binding rests on SHA-512, the statement's other
-disjunct is a collision among the messages actually hashed: two different ones, one from each opening's check (or the two
-framed messages), with one digest. That is collision resistance's content, taken as a disjunct rather than assumed away, and
-bounded to the inputs, since some collision of SHA-512 exists outright.
--/
+/-! Properties of the executable Lean of PoUW's commitments (`PouwCommit`); where binding rests on SHA-512, the other
+disjunct is a collision among the messages actually hashed. -/
 
 @[expose] public section
 
 namespace Properties.Pouw.Commit
 
 open Flock PouwCommit
-
-/-! ## Sizes -/
 
 /-- Every binding `tagged` gives, and so every weight, activation and transcript binding and the weights' root, is 64 bytes:
 what every frame takes as a SHA-512 identity. -/
@@ -44,8 +34,6 @@ def CoinNumbers : Prop :=
 def DepthServed : Prop :=
   depth 0 = 0 ∧ depth 1 = 0 ∧ depth 8192 = 13 ∧ depth 8193 = 14 ∧ depth 9216 = 14 ∧ depth (2 ^ 20) = 20
 
-/-! ## Refusals -/
-
 /-- A domain `CommitmentDomain` gives has a binding of 32 or 64 bytes and an owner of at least -2, for any count and
 either hash. -/
 def DomainRefusals : Prop :=
@@ -67,8 +55,6 @@ def CoinRaises : Prop :=
       (o.epoch = c.epoch → o.label = label → o.coin.size = 32 → o.salt.size = 192 →
         ∀ p ∈ o.path, p.size = 32 ∨ p.size = 64)
 
-/-! ## What an accepted coin is -/
-
 /-- The root over a coin's value at `rank` and the other coin's leaf digest `sib`, at the tree's one level. -/
 def coinRoot (epoch rank : Nat) (coin salt sib : ByteArray) : ByteArray :=
   let d := coinDomain epoch
@@ -85,8 +71,6 @@ def CoinOpens (c : CoinCommitment) (o : CoinOpening) (label : String) (after : B
 
 /-- An opening `coin_reason` accepts (gives no reason) is one `CoinOpens` describes. -/
 def CoinAccepts : Prop := ∀ c o label after, coinReason c o label after = .ok none → CoinOpens c o label after
-
-/-! ## Salts and sample keys -/
 
 /-- A key PoUW derives (`derive` under its domains) is from a nonempty source. -/
 def KeyRefusals : Prop :=
@@ -118,13 +102,9 @@ what the verifier recorded. -/
 def DrawCoinAccepts : Prop :=
   ∀ cc o after coin, drawCoin cc o after = .ok (.ok coin) → ∃ c, cc = some c ∧ CoinOpens c o "draw" after ∧ coin = o.coin
 
-/-! ## Samples -/
-
 /-- A work-weighted sample (`Sampled.select`) gives `t` tickets, each a position of the ticket list. -/
 def DrawShape : Prop :=
   ∀ key tickets t ids, weightedDraw key tickets t = .ok ids → ids.length = t ∧ ∀ i ∈ ids, i < tickets.length
-
-/-! ## Binding -/
 
 /-- The node frames `Domain.verify` hashes climbing from the leaf digest `leaf` at `rank` along `path`, bottom first. -/
 def pathFrames (d : Domain) (rank : Nat) (leaf : ByteArray) (path : List ByteArray) : List ByteArray :=

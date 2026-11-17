@@ -2,24 +2,7 @@ module
 
 public import MemoryChallenger.Judge
 
-/-!
-# The memory challenger's verdict's property, stated against the Lean code
-
-What `MemoryChallenger.verdict` (package `core_memory_challenger`, `memory_challenger.verdict` in the Python) accepts,
-stated over its inputs: the accepted schemes, the trusted keys, the expected digests, the signed session, the commitment
-released with it and the coin openings. No statement takes an assumption: the verdict is a function of those inputs.
-
-* `VerdictAccepts`: an accepted verdict's scheme is accepted, its key trusted and `lmsVerify` passes on the session's
-  message; the signed header is the commitment; the session ended complete after the commitment's `k` rounds; and each
-  round `j`'s index is its committed coin (an opening of round `j` to that index verifies under the coin tree), its
-  digest is the expected digest of that block of `C`, and it is on time, within `Δ + RTT`.
-* `JudgeAccepts`: the same for `Judge.judge` on a record as its caller holds it, under the schemes the record names.
-
-Neither says the signer signed: the conclusion is that the signature verifies, not that it was made by the key's holder.
-`VerdictSigned` and `JudgeSigned` say it: the accepted session is one the memory challenger holding its key ran,
-recorded and timed itself, or the run's own data carries a break (an LMS forgery, or a SHA-512 collision). All four are
-proved (`Proofs.Properties.Pous.MemoryChallenger`).
--/
+/-! The properties of the memory challenger's verdict (`MemoryChallenger.verdict`), which take no assumption. -/
 
 @[expose] public section
 
@@ -46,29 +29,8 @@ def JudgeAccepts : Prop :=
     ∃ schemes, Judge.schemesOf r.schemes = .ok schemes ∧
       Accepted schemes r.trusted.toList r.expected.find r.signed r.commitment r.openings
 
-/-! ## What the memory challenger signs
-
-The device, as `memory_challenger.MemoryChallenger` runs a session (its module docstring): it builds the commitment of
-its coins and the session's parameters (`__init__`) and keeps it until the session is signed; each round,
-`challenge()` reveals the next coin's index and reads its clock (the send time), and `receive(block)` reads its clock
-again (the receipt time), refuses an answer that is not `block_bytes` long, and records
-`Round(j, index, send, receipt, block_digest(block))`; the first late round ends the session `late`, the `k`-th on-time
-round `complete`; `close()` signs the ended session once (`LmsSigner.sign`), the message
-`memoryChallengerMessage(I, session, message(commitment, ended, rounds))` under its key, and only then releases the
-commitment.
-
-The model takes the device's clock readings and the answers it receives as they came, and assumes nothing of them: a
-round's times are the device's own readings, whatever its clock did. It does not model what refuses a session before
-it starts (a limit or answer size that is not positive, a clock coarser than a microsecond): those restrict the runs, not
-what a run signs. The device may run any number of sessions under a key, each signed once. A key signs only its
-sessions' messages, one role per key: `Signed` is all the model's key signs, so a key also used for another role
-(`lms.ROLES` has `network-certificate` too) is outside the model, and the third disjunct is an EUF-CMA break only
-under that one-role reading.
-
-Nothing is assumed of SHA-512 or LMS. `VerdictSigned` holds, or the run's own data carries a break: two distinct
-strings of `runStrings`, the strings the session and the device's sessions under its key hash, with one SHA-512 digest
-(`cr/sha-512`), or a signature that verifies under the session's key over its message (`challengePhaseMessage`) though the
-device never signed that message (`euf-cma/lms-sha512-n64`). -/
+/-! The model reads a key as signing only its sessions' messages: a key used for another role too is outside it, and
+the forgery disjunct is an EUF-CMA break only under that reading. -/
 
 /-- What the device observes in a round it records: its clock's reading as it reveals the index, its reading as the
 answer arrives, and the answer. -/
@@ -127,8 +89,6 @@ def LmsVerifies (p : Lms.Params) (pk m sig : ByteArray) : Prop :=
 and its `message`. -/
 def challengePhaseMessage (s : SignedChallengePhase) : Option ByteArray :=
   (s.message >>= memoryChallengerMessage (s.publicKey.extract 0 16) s.commitment.session).toOption
-
-/-! ### The strings a run hashes -/
 
 /-- What SHA-512 hashes for a session `(c, ended, rounds)` signed under the key `pk`: the coin key (the header holds
 its digest), the records stream under its `sha512/row/v2` prefix, the input of the session's `message`, and that of

@@ -34,26 +34,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The verifier's pooled bound covers the sample's (`Poub.Pooled`)
-
-`Poub.Pooled.pooled` (`verity/protocols/accounting/poub/verifier/lean/Poub/Pooled.lean`, which `pooled.py`
-is held to by the difftest, and whose W the memory line reads: `Poub.Line.line`) computes a session's pooled
-bound from its windows' receipts `U_t` and samples `s_t` at `δ`, in exact rationals: the budget from above by a
-certified rational root, and W by the fractional knapsack's greedy. The sample's model reads the bound as a supremum
-(`ResourceAccounting.Remote.Sample.pooled`, which `ResourceAccounting.Guarantees.Remote.PooledSample` reads).
-
-* `PooledCovers`: whenever the code computes a bound, its W is at least `Sample.pooled` of the same windows at the same
-  `δ`: its budget is at least `S·(1 − δ^(1/S))`, and its greedy reaches the supremum over every share vector the sample
-  allows.
-* `PooledCoversRun`: the same at a session's sizes and sample counts (`Sample.Run.pooled`), the windows given as
-  `(U_t, min(s_t, U_t))`.
-* `LineCoversRun`: whenever the memory line gives a line for those windows, the W it reads (`Line.wrong`, every
-  stretch's) is at least the session's pooled bound.
-
-They take no premise. That the windows the line reads are the session's (each window's receipts and its samples, as the
-verifier's record holds them, `audit.Record`) is the record's, outside this statement.
--/
+/-! The verifier's pooled bound covers the opening sample's (`PooledCovers`, `PooledCoversRun`, `LineCoversRun`). -/
 
 @[expose] public section
 

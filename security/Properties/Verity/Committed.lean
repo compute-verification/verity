@@ -8,40 +8,8 @@ public import Spot.RecordText
 public import Spot.OneStageZk
 public import VStarRecursive.Sampled
 
-/-!
-# What ties the inference-only policy's clause to the committed files
-
-The game's clause for the inference-only policy (`Verity.Vocab.Holds` at `.inferenceOnly`) is on the Program the
-policy's compiled check judges, and is proved of the case as sent. It says nothing of the committed files until two
-statements hold, each a named `Prop` here, stated and not proved. Remote's soundness (`Verity.RemoteSoundness`) takes
-both as hypotheses.
-
-`GateARow`, `Γ`'s unit: in the game's circuit of a committed file (`Flock.Bridge.circuitOfFile`) every unit has one
-gate for each of its file's rows. The policy's `Γ` counts rows of the committed circuit a block, and PoUW's claim
-counts that circuit's gates (`Verity.Vocab.computed`), so with it the two count one thing.
-
-`Vocab.WiresSound`, the wires: on an accepted play the wiring the policy's record names is the wiring the committed
-units are held to. The committed circuit's units each commit their own rows, and nothing in it joins a unit's input
-row to the output row the record wires it to. The statement reads the wiring on the commitment:
-
-* **the record's wiring** (`RecordWiring`): the wires of the text whose SHA-512 the record's `window.circuit` is,
-  as SPOT's reader reads them (`Spot.RecordText.wiring`);
-* **a row's root** (`RecordRoot`, `rowName`): the root the record's `roots` hold for the row's name, a port's own
-  name or, of a port cut into several rows, the port's name, `#` and the row;
-* **a unit's leaf under a root** (`Vocab.ReadsLeaf`, `Vocab.WritesLeaf`): the registered position (`Vocab.place`) of
-  an input gate the unit reads, or of a gate of the unit, a wiring's unit `u` being the committed circuit's unit `u`;
-* **a wire holds** (`Vocab.SameRow`): every opening the row-leaf verifier accepts of the reader's leaf and every one
-  it accepts of the writer's leaf hold the same bits.
-
-A unit is then held (`Properties.Spot.WiredCorrect`) when the transcript binds it (`ResourceAccounting.unbound`) and no wire
-into it fails (`Properties.Spot.miswired`), and the claim (`Vocab.WiresHold`) is SPOT's at twice its share:
-at most a `2ε` share of the units not held. The target is the claim at twice SPOT's error.
-
-`Vocab.MemberWiresSound` is the same claim in the per-member form, at that form's own wiring: the parameter its
-compiled check holds the sampled proof blocks' wired rows to (`Spot.OneStageZk.wiresHeld`). It reads the wiring off SPOT's
-case (`SpotCase`, `Spot.OneStageZk.Params.wiring`), a template's unit at its range of the partition (`popUnit`) and a
-row's root under its member's name (`memberRow`). That the policy's record names the same wiring is not in it.
--/
+/-! What ties the inference-only policy's clause to the committed files: `GateARow` and `Vocab.WiresSound`, stated
+and not proved. -/
 
 @[expose] public section
 
@@ -70,11 +38,9 @@ def RecordRoot (record : Lean.Json) (name : String) (R : Hash.Digest) : Prop :=
 def rowName (W : Spot.Wires.Wiring) (template port : String) (row : ℕ) : String :=
   if W.cutsOf template port = 1 then port else port ++ "#" ++ toString row
 
-/-- **SPOT's case in what the prover sent composite `k`, at one-stage v2's parameters `p`**, decoded: the three byte
-strings decode under the composition's formats, one of the subprotocols' cases is SPOT's component's
-(`VStar.Recursive.Sampled.protocol` on the blobs sent), its parameters are one-stage v2's `p` as the component reads
-them (`VStar.Recursive.Sampled.paramsOfJson`, either form: `Spot.OneStageZk.paramsEitherOfJson`) and its commitment
-is the registration `c`. It is `PolicyCase`'s reading at SPOT's component. -/
+/-- **SPOT's case in what the prover sent composite `k`, at one-stage v2's parameters `p`**, decoded: one of the
+subprotocols' cases is SPOT's component's, its parameters are `p` as the component reads them, and its commitment
+is the registration `c`. -/
 def SpotCase (k : Verity.Registration.Composite) (s : Sent) (p : Spot.OneStageZk.Params)
     (c : Spot.OneStage.Commitment) : Prop :=
   ∃ ps cm ev, Decoded s ps cm ev ∧
@@ -83,10 +49,9 @@ def SpotCase (k : Verity.Registration.Composite) (s : Sent) (p : Spot.OneStageZk
       (Core.canonicalJson x.2.1.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson) = .ok (.inl p) ∧
       Spot.OneStage.commitmentOf x.2.2.commitment = .ok c
 
-/-- **A template's unit in the population**, at the partition's ranges `rs` (each its template, first unit and
-count): the wiring's unit `u` of the template `t` is the population's unit `first + u` of the one range of `rs` that
-is `t`'s, and none where `rs` holds no range of `t` or several, or `u` is outside its count. It is
-`Spot.OneStageZk.wiresOn`'s reading, which refuses a wiring with a template of no one range (`Spot.OneStageZk.WIRES_TEMPLATE`). -/
+/-- **A template's unit in the population**, at the partition's ranges `rs`: the wiring's unit `u` of template `t` is
+unit `first + u` of the one range of `rs` that is `t`'s, and none where `rs` holds no range of `t` or several, or
+`u` is outside its count. -/
 def popUnit (rs : Array (String × ℕ × ℕ)) (t : String) (u : ℤ) : Option ℕ :=
   match (rs.filter (·.1 == t)).toList with
   | [(_, lo, n)] => if 0 ≤ u ∧ u < (n : ℤ) then some (lo + u.toNat) else none
@@ -174,16 +139,9 @@ def WiresSound (k : Verity.Registration.Composite) : Prop :=
     Game.prob (fun o => V.Verdict k .sampled o ∧ ¬ V.WiresHold k θ F c σ o) (V.game θ F c) σ ≤
       2 * V.error .sampled θ F c σ
 
-/-! ## The per-member form -/
-
-/-- **The reader's row is its writer's row under the per-member registration**, for a reader row
-`x = (template, unit, port, row)` and a writer's output row `y = (template, unit, output)` of the wiring `W`, at the
-partition's ranges `rs` and the members `ms` (each its name, first unit and count): each row's unit is the
-population's unit `popUnit` gives, in the member `Spot.OneStageZk.memberAt` gives, and its root is the one the
-registration `record` names under the member's name (`memberRow`, `RecordRoot`); there, every opening the row-leaf
-verifier accepts under SHA-512 of a leaf the reader's unit reads and every one it accepts of a leaf the writer's unit
-writes hold the same bit wherever both hold one. A row of no unit, of no member or of no root of the registration, or
-a leaf with no accepted opening, is compared with nothing. -/
+/-- **The reader's row is its writer's row under the per-member registration**: at each row's population unit, member
+and root, every accepted opening of a leaf the reader's unit reads and of one the writer's unit writes hold the
+same bit where both hold one; a row of no unit, member or root is compared with nothing. -/
 def MemberSameRow (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (record : Lean.Json) (W : Spot.Wires.Wiring)
     (rs ms : Array (String × ℕ × ℕ)) (x : String × ℕ × String × ℕ) (y : String × ℤ × String) : Prop :=
   ∀ (gx gy : ℕ) (mx my : String × ℕ) (Rx Ry : Hash.Digest) (p q : Place) (o o' : Hash.RowLeaf.Opening),
@@ -197,12 +155,8 @@ def MemberSameRow (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (record
     ∀ (i : ℕ) (b b' : Bool), o.row[i]? = some b → o'.row[i]? = some b' → b = b'
 
 open Classical in
-/-- **The population's units the wiring `W` doesn't hold** in the transcript `X`, at the ranges `rs` and members `ms`:
-those `X` doesn't bind (`ResourceAccounting.unbound` under the commitment's openings), and those that are some template's
-unit (`popUnit`) mis-wired in it (`Properties.Spot.miswired`, a wire holding as `MemberSameRow` compares its two
-rows): the units not correct in the wired population (`Properties.Spot.WiredCorrect`), each read at its population
-unit. The population's unit `g` is the committed circuit's unit `g`: the members' units side by side in the
-members' order, as the window lays them out (`Spot.OneStageZk.laidHeld`). -/
+/-- **The population's units the wiring `W` doesn't hold** in the transcript `X`: those `X` doesn't bind and those
+mis-wired as `MemberSameRow` compares rows. The population's unit `g` is the committed circuit's unit `g`. -/
 noncomputable def memberUnheld (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (record : Lean.Json)
     (W : Spot.Wires.Wiring) (rs ms : Array (String × ℕ × ℕ)) (X : (V.circuitOf θ F).Trace) :
     Finset (Fin (V.units θ F)) :=
@@ -210,32 +164,9 @@ noncomputable def memberUnheld (θ : ByteArray) (F : Array ByteArray) (c : ByteA
     ∃ (t : String) (u : ℕ), popUnit rs t u = some g.val ∧
       (t, u) ∈ Properties.Spot.miswired W (V.MemberSameRow θ F c record W rs ms)
 
-/-- **The wires' claim at the per-member form's wiring** in the play of `σ` that ended with `o`, at composite `k`:
-for every case of SPOT in the play's messages whose one-stage v2 parameters `p` name members `ms` and a wiring `W`
-(`SpotCase`; `p.wiring`, the auditor's parameter, fixed before any coin, which SPOT's `Spot.Wires.check` accepted
-when the parameters were read, `Spot.OneStageZk.wiringOf`), at the ranges of the verifier's partition
-(`Spot.Partition.evaluate` on the parameters' program and query, as `Spot.OneStageZk.wiresHeld` reads them), at
-most a `2ε` share of the committed units are not held in the extractor's transcript (`memberUnheld`): unbound in it,
-or reading a row that is not the row the wiring gives it, each row's root read under its member's name in the case's
-registration. `ε` is SPOT's published share. The compiled check holds the sampled proof blocks' wired rows to the wiring
-(`Spot.OneStageZk.membersRun_wires`); this is that check's claim on the population.
-
-What it does not say:
-
-* **That the wiring is the one the policy's record names.** It reads the per-member form's own parameter. That the
-  inference-only policy's record (`RecordWiring`) names the same wiring is a tie between the two subprotocols'
-  cases, compared by digest, and not in it.
-* **Anything of parameters that name no members or no wiring.** At the one statement's parameters
-  (`Spot.OneStageZk.paramsOfJson_wiring`: their parse names no wiring) or members with no wiring, the claim holds of
-  the play and says nothing, not even SPOT's share. The one-statement reading is `WiresHold`'s.
-* **Anything of a template no one range of the partition holds.** Its units are no population unit (`popUnit`), so
-  they are held to no wire; the compiled check refuses such a wiring (`Spot.OneStageZk.WIRES_TEMPLATE`).
-* **Anything of a committed circuit whose units are not the members' side by side.** It reads the population's unit
-  `g` as the committed circuit's unit `g`.
-* **That a unit's rows are the Program's gates.** It holds a wired row to its writer's row; that a member's file
-  computes its template is not in it.
-* **Anything of a composite whose SPOT case is the recursive form**, which SPOT's component refuses
-  (`VStar.Recursive.Sampled.RECURSIVE_REFUSED`), so no case decodes to one-stage v2's parameters there. -/
+/-- **The wires' claim at the per-member form's wiring**: for every SPOT case whose parameters name members and a
+wiring, at most a `2ε` share of the committed units are not held in the extractor's transcript (`memberUnheld`).
+It does not say the wiring is the policy's record's, and says nothing without members or a wiring. -/
 def MemberWiresHold (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Game.Strategy (V.game θ F c)) (o : Exchange) : Prop :=
   ∀ (p : Spot.OneStageZk.Params) (sc : Spot.OneStage.Commitment), SpotCase k o.sent p sc →
@@ -247,10 +178,9 @@ def MemberWiresHold (k : Verity.Registration.Composite) (θ : ByteArray) (F : Ar
             (ms.map fun m => (m.name, m.first, m.count)) (V.extract θ F c σ)).card : ℝ) ≤
           2 * (V.certOf θ).ε * V.units θ F
 
-/-- **The wires' target at the per-member form's wiring, at composite `k`**: at all `θ`, `F` and `c`, for every
-strategy, the probability that SPOT's verdict at `k` accepts while the wires' claim at the parameter's wiring fails
-(`MemberWiresHold`) is at most twice SPOT's error at that strategy. The compiled check holds the sampled proof blocks'
-wired rows (`Spot.OneStageZk.wiresHeld`); no theorem lifts that to the population yet, so no theorem proves it. -/
+/-- **The wires' target at the per-member form's wiring, at composite `k`**: SPOT's verdict accepts while
+`MemberWiresHold` fails with probability at most twice SPOT's error. No theorem lifts the compiled check's hold
+on the sampled proof blocks' wired rows to the population, so none proves it. -/
 def MemberWiresSound (k : Verity.Registration.Composite) : Prop :=
   ∀ (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)),
     Game.prob (fun o => V.Verdict k .sampled o ∧ ¬ V.MemberWiresHold k θ F c σ o) (V.game θ F c) σ ≤
