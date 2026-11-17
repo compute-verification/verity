@@ -190,7 +190,8 @@ PLACEMENT = {WORKERS: PROVER_NODE, ZK_SERVER: PROVER_NODE, PROVER: PROVER_NODE, 
              VERIFIER: AUDITOR_HOST}
 #: the configuration this table's demo runs, whose `[[pin]]` entries are the only statement of the keys the auditor pinned
 CONFIG = ROOT / "demos" / "onsite_full.toml"
-_NOT_YET = "`verity run` stops on it with NotImplementedError until goal demos/onsite-demo brings it."
+_UNDECIDED = ("`verity run` records each period's verdict under that id, undecided unless the line says who",
+              "combined it: no composite takes it.")
 #: each demo file's header
 HEADERS = {
     "onsite_full": (
@@ -201,11 +202,11 @@ HEADERS = {
     "onsite_compute": (
         "The served window under SPOT, PoUW, the inference-only policy, the network certifier and the memory",
         "wipe (verity/onsite-compute/v0, a deployment of its own, never onsite): onsite without PoUS and PoUB,",
-        "each party on its machine, and the key the auditor pinned for its memory attester.", _NOT_YET),
+        "each party on its machine, and the key the auditor pinned for its memory attester.", *_UNDECIDED),
     "onsite_network": (
         "The served window under the network certifier, SPOT and the memory wipe (verity/onsite-network/v0, a",
         "deployment of its own, never onsite), each party on its machine, and the key the auditor pinned for",
-        "its memory attester.", _NOT_YET),
+        "its memory attester.", *_UNDECIDED),
     "remote": (
         "The served window under remote's subprotocols (verity/remote/v1): SPOT, PoUW's Pearl+ run verdict and the",
         "inference-only policy. No auditor's device is at the site: the developer's parties are on the prover node",

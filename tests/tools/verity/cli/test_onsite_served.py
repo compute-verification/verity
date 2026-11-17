@@ -273,6 +273,17 @@ def test_a_dry_run_without_bindings_names_every_one_it_lacks(capsys):
                 if e["component"] == "pous") == "<memory-challenger.pous.address>"
 
 
+@pytest.mark.parametrize("demo", ["onsite_network", "onsite_compute"])
+def test_a_dry_run_of_a_smaller_onsite_demo_resolves_every_party_and_channel(capsys, demo):
+    path = ROOT / "demos" / f"{demo}.toml"
+    rc, got, err = dry(capsys, config=path)
+    cfg = R.load(path, REG)
+    assert rc == 0, err
+    assert K.composite(cfg["protocols"], REG.components) in K.UNACCEPTED
+    assert sorted(x["party"] for x in got["plan"]) == sorted(p["name"] for p in cfg["party"])
+    assert len(got["channel"]) == len(cfg["channel"]) and got["dry"][0]["configuration"] == K.digest(cfg)
+
+
 def test_a_dry_run_on_a_machine_resolves_its_parties(capsys):
     rc, got, _ = dry(capsys, "--on", T.PROVER_NODE)
     assert rc == 0 and [x["party"] for x in got["plan"]] == ["workers", "firewall", "prover"]
