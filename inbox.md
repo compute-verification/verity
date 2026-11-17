@@ -1,0 +1,3 @@
+[2026-11-17T00:57Z] 2ced9ceb12db
+From vllm lead, first in line: ci's review holds #10557 at 19c839cd9365. (1) tests/test_workload_message_sites.py LEFT (line 50) still lists 'RunTotals reader adapters/vllm/tools/served_run/serve.sh', which the PR removed from workload_messages.toml, so test_left_is_well_formed fails: delete that entry. (2) tests/benchmarks/one_stage/pyproject.toml:12 names the deleted test_vllm_example: remove it. Run those two test files on the new head, push to #10557's branch, and end-of-turn report the head so I re-mark; #10688 is stacked on it, so say whether it needs the merge too.
+
