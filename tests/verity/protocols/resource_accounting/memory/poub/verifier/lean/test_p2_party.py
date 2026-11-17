@@ -331,9 +331,8 @@ def test_a_lean_that_holds_another_store_or_session_is_refused(exe, store) -> No
     for lie in (lambda _req, got: got | {"units": got["units"] + 1},
                 lambda _req, got: got | {"session": got["session"] | {"samples": 1}}):
         for auditor in (p2_parties.SESSION, TOY):
-            with p2_lean.Lean(exe) as lean:
-                with pytest.raises(ValueError, match=p2_parties.DISAGREEMENT):
-                    p2_parties.hold(Lying(lean, "p2_hold", lie), data, auditor=auditor)
+            with p2_lean.Lean(exe) as lean, pytest.raises(ValueError, match=p2_parties.DISAGREEMENT):
+                p2_parties.hold(Lying(lean, "p2_hold", lie), data, auditor=auditor)
     with p2_lean.Lean(exe) as lean:
         seen = Lying(lean, "p2_hold", lambda _req, got: got)
         p2_parties.hold(seen, data, auditor=TOY)
