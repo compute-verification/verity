@@ -15,7 +15,7 @@ package = false
 untraced = ["test_cli.py"]
 # The contract (verity_numerical.bench.contract) reads the census when it is imported; verity_flock.class_statement, which
 # samples the instances, imports circuit_check without declaring it. `record` writes its readings with the harness's kit.
-inputs = ["benchmarks/census", "tools/verity/circuit_check/src/circuit_check", "benchmarks/harness/verity_bench",
+inputs = ["calibration/census", "tools/verity/circuit_check/src/circuit_check", "benchmarks/harness/verity_bench",
           "tools/config/verity_config"]
 
 [tool.pytest.ini_options]
