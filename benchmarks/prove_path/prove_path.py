@@ -142,7 +142,8 @@ Two kinds of committed run:
   **weights-registration** committed them under it before the first window's coins (``--registration``, which the
   verifier pins: ``records_audit.py audit --registered``), so a weight served as registered has its registered root and
   any other's reads are free; the scan's state rows (`window_rows.state_value`), or without a kept run a stand-in's
-  (`window_rows.standin_state`), a per-window value under the run root, whose rows and salts it also writes whole, prover
+  (`window_rows.standin_state`), registered as a value of the window's Program (`window_circuit.population_digest`)
+  under a domain bound to the run root, the challenger-signed open root, whose rows and salts it also writes whole, prover
   only, for the network attester's scan to read as its state tree (`scan_state_opening`, ``scan_zk.py --v3c``). Where
   the certifier front kept the network attester's run under the serve dir, slot k is instead the request whose Program
   the network attester's scan of that run starts there (`kept_scan`), its row the scan's. ``--out`` is the window's
@@ -1821,7 +1822,8 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
     store = CommittedStore.of_record(bmap, OpenedReader(r.store, r.run), r.manifest if isinstance(r.manifest, dict) else None)
     units = [u for u in compiled.requests if u is not None]
     scanned = kept_scan(Path(a.serve_run), cls, [u.id for u in units], kept_ingress=kept_ingress)
-    state = None if scanned is None else WRS.state_value(WC.NAME, cls, scanned[0], key, int(a.window), window=run)
+    population = WC.population_digest(low.circuit)
+    state = None if scanned is None else WRS.state_value(population, cls, scanned[0], key, int(a.window), window=run)
     lap("scan")
     placed = place_slots(cls, [u.id for u in units], compiler.inner.ingress,
                          None if state is None else (scanned[1], WRS.scan_slots(low, state.rows)))
@@ -1840,7 +1842,7 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
                          f"{model['repo']}@{model['revision']}'s")
     served = {label: weights(label, 0, n) for label, n in sizes.items()}
     values = {**WW.weight_values(registered, served, key, keep_rows=True),
-              SS.SCAN_STATE: WRS.standin_state(WC.NAME, cls, rows, key, int(a.window), window=run) if state is None
+              SS.SCAN_STATE: WRS.standin_state(population, cls, rows, key, int(a.window), window=run) if state is None
               else state}
     held = sorted(p for p, e in reg.values.items() if p in values and values[p].entry() == dict(e))
     lap("weights")
@@ -1863,8 +1865,7 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
     lap("record")
     c = win.close(workers=a.workers or min(16, os.cpu_count() or 1))
     lap("close")
-    prov = {"window_circuit": {"class": [cls.slots, cls.prompt, cls.outputs, cls.lanes, cls.every], "window": int(a.window)},
-            "activations": {"program": WC.NAME, "values": {SS.SCAN_STATE: values[SS.SCAN_STATE].entry()}}}
+    prov = {"window_circuit": {"class": [cls.slots, cls.prompt, cls.outputs, cls.lanes, cls.every], "window": int(a.window)}}
     win.write(c, a.out, prov, registrar=R, index_salt=WRS.index_salt(key, int(a.window)), previous=previous)
     scan_state_opening(values[SS.SCAN_STATE], Path(a.out) / scan_state_file)
     lap("write")
