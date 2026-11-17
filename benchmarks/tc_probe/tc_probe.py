@@ -616,11 +616,13 @@ class Probe:
 
 
 def host_identity() -> dict:
-    """``nvidia_smi`` (name, driver, compute capability of GPU 0), ``driver``, ``hostname`` and ``gpu_uuid`` -- the board's own
-    identity (``nvidia-smi --query-gpu=uuid``; the trust framework's S1 wants the device, not the pod's hostname)."""
+    """``nvidia_smi`` (name, driver, compute capability of the GPU this process opens: ``CUDA_VISIBLE_DEVICES``'s first, an
+    nvidia-smi index under gpu-lease's ``CUDA_DEVICE_ORDER=PCI_BUS_ID``, else GPU 0), ``driver``, ``hostname`` and ``gpu_uuid`` --
+    the board's own identity (``nvidia-smi --query-gpu=uuid``; the trust framework's S1 wants the device, not the pod's hostname)."""
 
+    device = os.environ.get("CUDA_VISIBLE_DEVICES", "").split(",")[0].strip() or "0"
     try:
-        smi = subprocess.run(["nvidia-smi", "--query-gpu=name,driver_version,compute_cap,uuid", "--format=csv,noheader", "-i", "0"], capture_output=True, text=True)
+        smi = subprocess.run(["nvidia-smi", "--query-gpu=name,driver_version,compute_cap,uuid", "--format=csv,noheader", "-i", device], capture_output=True, text=True)
         text = smi.stdout.strip() if smi.returncode == 0 else None
     except OSError:
         text = None
