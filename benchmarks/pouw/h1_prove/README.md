@@ -1,9 +1,21 @@
-# h1_prove
+# H1 tile proof blocks through SPOT
 
-H1 tile proof blocks through SPOT: a recorded or served int8 Llama-3.1-8B window's proof blocks sampled by the live coin,
-proved by Flock `--zk` under the ZK server and checked by the Lean verifier against the verifier's own public files,
-beside controls each refused or rejected by the check it breaks; and the proof blocks a served window's own sampling coin
-selects, read from that window's run.
+This directory takes H1 tile proof blocks through SPOT: the proof blocks of a recorded or served int8 Llama-3.1-8B
+execution phase are sampled by the live coin, proved by Flock `--zk` under the ZK server and checked by the Lean verifier
+against the verifier's own public files, beside controls each refused or rejected by the check it breaks. It also reads,
+from a served execution phase's run, the proof blocks that phase's own sampling coin selects.
+
+## Try it
+
+Check, without a prover or Lean, that a served dump's staged statements are the verifier's own public files:
+
+~~~sh
+uv run pytest tests/benchmarks/pouw/test_h1_prove_live.py -q
+~~~
+
+It prints `6 passed`.
+
+## Runner
 
 **Hardware:** a node's CPUs, no GPU, with the memory the job's header sizes: `job` at K = 4096 wants hundreds of GB
 (`H1_MEM_GB`), `live` 128 GB, `served` 16 GB.

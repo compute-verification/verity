@@ -33,6 +33,7 @@ from verity.device import load_card
 
 from verity_vllm.acquire import inductor_templates as T
 from verity_vllm.acquire.inductor_templates import Unmodelled, bound
+from verity_vllm.config import CARD_FILES
 from verity_vllm.definitions.numerics import derived_rows as DR
 from verity_vllm.definitions.numerics import fa3_model as FA3
 from verity_vllm.definitions.registry import attention_vocab
@@ -114,7 +115,7 @@ def card_of(name: str) -> str | None:
 
 def check_card(cc: tuple[int, int], sms: int, sku: str) -> None:
     """Refuse a device whose compute capability or SM count is not that of card `sku` (its `arch` and `sm.count`)."""
-    c = load_card(sku)
+    c = load_card(sku, directory=CARD_FILES)
     arch = re.fullmatch(r"sm_(\d+)(\d)[af]?", c["arch"])
     if arch is None:
         raise Unmodelled(f"hardware/cards/{sku}.toml: arch {c['arch']!r} names no compute capability")

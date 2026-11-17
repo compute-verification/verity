@@ -22,7 +22,7 @@ FIELDS = {"model": ["m", "m"], "revision": ["r", "r"], "hf_config": ["c", "c"], 
 
 
 def _facts(digest: str = "ee" * 64) -> dict:
-    return {"templates": [["LinearARow_v2", 4]], "params": PARAMS, "calls": CALLS, "digest": digest}
+    return {"templates": [["LinearARow_v4", 4]], "params": PARAMS, "calls": CALLS, "digest": digest}
 
 
 def _w(tmp_path: Path, case: str) -> Path:
