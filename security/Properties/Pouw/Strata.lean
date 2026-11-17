@@ -1,6 +1,6 @@
 module
 
-public import PouwCheck.Credit
+public import PouwVerifier.Credit
 
 /-!
 # A served window's work strata tile its units (`PouwCheck.Credit.strata`)
@@ -18,7 +18,7 @@ units in the strata the sample runs over (`unitWork`), and the window's work it 
 namespace Properties.Pouw.Strata
 
 open Lean (Json)
-open PouwCheck.Credit (callWork)
+open PouwVerifier.Credit (callWork)
 
 /-- Unit `u` is in one of stratum `s`'s ranges `[lo, hi)`. -/
 def holds (s : Flock.Draw.Stratum) (u : Nat) : Bool := s.units.any fun (lo, hi) => lo ≤ u && u < hi
@@ -36,7 +36,7 @@ unit from the window's end on is held; the strata's sizes add up to the window's
 strata's work (`Flock.Draw.totalWork`) is the calls' (`callWork`'s units times their work); and the strata's templates,
 which label their sample streams, are distinct. -/
 def StrataTile : Prop :=
-  ∀ (layout : Json) (ss : Array Flock.Draw.WorkStratum), PouwCheck.Credit.strata layout = .ok ss →
+  ∀ (layout : Json) (ss : Array Flock.Draw.WorkStratum), PouwVerifier.Credit.strata layout = .ok ss →
     (∀ i (hi : i < (callWork layout).length) u, callStart layout i ≤ u → u < callStart layout (i + 1) →
       (∃ s ∈ ss, holds s.toStratum u = true) ∧
         ∀ s ∈ ss, holds s.toStratum u = true → s.work = ((callWork layout)[i]).2) ∧

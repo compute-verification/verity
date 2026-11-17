@@ -158,11 +158,11 @@ theorem remote_check (blobs : Array ByteArray) (ps : List Named) (c : ByteArray)
     (Core.Remote.protocol.on blobs).check ps c ev =
       holdTies [Core.Remote.executionPhases] ev (checkSame "verity/remote/v0"
         ["verity/inference-only/v0", "verity/sampled-proofs/v1"]
-        [InferenceOnlyCheck.Protocol.protocol, PouwCheck.Period.protocol,
+        [InferenceOnlyCheck.Protocol.protocol, PouwVerifier.Period.protocol,
           VStar.Recursive.Sampled.protocol.onBlobs (Blobs.ofArray blobs)] ps c ev) := rfl
 
 theorem id_policy : InferenceOnlyCheck.Protocol.protocol.id = "verity/inference-only/v0" := rfl
-theorem id_monitoringPeriod : PouwCheck.Period.protocol.id = "verity/pouw/period/v1" := rfl
+theorem id_monitoringPeriod : PouwVerifier.Period.protocol.id = "verity/pouw/period/v1" := rfl
 theorem id_sampled (bs : Blobs) : (VStar.Recursive.Sampled.protocol.onBlobs bs).id = "verity/sampled-proofs/v1" := rfl
 
 /-- SPOT's commitment and digest are the one-stage registration record's, on any blobs. -/
@@ -399,7 +399,7 @@ theorem remote_check_ids (blobs : Array ByteArray) (ps : List Named) (c : ByteAr
     (Core.Remote.protocol.on blobs).check ps c ev =
       holdTies [Core.Remote.executionPhases] ev (checkSame "verity/remote/v0"
         [InferenceOnlyCheck.Protocol.protocol.id, (VStar.Recursive.Sampled.protocol.onBlobs (Blobs.ofArray blobs)).id]
-        [InferenceOnlyCheck.Protocol.protocol, PouwCheck.Period.protocol,
+        [InferenceOnlyCheck.Protocol.protocol, PouwVerifier.Period.protocol,
           VStar.Recursive.Sampled.protocol.onBlobs (Blobs.ofArray blobs)] ps c ev) := by
   rw [remote_check, id_policy, id_sampled]
 
@@ -408,13 +408,13 @@ theorem ne_policy_stage (bs : Blobs) :
   rw [id_policy, id_sampled]; decide
 
 theorem ne_monitoringPeriod_stage (bs : Blobs) :
-    (PouwCheck.Period.protocol.id == (VStar.Recursive.Sampled.protocol.onBlobs bs).id) = false := by
+    (PouwVerifier.Period.protocol.id == (VStar.Recursive.Sampled.protocol.onBlobs bs).id) = false := by
   rw [id_monitoringPeriod, id_sampled]; decide
 
 /-- What remote's tie gives once the policy's commitment decodes: every Commit record the period's windows name, when
 they decode, has the policy's record's digest. -/
 theorem executionPhases_tied {kI kW kS : Case} {cI : InferenceOnlyCheck.Protocol.Commitment}
-    (hI : kI.id = InferenceOnlyCheck.Protocol.protocol.id) (hW : kW.id = PouwCheck.Period.protocol.id)
+    (hI : kI.id = InferenceOnlyCheck.Protocol.protocol.id) (hW : kW.id = PouwVerifier.Period.protocol.id)
     (hcI : InferenceOnlyCheck.Protocol.protocol.commitment kI.commitment = .ok cI)
     (ht : Properties.Composition.Tied Core.Remote.executionPhases [kI, kW, kS]) :
     ∀ ds, Core.Remote.executionPhaseRecords kW = some ds → ∀ d ∈ ds, d = InferenceOnlyCheck.Protocol.protocol.digest cI := by
@@ -426,14 +426,14 @@ theorem executionPhases_tied {kI kW kS : Case} {cI : InferenceOnlyCheck.Protocol
     have hid : (kI.id == InferenceOnlyCheck.Protocol.protocolId) = true := by rw [hI]; decide
     simp [Properties.Composition.named, List.find?, hid, Core.Remote.policyRecord, hcI, Except.toOption]
     exact ⟨cI, rfl, rfl⟩
-  have nW : Properties.Composition.named [kI, kW, kS] (PouwCheck.Period.protocolId, Core.Remote.executionPhaseRecords) =
+  have nW : Properties.Composition.named [kI, kW, kS] (PouwVerifier.Period.protocolId, Core.Remote.executionPhaseRecords) =
       some ds := by
-    have hI' : (kI.id == PouwCheck.Period.protocolId) = false := by rw [hI]; decide
-    have hW' : (kW.id == PouwCheck.Period.protocolId) = true := by rw [hW]; decide
+    have hI' : (kI.id == PouwVerifier.Period.protocolId) = false := by rw [hI]; decide
+    have hW' : (kW.id == PouwVerifier.Period.protocolId) = true := by rw [hW]; decide
     simp [Properties.Composition.named, List.find?, hI', hW', hds]
   have mI : (InferenceOnlyCheck.Protocol.protocolId, Core.Remote.policyRecord) ∈ Core.Remote.executionPhases.names := by
     simp [Core.Remote.executionPhases]
-  have mW : (PouwCheck.Period.protocolId, Core.Remote.executionPhaseRecords) ∈ Core.Remote.executionPhases.names := by
+  have mW : (PouwVerifier.Period.protocolId, Core.Remote.executionPhaseRecords) ∈ Core.Remote.executionPhases.names := by
     simp [Core.Remote.executionPhases]
   rcases ht with ⟨n, hn, e⟩ | ⟨r, hr⟩
   · simp only [Core.Remote.executionPhases, List.mem_cons, List.not_mem_nil, or_false] at hn
@@ -585,7 +585,7 @@ theorem remote_accept {blobs : Array ByteArray} {ps : List Named} {c : ByteArray
     accepted_three hcheck
   have hS₀ := hS
   obtain ⟨pS, cS, eS, -, hcS, -, -⟩ := hS₀
-  have hdS := strays_two (P₁ := InferenceOnlyCheck.Protocol.protocol) (P₂ := PouwCheck.Period.protocol)
+  have hdS := strays_two (P₁ := InferenceOnlyCheck.Protocol.protocol) (P₂ := PouwVerifier.Period.protocol)
     (P₃ := VStar.Recursive.Sampled.protocol.onBlobs (Blobs.ofArray blobs)) (ne_policy_stage _) (ne_monitoringPeriod_stage _)
     hcI hcS hstrays
   have hp : (canonicalJson kI.params.toUTF8 >>= InferenceOnlyCheck.Protocol.paramsOf) = .ok pI := by rw [hpI]; exact hpI'

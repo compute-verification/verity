@@ -1,6 +1,6 @@
 module
 
-public import PouwCheck.Verified
+public import PouwVerifier.Verified
 
 /-!
 # A period's committed circuit files (`credit.committed_files`)
@@ -12,11 +12,11 @@ statements on (`credit._lean_committed_files`, through `pouw-check-difftest`'s `
 
 @[expose] public section
 
-namespace PouwCheck.CommittedFiles
+namespace PouwVerifier.CommittedFiles
 
 open Lean (Json)
-open PouwCheck.Credit
-open PouwCheck.Verified (CIRCUIT_FILES)
+open PouwVerifier.Credit
+open PouwVerifier.Verified (CIRCUIT_FILES)
 
 /-- `credit._TEMPLATE`: a committed circuit file's template, `k<K>` (K a positive integer, no leading zero) or `live`. -/
 def template? (x : String) : Bool :=
@@ -49,4 +49,4 @@ def filesOf (j : Json) : R Json := do
   let some name := str? (get j "name") | throw ("error", "credit-committed-files: the period's name is not a string")
   pure (Json.mkObj [("files", ← committedFiles (get j "ledger") name)])
 
-end PouwCheck.CommittedFiles
+end PouwVerifier.CommittedFiles

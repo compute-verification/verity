@@ -1,6 +1,6 @@
 module
 
-public import PouwCheck.Lanes
+public import PouwVerifier.Lanes
 
 /-!
 # A served window's statements verified (`credit._verified`)
@@ -39,10 +39,10 @@ accepted, the produced record's checks (`Lanes.outcomes`) give each sampled leaf
 
 @[expose] public section
 
-namespace PouwCheck.Verified
+namespace PouwVerifier.Verified
 
 open Lean (Json toJson)
-open PouwCheck.Credit
+open PouwVerifier.Credit
 
 def STATEMENT_KEYS : List String := ["call", "circuit", "public", "sessions"]
 
@@ -278,4 +278,4 @@ def verified (j : Json) : R Json := do
     return Json.mkObj [("outcomes", Json.arr out)]
   | _ => throw ("error", "credit-verified: the verifier's answers are neither null nor a list")
 
-end PouwCheck.Verified
+end PouwVerifier.Verified

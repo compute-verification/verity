@@ -33,7 +33,7 @@ that returns 0 whatever it reads numbers ticket 0 more often than uniform ticket
 
 namespace Properties.Pouw.PearlPlus
 
-open PouwCommit PouwCheck.PearlPlus
+open PouwCommit PouwVerifier.PearlPlus
 
 open Finset
 

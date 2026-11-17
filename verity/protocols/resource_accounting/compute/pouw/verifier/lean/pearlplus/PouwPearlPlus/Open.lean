@@ -20,7 +20,7 @@ read at the call's k, a byte past the file's end as 0, and `Words.parseRow` hold
 
 @[expose] public section
 
-namespace PouwCheck.PearlPlus
+namespace PouwVerifier.PearlPlus
 
 open Lean PouwCommit
 
@@ -160,4 +160,4 @@ def output (ans : RunAnswer) (pub : Option Published := ans.work.map fun w => { 
           (t.load.map fun c => [("load", Json.arr #[.num ⟨c.slots, 0⟩, .num ⟨c.prompt, 0⟩, .num ⟨c.outputs, 0⟩])]).getD [])
       | none => .null)]
 
-end PouwCheck.PearlPlus
+end PouwVerifier.PearlPlus

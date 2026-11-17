@@ -709,7 +709,7 @@ def lean(args: argparse.Namespace) -> int:
         if reason is None:
             got = rec["lean"]
             why = "" if got["verdict"] == "accept" else f" ({got.get('reason')})"
-            rec["line"] = (f"{got['verdict'].upper()} {VR.PROTOCOL}{why}: the Lean PouwCheck.PearlPlus verdict, the "
+            rec["line"] = (f"{got['verdict'].upper()} {VR.PROTOCOL}{why}: the Lean PouwVerifier.PearlPlus verdict, the "
                            f"Python's on {', '.join(LEAN_HELD)}; run {str(got['commitment'])[:16]}, W "
                            f"{str((rec['answer']['tie'] or {}).get('record'))[:16]} -> {out.name}; transcript "
                            + "; ".join(doc.get("passes") or []))
@@ -991,7 +991,7 @@ def main(argv: list[str] | None = None) -> int:
     n.add_argument("--manifest", action="append", type=Path,
                    help="a pass's manifest, in order, repeated: the passes verify --manifest named (default: as verify's)")
     n.add_argument("--verify", required=True, help="verify's --out document")
-    n.add_argument("--exe", required=True, help=f"PouwCheck.PearlPlus's pouw-pearlplus, built, or {BUILD!r}: built first "
+    n.add_argument("--exe", required=True, help=f"PouwVerifier.PearlPlus's pouw-pearlplus, built, or {BUILD!r}: built first "
                    "in its package (LEAN_PACKAGE)")
     n.add_argument("--out", required=True, help="where the Lean's answer goes where it agrees with the Python's")
     n.add_argument("--check", help=f"where both verdicts go (default: {LEAN_CHECK} beside --out)")

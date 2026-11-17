@@ -11,7 +11,7 @@ to the Python, refusal for refusal, at every multiple of 32 below 2^17 (`tests/t
 
 @[expose] public section
 
-namespace PouwCheck.Chunks
+namespace PouwVerifier.Chunks
 
 /-- `weights.CHUNK_MAX`: the largest K a lane is proved at whole, and a chunk's largest. -/
 def CHUNK_MAX : Nat := 4096
@@ -31,4 +31,4 @@ def chunks (k : Nat) : Except String Nat :=
     | none => .error (s!"K = {k}: no n splits it into chunks of at most {CHUNK_MAX} entries that are whole " ++
         s!"{CHUNK_ALIGN}-bit noise blocks")
 
-end PouwCheck.Chunks
+end PouwVerifier.Chunks

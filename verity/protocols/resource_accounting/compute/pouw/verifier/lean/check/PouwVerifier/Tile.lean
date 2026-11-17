@@ -17,7 +17,7 @@ first ports are R A rows, C B rows and the public row `pub`, and only a certifie
 
 @[expose] public section
 
-namespace PouwCheck
+namespace PouwVerifier
 
 /-- A salted template's unit: R A rows and C B rows, then its public row, each an `hm96-sha512/row/v2` row. -/
 structure Salted where
@@ -62,4 +62,4 @@ def tiles : List Tile := [
 /-- The pinned tile of `template`, if any. -/
 def tile? (template : String) : Option Tile := tiles.find? (·.template == template)
 
-end PouwCheck
+end PouwVerifier

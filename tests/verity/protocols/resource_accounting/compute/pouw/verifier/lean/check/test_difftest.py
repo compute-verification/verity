@@ -100,7 +100,7 @@ def reference(case) -> dict:
     return a
 
 
-PORT = ExactPort("pouw-check", reference, inputs=INPUTS, package=LEAN, of_record=V.RECORD_VERDICT)
+PORT = ExactPort("pouw-verifier", reference, inputs=INPUTS, package=LEAN, of_record=V.RECORD_VERDICT)
 server = D.server_fixture(PORT)
 
 
@@ -112,7 +112,7 @@ def test_pouw_check(server):
     stats = D.run(PORT, examples=EXAMPLES, server=server)
     swept = Counter(D.replay(PORT, cases.instance(random.Random(f"{name}/{seed}"), name), server)[0]
                     for name in ["honest", *cases.NAMES] for seed in range(3))
-    print(f"pouw-check difftest: {stats}, and {sum(swept.values())} swept ({dict(swept)}); by rule: "
+    print(f"pouw-verifier difftest: {stats}, and {sum(swept.values())} swept ({dict(swept)}); by rule: "
           f"{dict(sorted(RULES.items()))}")
     assert {"accept", "reject", "undecided"} <= set(swept), dict(swept)
 
@@ -157,7 +157,7 @@ def opening(case: dict) -> str | None:
 
 
 OPENING_NAMES = ["honest"] * (len(openings.NAMES) // 6) + openings.NAMES
-OPENING = D.Port("pouw-check-difftest", "opening", opening, package=LEAN, rejects=(CC.Refused,),
+OPENING = D.Port("pouw-verifier-difftest", "opening", opening, package=LEAN, rejects=(CC.Refused,),
                  of_record=V.RECORD_VERDICT,
                  inputs=st.builds(openings.instance, st.randoms(use_true_random=False), st.sampled_from(OPENING_NAMES)))
 opening_server = D.server_fixture(OPENING)
@@ -169,7 +169,7 @@ def test_opening(opening_server):
     stats = D.run(OPENING, examples=2000, server=opening_server)
     swept = Counter(D.replay(OPENING, openings.instance(random.Random(f"{name}/{seed}"), name), opening_server)[0]
                     for name in ["honest", *openings.NAMES] for seed in range(3))
-    print(f"pouw-check-difftest opening: {stats}, and {sum(swept.values())} swept ({dict(swept)}); by reason: "
+    print(f"pouw-verifier-difftest opening: {stats}, and {sum(swept.values())} swept ({dict(swept)}); by reason: "
           f"{dict(sorted(OPENED.items()))}")
     assert set(OPENED) == REASONS | {"accept"}, set(OPENED) ^ (REASONS | {"accept"})
 
@@ -190,7 +190,7 @@ def registered(x: dict) -> dict:
     return {"reason": why}
 
 
-REGISTERED = D.Port("pouw-check-difftest", "registered", registered, package=LEAN, rejects=(ValueError,),
+REGISTERED = D.Port("pouw-verifier-difftest", "registered", registered, package=LEAN, rejects=(ValueError,),
                     of_record=V.RECORD_VERDICT,
                     inputs=st.builds(lambda r, n: registered_input(cases.instance(r, n)), st.randoms(use_true_random=False),
                                      st.sampled_from([n for n in NAMES if not n.startswith("answer")])))
@@ -204,7 +204,7 @@ def test_registered(registered_server):
     swept = Counter(D.replay(REGISTERED, registered_input(cases.instance(random.Random(f"{name}/{seed}"), name)),
                              registered_server)[0]
                     for name in NAMES if not name.startswith("answer") for seed in range(3))
-    print(f"pouw-check-difftest registered: {stats}, and {sum(swept.values())} swept ({dict(swept)}); by rule: "
+    print(f"pouw-verifier-difftest registered: {stats}, and {sum(swept.values())} swept ({dict(swept)}); by rule: "
           f"{dict(sorted(RULED.items()))}")
     assert set(RULED) >= {"holds", "window", "public-items", "level", "public-value", "population", "law", "query",
                           "scheme"}, set(RULED)
@@ -225,10 +225,10 @@ def draw(case: dict) -> dict | None:
     return None if refused is None else {"refused": list(refused)}
 
 
-PASS = D.Port("pouw-check-difftest", "pass", pass_epoch, package=LEAN, need_rejects=False, of_record=V.RECORD_VERDICT,
+PASS = D.Port("pouw-verifier-difftest", "pass", pass_epoch, package=LEAN, need_rejects=False, of_record=V.RECORD_VERDICT,
               inputs=st.builds(passes.pass_instance, st.randoms(use_true_random=False),
                                st.sampled_from(["honest"] * (len(passes.PASS_NAMES) // 6) + passes.PASS_NAMES)))
-DRAW = D.Port("pouw-check-difftest", "draw", draw, package=LEAN, need_rejects=False, of_record=V.RECORD_VERDICT,
+DRAW = D.Port("pouw-verifier-difftest", "draw", draw, package=LEAN, need_rejects=False, of_record=V.RECORD_VERDICT,
               inputs=st.builds(passes.draw_instance, st.randoms(use_true_random=False),
                                st.sampled_from(["honest"] * (len(passes.DRAW_NAMES) // 4) + passes.DRAW_NAMES)))
 pass_server = D.server_fixture(PASS)
@@ -243,7 +243,7 @@ def test_pass_and_draw(pass_server):
                     for name in ["honest", *passes.PASS_NAMES] for seed in range(3))
     swept += Counter(D.replay(DRAW, passes.draw_instance(random.Random(f"{name}/{seed}"), name), pass_server)[0]
                      for name in ["honest", *passes.DRAW_NAMES] for seed in range(3))
-    print(f"pouw-check-difftest pass: {stats['pass']}; draw: {stats['draw']}; and {sum(swept.values())} swept "
+    print(f"pouw-verifier-difftest pass: {stats['pass']}; draw: {stats['draw']}; and {sum(swept.values())} swept "
           f"({dict(swept)}); by outcome: {dict(sorted(PASSED.items()))}")
     assert {k for k in PASSED if not k.startswith("draw ")} >= {"coin", "recorded beacon", "certifier", "live coin"}
     for part in (CC.LIVE_UNHELD, CC.LIVE_FORM, CC.LIVE_NOT_SIGNED, CC.LIVE_SESSION, CC.INCOMPLETE, CC.PASS_FORM,
@@ -339,7 +339,7 @@ def registered_file(case: dict) -> dict:
 
 
 def _port(name: str, fn, instance, names: list[str]) -> D.Port:
-    return D.Port("pouw-check-difftest", name, fn, package=LEAN, need_rejects=False, of_record=V.RECORD_VERDICT,
+    return D.Port("pouw-verifier-difftest", name, fn, package=LEAN, need_rejects=False, of_record=V.RECORD_VERDICT,
                   inputs=st.builds(instance, st.randoms(use_true_random=False),
                                    st.sampled_from(["honest"] * (len(names) // 4) + names)))
 
@@ -393,7 +393,7 @@ def test_credit(pass_server):
                                   (WEIGHTS, credit_cases.weights_instance, credit_cases.WEIGHTS_NAMES)):
         swept += Counter(D.replay(port, instance(random.Random(f"{name}/{seed}"), name), pass_server)[0]
                          for name in ["honest", *names] for seed in range(3))
-    print(f"pouw-check-difftest credit: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
+    print(f"pouw-verifier-difftest credit: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
           f"{dict(sorted(CREDITED.items()))}")
     assert {"credit accept", "drawn accept", "window-drawn accept", "outcome accept", "window accept", "period accept",
             "a-link accept", "weights accept", "registered-file accept", "registered-file accept j10r",
@@ -559,7 +559,7 @@ def test_a_commit_record_reads_alike_under_both_parsers(pass_server):
             out = json.loads(D.replay(COMMIT_PARSERS, case, pass_server)[1])
             assert out["core"] == out["total"] and (out["core"] or name.endswith("commit-form")), (name, seed, out)
             read[name, bool(out["core"])] += 1
-    print(f"pouw-check-difftest commit-parsers: {stats}; and {sum(read.values())} swept ({dict(read)})")
+    print(f"pouw-verifier-difftest commit-parsers: {stats}; and {sum(read.values())} swept ({dict(read)})")
     assert all(read[name, True] for name in ["honest", *COMMIT_NAMES]) and any(not ok for _name, ok in read)
 
 
@@ -570,7 +570,7 @@ def leaf_words(case: dict) -> dict:
         return {"leaf_words": None}
 
 
-LEAF_WORDS = D.Port("pouw-check-difftest", "leaf-words", leaf_words, package=LEAN, need_rejects=False,
+LEAF_WORDS = D.Port("pouw-verifier-difftest", "leaf-words", leaf_words, package=LEAN, need_rejects=False,
                     of_record=V.RECORD_VERDICT, inputs=st.builds(lambda k: {"k": k}, st.integers(-2, 1 << 20)))
 
 
@@ -581,7 +581,7 @@ def test_leaf_words(pass_server):
     stats = D.run(LEAF_WORDS, examples=500, server=pass_server)
     got = Counter(D.replay(LEAF_WORDS, {"k": k}, pass_server)[1] == '{"leaf_words":null}'
                   for k in sorted({*range(-1, 4096 + 65), *range(32, 1 << 17, 32)}))
-    print(f"pouw-check-difftest leaf-words: {stats}; swept {dict(got)} (True: no chunks)")
+    print(f"pouw-verifier-difftest leaf-words: {stats}; swept {dict(got)} (True: no chunks)")
     assert got[True] and got[False]
 
 
@@ -599,7 +599,7 @@ _PASS = st.one_of(st.fixed_dictionaries({"salt": st.sampled_from(["ab" * 32, "cd
                                          "matmuls": st.lists(_CALL, max_size=4)}),
                   st.sampled_from([{"salt": 1, "matmuls": []}, {"salt": "ab" * 32, "matmuls": {}},
                                    {"salt": "ab" * 32, "matmuls": [1]}, []]))
-PASSES_DISTINCT = D.Port("pouw-check-difftest", "passes-distinct", passes_distinct, package=LEAN,
+PASSES_DISTINCT = D.Port("pouw-verifier-difftest", "passes-distinct", passes_distinct, package=LEAN,
                          of_record=V.RECORD_VERDICT,
                          inputs=st.one_of(st.builds(lambda ps: {"passes": ps}, st.lists(_PASS, max_size=4)),
                                           st.just({"passes": {}})))
@@ -609,7 +609,7 @@ def test_passes_distinct(pass_server):
     """`credit.passes_distinct_twin` against Pearl+'s `PearlPlus.passesDistinct`, the verdict of record
     `credit.passes_distinct` reads: passes under two salts with small, repeated, out-of-range and missing call indices,
     and manifests of the wrong form."""
-    print(f"pouw-check-difftest passes-distinct: {D.run(PASSES_DISTINCT, examples=500, server=pass_server)}")
+    print(f"pouw-verifier-difftest passes-distinct: {D.run(PASSES_DISTINCT, examples=500, server=pass_server)}")
 
 
 def period_roots_instance(rng: random.Random, name: str = "honest") -> dict:
@@ -636,7 +636,7 @@ def test_period_roots(pass_server):
     swept = Counter(json.loads(D.replay(PERIOD_ROOTS, period_roots_instance(random.Random(f"{name}/{seed}"), name),
                                         pass_server)[1]) is None
                     for name in ["honest", *credit_cases.PERIOD_NAMES] for seed in range(3))
-    print(f"pouw-check-difftest period-roots: {stats}; swept {dict(swept)} (True: accepted)")
+    print(f"pouw-verifier-difftest period-roots: {stats}; swept {dict(swept)} (True: accepted)")
     assert swept[True] and swept[False]
 
 
@@ -649,7 +649,7 @@ def chunks(k) -> dict:
         return {"refused": str(e)}
 
 
-CHUNKS = D.Port("pouw-check-difftest", "chunks", chunks, package=LEAN, of_record=V.RECORD_VERDICT,
+CHUNKS = D.Port("pouw-verifier-difftest", "chunks", chunks, package=LEAN, of_record=V.RECORD_VERDICT,
                 inputs=st.one_of(st.integers(-64, 1 << 18), st.booleans(), st.text(max_size=2), st.none()))
 
 
@@ -659,7 +659,7 @@ def test_chunks(pass_server):
     and non-integers."""
     outs = [json.loads(D.replay(CHUNKS, k, pass_server)[1]) for k in range(0, 1 << 17, 32)]
     stats = D.run(CHUNKS, examples=500, server=pass_server)
-    print(f"pouw-check-difftest chunks: 4096 Ks swept, then {stats}")
+    print(f"pouw-verifier-difftest chunks: 4096 Ks swept, then {stats}")
     assert Counter(next(iter(o)) for o in outs) == {"chunks": 375, "refused": 3721}
     assert [outs[k // 32] for k in (4096, 6144, 12288, 14336, 16384)] == [{"chunks": n} for n in (1, 2, 3, 4, 4)]
 
@@ -680,7 +680,7 @@ def ratio(x) -> dict:
     return {"ratio": got, "text": text, "back": read(text)[1]}
 
 
-RATIO = D.Port("pouw-check-difftest", "ratio", ratio, package=LEAN, of_record=V.RECORD_VERDICT,
+RATIO = D.Port("pouw-verifier-difftest", "ratio", ratio, package=LEAN, of_record=V.RECORD_VERDICT,
                inputs=st.one_of(st.fixed_dictionaries({"s": st.text("0123456789/", max_size=12) | st.text(max_size=4),
                                                        "ctx": st.sampled_from(["delta", "eps", "profile.delta"])}),
                                 st.none(), st.integers(), st.fixed_dictionaries({"s": st.integers(), "ctx": st.text()})))
@@ -700,7 +700,7 @@ def test_ratio(pass_server):
                                                                                        "back": hexes}
     for s in (f"{big}/{big}0", "0" + big, f"{big}/0{odd}", f"{big}/1", f"{big}/{odd}/3"):
         assert "refused" in json.loads(D.replay(RATIO, {"s": s, "ctx": "delta"}, pass_server)[1])
-    print(f"pouw-check-difftest ratio: {stats}, and {len(read) + 5} long numbers")
+    print(f"pouw-verifier-difftest ratio: {stats}, and {len(read) + 5} long numbers")
 
 
 ROUNDED: Counter[str] = Counter()
@@ -718,7 +718,7 @@ def rounds(case: dict) -> dict | None:
     return None if refused is None else {"refused": list(refused)}
 
 
-ROUNDS = D.Port("pouw-check-difftest", "rounds", rounds, package=LEAN, need_rejects=False, of_record=V.RECORD_VERDICT,
+ROUNDS = D.Port("pouw-verifier-difftest", "rounds", rounds, package=LEAN, need_rejects=False, of_record=V.RECORD_VERDICT,
                 inputs=st.builds(rounds_cases.rounds_instance, st.randoms(use_true_random=False),
                                  st.sampled_from(["honest"] * (len(rounds_cases.ROUNDS_NAMES) // 4)
                                                  + rounds_cases.ROUNDS_NAMES)))
@@ -731,7 +731,7 @@ def test_rounds(pass_server):
     stats = D.run(ROUNDS, examples=600, server=pass_server)
     swept = Counter(D.replay(ROUNDS, rounds_cases.rounds_instance(random.Random(f"{name}/{seed}"), name), pass_server)[0]
                     for name in ["honest", *rounds_cases.ROUNDS_NAMES] for seed in range(3))
-    print(f"pouw-check-difftest rounds: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
+    print(f"pouw-verifier-difftest rounds: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
           f"{dict(sorted(ROUNDED.items()))}")
     assert "accept" in ROUNDED
     for part in ("is opened twice", "was opened before its root was recorded", "was never opened", ": coin is epoch #",
@@ -759,7 +759,7 @@ def salt(case: dict) -> dict | None:
     return None if refused is None else {"refused": list(refused)}
 
 
-SALT = D.Port("pouw-check-difftest", "salt", salt, package=LEAN, need_rejects=False, of_record=V.RECORD_VERDICT,
+SALT = D.Port("pouw-verifier-difftest", "salt", salt, package=LEAN, need_rejects=False, of_record=V.RECORD_VERDICT,
               inputs=st.builds(rounds_cases.salt_instance, st.randoms(use_true_random=False),
                                st.sampled_from(["honest"] * (len(rounds_cases.SALT_NAMES) // 4) + rounds_cases.SALT_NAMES)))
 
@@ -773,7 +773,7 @@ def test_salt(pass_server):
     stats = D.run(SALT, examples=400, server=pass_server)
     swept = Counter(D.replay(SALT, rounds_cases.salt_instance(random.Random(f"{name}/{seed}"), name), pass_server)[0]
                     for name in ["honest", *rounds_cases.SALT_NAMES] for seed in range(3))
-    print(f"pouw-check-difftest salt: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
+    print(f"pouw-verifier-difftest salt: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
           f"{dict(sorted(SALTED.items()))}")
     assert "accept" in SALTED
     for part in (CC.NO_RESERVE, CC.SALT_FORM, CC.OTHER_WINDOW, CC.NOT_RECEIVED,
@@ -794,7 +794,7 @@ def live_salt(case: dict) -> dict:
     return {"salt": salt.hex()} if refused is None else {"refused": list(refused)}
 
 
-LIVE_SALT = D.Port("pouw-check-difftest", "live-salt", live_salt, package=LEAN, need_rejects=False,
+LIVE_SALT = D.Port("pouw-verifier-difftest", "live-salt", live_salt, package=LEAN, need_rejects=False,
                    of_record=V.RECORD_VERDICT,
                    inputs=st.builds(passes.live_salt_instance, st.randoms(use_true_random=False),
                                     st.sampled_from(["honest"] * (len(passes.LIVE_SALT_NAMES) // 4)
@@ -813,7 +813,7 @@ def test_live_salt(pass_server):
     swept = Counter(D.replay(LIVE_SALT, passes.live_salt_instance(random.Random(f"{name}/{seed}"), name),
                              pass_server)[0]
                     for name in ["honest", *passes.LIVE_SALT_NAMES] for seed in range(3))
-    print(f"pouw-check-difftest live-salt: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
+    print(f"pouw-verifier-difftest live-salt: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
           f"{dict(sorted(LIVE_SALTED.items()))}")
     assert "accept" in LIVE_SALTED
     for part in (CC.NO_RESERVE, CC.RESERVE_LAYOUT, CC.INCOMPLETE, CC.LIVE_NOT_RECEIVED, CC.LIVE_NOT_SIGNED, CC.LIVE_SALT,

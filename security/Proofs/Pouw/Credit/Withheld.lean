@@ -53,7 +53,7 @@ open Properties.Challenger.Plain (PlainStr PlainAt canonical_canon)
 open Properties.Challenger.Bodies (read_str)
 open Properties.Challenger.Withheld (Play)
 open Properties.Certifier.Bytes (hash_size)
-open PouwCheck.Credit (digest? commitOf? isHexBytes callsRoot COMMIT_FORMAT DRAW_TAG Internal.creditedRoot
+open PouwVerifier.Credit (digest? commitOf? isHexBytes callsRoot COMMIT_FORMAT DRAW_TAG Internal.creditedRoot
   Internal.creditedDraw Internal.credited)
 
 /-! ## Hex, as Python reads it -/
@@ -116,17 +116,17 @@ theorem isHexBytes_hex {b : ByteArray} (hb : b.size ≠ 0) : isHexBytes (Flock.h
 
 /-- **A 64-byte digest's hex reads as the digest.** -/
 theorem digest_hex {b : ByteArray} (h : b.size = 64) : digest? (.str (Flock.hexOf b)) = some b := by
-  have hd : PouwCheck.isHexDigest (Flock.hexOf b) = true := by
-    unfold PouwCheck.isHexDigest
+  have hd : PouwVerifier.isHexDigest (Flock.hexOf b) = true := by
+    unfold PouwVerifier.isHexDigest
     rw [Built.hexOf_len, h, String.all_bool_eq, hex_chars]
     rfl
   unfold digest?
-  simp only [PouwCheck.str?, PouwCheck.hex?, Option.any_some, hd, pyFromHex_hex, ite_true, Except.toOption]
+  simp only [PouwVerifier.str?, PouwVerifier.hex?, Option.any_some, hd, pyFromHex_hex, ite_true, Except.toOption]
 
 /-! ## Reads -/
 
 /-- PoUW's field read is the challenger's. -/
-theorem get_getD (j : Json) (k : String) : PouwCheck.get j k = getD j k := by
+theorem get_getD (j : Json) (k : String) : PouwVerifier.get j k = getD j k := by
   cases j <;> rfl
 
 theorem bind_ok {α β : Type} {x : Flock.V α} {f : α → Flock.V β} {v : β} (h : (x >>= f) = .ok v) :
@@ -169,21 +169,21 @@ theorem commit_read {d : Json} {m : Std.TreeMap.Raw String Json} {text : String}
   obtain ⟨e, hpe, hs⟩ := FlockComplete.JsonRT.parse_canon d text (Entry.good_of_plain hp) hc
   have hpy : PyJson.canonical e = .ok text := by
     rw [canonical_canon (Entry.plainAt_same hp hs), ← FlockComplete.JsonRT.canon_same d e hs, hc]
-  have h1 : PouwCheck.get e "format" = .str COMMIT_FORMAT := (get_getD e _).trans (read_str hs hf)
-  have h2 : PouwCheck.get e "registered" = .arr #[] := by
+  have h1 : PouwVerifier.get e "format" = .str COMMIT_FORMAT := (get_getD e _).trans (read_str hs hf)
+  have h2 : PouwVerifier.get e "registered" = .arr #[] := by
     have hg := Entry.same_getD hs "registered"
     rw [hr] at hg
     obtain ⟨b, hb, hsz, -⟩ := FlockComplete.JsonRT.same_arr hg
     have hb0 : b = #[] := Array.eq_empty_of_size_eq_zero (by simpa using hsz.symm)
     rw [get_getD, hb, hb0]
-  have h3 : PouwCheck.Credit.isObj e = true := by
+  have h3 : PouwVerifier.Credit.isObj e = true := by
     subst ho
     obtain ⟨n, rfl⟩ := Entry.same_obj_eq hs
     rfl
   have hne : text.toUTF8.size ≠ 0 := utf8_ne (canon_obj_ne (ho ▸ hc))
-  have ha : (#[] : Array Json).all PouwCheck.Credit.isObj = true := Array.all_empty
+  have ha : (#[] : Array Json).all PouwVerifier.Credit.isObj = true := Array.all_empty
   unfold commitOf?
-  simp only [PouwCheck.str?, PouwCheck.hex?, isHexBytes_hex hne, pyFromHex_hex, fromUTF8_toUTF8, hpe, hpy, h1, h2, h3,
+  simp only [PouwVerifier.str?, PouwVerifier.hex?, isHexBytes_hex hne, pyFromHex_hex, fromUTF8_toUTF8, hpe, hpy, h1, h2, h3,
     ha, Option.bind, Except.toOption, Json.getArr?, jsonStrIs, beq_self_eq_true, Bool.and_self, ite_true, pure,
     Except.pure]
 
@@ -241,14 +241,14 @@ opened challenge reads, the verifier's key, call 0, and the sample root of the s
 digest, the receipts' root, and the round's root and challenge. -/
 theorem root_one {key salt commit sample row x : Json} {k : ChallengerKey} {s rc z rr : ByteArray}
     {cd : ByteArray × Array Json} {o : LiveOpening} (hk : ChallengerKey.ofJson key = .ok k)
-    (hs : digest? salt = some s) (hc : commitOf? commit = some cd) (ho : PouwCheck.Credit.isObj sample = true)
-    (hr : digest? (PouwCheck.get sample "receipts") = some rc) (h1 : PouwCheck.Credit.isObj row = true)
-    (h2 : PouwCheck.Credit.plain PouwCheck.Credit.DEPTH row = true)
-    (h3 : PouwWindow.intOf? (PouwCheck.get row "index") = some 0)
-    (h4 : PouwCheck.get row PouwCheck.Credit.CREDIT = .bool true)
-    (h5 : digest? (PouwCheck.get (PouwCheck.get row "tables") "z") = some z)
-    (h6 : PouwCheck.Credit.isObj x = true) (h7 : digest? (PouwCheck.get x "root") = some rr)
-    (h8 : LiveOpening.ofJson (PouwCheck.get x "coin") = .ok o) :
+    (hs : digest? salt = some s) (hc : commitOf? commit = some cd) (ho : PouwVerifier.Credit.isObj sample = true)
+    (hr : digest? (PouwVerifier.get sample "receipts") = some rc) (h1 : PouwVerifier.Credit.isObj row = true)
+    (h2 : PouwVerifier.Credit.plain PouwVerifier.Credit.DEPTH row = true)
+    (h3 : PouwWindow.intOf? (PouwVerifier.get row "index") = some 0)
+    (h4 : PouwVerifier.get row PouwVerifier.Credit.CREDIT = .bool true)
+    (h5 : digest? (PouwVerifier.get (PouwVerifier.get row "tables") "z") = some z)
+    (h6 : PouwVerifier.Credit.isObj x = true) (h7 : digest? (PouwVerifier.get x "root") = some rr)
+    (h8 : LiveOpening.ofJson (PouwVerifier.get x "coin") = .ok o) :
     Internal.creditedRoot key salt (.arr #[row]) .null commit (.arr #[x]) sample =
       .ok (k, [0], PouwCommit.tagged DRAW_TAG
         [.bytes (callsRoot s [row] none (some cd.1)), .bytes rc, .bytes rr, .bytes o.coin]) := by
@@ -260,10 +260,10 @@ theorem root_one {key salt commit sample row x : Json} {k : ChallengerKey} {s rc
 
 /-- **`creditedDraw` on a sample whose session released its one challenge after the sample root.** -/
 theorem sample_ok {ledger pins main sample : Json} {k : ChallengerKey} {root : ByteArray} {c : LiveCommitment}
-    {o : LiveOpening} (hroot : PouwCheck.str? (PouwCheck.get sample "root") = some (Flock.hexOf root))
-    (hsess : PouwCheck.Credit.drawChallengePhase ledger k pins main (PouwCheck.get sample "session") (Flock.hexOf root) =
+    {o : LiveOpening} (hroot : PouwVerifier.str? (PouwVerifier.get sample "root") = some (Flock.hexOf root))
+    (hsess : PouwVerifier.Credit.drawChallengePhase ledger k pins main (PouwVerifier.get sample "session") (Flock.hexOf root) =
       .ok (c, [(PouwWindow.DRAW, [root])]))
-    (hopen : LiveOpening.ofJson (PouwCheck.get sample "coin") = .ok o)
+    (hopen : LiveOpening.ofJson (PouwVerifier.get sample "coin") = .ok o)
     (hlive : liveReason c o PouwWindow.DRAW 0 root = .ok none) :
     Internal.creditedDraw ledger k pins main sample root = .ok () := by
   have hl : (([(PouwWindow.DRAW, [root])] : Roots).lookup PouwWindow.DRAW).getD [] = [root] := by
@@ -290,7 +290,7 @@ def sampleOf (p : Play) (receipts : ByteArray) : Json :=
     ("root", .str (Flock.hexOf p.window)), ("session", p.session)]
 
 theorem sample_receipts (p : Play) (receipts : ByteArray) :
-    PouwCheck.get (sampleOf p receipts) "receipts" = .str (Flock.hexOf receipts) :=
+    PouwVerifier.get (sampleOf p receipts) "receipts" = .str (Flock.hexOf receipts) :=
   (get_getD _ _).trans rfl
 
 /-- **`credited` accepts an honest play of the sample's family**: under the play's key, a window whose sample root
@@ -304,11 +304,11 @@ theorem credited_play {I : ByteArray} {p : Play} (h : p.Honest I) {salt calls se
     Internal.credited p.key.toJson (.arr #[.str p.openText, .str p.endText]) (.arr #[.str p.pinText])
       (.arr #[.str (Flock.hexOf p.pin)]) salt calls served commit rounds (sampleOf p receipts) = .ok out := by
   obtain ⟨ht, hwo⟩ := Properties.Challenger.Withheld.trusted h
-  have g2 : PouwCheck.get (sampleOf p receipts) "root" = .str (Flock.hexOf p.window) := (get_getD _ _).trans rfl
-  have g3 : PouwCheck.get (sampleOf p receipts) "session" = p.session := (get_getD _ _).trans rfl
-  have g4 : PouwCheck.get (sampleOf p receipts) "coin" = p.opening.toJson := (get_getD _ _).trans rfl
-  have hsess : PouwCheck.Credit.drawChallengePhase (.arr #[.str p.openText, .str p.endText]) p.key (.arr #[.str p.pinText])
-      (.arr #[.str (Flock.hexOf p.pin)]) (PouwCheck.get (sampleOf p receipts) "session") (Flock.hexOf root) =
+  have g2 : PouwVerifier.get (sampleOf p receipts) "root" = .str (Flock.hexOf p.window) := (get_getD _ _).trans rfl
+  have g3 : PouwVerifier.get (sampleOf p receipts) "session" = p.session := (get_getD _ _).trans rfl
+  have g4 : PouwVerifier.get (sampleOf p receipts) "coin" = p.opening.toJson := (get_getD _ _).trans rfl
+  have hsess : PouwVerifier.Credit.drawChallengePhase (.arr #[.str p.openText, .str p.endText]) p.key (.arr #[.str p.pinText])
+      (.arr #[.str (Flock.hexOf p.pin)]) (PouwVerifier.get (sampleOf p receipts) "session") (Flock.hexOf root) =
         .ok (p.commitment, [(PouwWindow.DRAW, [root])]) := by
     have hd := Properties.Pouw.Credit.SecurityProofs.drawChallengePhase_honest ht hwo
     rw [hl, ha, hw] at hd
@@ -335,9 +335,9 @@ theorem credited_play {I : ByteArray} {p : Play} (h : p.Honest I) {salt calls se
 
 /-- An object built from increasing keys is plain one level deeper than its values. -/
 theorem plain_mkObj {l : List (String × Json)} {d : Nat} (hs : (l.map (·.1)).Pairwise (· < ·))
-    (h : l.all (fun q => PouwCheck.Credit.plain d q.2) = true) :
-    PouwCheck.Credit.plain (d + 1) (Json.mkObj l) = true := by
-  rw [Json.mkObj, PouwCheck.Credit.plain, ← Array.all_toList, Std.TreeMap.Raw.toList_toArray, Built.toList_mkObj hs]
+    (h : l.all (fun q => PouwVerifier.Credit.plain d q.2) = true) :
+    PouwVerifier.Credit.plain (d + 1) (Json.mkObj l) = true := by
+  rw [Json.mkObj, PouwVerifier.Credit.plain, ← Array.all_toList, Std.TreeMap.Raw.toList_toArray, Built.toList_mkObj hs]
   exact h
 
 /-- **A credited manifest row as the serving process writes it**, the first call of its window: the call's step,
@@ -366,35 +366,35 @@ theorem CallRow.sorted (r : CallRow) : (r.items.map (·.1)).Pairwise (· < ·) :
   decide
 
 /-- A read of the row is its list's. -/
-theorem row_get (r : CallRow) (k : String) : PouwCheck.get r.toJson k = (r.items.lookup k).getD .null :=
+theorem row_get (r : CallRow) (k : String) : PouwVerifier.get r.toJson k = (r.items.lookup k).getD .null :=
   (get_getD _ _).trans (Built.getD_mkObj r.sorted k)
 
-theorem row_plain (r : CallRow) : PouwCheck.Credit.plain PouwCheck.Credit.DEPTH r.toJson = true := by
-  have hb : PouwCheck.Credit.plain 63 (Json.mkObj [("m", .num ⟨r.m, 0⟩), ("ok", .bool true)]) = true :=
+theorem row_plain (r : CallRow) : PouwVerifier.Credit.plain PouwVerifier.Credit.DEPTH r.toJson = true := by
+  have hb : PouwVerifier.Credit.plain 63 (Json.mkObj [("m", .num ⟨r.m, 0⟩), ("ok", .bool true)]) = true :=
     plain_mkObj (d := 62) (by simp only [List.map_cons, List.map_nil]; decide)
-      (by simp only [List.all_cons, PouwCheck.Credit.plain, BEq.rfl, List.all_nil, Bool.and_self])
-  have ht : PouwCheck.Credit.plain 63 r.tables = true :=
+      (by simp only [List.all_cons, PouwVerifier.Credit.plain, BEq.rfl, List.all_nil, Bool.and_self])
+  have ht : PouwVerifier.Credit.plain 63 r.tables = true :=
     plain_mkObj (d := 62) (by simp only [List.map_cons, List.map_nil]; decide)
-      (by simp only [List.all_cons, PouwCheck.Credit.plain, List.all_nil, Bool.and_self])
-  show PouwCheck.Credit.plain (63 + 1) (Json.mkObj r.items) = true
+      (by simp only [List.all_cons, PouwVerifier.Credit.plain, List.all_nil, Bool.and_self])
+  show PouwVerifier.Credit.plain (63 + 1) (Json.mkObj r.items) = true
   refine plain_mkObj r.sorted ?_
-  simp only [CallRow.items, List.all_cons, PouwCheck.Credit.plain, BEq.rfl, hb, List.size_toArray, List.length_cons,
+  simp only [CallRow.items, List.all_cons, PouwVerifier.Credit.plain, BEq.rfl, hb, List.size_toArray, List.length_cons,
     List.length_nil, Nat.zero_add, Nat.reduceAdd, List.all_toArray', List.all_nil, Bool.and_self, ht]
 
-theorem row_index (r : CallRow) : PouwWindow.intOf? (PouwCheck.get r.toJson "index") = some 0 := by
+theorem row_index (r : CallRow) : PouwWindow.intOf? (PouwVerifier.get r.toJson "index") = some 0 := by
   rw [row_get]
   rfl
 
-theorem row_bit (r : CallRow) : PouwCheck.get r.toJson PouwCheck.Credit.CREDIT = .bool true := by
+theorem row_bit (r : CallRow) : PouwVerifier.get r.toJson PouwVerifier.Credit.CREDIT = .bool true := by
   rw [row_get]
   rfl
 
 /-- **The row commits its product's table**: the digest `creditedRoot` asks of a credited call. -/
 theorem row_z (r : CallRow) (hz : r.z.size = 64) :
-    digest? (PouwCheck.get (PouwCheck.get r.toJson "tables") "z") = some r.z := by
-  have ht : PouwCheck.get r.toJson "tables" = r.tables := (row_get r _).trans rfl
-  have hg : PouwCheck.get r.tables "z" = .str (Flock.hexOf r.z) := (get_getD _ _).trans rfl
-  exact (congrArg (fun j => digest? (PouwCheck.get j "z")) ht).trans ((congrArg digest? hg).trans (digest_hex hz))
+    digest? (PouwVerifier.get (PouwVerifier.get r.toJson "tables") "z") = some r.z := by
+  have ht : PouwVerifier.get r.toJson "tables" = r.tables := (row_get r _).trans rfl
+  have hg : PouwVerifier.get r.tables "z" = .str (Flock.hexOf r.z) := (get_getD _ _).trans rfl
+  exact (congrArg (fun j => digest? (PouwVerifier.get j "z")) ht).trans ((congrArg digest? hg).trans (digest_hex hz))
 
 /-- A round's entry in the round log: its root, and its challenge as the challenger opens it, with no path. -/
 def roundOf (root coin csalt : ByteArray) : Json :=
@@ -402,14 +402,14 @@ def roundOf (root coin csalt : ByteArray) : Json :=
     ("root", .str (Flock.hexOf root))]
 
 theorem round_root {root : ByteArray} (coin csalt : ByteArray) (h : root.size = 64) :
-    digest? (PouwCheck.get (roundOf root coin csalt) "root") = some root := by
-  have hg : PouwCheck.get (roundOf root coin csalt) "root" = .str (Flock.hexOf root) := (get_getD _ _).trans rfl
+    digest? (PouwVerifier.get (roundOf root coin csalt) "root") = some root := by
+  have hg : PouwVerifier.get (roundOf root coin csalt) "root" = .str (Flock.hexOf root) := (get_getD _ _).trans rfl
   exact (congrArg digest? hg).trans (digest_hex h)
 
 theorem round_coin (root coin csalt : ByteArray) :
-    LiveOpening.ofJson (PouwCheck.get (roundOf root coin csalt) "coin") =
+    LiveOpening.ofJson (PouwVerifier.get (roundOf root coin csalt) "coin") =
       .ok ⟨0, PouwWindow.ROUND, 0, root, coin, csalt, []⟩ := by
-  have hg : PouwCheck.get (roundOf root coin csalt) "coin" =
+  have hg : PouwVerifier.get (roundOf root coin csalt) "coin" =
       LiveOpening.toJson ⟨0, PouwWindow.ROUND, 0, root, coin, csalt, []⟩ := (get_getD _ _).trans rfl
   exact (congrArg LiveOpening.ofJson hg).trans (Files.opening_ofJson _ _ _ _ _ _)
 
@@ -482,7 +482,7 @@ credits the call is not shown here. -/
 theorem sampleWithheld_honest :
     ∃ (seed : ByteArray) (k : Lms.PrivateKey) (ledger pins main salt calls served commit rounds sample : Json),
       Lms.keygen Lms.deployed seed = .ok k ∧
-        PouwCheck.Credit.Internal.credited (ChallengerKey.toJson ⟨Lms.deployed, k.publicKey⟩) ledger pins main salt
+        PouwVerifier.Credit.Internal.credited (ChallengerKey.toJson ⟨Lms.deployed, k.publicKey⟩) ledger pins main salt
           calls served commit rounds sample = .ok [0] := by
   obtain ⟨k, hkg, I, hk⟩ := Properties.Challenger.Withheld.keygen_ok (seed := ⟨Array.replicate 64 0⟩)
     (Properties.Challenger.Withheld.zeros_size 64)

@@ -38,7 +38,7 @@ Out of scope, refused by name in `load`: sm_120's schemes.
 
 @[expose] public section
 
-namespace PouwCheck.PearlPlus
+namespace PouwVerifier.PearlPlus
 
 open Lean PouwCommit Words
 
@@ -216,4 +216,4 @@ def check (i : Input) (opener : Nat → Nat → Except String TileOpening) : Run
     else { accept := false, reason := some ("; ".intercalate bad), plan := some pl, verdicts := vs, overInertBound := i.overInertBound,
            tie := pl.tie }
 
-end PouwCheck.PearlPlus
+end PouwVerifier.PearlPlus

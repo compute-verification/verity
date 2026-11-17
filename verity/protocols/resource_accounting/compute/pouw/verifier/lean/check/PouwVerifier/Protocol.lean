@@ -1,6 +1,6 @@
 module
 
-public import PouwCheck.Check
+public import PouwVerifier.Check
 
 /-!
 # PoUW's execution phase check as a `Core.Protocol`
@@ -12,7 +12,7 @@ with one-stage's digest, its evidence the proof system's answer, its check `Pouw
 
 @[expose] public section
 
-namespace PouwCheck
+namespace PouwVerifier
 
 def protocol : Core.Protocol where
   id := "verity/pouw/v1"
@@ -33,4 +33,4 @@ def protocol : Core.Protocol where
 written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
 example : protocol.id = Domains.POUW_PROTOCOL := rfl
 
-end PouwCheck
+end PouwVerifier

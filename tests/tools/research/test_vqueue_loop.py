@@ -4696,7 +4696,7 @@ def test_under_gate_check_a_candidate_changing_only_a_lean_package_s_file_audits
     from research.landing import AFTER_LANDING
 
     pkg = "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check"
-    env.put(1, {f"{pkg}/lakefile.toml": 'name = "PouwCheck"\n', f"{pkg}/PouwCheck/Credit.lean": "-- a\n"})
+    env.put(1, {f"{pkg}/lakefile.toml": 'name = "PouwVerifier"\n', f"{pkg}/PouwVerifier/Credit.lean": "-- a\n"})
     env.put(2, {path: "{}\n"})
     loop, runs = _check(env, monkeypatch, batch=1, depth=2)
     _, built, _ = loop.tick()
@@ -4717,8 +4717,8 @@ def test_under_gate_check_a_candidate_deleting_only_a_file_an_audit_reads_audits
     from research.landing import AFTER_LANDING
 
     pkg = "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check"
-    _main_to(env, {f"{pkg}/lakefile.toml": 'name = "PouwCheck"\n', f"{pkg}/models.json": "{}\n", f"{pkg}/README.md": "# pouw\n"})
-    env.put(1, {f"{pkg}/PouwCheck/Credit.lean": "-- a\n"})
+    _main_to(env, {f"{pkg}/lakefile.toml": 'name = "PouwVerifier"\n', f"{pkg}/models.json": "{}\n", f"{pkg}/README.md": "# pouw\n"})
+    env.put(1, {f"{pkg}/PouwVerifier/Credit.lean": "-- a\n"})
     env.put(2, {path: None})
     loop, runs = _check(env, monkeypatch, batch=1, depth=2)
     _, built, _ = loop.tick()

@@ -593,7 +593,7 @@ RETIRED_NAMES = {"draw": 1020, "law": 133, "escape": 98, "wrong": 130, "dampener
 IMPORT_ALL: dict[str, str] = {
     "security/Proofs/Flock/Claims/Sampling/Select/Second.lean: Spot.Draw":
         "its proofs open `Spot.Draw`'s private `stratum?` and `natRanges` to read the stratified sampling design's strata",
-    "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwCheck/CreditOnce.lean: Spot.ChallengerSession":
+    "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwVerifier/CreditOnce.lean: Spot.ChallengerSession":
         "`pinnedChallengePhaseWith` restates `pinnedChallengePhase`, which reads the private `strOf`, and is held to it by "
         "`rfl`; a copy of `strOf` is another constant, so the `rfl` fails",
 }

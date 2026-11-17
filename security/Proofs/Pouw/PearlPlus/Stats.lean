@@ -22,7 +22,7 @@ only at `−0`, which none of the formulas tells from `+0` (`WholeCircuit.alpha8
 
 namespace Pouw.PearlPlus.Bridge
 
-open Pouw.PearlC Pouw.Fp8Atom PouwCheck.PearlPlus
+open Pouw.PearlC Pouw.Fp8Atom PouwVerifier.PearlPlus
 
 namespace StatsSim
 
