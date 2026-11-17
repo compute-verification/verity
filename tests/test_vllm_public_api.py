@@ -86,8 +86,7 @@ PUBLIC = {
                                    "forwards counted (ForwardCounter) and the steps each request arrived at "
                                    "(realized_arrive_steps), which the harness's engine serves under",
     "verity_vllm.engine.int8_ranks": "I1: the exact-int8 parts a process's engines build with, its tensor-parallel ranks "
-                                     "included (register, EXTENSION), which the harness's engine and benchmarks/network_e2e's "
-                                     "trace plugin register",
+                                     "included (register, EXTENSION), which benchmarks/network_e2e's trace plugin registers",
     "verity_vllm.engine.int8_k_scales": "I1: the int8 attention's K scales, a calibrated parameter of the served "
                                         "checkpoint: its manifest (MANIFEST), a revision's table (table) and a calibration's "
                                         "entry (entry, with_entry), which benchmarks/ppl's calibration job writes",
@@ -141,8 +140,7 @@ PUBLIC = {
                                                 "circuit cut at its linears (PearlTables)",
     "verity_vllm.program.frontend.kernel_readback": "I7: what a built model's layers execute, read back: the int8 scope "
                                                     "(int8_exact_of), the FP8 linear kernel and the experts class, each one "
-                                                    "value over the layers, which the harness's engine checks against its "
-                                                    "declaration",
+                                                    "value over the layers",
     "verity_vllm.program.frontend.vllm_derive": "I7: a Program derived under the vLLM adapter's rules, its profiles' vocabulary "
                                                 "and its served seed and length rules (derive, derive_report), which "
                                                 "benchmarks/network_sim derives its served Program with",
@@ -289,7 +287,7 @@ PUBLIC = {
                                        "Context, Target)",
     "verity_vllm.protocols.pouw": "I1: PoUW's protocol option, and what a run that is its own auditor reads of it: its "
                                   "coins an in-process challenger's (challenged) and the H1 run an installed H1 option "
-                                  "serves (h1_run), which the harness's arms and engine and benchmarks/pouw read",
+                                  "serves (h1_run), which the harness's arms and benchmarks/pouw read",
     "verity_vllm.protocols.linear.api": "I1: the linear-site interface: what computes y at a linear layer, where its weight comes "
                                         "from, and the one object vLLM's quant_method.apply calls (Stack, Arm, Control, PassSpec, "
                                         "LinearSite), which benchmarks/pouw's Pearl-C arms build",

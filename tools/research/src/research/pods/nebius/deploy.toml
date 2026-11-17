@@ -376,7 +376,9 @@ owner = "infra"
 # ---- the shared nodes: how each reaches the others, for a check's twins (`check.py --on auto`, slot.py --twin). The list
 # is made from the register of machines at each install (`register`: its template names the machines by pattern, and holds no
 # address), so every node's is the same, and each node takes the vy-cluster key from the address of every machine its list
-# names (`accept`). A machine that joined is put into every node's list by `research deploy roll /etc/vy/peers`. vy-nebius-2
+# names (`accept`). A machine that joined is put into every node's list by `research deploy roll /etc/vy/peers`, and one the
+# register marks stopped (`research pods stopped NAME`) is taken out of every list by the next roll with `--allow-shrink`,
+# until the roll after `research pods stopped NAME --back`. vy-nebius-2
 # is neither a list's node nor a line of the template while its machine is stopped: the address its register file gives is
 # no longer its own. It goes back into both when it runs again at an address of its own.
 
