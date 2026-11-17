@@ -417,11 +417,11 @@ NO_GATES = ("in AND gates: missing. A proof block's AND gates are its partition'
             "of the monitoring period's proof blocks")
 NOT_POOLED = ("its draw isn't a uniform k-subset of the window's proof blocks, the sampling_design IntegrityHorizon pools, so no "
               "pooled figure is stated for it")
-MULTI = ("a window of more than one member, whatever its draw: its case of verity/sampled-proofs/v1 names each "
-         "member's circuit and registered file (`a5.v2_proof`'s per-member form, proofs.members), and Lean refuses "
-         "that form (MULTI_REFUSED) until a guarantee for a sample over several members' statements under one draw is "
-         "in the lock, so each composite that reads the case rejects naming it. A run of record's window is one "
-         "member, one statement, and this is that window's guarantee")
+MULTI = ("a window of more than one member, whatever its draw: its case of verity/sampled-proofs/v1 is in the "
+         "per-member form (`a5.members_proof`, proofs.members), which Lean's per-member verifier answers "
+         "(OneStageZk.checkMembersAt), and no listed guarantee covers a sample over several members' statements "
+         "under one draw, so this record states none for it. A run of record's window is one member, one "
+         "statement, and this is that window's guarantee")
 #: the network attester's chain report as its piece publishes it (`certifier_piece.PUBLIC`), and its draws by step
 CHAIN_REPORT = CASE.parent / "chain" / "report" / "report.json"
 DRAWS = {"n2": "the period draw", "scan": "the scan's draw"}

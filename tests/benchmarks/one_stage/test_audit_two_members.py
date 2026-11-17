@@ -193,7 +193,7 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
     count by name; over the window's two proof blocks that rate names the design the window was committed under
     (`records_audit.verifier_window`), and the stream sampled by it accepts its outcome on the challenger's coins. The
     audit record names whose coins those are, the key and the session the challenger's ledger opens on the run's root,
-    and says it wrote no case for the compiled check; SPOT's answer on the audit accepts with both in its public
+    and says it wrote the case in the per-member form; SPOT's answer on the audit accepts with both in its public
     outputs."""
     window = _window(tmp_path / "window")
     assert RA.verifier_window(window, RULE, None)[0].law == D.parse_design(DESIGN) and S.SamplingDesign(RULE).text == RULE
@@ -211,8 +211,7 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
     assert (outcome["accepted"], outcome["codes"], row["coins"]["coins_reason"]) == (True, [], None), row["coins"]
     assert row["coins_session"]["error"] is None and row["coins_session"]["trusted"]["pinned_session"] is None
     # whose coins: the one session the local challenger's own ledger opens on the run's root, under that session's key,
-    # as the coins' check verified them; SPOT's answer carries them, and that the audit, of two members, wrote
-    # no case for the compiled check
+    # as the coins' check verified them; SPOT's answer carries them, and that the audit wrote its case
     opened, = (e for e in map(json.loads, (out / "challenger" / "windows.jsonl").read_text().splitlines())
                if e["kind"] == "open")
     whose = {"key_sha512": opened["body"]["key_sha512"], "session": opened["session"]}
@@ -220,7 +219,7 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
     assert row["coins"]["verified"] == whose
     record = json.loads((out / "window" / "audit.json").read_text())
     assert record["coins"]["verified"] == whose
-    assert record["case_v2"]["written"] is False and "this audit sampled 2 members" in record["case_v2"]["why"]
+    assert record["case_v2"] == {"written": True}
     answer = _answer(out)
     assert (answer["verdict"], answer["public"]["coins"]) == ("accept", whose), answer
     assert answer["public"]["case_v2"] == record["case_v2"]
@@ -234,9 +233,9 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
     assert _coin_trees(out) == ("own", False)
     missing = [f for f in RECORD if not (out / f).is_file()]
     assert not missing, missing
-    # v2's case is one table's session, so an audit of two members writes why it has none, which SPOT's row reads
-    assert not (out / "window" / "case-v2.json").exists()
-    assert "this audit sampled 2 members" in (out / "window" / "case-v2-error.txt").read_text()
+    case = json.loads((out / "window" / "case-v2.json").read_text())
+    assert len(case["params"]["proofs"]["members"]) == 2 and "challenger" not in case["params"]
+    assert json.loads((out / "window" / "case-sampled.json").read_text())["params"]["form"] == "one-stage"
 
 
 def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_accepts_the_case(tmp_path, binaries):
@@ -259,7 +258,7 @@ def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_acc
     assert _kept_verifier(out) == [(0, True), (1, True)]
     assert _coin_trees(out) == ("window", True)
     assert row["coins_session"]["error"] is None, row["coins_session"]
-    case = json.loads((out / "window" / "case-v2-members.json").read_text())
+    case = json.loads((out / "window" / "case-v2.json").read_text())
     params, evidence = case["params"], json.loads(bytes.fromhex(case["evidence"]))
     assert sorted(params["challenger"]) == ["key", "label"] and len(params["window_root"]) == 128
     assert sorted(evidence["coins"]) == ["ledger", "main", "pins", "segment", "session"]

@@ -5,8 +5,6 @@ attention `vllm_dsa` binds: `bmm(q_nope^T, W_UK_T)` and `bmm(attn^T, W_UV)`, `ba
 
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 from typing import cast
 
 import torch

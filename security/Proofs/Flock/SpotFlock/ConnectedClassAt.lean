@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.SpotFlock.WiredClass
-public import Proofs.Flock.SpotFlock.OffClassAt
+public import Proofs.Flock.SamplingGeneric.TwoOffClassAt
 public import Proofs.Flock.SpotFlock.OneWaitClassAt
 import Proofs.Flock.SamplingGeneric
 import Proofs.Flock.Masked
