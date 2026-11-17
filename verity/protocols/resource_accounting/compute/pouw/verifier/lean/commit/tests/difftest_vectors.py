@@ -31,7 +31,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 COUNTS = {"tagged": 1000, "bindings": 500, "domain": 1000, "commit_rows": 1500, "transcript": 500, "verify": 4000, "coins": 100,
-          "salt_of": 400, "unverified_salt": 200, "epoch_salt": 60, "key": 600, "sampled": 300, "pearl_sample": 300}
+          "salt_of": 400, "unverified_salt": 200, "epoch_salt": 60, "key": 600, "sampled": 300, "pearl_draw": 300}
 
 
 def _outcome(f) -> dict:
@@ -351,14 +351,14 @@ def generate(seed: int = 0) -> list[dict]:
                 return list(CA.Sampled(t).select(None, epoch, SimpleNamespace(commitment=SimpleNamespace(root=tr)), source, [], None))
         add("sampled", {"source": source.hex(), "transcript": tr.hex(), "salt": salt.hex(), "tickets": tk, "t": t}, _outcome(sampled))
 
-    for _ in range(COUNTS["pearl_sample"]):
+    for _ in range(COUNTS["pearl_draw"]):
         source, tr, rd, salt = rng.randbytes(rng.choice([32] * 12 + [0])), rng.randbytes(64), rng.randbytes(64), rng.randbytes(32)
         tk, t = tickets(), t_draws()
 
         def pearl() -> list[int]:
             with mock.patch.object(CW, "tickets", lambda _scheme, _records: [(i, None, w) for i, w in enumerate(tk)]):
                 return [i for i, _ in CW.draw(None, [], CW.draw_key(source, tr, rd, salt), t)]
-        add("pearl_sample", {"source": source.hex(), "transcript": tr.hex(), "records": rd.hex(), "salt": salt.hex(), "tickets": tk,
+        add("pearl_draw", {"source": source.hex(), "transcript": tr.hex(), "records": rd.hex(), "salt": salt.hex(), "tickets": tk,
                            "t": t}, _outcome(pearl))
     return cases
 

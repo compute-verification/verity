@@ -497,11 +497,11 @@ def SIGNED_LIVE : String :=
     "(`challenger.trusted_commitment`), not a bare commitment"
 
 /-- `core_check.NO_PINNED_KEY`, `OTHER_KEY` and `SEEDED_PINNED`: the reasons of a `coin-key` refusal. -/
-def NO_PINNED_KEY : String := "the window's parameters pin no challenger key for its sample's record"
+def NO_PINNED_KEY : String := "the window's parameters pin no challenger key for its draw's record"
 def OTHER_KEY : String :=
   "the challenger record is signed under a key other than the challenger key the window's parameters pin"
 def SEEDED_PINNED : String :=
-  "the window's parameters pin a challenger key, so its sample's coins are that challenger's signed record, " ++
+  "the window's parameters pin a challenger key, so its draw's coins are that challenger's signed record, " ++
     "not seeded coins"
 
 /-- `core_check.draw`: none when `units` are the execution phase's sample, else the refusal. Seeded coins (`coinsOf`) have their
@@ -562,11 +562,11 @@ def sampleCheck (coins : Json) (recorded : Bool) (opening stream registration re
   let src ← if old then pure (streamV1 (deriveV1 drawn SAMPLE_DOMAIN ctx) [.str "draw"] bytes)
     else do pure (FlockSoundness.Randomness.stream (← port (PouwCommit.key? drawn SAMPLE_DOMAIN ctx)) [.str "draw"] bytes)
   let some got := Flock.Draw.subset k n src
-    | throw ("sampler", "the sample's stream ran out")
+    | throw ("sampler", "the draw's stream ran out")
   let same := match units with
     | .arr us => us.toList.mapM PouwWindow.natOf? == some got.toList
     | _ => false
-  if !same then throw ("draw", s!"the units are not the sampling coin's subset:{k} over {n}")
+  if !same then throw ("draw", s!"the units are not the draw coin's subset:{k} over {n}")
 
 /-- `core_check.work_units`: `sampleCheck`'s rule under the sampling design `work:k`, the units the sampling coin `coin` samples over the
 work strata `strata`, ascending. Stratum s is `Flock.Draw.subset` of its `k_s` over its units on the stream

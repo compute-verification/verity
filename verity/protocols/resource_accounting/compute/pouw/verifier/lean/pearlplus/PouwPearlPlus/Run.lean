@@ -108,7 +108,7 @@ structure CoinRecord where
   draw : Lean.Json := .null
 
 def AFTER_COIN : String × String :=
-  ("after-coin", "the retained passes or their records are not those the verifier's coin was sampled on: a retention change " ++
+  ("after-coin", "the retained passes or their records are not those the verifier's coin was drawn on: a retention change " ++
     "or a give-up after the coin is refused, and a retry never redraws")
 
 /-- A tile's ticket weight as a fraction `num/den` in lowest terms: |credited rows|·|credited columns| cells at the cell's

@@ -1348,7 +1348,7 @@ def test_a_credit_bit_changed_after_the_sampling_coin_is_refused(periodic):
     root = CR.draw_root(CR.calls_root(salt, rows, served, CT.digest(c["commit"])), bytes.fromhex(c["draw"]["receipts"]),
                         c["rounds"])
     kind, why = credited({**c, "draw": {**c["draw"], "root": root.hex()}}, rows)
-    assert kind == "coin" and why.startswith("the sample's session is not trusted: "), why
+    assert kind == "coin" and why.startswith("the draw's session is not trusted: "), why
     assert credited(c, [{k: v for k, v in rec["calls"][0].items() if k != CR.CREDIT}]) == ("credit", CR.no_bit(0))
     no_z = [{**rec["calls"][0], "tables": {**rec["calls"][0]["tables"], "z": None}}]
     assert credited(c, no_z) == ("credit", CR.no_z(0))

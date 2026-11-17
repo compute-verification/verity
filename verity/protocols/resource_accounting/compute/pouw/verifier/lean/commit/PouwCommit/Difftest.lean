@@ -22,7 +22,7 @@ is not it, naming the Lean's. The kinds:
 * `salt_of`, `unverified_salt`: the execution phase's salt from a coin, and `Epoch.unverified`'s from a seed;
 * `epoch_salt`, `draw_coin`: `Epoch.start`'s salt and `draw_coin`'s coin, or their refusals in their words (`{"reason"}`);
 * `key`: the audit, sample and replay keys and `draw_after`;
-* `sampled`, `pearl_sample`: the clear audit's work-weighted samples over given tickets, `Sampled.select`'s and
+* `sampled`, `pearl_draw`: the clear audit's work-weighted samples over given tickets, `Sampled.select`'s and
   `clear_work.draw`'s (`verity/protocols/accounting/pouw/prover/clear`).
 -/
 
@@ -143,7 +143,7 @@ def outcome (kind : String) (i : Json) : E Json := do
   | "sampled" =>
     let key ← auditKey (← unhexField i "source") (← unhexField i "transcript") (← unhexField i "salt")
     return draws (← weightedSample key (← tickets i) (← nat i "t"))
-  | "pearl_sample" =>
+  | "pearl_draw" =>
     let key ← drawKey (← unhexField i "source") (← unhexField i "transcript") (← unhexField i "records") (← unhexField i "salt")
     return draws (← pearlSample key (← tickets i) (← nat i "t"))
   | k => throw s!"no kind {k}"

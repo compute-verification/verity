@@ -143,7 +143,7 @@ open PouwCheck.Once (roundsCheckWith)
 def samplingSessionWith (replay : Replay) (ledger : Json) (k : ChallengerKey) (pins main session : Json) (root : String) :
     R (Spot.Challenger.LiveCommitment × Spot.Challenger.Roots) := do
   let got ← (trustedChallengePhaseOfWith replay (Json.mkObj [("root", Json.str root)]) k pins main session).mapError
-    fun e => ("coin", s!"the sample's session is not trusted: {e}")
+    fun e => ("coin", s!"the draw's session is not trusted: {e}")
   unless Spot.Challenger.withheldOn ledger root do throw ("coin", Spot.Challenger.WITHHELD)
   pure got
 
@@ -164,7 +164,7 @@ def creditedSampleWith (replay : Replay) (ledger : Json) (k : ChallengerKey) (pi
     | .ok o => match liveReason c o PouwWindow.SAMPLE 0 root with
       | .error e => some e
       | .ok w => w
-  if let some w := why then throw ("coin", s!"the sampling coin: {w}")
+  if let some w := why then throw ("coin", s!"the draw coin: {w}")
 
 theorem creditedSample_eq (ledger : Json) (k : ChallengerKey) (pins main draw : Json) (root : ByteArray) :
     Internal.creditedSample ledger k pins main draw root =
@@ -332,7 +332,7 @@ def periodCreditWith (replay : Replay) (key ledger pins main name windows : Json
     if let some why := pinHygiene nm i main a.pinned periodPin floor then throw why
     let dr ← (creditedChallengePhaseWith replay (Json.mkObj [("root", rootOf (f "draw"))]) k pins main
       d).mapError fun e =>
-      ("circuit", s!"window {i}'s sampling session of period {nm} doesn't count toward it, so the period earns nothing: {e}")
+      ("circuit", s!"window {i}'s draw session of period {nm} doesn't count toward it, so the period earns nothing: {e}")
     if let some why := pinHygiene nm i main dr.pinned periodPin floor SAMPLE_UNIT then throw why
     let (got, layout, rows) ← (executionPhaseLayoutWith replay key ledger pins main (f "window") (f "session") (f "salt")
       (f "calls") (f "served") (f "commit") (f "rounds") (f "draw") (f "descriptor") (f "entries") (f "proofs")

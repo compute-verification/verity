@@ -64,9 +64,9 @@ def liveEpochReason (c : LiveCommitment) : Option String :=
 /-- `SAMPLE_FAMILIES`: a live execution phase's sample session's layout, its sampling coin alone. -/
 def SAMPLE_FAMILIES : List (String × Nat) := [(SAMPLE, 1)]
 
-def NOT_SAMPLE_EPOCH : String := "the coin commitment's coins are not a live window's sampling session's: its sampling coin alone"
+def NOT_SAMPLE_EPOCH : String := "the coin commitment's coins are not a live window's draw session's: its draw coin alone"
 
-/-- `sample_epoch_reason`: why `c` is not a live execution phase's sample session's coin commitment; `none` when it is. -/
+/-- `draw_epoch_reason`: why `c` is not a live execution phase's sample session's coin commitment; `none` when it is. -/
 def sampleEpochReason (c : LiveCommitment) : Option String :=
   if c.scheme != LIVE_SCHEME then some s!"the coin commitment's scheme is {c.scheme}, not {LIVE_SCHEME}"
   else if c.families != SAMPLE_FAMILIES then some NOT_SAMPLE_EPOCH

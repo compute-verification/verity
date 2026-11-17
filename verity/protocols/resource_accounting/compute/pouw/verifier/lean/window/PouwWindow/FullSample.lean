@@ -37,14 +37,14 @@ def recordDraw (record : String) : Option Json :=
 `k` units, `0 < k`, and its units are `[0, k)`; else the reason, named. -/
 def checkFull (record : String) : Except String Unit :=
   match recordDraw record with
-  | none => .error "the session's record has no sample"
+  | none => .error "the session's record has no draw"
   | some d => match Flock.Draw.UnitSample.ofJson d with
-    | .error e => .error s!"the session's sample: {e}"
+    | .error e => .error s!"the session's draw: {e}"
     | .ok D => match D.samplingDesign with
       | .subset k =>
         if k = D.population ∧ 0 < k ∧ D.units = Array.range k then .ok ()
-        else .error s!"the session's sample is subset:{k} of {D.units.size} units over {D.population}, not every unit"
-      | _ => .error "the session's sample's law is not subset"
+        else .error s!"the session's draw is subset:{k} of {D.units.size} units over {D.population}, not every unit"
+      | _ => .error "the session's draw's law is not subset"
 
 theorem checkFull_ok {record : String} (h : checkFull record = .ok ()) :
     ∃ d D k, recordDraw record = some d ∧ Flock.Draw.UnitSample.ofJson d = .ok D ∧ D.samplingDesign = .subset k ∧

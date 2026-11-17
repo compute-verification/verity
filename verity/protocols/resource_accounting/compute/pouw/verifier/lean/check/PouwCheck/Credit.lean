@@ -153,18 +153,18 @@ def leafWords (k : Nat) : Nat := match chunks? k with
 def SALT_FORM : String := "the window's Program salt is not a SHA-512 digest (128 lowercase hex)"
 def CALLS_FORM : String := "the window's manifest is not a list of call rows"
 def SERVED_FORM : String := "the served trees' digest is neither null nor a SHA-512 digest (128 lowercase hex)"
-def DRAW_FORM : String := "the window's sample is not an object whose receipts are a SHA-512 digest"
+def DRAW_FORM : String := "the window's draw is not an object whose receipts are a SHA-512 digest"
 def NO_SAMPLE : String :=
-  "the challenger's session closed with no sampling coin opened: the window opens its sampling coin once, after its sample root"
+  "the challenger's session closed with no draw coin opened: the window opens its draw coin once, after its draw root"
 def SAMPLE_ROOT : String :=
-  "the window's sample root is not over its manifest (each call's credit bit among it), its Commit record, its last " ++
+  "the window's draw root is not over its manifest (each call's credit bit among it), its Commit record, its last " ++
   "round's receipts and every round's root and coin"
 def CHANGED : String :=
-  "the sample root over the manifest (each call's credit bit among it), its Commit record, its last round's " ++
-  "receipts and every round's root and coin is not the one root the challenger's log shows its sampling coin " ++
-  "followed: a credit bit, a call or the Commit record changed after the sampling coin, or the sample opened after " ++
-  "another root. Commit every call's credit bit in its manifest row, and the Commit record, before the sample " ++
-  "root, and never change them after the sampling coin"
+  "the draw root over the manifest (each call's credit bit among it), its Commit record, its last round's " ++
+  "receipts and every round's root and coin is not the one root the challenger's log shows its draw coin " ++
+  "followed: a credit bit, a call or the Commit record changed after the draw coin, or the draw opened after " ++
+  "another root. Commit every call's credit bit in its manifest row, and the Commit record, before the draw " ++
+  "root, and never change them after the draw coin"
 def K_FIELD : String := "draw_k"
 def WEIGHTS_FIELD : String := "weights_root"
 def PERIOD_PIN_FIELD : String := "pinned"
@@ -174,15 +174,15 @@ def MAX_K : Nat := 2 ^ 24
 def ROWS_FIELD : String := "rows"
 def DELTA : Rat := mkRat 1 (2 ^ 40)
 def K_FORM : String :=
-  s!"the sample's K is not a positive integer at most 2^24 (the K its period's open committed as {K_FIELD})"
+  s!"the draw's K is not a positive integer at most 2^24 (the K its period's open committed as {K_FIELD})"
 def LAYOUT_KEYS : List String := ["calls", "linears", "m", "tile"]
 def LAYOUT_FORM : String :=
   "the window's layout is not {calls, linears, m, tile}, h1window.program's arguments: its calls " ++
   "[[linear, A block], ...] in order, its linears [[name, K, n], ...] each once, its A slot m and its tile " ++
   "[R, C], every number a natural number and R, C at least one"
-def COIN_FORM : String := "the sampling coin is not a SHA-512 digest (128 lowercase hex)"
+def COIN_FORM : String := "the draw coin is not a SHA-512 digest (128 lowercase hex)"
 def SAMPLE_ARGS : String :=
-  "the sample's stream is not a string, its registration not a SHA-512 digest, or its receipt not an object of " ++
+  "the draw's stream is not a string, its registration not a SHA-512 digest, or its receipt not an object of " ++
   "printable ASCII strings"
 def WINDOW_KEYS : List String :=
   ["calls", "commit", "descriptor", "draw", "entries", "live", "proofs", "rounds", "salt", "served", "session",
@@ -197,8 +197,8 @@ def DESCRIPTOR_HEX : String :=
 /-- A sampled proof block's proof outcome: the verifier's verdict for the session that proved it. -/
 def PROOF_KEYS : List String := ["program", "registered", "unit", "verdict"]
 def PROOFS_FORM : String :=
-  "the sampled units' proof outcomes are not a list of {program, registered, unit, verdict}, each the verifier" ++
-  "'s verdict for a sampled unit's session: verdict accept or reject, program the SHA-512 of the circuit's " ++
+  "the drawn units' proof outcomes are not a list of {program, registered, unit, verdict}, each the verifier" ++
+  "'s verdict for a drawn unit's session: verdict accept or reject, program the SHA-512 of the circuit's " ++
   "descriptor it verified the session against, and registered its finding, each registered port's {value, root}, " ++
   "port and value printable ASCII and root a SHA-512 digest"
 def LOG_FORM : String := "the round log is not a nonempty list"
@@ -212,7 +212,7 @@ def COMMIT_FORMAT : String := "verity/registration/v2"
 def COMMIT_FORM : String :=
   "the window's Commit record is not the bytes in lowercase hex of a verity/registration/v2 record in canonical " ++
   "JSON whose registered values are a list of objects: the served Commit runs in the window's engine, and its " ++
-  "record is bound under the window's calls_root before the sampling coin"
+  "record is bound under the window's calls_root before the draw coin"
 
 /-- `credit.commit_rows`: the Commit's name for the A rows (its AROW) of the execution phase's round `s`'s calls of contraction
 `k`, its A table of K `…/a/<K>@<s>`. -/
@@ -223,7 +223,7 @@ def commitIds (s : Nat) : String := s!"input-ids/{s}"
 
 def noBit (i : Nat) : String :=
   s!"manifest row {i} has no credit bit: the serving process commits each call's verdict as `{CREDIT}` (true or " ++
-  "false) in its manifest row, under calls_root, before the sampling coin"
+  "false) in its manifest row, under calls_root, before the draw coin"
 
 def noZ (i : Nat) : String :=
   s!"call {i} is credited with no z table root: a credited call's manifest row carries its z table's root " ++
@@ -235,7 +235,7 @@ def SERVED_ROWS : String := "served"
 def noServed (i t : Nat) : String :=
   s!"manifest row {i} states no served rows m_s at most the period's T = {t} table rows (`{SERVED_ROWS}`, a " ++
   "natural number): the serving process commits each call's served rows in its manifest row, under " ++
-  "calls_root, before the sampling coin, and a step serves at most its tables' T rows"
+  "calls_root, before the draw coin, and a step serves at most its tables' T rows"
 
 def noRows (name : String) : String :=
   s!"period {name}'s open commits no table rows T ({ROWS_FIELD}, a positive integer: each round's request and " ++
@@ -327,7 +327,7 @@ withheld (`withheldOn`); else the refusal (`coin`). -/
 def sampleChallengePhase (ledger : Json) (k : ChallengerKey) (pins main session : Json) (root : String) :
     R (Spot.Challenger.LiveCommitment × Spot.Challenger.Roots) := do
   let got ← (trustedChallengePhaseOf ledger (Json.mkObj [("root", Json.str root)]) k pins main session).mapError
-    fun e => ("coin", s!"the sample's session is not trusted: {e}")
+    fun e => ("coin", s!"the draw's session is not trusted: {e}")
   unless Spot.Challenger.withheldOn ledger root do throw ("coin", Spot.Challenger.WITHHELD)
   pure got
 
@@ -378,7 +378,7 @@ def Internal.creditedSample (ledger : Json) (k : ChallengerKey) (pins main draw 
     | .ok o => match liveReason c o PouwWindow.SAMPLE 0 root with
       | .error e => some e
       | .ok w => w
-  if let some w := why then throw ("coin", s!"the sampling coin: {w}")
+  if let some w := why then throw ("coin", s!"the draw coin: {w}")
 
 /-- `credit._credited`: the credited calls' indices, else the refusal. A step of `executionPhase`: its indices are no credit
 until every other step accepts. -/
@@ -458,7 +458,7 @@ def samplingDesign (ss : Array Flock.Draw.WorkStratum) (k : Json) : R (Array Flo
   let some k := (nat? k).filter (fun k => 1 ≤ k && k ≤ MAX_K) | throw ("budget", K_FORM)
   let n := ss.foldl (fun a s => a + s.size) 0
   if n < k then
-    throw ("budget", s!"the window's {n} units are fewer than K = {k}, the K its period committed, so its sample " ++
+    throw ("budget", s!"the window's {n} units are fewer than K = {k}, the K its period committed, so its draw " ++
       s!"would not be K's: the proof system commits a K at most every window's units ({K_FIELD} in the period-open)")
   let total := Flock.Draw.totalWork ss
   pure (ss.map fun s => { s.toStratum with k := Flock.Draw.workK k s.work s.size total s.floor })
@@ -722,7 +722,7 @@ def drawnOf (coin : ByteArray) (stream registration receipt : Json) (ss : Array 
         | .str s => if _root_.PouwCheck.plain x && _root_.PouwCheck.plain s then some (x, s) else none
         | _ => none
       | _, _, _, _ => none) | throw ("draw", SAMPLE_ARGS)
-  let some units ← port (workUnits coin st reg kvs (← samplingDesign ss k)) | throw ("sampler", "the sample's stream ran out")
+  let some units ← port (workUnits coin st reg kvs (← samplingDesign ss k)) | throw ("sampler", "the draw's stream ran out")
   pure units
 
 /-- `credit._finding`: a session's registered finding (verity-verify-proof's `registered`, `{port: {value, root}}`: each
@@ -750,18 +750,18 @@ def proved (drawn : Array Nat) (proofs : Json) : R Unit := do
         | _, _ => none
       else none) | throw ("outcome", PROOFS_FORM)
     if seen.contains u then
-      throw ("outcome", s!"unit {u} has two proof outcomes: a sampled unit is proved and verified once, and a retry " ++
+      throw ("outcome", s!"unit {u} has two proof outcomes: a drawn unit is proved and verified once, and a retry " ++
         "never reproves it")
     unless picked.contains u do
-      throw ("outcome", s!"unit {u} has a proof outcome and was not sampled: only the sample's units are proved")
+      throw ("outcome", s!"unit {u} has a proof outcome and was not drawn: only the draw's units are proved")
     seen := seen.insert u v
   for u in drawn do
     match seen.get? u with
-    | none => throw ("missing", s!"drawn unit {u} has no proof outcome: every sampled unit's proof is verified, and a " ++
-        "window with one missing is refused whole (no partial credit). Prove and verify every sampled unit")
+    | none => throw ("missing", s!"drawn unit {u} has no proof outcome: every drawn unit's proof is verified, and a " ++
+        "window with one missing is refused whole (no partial credit). Prove and verify every drawn unit")
     | some v =>
       unless v == "accept" do
-        throw ("failed", s!"drawn unit {u}'s proof was rejected: a failed sampled unit refuses the whole window, not " ++
+        throw ("failed", s!"drawn unit {u}'s proof was rejected: a failed drawn unit refuses the whole window, not " ++
           "only its call (no partial credit, and no retry)")
 
 /-- `credit.drawn`: the units the sampling coin `coin` (its value, a SHA-512 digest in hex) samples from the execution phase `layout`,
@@ -1404,7 +1404,7 @@ def Internal.registration (executionPhase program prefix_ : String) (entries pro
     c := callAt starts u c
     unless str? prog == some program do
       registrationRefuse (s!"drawn unit {u}'s proof was verified against another circuit than the window's (its " ++
-        "program is not the SHA-512 of the descriptor whose layout the window was sampled over): verify every sampled " ++
+        "program is not the SHA-512 of the descriptor whose layout the window was drawn over): verify every drawn " ++
         "unit's session against the window's committed circuit")
     let mut opened := false
     let mut weights := false
@@ -1429,11 +1429,11 @@ def Internal.registration (executionPhase program prefix_ : String) (entries pro
       weights := weights || v == s!"{prefix_}b/{k}"
     unless opened do
       registrationRefuse (s!"drawn unit {u}'s proof opened no A value …/a/{k} or …/a/{k}@{c / per} (its call's " ++
-        "round's) of the window, so nothing ties the A rows it proved to the ones the round roots committed: verify each sampled unit's " ++
+        "round's) of the window, so nothing ties the A rows it proved to the ones the round roots committed: verify each drawn unit's " ++
         "session with the window's A value registered")
     unless weights do
       registrationRefuse (s!"drawn unit {u}'s proof opened no weights {prefix_}b/{k} of the window, so nothing ties " ++
-        "the B rows it proved to the ones its period registered: verify each sampled unit's session with the window's " ++
+        "the B rows it proved to the ones its period registered: verify each drawn unit's session with the window's " ++
         "weights registered")
 
 def arowRefuse {α : Type} (why : String) : R α := throw ("arow", why)
@@ -2006,7 +2006,7 @@ def Internal.live (live : Json) (t steps : Nat) (pre program executionPhase : St
 `ss` at the period's committed K `k`, its stream the execution phase's root, its registration the sample's root and its receipt
 `{"receipts": …}` (`drawnOf`), else the refusal. -/
 def executionPhaseSampled (executionPhase draw k : Json) (ss : Array Flock.Draw.WorkStratum) : R (Array Nat) := do
-  let o ← (LiveOpening.ofJson (get draw "coin")).mapError fun e => ("coin", s!"the sampling coin: {e}")
+  let o ← (LiveOpening.ofJson (get draw "coin")).mapError fun e => ("coin", s!"the draw coin: {e}")
   drawnOf o.coin (get executionPhase "root") (get draw "root") (Json.mkObj [("receipts", get draw "receipts")]) ss k
 
 /-- The units an execution phase's sample demands proofs of, from its circuit's descriptor in hex: `executionPhaseSampled` over the strata
@@ -2142,8 +2142,8 @@ def committedK (ledger : Json) (name : String) : R Nat := do
     e.kind == "period-open" && get e.body "period" == Json.str name).map (·.body)
   let some k := (body.bind fun b => nat? (get b K_FIELD)).filter (fun k => 1 ≤ k && k ≤ MAX_K)
     | throw ("budget", s!"period {name}'s open commits no draw K ({K_FIELD}, a positive integer at most 2^24), so " ++
-        "its windows have no K to be sampled with: the proof system commits K in the period-open, beside its circuit " ++
-        "and cap, before any sample")
+        "its windows have no K to be drawn with: the proof system commits K in the period-open, beside its circuit " ++
+        "and cap, before any draw")
   pure k
 
 /-- `credit.committed_rows`: the table rows T period `name`'s open committed (`ROWS_FIELD`, a positive integer: each
@@ -2176,7 +2176,7 @@ def mainIndex? (main : Json) (commit : String) : Option Nat :=
   | _ => none
 
 /-- `credit.SAMPLE_UNIT`: what `pinHygiene` names an execution phase's sample session by. -/
-def SAMPLE_UNIT : String := "the sampling session of window"
+def SAMPLE_UNIT : String := "the draw session of window"
 
 /-- `credit._pin_hygiene`: why execution phase `i` of period `name`, whose session ran commit `pinned` on main's first-parent line
 `main`, is too old for the period: its pin more than the period's freshness floor of first-parent commits behind the
@@ -2257,7 +2257,7 @@ def periodCredit (key ledger pins main name windows : Json) : R PeriodCredit := 
     if let some why := pinHygiene nm i main a.pinned periodPin floor then throw why
     let dr ← (Spot.Challenger.creditedChallengePhase ledger (Json.mkObj [("root", rootOf (f "draw"))]) k pins main
       d).mapError fun e =>
-      ("circuit", s!"window {i}'s sampling session of period {nm} doesn't count toward it, so the period earns nothing: {e}")
+      ("circuit", s!"window {i}'s draw session of period {nm} doesn't count toward it, so the period earns nothing: {e}")
     if let some why := pinHygiene nm i main dr.pinned periodPin floor SAMPLE_UNIT then throw why
     let (got, layout, rows) ← (executionPhaseLayout key ledger pins main (f "window") (f "session") (f "salt") (f "calls") (f "served")
       (f "commit") (f "rounds") (f "draw") (f "descriptor") (f "entries") (f "proofs") (f "live") (Lean.toJson bigK)

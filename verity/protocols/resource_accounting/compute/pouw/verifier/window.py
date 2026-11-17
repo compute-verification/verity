@@ -58,7 +58,7 @@ derivation from the salt and the prover's roots.  A live execution phase's comes
 `live_families(R)` under `LIVE_SCHEME`, its salt coin and R round coins (``pouw/round``, rounds numbered from 0 as
 Compose's `Declared.round` numbers them), all committed before the execution phase. Its sampling coin is a session of its own
 (`DRAW_FAMILIES`), opened withheld on the execution phase's sample root, so its coin root reaches the prover only after that root
-(`credit._credited`, Lean `Properties.Pouw.Credit.DrawWithheld`). The salt and round coins' session stays plain: each coin
+(`credit._credited`, Lean `Properties.Pouw.Credit.SampleWithheld`). The salt and round coins' session stays plain: each coin
 opens after its own root, so a coin root released before them hides no choice the prover makes, and its commitment's
 root is in the salt and every round's noise key.  The salt coin opens once, after the
 execution phase's open root (`salt.window_open_root` of its weights' root, its round-0 request table's root and its session; the
@@ -95,8 +95,8 @@ GRID_BITS = 3
 
 #: (item, kind, source, reason): the execution phase's public items, in the service's `Public` form
 PUBLIC = (
-    ("verdict", "output", "outcome", "what the credit rests on: every sampled tile was proved and opened, or not"),
-    ("work", "output", "window", ("the credited work, as the tile count padded to a grid level: the sample ranges over its N "
+    ("verdict", "output", "outcome", "what the credit rests on: every drawn tile was proved and opened, or not"),
+    ("work", "output", "window", ("the credited work, as the tile count padded to a grid level: the draw ranges over its N "
                                   "tiles and the auditor credits its work; one level, so at most log2 q bits")),
     ("check", "structure", "parameter", ("the check's identity: the tile template, its work per tile and the "
                                          "commitment scheme fix the auditor's verifier")),
@@ -104,7 +104,7 @@ PUBLIC = (
                                             "is stated in them")),
     ("length", "structure", "parameter", ("the workloads of record's fixed length: each slot's max_tokens, served whatever it "
                                           "samples (ignore_eos), so the useful work is public")),
-    ("drawn", "coins", "outcome", "the verifier's own sample, after the receipt"),
+    ("drawn", "coins", "outcome", "the verifier's own draw, after the receipt"),
     ("root_W", "commitment", "parameter", "the weights' salted root: what the tiles' weight rows are committed to, hiding"),
 )
 #: the items an execution phase's execution phase commitment record carries; the verdict and the sample come after it
@@ -825,13 +825,13 @@ def draw_challenger(epoch: int, entropy: Callable[[int], bytes]) -> Ch.LiveChall
     return Ch.LiveChallenger(LIVE_SCHEME, epoch, DRAW_FAMILIES, entropy)
 
 
-def sample_epoch_reason(commitment: Ch.LiveCommitment) -> str | None:
+def draw_epoch_reason(commitment: Ch.LiveCommitment) -> str | None:
     """Why `commitment` is not a live execution phase's sample session's coin commitment (`LIVE_SCHEME`, `DRAW_FAMILIES`); None when
     it is."""
     if commitment.scheme != LIVE_SCHEME:
         return f"the coin commitment's scheme is {commitment.scheme}, not {LIVE_SCHEME}"
     if commitment.families != DRAW_FAMILIES:
-        return "the coin commitment's coins are not a live window's sampling session's: its sampling coin alone"
+        return "the coin commitment's coins are not a live window's draw session's: its draw coin alone"
     return None
 
 
@@ -865,7 +865,7 @@ __all__ = ["COINS", "DEPTHS", "DRAW", "DRAW_FAMILIES", "ENTRY_BITS", "ENTRY_BYTE
            "EPS_BITS", "EXACT_BITS", "Entry", "GRID_BITS", "KINDS", "KIND_CODE", "LEGACY_REGISTERED", "LENGTH_KEYS",
            "LIVE_SCHEME", "MODES", "M_MAX", "OWNER", "PORT", "PUBLIC", "PUBLIC_INPUTS_FORMAT", "PUBLIC_PORTS",
            "REGISTERED", "ROUND", "ROUND_NOISE_DOMAIN", "ROW_STEP", "SALT", "SALT_FAMILIES", "SIDE_DOMAIN",
-           "SIDE_INDEX_WORDS", "STOP_FIXED", "TILE", "T_BITS", "Work", "bucket", "draw_challenger", "sample_epoch_reason",
+           "SIDE_INDEX_WORDS", "STOP_FIXED", "TILE", "T_BITS", "Work", "bucket", "draw_challenger", "draw_epoch_reason",
            "entry_bc", "entry_digest", "entry_leaf", "eps_at", "floor_point", "instance_ts", "k_prime",
            "layout_problem", "length_item", "length_problem", "level", "levels", "live_challenger", "live_epoch_reason",
            "live_families", "miss_at_most", "mode", "on_grid", "pad", "pad_node", "pass_tiles", "point",

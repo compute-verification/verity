@@ -134,7 +134,7 @@ def afterTie (i : Input) (passes : List Pass) (tie : Option Tied) : Except Refus
     | some h =>
       if h.commitment != root || (i.source.isSome && i.source != some h.source) then
         throw { refused := some AFTER_COIN,
-                reason := s!"{AFTER_COIN.1}: {AFTER_COIN.2} (its coin was sampled on run {(hex h.commitment).take 16}, " ++
+                reason := s!"{AFTER_COIN.1}: {AFTER_COIN.2} (its coin was drawn on run {(hex h.commitment).take 16}, " ++
                   s!"these passes are run {(hex root).take 16})" }
       pure h.source
     | none => match i.source with

@@ -191,7 +191,7 @@ def leaf_statement(win: dict, u: int, st: tuple, x: dict, trees: dict[str, G.Reg
     got, why = CR.leaf_registered_file(win["program"], lay, shape, u, st, win["roots"], win["root"], win["steps"],
                                        win["salt"], draw_root, produced)
     if why is not None:
-        raise Refused(f"sampled leaf {u}'s statement {list(st)}: credit builds no registered file: {why[1]}")
+        raise Refused(f"drawn leaf {u}'s statement {list(st)}: credit builds no registered file: {why[1]}")
     reg = got[0]
     known = LL.known_rows(*x["tile"], kind, ln, admit=x["admit"], salt=x["salt"], position=u, roots=x["roots"])
     rows, salts, registered = {}, {}, {}
@@ -205,7 +205,7 @@ def leaf_statement(win: dict, u: int, st: tuple, x: dict, trees: dict[str, G.Reg
         else:
             src = held(trees[e["value"]], e, "the prover's state and the served weights")
         if src.root.hex() != e["root"]:
-            raise Refused(f"sampled leaf {u}'s statement {list(st)}: port {port}'s {e['value']} is not at the root credit's "
+            raise Refused(f"drawn leaf {u}'s statement {list(st)}: port {port}'s {e['value']} is not at the root credit's "
                           "file reads it at")
         salts[port] = [bytes(src.salts[at])]
         registered[port] = {"value": e["value"], "positions": [at], "paths": [src.path(at).hex()]}
@@ -213,6 +213,6 @@ def leaf_statement(win: dict, u: int, st: tuple, x: dict, trees: dict[str, G.Reg
             rows[port] = np.array([src.rows[at]], np.uint16)
     ok = leaf_ok(kind, ln, x, rows)
     if ok != 1:
-        raise Refused(f"sampled leaf {u}'s statement {list(st)}: the word reference's ok is {ok}, not 1: its rows are not "
+        raise Refused(f"drawn leaf {u}'s statement {list(st)}: the word reference's ok is {ok}, not 1: its rows are not "
                       "the leaf's honest lane or combine, so it is not proved")
     return rows, salts, registered, reg

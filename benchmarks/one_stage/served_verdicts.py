@@ -1380,7 +1380,7 @@ def pearlplus_draw(record: Path, out: Path, gate: str | None, key: str | None, m
     host's pins log as it answers now, written to `out` (the session's tree at ``out/session/<id>``, beside the salt
     session's), the ledger opening that session alone on the run's commitment C under the challenger key `key` pins, run
     from a commit on main's line `main` (`challenger.trusted_session_of`), withheld (`challenger.withheld_on`), its signed
-    commitment the record's and of a sample session's layout (`window.sample_epoch_reason`), its log showing C as the one
+    commitment the record's and of a sample session's layout (`window.draw_epoch_reason`), its log showing C as the one
     root its coin followed, and the record's opening its coin ``pouw/draw`` 0 after C (`challenger.live_reason`) with
     the record's source its coin. `fetch` replaces the gate's answers (tests). ``{from, session, reason}``: the sample's
     origin, its session and None or the first refusal; a node's sample has no session and no refusal here (the compose
@@ -1419,7 +1419,7 @@ def pearlplus_draw(record: Path, out: Path, gate: str | None, key: str | None, m
         opening = Ch.LiveOpening.from_json(draw.get("opening"))
         if not Ch.withheld_on(lines, c):
             raise ValueError(f"the run's draw session: {Ch.WITHHELD}")
-        if (why := Wd.sample_epoch_reason(trusted)) is not None:
+        if (why := Wd.draw_epoch_reason(trusted)) is not None:
             raise ValueError(f"the draw session's signed coins: {why}")
         if trusted.to_json() != draw.get("commitment"):
             raise ValueError("the record's draw commitment is not the one the draw session's challenger signed")
@@ -1427,9 +1427,9 @@ def pearlplus_draw(record: Path, out: Path, gate: str | None, key: str | None, m
             raise ValueError("the draw session's log does not show the run's commitment as the one root its draw coin "
                              "followed")
         if (why := Ch.live_reason(trusted, opening, Wd.DRAW, 0, bytes.fromhex(c))) is not None:
-            raise ValueError(f"the record's sampling coin: {why}")
+            raise ValueError(f"the record's draw coin: {why}")
         if opening.coin.hex() != rec.get("source"):
-            raise ValueError("the record's source is not its sampling session's coin")
+            raise ValueError("the record's source is not its draw session's coin")
     except (OSError, RuntimeError, ValueError, KeyError, TypeError, AttributeError, tarfile.TarError, Ch.CoinError) as e:
         got["reason"] = f"{type(e).__name__}: {e}"[:600]
     return got
@@ -1882,7 +1882,7 @@ def pearlplus_live_sample(record: Mapping[str, Any], piece_dir: Path, key: str, 
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
 
     if record.get("schema") != COIN_KIND:
-        return f"the verifier's coin record is {record.get('schema')!r}, not {COIN_KIND}, which carries its sample"
+        return f"the verifier's coin record is {record.get('schema')!r}, not {COIN_KIND}, which carries its draw"
     draw = record.get("draw") or {}
     if draw.get("from") != "challenger":
         return PEARLPLUS_NODE_SAMPLE
@@ -1911,13 +1911,13 @@ def pearlplus_live_sample(record: Mapping[str, Any], piece_dir: Path, key: str, 
     try:
         commitment = Ch.LiveCommitment.from_json(draw.get("commitment"))
         opening = Ch.LiveOpening.from_json(draw.get("opening"))
-        why = Wd.sample_epoch_reason(commitment) or Ch.live_reason(commitment, opening, Wd.DRAW, 0, bytes.fromhex(str(c)))
+        why = Wd.draw_epoch_reason(commitment) or Ch.live_reason(commitment, opening, Wd.DRAW, 0, bytes.fromhex(str(c)))
     except (Ch.CoinError, ValueError, TypeError) as e:
         return f"the record's draw is malformed: {type(e).__name__}: {e}"
     if why is not None:
-        return f"the record's sampling coin: {why}"
+        return f"the record's draw coin: {why}"
     if opening.coin.hex() != record.get("source"):
-        return "the record's source is not its sampling session's coin"
+        return "the record's source is not its draw session's coin"
     return None
 
 

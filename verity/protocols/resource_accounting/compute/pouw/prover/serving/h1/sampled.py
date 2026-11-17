@@ -526,7 +526,7 @@ def stage_leaves(a: Any, win: dict, k: int, units: list[int], values: dict[str, 
         call = CR.leaf_call(lay, u)[0]
         at = CR.leaf_place(lay, win["shape"], u, win["steps"])
         if len(win["roots"].get(at[LL.RECEIPT][0], ())) != 1:
-            raise Refused(f"sampled leaf {u}: the window registers its call's {at[LL.RECEIPT][0]} "
+            raise Refused(f"drawn leaf {u}: the window registers its call's {at[LL.RECEIPT][0]} "
                           f"{'twice' if win['roots'].get(at[LL.RECEIPT][0]) else 'not'}, which its combine reads: serve "
                           "the window with its zy receipts (served.Served.receipts) to prove it as lanes")
         for v in (LL.A, LL.B, LL.ZY, LL.RECEIPT):
@@ -700,7 +700,7 @@ def statements(a: Any) -> int:
                 for x in plan["calls"]]
     leaves = plan.get("leaves", [])
     for x in leaves:
-        sessions = session(x, f"sampled leaf {x['unit']}'s statement {x['statement']}")
+        sessions = session(x, f"drawn leaf {x['unit']}'s statement {x['statement']}")
         out.append({"unit": int(x["unit"]), "statement": list(x["statement"]), "circuit": str(x["circuit"]),
                     "public": str(Path(x["dir"]) / "pub.bin"), "sessions": [str(s) for s in sessions]})
     if leaves:

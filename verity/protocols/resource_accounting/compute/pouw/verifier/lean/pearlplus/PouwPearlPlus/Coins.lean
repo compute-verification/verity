@@ -17,7 +17,7 @@ public import PouwWindow.Rounds
   coins. `sampleReason` holds a challenger sample as a reader of the record does (`served_verdicts.pearlplus_live_sample`, less
   the auditor's ledger, key and period, which the compose checks): its opening is coin ``pouw/draw`` 0 of its commitment
   opened after the run's commitment C (`challenger.live_reason`), its coin is the record's source S, and its commitment is
-  of a sample session's layout (`window.sample_epoch_reason`).
+  of a sample session's layout (`window.draw_epoch_reason`).
 * **Of record** (`--of-record`), the verdict takes only a challenger sample on live epoch coins: `ofRecordReason` refuses
   the node's sample, a v1 record (which names no sample), no record, a source given on the command line, and an in-process
   challenger's epoch coins. Without it they are read as development runs.
@@ -102,14 +102,14 @@ def sampleReason (h : CoinRecord) (root : ByteArray) : Option String := Id.run d
       ← LiveOpening.ofJson ((get? h.draw "opening").getD .null))
   let (c, o) ← match parsed with
     | .ok p => pure p
-    | .error e => return some s!"the record's sample is malformed: CoinError: {e}"
+    | .error e => return some s!"the record's draw is malformed: CoinError: {e}"
   let why ← match PouwWindow.sampleEpochReason c with
     | some why => pure (some why)
     | none => match Spot.Challenger.liveReason c o PouwWindow.SAMPLE 0 root with
       | .ok w => pure w
-      | .error e => return some s!"the record's sample is malformed: CoinError: {e}"
-  if let some why := why then return some s!"the record's sampling coin: {why}"
-  if o.coin != h.source then return some "the record's source is not its sampling session's coin"
+      | .error e => return some s!"the record's draw is malformed: CoinError: {e}"
+  if let some why := why then return some s!"the record's draw coin: {why}"
+  if o.coin != h.source then return some "the record's source is not its draw session's coin"
   return none
 
 def SAMPLE_REFUSED : String := "draw"
@@ -122,16 +122,16 @@ def ofRecordReason (coins : EpochCoins) (source : Option ByteArray) (held : Opti
   | .inproc _, _, _ => some ("the epoch's coins are an in-process challenger's, not a live session's on the auditor " ++
       "host's challenger: a development run")
   | _, some _, _ => some "the source is given on the command line, not a challenger coin the verifier's record carries"
-  | _, _, none => some "the verifier holds no record of its coin, so no challenger sample pins the source"
+  | _, _, none => some "the verifier holds no record of its coin, so no challenger draw pins the source"
   | _, _, some h =>
     if h.schema != COIN_SCHEMA then
-      some s!"the verifier's coin record is {pyRepr h.schema}, not {COIN_SCHEMA}, which carries its sample"
+      some s!"the verifier's coin record is {pyRepr h.schema}, not {COIN_SCHEMA}, which carries its draw"
     else
       let src := get? h.draw "from"
       if fieldIs src SAMPLE_CHALLENGER then none
       else if fieldIs src SAMPLE_NODE then
         some ("the verifier's draw source is drawn on the serving node (verify_run.node_draw), not a challenger coin " ++
-          "opened on the run commitment: a development sample no verdict of record takes")
-      else some s!"the verifier's coin record's sample is from {pyReprJson (src.getD .null)}, not the challenger's"
+          "opened on the run commitment: a development draw no verdict of record takes")
+      else some s!"the verifier's coin record's draw is from {pyReprJson (src.getD .null)}, not the challenger's"
 
 end PouwCheck.PearlPlus

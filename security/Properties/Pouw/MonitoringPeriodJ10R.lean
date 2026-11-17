@@ -115,7 +115,7 @@ and 65,536 (down); such a unit is past Flock's `2^27` until `h1zy` has J10-R lan
   the sampling block's stratified sample, the tiles joining the integrity registration as one subcircuit, and reads
   `k s_T` from it; today `Credit.executionPhase` samples by its own work sampling design (`Credit.samplingDesign`, one stratum a `K` template, the
   period's committed `k`). `creditSampled` is the verifier's own sample (`Credit.executionPhaseSampled`, which `executionPhaseLayout` holds
-  the proofs to), and PouwCheck's `window-sampled` difftest holds it to the Python verifier's `credit._window_drawn`. Its
+  the proofs to), and PouwCheck's `window-drawn` difftest holds it to the Python verifier's `credit._window_drawn`. Its
   reading of the model's uniform permutation as the sample is exact only when the sample's stream is the live coin's own
   bits; a stream expanded from the coin by SHA-512 is read as uniform under SHA-512 as a random oracle,
   a named assumption, which this statement then uses.
@@ -217,7 +217,7 @@ def ExecutionPhaseAccepts (r : PreSample) (e : Answered) : Prop :=
 
 /-- **The units the window's sample demands proofs of**: `Credit.descriptorSampled`, the verifier's `Credit.executionPhaseSampled`
 (the sample `Credit.executionPhaseLayout` holds the proofs to) over the strata of the descriptor's layout, at the window's root,
-the sample's coin, root and receipts and the period's `k`. The `window-sampled` difftest holds it to the Python verifier's
+the sample's coin, root and receipts and the period's `k`. The `window-drawn` difftest holds it to the Python verifier's
 `credit._window_drawn`. -/
 def creditSampled (r : PreSample) (e : Answered) : PouwCheck.R (Array ℕ) :=
   PouwCheck.Credit.descriptorSampled r.window e.draw r.descriptor r.k

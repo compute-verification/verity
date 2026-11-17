@@ -67,7 +67,7 @@ def epochSalt (c : CoinCommitment) (o : CoinOpening) (weightsRoot : ByteArray) :
 /-- `draw_coin`'s check: `.ok coin` when `o` is the execution phase's sampling coin opened after `after`, else `.error` with its words. -/
 def flipCoin (c : Option CoinCommitment) (o : CoinOpening) (after : ByteArray) :
     Except String (Except String ByteArray) := do
-  let some c := c | pure (.error "the epoch has no coin commitment for its sampling coin to open against")
+  let some c := c | pure (.error "the epoch has no coin commitment for its draw coin to open against")
   match ← coinReason c o "draw" after with
   | some r => pure (.error s!"the draw's {r}")
   | none => pure (.ok o.coin)
@@ -101,7 +101,7 @@ def weightedSample (key : ByteArray) (tickets : List Nat) (t : Nat) : Except Str
   if t = 0 then return []
   let cumulative := (tickets.foldl (fun (acc : Array Nat × Nat) w => (acc.1.push (acc.2 + w), acc.2 + w)) (#[], 0)).1.toList
   let total ← match cumulative.getLast? with
-    | none => throw "no tickets to sample from"
+    | none => throw "no tickets to draw from"
     | some 0 => throw "uniform(n) needs n > 0"
     | some n => pure n
   (List.range t).mapM fun j =>

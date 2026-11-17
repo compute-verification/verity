@@ -155,11 +155,11 @@ def outcome (p : Params) (c : ExecutionPhaseCommitmentRecord) (f : Fixed) (e : E
     if prof.programs ≠ #[c.program] then
       .reject s!"profile: programs {", ".intercalate prof.programs.toList}, not the registered {c.program}"
     else if prof.levels ≠ #[{ name := unitLevel, query := some c.partition, size := n, draw := some (.subset k) }] then
-      .reject s!"profile: its levels are not the registered partition's {n} units sampled subset:{k}"
+      .reject s!"profile: its levels are not the registered partition's {n} units drawn subset:{k}"
     else if prof.delta ≠ p.delta then
       .reject s!"profile: delta {prof.delta.toString}, not the window's {p.delta.toString}"
     else if prof.drawn ≠ #[(unitLevel, k)] then
-      .reject s!"profile: sampled {cs (sampledJson prof.drawn)}, not {k} units"
+      .reject s!"profile: drawn {cs (sampledJson prof.drawn)}, not {k} units"
     else if draw.samplingDesign ≠ .subset k ∨ draw.population ≠ n then
       .reject s!"draw: {samplingDesignName draw.samplingDesign} over {draw.population}, not subset:{k} over {n}"
     else if ¬ UnitsOk draw.units k n then

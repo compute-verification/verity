@@ -143,11 +143,11 @@ def asks (statements files : Json) (program : String) (shape : Shape) (layout en
   let mut out : Array Ask := #[]
   for (i, c) in ss do
     if seen.contains c then
-      return (out, #[], some ("outcome", s!"call {c} has two statements: a call's sampled units are proved in one " ++
+      return (out, #[], some ("outcome", s!"call {c} has two statements: a call's drawn units are proved in one " ++
         "statement and verified once, and a retry never reproves them"))
     seen := c :: seen
     unless drawn.contains c do
-      return (out, #[], some ("outcome", s!"call {c} has a statement and no sampled unit: only the sample's units are proved"))
+      return (out, #[], some ("outcome", s!"call {c} has a statement and no drawn unit: only the draw's units are proved"))
     let lin := callLin.getD c ""
     let k := ((lins.reverse.find? (·.1 == lin)).map (·.2)).getD 0
     let some (.str sha) := PouwWindow.field? files s!"k{k}" | return (out, #[], some ("circuit", noStatementFiles k))
@@ -213,7 +213,7 @@ def judge (statements files : Json) (program : String) (shape : Shape) (layout e
         let f ← finding fj
         unless f.accepted do
           throw ("failed", s!"call {c}'s session {f.session} was rejected by the verifier ({f.why}): a " ++
-            "failed sampled unit refuses the whole window, not only its call (no partial credit, and no retry)")
+            "failed drawn unit refuses the whole window, not only its call (no partial credit, and no retry)")
         let opened := (finding? f.registered).getD []
         if opened.any fun (p, v, root) => (pubCall? (.str v)).isSome && (p, v, root) != (PUB_PORT, pv, pr) then
           throw ("registration", s!"call {c}'s session {f.session} opened a public table at another port, value or " ++
@@ -232,7 +232,7 @@ def judge (statements files : Json) (program : String) (shape : Shape) (layout e
     | _, _, _ => throw ("error", "credit-verified: an answer is not {error}, {refused: [code, why]} or {findings}")
   let mut held : Lanes.Held := {}
   for a in leaves do
-    let what := s!"sampled leaf {a.unit}'s {a.leaf} statement"
+    let what := s!"drawn leaf {a.unit}'s {a.leaf} statement"
     let some ans := runs[j]? | throw ("error", s!"credit-verified: no verifier answer for statement {a.statement}")
     j := j + 1
     match get ans "error", get ans "refused", get ans "findings" with
@@ -261,7 +261,7 @@ def verified (j : Json) : R Json := do
   let program := Flock.hexOf (Flock.Sha512.hash descriptor)
   let shape := shapeOf P
   let some units := (Json.getArr? (get j "units")).toOption.bind (·.toList.mapM nat?)
-    | throw ("error", "credit-verified: the sampled units are not a list of natural numbers")
+    | throw ("error", "credit-verified: the drawn units are not a list of natural numbers")
   let (some steps, some window, some salt) := (nat? (get j "steps"), str? (get j "window"), str? (get j "salt"))
     | throw ("error", "credit-verified: the window's steps, open root or salt are malformed")
   let (statements, files, entries, draw) := (get j "statements", get j "files", get j "entries", get j "draw")

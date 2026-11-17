@@ -43,7 +43,7 @@ cases, rc, h1 = (sys.modules[n] for n in ("pouw_credit_cases", "pouw_rounds_case
 
 SEEDS = range(3)
 #: a sample root no withheld session opened on: its sampling coin was never sampled after it
-NO_DRAW_SESSION = "the sample's session is not trusted: the auditor's ledger opens no challenger session for this window"
+NO_DRAW_SESSION = "the draw's session is not trusted: the auditor's ledger opens no challenger session for this window"
 
 #: each `_credited` mutation's refusal: its code and its reason's start
 CREDIT_EXPECT = {
@@ -53,13 +53,13 @@ CREDIT_EXPECT = {
     "calls-form": ("manifest", Cr.CALLS_FORM), "salt-form": ("manifest", Cr.SALT_FORM),
     "served-form": ("manifest", Cr.SERVED_FORM), "commit-form": ("commit", Cr.COMMIT_FORM), "rounds-form": ("rounds", ""),
     "draw-form": ("draw", Cr.DRAW_FORM),
-    "no-draw": ("draw", Cr.NO_DRAW), "draw-coin": ("coin", "the sampling coin: "),
+    "no-draw": ("draw", Cr.NO_DRAW), "draw-coin": ("coin", "the draw coin: "),
     "key-form": ("coin", "the verifier's challenger key is malformed"),
-    "forged-ledger": ("coin", "the sample's session is not trusted: "),
-    "unpinned": ("coin", "the sample's session is not trusted: session "),
-    "branch-pin": ("coin", "the sample's session is not trusted: session "),
+    "forged-ledger": ("coin", "the draw's session is not trusted: "),
+    "unpinned": ("coin", "the draw's session is not trusted: session "),
+    "branch-pin": ("coin", "the draw's session is not trusted: session "),
     "unwithheld": ("coin", Ch.WITHHELD), "draw-elsewhere": ("coin", NO_DRAW_SESSION),
-    "draw-session": ("coin", "the sample's session is not trusted: "), "draw-after-other": ("draw", Cr.CHANGED),
+    "draw-session": ("coin", "the draw's session is not trusted: "), "draw-after-other": ("draw", Cr.CHANGED),
 }
 #: a session pinned to a logged commit off main's first-parent line
 OFF_MAIN = "which the host's pins log records but which is not on main's first-parent line"
@@ -90,7 +90,7 @@ DRAWN_EXPECT = {
     "k-form": ("budget", Cr.K_FORM), "k-past-units": ("budget", FEWER),
 }
 WINDOW_DRAWN_EXPECT = {
-    "coin-form": ("coin", "the sampling coin: " + Ch.OPENING_FORM), "args-form": ("draw", Cr.DRAW_ARGS),
+    "coin-form": ("coin", "the draw coin: " + Ch.OPENING_FORM), "args-form": ("draw", Cr.DRAW_ARGS),
     "descriptor-hex": ("layout", Cr.DESCRIPTOR_HEX), "k-form": ("budget", Cr.K_FORM), "k-past-units": ("budget", FEWER),
 }
 OUTCOME_EXPECT = {
@@ -1228,7 +1228,7 @@ def test_the_unit_count_form_is_refuted_at_its_cap(light, heavy):
     """The ε of `eps_at(K, δ, C, n, w_max)`, the unit count n in place of the work W, is refuted wherever the work sampling design
     samples a stratum of light work only in part at K = n: there it reports 2^-32, and a set of light units holding that
     share of the work is missed with probability above 9/10. At the same sample the work form (C, W, 1) holds, every set
-    of its share missed with probability at most δ (`Properties.Pouw.Credit.WorkDrawMisses`)."""
+    of its share missed with probability at most δ (`Properties.Pouw.Credit.WorkSampleMisses`)."""
     (n_a, w_a), (n_b, w_b) = light, heavy
     lay = {"calls": [["a", 0], ["b", 0]], "linears": [["a", w_a, n_a], ["b", w_b, n_b]], "m": 1, "tile": [1, 1]}
     n = n_a + n_b

@@ -75,18 +75,18 @@ def test_verified(server):
                  "proof: call #'s statement could not be verified", "'s statement: the statement's public file",
                  "failed: call #'s session ", "opened a public table at another port",
                  "opened the ok rows at another port", "which is no unit of call #",
-                 "lanes-shape: sampled leaf #: the window's # × # tile", "lanes-shape: sampled leaf #: K = # is below LEAST_K",
-                 "lanes-shape: sampled leaf #: K = # fails PouwWindow.Lanes.Tile.check",
-                 "lanes-shape: sampled leaf #: K = #'s lanes are # chunk lanes",
-                 "is at a lanes-form K and the window carries no lanes evidence", "missing: sampled leaf # has no statement",
+                 "lanes-shape: drawn leaf #: the window's # × # tile", "lanes-shape: drawn leaf #: K = # is below LEAST_K",
+                 "lanes-shape: drawn leaf #: K = # fails PouwWindow.Lanes.Tile.check",
+                 "lanes-shape: drawn leaf #: K = #'s lanes are # chunk lanes",
+                 "is at a lanes-form K and the window carries no lanes evidence", "missing: drawn leaf # has no statement",
                  "leaf Program is not the one the period-open committed", "leaf Program is not h#window.leaf_program's",
                  "is proved twice", "has a leaf statement and is no drawn lanes-form leaf",
                  "is none of leaf_lanes.statements", "the window's produced record (verity/registration/produced/v#) "
                  "fails P-", "combine reads its call's receipts", "the window's draw root, the produced record's",
-                 "the window's sampling coin, the produced record's sample, is not a live opening",
+                 "the window's draw coin, the produced record's draw, is not a live opening",
                  "proof: the window's lanes evidence is not", "of its lanes form's two files", "commits both k#",
                  "leaf_programs is not", "(P-shared)", "(P-opened)", "opened its ports at other values or roots",
-                 "failed: sampled leaf #'s ", "(checkFull)", "# statement could not be verified",
+                 "failed: drawn leaf #'s ", "(checkFull)", "# statement could not be verified",
                  "# statement: the statement's public file"):
         assert any(part in k for k in VERIFIED), part
 

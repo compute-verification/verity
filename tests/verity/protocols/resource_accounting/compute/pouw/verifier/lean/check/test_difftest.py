@@ -18,8 +18,8 @@ Pearl-C pass's, and honest samples, then one mutation each aimed at every refusa
 salt was had, or the same refusal.
 
 Its `window` and `period` against `credit.window` and `credit.period_credit`, the only entries, and its `credit`,
-`drawn`, `window-sampled`, `outcome`, `a-link` and `weights` against the steps they run or will, `credit._credited`,
-`credit.drawn`, `credit._window_drawn` (at the strata of the descriptor's layout, `Credit.descriptorDrawn`, the sample the
+`drawn`, `window-drawn`, `outcome`, `a-link` and `weights` against the steps they run or will, `credit._credited`,
+`credit.drawn`, `credit._window_drawn` (at the strata of the descriptor's layout, `Credit.descriptorSampled`, the sample the
 J10-R period's statement reads), `credit._outcome`, `credit._a_link` and `credit._weights` (`PouwCheck.Credit.Internal`'s):
 one `Port` each, over the cases
 `pouw_credit_cases` generates (a served window whose sampling coin opened after its sample root over the manifest's credit bits,
@@ -279,7 +279,7 @@ def drawn(case: dict) -> dict:
 
 
 def window_drawn(case: dict) -> dict:
-    """`credit._window_drawn` over the strata of the descriptor's layout, as `Credit.descriptorDrawn` reads them."""
+    """`credit._window_drawn` over the strata of the descriptor's layout, as `Credit.descriptorSampled` reads them."""
     got, refused = None, ("layout", Cr.DESCRIPTOR_HEX)
     if type(case["descriptor"]) is str and Cr._HEX.fullmatch(case["descriptor"]):
         lay, refused = Cr.layout_of(bytes.fromhex(case["descriptor"]))
@@ -288,7 +288,7 @@ def window_drawn(case: dict) -> dict:
             ss, refused = Cr.strata(lay)
         if refused is None:
             got, refused = Cr._window_drawn(case["window"], case["draw"], ss, case["k"])
-    _counted(refused, "window-sampled")
+    _counted(refused, "window-drawn")
     return {"drawn": got} if refused is None else {"refused": list(refused)}
 
 
@@ -346,7 +346,7 @@ def _port(name: str, fn, instance, names: list[str]) -> D.Port:
 
 CREDIT = _port("credit", credit, credit_cases.credit_instance, credit_cases.CREDIT_NAMES)
 DRAWN = _port("drawn", drawn, credit_cases.drawn_instance, credit_cases.DRAWN_NAMES)
-WINDOW_DRAWN = _port("window-sampled", window_drawn, credit_cases.window_drawn_instance, credit_cases.WINDOW_DRAWN_NAMES)
+WINDOW_DRAWN = _port("window-drawn", window_drawn, credit_cases.window_drawn_instance, credit_cases.WINDOW_DRAWN_NAMES)
 OUTCOME = _port("outcome", outcome, credit_cases.outcome_instance, credit_cases.OUTCOME_NAMES)
 WINDOW = _port("window", window, credit_cases.window_instance, credit_cases.WINDOW_NAMES)
 PERIOD = _port("period", period, credit_cases.period_instance, credit_cases.PERIOD_NAMES)
@@ -395,12 +395,12 @@ def test_credit(pass_server):
                          for name in ["honest", *names] for seed in range(3))
     print(f"pouw-check-difftest credit: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
           f"{dict(sorted(CREDITED.items()))}")
-    assert {"credit accept", "drawn accept", "window-sampled accept", "outcome accept", "window accept", "period accept",
+    assert {"credit accept", "drawn accept", "window-drawn accept", "outcome accept", "window accept", "period accept",
             "a-link accept", "weights accept", "registered-file accept", "registered-file accept j10r",
             "registered-file accept j10r chunked"} <= set(CREDITED)
     for part in ("credit draw: the draw root over the manifest", "credit draw: the window's draw root is not",
                  "credit draw: the challenger's session closed with no draw coin", "credit credit: manifest row # has no",
-                 "credit credit: call # is credited with no z", "credit coin: the sampling coin: ",
+                 "credit credit: call # is credited with no z", "credit coin: the draw coin: ",
                  "credit coin: the draw's session is not trusted",
                  "credit coin: the session the auditor's ledger opens on the window does not withhold",
                  "outcome missing: ", "outcome failed: ",
@@ -441,7 +441,7 @@ def test_credit(pass_server):
                  "window coin: pouw/round coin #: coin was not opened after", "window a-link: registered A value ",
                  "window a-link: the window registers no A value",
                  "so the period earns nothing: rounds: the round roots are not",
-                 "the sampled units' proof outcomes are not a list of {program, registered, unit, verdict}",
+                 "the drawn units' proof outcomes are not a list of {program, registered, unit, verdict}",
                  "domain is not the one the window's registration gives it (the registered domain of h#/w#/a/#",
                  "window registration: drawn unit #'s proof opened port ",
                  "against another root than the one the window registered for",

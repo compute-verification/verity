@@ -657,12 +657,12 @@ def check_twin(p: dict, c: dict, e: dict) -> tuple[str, Any, Any]:
     if prof["programs"] != [rec["program"]]:
         return "reject", f"profile: programs {', '.join(prof['programs'])}, not the registered {rec['program']}", None
     if prof["levels"] != [{"name": LEVEL, "query": rec["partition"], "size": w.n, "draw": {"subset": k}}]:
-        return "reject", f"profile: its levels are not the registered partition's {w.n} units sampled subset:{k}", None
+        return "reject", f"profile: its levels are not the registered partition's {w.n} units drawn subset:{k}", None
     if prof["delta"] != p["delta"]:
         return ("reject", f"profile: delta {Wd.ratio_str(prof['delta'])}, not the window's {Wd.ratio_str(p['delta'])}",
                 None)
     if prof["drawn"] != [(LEVEL, k)]:
-        return "reject", f"profile: sampled {_canon(dict(prof['drawn']))}, not {k} units", None
+        return "reject", f"profile: drawn {_canon(dict(prof['drawn']))}, not {k} units", None
     if not (draw["law"] == "subset" and draw["k"] == k) or draw["population"] != w.n:
         return "reject", f"draw: {sampling_design_name(draw)} over {draw['population']}, not subset:{k} over {w.n}", None
     units = draw["units"]
@@ -1341,9 +1341,9 @@ SIGNED_LIVE = ("a live window's coins are its challenger's signed record and the
 
 #: the refusal of a sample whose coins aren't the record of the challenger the execution phase's parameters pin
 COIN_KEY = "coin-key"
-NO_PINNED_KEY = "the window's parameters pin no challenger key for its sample's record"
+NO_PINNED_KEY = "the window's parameters pin no challenger key for its draw's record"
 OTHER_KEY = "the challenger record is signed under a key other than the challenger key the window's parameters pin"
-SEEDED_PINNED = ("the window's parameters pin a challenger key, so its sample's coins are that challenger's signed record, "
+SEEDED_PINNED = ("the window's parameters pin a challenger key, so its draw's coins are that challenger's signed record, "
                  "not seeded coins")
 
 
@@ -1367,7 +1367,7 @@ def _live_coins(coins: dict, pinned: Any) -> tuple[Ch.LiveCommitment | None, tup
     if why is not None:
         return None, ("coin", why)
     c = Ch.ChallengerRecord.from_json(coins["record"]).commitment
-    return (None, ("coin", why)) if (why := Wd.sample_epoch_reason(c)) is not None else (c, None)
+    return (None, ("coin", why)) if (why := Wd.draw_epoch_reason(c)) is not None else (c, None)
 
 
 def draw_twin(coins: Any, recorded: bool, opening: Any, stream: Any, registration: Any, receipt: Any, k: Any, population: Any,
@@ -1414,9 +1414,9 @@ def draw_twin(coins: Any, recorded: bool, opening: Any, stream: Any, registratio
     src = stream_v1(derive_v1(o.coin, DRAW_DOMAIN, ctx), "draw", n) if old else derive(o.coin, DRAW_DOMAIN, ctx).stream("draw", n)
     got = stream_subset(k, population, src)
     if got is None:
-        return "sampler", "the sample's stream ran out"
+        return "sampler", "the draw's stream ran out"
     if not (isinstance(units, list) and all(_nat(u) for u in units) and units == got):
-        return "draw", f"the units are not the sampling coin's subset:{k} over {population}"
+        return "draw", f"the units are not the draw coin's subset:{k} over {population}"
     return None
 
 
