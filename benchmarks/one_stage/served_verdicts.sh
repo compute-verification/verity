@@ -2287,7 +2287,12 @@ sampled_coins || stop sampled-proofs 20
 
 # 6. here with the split certifier, whose period check reads V3c's period.json: its piece then reads the answer it wrote
 if [ -n "$SPLIT" ]; then
-  v3c_commit && v3c_proved
+  if ! v3c_commit; then why="V3c's window commit at class $V3C did not finish within V3C_TIMEOUT ($V3C_TIMEOUT) or failed (its WINDOW-COMMIT line), so the split network attester's chain and period check, which read it, did not run"
+  elif ! v3c_proved; then why="V3c's audit of its committed window wrote no period.json, which the split network attester's period check reads (v3c-audit/ in the run's out)"
+  else why=; fi
+  mkdir -p "$OUT/pieces/certifier"
+  [ -z "$why" ] || [ -e "$OUT/pieces/certifier/answer.json" ] || [ -e "$OUT/pieces/certifier/refused.txt" ] \
+    || echo "$why" > "$OUT/pieces/certifier/refused.txt"
   export CERTIFIER_CMD=true
 fi
 
