@@ -343,7 +343,7 @@ def test_a_command_starts_only_under_the_nodes_env_files(tmp_path, mode, sets, r
 
 @pytest.mark.parametrize("demo", ["remote", "onsite_network"])
 def test_the_bindings_bind_every_party_of_the_demo_by_the_env_files_names(tmp_path, demo):
-    path = HERE.parents[3] / "demos" / f"{demo}.toml"
+    path = HERE.parents[3] / "applications" / f"{demo}.toml"
     got = subprocess.run(["bash", str(HERE / "run.sh"), "bindings", str(path)], capture_output=True, text=True, check=False,
                          env={**os.environ, "PATH": f"{Path(sys.executable).parent}:{os.environ['PATH']}"})
     assert got.returncode == 0, got.stderr
