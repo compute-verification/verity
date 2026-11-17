@@ -1,7 +1,7 @@
 [project]
-name = "pous-check"
+name = "pous-verifier"
 version = "0.1.0"
-description = "The differential test of pous_check, the PoUS setup check in Lean, against the Python reference: the core difftest harness drives its functions (pous-setup-difftest), its protocol (pous-setup) and the composed check of a recorded run (pous-run serve, against run.check_at) and the run on the memory challenger's signed setup (pous-signed-run serve, against run.check_signed_at); interop.py, the timed audit's wire (pous-audit-difftest serve) against wire.py on the spec's vectors; timed_audit.py, the strict timed audit's verdict of record (pous-timed-audit) against memory_challenger.verdict; and test_verdict_difftest.py, the verdict unit's code (pous-verdict-difftest) against the Definition verdict_circuit.PousVerdict, compiled."
+description = "The differential test of pous_verifier, the PoUS setup check in Lean, against the Python reference: the core difftest harness drives its functions (pous-setup-difftest), its protocol (pous-setup) and the composed check of a recorded run (pous-run serve, against run.check_at) and the run on the memory challenger's signed setup (pous-signed-run serve, against run.check_signed_at); interop.py, the timed audit's wire (pous-audit-difftest serve) against wire.py on the spec's vectors; timed_audit.py, the strict timed audit's verdict of record (pous-timed-audit) against memory_challenger.verdict; and test_verdict_difftest.py, the verdict unit's code (pous-verdict-difftest) against the Definition verdict_circuit.PousVerdict, compiled."
 requires-python = ">=3.12"
 dependencies = ["verity", "verity-difftest", "hypothesis>=6.100"]
 

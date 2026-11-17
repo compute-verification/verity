@@ -458,7 +458,7 @@ def main(argv: list[str] | None = None, **kw: Any) -> int:
                          "matches (a timed run of a large W then skips the encode an untimed run measured)")
     ap.add_argument("--pous-timed-audit", default=None,
                     help="reference, p2-v3-gpu: a built pous-timed-audit, the audit's verdict of record (default: "
-                         "pous_check's; p2-v3-gpu builds it there once a run, a no-op after pod.sh's PREPARE=1)")
+                         "pous_verifier's; p2-v3-gpu builds it there once a run, a no-op after pod.sh's PREPARE=1)")
     ap.add_argument("--mc-lms-key", default="",
                     help="p2-v3-mc-gpu: sign the memory challenger's sessions with S1's LMS key in this directory (made "
                          "there when absent); without one they are test-signed and the verdict rejects them all")

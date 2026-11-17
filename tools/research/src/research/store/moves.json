@@ -5158,6 +5158,12 @@
         "verity/protocols/resource_accounting/network/verifier/lean/NetworkCheck.lean": "verity/protocols/resource_accounting/network/verifier/lean/NetworkVerifier.lean",
         "verity/protocols/resource_accounting/network/verifier/lean/NetworkCheck/": "verity/protocols/resource_accounting/network/verifier/lean/NetworkVerifier/"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/resource_accounting/memory/pous/verifier/check/PousCheck.lean": "verity/protocols/resource_accounting/memory/pous/verifier/check/PousVerifier.lean",
+        "verity/protocols/resource_accounting/memory/pous/verifier/check/PousCheck/": "verity/protocols/resource_accounting/memory/pous/verifier/check/PousVerifier/"
+      }
     }
   ]
 }

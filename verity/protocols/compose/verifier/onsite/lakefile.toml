@@ -47,7 +47,7 @@ path = "../../../resource_accounting/network/verifier/lean"
 
 # Space: PoUS's check of a run, on the memory challenger's Lean.
 [[require]]
-name = "pous_check"
+name = "pous_verifier"
 path = "../../../resource_accounting/memory/pous/verifier/check"
 
 # Bandwidth: PoUB's P2 session on PoUS's store (`Poub.P2Protocol`).

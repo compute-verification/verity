@@ -25,7 +25,7 @@ members = [
     "cluster-tests",
     "core-identity",
     "memory-challenger-lean",
-    "pous-check",
+    "pous-verifier",
     "research",
     "research-tests",
     "verity",
@@ -1492,7 +1492,7 @@ wheels = [
 ]
 
 [[package]]
-name = "pous-check"
+name = "pous-verifier"
 version = "0.1.0"
 source = { virtual = "tests/verity/protocols/resource_accounting/memory/pous/verifier/check" }
 dependencies = [

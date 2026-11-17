@@ -24,8 +24,8 @@ block, or two of the run's strings collide.
 
 namespace Pous.EndToEnd.SecurityProofs
 
-open Flock MemoryAttester MemoryAttester.Properties PousCheck PousCheck.Properties
-open PousCheck.Properties.SecurityProofs (hash_size append_cancel mth_binds leaves_entry root_mth)
+open Flock MemoryAttester MemoryAttester.Properties PousVerifier PousVerifier.Properties
+open PousVerifier.Properties.SecurityProofs (hash_size append_cancel mth_binds leaves_entry root_mth)
 
 local instance instLawfulBEqByteArray_run : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
@@ -385,8 +385,8 @@ theorem shaped_of {c : SetupProtocol.Commitment} {C : Array (Array ByteArray)} (
 root, which is all `runCheckAccepts` asks of it. -/
 theorem runCertifies : RunCertifies := by
   intro trusted c C pub digests r sid dev ⟨hs, hc⟩
-  have hD := PousCheck.Properties.SecurityProofs.acceptsDecodes q c C ⟨pub, (), hs⟩
-  have hP := PousCheck.Properties.SecurityProofs.publishesRoot q c C pub () hs
+  have hD := PousVerifier.Properties.SecurityProofs.acceptsDecodes q c C ⟨pub, (), hs⟩
+  have hP := PousVerifier.Properties.SecurityProofs.publishesRoot q c C pub () hs
   obtain ⟨ha, hsid, htr, hrest⟩ := runCheckAccepts trusted pub digests r sid hc dev C
   have hroot : Merkle.root (leaves pub.salt C) = some pub.root := by rw [hP.2.2.1]; exact hP.1
   exact ⟨hD, hP, ha, hsid, htr, hrest (shaped_of hD) hroot⟩

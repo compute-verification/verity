@@ -22,9 +22,9 @@ segment finalize alike. `publishesRoot`: the published root is `Merkle.root` ove
 
 @[expose] public section
 
-namespace PousCheck.Properties.SecurityProofs
+namespace PousVerifier.Properties.SecurityProofs
 
-open Flock PousCheck PousCheck.Properties
+open Flock PousVerifier PousVerifier.Properties
 open Properties.Identity (L L_length L_append Rep rep_init rep_update rep_foldl)
 
 local instance instLawfulBEqByteArray_setup : LawfulBEq ByteArray where
@@ -421,4 +421,4 @@ theorem acceptsDecodes : AcceptsDecodes := by
     rw [(rep_update hM _).finalize, ← hfin, (rep_foldl segs hM).finalize]
     exact congrArg Flock.Sha512.hash (L_inj (by rw [L_append, hLW, L_foldl_append]))
 
-end PousCheck.Properties.SecurityProofs
+end PousVerifier.Properties.SecurityProofs

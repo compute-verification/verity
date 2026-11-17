@@ -17,7 +17,7 @@ and the memory challenger's sample as the ring game reads it. It reads the deplo
 
 namespace Pous.Period
 
-open Pous.EndToEnd PousCheck PousCheck.Properties
+open Pous.EndToEnd PousVerifier PousVerifier.Properties
 
 open scoped ENNReal
 
@@ -46,7 +46,7 @@ structure Audits (ΩW ΩQ : Type) where
   W : ΩW × ΩQ → Bits sch.n
   /-- the memory challenger's signed session -/
   session : ΩW × ΩQ × ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) →
-    PousCheck.Run.ChallengePhaseRecord
+    PousVerifier.Run.ChallengePhaseRecord
   /-- the memory challenger's record of its sessions -/
   device : ΩW × ΩQ × ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) →
     MemoryAttester.Properties.Challengers

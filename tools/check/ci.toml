@@ -133,7 +133,7 @@ group = 6
 [[plan]]
 shards = [
     ["lean-audit:security/Proofs", "lean-audit:security/Properties", "pytest:*", "lean-suites:verity-vllm:1/3",
-     "lean-suites:verity-flock:1/6", "lean-suites:verity-flock:2/6", "lean-suites:verity-core-evaluate", "lean-suites:pous-check",
+     "lean-suites:verity-flock:1/6", "lean-suites:verity-flock:2/6", "lean-suites:verity-core-evaluate", "lean-suites:pous-verifier",
      "lean-suites:verity/protocols/resource_accounting/network/verifier:3/3",
      "lean-suites:verity-pouw-verifier-difftest:1/3", "lean-suites:verity-lean-audit:1/3",
      "lean-suites:verity-core-composition:3/3", "lean-suites:verity-pouw-benchmarks:3/3",
@@ -156,7 +156,7 @@ shards = [
 [[plan]]
 shards = [
     ["lean-audit:security/Proofs", "lean-audit:security/Properties", "circuit-check:1/4", "lean-suites:verity-vllm:1/3",
-     "lean-suites:verity-flock:1/6", "lean-suites:verity-flock:2/6", "lean-suites:verity-core-evaluate", "lean-suites:pous-check",
+     "lean-suites:verity-flock:1/6", "lean-suites:verity-flock:2/6", "lean-suites:verity-core-evaluate", "lean-suites:pous-verifier",
      "lean-suites:verity/protocols/resource_accounting/network/verifier:3/3",
      "lean-suites:verity-pouw-verifier-difftest:1/3", "lean-suites:verity-lean-audit:1/3",
      "lean-suites:verity-core-composition:3/3", "lean-suites:verity-pouw-benchmarks:3/3",
@@ -182,7 +182,7 @@ shards = [
 [[plan]]
 shards = [
     ["lean-audit:security/Proofs", "lean-audit:security/Properties", "pytest:adapters/vllm/verity_vllm/definitions", "lean-suites:verity-vllm:1/3",
-     "lean-suites:verity-flock:1/6", "lean-suites:verity-flock:2/6", "lean-suites:verity-core-evaluate", "lean-suites:pous-check",
+     "lean-suites:verity-flock:1/6", "lean-suites:verity-flock:2/6", "lean-suites:verity-core-evaluate", "lean-suites:pous-verifier",
      "lean-suites:verity/protocols/resource_accounting/network/verifier:3/3",
      "lean-suites:verity-pouw-verifier-difftest:1/3", "lean-suites:verity-lean-audit:1/3",
      "lean-suites:verity-core-composition:3/3", "lean-suites:verity-pouw-benchmarks:3/3",

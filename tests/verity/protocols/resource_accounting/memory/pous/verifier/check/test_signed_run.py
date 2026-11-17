@@ -308,7 +308,7 @@ def test_setup_accepted_is_the_certificates_hypothesis() -> None:
 def test_setup_accepted_is_one_string() -> None:
     """The Lean's `SETUP_ACCEPTED`, its string literals joined, is the Python's: no served case reaches a point with a
     certificate, so this holds the two to one value, and each side's own test holds its profile to it."""
-    lean = (LEAN / "PousCheck" / "SignedRun.lean").read_text()
+    lean = (LEAN / "PousVerifier" / "SignedRun.lean").read_text()
     body = re.search(r"^def SETUP_ACCEPTED : String :=\n((?:  .*\n)+)", lean, re.M)
     literal = r'"(?:[^"\\]|\\.)*"'
     assert body and re.fullmatch(rf"(?:\s*{literal}\s*(?:\+\+)?)+\s*", body.group(1)), \
