@@ -31,7 +31,17 @@
 # hand (served_piece.py's arguments with --answers), with no new session; once each Lean has answered, C* is removed.
 #
 # POUS_ARGS adds served_piece.py's options, as shell words (--node, --private, --rounds, --challenger-*, --trusted-sha512, --device,
-# --bw-*, --no-bandwidth). Logs: DIR/build.log, DIR/lake-build.log, DIR/pous.log (both parts' stderr) and
+# --bw-*, --no-bandwidth), which this script evaluates: `verity run` builds it from the configuration and its bindings
+# alone, and a caller who exports it by hand runs whatever it holds, on its own machine.
+#
+# --run-keys among them is a development run's: the memory challenger and the bandwidth party start on this node
+# (run_attester.sh, listening on loopback), under one key made for the run in SERVE_DIR/private/run-keys (0700) before
+# the card is asked for, which both sessions are trusted under for this run alone, so the record says key_pin run and
+# trusted-device rehearsal; the directory is removed when this script exits. It is refused beside a pin or an
+# attester's flag (--trusted-sha512, --bw-trusted-sha512, --challenger-*, --bw-host, --bw-party). TPY is the tree's
+# Python the attesters run in (default .venv/bin/python), and BW_PARTY_EXE a built poub-verifier for the bandwidth party.
+#
+# Logs: DIR/build.log, DIR/lake-build.log, DIR/pous.log (both parts' stderr) and
 # DIR/stamps.txt, the piece's timeline, a line `UTC EVENT` each: its start, each build's end, the library's load, the
 # card asked for and leased, each part's exit, and between them served_piece.py's own (the weights loaded, setup, each
 # session, each answer). Exit: served_piece.py's (0 accept, 1 another answer, 2 no answer made), 3 when the library
@@ -44,8 +54,22 @@ stamp() { echo "$(date -u +%FT%TZ) $*" >> "$DIR/stamps.txt"; }
 rm -f "$DIR/stamps.txt"
 stamp start
 PY=${PY:-/workspace/cp/venv312/bin/python}
+eval "GIVEN=(${POUS_ARGS:-})"
+EXTRA=() RUN_KEYS=
+for a in ${GIVEN[@]+"${GIVEN[@]}"}; do [ "$a" = --run-keys ] && RUN_KEYS=1 || EXTRA+=("$a"); done
+if [ -n "$RUN_KEYS" ]; then
+  for a in ${EXTRA[@]+"${EXTRA[@]}"}; do
+    case $a in
+      --trusted-sha512 | --bw-trusted-sha512 | --challenger-host | --challenger-address | --challenger-command | --bw-host | --bw-party)
+        echo "POUS REFUSED: --run-keys starts the memory challenger and the bandwidth party on this node under a key" \
+          "made for the run, and POUS_ARGS also names $a: drop $a, or drop --run-keys and bind the auditor's attesters"
+        stamp refused; exit 2 ;;
+    esac
+  done
+fi
 export PYTHONPATH=$ROOT:$ROOT/adapters/vllm:$ROOT/tools/config:$ROOT/tools/research/src PYTHONDONTWRITEBYTECODE=1
-S=$(mktemp -d); trap 'rm -rf "$S"' EXIT
+K=
+S=$(mktemp -d); trap 'rm -rf "$S" ${K:+"$K"}' EXIT
 LIB=${P2_LIB:-}
 if [ -z "$LIB" ]; then
   setarch "$(uname -m)" -R true 2> /dev/null \
@@ -65,20 +89,36 @@ built() {  # the Lean executable $2 of the scratch copy's package $1, built ther
   (cd "$S/$1" && lake build "$2") >> "$DIR/lake-build.log" 2>&1 && { stamp "built $2"; return; }
   tail -20 "$DIR/lake-build.log"; echo "POUS: no answer: $2 doesn't build (lake-build.log)"; exit 7
 }
-POUS_EXE=${POUS_EXE:-} BW_CASE_EXE=${BW_CASE_EXE:-}
-if [ -z "$POUS_EXE" ] || [ -z "$BW_CASE_EXE" ]; then
+POUS_EXE=${POUS_EXE:-} BW_CASE_EXE=${BW_CASE_EXE:-} BW_PARTY_EXE=${BW_PARTY_EXE:-}
+if [ -z "$POUS_EXE" ] || [ -z "$BW_CASE_EXE" ] || { [ -n "$RUN_KEYS" ] && [ -z "$BW_PARTY_EXE" ]; }; then
   CHECK=verity/protocols/resource_accounting/memory/pous/verifier/check
+  POUB=verity/protocols/resource_accounting/memory/poub/verifier/lean
   tar -C "$ROOT" -c --exclude=.lake --exclude=__pycache__ verity | tar -C "$S" -x
   export PATH="$HOME/.elan/bin:$PATH"
   command -v lake > /dev/null 2>&1 || bash "$ROOT/tools/verity/lean/setup.sh" "$S/$CHECK" > "$DIR/lake-setup.log" 2>&1
   : > "$DIR/lake-build.log"
   [ -n "$POUS_EXE" ] || { built "$CHECK" pous-run-protocol; POUS_EXE=$EXE; }
-  [ -n "$BW_CASE_EXE" ] || { built verity/protocols/resource_accounting/memory/poub/verifier/lean poub-p2-protocol; BW_CASE_EXE=$EXE; }
+  [ -n "$BW_CASE_EXE" ] || { built "$POUB" poub-p2-protocol; BW_CASE_EXE=$EXE; }
+  [ -z "$RUN_KEYS" ] || [ -n "$BW_PARTY_EXE" ] || { built "$POUB" poub-verifier; BW_PARTY_EXE=$EXE; }
+fi
+if [ -n "$RUN_KEYS" ]; then
+  K=$SERVE_DIR/private/run-keys
+  rm -rf "$K" && (umask 077 && mkdir -p "$K/pous")
+  TPY=${TPY:-$ROOT/.venv/bin/python}
+  SHA=$(cd "$ROOT" && env -u PYTHONPATH "$TPY" -c 'import hashlib, sys
+from verity.protocols.resource_accounting.memory.pous.attester import onsite
+print(hashlib.sha512(onsite.device_key(sys.argv[1], workers=int(sys.argv[2])).public_key).hexdigest())' \
+    "$K/pous" "$(nproc)" 2>> "$DIR/pous.log")
+  [[ $SHA =~ ^[0-9a-f]{128}$ ]] || { echo "POUS: no answer: the run's key isn't made in $K (pous.log)"; exit 2; }
+  stamp "made the run's key"
+  printf -v CC 'bash %q challenger_party %q %q' "$ROOT/benchmarks/pous/run_attester.sh" "$TPY" "$K"
+  printf -v BP 'bash %q bw_party %q %q %q' "$ROOT/benchmarks/pous/run_attester.sh" "$TPY" "$K" "$BW_PARTY_EXE"
+  EXTRA+=(--challenger-host "$(hostname)" --challenger-address 127.0.0.1:47610 --challenger-command "$CC"
+          --trusted-sha512 "$SHA" --bw-party "$BP" --bw-host 127.0.0.1 --bw-trusted-sha512 "$SHA")
 fi
 ARGS=("$ROOT/benchmarks/pous/served_piece.py" "$SERVE_DIR" "$WINDOW" "$DIR" --hf-home "${HF_HOME:-/workspace/hf}"
       --p2-lib "$LIB" --node "${POUS_NODE:-$(hostname)}" --bw-minutes "${BW_PARTY_MIN:-10}"
-      --case-exe "$POUS_EXE" --bw-case-exe "$BW_CASE_EXE")
-eval "ARGS+=(${POUS_ARGS:-})"
+      --case-exe "$POUS_EXE" --bw-case-exe "$BW_CASE_EXE" ${EXTRA[@]+"${EXTRA[@]}"})
 LEASE=(gpu-lease)
 command -v gpu-lease > /dev/null 2>&1 || LEASE=(bash "$ROOT/tools/research/src/research/pods/sh/gpu_lease.sh")
 stamp "asked for the card"

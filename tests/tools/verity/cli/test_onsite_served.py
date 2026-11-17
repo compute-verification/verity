@@ -48,7 +48,10 @@ BINDINGS = {
 }
 #: `BINDINGS` with the address PoUB's runtime parties read (`runtime`)
 RUNTIME_BINDINGS = {**BINDINGS, "bandwidth-verifier": {"bandwidth": {"address": "192.0.2.2:7002"}}}
-UNBOUND = sorted(f"{p}.{c}.{k}" for p, cs in BINDINGS.items() for c, ks in cs.items() for k in ks)
+#: the memory attesters', which, unbound, are the run's on the workload's machine (`Piece.development`)
+ATTESTERS = ("memory-challenger", "bandwidth-verifier")
+UNBOUND = sorted(f"{p}.{c}.{k}" for p, cs in BINDINGS.items() for c, ks in cs.items() for k in ks
+                 if f"{p}.{c}" not in ("memory-challenger.pous", "bandwidth-verifier.bandwidth"))
 #: the served window's runner's variables under `BINDINGS`, and the bindings the pieces read, in the pieces' order
 VARIABLES = {
     "CERTIFIER_CHAIN_CMD": '.venv/bin/python benchmarks/network_traces/certifier_piece.py chain "$@"',
@@ -66,8 +69,8 @@ VARIABLES = {
                  f"--bw-trusted-sha512 {PIN['bandwidth']} --bw-host 192.0.2.2",
     "BANDWIDTH_CMD": '"$PY" benchmarks/one_stage/served_bandwidth.py collect --serve-dir "$1" --window "$2" --out "$3"',
 }
-KEYS = ["challenger.pouw.gate", "challenger.pouw.peer", "challenger.pouw.key-sha512", "memory-challenger.pous.address",
-        "bandwidth-verifier.bandwidth.host", "network-certifier.certifier.gate", "memory-challenger.wipe.address"]
+KEYS = ["challenger.pouw.gate", "challenger.pouw.peer", "challenger.pouw.key-sha512", "network-certifier.certifier.gate",
+        "memory-challenger.wipe.address"]
 #: each runtime party: its protocol (None while a half isn't in the tree), its role there, its machine and its clock
 RUNTIME = {
     ("memory-challenger", "pous"): ("verity/pous/memory-challenger", "memory-challenger", "auditor-host",
@@ -289,9 +292,8 @@ def test_the_runtime_sessions_are_one_manifest_with_every_configured_role_and_a_
 def test_a_dry_run_without_bindings_names_every_one_it_lacks(capsys):
     rc, got, _ = dry(capsys)
     assert rc == 0 and got["dry"][0]["unbound"] == UNBOUND
-    assert "--challenger-address '<memory-challenger.pous.address>'" in next(
-        e["hooks"]["POUS_ARGS"] for x in got["plan"] if x["party"] == "prover" for e in x["entries"]
-        if e["component"] == "pous")
+    assert next(e["hooks"]["POUS_ARGS"] for x in got["plan"] if x["party"] == "prover" for e in x["entries"]
+                if e["component"] == "pous") == "--run-keys --rounds 320"
 
 
 def test_a_dry_run_on_a_machine_resolves_its_parties(capsys):
@@ -632,7 +634,8 @@ def test_the_onsite_check_is_the_records_composed_verdict(tmp_path, capsys, monk
     assert line["verdict"] == verdict and line["block"] == 2 and line["product"] == T.ONSITE
     assert line["components"] == {**{c: "accept" for c in T.PROTOCOLS},
                                   **{c: rows.get(c, "absent") for c in ("bandwidth", "inference-only")}}
-    assert line["coins"] == "development" and line["reason"] == reason and "combined_by" not in line
+    assert line["coins"] == "simulated" and line["reason"] == reason and "combined_by" not in line
+    assert line["coins_on"] == {c: T.PROVER_NODE for c in ("pous", "bandwidth")}
 
 
 NETWORK = ROOT / "demos" / "onsite_network.toml"
@@ -725,6 +728,147 @@ def test_pouss_and_poubs_command_line_carries_the_configurations_pins_and_no_oth
     assert (flag["--trusted-sha512"], flag["--bw-trusted-sha512"]) == (pinned.get("pous"), pinned.get("bandwidth"))
     assert flag["--challenger-command"] == "ssh -i key auditor-1 challenger_party" and flag["--bw-host"] == "192.0.2.2"
     assert "d" * 128 not in argv
+
+
+def test_an_inherited_or_bound_pous_args_adds_no_word_to_the_tables(tmp_path, capsys, monkeypatch):
+    """served_piece.sh evaluates POUS_ARGS as shell words, so under `verity run` it is the table's alone: the value the
+    environment carries and one a workload binding names are both replaced by the pieces' own."""
+    monkeypatch.setattr(T, "RUNNER", stand_in(tmp_path, "runner.sh", RUNNER))
+    monkeypatch.setenv("POUS_ARGS", f"--trusted-sha512 {'f' * 128}")
+    tables = {**BINDINGS, "workers": {"served-window": {"POUS_ARGS": f"--bw-trusted-sha512 {'f' * 128}"}}}
+    state = tmp_path / "state"
+    assert R.run_main([str(CONFIG), "--on", T.PROVER_NODE, *SERVED_PARTIES, "--bindings", bindings(tmp_path, tables),
+                       "--state", str(state)], REG) == 0, capsys.readouterr().err
+    hooks = dict(x.split("=", 1) for x in (state / "out" / "hooks.txt").read_text().splitlines())
+    assert hooks["POUS_ARGS"] == VARIABLES["POUS_ARGS"]
+
+
+# --- a development run: the memory attesters unbound, on the workload's machine under keys made for the run ----------
+
+#: `BINDINGS` without PoUS's and PoUB's attesters'
+NO_ATTESTERS = {**{p: cs for p, cs in BINDINGS.items() if p not in ATTESTERS},
+                "memory-challenger": {"wipe": BINDINGS["memory-challenger"]["wipe"]}}
+RUN_KEY = "e" * 128
+#: the tree's Python's stand-in for served_piece.sh --run-keys: the key's directory and its mode, and a key's SHA-512
+TPY = f"""#!/usr/bin/env bash
+echo "$3 $(stat -c %a "$(dirname "$3")")" > "$(dirname "$0")/keys.txt"
+echo {RUN_KEY}
+"""
+#: a program's stand-in that keeps its last call's arguments, NUL-separated
+ARGS0 = """#!/usr/bin/env bash
+printf '%s\\0' "$@" > "$(dirname "$0")/$(basename "$0").args"
+"""
+
+
+def executable(tmp: Path, name: str, body: str) -> Path:
+    f = Path(stand_in(tmp, name, body))
+    f.chmod(0o755)
+    return f
+
+
+def args0(f: Path) -> list[str]:
+    return Path(f"{f}.args").read_text().split("\0")[:-1]
+
+
+def test_unbound_the_memory_attesters_are_the_runs_and_each_piece_says_so_before_anything_starts(tmp_path, capsys):
+    cfg = R.load(CONFIG, REG)
+    got = T.variables(cfg, NO_ATTESTERS)
+    assert got["POUS_ARGS"] == "--run-keys --rounds 320"
+    assert not [k for k, v in got.items() if k not in ("VERITY_PINS", "WIPE_CMD") and any(p in v for p in PIN.values())]
+    rc, plan, err = dry(capsys, "--bindings", bindings(tmp_path, NO_ATTESTERS))
+    hooks = {(x["party"], e["component"]): e["hooks"] for x in plan["plan"] for e in x["entries"]}
+    assert rc == 0, err
+    assert [hooks[T.PROVER, c]["DEVELOPMENT"] for c in ("pous", "bandwidth")] == ["1"] * 2
+
+
+@pytest.mark.parametrize("tables, says", [
+    ({"memory-challenger": {"pous": {"host": "auditor-1"}}}, "and the deploy bindings bind memory-challenger.pous.host "
+                                                             "beside it: bind memory-challenger.pous.address too"),
+    ({"bandwidth-verifier": {"bandwidth": {"host": "192.0.2.2"}}},
+     "bind bandwidth-verifier.bandwidth.host but not memory-challenger.pous.address: bind both"),
+    ({"memory-challenger": {"pous": {"address": "192.0.2.1:7000"}}},
+     "bind memory-challenger.pous.address but not bandwidth-verifier.bandwidth.host: bind both"),
+])
+def test_an_attester_bound_in_part_is_refused_by_name_with_the_fix(tmp_path, capsys, tables, says):
+    """Unbound, an attester's other bindings would be dropped, and PoUB's party signs under PoUS's key: a binding given
+    without its attester's address, and PoUS and PoUB not bound together, are refused before anything starts."""
+    rc, _, err = dry(capsys, "--bindings", bindings(tmp_path, {**NO_ATTESTERS, **tables}))
+    assert rc == 2 and "refused unbound" in err and says in err
+
+
+def served_piece(tmp: Path, pous_args: str, **env: str) -> tuple[subprocess.CompletedProcess, Path]:
+    """served_piece.sh run as the workload runs it, with stand-ins for vLLM's Python and the tree's, and Lean built."""
+    py = executable(tmp, "python", ARGV)
+    run = {"PATH": os.pathsep.join([str(Path(sys.executable).parent), os.defpath]), "HOME": str(tmp), "PY": str(py),
+           "P2_LIB": str(tmp), "POUS_EXE": "true", "BW_CASE_EXE": "true", "BW_PARTY_EXE": "/lean/poub-verifier",
+           "TPY": str(executable(tmp, "tpy", TPY)), "GPU_LEASE_UUID": "no-such-card", "VERITY_PINS": "[]",
+           "POUS_ARGS": pous_args, **env}
+    p = subprocess.run(["bash", "-c", f'bash {T.POUS_SCRIPT} "$@"', "_", str(tmp / "serve"), "3", str(tmp / "pous")],
+                       cwd=ROOT, env=run, capture_output=True, text=True, check=False)
+    return p, tmp / "argv.txt"
+
+
+def test_with_run_keys_served_piece_starts_the_attesters_here_under_one_key_made_for_the_run(tmp_path):
+    p, calls = served_piece(tmp_path, T.variables(R.load(CONFIG, REG), NO_ATTESTERS)["POUS_ARGS"])
+    assert p.returncode == 0, p.stdout + p.stderr
+    argv, = [c.split("\n") for c in calls.read_text().split("\n\n") if "--sessions" in c]
+    flag = {f: argv[argv.index(f) + 1] for f in ("--trusted-sha512", "--bw-trusted-sha512", "--challenger-host",
+                                                 "--challenger-address", "--challenger-command", "--bw-party",
+                                                 "--bw-host", "--rounds")}
+    keys = tmp_path / "serve" / "private" / "run-keys"
+    attester = f"bash {ROOT / T.ATTESTER_SCRIPT} "
+    assert flag == {"--trusted-sha512": RUN_KEY, "--bw-trusted-sha512": RUN_KEY,
+                    "--challenger-host": subprocess.run(["hostname"], capture_output=True, text=True).stdout.strip(),
+                    "--challenger-address": "127.0.0.1:47610", "--bw-host": "127.0.0.1", "--rounds": "320",
+                    "--challenger-command": f"{attester}challenger_party {tmp_path / 'tpy'} {keys}",
+                    "--bw-party": f"{attester}bw_party {tmp_path / 'tpy'} {keys} /lean/poub-verifier"}
+    assert "--run-keys" not in argv
+    assert (tmp_path / "keys.txt").read_text().split() == [str(keys / "pous"), "700"] and not keys.exists()
+
+
+@pytest.mark.parametrize("flag", ["--trusted-sha512", "--bw-trusted-sha512", "--challenger-host", "--challenger-address",
+                                  "--challenger-command", "--bw-host", "--bw-party"])
+def test_run_keys_beside_a_pin_or_an_attesters_flag_is_refused_before_the_card(tmp_path, flag):
+    p, calls = served_piece(tmp_path, f"--run-keys --rounds 320 {flag} x")
+    assert p.returncode == 2 and "POUS REFUSED: --run-keys" in p.stdout and f"names {flag}: drop {flag}" in p.stdout
+    assert not calls.exists() and not (tmp_path / "keys.txt").exists()
+
+
+def test_the_run_attesters_take_the_gates_words_and_the_runs_key(tmp_path):
+    """run_attester.sh's verbs are the gate's (host.py's party_argv) on loopback: the bandwidth party's --pous-session
+    and --session read the memory challenger's device in the run's key directory, and any other word is refused."""
+    py, keys = executable(tmp_path, "python", ARGS0), tmp_path / "run-keys"
+    env = {"PATH": os.pathsep.join([str(Path(sys.executable).parent), os.defpath]), "HOME": str(tmp_path)}
+
+    def attester(*words: str) -> subprocess.CompletedProcess:
+        return subprocess.run(["bash", str(ROOT / T.ATTESTER_SCRIPT), words[0], str(py), str(keys), *words[1:]],
+                              env=env, capture_output=True, text=True, check=False)
+
+    assert attester("challenger_party").returncode == 0
+    assert args0(py) == ["-m", "verity.protocols.resource_accounting.memory.pous.attester.challenger_party",
+                         "--device", str(keys / "pous"), "--listen", "127.0.0.1:47610"]
+    sid, session = "1" * 64, "2" * 64
+    assert attester("bw_party", "/lean/poub-verifier", "--minutes", "1", "--pous-session", sid, "--session", session,
+                    "--trusted-sha512", RUN_KEY).returncode == 0
+    assert args0(py)[2:] == ["--device", str(keys / "bw"), "--listen", "127.0.0.1:0", "--lean-exe", "/lean/poub-verifier",
+                             "--pous-record", str(keys / "pous"), "--pous-session", sid, "--challenger",
+                             str(keys / "pous"), "--session", session, "--trusted-sha512", RUN_KEY]
+    refused = attester("bw_party", "/lean/poub-verifier", "--minutes", "1", "--fixture")
+    assert refused.returncode == 2 and "got --fixture" in refused.stderr
+
+
+@pytest.mark.parametrize("tables, on, coins", [({}, T.PROVER_NODE, "simulated"),
+                                               (BINDINGS, T.AUDITOR_HOST, "development")])
+def test_the_onsite_line_names_the_machine_each_memory_attesters_key_and_coins_were_made_on(tmp_path, monkeypatch,
+                                                                                         tables, on, coins):
+    monkeypatch.setattr(T, "VERDICTS_SCRIPT", stand_in(tmp_path, "record.py", RECORD % json.dumps({})))
+    state = tmp_path / "state"
+    (state / "out").mkdir(parents=True)
+    (state / "out" / "machine.txt").write_text("research\nprover-1\n")
+    (state / T.BINDINGS).write_text(json.dumps(tables))
+    line = T.onsite_check(R.load(CONFIG, REG), state)
+    assert line["coins_on"] == {"pous": on, "bandwidth": on} and line["coins"] == coins
+
 
 
 @pytest.mark.parametrize("rows, verdict, reason", [

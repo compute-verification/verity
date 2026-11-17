@@ -35,6 +35,7 @@ inputs = ["verity", "tools/difftest/python/verity_difftest", "tools/verity/lean/
           "benchmarks/one_stage/served_verdicts.sh", "benchmarks/one_stage/served_verdicts.py",
           "benchmarks/network_traces/certifier_piece.py", "benchmarks/pous/streamed_wipe/served_wipe.sh",
           "benchmarks/pous/served_piece.sh", "benchmarks/pous/onsite_pieces.sh", "benchmarks/one_stage/served_bandwidth.py",
+          "benchmarks/pous/run_attester.sh",
           "demos/onsite_full.toml", "demos/onsite_compute.toml",
           "demos/onsite_network.toml", "demos/remote.toml"]
 

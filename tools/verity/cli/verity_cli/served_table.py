@@ -301,7 +301,10 @@ class Piece:
     """One party's piece of the served window (module docstring): ``hooks(cfg, params, bound)`` gives the runner's
     variables for it from the configuration, the component's checked parameters and the bindings of the party it
     reaches (``bound``: each of ``binds``, a ``<party.component.key>`` placeholder while unbound, and each bound one of
-    ``optional``). A ``runtime`` piece's ``session`` is the protocol it is a party of."""
+    ``optional``). A ``runtime`` piece's ``session`` is the protocol it is a party of. A piece with a ``development``
+    binding left unbound starts the party it reaches on its own machine, under a key and coins made for the run, in a
+    development run (`coins_on`), and takes none of its other bindings; one that ``follows`` a listed component's piece
+    of the same party is unbound exactly when that piece is, since its attester signs under that one's key."""
 
     component: str
     party: str
@@ -313,6 +316,8 @@ class Piece:
     optional: tuple[str, ...] = ()
     hooks: Hooks = _none
     session: Session | None = None
+    development: str = ""
+    follows: str = ""
 
     def __post_init__(self) -> None:
         if self.runs not in RUNS:
@@ -335,6 +340,18 @@ class Piece:
 
     def variables(self, cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[str, str]:
         mine = self._bindings(bindings)
+        if self.development and self.development not in mine and (given := [k for k in self.optional if k in mine]):
+            raise Refused("unbound", f"{self.key(self.development)} is unbound, so {self.party}'s {self.component} "
+                                     f"piece starts its {self.reaches} on its own machine under a key made for the "
+                                     f"run, and the deploy bindings bind {', '.join(map(self.key, given))} beside it: "
+                                     f"bind {self.key(self.development)} too, or none of them")
+        if self.follows in cfg["protocols"] and (self.development in mine) != (
+                (lead := PARTIES[self.follows][self.party]).development in lead._bindings(bindings)):
+            given, alone = (self, lead) if self.development in mine else (lead, self)
+            raise Refused("unbound", f"{self.component}'s attester signs under {self.follows}'s key, and the deploy "
+                                     f"bindings bind {given.key(given.development)} but not "
+                                     f"{alone.key(alone.development)}: bind both, or neither for a development run "
+                                     "whose attesters run on the workload's machine under a key made for the run")
         bound = {**{k: f"<{self.key(k)}>" for k in self.binds},
                  **{k: str(v) for k, v in mine.items() if k in self.binds or k in self.optional}}
         params = cfg["params"].get(MANIFESTS[self.component].id, {}) if self.component in MANIFESTS else {}
@@ -383,6 +400,11 @@ def _pouw(cfg, params, bound):
     return {"H1_GATE": bound["gate"], "H1_PEER": bound["peer"], "H1_KEY_SHA512": bound["key-sha512"]}
 
 
+#: the scripts' one flag for a development run's attester: on the workload's machine, under a key made for the run
+RUN_KEYS = "--run-keys"
+DEVELOPMENT = {"DEVELOPMENT": "1"}
+
+
 WIPE_SCRIPT = "benchmarks/pous/streamed_wipe/served_wipe.sh"
 #: served_wipe.sh's variable for each binding of the wipe's memory challenger
 _WIPE = {"address": "WIPE_ADDRESS", "host": "WIPE_CHALLENGER", "command": "WIPE_COMMAND"}
@@ -398,6 +420,7 @@ def _wipe(cfg, params, bound):
 
 
 POUS_SCRIPT, ONSITE_PIECES = "benchmarks/pous/served_piece.sh", "benchmarks/pous/onsite_pieces.sh"
+ATTESTER_SCRIPT = "benchmarks/pous/run_attester.sh"
 BANDWIDTH_SCRIPT = "benchmarks/one_stage/served_bandwidth.py"
 #: served_piece.py's flag for each binding of PoUS's memory challenger, and of PoUB's bandwidth verifier
 _POUS = {"address": "--challenger-address", "host": "--challenger-host", "command": "--challenger-command"}
@@ -410,20 +433,22 @@ def _pinned(cfg: Mapping[str, Any], party: str, protocol: str) -> list[str]:
 
 def _pous_piece(cfg, params, bound):
     """The memory challenger's key is the configuration's pin alone, on the command line; with no pin the piece
-    trusts no session."""
-    pin = _pinned(cfg, MEMORY_CHALLENGER, "pous")
-    words = [*(["--trusted-sha512", *pin] if pin else []), "--rounds", str(params["challenges"]),
+    trusts no session. Unbound, the key is the run's (`RUN_KEYS`), and no pin is passed."""
+    pin = _pinned(cfg, MEMORY_CHALLENGER, "pous") if "address" in bound else []
+    words = [*(["--trusted-sha512", *pin] if pin else []), *([] if "address" in bound else [RUN_KEYS]),
+             "--rounds", str(params["challenges"]),
              *(w for k, flag in _POUS.items() if k in bound for w in (flag, bound[k]))]
-    return {"POUS_CMD": f'bash {POUS_SCRIPT} "$@"', "POUS_ARGS": shlex.join(words), "ONSITE_PIECES": ONSITE_PIECES}
+    return {"POUS_CMD": f'bash {POUS_SCRIPT} "$@"', "POUS_ARGS": shlex.join(words), "ONSITE_PIECES": ONSITE_PIECES,
+            **({} if "address" in bound else DEVELOPMENT)}
 
 
 def _bandwidth_piece(cfg, params, bound):
     """The close's key is the configuration's pin for the bandwidth verifier alone; with no pin the session has no
-    case."""
-    pin = _pinned(cfg, BANDWIDTH_VERIFIER, P2.COMPONENT)
+    case. Unbound, PoUS's `RUN_KEYS` starts the bandwidth party too, under PoUS's key made for the run."""
+    pin = _pinned(cfg, BANDWIDTH_VERIFIER, P2.COMPONENT) if "host" in bound else []
     words = [*(["--bw-trusted-sha512", *pin] if pin else []),
              *(w for k, flag in _BANDWIDTH.items() if k in bound for w in (flag, bound[k]))]
-    return {"POUS_ARGS": shlex.join(words),
+    return {**({"POUS_ARGS": shlex.join(words)} if words else DEVELOPMENT),
             "BANDWIDTH_CMD": f'"$PY" {BANDWIDTH_SCRIPT} collect --serve-dir "$1" --window "$2" --out "$3"'}
 
 
@@ -495,8 +520,10 @@ PARTIES: dict[str, dict[str, Piece]] = {
         PROVER: Piece("pous", PROVER, SERVED_WINDOW, "PoUS's prover after the workload (POUS_CMD, served_piece.sh): "
                       "the memory challenger's timed reads answered from the served weights held as P2's C* on the "
                       "card, its session trusted only under the key the configuration pins for the memory challenger's "
-                      "PoUS sessions", scripts=(POUS_SCRIPT, ONSITE_PIECES), reaches=MEMORY_CHALLENGER,
-                      binds=("address",), optional=("host", "command"), hooks=_pous_piece),
+                      "PoUS sessions; unbound, under a key made for the run, with the memory challenger on the "
+                      "workload's machine in a development run", scripts=(POUS_SCRIPT, ONSITE_PIECES, ATTESTER_SCRIPT),
+                      reaches=MEMORY_CHALLENGER, optional=("address", "host", "command"), hooks=_pous_piece,
+                      development="address"),
         MEMORY_CHALLENGER: Piece("pous", MEMORY_CHALLENGER, GATE, "the gate: PoUS's memory challenger, on its own "
                                  "coins and clock, signing the session"),
         VERIFIER: Piece("pous", VERIFIER, CHECK, "PoUS's row"),
@@ -505,8 +532,10 @@ PARTIES: dict[str, dict[str, Piece]] = {
         PROVER: Piece("bandwidth", PROVER, SERVED_WINDOW, "PoUB's prover inside PoUS's piece (served_piece.py's "
                       "--bw-*): the held store proved to the bandwidth verifier a pass at a time, the session's close "
                       "trusted only under the key the configuration pins for the bandwidth verifier, its answer "
-                      "collected by BANDWIDTH_CMD", scripts=(BANDWIDTH_SCRIPT,), reaches=BANDWIDTH_VERIFIER,
-                      binds=("host",), optional=("command",), hooks=_bandwidth_piece),
+                      "collected by BANDWIDTH_CMD; unbound, the bandwidth party on the workload's machine under PoUS's "
+                      "key made for the run, in a development run", scripts=(BANDWIDTH_SCRIPT,),
+                      reaches=BANDWIDTH_VERIFIER, optional=("host", "command"), hooks=_bandwidth_piece,
+                      development="host", follows="pous"),
         BANDWIDTH_VERIFIER: Piece("bandwidth", BANDWIDTH_VERIFIER, GATE, "the gate: the bandwidth verifier and its "
                                   "challenger, on its own coins and clock"),
         VERIFIER: Piece("bandwidth", VERIFIER, CHECK, "PoUB's row"),
@@ -702,8 +731,10 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
         python = {"combined_by": f"python: no Lean verifier takes {product}, so this verdict is its rows' verdicts "
                                  "combined in Python (each accepts: accept; one rejects or errs: reject), not a Lean "
                                  "verifier's"}
+    on, developer = coins_on(cfg, bindings_of(state)), {p["machine"] for p in cfg["party"] if p["principal"] == "developer"}
     return {"block": k, "components": components, "product": product, "reason": reason, "registration": None,
-            "coins": coins_of(cfg), "verdict": "undecided" if verdict == "accept" and absent else verdict, **python}
+            "coins": "simulated" if developer & set(on.values()) else coins_of(cfg), "coins_on": on,
+            "verdict": "undecided" if verdict == "accept" and absent else verdict, **python}
 
 
 #: what a registration raises with once its configuration item is written, while no run's log holds the item: the goal
@@ -736,6 +767,14 @@ def coins_of(cfg: Mapping[str, Any]) -> str:
     gate = at[CHALLENGER]["machine"]
     return "simulated" if any(p["machine"] == gate and p["principal"] == "developer" for p in at.values()) \
         else "development"
+
+
+def coins_on(cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[str, str]:
+    """The machine each listed component's attester's key and coins are made on, for the pieces that have a
+    ``development`` binding: the attester's where it is bound, else the piece's own."""
+    at = {p["name"]: p["machine"] for p in cfg["party"]}
+    return {c: at[x.reaches] if x.development in x._bindings(bindings) else at[x.party] for c in cfg["protocols"]
+            for x in PARTIES.get(c, {}).values() if x.development}
 
 
 def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
