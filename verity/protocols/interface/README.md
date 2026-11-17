@@ -71,7 +71,7 @@ decodes the evidence, and its peak memory is about 2.6 times the line.
 A check that reads bytes too large for canonical JSON (a statement's circuit file, its public file, its sessions'
 records and proofs) is a `Core.BlobProtocol`: a `Protocol` with `checkBlobs`, which also takes `Core.Blobs`. The caller
 passes the bytes, and the verifier holds each under the SHA-512 it computes itself, so `Blobs.get digest` finds a blob
-only by the digest of its own bytes. The check names each file by a digest its parameters or evidence carry, and the
+only by the digest of its own bytes. The verifier names each file by a digest its parameters or evidence carry, and the
 lookup is the check that the file is the committed one. `BlobProtocol.answer` is `Protocol.answer` with `checkBlobs` on
 the caller's blobs. `toProtocol` is the protocol on no blobs, so a composition of `Protocol`s takes it unchanged.
 `Protocol` and `Protocol.answer` don't change, and a protocol that reads no blobs needs none of this.

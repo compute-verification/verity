@@ -133,7 +133,7 @@ def test_a_family_priced_several_ways_is_split_by_its_ways_and_only_an_own_row_i
 
 def test_the_hand_computation_is_reproduced_from_the_rows_it_read(tmp_path):
     """The figures a hand computation gave on these rows, to the digits it kept: the world year's audit budget at 10%, its
-    bound at λ = 1 and at the rows' λ, each part of the 10%, the figure with the network check's own proving taken off the
+    bound at λ = 1 and at the rows' λ, each part of the 10%, the figure with the network verifier's own proving taken off the
     budget, and the datacenter year's. A fresh machine gets them from the store's remote alone."""
 
     doc = E.build(store=recorded(tmp_path).fresh(), root=REPO)

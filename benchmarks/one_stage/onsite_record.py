@@ -322,7 +322,7 @@ DAY = (f"{DAY_OPEN}: the record doesn't claim the run served one program a day. 
        "until each closes: R2's day isn't yet the challenger's signed time but the day the run's launcher passed the "
        "server (serve-openai --advice-day), and the audit doesn't yet read the challenger's signed registration log "
        "but the copy the served node holds. The day's registration and the declared-circuit refusals still run and "
-       "refuse as before: the server declares B as its day's one program in the registration log, whose check refuses "
+       "refuse as before: the server declares B as its day's one program in the registration log, whose verifier refuses "
        "a second declaration of a day (duplicate-declaration); the run's ADVICE-LINE holds the log's last entry to "
        "that declaration; and R2 refuses a record whose program isn't its day's declared one (R2-declared) wherever a "
        "verifier passes it the day and the log's declarations, which no verdict here does")
@@ -399,7 +399,7 @@ POOLED = ("Flock.Guarantees.IntegrityHorizon: over T sampling blocks (``sampling
           "window accepts while their incorrect proof blocks total at least ln(1/δ)/q with probability at most "
           "δ + Σ_t (ε_ks,t + δ_link,t), whatever T is. So a monitoring period's windows hold at most ⌊ln(1/δ)/q⌋ "
           "incorrect proof blocks in all (``incorrect_at_most``) but with that probability, its named assumptions A3 "
-          "for each window's draw bytes, live-verifier, cr/sha-512 and ecr/sha-512. No check computes ε_ks,t or "
+          "for each window's draw bytes, live-verifier, cr/sha-512 and ecr/sha-512. No verifier computes ε_ks,t or "
           "δ_link,t, so the probability has no number here past δ (``error``)")
 #: the pooled cells' rules: the node's period from the run's window, and the datacenter's and the world's from the node's
 POOLED_RULES = {

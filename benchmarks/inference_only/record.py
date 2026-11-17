@@ -1,5 +1,5 @@
 """A workload's record, read for `report.py --from`: the inference-only check on the run's files, what it costs in
-the clear, and the share of a block's work that no PoUW check credits.
+the clear, and the share of a block's work that no PoUW verifier credits.
 
 * **The files.** The run's `out/` (`OUT_FILES`), named by its path or by the run directory holding it (`files_of`):
   its compose's verdicts, its policy, the rate rule's limits and the count's. The Program, the circuit record and the
@@ -233,7 +233,7 @@ def previous(files: Files) -> Any:
 
 
 def share(verdicts: Mapping[str, Any], policy: Mapping[str, Any], before: Any) -> dict[str, Any]:
-    """The share of the run's blocks' work that no PoUW check credits, from its verdict of record (module docstring),
+    """The share of the run's blocks' work that no PoUW verifier credits, from its verdict of record (module docstring),
     ``before`` the run's registration's `previous`."""
     row = (verdicts.get("protocols") or {}).get("work")
     if not isinstance(row, dict):

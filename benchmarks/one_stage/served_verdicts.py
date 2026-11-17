@@ -238,7 +238,7 @@ REPORT_FORMAT = "verity/all-protocols-window/v1"
 #: the block record's verdict by the window report's name for it: ``-window/v1`` calls an undecided window pending
 WINDOW_VERDICT = {"undecided": "pending"}
 #: ``record``'s exit by the window's verdict, as composite.py's by its Lean's: 0 only for the compiled Lean check's
-#: accept; 1 for a reject (or a refused composite, or a block record its own check refuses), 2 for pending
+#: accept; 1 for a reject (or a refused composite, or a block record its own verifier refuses), 2 for pending
 RECORD_EXIT = {"accept": 0, "reject": 1, "pending": 2}
 #: SPOT's owner, its row's
 INTEGRITY_OWNER = "compute-accounting"

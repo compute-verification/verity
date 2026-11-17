@@ -108,7 +108,7 @@ place), onsite's the same three among its own, and neither's one-stage v1's case
 files in a 0700 scratch directory under ``--private``; the period's answer is the one `pouw_piece.py` wrote, and
 Pearl+'s the Lean verdict of record's.
 
-**No check runs outside a memory limit of its own, and none is started that cannot fit** (`lean_answer`, `Limits`).
+**No verifier runs outside a memory limit of its own, and none is started that cannot fit** (`lean_answer`, `Limits`).
 Each check is its own process in a systemd user scope of its own (``MemoryMax`` ``CHECK_MEM_GB``, default
 `CHECK_MEM_GB`, no swap), on a host with no such scope behind ``prlimit`` under an address-space limit of the same
 size, and on a host with neither it is not started (``CHECK_SCOPE=none`` runs it under no limit, a development host's

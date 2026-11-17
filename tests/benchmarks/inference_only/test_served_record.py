@@ -1,5 +1,5 @@
 """`verity bench inference_only --from`: a workload's record, made small from the record check's own shaped case.
-The check's case is written by its script; its verdicts come from a stand-in that prints the script's reference
+The verifier's case is written by its script; its verdicts come from a stand-in that prints the script's reference
 verdicts as the compiled command prints them, or, where `lake` is, from the compiled command itself. What the command
 keeps of each verdict is its public form; the share is PoUW's verdict of record's, refused where it can't be; and the
 record's class under the tie is read from its policy's own k by kind."""
@@ -365,7 +365,7 @@ def test_a_record_that_misstates_is_refused_before_the_check_runs(case, tmp_path
 
 def test_a_record_with_no_program_has_no_number_and_says_the_check_did_not_run(case, tmp_path, capsys) -> None:
     """A record that holds no Program (a serve under the Pearl+ tie writes none) can't be checked: there is no number,
-    whatever PoUW's accept credits, its why says the check did not run, no check runs, and the exit is 1."""
+    whatever PoUW's accept credits, its why says the check did not run, no verifier runs, and the exit is 1."""
     args = made(case, tmp_path, accept=True)
     (tmp_path / "run" / "program.json").unlink()
     code, doc = _run(args, tmp_path / "no-such-check")

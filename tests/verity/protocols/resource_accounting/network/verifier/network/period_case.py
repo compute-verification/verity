@@ -1666,7 +1666,7 @@ MUTATIONS = list(EXPECT)
 #: each execution phase signed by its own entry at its own number. Refused: two listed entries that sign in turn, each
 #: in its own session at its own number, in a period the second's stretch holds; a certificate or a rows registration
 #: under a key that isn't listed, under the picked key in the other entry's session, under the other listed entry,
-#: outside its stretch, and at the period's number where the session's belongs. The check reads each session's
+#: outside its stretch, and at the period's number where the session's belongs. The verifier reads each session's
 #: signed start: accepted, one key listed in two sessions, the period's one execution phase in the second's stretch, the
 #: second starting where the two sessions' signed bases put it (`two-sessions`); refused, that list with the second
 #: session's base another (`start-not-signed`), or its ordinal not the first's next (`start-skipped`), and a period of

@@ -4,7 +4,7 @@ pod's older run directories still hold.
 
 Its writers are `config.RowConfig.to_json` (the row files), `pipeline.workload.workload_doc` and `pipeline.coverage_workloads`;
 each writes every field typed here as required, and a holdout workload a pod's runs hold lacks three that are optional.  `config.RowConfig` parses a
-row file for running it (v2 only, with the engine's checks); this is the record a check reads.
+row file for running it (v2 only, with the engine's checks); this is the record a verifier reads.
 
     w = Workload.load(path)                     # MissingField / UnknownField name the file and the field
     w.requests[0].prompt_length, w.sampling_variant, w.arrive_step(0), w.doc_sha256

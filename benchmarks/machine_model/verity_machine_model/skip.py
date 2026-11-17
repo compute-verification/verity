@@ -2,10 +2,10 @@
 
 ε_skip = (honest work a cheater can skip) / (the cheater's unavoidable work). Each component of honest work is
 classified per design as unavoidable (a transcript Verify recomputes, a commitment, a sample, noise the cheater must
-expand, a value a check recomputes from the transcript) or skippable (unchecked: the strip of a low-rank noise, a
+expand, a value a verifier recomputes from the transcript) or skippable (unchecked: the strip of a low-rank noise, a
 product served plain, the vector work only a served output needs). The cheater is the zero instance (A* = B* = 0,
 chosen before the sample), which makes every strip, every served output and everything derived from it free unless a
-check recomputes it from the transcript.
+verifier recomputes it from the transcript.
 
 - MAC-weighted: tensor MACs only, strips at their logical rank (L per output word).
 - Time-weighted: every component's GPU time on one RTX PRO 6000 (sm_120) at its read clock, from the measured rates in
@@ -25,7 +25,7 @@ records it to four figures. `benchmarks/pouw/eps_budget.py` prints it as tables.
 
 Two pieces of served-only work that the cheater skips are not priced as skippable:
 
-- co32c's recombination O = O′ − Σ128^d D_d. `TS_EPS` prices co32c as if O were a checked word, but no check reads it:
+- co32c's recombination O = O′ − Σ128^d D_d. `TS_EPS` prices co32c as if O were a checked word, but no verifier reads it:
   H1's receipts are T, O′ and the D_d.
 - g1's centring correction, which nothing here prices.
 
@@ -283,7 +283,7 @@ PV_DIGIT_OPS, PV_SERVE_OPS, PV_SCALE_OPS = 7.0, 11.2, 12.0
 #: component's own time, by leaf, model and component, from checked_strip.py @007ee9c54 (`ts_co32c_recombination`,
 #: `ts_qk_k128_all_routes`):
 #: - co32c (linears, lm_head): `ts_co32c_recombination`'s "O committed", within 1e-5 of "charged". That prices the residue
-#:   sums alone, with the cheater charged for the recombination. No check reads O (H1's receipts are T, O′ and the D_d), so
+#:   sums alone, with the cheater charged for the recombination. No verifier reads O (H1's receipts are T, O′ and the D_d), so
 #:   this leaves the recombination out of ♭'s credit, which is sound (the module docstring).
 #: - cohalf (Q Kᵀ, k = 128): every zero-instance route at X_BITSLICED; its O = T_last − U·Y is a receipted word.
 #: Two-sided's served outputs are its last checked words and its

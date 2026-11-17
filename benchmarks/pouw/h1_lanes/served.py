@@ -457,7 +457,7 @@ def prepare(a: argparse.Namespace) -> None:
     produced = PR.entry(ctx.prog, LL.PARTIALS, LL.lanes(*RC), ctx.wp, d)
     produced_check = list(PR.check(record, d, op["draw_root"], {LL.PARTIALS: produced}))
     if produced_check:
-        raise SystemExit(f"the produced record fails its own check: {produced_check}")
+        raise SystemExit(f"the produced record fails its own verifier: {produced_check}")
     sw = Served(leaf, (a_root, b_root), d, op["draw_root"], tree, record, op["ports"],
                 {LL.PARTIALS: produced, "other-a": op["other"]["entry"]})
     ctx.worlds = {"served": sw}

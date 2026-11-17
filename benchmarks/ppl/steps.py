@@ -1210,7 +1210,7 @@ def native_linear(mm: MM, nxt: Next, *, grid: str, scale: str = "channel", act: 
     integers m q + b (in int8 for e4m3i120 and nvi10; in H1's weights, +-110, with H1's U on +-16 in s8, for e4m3i104
     and nvi9; in co32c's 7-bit weights, Dither-C's, for e4m3i60 and nvi5), less its rank-one terms. `clip = n`: every
     per-row scale (each token's, each weight row's) searched over n clip ratios (`native_parts`); the honest prover's
-    choice of levels, which no check reads. `act = dither3`: each activation its nearest level moved by its gap times
+    choice of levels, which no verifier reads. `act = dither3`: each activation its nearest level moved by its gap times
     b + b' - 1 (`dither3`), beside dithered weights: the dithered product is the one served."""
     hkey = (mm.name, tuple(s.key for s in mm.prefix[:-1]))
     if mm.run.hessian is not None:
