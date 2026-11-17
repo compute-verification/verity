@@ -105,7 +105,7 @@ def test_the_configuration_is_the_tables_byte_for_byte():
 
 @pytest.mark.parametrize("demo", sorted(set(T.DEMOS) - {"onsite_full"}))
 def test_each_smaller_demo_is_the_tables_byte_for_byte_and_its_own_composite(demo):
-    """Each other demo file is the table's configuration of its subprotocols, at onsite_full's commit, whose composite
+    """Each other application's file is the table's configuration of its subprotocols, at onsite_full's commit, whose composite
     (or onsite's smaller set) is its own id; only the subprotocols it lists have parameters and pins."""
     path = ROOT / "applications" / f"{demo}.toml"
     cfg = T.configuration(K.parse(CONFIG.read_text())["program"]["commit"], demo)
@@ -115,7 +115,7 @@ def test_each_smaller_demo_is_the_tables_byte_for_byte_and_its_own_composite(dem
     assert {p["protocol"] for p in cfg["pin"]} == {"pous", "wipe"} & set(T.DEMOS[demo])
 
 
-def test_remote_has_the_values_pearl_pluss_tie_takes_and_no_onsite_demo_takes_them():
+def test_remote_has_the_values_pearl_pluss_tie_takes_and_no_onsite_application_takes_them():
     remote = R.load(ROOT / "applications" / "remote.toml", REG)
     assert remote["workload"]["params"] == {"model": "unsloth/Llama-3.2-1B", "precision": "bfloat16", "slots": 4,
                                             "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da",
@@ -724,7 +724,7 @@ def test_the_onsite_check_is_the_records_composed_verdict(tmp_path, capsys, monk
 
 
 def test_a_smaller_demos_check_reads_no_onsite_composite(tmp_path, monkeypatch):
-    """A demo whose product isn't onsite's hands the record no composite: onsite's Lean answer is not its product's."""
+    """An application whose product isn't onsite's hands the record no composite: onsite's Lean answer is not its product's."""
     monkeypatch.setattr(T, "VERDICTS_SCRIPT", stand_in(tmp_path, "record.py", RECORD % json.dumps(ALL_ROWS)))
     cfg = T.configuration(R.load(CONFIG, REG)["program"]["commit"], "onsite_compute")
     (tmp_path / "out").mkdir()
