@@ -17,7 +17,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = ["test_bench.py", "test_bench_engines.py", "test_bench_results.py",
+untraced = ["test_bench.py", "test_booked_card.py", "test_bench_engines.py", "test_bench_results.py",
             "test_bench_resume.py", "test_bench_served.py", "test_env.py",
             "test_spot_status.py", "test_steady_launch.py", "test_steady_node.py",
             "test_steady_node_kept.py", "test_steady_node_refusals.py", "test_steady_point.py",
