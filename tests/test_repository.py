@@ -67,7 +67,7 @@ CODE_SUFFIXES = SOURCE_SUFFIXES | {".lean", ".cuh", ".cpp", ".md"}
 #: to 64 KiB, so none can grow past that and nothing joins them silently. A test fixture over BLOB_LIMIT is registered in
 #: artifacts.json instead and fetched (`research data fetch-fixtures`).
 ALLOWLIST = {
-    "benchmarks/census/workloads.json": 384 * 1024,
+    "calibration/census/workloads.json": 384 * 1024,
     "tests/adapters/vllm/tests/lint/allowlists/mypy.json": 448 * 1024,  # shrink-only: the integration's mypy errors
     "adapters/vllm/manifests/checkpoints.json": 320 * 1024,
     "tests/lint/allowlists/repo_retired_terms.json": 512 * 1024,
