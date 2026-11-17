@@ -100,6 +100,34 @@ def test_only_a_run_of_the_door_s_own_job_can_be_stored_or_recorded(tmp_path):
         assert not R.of_record(s.store, run)[0]
 
 
+def test_a_trial_through_the_door_is_admitted_and_never_of_record(tmp_path, monkeypatch):
+    """A trial (`VERITY_BENCH_TRIAL`) passes the door's `--env` rule, so a probe can run the door's own job, and the door
+    forwards it from the launcher; a sweep or timed run that is one, by its attempt's env or its result, is refused."""
+
+    from verity_bench import kit
+
+    monkeypatch.setattr(kit.atexit, "register", lambda *a: None)
+    s = Store(tmp_path)
+    art = stored_points(tmp_path, s, "r20261104-020000-0001")
+    node_points(tmp_path, Node(tmp_path), "r20261104-020000-0002")
+    s.ran("r20261104-020000-0003", tmp_path / "r20261104-020000-0002", sub="points", env={kit.TRIAL: "1"})
+    with pytest.raises(ValueError, match=r"r20261104-020000-0003 is a trial run \(VERITY_BENCH_TRIAL\)"):
+        R.store_points(s.store, "r20261104-020000-0003")
+
+    sent = tmp_path / "sent-points.json"
+    sent.write_bytes(Path(s.store.fetch(art)).read_bytes())
+    monkeypatch.setenv(kit.TRIAL, "1")
+    argv = R.launch_argv(tmp_path, "node", 60, ["run"])
+    assert argv[argv.index("VERITY_BENCH_TRIAL=1") - 1] == "--env"
+    rc, run_dir = node_run(tmp_path, Node(tmp_path), sent, "stock", art, run="r20261104-030000-0001")
+    monkeypatch.delenv(kit.TRIAL)
+    assert rc == 0 and json.loads((run_dir / "result.json").read_text())["trial"] is True
+    s.ran("r20261104-030000-0001", run_dir)
+    with pytest.raises(ValueError, match=r"r20261104-030000-0001 is a trial run"):
+        R.record_run(s.store, "r20261104-030000-0001")
+    assert not s.store.labels("r20261104-030000-0001", key=R.RUN_OF_RECORD)
+
+
 def test_the_table_shows_only_labelled_runs_of_record_and_refuses_the_rest_with_why(tmp_path, scheme):
     """The source check: a γ stands only from a labelled run of the door, timed at the points of record. A run that
     doesn't stand as a whole can't be labelled; a point that fails the door's rules stays in the table, refused; points
@@ -222,3 +250,18 @@ def test_a_row_carries_the_note_of_its_own_run_and_the_same_numbers_with_it_or_w
     assert table["covers"] in said and O.WITHOUT_Y in said
     monkeypatch.setitem(O.LEFT_OUT, O.KERNEL_MODEL, ())
     assert O.covers() == "Each γ is over the 4 linears of one llama3.1-70b layer (qkv, o, gate_up, down)."
+
+
+@pytest.mark.parametrize("commits_y", [True, False, None])
+def test_a_gamma_of_record_says_whether_its_run_timed_y_s_commitment(tmp_path, scheme, commits_y):
+    s = Store(tmp_path)
+    art = stored_points(tmp_path, s, "r20261104-020000-0001")
+    assert R.record_run(s.store, timed(tmp_path, s, art, "pearl-plus", "r20261104-030000-0002")) == []
+    table = R.build(s.fresh(), root=REPO)
+    row = next(r for r in table["rows"] if (r["scheme"], r["point"], r["model"]) == ("pearl-plus", "C", O.KERNEL_MODEL))
+    del row["commits_y"]
+    if commits_y is not None:
+        row["commits_y"] = commits_y
+    own = next(m for m in R.measurements(table, {"m": "pearl-plus/h200/C"}) if "member" not in m)
+    assert (own["value"], own["target"], own["verdict"]) == (row["gamma"]["gamma"], O.GAMMA_MAX, "within target")
+    assert own["extra"].get("commits_y", "none written") == ("none written" if commits_y is None else commits_y)
