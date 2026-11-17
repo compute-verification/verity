@@ -1272,9 +1272,9 @@ def test_schedule_prints_the_classs_schedule_as_network_attester_serves_flags(ca
     assert WS._params(WS.parser().parse_args(["rehearse", "--fake", "--ids", "--out", "o", *flags])) == params
 
 
-def test_w63k4_is_w63s_class_at_a_window_circuits_ko_and_ki_its_certifier_w63s_at_egress_cells_ko_plus_1():
+def test_w63k4_is_w63s_class_at_a_window_circuits_ko_and_ki_its_attester_w63s_at_egress_cells_ko_plus_1():
     """w63k4 is w63's class at KO 4 and KI 32 (a window circuit's of 8 slots, 32 prompt ids and 4 outputs a request),
-    its certifier w63's but for egress_cells 5, which the class serves and w63's 65 it refuses by name; its traffic
+    its attester w63's but for egress_cells 5, which the class serves and w63's 65 it refuses by name; its traffic
     fills the class (a prompt of KI ids, a response of KO), and its egress is 4 request slots of KO ids."""
     s = sz.SETUPS["w63k4"]
     assert s.cls == replace(sz.CLASS, KO=4, KI=32) and (s.cls.SLOTS, s.params.window_programs) == (4, 8)
@@ -1394,7 +1394,7 @@ def test_a_challenger_sample_that_cant_sample_is_refused_by_name_before_anything
     assert re.search(why, capsys.readouterr().err) and not (tmp_path / "out").exists()
 
 
-def test_the_window_root_is_the_network_certifiers_signed_execution_phase(tmp_path):
+def test_the_window_root_is_the_network_attesters_signed_execution_phase(tmp_path):
     """Each run's root is its own (the synthetic run's registrations carry fresh salts), a network attester run's is
     read from its published registrations alone, and each execution phase of a group has its own."""
     def phase(whole, w: int = 0) -> SimpleNamespace:
