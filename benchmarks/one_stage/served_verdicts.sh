@@ -108,13 +108,15 @@
 #     no record, is refused, exit 1; any other server's answer is carried as elsewhere. Network attestation's chain files
 #     that list or count the window's requests (CERTIFIER_PRIVATE) then move to the serve dir's private/pieces/attester. Then, unless COMPOSITE is set empty, remote's and onsite's Lean
 #     verdicts on the run's cases (`served_composite.sh`'s docstring): a composite that didn't run (a tree without
-#     composite.py) or whose Lean didn't answer fails the run. On the served node its composite is of record, its
-#     composed_on saying where it was made; under VERITY_HOLD_PLACEMENT=1 none is (under COMPOSE_OFF_NODE=0 it is a
+#     composite.py) or whose Lean didn't answer fails the run. On the served node its composite is of record, and the
+#     record is composed again after it, reading it (--composite), its composed_on saying where it was made (the served
+#     node, served_node true); under VERITY_HOLD_PLACEMENT=1 none is (under COMPOSE_OFF_NODE=0 it is a
 #     development check), so this record is `pending`; under COMPOSE_OFF_NODE=1, then the default,
 #     it says (its `deferred`) that the final record and the composite are composed off it, and in the composite's place
 #     the run's last step, after V3c, writes the compose hand-off they are composed from (below, at `handoff`).
 #     The run's exit is the record's verdict: 0 only where it is the compiled Lean check's accept, 2 where it is
-#     `pending`, no composite of record yet (always on the served node and in a deferral's follow-on), and otherwise
+#     `pending`, no composite of record yet (on the served node and in a deferral's follow-on under
+#     VERITY_HOLD_PLACEMENT=1), and otherwise
 #     nonzero: 1 where it is `reject`, a composite is refused or a step around it failed, the step's own code where one
 #     stopped the run before it.
 #     PRODUCT (default onsite) is the product the run composes: onsite every subprotocol; remote SPOT and PoUW
@@ -179,8 +181,8 @@
 #     and the period check, which the run's --timeout holds beside the other steps. The period check writes the
 #     network attester's answer.json in DIR, which step 4's attester piece reads; `served_verdicts.sh v3c`, which writes no
 #     record, moves the steps' logs (CERTIFIER_PRIVATE) to the serve dir's private/pieces/certifier before it exits.
-# Composed off the served node: with COMPOSE_OFF_NODE=1 (the default under PRODUCT=remote or VERITY_HOLD_PLACEMENT=1,
-# else 0, which composes both on the served node, the composite a development check that claims no record only under
+# Composed off the served node: with COMPOSE_OFF_NODE=1 (the default under VERITY_HOLD_PLACEMENT=1, else 0, which
+# composes both on the served node, the composite a development check that claims no record only under
 # VERITY_HOLD_PLACEMENT=1, `served_composite.sh`, which then refuses one there under 1) the run's
 # last step (`handoff`, after V3c in every run, so the composite reads V3c's audit's cases where it ran, the class window
 # of record, and step 3's audit's only in a run without V3c) writes the serve dir's private/compose: the
@@ -553,9 +555,8 @@ MAIN_SHA=${MAIN_SHA-$(git -C "$TREE" rev-parse HEAD 2>/dev/null)}
 PRODUCT=${PRODUCT:-onsite}
 # true under VERITY_HOLD_PLACEMENT=1, which restores the holds that rest only on where coins are flipped or a composite made
 hold_placement() { [ "${VERITY_HOLD_PLACEMENT:-}" = 1 ]; }
-# remote's composite is composed off the node from the hand-off unless its caller says otherwise; onsite's, whose cases
-# only the node writes, on the node unless placement is held
-COMPOSE_OFF_NODE=${COMPOSE_OFF_NODE:-$({ hold_placement || [ "$PRODUCT" = remote ]; } && echo 1 || echo 0)} COMPOSE_NODE=${COMPOSE_NODE:-vy-auditor-2}
+# off the node only where the caller runs a composer there (COMPOSE_OFF_NODE=1), or under VERITY_HOLD_PLACEMENT=1
+COMPOSE_OFF_NODE=${COMPOSE_OFF_NODE:-$(hold_placement && echo 1 || echo 0)} COMPOSE_NODE=${COMPOSE_NODE:-vy-auditor-2}
 COMPOSE_GATE=${COMPOSE_GATE:-ssh -i $HOME/.ssh/vllm_gate_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes research@${VY_AUDITOR_2_HOST:-}}
 export COMPOSE_OFF_NODE
 if [ -n "${ONSITE_PIECES:-}" ]; then
@@ -610,7 +611,7 @@ case $PRODUCT in
     done ;;
   *) say "PREFLIGHT: PRODUCT is onsite or remote, not $PRODUCT"; exit 3 ;;
 esac
-case $COMPOSE_OFF_NODE in 0 | 1) ;; *) say "PREFLIGHT: COMPOSE_OFF_NODE is 1 (the default under PRODUCT=remote or VERITY_HOLD_PLACEMENT=1) or 0, not $COMPOSE_OFF_NODE"; exit 3 ;; esac
+case $COMPOSE_OFF_NODE in 0 | 1) ;; *) say "PREFLIGHT: COMPOSE_OFF_NODE is 1 (the default under VERITY_HOLD_PLACEMENT=1) or 0, not $COMPOSE_OFF_NODE"; exit 3 ;; esac
 [[ -z ${V3C_GPUS:-} || $V3C_GPUS =~ ^[0-9]+(,[0-9]+)*$ ]] \
   || { say "PREFLIGHT: V3C_GPUS is the cards V3c's audit proves on, their indices comma-separated (0,1), not $V3C_GPUS"; exit 3; }
 [ -z "${V3C_GPUS:-}" ] || command -v gpu-lease > /dev/null \
@@ -2393,6 +2394,13 @@ comp=0
 fixed_limits
 [ -n "$DEFER" ] || [ "$COMPOSE_OFF_NODE" = 1 ] || [ -z "${COMPOSITE-1}" ] \
   || TPY=$TPY bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
+if [ -z "$DEFER" ] && [ "$COMPOSE_OFF_NODE" = 0 ] && [ -n "${COMPOSITE-1}" ] && ! hold_placement; then
+  "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$SP" \
+    --pieces "$OUT/pieces" --out "$OUT/record" --product "$PRODUCT" ${WT[@]+"${WT[@]}"} ${SC[@]+"${SC[@]}"} \
+    --key-sha512 "$H1_KEY_SHA512" --lane "${PEARLC_CHALLENGER_LANE:-${H1_LANE:-vllm}}" --composite "$OUT/composite" \
+    2>&1 | publish_lines
+  rec=${PIPESTATUS[0]}
+fi
 if [ -n "$v3c_done" ]; then :
 elif [ -n "$V3C" ]; then v3c_commit && v3c_proved
 else say "V3C: not in this run (V3C_CLASS empty): \`served_verdicts.sh v3c\` runs it on the serve dir"; fi

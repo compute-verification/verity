@@ -328,7 +328,7 @@ def test_the_runners_variables_and_the_bindings_keys_are_these():
     assert T.variables(cfg, BINDINGS) == VARIABLES | deployed
     assert T.unbound(cfg, {}) == KEYS and T.unbound(cfg, BINDINGS) == [] and sorted(KEYS) == UNBOUND
     unbound = T.variables(cfg, {})
-    assert set(unbound) == set(VARIABLES) - {"WIPE_ADDRESS"} | set(deployed)
+    assert set(unbound) == set(VARIABLES) - {"WIPE_ADDRESS"} | set(deployed) | {"DEVELOPMENT"}
     assert unbound["CERTIFIER_FRONT"].endswith("--gate '<network-certifier.certifier.gate>' "
                                                "--peer '<network-certifier.certifier.peer>'")
     assert all(unbound[k] == VARIABLES[k] for k in ("CERTIFIER_CHAIN_CMD", "CERTIFIER_PERIOD_CMD"))
@@ -625,14 +625,15 @@ echo "${COMPOSITE-unset}|${COMPOSE_OFF_NODE-unset}" > "$OUT/composite.txt"
     ({"COMPOSITE": ""}, {}, "|unset"),
     ({"COMPOSE_OFF_NODE": "0"}, {}, "unset|0"),
     ({"COMPOSE_OFF_NODE": "0", "VERITY_HOLD_PLACEMENT": "1"}, {}, "unset|0"),
-    ({"PRODUCT": "remote"}, {"COMPOSITE": ""}, "|unset"),
-    ({"PRODUCT": "remote", "COMPOSE_OFF_NODE": "0"}, {}, "unset|0"),
+    ({"PRODUCT": "remote"}, {}, "unset|unset"),
+    ({"PRODUCT": "remote", "COMPOSE_OFF_NODE": "1"}, {"COMPOSITE": ""}, "|1"),
+    ({"PRODUCT": "remote", "VERITY_HOLD_PLACEMENT": "1"}, {"COMPOSITE": ""}, "|unset"),
 ])
 def test_the_served_window_asks_for_no_composite_unless_its_caller_names_one(tmp_path, capsys, monkeypatch, named,
                                                                              sets, got):
-    """The runner composes onsite's composite on the node by default; under VERITY_HOLD_PLACEMENT=1, and for remote,
-    it composes off the node, where it refuses onsite's, so the table hands it ``COMPOSITE`` empty as it always did for
-    remote; a caller that names ``COMPOSITE`` or ``COMPOSE_OFF_NODE`` gets the runner what it named and nothing more."""
+    """The runner composes on the node by default, remote's as onsite's; where it composes off the node (a caller's
+    COMPOSE_OFF_NODE=1, or the default under VERITY_HOLD_PLACEMENT=1), where it refuses onsite's, the table hands it
+    ``COMPOSITE`` empty; a caller that names ``COMPOSITE`` or ``COMPOSE_OFF_NODE`` gets the runner what it named."""
     for name in ("COMPOSITE", "COMPOSE_OFF_NODE", "VERITY_HOLD_PLACEMENT", "PRODUCT"):
         monkeypatch.delenv(name, raising=False)
     for name, value in named.items():
