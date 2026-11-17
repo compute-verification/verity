@@ -416,14 +416,19 @@ def test_a_realization_compares_at_least_two_random_vectors_within_the_budget():
 
     e, got = run(floor)
     assert got == (6, 4, 6, 2) and CK.vector_class(e) == "random" and CK.classified(e) is e
+    assert CK.compared_by(e) == {"by": "lowering", "realizations": ["c-flock:ir_lower"]}
     e, got = run(dataclasses.replace(floor, random_budget=1))
     assert got == (4, 4, 4, 0) and CK.vector_class(e) == "edge-only"
+    assert CK.compared_by(e) == {"by": "none", "realizations": [], "reason": "edge-only", "why": ""}
     assert [w["name"] for w in CK.classified(e)["warnings"] if w["check"] == "vectors"] == [
         "vectors/edge-only CircuitCheckFloorSum_v1: 1 its realizations compared it with the reference on all-edge vectors only, "
         "on no random one"]
     e, got = run(dataclasses.replace(floor, lower_max_gates=0))
     assert got == (4, 4, None, None) and CK.vector_class(e) == "none"
     assert [w["code"] for w in CK.classified(e)["warnings"] if w["check"] == "vectors"] == ["none"]
+    assert CK.compared_by(e)["by"] == "none" and CK.compared_by(e)["reason"] == "units"
+    word = {"correspondence": {"vectors": 4, "edge_vectors": 2, "realizations": [{"via": "word:W_v1", "compared": 4, "random": 2}]}}
+    assert CK.compared_by(word) == {"by": "other", "realizations": ["word:W_v1"]}
 
 
 def test_a_kernel_takes_its_floor_from_its_own_sampler():
@@ -460,7 +465,8 @@ def test_a_kernel_takes_its_floor_from_its_own_sampler():
     assert [f["name"] for f in e["failures"]] == [
         "correspondence/kernel-mismatch CircuitCheckFloorKernel_v1 [edges-only]: 2 of the 2 sampled vectors"]
     assert CK.vector_class(e) == "random"
-    assert not over["failures"] and CK.vector_class(over) == "edge-only"
+    assert CK.compared_by(e) == {"by": "kernel", "realizations": ["kernel:edges-only", "kernel:finite"]}
+    assert not over["failures"] and CK.vector_class(over) == "edge-only" and CK.compared_by(over)["reason"] == "edge-only"
     assert all("sampled" not in r for r in over["correspondence"]["realizations"])
 
 

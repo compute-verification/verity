@@ -1714,11 +1714,18 @@ def main(argv: list[str] | None = None) -> int:
     if a.update_pins:
         update_pins(rep)
     if model is not None:
+        by_id = {t.get("definition", t.get("target")): t for t in rep["targets"]}
+        model["compared"] = {fid: CK.compared_by(by_id[fid]) if fid in by_id else
+                             {"by": "none", "realizations": [], "reason": "not-checkable", "why": model["not_checkable"].get(fid, "no result")}
+                             for fid in model["bindings"]}
+        n = collections.Counter(c["by"] for c in model["compared"].values())
+        model["counts"] = {"bindings": len(model["bindings"]), **{by: n[by] for by in CK.COMPARED_BY}}
         rep["model"] = model
         rep["summary"]["ok"] = rep["summary"]["ok"] and not model["not_checkable"]
         return max(verdict(rep, out=a.out, fail_on_warnings=a.fail_on_warnings,
                            what=f"{len(rep['targets'])} of the model's {len(model['bindings'])} served binding(s), "
-                                f"{len(model['not_checkable'])} not checkable from a configuration"),
+                                f"{len(model['not_checkable'])} not checkable from a configuration; compared on random vectors "
+                                + ", ".join(f"{n[by]} by {'nothing' if by == 'none' else by}" for by in CK.COMPARED_BY)),
                    int(bool(model["not_checkable"])))
     if a.binding is not None:
         return verdict(rep, out=a.out, fail_on_warnings=a.fail_on_warnings,

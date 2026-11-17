@@ -25,7 +25,14 @@ node through `research run --on auto`. `circuit-check --help` lists every other 
 alone: the Definitions of the proof blocks of its class circuit at that window class. `PHI` is the φ file a served run
 records. Each binding is a target of its own. A binding whose id no catalog Definition resolves, such as a record
 static, is named with the reason it can't be resolved, and the run fails. `--list` prints the bindings without checking
-any.
+any. The report's `model.compared` gives each binding's `by`:
+- `lowering`: a Flock lowering was compared with the reference on random vectors.
+- `kernel`: only a kernel was.
+- `other`: only a word view or a template's target was.
+- `none`: nothing was. Its `reason` is `budget`, `units`, `edge-only`, `not-checkable` or `other`, and its `why` gives the
+  lowering's own reason.
+
+`model.counts` totals the bindings by `by`.
 
 ## Failures, warnings and the cache
 

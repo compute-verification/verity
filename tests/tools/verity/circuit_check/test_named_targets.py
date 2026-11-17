@@ -77,7 +77,10 @@ def test_a_models_served_bindings_are_named_targets_and_one_no_configuration_che
     assert asked == [("phi.json", "4,27,2")] and got[-1]["specs"] == ["F32Add_v1", "F32Mul_v1"]
     assert got[-1]["jobs"] == 6 and got[-1]["cache"] == cli.default_cache() and traced == [cli.REPO]
     rep = json.loads(out.read_text())
-    assert rep["model"] == {"config": "phi.json", "class": "4,27,2", "bindings": ["F32Add_v1", "F32Mul_v1"], "not_checkable": {}}
+    nothing = {"by": "none", "realizations": [], "reason": "other", "why": ""}
+    assert rep["model"] == {"config": "phi.json", "class": "4,27,2", "bindings": ["F32Add_v1", "F32Mul_v1"], "not_checkable": {},
+                            "compared": {"F32Add_v1": nothing, "F32Mul_v1": nothing},
+                            "counts": {"bindings": 2, "lowering": 0, "kernel": 0, "other": 0, "none": 2}}
     assert rep["summary"]["ok"] and "2 of the model's 2 served binding(s), 0 not checkable from a configuration" in capsys.readouterr().out
     runs_before = len(got)
     assert cli.main([*model, "--list", "--out", str(out)]) == 0 and len(got) == runs_before and len(traced) == 1
@@ -90,6 +93,8 @@ def test_a_models_served_bindings_are_named_targets_and_one_no_configuration_che
     assert cli.main([*model, "--out", str(out)]) == 1 and got[-1]["specs"] == ["F32Add_v1"]
     rep = json.loads(out.read_text())
     assert not rep["summary"]["ok"] and rep["model"]["not_checkable"] == {rec: "KeyError: 'record static {0123456789ab}'"}
+    assert rep["model"]["compared"][rec] == {"by": "none", "realizations": [], "reason": "not-checkable",
+                                             "why": "KeyError: 'record static {0123456789ab}'"}
     printed = capsys.readouterr().out
     assert f"not checkable from a configuration: {rec}: KeyError" in printed
     assert "1 of the model's 2 served binding(s), 1 not checkable from a configuration" in printed

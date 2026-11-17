@@ -1,4 +1,4 @@
-"""`circuit-check --model PHI --class SPEC --list` on a tiny Llama, built from its configuration alone: its served bindings are
+"""`circuit-check --model PHI --class SPEC` on a tiny Llama, built from its configuration alone: its served bindings are
 the Definitions of its class circuit's proof blocks, each a target `targets.definition` resolves to that Definition.  The
 model is Llama-3.2-1B at one layer, an MLP of 2,048 and a vocabulary of one token-select unit, the smallest the default
 grain (Llama-3.2-1B's) lowers."""
@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import json
 from collections import Counter
+
+import pytest
 
 from circuit_check import cli
 from circuit_check import targets as TG
@@ -36,3 +38,24 @@ def test_a_tiny_models_served_bindings_are_its_class_circuits_proof_blocks_each_
     assert "EmbeddingRead_v1{V=2672,H=2048}" in listed and "Gemm_v2{K=2048,N=16,DOT=HopperBF16WgmmaDot16_v1}" in listed
     assert all(TG.definition(fid).id == fid for fid in listed)
     assert printed[-1].startswith("circuit-check --model: 35 served binding(s) of 14 families at class 1,2,2, 0 not checkable")
+
+
+@pytest.mark.slow
+def test_the_report_says_how_each_served_binding_was_compared_on_random_vectors(tmp_path, monkeypatch, capsys):
+    """Four of the tiny model's bindings checked for real, one of each kind: a Flock lowering compared (``lowering``), a kernel
+    only (``kernel``), and none over the whole-Definition budget or lowered as its template's units (``none``, with why)."""
+    four = {"TokenFeed_v1", "SiluMul_v2", "RoPEHead_v1", "RMSNormFusedCudaTail_v1"}
+    served = TG.served_targets
+    monkeypatch.setattr(TG, "served_targets", lambda config, cls: (
+        [fid for fid in served(config, cls)[0] if fid.partition("{")[0] in four], {}))
+    phi, out = tmp_path / "phi.json", tmp_path / "report.json"
+    phi.write_text(json.dumps(PHI))
+    assert cli.main(["--model", str(phi), "--class", "1,2,2", "--no-cache", "-j", "1", "--out", str(out)]) == 0
+    model = json.loads(out.read_text())["model"]
+    by = {fid.partition("{")[0]: c for fid, c in model["compared"].items()}
+    assert by["TokenFeed_v1"] == {"by": "lowering", "realizations": ["c-flock:ir_lower"]}
+    assert by["SiluMul_v2"] == {"by": "kernel", "realizations": ["kernel:rows"]}
+    assert by["RoPEHead_v1"]["by"] == "none" and by["RoPEHead_v1"]["reason"] == "budget" and "whole-Definition budget" in by["RoPEHead_v1"]["why"]
+    assert by["RMSNormFusedCudaTail_v1"]["by"] == "none" and by["RMSNormFusedCudaTail_v1"]["reason"] == "units"
+    assert model["counts"] == {"bindings": 4, "lowering": 1, "kernel": 1, "other": 0, "none": 2}
+    assert "compared on random vectors 1 by lowering, 1 by kernel, 0 by other, 2 by nothing" in capsys.readouterr().out
