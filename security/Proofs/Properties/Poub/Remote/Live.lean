@@ -49,7 +49,6 @@ theorem isReleased_W (c a : Array ByteArray) (s : State) (x y : Nat) : (W c a s)
   rfl
 theorem withdrawable_W (c a : Array ByteArray) (s : State) (pl : Plan) (w : Array (Int × Int)) :
     (W c a s).withdrawable pl w = s.withdrawable pl w := rfl
-theorem awaiting_W (c a : Array ByteArray) (s : State) (t : Int) : (W c a s).awaiting t = s.awaiting t := rfl
 
 theorem verify_W (s : State) (c a : Array ByteArray) (t : Int) (o : Array Opening) :
     verify (W c a s) t o = ((verify s t o).1, W c a (verify s t o).2) := by

@@ -1951,6 +1951,32 @@ def test_a_renamed_file_is_its_old_paths_file_so_the_sites_its_base_holds_past_i
             "repo_retired_terms: docs/b.md: 4 found, 2 allowed") in c["why"], c["why"]
 
 
+#: a short file whose rename rewrites most of its bytes (a module renamed in its own text), with its one listed use
+OLD_B, NEW_B = "docs/old/b.md", "docs/new/b.md"
+OLD_B_TEXT = "# Old.B\n\nOld.B.run, Old.B.stop.\nAn Old.B teapot.\n"
+NEW_B_TEXT = OLD_B_TEXT.replace("Old", "New")
+
+
+@pytest.mark.parametrize("more", [False, True])
+def test_a_rename_git_doesnt_pair_is_the_file_it_was_when_the_list_moves_its_entry(repo, more):
+    """A rename under git's 50% similarity that moves its entry with it (``--move OLD NEW``) is the file it was: its use is
+    the base's, so the change passes; one more use in it is the change's, named at its new path."""
+    repo.commit("retired terms", {REPO_TERMS_LINT: (SCRIPT.parents[3] / REPO_TERMS_LINT).read_text(), "GLOSSARY.md": TOY_GLOSSARY,
+                                  REPO_TERMS_JSON: _allowlist({"file": OLD_B, "count": 1}), OLD_B: OLD_B_TEXT})
+    repo.git("checkout", "-q", "-b", "pr")
+    repo.commit("Old.B is New.B", {OLD_B: None, NEW_B: NEW_B_TEXT + "A New.B teapot rests.\n" * more,
+                                   REPO_TERMS_JSON: _allowlist({"file": NEW_B, "count": 1})})
+    assert set(repo.git("diff", "-M", "--name-status", "main", "pr", "--", OLD_B, NEW_B).splitlines()) == {
+        f"D\t{OLD_B}", f"A\t{NEW_B}"}
+    [c] = G.gate("main", "pr")["changes"]
+    if not more:
+        assert (c["verdict"], c["fix"]) == ("passed", []), c["why"]
+    else:
+        assert (c["verdict"], c["fix"]) == ("failed", [
+            f"repo_retired_terms: {NEW_B}: 2 found, 1 allowed",
+            f"repo_retired_terms: {NEW_B}:5 'teapot' is retired; say kettle (GLOSSARY.md)"]), c["why"]
+
+
 def test_one_more_site_in_a_renamed_file_is_the_changes(terms_behind):
     """The same rename with a fifth use of the term in the moved file: it holds one more site than its old path did, so
     the change fails, naming the new path's count and the one new site."""
@@ -1992,8 +2018,9 @@ def test_a_violation_is_compared_by_its_file_and_what_it_is_with_a_count_and_nev
     """`beyond`: of a file's sites of one kind, as many as its base holds are the base's (those at a line the base names
     first, then the earliest), each named at the base's line; a count is the base's while it is no more than the base's,
     whatever each list allows, and the change's where the base names none; a key's violation that names each of its lines
-    counts a site a line, with the count it states after them or without; and a violation that names neither a line nor a
-    count is the base's when the base has the same one."""
+    counts a site a line, with the count it states after them or without; a retired term's site is its term without the
+    advice its Glossary row gives; and a violation that names neither a line nor a count is the base's when the base has
+    the same one."""
     a, b, count = "l: f.py:3 x", "l: f.py:9 x", "l: f.py: 2 found, 0 allowed"
     assert G.beyond([a], ["l: f.py:4 x"]) == (["l: f.py:4 x"], [])
     assert G.beyond([a, b], ["l: f.py:9 x"]) == ([b], [a])
@@ -2019,6 +2046,9 @@ def test_a_violation_is_compared_by_its_file_and_what_it_is_with_a_count_and_nev
     assert G.beyond([two], [three]) == ([three], []) and G.beyond([three], [two]) == ([], [three])
     assert G.beyond([two], [keyed]) == ([keyed], []) and G.beyond([keyed], [two]) == ([two], [])
     assert G.beyond(["l: test_x raised E", "l: nothing here"], ["l: test_x raised E"]) == (["l: test_x raised E"], ["l: nothing here"])
+    was, now = (f"r: f.md:{n} 'kettle' is retired; say the pot; its {s} (GLOSSARY.md)" for n, s in ((3, "lids"), (4, "tops")))
+    other = now.replace("'kettle'", "'teapot'")
+    assert G.beyond([now], [was]) == ([was], []) and G.beyond([other], [was]) == ([], [other])
 
 
 def test_a_site_a_lint_below_it_counts_fails_the_pr_that_adds_it_and_never_a_later_one(lane_linted):
@@ -2317,6 +2347,115 @@ def test_a_moved_site_pays_for_no_new_one_and_only_a_file_whose_count_falls_give
     assert c["verdict"] == "failed" and c["why"].startswith(
         f"adds 1 retired-term site(s) to the files it changes, as the base's {REPO_TERMS_LINT} counts them "
         f"(docs/c.md 0 -> 1)"), c["why"]
+
+
+def test_the_definitions_tests_are_the_integrations_and_keyed_as_beside_the_definitions():
+    path = "tests/adapters/vllm/verity_vllm/definitions/registry/test_a.py"
+    assert G.in_integration(path) and G.key_of(path) == "verity_vllm/definitions/tests/registry/test_a.py"
+    assert G.path_of(G.key_of(path)) == path
+    for path in ("tests/adapters/vllm/tests/pipeline/test_a.py", "adapters/vllm/verity_vllm/definitions/registry/a.py"):
+        assert G.path_of(G.key_of(path)) == path
+    assert not G.in_integration("tests/adapters/torch/test_a.py")
+
+
+ROOT = "tests/adapters/vllm/toyroot/"
+MYPY_JSON = "tests/adapters/vllm/tests/lint/allowlists/mypy.json"
+
+
+def _printed(file: str) -> dict:
+    return {**T201, "file": f"{ROOT}{file}"}
+
+
+@pytest.fixture
+def rooted(ruffed, monkeypatch) -> Repo:
+    """``ruffed`` with the vLLM rules' lint and a tests root (``ROOTS``) its lints don't read yet, whose test_a.py holds one
+    `print`, which no list records."""
+    monkeypatch.setattr(G, "ROOTS", {ROOT: ROOT})
+    ruffed.git("checkout", "-q", "main")
+    ruffed.commit("ruff with vLLM's rules, and a root it doesn't read", {
+        RUFF_VLLM_LINT: (REAL_LINT / "test_ruff_vllm.py").read_text(), G.RUFF_VLLM_CONFIG: RUFF_VLLM_TOML,
+        RUFF_VLLM_JSON: _allowlist(T201), "adapters/vllm/verity_vllm/b.py": "print(1)\n", f"{ROOT}test_a.py": "print(1)\n"})
+    ruffed.git("checkout", "-q", "-B", "pr")
+    return ruffed
+
+
+def _reads_the_root() -> dict[str, str]:
+    return {G.RATCHET_MODULE: (REAL_LINT / "_ratchet.py").read_text() + f"#: and {ROOT.rstrip('/')}\n"}
+
+
+def test_a_root_the_lints_come_to_read_brings_the_base_s_findings_but_no_new_one(rooted):
+    assert G.ROOTS == {ROOT: ROOT}
+    rooted.commit("reads the root, and records what it finds there", {
+        **_reads_the_root(), RUFF_VLLM_JSON: _allowlist(T201, _printed("test_a.py"))})
+    [c] = G.gate("main", "pr")["changes"]
+    assert c["verdict"] == "passed", c["why"]
+    assert c["pooled"] == [(f"{RUFF_VLLM_JSON} records 1 finding(s) in 1 file(s) under {ROOT}, which the change's lints come "
+                           "to read and the base's tree already holds")]
+    rooted.commit("a new use under the root", {f"{ROOT}test_b.py": "print(2)\n",
+                                               RUFF_VLLM_JSON: _allowlist(T201, _printed("test_a.py"), _printed("test_b.py"))})
+    [c] = G.gate("main", "pr")["changes"]
+    assert c["verdict"] == "failed" and c["why"].startswith(f"grows {RUFF_VLLM_JSON} 1 -> 2 entries"), c["why"]
+    assert c["fix"] == [f"{RUFF_VLLM_JSON}: new {G.key(_printed('test_b.py'))}"]
+
+
+def test_a_root_the_base_s_lints_read_already_brings_nothing(rooted):
+    rooted.commit("names the root", _reads_the_root())
+    rooted.git("checkout", "-q", "-B", "main")
+    rooted.git("checkout", "-q", "-B", "pr")
+    rooted.commit("records what its lint finds there", {RUFF_VLLM_JSON: _allowlist(T201, _printed("test_a.py"))})
+    [c] = G.gate("main", "pr")["changes"]
+    assert c["verdict"] == "failed" and c["why"].startswith(f"grows {RUFF_VLLM_JSON} 1 -> 2 entries"), c["why"]
+
+
+def test_a_root_s_mypy_entries_are_unchecked_outside_the_environment_its_list_records(rooted):
+    rooted.git("checkout", "-q", "main")
+    rooted.commit("mypy's list", {MYPY_JSON: '{"rule": "mypy", "environment": {"python": "0.0"}, "entries": []}\n'})
+    rooted.git("checkout", "-q", "-B", "pr")
+    entry = {"file": f"{ROOT}test_a.py", "kind": "name-defined", "symbol": "<module>", "detail": ""}
+    rooted.commit("reads the root, and records a mypy error there", {
+        **_reads_the_root(), MYPY_JSON: json.dumps({"rule": "mypy", "environment": {"python": "0.0"}, "entries": [entry]})})
+    [c] = G.gate("main", "pr")["changes"]
+    assert c["verdict"] == "failed", c["why"]
+    assert (f"{MYPY_JSON}'s 1 finding(s) under {ROOT}, which the change's lints come to read, unchecked against its base: "
+            "this environment (") in c["why"], c["why"]
+
+
+def test_the_definitions_tests_are_a_root_the_lints_name():
+    assert G.ROOTS == {G.DEFINITION_TESTS_KEY: G.DEFINITION_TESTS}
+    assert G.DEFINITION_TESTS_KEY.rstrip("/") in (REAL_LINT / "_ratchet.py").read_text()
+
+
+def test_a_root_s_mypy_entries_are_held_to_what_mypy_finds_in_the_base_s_tree(rooted):
+    """mypy runs on the base's root in this process's environment, which must be the one the list records."""
+    env = G.mypy_environment()
+    assert env["mypy"], "no mypy here: `uv sync --all-packages --extra torch-cpu` installs the one the root `dev` group pins"
+    rooted.git("checkout", "-q", "main")
+    rooted.commit("mypy's list, and an error under the root", {
+        MYPY_JSON: json.dumps({"rule": "mypy", "environment": env, "entries": []}),
+        "adapters/vllm/pyproject.toml": "[tool.mypy]\n", f"{ROOT}test_c.py": 'X: int = "a"\n'})
+    rooted.git("checkout", "-q", "-B", "pr")
+    wrong = {"file": f"{ROOT}test_c.py", "kind": "assignment", "symbol": "<module>", "detail": ""}
+    rooted.commit("reads the root, and records mypy's error there", {
+        **_reads_the_root(), MYPY_JSON: json.dumps({"rule": "mypy", "environment": env, "entries": [wrong]})})
+    [c] = G.gate("main", "pr")["changes"]
+    assert c["verdict"] == "passed", c["why"]
+    assert c["pooled"] == [(f"{MYPY_JSON} records 1 finding(s) in 1 file(s) under {ROOT}, which the change's lints come to "
+                           "read and the base's tree already holds")]
+    rooted.commit("a second error there", {
+        f"{ROOT}test_c.py": 'X: int = "a"\nY: int = "b"\n',
+        MYPY_JSON: json.dumps({"rule": "mypy", "environment": env, "entries": [{**wrong, "count": 2}]})})
+    [c] = G.gate("main", "pr")["changes"]
+    assert c["verdict"] == "failed" and c["why"].startswith(f"grows {MYPY_JSON} assignment 0 -> 2 in total"), c["why"]
+
+
+def test_a_verdict_is_kept_for_the_environment_mypy_runs_in(monkeypatch):
+    """A new root's mypy entries are checked only in the environment their list records, so a verdict reached in another
+    one is not recalled in it."""
+    c = G.Change("a" * 40, "b" * 40, ["b" * 40])
+    monkeypatch.setattr(G, "mypy_environment", lambda: {"python": "3.12", "torch": None})
+    without = G.cache_path(c, None)
+    monkeypatch.setattr(G, "mypy_environment", lambda: {"python": "3.12", "torch": "2.14.0+cpu"})
+    assert G.cache_path(c, None) != without
 
 
 def test_a_list_moved_out_of_the_lint_directories_is_read_where_the_change_puts_it(linted):

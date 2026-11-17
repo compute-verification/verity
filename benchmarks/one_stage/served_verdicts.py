@@ -241,6 +241,12 @@ WINDOW_VERDICT = {"undecided": "pending"}
 #: ``record``'s exit by the window's verdict, as composite.py's by its Lean's: 0 only for the compiled Lean check's
 #: accept; 1 for a reject (or a refused composite, or a block record its own check refuses), 2 for pending
 RECORD_EXIT = {"accept": 0, "reject": 1, "pending": 2}
+
+
+def hold_placement(env: Mapping[str, str] | None = None) -> bool:
+    """``VERITY_HOLD_PLACEMENT=1`` in ``env`` (default the process's): the holds that rest only on where coins are
+    flipped or a composite made are restored; unset, empty or anything else, they are lifted."""
+    return (os.environ if env is None else env).get("VERITY_HOLD_PLACEMENT") == "1"
 #: SPOT's owner, its row's
 INTEGRITY_OWNER = "compute-accounting"
 
@@ -2076,6 +2082,7 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
     from verity.protocols.proofs.spot.verifier.challenger import remote
     from verity.protocols.proofs.spot.verifier.one_stage import draw as D
+    from verity.protocols.proofs.spot.verifier.one_stage.verdict_record import DESIGN
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
 
     if doc.get("coin_source") != LIVE_SOURCE:
@@ -2144,12 +2151,12 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     if (accepted := (summary.get("audit") or {}).get("accepted")) is not True:
         return None, (f"the window's records audit tied to W didn't accept ({AUDIT_SUMMARY}'s audit.accepted is "
                       f"{accepted!r}), so nothing shows the window SPOT audited reads the roots Pearl+ credits")
-    design, committed, n = summary.get("sampling_design"), reg.get("law"), reg.get("population")
+    design, committed, n = summary.get("sampling_design"), reg.get(DESIGN), reg.get("population")
     rate, strata = D.parse_rate(design), D.parse_strata_rate(design)
     kind = "subset" if rate else None if strata is None else "work" if strata[0] else "stratified"
     k = (None if kind in (None, "stratified") else -1 if type(n) is not int else D.rate_count(*rate, n) if rate
          else D.rate_count(strata[1], strata[2], 1, n))
-    if not (isinstance(committed, Mapping) and kind and committed.get("law") == kind and k in (None, committed.get("k"))):
+    if not (isinstance(committed, Mapping) and kind and committed.get(DESIGN) == kind and k in (None, committed.get("k"))):
         return None, (f"the window's records audit states the rule {design!r}, not the one its registration R commits "
                       f"({committed!r} over {n!r} proof blocks): what Pearl+'s tie covers is read from R's rule")
     try:
@@ -2274,8 +2281,8 @@ def terms(r: Mapping[str, Any], subprotocol: Mapping[str, Any] | None) -> list[s
     """What an accepted answer holds beyond its verdict: where its profile says when its weights were held and what share
     of the checkpoint they are, those; where it says which host ran each party (the network attester's ``placement``),
     the link K counts, named, with every other link of the node uncounted and uncertified, and what its `trusted-device`
-    premise rests on (the wipe's holds only under the key its challenger's host is pinned to, and reads a rehearsal's
-    otherwise); and each δ of the block record's at which its subprotocol's quantity is not established. A placement
+    premise rests on (the wipe's never holds: under the key its challenger's host is pinned to, it reads that the key
+    matched the pins this machine was handed, and otherwise rehearsal, either with no bound); and each δ of the block record's at which its subprotocol's quantity is not established. A placement
     with no links (the front's ``--gate local``) states no link."""
     profile = (r.get("answer") or {}).get("profile")
     w = profile.get("weights") if isinstance(profile, Mapping) else None

@@ -6,6 +6,7 @@ import ast
 import gzip
 import hashlib
 import importlib.util
+import inspect
 import itertools
 import json
 import os
@@ -91,6 +92,15 @@ def seal_off_the_checkout(tmp_path_factory, monkeypatch):
     """`main` seals a run under `SEAL_BASE` (`ROOT/.lake/sealed`); here it seals under the test session's tmp instead, so a
     real-build audit never writes or reads under the checkout, which the suite's read guard would flag as undeclared."""
     monkeypatch.setattr(A, "SEAL_BASE", tmp_path_factory.mktemp("sealed"))
+
+
+@pytest.fixture(autouse=True)
+def main_s_globals_end_with_the_test(monkeypatch):
+    """`main` sets the globals its `global` statement names for its run (`ARTIFACTS` among them); each is put back after
+    every test, so a test that ran `main` leaves no artifact cache or tree to a later test of its worker."""
+    (names,) = [n.names for n in ast.walk(ast.parse(inspect.getsource(A.main))) if isinstance(n, ast.Global)]
+    for name in names:
+        monkeypatch.setattr(A, name, getattr(A, name))
 
 
 @pytest.fixture
@@ -2105,7 +2115,7 @@ def test_no_step_before_the_judge_reads_a_section_build_inputs_leaves_out():
              "homes": {"layers"}, "tree_roles": {"trees"}, "read_by_dependents": {"reads"}, "_finish": whole,   # the judge's
              "load": whole, "dump": whole,                                   # the reader and the writer themselves
                  "packages": whole,                                              # the file's name, among a directory's
-                 "controls_of": whole,                                           # a control's copy of a fixture
+                 "control_case": whole,                                          # a control's copy of a fixture
                  "moves_refused": whole,                                         # refuses a moves file, before any step
                  "base_locks": whole,                                            # the base's locks a move is held to
                  "write_staged": whole,                                          # the run's writer of the locks it staged
@@ -6784,7 +6794,7 @@ def test_a_job_pinned_to_one_cpu_runs_lean_on_one_thread(monkeypatch):
 
 
 def test_the_lean_checks_audit_passes_record_differences_and_names_the_records_to_commit(tmp_path, monkeypatch):
-    """`--regenerate` (the lean-audit step of the Lean check of `next`): a package whose every failure is a record difference,
+    """`--regenerate` (the lean-audit step of a candidate's Lean check): a package whose every failure is a record difference,
     so the audit wrote the record `--update` would, passes, and `audit.json` names that record for drive to commit; one with any other
     failure fails as before, and the packages' own locks are never written."""
     a, b = tmp_path / "a", tmp_path / "b"
@@ -9819,10 +9829,19 @@ def test_the_replay_reads_a_modules_private_part_and_a_plain_files_olean_alone(t
     assert json.loads((tmp_path / "replay.json").read_text())["axioms"] == axioms
 
 
+#: {fixture: `control_clean`'s copy}, built once a worker by the first control case that needs it
+CONTROL_CLEAN: dict[str, tuple[Path | None, list[str]]] = {}
+
+
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
-def test_the_controls(tmp_path):
-    toolchain = (A.FIXTURES / "control" / "lean-toolchain").read_text().strip()
-    assert A.controls(toolchain, tmp_path, log=lambda *_: None) == []
+@pytest.mark.parametrize("fixture,name", [(f, n) for f in A.CONTROLS for n in A.control_cases(f)])
+def test_the_controls(tmp_path_factory, fixture, name):
+    if fixture not in CONTROL_CLEAN:
+        toolchain = (A.FIXTURES / "control" / "lean-toolchain").read_text().strip()
+        CONTROL_CLEAN[fixture] = A.control_clean(fixture, toolchain, tmp_path_factory.mktemp("controls"))
+    work, fails = CONTROL_CLEAN[fixture]
+    assert fails == []
+    assert A.control_case(work, fixture, name) == []
 
 
 def test_a_step_records_the_peak_memory_of_every_process_it_waited_for(tmp_path):
@@ -10132,7 +10151,7 @@ def test_a_property_on_a_conjecture_lists_it_and_one_on_a_falsified_conjecture_c
 
 def test_a_dev_cache_run_restores_dependencies_and_is_never_a_verdict(monkeypatch):
     """`--dev-cache` lets setup.sh and Lake restore the verified build cache (no `LEAN_CACHE=off`, no
-    `LAKE_ARTIFACT_CACHE=false`), so its reports carry the fast path's kind, which `check` and `research merge` refuse:
+    `LAKE_ARTIFACT_CACHE=false`), so its reports carry the fast path's kind, which `check` and `research.merge` refuse:
     the gate's from-source build is the cache's root of trust and must never read it."""
     monkeypatch.setattr(A, "ARTIFACTS", None)
     monkeypatch.setattr(A, "DEV_CACHE", False)

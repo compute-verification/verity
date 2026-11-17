@@ -200,7 +200,7 @@ def machine_of(doc: dict) -> str | None:
 
 
 def check_panel(idx, now: datetime) -> dict:
-    """Every `check` Attempt of the last 24 hours, with the main commit that landed it from its `landed` label (`research merge`)."""
+    """Every `check` Attempt of the last 24 hours, with the main commit that landed it from its `landed` label (`merge.label_landed`)."""
     since = iso(now - timedelta(hours=24))
     landed = dict(idx.sql("SELECT target, value FROM labels WHERE key = 'landed' AND by = 'research-merge' ORDER BY ts"))
     rows, ends = [], []

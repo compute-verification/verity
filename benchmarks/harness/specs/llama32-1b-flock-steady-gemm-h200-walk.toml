@@ -1,0 +1,29 @@
+schema = "verity-bench/steady-spec/v0"
+id = "llama32-1b-flock-steady-gemm-h200-walk"
+# `llama32-1b-flock-steady-gemm-h200`'s point with the units' level walk on the card (`FC_UNIT_WALK=1`); everything
+# else is that spec's, so the two points differ in the walk alone, and a row says which walk ran (`unit_walk`).
+workload = "llama32-1b"
+card = "h200"
+cores = 10
+sessions = 120
+ahead = 2
+driver = "595.91.07"
+cuda_toolkit = "13.3.73"
+setup = "benchmarks/harness/setup/flock_prover.sh"
+
+[env]
+RUST_MIN_STACK = "67108864"
+FC_UNIT_WALK = "1"
+
+[admission]
+max_minutes = 40
+mem_gb = 300
+
+[[row]]
+type = 'census:Gemm_v2{K=2048,N=16,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}'
+n = 256
+pin = "dc4bfbd3beac80550a37ef5c132e58a56b6f5b024691caff44229ce981a9864682cd35338a437313860df9a72c374273f3c5ca8400e927232687c6bb45a3899b"
+provers = [1]
+warm = 3
+period = 2
+staged = "art:d4aba8ea6a775276931be2e9d1f0c6b232b674530f042424535056b507ca500f/out/stage"

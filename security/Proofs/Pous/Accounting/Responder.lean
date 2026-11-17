@@ -554,55 +554,6 @@ theorem B2Audit_fixed {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch 
     (B2Audit sch N k δ ε hsec W S X (fun _ => t) (t k) ans help 0 H hc (fun _ j => ht (Nat.lt_succ_self j))
       (fixed_setup hset) (fixed_ingress hin) fixed_arrival fixed_ticksIn hcount)
 
-/-- **`B2P2Ring` on a fixed schedule**, from `B2Audit_fixed`. -/
-theorem B2P2Ring_fixed :
-  Pous.P2.Assumptions.P2RingAuditSecure 0 0 0 →
-    ∀ {L : Type*} [LinearOrder L] (W : Pous.Bits (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).n)
-      (S : Pous.Outcome (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 → Actual.Run L) (X : Finset L)
-      (t : ℕ → ℕ) (ans : ℕ → Actual.Acts L → Pous.Bits (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).ℓ)
-      {α : Type*} (help : Pous.Outcome (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 → α) (H : ℕ),
-      CausalFrom S → StrictMono t →
-      (∀ x x', x.1 = x'.1 →
-        (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).enc W x.1 x.2.1 =
-          (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).enc W x'.1 x'.2.1 →
-        (S x).content X (t 0) = (S x').content X (t 0) ∧ help x = help x') →
-      (∀ x x' (j : Fin 105), help x = help x' → x.2.2 j = x'.2.2 j →
-        (S x).crossing (↑X)ᶜ ↑X (period t j) = (S x').crossing (↑X)ᶜ ↑X (period t j)) →
-      (Set.range help).encard ≤ ((2 ^ H : ℕ) : ℕ∞) →
-      Pous.pr (fun x => Responder.PassesFixed (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) W S X t ans x ∧
-          ∀ j : Fin 105, (S x).mem X (t j) + 1 + H ≤
-            (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).stateBound Pous.Params.ρ) ≤
-        ENNReal.ofReal Pous.Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130) := by
-  intro hsec L _ W S X t ans α help H hc ht hset hin hcount
-  exact B2Audit_fixed _ _ _ _ _ hsec W S X t ans help H hc ht hset hin hcount
-
-open Responder in
-/-- **`B2Determines` on a fixed schedule**, from `B2Determines` at `t z x = t`, `span = t k` and `τ = 0`. -/
-theorem B2Determines_fixed :
-  ∀ {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch : Pous.Scheme (Pous.ringRO B w p)) (k q : ℕ)
-    (W : Pous.Bits sch.n) (S : Pous.Bits q → Pous.Outcome sch k → Actual.Run L) (X : Finset L) (t : ℕ → ℕ)
-    (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ) {α : Type*} (help : Pous.Bits q → Pous.Outcome sch k → α)
-    (ζ : ℕ → List Bool → Pous.Bits q) (M H : ℕ),
-    (∀ z, CausalFrom (S z)) → StrictMono t →
-    (∀ z x x', x.1 = x'.1 → sch.enc W x.1 x.2.1 = sch.enc W x'.1 x'.2.1 →
-      (S z x).content X (t 0) = (S z x').content X (t 0) ∧ help z x = help z x') →
-    (∀ z x x' (j : Fin k), help z x = help z x' → x.2.2 j = x'.2.2 j →
-      (S z x).crossing (↑X)ᶜ ↑X (period t j) = (S z x').crossing (↑X)ᶜ ↑X (period t j)) →
-    (∀ z, (Set.range (help z)).encard ≤ ((2 ^ H : ℕ) : ℕ∞)) →
-    (∀ z x (j : Fin k), (S z x).mem X (t j) ≤ M) →
-    (∀ z x (j : Fin k), ζ j ((S z x).content X (t j)) = z) →
-    ∃ (A₁ : Pous.Bits q → Pous.Preprocessor sch (M + 1 + H))
-      (A₂ : Pous.Bits q → Pous.SeqResponderOn sch (M + 1 + H) 0 0 0) (π : ℕ → Pous.Bits (M + 1 + H) → Pous.Bits q),
-      (∀ (z : Pous.Bits q) (x : Pous.Outcome sch k) (j : ℕ), j < k →
-        π j (Pous.Sampled.seqState ((Pous.ringRO B w p).answer x.1) ((A₂ z).step W (sch.enc W x.1 x.2.1).1) 0
-          ((List.ofFn x.2.2).take j) (A₁ z W (sch.enc W x.1 x.2.1).1 (sch.enc W x.1 x.2.1).2 x.1)) = z) ∧
-      ∀ z x, Pous.seqAnswers ((Pous.ringRO B w p).answer x.1) ((A₂ z).step W (sch.enc W x.1 x.2.1).1) 0
-          (List.ofFn x.2.2) (A₁ z W (sch.enc W x.1 x.2.1).1 (sch.enc W x.1 x.2.1).2 x.1) =
-        List.ofFn fun j : Fin k => ans j ((S z x).acts X (period t j)) := by
-  intro L _ B w p _ sch k q W S X t ans α help ζ M H hc ht hset hin hcount hm hζ
-  exact B2Determines sch k q W S X (fun _ _ => t) (t k) ans help ζ M 0 H hc (fun _ _ j => ht (Nat.lt_succ_self j))
-    (fun z => fixed_setup (hset z)) (fun z => fixed_ingress (hin z)) (fun _ => fixed_arrival)
-    (fun _ => fixed_ticksIn) hcount (fun _ _ => fixed_timely ht k) hm hζ
 
 open Responder in
 /-- **`B2Adds` on a fixed schedule**, from `B2Adds` at `t z x = t`, `span = t k` and `τ = 0`. -/
@@ -628,26 +579,5 @@ theorem B2Adds_fixed :
       (fun _ _ j => ht (Nat.lt_succ_self j)) (fun z => fixed_setup (hset z)) (fun z => fixed_ingress (hin z))
       (fun _ => fixed_arrival) (fun _ => fixed_ticksIn) hcount (fun _ _ => fixed_timely ht c) hm hζ)
 
-/-- **`B2AddsP2Ring` on a fixed schedule**, from `B2Adds_fixed`. -/
-theorem B2AddsP2Ring_fixed :
-  Pous.P2.Assumptions.P2RingAuditSecure 0 0 0 →
-    ∀ {L : Type*} [LinearOrder L] (q k : ℕ) (W : Pous.Bits (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).n)
-      (S : Pous.Bits q → Pous.Outcome (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 → Actual.Run L) (X : Finset L) (t : ℕ → ℕ)
-      (ans : ℕ → Actual.Acts L → Pous.Bits (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).ℓ) {α : Type*}
-      (help : Pous.Bits q → Pous.Outcome (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 → α) (ζ : ℕ → List Bool → Pous.Bits q) (M H : ℕ),
-      (∀ z, CausalFrom (S z)) → StrictMono t →
-      (∀ z x x', x.1 = x'.1 → (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).enc W x.1 x.2.1 = (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).enc W x'.1 x'.2.1 →
-        (S z x).content X (t 0) = (S z x').content X (t 0) ∧ help z x = help z x') →
-      (∀ z x x' (j : Fin 105), help z x = help z x' → x.2.2 j = x'.2.2 j →
-        (S z x).crossing (↑X)ᶜ ↑X (period t j) = (S z x').crossing (↑X)ᶜ ↑X (period t j)) →
-      (∀ z, (Set.range (help z)).encard ≤ ((2 ^ H : ℕ) : ℕ∞)) →
-      (∀ z x (j : Fin 105), (S z x).mem X (t j) ≤ M) →
-      (∀ z x (j : Fin 105), ζ j ((S z x).content X (t j)) = z) →
-      Pous.pr (fun x : Pous.Bits q × Pous.Outcome (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 =>
-          Responder.PassesFixed (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) W (S x.1) X t ans x.2 ∧ ¬ q + (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).stateBound Pous.Params.ρ < M + 1 + H + k) ≤
-        ENNReal.ofReal Pous.Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130) + 105 * (2⁻¹ : ℝ≥0∞) ^ k := by
-  intro hsec L _ q k W S X t ans α help ζ M H hc ht hset hin hcount hm hζ
-  have := B2Adds_fixed _ _ _ _ _ hsec q k W S X t ans help ζ M H hc ht hset hin hcount hm hζ
-  rwa [Nat.cast_ofNat] at this
 
 end ResourceAccounting.SecurityProofs

@@ -55,9 +55,6 @@
                                                  # policy default: delete only what a record allows; a dry run unless --apply (research/retention.py)
   research retention rm PATH... --approved-by @OWNER --ref REF [--apply]   # delete chosen paths with the owner's yes, which every record
                                                  # covering them must name; never a `keep`; each --apply decision goes to the deletion log
-  research merge REF [--into main] [--tool check] [-m MSG] [--dry-run]   # the merge gate: `git merge --no-ff REF` only with a passing
-                                                 # attempt of the tool for that exact commit in the store (research/merge.py)
-  research merge --train A B C [--on MACHINE --project P]                # several refs as one candidate, one check, a fast-forward
   research queue status|ready|judge|review|eject|vqueue|... [--shadow]  # the verified queue: candidates of ready PRs merged on `main`,
                                                  # `main` fast-forwarded only to one with no new failure, or under --gate verdict to
                                                  # a plain one on its land verdicts and the quick tier (research/queue.py, vqueue.py)
@@ -653,6 +650,10 @@ def _run_placed_in(ns: argparse.Namespace, harness_opts: list[str], command: lis
     if ns.claimed and not env_map:
         env_map = _request_env(ns.remote_json)
     workload_env = {**result.env_defaults(os.environ), **env_map}   # every job's defaults, under --env, which still decides
+    from .telemetry.job import address_names, hide, hide_addresses
+
+    hide({**address_names(workload_env, None if ns.claimed else _registered_addresses(), command),
+          **((_request(ns.remote_json).get(remote.HIDDEN_ADDRESSES) or {}) if ns.claimed else {})})
     if ns.claimed and (run_dir / "job.json").exists():
         print(f"research run: {run_dir} already exists; a rerun gets a fresh id", file=sys.stderr)
         return 2
@@ -679,6 +680,7 @@ def _run_placed_in(ns: argparse.Namespace, harness_opts: list[str], command: lis
         return 2
     if no_remote:
         prep["section"]["local_only"] = {"reason": ns.local_only, "no_remote": no_remote}
+    prep["section"] = hide_addresses(prep["section"])
     if a.cwd is None:
         # the workload runs in its own run dir, locally and on a machine (a relative `> result.json` used to land in the checkout, and
         # on a machine in <root>/src/<sha>/, which every run of that commit shares: concurrent runs raced on it)
@@ -713,7 +715,7 @@ def _run_placed_in(ns: argparse.Namespace, harness_opts: list[str], command: lis
     from .telemetry.job import write_json_atomic
     from .telemetry.run import run as harness_run
 
-    write_json_atomic(run_dir / "job.json", job)
+    write_json_atomic(run_dir / "job.json", hide_addresses(job))
     if ns.claimed and remote_info and remote_info.get("request"):
         remote.ack_launch(Path(remote_info["request"]).parent / remote.LAUNCH_ACK, remote.FIRST_RECORD)
     os.environ.update(result.env_for(run_id, run_dir, source_sha=getattr(a, "tree_sha", None)))
@@ -1134,6 +1136,16 @@ def _memory_mark(ns: argparse.Namespace, run_id: str, run_dir: Path, job: dict) 
         elsewhere = "a GPU lease's scope (gpu-lease)" if req.get(remote.QUEUE_WORKLOAD_WRAP) or remote.gpu_lease_wrap(req) else None
     cgroup = (job.get("environment") or {}).get("cgroup") or {}
     return lambda: memmark.of_run(run_dir, req, cgroup, stated=stated, elsewhere=elsewhere)
+
+
+def _registered_addresses() -> dict[str, str]:
+    """{name: address} of each machine of the register here, for a local run's records; none where the register can't be read."""
+    try:
+        return remote.registered_addresses(remote.load_machines())
+    except (OSError, ValueError, remote.Refused) as e:
+        print(f"research run: the register was not read ({type(e).__name__}: {e}), so this run's records hide only its *_HOST "
+              "values", file=sys.stderr)
+        return {}
 
 
 def _request_env(remote_json: str | None) -> dict[str, str]:
@@ -2392,10 +2404,6 @@ def main(argv: list[str] | None = None) -> int:
         from .digest import main as digest_main
 
         return digest_main(rest)
-    if cmd == "merge":
-        from .merge import main as merge_main
-
-        return merge_main(rest)
     if cmd == "queue":
         from .queue import main as queue_main
 

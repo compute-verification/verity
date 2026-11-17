@@ -1,17 +1,31 @@
 # vLLM at its serving settings, replayed
 
-One command serves vLLM at the settings vLLM publishes for serving the model (prefix caching on, speculative decoding
-on, the context limit its recipe sets for the cards) with and without our changes, replays the window it served, and
-prints what the serve turned on and three lines: whether the replay's tokens are the served ones, what our changes
-cost over stock, and the advice a request. It measures nothing of its own. The serve, the load, the cost and the
-replay are the serving cost benchmark's (`benchmarks/serve_tax/`: `run.sh`, `serve_tax.py`, `replay.py`); this
-directory is the runner that calls them (`run.sh`) and the reader of what they leave (`prod_repro.py report`).
+Does Verity's serving still reproduce when vLLM runs the way people deploy it? This benchmark serves a model at the
+settings vLLM publishes for it (prefix caching on, speculative decoding on, the context limit its recipe sets for the
+cards), once stock and once with our changes, then replays what ours served under its recorded schedule. It prints
+what the serve turned on and three lines:
 
-## The command
+- **tokens**: whether the replay gave back every served token;
+- **cost**: what our changes add to stock's serving time, as a share of serving time on one node at one load, scaled
+  to nothing;
+- **advice**: the bits a request that the served schedule costs as advice.
 
-From the tree's root, as the command of a `research run` on a GPU node that the serving cost benchmark runs on (its
-pinned vLLM and the model's checkpoint: `benchmarks/serve_tax/run.sh`'s header), with the C4 shard sent for a job of
-the corpus client:
+It measures nothing of its own: the serve, the load, the cost and the replay are the serving cost benchmark's
+([`serve_tax/`](../serve_tax/README.md)), and this directory runs them and reads what they leave. GLM-5.3 is the one
+model whose published settings it holds.
+
+## Run it
+
+It runs from the tree's root as the command of a `research run`, on a GPU node that the serving cost benchmark runs
+on. This is the command its metrics are measured by, GLM-5.3 under a coding agent's load:
+
+~~~text
+research run --on NODE --source . --cwd source -- bash benchmarks/prod_repro/run.sh --client vllm-bench --model glm53 --again none --load agentic=4 --pass-prompts agentic=4 --lifetimes 8 --leave-out 1 --reps 2 --replay agentic@4 --sampled
+~~~
+
+The report goes to the job's `out/prod_repro.txt` and `out/prod_repro.json`. The command has four forms: serve and
+replay by the corpus client, serve by vLLM's own client, read an earlier job's `out/` again with no GPU, and replay
+an earlier job's pass alone. A job of the corpus client also needs the C4 shard sent with it.
 
 ~~~text
 verity bench prod_repro [--model moonlight] [--stock ARM] [--again ARM|none] [--ours ARM] [--load burst] [--rate 1000]
@@ -24,207 +38,30 @@ verity bench prod_repro --report OUT --load NAME [--replay PASS] [--stock ARM] [
 verity bench prod_repro --replay-of OUT --load NAME --replay PASS [--model ...] [--ours ARM]
 ~~~
 
-On Llama 3.2 1B and one H200, the job that writes its cost and its replay match:
+`run.sh`'s header says what each option does.
+
+On Llama 3.2 1B and one H200, the job that writes its cost, its replay match and its advice, as points of the same
+three metric ids, older than their other models (`record-ids` stands in for `record`: it keeps each request's ids,
+which a replay under vLLM's client reads):
 
 ~~~text
 research run --on NODE --source . --cwd source -- bash benchmarks/prod_repro/run.sh --client vllm-bench --model llama32-1b \
   --again none --load agentic=4 --pass-prompts agentic=4 --lifetimes 4 --leave-out 1 --reps 2 --replay agentic@4
 ~~~
 
-- **The arms.** A job serves stock, stock a second time and ours, each a server lifetime of its own. For a model
-  whose recipe the benchmark holds (GLM-5.3, `--model glm53`) they are the arms at the recipe's settings: `prod`,
-  stock vLLM as its recipe starts it on these cards; `prod-again`; and `prod-record`, which adds the scheduler's step
-  trace and keeps each request's prompt ids and served ids. For any other model the benchmark refuses those arms, and
-  the job serves `compiled`, `compiled-again` and `record`, at the benchmark's own settings, with `record-ids` in
-  place of `record` for a model with ids (Llama 3.2 1B, `--model llama32-1b`): it keeps each request's ids, which a
-  replay under vLLM's client reads. `--again none` serves
-  stock once: the cost then has no noise floor. `--stock none` serves ours alone, a first start of it and its replay:
-  there is then no cost, and under vLLM's client the benchmark's own cost step ends the runner with 1 for want of a
-  stock arm, which the job takes as no failure where ours served its load.
-- **Arms served beside them.** `--arms "ARM ARM ..."` names every arm the job serves, in the order it serves them.
-  Ours and stock are among them, and stock a second time is served only where it is. Any other arm is served beside
-  them: one that differs from stock or from ours in one thing, so that a figure in which ours differs from stock can
-  be read apart. The benchmark has two for the recipe's settings: `prod-seeded`, stock's server with its sampled
-  client sending the seeds ours's sends, and `prod-trace`, ours with the canonical top-k off. Such an arm is in no
-  line of the three: the report says how far it got and lists its passes with every arm's. The benchmark's own cost
-  step, and so the run's `result.json`, is of the last arm named over stock; the report's cost is ours's.
-- **The first form** sends the load by the corpus client: every arm gets the same plan (C4 prompts, about 60% of
-  them behind one of eight shared prefixes) as a burst the engine can't keep up with, each rep from an empty prefix
-  cache. It then replays rep 1 of ours (`--replay none`: no replay).
-- **The second form** sends the load by vLLM's own client at its rungs, which gives the benchmark's paired cost.
-  `--load agentic=N` is a coding agent's recorded sessions sent by N users, each turn's prompt beginning with the
-  turn before it. It replays nothing unless `--replay` names the pass of ours to re-run, as the benchmark names it
-  (`NAME@RUNG`): that needs an arm of ours that keeps each request's ids (`prod-record`), which vLLM's client does
-  not keep. `--pass-prompts`, `--sampled` and `--stop-at` are the benchmark's `PASS_PROMPTS` (the prompts a pass
-  sends), `SAMPLED` (each request sampled at the recipe's temperature and top-p, under its user's seed) and `STOP_AT`
-  (an arm starts no pass it can't finish by then; the replay runs after the arms whatever the time, and the job's
-  end is its lease's, `MAX_MIN`).
-- **Server lifetimes.** `--lifetimes L` is the benchmark's `LIFETIMES`: the arms are served L times, each time a
-  server of its own, in the arms' order and then that order turned round, and lifetime K of an arm is `out/<arm>.K`.
-  `--leave-out N` is its `LEAVE_OUT`: each lifetime's first N passes, its warm-up, are served and recorded and left
-  out of every figure. A sessions load's cost has an interval, and so a verdict, only over two lifetimes an arm or
-  more. The replay re-runs the named pass of ours's first lifetime, and the report says which lifetime its window
-  is of.
-- **The method a serving cost is measured by.** Four arms, `prod`, `prod-again`, `prod-seeded` and `prod-record`,
-  each served in nine server lifetimes in that alternating order, each lifetime opening with a 20-second warm-up pass
-  that no figure counts (the benchmark's `WARM_S`) and then two counted passes (`--reps 2 --lifetimes 9 --leave-out
-  0`). The cost is the mean of the nine lifetime pairs' costs with its Student's t 95% interval over them, t at the
-  pairs less one, and stock against stock, `prod-again` over `prod` taken the same way, is the noise floor printed
-  beside it and never subtracted. Two of the method's rules are not yet the report's own: the job's first lifetime
-  pair, its servers started cold, is left out of the figure, and a figure from a node any card of which slowed down
-  in a counted pass is named as on a throttled node, with no verdict; the report counts every pair and reads no
-  card's clock.
-- **The context limit** is `--max-model-len`'s, for every arm. Where the job names none it is the benchmark's for
-  each arm: at the recipe's settings the recipe's for the cards (262,144 tokens for GLM-5.3). `limits.json` says what
-  is known of leaving the limit to vLLM (`--max-model-len auto`), with the run that showed it, and the report's first
-  line repeats it beside the limit the arms were started at.
-- **The replay** runs after the arms, under their lease: `replay.py` rebuilds the engine from the step trace's header
-  and re-runs the pass under its recorded schedule. An arm that served on the canonical DSA top-k (`prod-record`) is
-  replayed on it: the replay loads the arm's other vLLM plugins under the arm's environment before it builds the
-  engine (`replay.served_under`), and its record says so. Such an arm keeps files on the node: `PRIVATE` names a
-  directory for them outside every run's, which the corpus client needs for it; a job of vLLM's client without one
-  serves all the same and keeps no counters of the top-k.
-- **The third form** reads an earlier job's `out/` again and needs no GPU; where it names no arm, the job is read as
-  the arms it served.
-- **The fourth form** serves nothing: it copies ours's directory from an earlier job's `out/` into this job's and
-  re-runs the replay of the named pass from it, under a lease taken for the replay alone. Its report is of ours alone,
-  with the tokens line and no cost.
-- **The advice line** is of the pass the replay re-runs, the tokens line's: what that pass's schedule costs as
-  advice, by the scheduler replay's loader (`benchmarks/network_e2e/encodings/replay.py`), which reads the pass's
-  records out of ours's step trace with each request's prompt ids and served ids.
+The cost of `prod-all-on` over `prod` (`--ours prod-all-on`: the serving cost benchmark's README, "Everything on at the
+recipe's line") is a point of the cost's id too, and its `parts` say in words what it has on and what it leaves off.
+Each point names its `model` (the checkpoint, `repo@revision`), its `hardware` (the cards it was served on) and its
+`member`, the model, the card and the arm (the cost's over its stock), which tells its line from the id's other models'
+and arms'. A serve with no draft, such as the 1B's, keeps no draft, so its kept count is 0 bits and its advice is the
+arrivals'.
 
-The report goes to the job's `out/prod_repro.txt` and `out/prod_repro.json`. Under `research run` the run's
-`result.json` names the report's two files and the replay's record among its artifacts, so a reader finds them as the
-run's files; the rest of `out/` is in the run's record whole. A job with no result of the benchmark's cost (one that
-served ours alone) gets one whose validation is the tokens line; either way its `target` field and detail hold the
-cost's verdict against its target, its status the run's own gates. For GLM-5.3 at the recipe's settings (`prod-record`
-over `prod`) the result also holds the cost line's figure as the measurement `vllm/prod-serving-cost-glm53`, in
-percent of stock's serving time, the number `benchmarks/prod_repro/metrics.toml` holds the goal to: only where it stands as the
-benchmark's own measurement (a sessions load, a value, the same work on both sides; `serve_tax.result_of`) and the
-two arms are at the same settings. Of `prod-record` it holds two more: `vllm/prod-replay-match-glm53`, the percent of
-the replayed window's served tokens the replay gave back before a request's first difference, where the replay's
-record agrees with what it kept; and `vllm/prod-advice-bits-glm53`, the advice line's bits charged a request, where
-that line is measured. For Llama 3.2 1B (`record-ids` over `compiled`) the cost, the replay match and the advice are
-points of the same three ids, older than their other models. Each point names
-its `model` (the checkpoint, `repo@revision`), its `hardware` (the cards it was served on) and its `member`, the model,
-the card and the arm (the cost's over its stock), which tells its line from the id's other models' and arms'.
-Otherwise the result holds no entry under an id.
-
-The job fails where an arm or the replay fails, where a replay was asked for and its tokens were not compared, and
-where a replayed token or step differs from the served one. One kind of served step is no difference, and the report
-counts and prints it: a step after a request's end, which emitted no token, whose requests had all ended in an earlier
-step, and which the replay did not run (the scheduler had planned it before it learned of the end, and serving dropped
-what it computed; the replay ends with its last request). A job that ends early still has its report, also one whose
-time ended (SIGTERM: the arm or the replay stops, and the report is of what was served and replayed by then): it says
-which arm failed and on what, which stopped before a pass, whether the replay ended and how its log ends; and for a
-replay that differs, the first token that does and the first step.
-
-## What each line means
-
-- **the first line**: the context limit the launch lines of ours and stock name, and for a model `limits.json` says
-  so of, that vLLM does not start with the limit left to it, at which settings, why, and the run that showed it.
-- **model**: the model as the benchmark names it and the checkpoint the engines loaded; they are two things where
-  `CHECKPOINT` names another model's directory.
-- **what ran**: each arm, or each lifetime of it, from its own record (`meta.json`): the seconds its server took to
-  come up, how many times it
-  served the load and how many requests it left unfinished; `FAILED` with the record's error and the first exception
-  its server's log names (the record's error is the last thing that failed, and the cause is above it), `STOPPED`
-  before the pass `STOP_AT` left no time for, `NOT SERVED` for an arm with no record. Then the replay: whether it
-  ended, and where
-  it did not, the last line of its log (`out/replay-<mode>.log`); and the replay's engine, as the replay's own
-  record says: the plugins and environment of ours it ran under and what set them (the replay), or that ours serves
-  with no plugin beside its record.
-  For the canonical DSA top-k, what its own counters say of the replay's processes and of serving's: the processes
-  that kept counters, the calls of the indexer's top-k, the rows of more than its keys that were rewritten, and
-  those of them with a tie across the k-th key, where vLLM's own kernels may select another set from run to run. The
-  processes keep them under `PRIVATE`; the job's report reads them there and keeps the counts in
-  `out/topk_counters.json`. A process writes its calls at the end of each one, so they are there when vLLM kills it,
-  as it does a serving worker. It reads its rows from its device every few thousand calls and when it exits in order,
-  so a killed process's rows are a lower bound: `rows_at` is the calls the processes had made when their rows were
-  read, and the report says so where it is below the calls. A replay in which no process kept any shows nothing of
-  the top-k having run there.
-- **each pass**, where the job served arms beside the three (`--arms`): every pass of the load every arm served, a
-  line a pass in the order served, by the counters the benchmark read off its server before and after it (the pass's
-  own `meta.json`; they are vLLM's own on the server's `/metrics`, so every arm's are read the same way, with a step
-  trace or without, and the first line names the two the accepted share is of): its engine steps, its drafts and how
-  many of the tokens they proposed the model accepted, and beside them
-  its output tokens and its seconds as the cost counts them; `left out` marks a lifetime's warm-up, and a pass whose
-  record holds no output tokens or no seconds (one none of whose requests was served) says so. Then how each
-  arm's requests were sampled, and whether its client sent their seeds; and for each directory whether its server
-  was started on the canonical top-k (its record's environment) and what the top-k's processes counted there.
-  These lines are in no verdict. They are what an arm served beside the three is read by: two arms that differ in
-  one thing, a line each. `out/prod_repro.json` holds them for every job (`ran.passes`).
-- **settings**: what ours ran with, stock's beside it, each with what says so (the launch line, the engine's own
-  configuration in the step trace's header, the engine's counters): prefix caching, speculative decoding with the
-  share of draft tokens accepted where the benchmark counts them, the context limit beside the model's own (the
-  checkpoint's `config.json`), the KV cache's type, compiled or eager, and whether the settings' circuit was compiled
-  ahead of serving. A setting the serve did not turn on is `off`; `DIFFERS` marks one that stock and ours do not
-  share, and the cost line then gives its figure without a verdict. Speculative decoding or a KV cache type that the
-  launch line turns on and the step trace's header does not hold is said: the replay builds its engine from the
-  header. A context limit the launch line leaves to vLLM (`--max-model-len auto`) is the one the engine took: the
-  header's where the arm kept a step trace, else the one vLLM's own log line says it fitted (stock keeps no trace);
-  `not resolved` where neither says, and two arms that both leave it to vLLM then count as sharing it. A limit under
-  the model's own is printed as below it. The last line is the value settings in force: the adapter's record of the
-  variables set in each server's environment that can change what an engine computes, which the benchmark keeps in
-  each lifetime's `meta.json` and of the replay's engine in `replay.json` (`serve_tax.value_settings`). It gives how
-  many are set and the record's SHA-512 for stock, ours and the replay, and names the variables ours's record
-  differs from stock's in and the replay's from ours's; `out/prod_repro.json` holds every record whole, a credential
-  by its name alone. It is in no verdict: ours's server is given variables stock's is not. A directory that holds no
-  such record is `not recorded`.
-- **tokens**: the requests of the replayed window, their served tokens, the tokens the replay kept for them and how
-  many differ; the engine steps and how many have other rows than the served schedule; how many of the window's
-  requests began from a prefix-cache hit and the longest hit; the mode served and replayed; how the window's
-  requests were sampled (greedy, or at a temperature with or without a seed); how the window was chosen; and, for a
-  checkpoint whose `config.json` names the keys its DSA indexer's top-k keeps (`index_topk`), how many of the
-  window's requests passed that many ids of prompt and output, and how many of the differing requests are among
-  them: only past it does attention read the keys the top-k selects.
-  `reproduced` means no token and no step differs. Where one does: the first token that differs, the one serving
-  emitted in the earliest step (its request, its position, the id served and the id replayed there, and that step),
-  and the first step whose rows differ, with the rows only serving ran and the rows only the replay ran.
-- **cost**: ours's time for the same work over stock's, less one: the share of stock's serving time our changes add.
-  The verdict's unit is a server lifetime: the passes of one share its server's state, so an interval over them as if
-  independent is too narrow, and the estimate alone shows nothing.
-  On a sessions load every figure is the benchmark's own cost's (`serve_tax.session_cost`). The cost is the mean of
-  the lifetimes' costs, a lifetime's being ours's seconds for its passes over stock's, less one, a pass's seconds
-  from its users' first send to the last one's last answer, with its 95% interval over the lifetimes an arm.
-  `under 1%: yes` is printed only where the benchmark says that interval's upper end is under the target; `NO` where
-  its lower end is over it; `not shown` otherwise, with the reason: one lifetime an arm, or one pair of lifetimes
-  with a pass both arms counted where an arm stopped before the rest (no such interval), an upper end that is not
-  under the target, arms that did not do the same work (a request unserved, another count of output tokens, another
-  share of the prompts from the prefix cache), or settings that differ. Under it: that each request
-  decoded to its recorded length, past any end-of-text token, in the benchmark's own words (vLLM's client sends each
-  with its length and `ignore_eos`, in every arm); the benchmark's line counting the requests that served an
-  end-of-text token before their end and went on, for a side whose server kept the served ids and whose record names
-  the checkpoint's end-of-text ids (stock keeps none), or that they are not counted where no side's passes hold the
-  count; each lifetime's cost and the spread between lifetimes and between a lifetime's passes; the same cost under the
-  benchmark's other readings of a pass (by the seconds its GPUs were busy, by its users' seconds summed, by the sum
-  of its users' own rates), in no verdict; each side's engine steps a pass and the share of its draft tokens
-  accepted, which the cost is adjusted for neither of; the cost over the passes taken
-  as independent, the paired ratio's median with its interval, in no verdict; and the noise floor, beside and not
-  added (each lifetime pair is already two servers): stock served a second time over stock where the job
-  served it, else stock's own lifetimes, each second one over the one before it, a lifetime pair its unit too, with
-  a line where its own interval leaves out 0: stock then differs from stock.
-  On another load the figure is the one over the passes taken as independent and has no verdict. By the corpus
-  client it is `serve_tax.tax` and is a cost only where stock did not keep up with the arrivals; where it kept up,
-  the line is not measured. By vLLM's client it is `serve_tax.serving_cost`, the paired ratio at the rung where
-  stock serves most, which needs six reps for an interval; its noise floor is stock served a second time, measured
-  the same way. The percent is a share of serving time on one node at one load (`prod_repro.scope`), scaled to nothing.
-- **advice**: the bits a request that the replayed pass's schedule costs as advice, charged: the arrivals (the
-  residual advice of when each request arrived, decoded back to the pass's steps; a serve under the certified tick
-  sends none, and no arm here is under it) and the kept count, the drafts each row kept, at the bits of a code
-  the loader builds and decodes back to the pass's counts, with its bits a row and, not sent, what the counts' entropy
-  taken each alone would come to. Under it: the kept count's own figures as the loader gives them (`K`, the rows, the
-  rows that kept each count, their entropy and its most, the code's bits and an ideal coder's, the bits where it is
-  derived); that the kept count costs 0 where the audited block derives it, which rests on a block of the served
-  Program calling the accept test's Definition (`SampledAccept_v1`), which none does yet; how the pass's sampled
-  requests were seeded, from each one's own arrival (what a sampled request with no seed there was sampled with is in
-  no record: its tokens cannot be replayed); and the pass. The loader's own
-  replay of the scheduler must reproduce every step of the pass: where it does not, the line is not measured and
-  says the loader's reason. A serve with no draft keeps no draft, so its kept count is 0 bits and its advice is the
-  arrivals'.
-
-A line says `not measured` with its reason where the job's files don't hold it or can't be read; the last line counts
-the measured ones and names the arms that were not served whole.
+**The method a serving cost is measured by.** Four arms, `prod`, `prod-again`, `prod-seeded` and `prod-record`, each
+served in nine server lifetimes in that alternating order, each lifetime opening with a 20-second warm-up pass that
+no figure counts (the benchmark's `WARM_S`) and then two counted passes (`--reps 2 --lifetimes 9 --leave-out 0`).
+The cost is the mean of the nine lifetime pairs' costs with its Student's t 95% interval over them, t at the pairs
+less one, and stock against stock, `prod-again` over `prod` taken the same way, is the noise floor printed beside it
+and never subtracted.
 
 ## The cost priced from counts
 
@@ -234,20 +71,36 @@ one card (`TOPK_CUT.jsonl`, the timing of `benchmarks/dsa_topk`'s passes at the 
 
 - **The rows each call reads** come from the schedule: each counted pass's decode steps in the arm's step trace, with
   the rows past the indexer's k keys and the longest of them. A decode step makes 22 calls on each card.
-- **The rows whose fast selection failed** come from the model's outputs: the top-k's counters (`topk_counters.json`).
-  Those are lifetime totals over the processes, so the reader takes a card's share and the counted passes' share of
-  the lifetime's decode rows. It places them in calls three ways: packed, a request's rows to a call, and one row a
-  call. The bounds and the point are those placements, with each pass's time ranged over the distributions it was timed on.
+- **The rows whose fast selection failed** come from the model's outputs. Where a lifetime kept the top-k's counts by
+  step (`dsa_topk_steps.*.jsonl` beside its step trace), each counted step's failed rows are its own, on its slowest
+  card, joined to the trace by step and tokens. Else they are the counters' lifetime totals (`topk_counters.json`): a
+  card's share, scaled to the counted passes' share of the lifetime's decode rows, and a lower bound by the rows a
+  killed process read last. The reader places a step's failed rows in its calls three ways: packed, a request's rows
+  to a call, and one row a call. Where the counts by step hold the calls a remedy failed in (`calls_bisected`,
+  `calls_refined`), it reads that number in place of the placements. The bounds and the point are those placements,
+  with each pass's time ranged over the distributions it was timed on.
+- **Prefill steps** (a step with a row of more than a decode request's tokens) are priced only at prefill unit times,
+  `--prefill-units FILE` in `TOPK_CUT.jsonl`'s form, with their own failed rows where the counts are by step. Without
+  that file they are refused, and the reader gives their measured added seconds instead: ours's prefill steps less the
+  reference's, from both arms' step traces, as a term marked measured.
 - **What it gives:** the layer's cost in percent of the reference's counted serving time, beside the job's own measured
-  layer (`prod_repro.json`'s `layers`) and the difference in points. The point under
-  `vllm/prod-serving-cost-glm53` (member `…-priced`, `mark` `modeled`, `--result` under a run) is that layer plus the
-  job's measured `prod-trace` over `prod`. It names the job's run as the run that tests it.
+  layer (`prod_repro.json`'s `layers`) and the difference in points. Beside the measured layer is the same layer with
+  each pass's seconds adjusted for its engine steps (each pass paired with the reference's of the same lifetime and
+  rep, at the slope of ln seconds on ln steps within each arm), marked modelled. The point (`price`, which the serving
+  cost's door calls too) is that layer, plus the measured prefill term where prefill was not priced, plus the job's
+  measured `prod-trace` over `prod`, under `benchmarks/serving-cost-priced` with the member model, card, then arm
+  (`glm-5.3-h200-prod-record`), `mark` `modeled`. It names the job's run as the run that tests it, and each measured term in its
+  inputs. The reader writes it to `priced.json` alone; `verity bench serving_cost price` stores it, and nothing puts a
+  priced point on the measured line `vllm/prod-serving-cost-glm53`.
 - **When it writes no point:** where the counters hold no failed rows, or where the job measured no layer below.
-- **What it doesn't price:** prefill steps, which have no device times at prefill shapes; the host's time; and the
-  cards differing (each card is taken to fail the same rows).
+- **What it doesn't price:** the host's time, and a failed row's own keys (each failed call is priced at its step's
+  longest row).
 
 ## What is not yet true
 
+- **Two rules of the cost's method are not yet the report's own.** The job's first lifetime pair, its servers
+  started cold, is left out of the figure, and a figure from a node any card of which slowed down in a counted pass
+  is named as on a throttled node, with no verdict; the report counts every pair and reads no card's clock.
 - **The advice line's serve is not under the network attester.** No arm of this command is served under the
   network attester's record or the certified tick, so the arrivals are charged at what they would cost without the tick. The
   kept count is charged at its code's bits: the accept test has a Definition, and no block of a served Program calls

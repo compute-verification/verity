@@ -213,11 +213,12 @@ def test_the_tick_rule_reads_whole_buckets_in_microseconds():
 class Gated:
     """A gate over `Sched` with a hand-turned clock."""
 
-    def __init__(self, hold_s: float = 5.0) -> None:
+    def __init__(self, hold_s: float = 5.0, rule: dict[str, Any] | None = None) -> None:
         self.now = 0.0
         self.sched = Sched()
         self.log: list[dict] = []
-        self.gate = sa.TickGate(TICK, hold_s=hold_s, clock=lambda: self.now, log=self.log.append)
+        kw = {"hold_s": hold_s, "clock": lambda: self.now, "log": self.log.append}
+        self.gate = tp.RuleGate(TICK, **rule, **kw) if rule else sa.TickGate(TICK, **kw)
         self.hooks = sa.install(self.sched, self.gate, key=lambda rid: rid)
         self.watermark = sa.Watermark(RUN, self.gate.take)
 
@@ -265,7 +266,56 @@ def test_the_engine_waits_for_the_watermark_and_admits_at_the_bucket_close():
     assert not g.step() and g.gate.T == 320_000                      # T is past bucket 2's close: its line is wanted
     g.lines(3)
     assert g.step() and g.sched.added == ["r0", "r1", "r2"] and g.sched.steps[-1] == ["r1", "r2"]
-    assert g.log[0] == {"step": 0, "T": TICK.close(0), "bucket": 0, "admitted": [0, 1], "t": 0.0}
+    assert g.log[0] == {"step": 0, "T": TICK.close(0), "bucket": 0, "admitted": [0, 1], "held_steps": [0], "t": 0.0}
+    assert [r["held_steps"] for r in g.log] == [[0], [0], [2]]       # r2 came, then r1 stepped twice before its bucket
+
+
+def test_a_rule_gate_adds_its_tokens_to_t_and_catches_up_to_the_newest_line_while_nothing_waits():
+    g = Gated(rule={"token_ns": 1_000_000, "catch_up": "marks"})
+    g.release(0, bucket=0)
+    g.arrive("r0", out=10)
+    g.lines(1)
+    assert g.step() and g.gate.T == TICK.close(0) + TICK.free_us + 1_000
+    g.release(1, bucket=3)
+    g.arrive("r1")
+    g.lines(1, 1, 2)
+    assert g.step() and g.sched.added == ["r0", "r1"] and g.sched.steps[-1] == ["r0", "r1"]
+    up = [r for r in g.log if r.get("event") == "catch_up"]
+    assert [(r["T"], r["to"], r["bits"]) for r in up] == [(141_000, TICK.close(3), 2.0)]
+    h = Gated()
+    h.release(0, bucket=0)
+    h.arrive("r0", out=10)
+    h.lines(1)
+    h.step()
+    h.release(1, bucket=3)
+    h.arrive("r1")
+    h.lines(1, 1, 2)
+    assert h.step() and h.sched.added == ["r0"]                     # the registered rule holds r1 till T closes bucket 3
+    o = Gated(rule={"catch_up": "open"})
+    o.release(0, bucket=5)
+    o.arrive("r0")
+    assert o.step() and o.sched.added == ["r0"] and o.gate.opened == "the rule orders nothing"
+
+
+def test_a_rule_gates_token_term_counts_non_draft_tokens_on_a_clock_of_nanoseconds():
+    drafted = SimpleNamespace(total_num_scheduled_tokens=14, scheduled_spec_decode_tokens={"a": [3] * 5, "b": [-1] * 5})
+    assert tp.non_draft_tokens(drafted) == (4, 10)
+    assert tp.non_draft_tokens(SimpleNamespace(total_num_scheduled_tokens=7, scheduled_spec_decode_tokens={})) == (7, 0)
+    g = Gated(rule={"token_ns": 600})
+    g.release(0, bucket=0)
+    g.arrive("r0", out=10)
+    g.lines(1)
+    assert g.step() and g.gate.T == TICK.close(0) + TICK.free_us
+    assert g.step() and g.gate.T == TICK.close(0) + 2 * TICK.free_us + 1
+    assert g.gate.summary()["rule"] == {"token_ns": 600, "catch_up": "quiet", "tokens": {"non_draft": 2, "draft": 0}}
+
+
+def test_the_tick_config_names_the_registered_rule_by_default_and_refuses_another_it_does_not_know(tmp_path):
+    env = config(tmp_path)
+    assert {k: tp.tick_config(env)[k] for k in ("token_ns", "catch_up")} == {"token_ns": 0, "catch_up": "quiet"}
+    for bad in ({"token_ns": -1}, {"token_ns": 1.5}, {"catch_up": "wall"}):
+        with pytest.raises(ValueError, match="token_ns a non-negative integer"):
+            tp.tick_config({tp.TICK_ENV: json.dumps(json.loads(env[tp.TICK_ENV]) | bad)})
 
 
 def test_a_missing_release_no_line_names_lost_holds_the_later_ones_until_its_skip_and_comes_late():
@@ -300,7 +350,8 @@ def test_a_lost_release_at_the_head_is_not_waited_for_and_never_added_should_it_
         g.arrive(f"r{n}")
     g.mark(3, lost=[0])
     assert g.gate.lost == {0} and g.step() and g.sched.added == ["r1", "r2"]         # at once: the clock never moved
-    assert g.log[-1] == {"step": 0, "T": TICK.close(0), "bucket": 0, "admitted": [1, 3], "t": 0.0}
+    assert g.log[-1] == {"step": 0, "T": TICK.close(0), "bucket": 0, "admitted": [1, 3], "held_steps": [0, 0],
+                         "t": 0.0}
     assert counts(g) == {"admitted": 2, "lost": 1, "dropped": 0, "aborted": 0, "held_now": 0}
     g.release(0, bucket=0)                           # its bytes arrive after all, once the gate is past it
     g.arrive("r0")
