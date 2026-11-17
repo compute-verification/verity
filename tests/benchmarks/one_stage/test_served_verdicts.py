@@ -70,6 +70,7 @@ from verity.commitments.periods import interface as IF
 from verity.protocols.registration.verifier import registration as RL
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_period as W
 from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
+from verity.protocols.proofs.spot.verifier.one_stage.verdict_record import DESIGN
 from verity.protocols.resource_accounting.memory.poub.verifier import ledger
 
 HERE = Path(__file__).resolve().parent
@@ -2489,7 +2490,7 @@ def _pearlplus_piece(tmp_path: Path, monkeypatch, live, case: str = "of record",
     committed = _committed("rate:1/1000000000" if case == "rule not R's" else rule)
     (audit / S.WINDOW_REGISTRATION).write_text(json.dumps(
         {"format": REG.FORMAT_V2, "previous": "ab" * 64 if case == "R not after W" else PEARL_W, "registered": [],
-         "population": PEARL_BLOCKS, "law": committed}))
+         "population": PEARL_BLOCKS, DESIGN: committed}))
     summary = {"tie": {"record": PEARL_W}, "sampling_design": rule,
                "audit": {"rejected": {"accepted": False}, "unsaid": {}}.get(case, {"accepted": True})}
     (audit / S.AUDIT_SUMMARY).write_text(json.dumps({} if case == "audit untied" else summary))
