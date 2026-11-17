@@ -15,7 +15,16 @@ verity bench exfiltration --variant V     read one variant of the row, in a run 
 verity bench exfiltration --response-ids N the network attester's part for a class of at most N ids a response
 verity bench exfiltration --scan-delta D  the network attester's errors at another δ of its scans (a fraction)
 verity bench exfiltration --local-only    read this machine's catalog alone, not the store's remote
+verity bench exfiltration --from DIR      read one run's record directory instead, with no store
 verity bench exfiltration --help          every parameter and its default
+```
+
+To try it with nothing of ours, no store and no key, read the made-up record in this directory from the repository's
+root. It prints the same tables from rows written by hand, and says the record is made up:
+
+```text
+uv sync --all-packages --extra torch-cpu
+uv run verity bench exfiltration --from benchmarks/exfiltration/made_up
 ```
 
 ## The two parts
@@ -27,7 +36,7 @@ verity bench exfiltration --help          every parameter and its default
   modeled lever at its measured value, at the step that prices the verifier as measured, and reads it at the β
   where its total is the share: the total is a line in β fitted over the pinned budgets, and ln(bound) is linear in ln β
   between the two that bracket it. The row plans for the weights / λ, and its part is λ times its bound. `--row` and
-  `--step` take another case of the plan. This is the headline figure. The planner's driver reads the same rows two
+  `--step` take another case of the plan. The planner's driver reads the same rows two
   other ways, and the print says how each differs: `headline plan` gives the bound at the plan's own pinned budget,
   whose total is that row's rather than the share, at λ = 1; `headline rows` gives λ times the bound at 10%, the
   total read between the two pinned budgets that bracket it alone.
@@ -42,8 +51,8 @@ verity bench exfiltration --help          every parameter and its default
   the fail cells and the jitter, for the scan as the monitoring-period check charges them today, for the scan
   under each change to its check, and for the design with no run behind it, before a served audit has sampled a
   stop block and once one has. The design's two rows are also charged the count: how many of a link's releases
-  each content class holds in an execution phase. The command reads that command's document (`certifier-term/v2`)
-  and refuses another schema.
+  each content class holds in an execution phase. The command reads that command's document at one schema
+  (`verity_bench.exfiltration_common`'s `TERM_SCHEMA`) and refuses another.
   - **Its figures of record are at two release schedules**, D_j = 2, the jitter bound of that document's term of
     record. A figure at D_j = 1, and every figure of a row whose release times are taken once (`timing`,
     `all three`), is what a network attester with a set-time card would be charged. That card is simulated: none
@@ -53,7 +62,7 @@ verity bench exfiltration --help          every parameter and its default
     on each row that carries it, and holds no copy.
   - **Its class is the one the plan of record serves**: at most 1,024 ids a response (`--response-ids`), assumed, as
     every class is while no run has certified one. `verity bench certifier_term` assumes a wider class by default,
-    so the headline gives that command's own term of record beside this one's.
+    so the print gives that command's own term of record beside this one's.
 
 A link's execution phase carries K = schedules + cells + jitter + min(entries, advice + the wrong blocks' output bits
 at δ). The first three terms are the network attester's part and the last term's second branch is the compute
@@ -86,13 +95,13 @@ The command hands the list to the stop verdicts' reader, `verity/protocols/resou
 the reader's answer to the network attester's calculator, which charges the stop class of its rows by it and by
 nothing else. What the reader reads in a run's files, and what holds an execution phase, are its own
 (`benchmarks/certifier_term/README.md`, "The stop class's verdicts"); the command reads none of those files itself.
-The document carries the answer (`certifier.stop`): the rows it charges, the execution phases held, whether the stop
+The document carries the answer (`attester.stop`): the rows it charges, the execution phases held, whether the stop
 class is charged below on every execution phase, the reader's own lines, the verdicts it read, and the runs it was
 handed with the superseded ones. The print gives the reader's lines as they are, under a line that names the runs.
 
 With no run carrying the record the reader is not asked, and the calculator's rows are as with no record read: each
 connection charged its whole schedule, `design` equal to `design, no stop block`, and the network attester's
-figure in the headline the `scan` row's.
+part the `scan` row's.
 
 ### The output count's mark
 
@@ -407,12 +416,13 @@ the network attester's ε is 1 or more) is left out, but the world's year, the f
 is always written and written last, so a reader that keys a result's measurements by name alone, the last of a name
 winning, reads it:
 
-- `benchmarks/exfiltration-gb-world-year`: the headline figure, the document's `value` over the world's year (today
-  the compute audit's part, λ times the bound where row `(ii) honest`'s total is 10% of compute), and that part over
-  each other period.
 - `benchmarks/exfiltration-compute-audit-gb`: the compute audit's part over each period.
-- `benchmarks/exfiltration-network-certifier-gb`: the network attester's part of record, the `scan` row at D_j = 2;
+- `benchmarks/exfiltration-network-attester-gb`: the network attester's part of record, the `scan` row at D_j = 2;
   over the world's year with no value and "no bound at this period" with its ε as its why where that ε is 1 or more.
+- `benchmarks/exfiltration-total-gb`: the two parts together, the `scan` row at D_j = 2 with the compute audit's
+  part, its error the two parts' summed; over each period the compute audit's part has a value over.
+
+The three are of equal rank: each part is its own metric, and the total is their sum.
 
 Each measurement's first input opens
 with its mark (`modeled`, and the network attester's with the mark its calculator gives the `scan` row beside it), its
@@ -424,3 +434,25 @@ ran. The print is the same in a run as outside one.
 ```text
 research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/exfiltration/run.py
 ```
+
+## What you may change
+
+Every input the print lists with its mark: the share of total compute, the network check's share, the planner's row
+and step, the class of ids a response, the scans' δ and a served run's record, each by its flag. And the record the
+rows come from: the store's runs of record, or one run's record directory with `--from`.
+
+## What is fixed
+
+The two calculators, the planner's bound and the network attester's term, and how the command reads them: the fit
+over the pinned budgets, λ, the errors summed over everything a figure covers, and the marks. With `--from` the print
+and its document go through the harness kit (`kit.report`), which says what the run ran with (`ran with: not
+stated`: the planner's rows record no coins), that it is a measurement and not an audit, and where the record is
+made up.
+
+## How a cheating change is refused
+
+The command refuses two parts that cover different GPU-seconds, requests or weights, and two runs of record that both
+hold a scope with neither superseded; a run whose two rows files differ on one case is left out, and is listed with why.
+A figure whose error is 1 or more prints no amount. A record that says it is made up (`made_up` in its `job.json`) is
+printed as made up, and writes no measurement, under a research run or not: its document alone, which says so. A run id
+given to `--from` is fetched past the store's withdrawals, and a withdrawn record is refused.

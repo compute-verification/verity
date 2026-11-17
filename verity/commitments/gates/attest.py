@@ -23,7 +23,7 @@ constant and whose count is the second block's bytes 37 to 44: one ``Sha512Compr
 then ``LmsEqual_v1{64}`` against ``domain``, ANDed into the result.
 
 **The message** is SHA-512 of ``u64(21) || "verity/period-root/v1" || I || u64(L + 8) || context || u64be(count) ||
-u64(64) || root`` (`lms._digest`), 133 + L bytes: three ``Sha512Compress_v1`` calls up to L = 234 (a memory challenger's
+u64(64) || root`` (`lms._digest`), 133 + L bytes: three ``Sha512Compress_v1`` calls up to L = 234 (a memory attester's
 party on a device role of 8 bytes and a 32-byte attachment is L = 161), wired in the body over the arguments' bits and
 the constant bytes, as `gates.lms` hashes a one-time public key. Its digest is ``LmsVerify_v1{N, W, H}``'s message. Every
 digest and N-byte value is SHA-512 words as `gates.lms` lays them out (bytes big-endian, each word's bits LSB first); a

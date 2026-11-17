@@ -36,8 +36,6 @@ it on every sampled row and every alternative refuted on at least PER_ALT words 
 """
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import argparse
 import json
 import logging

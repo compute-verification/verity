@@ -525,7 +525,7 @@ def _inv_freq(C: dict[str, Any]) -> np.ndarray:
     # D` under the model's device context), and ATen's CUDA true division by a CPU scalar is a multiplication by the fp32
     # reciprocal (BinaryDivTrueKernel.cu: `a * (1/b)`), not a correctly rounded division.  For power-of-two D the two agree
     # bit for bit (Llama 64/128, Qwen 128, Gemma-2 256); for D=96 (Phi-3-mini) they differ by one fp32 ulp at 15 of the 48
-    # exponents, which `base ** e` amplifies to up to 9 ulps of inv_freq (14 of 48) and check_cos_sin's bound then rejects
+    # exponents, which `base ** e` amplifies to several ulps of inv_freq and check_cos_sin's bound then rejects
     # 198 words of the captured table (positions t with t * inv_freq_k near a zero of cos / sin).
     exps = (np.arange(0, D, 2, dtype=np.float32) * (np.float32(1.0) / np.float32(D))).astype(np.float32)
     inv = (np.float32(1.0) / np.power(base, exps, dtype=np.float32)).astype(np.float32)

@@ -38,7 +38,7 @@ engine's resulting parameters, the seed and its rule). A greedy request without 
 split count is not pinned yet, so its sample is not a function of the committed values.
 
 The default precision is ``verity_int8`` (int8 linears, vLLM's attention), the one setting whose 16-token probe (0.81 s at 4 in
-flight) fits the certifier's plan (about 2.6 s); ``int8_exact`` takes 12.9 s even without the Commit. The ``verity_int8``
+flight) fits network attestation's plan (about 2.6 s); ``int8_exact`` takes 12.9 s even without the Commit. The ``verity_int8``
 quantization method is registered under every precision, so a pin whose checkpoint names it loads under ``--precision pin`` too.
 
 The engine is `verity_vllm.LLM` (in-process engine core, Model Runner V2), stepped by one thread, the process's main
@@ -46,9 +46,9 @@ thread (`serve_loop.EngineLoop`): each HTTP request is admitted with ``add_reque
 ``f"{request_id}-{i}"``), and vLLM's scheduler batches whatever is admitted; each engine output goes back to its
 request's connection as it comes. The HTTP side is an asyncio server on its own thread, one request per connection. It
 takes a request's first line only as the network attester does (`serve_head.request_line`), and answers 400 to any other:
-those are the bytes the certifier passes on without its release.
+those are the bytes the network attester passes on without its release.
 Requests reach the engine in the order the frontend parsed them (``--admit arrival``, the default), or in the network
-attester's release order (``--admit release-order``: `serve_admit.ReleaseOrder`, which says what the certifier sends), where each step's
+attester's release order (``--admit release-order``: `serve_admit.ReleaseOrder`, which says what the network attester sends), where each step's
 rows also keep the scheduler's order, so a step's new rows are in admission order (`serve_admit.keep_scheduler_rows`; ``serve.json``'s
 ``step_rows``). ``--admit tick`` (`serve_admit.TickGate`) also adds each at the step the certified tick says, from the release
 buckets the network attester's watermark gives (its ``POST /verity/watermark``, which the server reads as it streams) and the
@@ -113,7 +113,7 @@ its outcome is its ``windows.jsonl`` line's ``pouw_pearl``. With ``--challenger-
 reserved under the lane when the window opens (`serve_pearl.live`); without them it is in-process and credits nothing.
 ``--day N`` declares day N's one circuit in ``--day-log`` before the model loads, and each window's registration names it (`serve_day`).
 ``--remote-verifier HOST:PORT`` proves the engine's store (its weights, and ``--remote-filler-gib``) to
-PoUB's verifier in lockstep with the server's engine steps from its first, a pass a step (`serve_remote`): its
+PoUB's verifier in lockstep with the server's engine steps from its first, a pass a step (`serve_poub`): its
 record is ``remote_session.json``, and a rejected session fails the exit.
 
 The engine runs eager, so each step makes hundreds of torch calls, each of which releases the GIL and takes it back. While
@@ -139,7 +139,7 @@ from verity_vllm import messages as M, settings
 from verity_vllm.config import UsageError, group, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED, UNSEEDED, rule_of
 from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h1 as SH, serve_head as HD, serve_learn as SL,
-                                   serve_pearl as SPL, serve_release as RL, serve_day as SD, serve_remote as SR, serve_row as RW,
+                                   serve_pearl as SPL, serve_release as RL, serve_day as SD, serve_poub as SR, serve_row as RW,
                                    serve_seal as SS)
 from verity_vllm.pipeline.serve_admit import (ADMIT, WATERMARK_PATH, Admission, Delta, ReleaseOrder, Tick, TickAdmit, TickGate,
                                               engine_id_of, keep_scheduler_rows, new_http_id)
@@ -178,7 +178,7 @@ class Options:
                                   "B = 512)")
     precision: str = option("--precision", choices=PRECISIONS, default="verity_int8",
                             help="verity_int8 (default): int8 linears only, as vLLM's own server serves the int8 pin, the one that fits "
-                                 "the certifier's plan; int8_exact: int8 linears and attention (quantization verity_int8, attention "
+                                 "network certification's plan; int8_exact: int8 linears and attention (quantization verity_int8, attention "
                                  "CUSTOM); pin: the pin's engine profile; bfloat16: the pin's profile at dtype bfloat16, "
                                  "unquantized (Pearl+'s arm, serve_pearl)")
     max_num_seqs: int = option("--max-num-seqs", type=int, default=8)

@@ -39,6 +39,8 @@ from __future__ import annotations
 import copy
 import hashlib
 import importlib.util
+import shutil
+import sys
 from itertools import chain, count
 from pathlib import Path
 
@@ -74,8 +76,11 @@ REQUIREMENT_DIFFTEST = Path(__file__).resolve().parents[5] / "tests/verity/circu
 _spec = importlib.util.spec_from_file_location("test_requirement_difftest", REQUIREMENT_DIFFTEST)
 assert _spec is not None and _spec.loader is not None
 _RD = importlib.util.module_from_spec(_spec)
+sys.modules.setdefault("test_requirement_difftest", _RD)
 _spec.loader.exec_module(_RD)
 PORT, _lean, encode, rmsnorm, serve, toy_decoder = _RD.PORT, _RD._lean, _RD.encode, _RD.rmsnorm, _RD.serve, _RD.toy_decoder
+
+pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 server = D.server_fixture(PORT)
 
@@ -355,8 +360,13 @@ def _verdicts(out: dict, session: dict) -> tuple[dict[int, set[int]], dict[int, 
     give, that every credited row is in a block the map holds (a block with none may be held too, and earns W nothing).
     Returns the live rows in incomplete blocks and the blocks held with no credited row, by step."""
     rows, block, held, arrive = session["rows"], session["block"], session["held"], session["arrive"]
-    born = lambda v: arrive[rows[v][0]] + rows[v][3].born  # noqa: E731
-    live = lambda t: {v for v, (r, _, _, x) in rows.items() if born(v) < t <= arrive[r] + x.last}  # noqa: E731
+
+    def born(v: int) -> int:
+        return arrive[rows[v][0]] + rows[v][3].born
+
+    def live(t: int) -> set[int]:
+        return {v for v, (r, _, _, x) in rows.items() if born(v) < t <= arrive[r] + x.last}
+
     uncredited, dead = {}, {}
     for t, s in enumerate(out["steps"]):
         assert s["live"] == s["reads"] == sorted(live(t)) and s["resident"] == sorted(held[t])
@@ -452,7 +462,10 @@ def deferred(value: dict, lag: int) -> dict:
                 freed[free[j]].remove(j)
             else:
                 written[t + lag].append(j)
-    resident = lambda t: set(chain(*written[:t])) - set(chain(*freed[:t]))  # noqa: E731
+
+    def resident(t: int) -> set[int]:
+        return set(chain(*written[:t])) - set(chain(*freed[:t]))
+
     return {**value, "encoded": [encoded.get(j, 0) for j in range(1 + max(encoded, default=-1))],
             "store": {**s, "written": written, "freed": freed},
             "plans": [sorted(set(p) & resident(t)) for t, p in enumerate(value["plans"])]}

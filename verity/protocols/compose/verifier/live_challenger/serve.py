@@ -7,7 +7,7 @@ log signed when the session ends.
         [--root HEX] [--secret-file FILE] [--sign-lock FILE] [--withhold]
 
 - **The key** is the challenger's LMS key over SHA-512, on its host in `--key DIR` (default
-  `~/.local/state/live-challenger/key`), in the memory challenger's layout (`benchmarks/pous/memory_challenger/live.py`):
+  `~/.local/state/live-challenger/key`), in the memory attester's layout (`benchmarks/pous/memory_attester/live.py`):
   `seed` (secret, 0600), `public` (`I || T[1]`), `tree.bin` (the key's tree, a cache checked against `public` and
   `tree.sha512`) and `state.json` (`lms.LeafState`, which refuses a used leaf across runs).  A missing key is made there
   first, at `lms.DEPLOYED` (about 1.1G SHA-512 hashes over `--keygen-workers`) or at `--params W,H` (tests).  A key inside
@@ -24,7 +24,7 @@ log signed when the session ends.
   opens no tunnel: PORT is one of its peer's certifier coin link, which carries it to the peer (`auditor.py`, the coins'
   path), and `--peer` with `--root` is refused (`CoinsConfidential`).  Only a development session (`run.sh`) takes
   `--peer`: it then opens `ssh -R PORT` to that machine of `--peers` (`/etc/vy/peers`, as
-  `benchmarks/remote_session/run.sh` does for its verifier), whose own 127.0.0.1:PORT the client connects to.  It
+  `benchmarks/poub_session/run.sh` does for its verifier), whose own 127.0.0.1:PORT the client connects to.  It
   serves the first client whose hello it accepts (`remote.greet`, then `remote.serve`): a refused hello releases nothing, so it is logged in `hellos.jsonl` (`{"n",
   "reason"}`, fsynced; `remote.log_hello`) and the next connection is taken, each hello read within 10 s, up to
   `challenger.MAX_HELLOS` refused hellos, the most a session's evidence holds: the next refused past them ends the

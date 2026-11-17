@@ -33,7 +33,7 @@ mkdir -p "$RT/build" "$RT/logs"
 # each file up to 5 times, backing off 1 s doubling or as long as Retry-After says.
 for f in $FILES; do
   mkdir -p "$RT/vllm/$(dirname "$f")"
-  [ -s "$RT/vllm/$f" ] || curl -fsSL --retry 5 --retry-all-errors "https://raw.githubusercontent.com/vllm-project/vllm/$PIN/$f" -o "$RT/vllm/$f" || fail "fetch $f"
+  [ -s "$RT/vllm/$f" ] || curl -fsSL --retry 5 "https://raw.githubusercontent.com/vllm-project/vllm/$PIN/$f" -o "$RT/vllm/$f" || fail "fetch $f"
 done
 
 # (2) build when the inputs changed

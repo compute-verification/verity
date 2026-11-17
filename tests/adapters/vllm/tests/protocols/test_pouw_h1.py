@@ -26,6 +26,11 @@ else:
 
 from verity.circuits.refs import runs
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import seeds as SD
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import requests as RQ
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
 from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
 from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
@@ -45,12 +50,7 @@ from verity_vllm.engine import int8_exact as E
 from verity_vllm.engine import int8_experts as X
 from verity_vllm.engine import vllm_adapter as va
 from verity_vllm.protocols import pouw
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
 from verity_vllm.protocols.pouw import h1_hooks as PHK
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import requests as RQ
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
 
 K = 64
 ROW = K * PH.I8_BITS
