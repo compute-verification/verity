@@ -11,7 +11,7 @@ import pytest
 
 from tests.compiler.test_network_attester_compile_slice import BOOK
 from verity_vllm.compiler import compile_slice as CS
-from verity_vllm.compiler import tick_slice as TL
+from verity_vllm.pipeline import tick_slice as TL
 from verity_vllm.pipeline.advice_code import replay as RP
 from verity_vllm.pipeline.advice_code import schedule as SC
 

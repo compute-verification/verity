@@ -1,5 +1,5 @@
-"""The compile slice under the certified tick: `compile_slice_v7`'s with each step `tick_step.TickStep_v1` in place of
-`replay_step.ReplayStep_v1`, on the chain at the tick's rows (`replay_chain` with TAU).
+"""The compile slice under the certified tick: `compiler.compile_slice_v7`'s with each step `compiler.tick_step.TickStep_v1`
+in place of `compiler.replay_step.ReplayStep_v1`, on the chain at the tick's rows (`compiler.replay_chain` with TAU).
 
     TickSlice_v1{R, W, A, M, T, L, B, H, CH, WM, FULL, PC, NB, IW, AS, EW, Q, D, P, K, CN, CTW, CU,
                  TAU, CSAT, CFREE, C1, TCU, CARRY}
@@ -108,7 +108,7 @@ TickSlice = _part(
 
 def statics(R: int, W: int, A: int, engine: dict, IW: int, Q: int, D: int, P: int, K: int, *, tau: int, sat: int,
             free: int, token: int = 0, quiet: bool = True, carry: int = 1) -> dict:
-    """`compile_slice_v7.statics` with the tick's amounts (`tick_step.statics`' ``tau``, ``sat``, ``free``, ``token``,
+    """`compile_slice_v7.statics` with the tick's amounts (`compiler.tick_step.statics`' ``tau``, ``sat``, ``free``, ``token``,
     ``quiet`` and ``carry``), refused as TickStep_v1 refuses them and where the engine caches prefixes."""
     st = {**V7.statics(R, W, A, engine, IW, Q, D, P, K), "TAU": tau, "CSAT": sat, "CFREE": free, "C1": token,
           "TCU": int(not quiet), "CARRY": carry}
@@ -153,7 +153,7 @@ def _step(S, cur: RC.Row, arr: Sequence[RC.Arrival]) -> TS.Out:
 
 
 def scan(S, sl: Slice, cert: Sequence[RC.Arrival] | None = None, *, clock: dict[int, int] | None = None) -> SimpleNamespace:
-    """The window as a prover runs it from `sl`: TickLoad_v1's rows, then each step by `tick_step.reference` on the
+    """The window as a prover runs it from `sl`: TickLoad_v1's rows, then each step by `advice_code.tick_step.reference` on the
     state row and the window row's arrivals at its head. The prover's choices: `cert`, the arrivals with buckets it puts
     in ``cert`` (default `sl`'s); `clock`, step u -> the T it puts in the state row step u reads, the steps then going
     on from it."""
@@ -183,7 +183,7 @@ def scan(S, sl: Slice, cert: Sequence[RC.Arrival] | None = None, *, clock: dict[
 
 def check(S, rows: dict) -> dict[str, bool | None]:
     """The circuit's flags on a unit's rows by its pieces' references, CompileSlice_v7's (`compile_slice.check`) with
-    `tick_step.reference` for each active step and ``load`` refused at a count other than 0."""
+    `advice_code.tick_step.reference` for each active step and ``load`` refused at a count other than 0."""
     Sc = CS.chain(S)
     F = CS.fields(S, CODE)
     a, w = (RC._split(rows[r], F[r]) for r in ("adv", "wit"))
