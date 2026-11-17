@@ -142,8 +142,7 @@ Two kinds of committed run:
   **weights-registration** committed them under it before the first window's coins (``--registration``, which the
   verifier pins: ``records_audit.py audit --registered``), so a weight served as registered has its registered root and
   any other's reads are free; the scan's state rows (`window_rows.state_value`), or without a kept run a stand-in's
-  (`window_rows.standin_state`), registered as a value of the window's Program (`window_circuit.population_digest`)
-  under a domain bound to the run root, the challenger-signed open root, whose rows and salts it also writes whole, prover
+  (`window_rows.standin_state`), a per-window value under the run root, whose rows and salts it also writes whole, prover
   only, for the network attester's scan to read as its state tree (`scan_state_opening`, ``scan_zk.py --v3c``). Where
   the certifier front kept the network attester's run under the serve dir, slot k is instead the request whose Program
   the network attester's scan of that run starts there (`kept_scan`), its row the scan's. ``--out`` is the window's
