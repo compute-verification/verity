@@ -11,7 +11,7 @@ backward.proofsInPublic = true
 name = "flock_verifier"
 path = "../../../../proofs/flock/verifier"
 
-# The period's check reads a scan's layout off its description as the inference-only check does (`InferenceOnlyVerifier.Desc`'s layout checks).
+# The period's check reads a scan's layout off its description as the inference-only check does (`InferenceOnlyCheck.Desc`'s layout checks).
 [[require]]
 name = "inference_only_verifier"
 path = "../../../../workload_classification/training_detection/inference_only/verifier/lean"

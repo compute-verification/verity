@@ -5,14 +5,14 @@ public import InferenceOnlyVerifier.Check
 /-!
 # The inference-only check at the size of the description
 
-`InferenceOnlyVerifier.Desc.evaluate` decides what `InferenceOnlyVerifier.evaluate` decides, for a division whose inference blocks are unions of the root's
+`InferenceOnlyCheck.Desc.evaluate` decides what `InferenceOnlyCheck.evaluate` decides, for a division whose inference blocks are unions of the root's
 nodes (inference blocks aligned to Calls), without laying out the circuit: its cost grows with the descriptor, not with the unrolled
-circuit (AGENTS.md "Design rules"). `InferenceOnlyVerifier.evaluate` stays the reference it is held to: the
-difftest (`InferenceOnlyVerifier.DescDifftest`) checks both on the same declarations, the old one on the division expanded gate by gate.
+circuit (AGENTS.md "Design rules"). `InferenceOnlyCheck.evaluate` stays the reference it is held to: the
+difftest (`InferenceOnlyCheck.DescDifftest`) checks both on the same declarations, the old one on the division expanded gate by gate.
 
 ## The instance
 
-The fields are `InferenceOnlyVerifier.Check`'s (`program`, `theta`, `owner`, `gamma`, `alpha`), read by `InferenceOnlyVerifier.parse`, with two read
+The fields are `InferenceOnlyCheck.Check`'s (`program`, `theta`, `owner`, `gamma`, `alpha`), read by `InferenceOnlyCheck.parse`, with two read
 per root node instead of per gate:
 * `theta`: θ as root nodes, each an input node (§5.2 of `verity/circuits/PROTOCOL.md`) bound at registration
   (`RegisteredInput<w>_v1`), none twice. θ is every gate of those nodes.
@@ -20,8 +20,8 @@ per root node instead of per gate:
   which is in inference block `u`. A root node without gates (a batch of none, or a Call of a Definition without gates) holds no gate of
   any inference block, so its entry is only read for its form.
 
-The expansion, θ as the gates of its nodes and each gate's owner its root node's, is an instance of `InferenceOnlyVerifier.evaluate`, and
-the verdict is the one `InferenceOnlyVerifier.evaluate` gives on it: `gates`, per inference block its size and fresh input bits, the verdict and the first
+The expansion, θ as the gates of its nodes and each gate's owner its root node's, is an instance of `InferenceOnlyCheck.evaluate`, and
+the verdict is the one `InferenceOnlyCheck.evaluate` gives on it: `gates`, per inference block its size and fresh input bits, the verdict and the first
 failing inference block with its rule.
 
 ## What is computed, once per Definition
@@ -61,8 +61,8 @@ same inference block (expanded copy by copy, `freshWidth`). Serve_v1 meets none 
 
 ## Refusals
 
-In the order checked: `instance` and `params` (`InferenceOnlyVerifier.parse`), `program` (the decoder refuses it, among them a
-reference that reads a leaf at another width than it was committed with, `E_REINTERPRET`: `InferenceOnlyVerifier.decodeProgram`), `not-topological`
+In the order checked: `instance` and `params` (`InferenceOnlyCheck.parse`), `program` (the decoder refuses it, among them a
+reference that reads a leaf at another width than it was committed with, `E_REINTERPRET`: `InferenceOnlyCheck.decodeProgram`), `not-topological`
 (a body names a later node, `Prog.orderViolation`), `program` (the root's offsets are not its layout, a body calls the
 root or holds an input node outside the root's: `rootLaidOut`, `inputsAtRoot`, which the decoder never gives), `program`
 (a `walkBound` past half of `Flock.Steps.FUEL`, past which `Prog.gate`'s walk can run out of steps; a scan of no
@@ -72,7 +72,7 @@ layout can't resolve), `unwalked` (what `analyze` would walk one by one past `WA
 many), then θ entry by entry (`theta-unknown`: not a root node, `theta-not-input`,
 `theta-not-registered`: an input node bound per run, `theta-duplicate`), then the owners (`owner-length`: not one per root
 node; node by node `owner-entry`, `input-in-iu`, `gate-in-no-iu`), then
-`empty-iu`. `InferenceOnlyVerifier.evaluate` checks the order gate by gate, so it gives a verdict on a program in which a node reads
+`empty-iu`. `InferenceOnlyCheck.evaluate` checks the order gate by gate, so it gives a verdict on a program in which a node reads
 an earlier member of itself, which this check refuses.
 -/
 
@@ -988,9 +988,9 @@ def freshWidth (segs : Array Seg) : Nat :=
 well-formed static-free composite key), and its gates are computed. -/
 def isInputNode (P : Prog) (n : Node) : Bool := let f := P.defs[n.fn]!; f.prim && isInputId f.key
 
-/-- The root body's layout as `InferenceOnlyVerifier.evaluate` reads it through `Prog.gate`: one offset per node and one more, from 0,
+/-- The root body's layout as `InferenceOnlyCheck.evaluate` reads it through `Prog.gate`: one offset per node and one more, from 0,
 not decreasing, to the root's gates. The decoder lays every body out so; it is checked here, at the cost of the root's
-nodes, because the agreement with `InferenceOnlyVerifier.evaluate` rests on it. -/
+nodes, because the agreement with `InferenceOnlyCheck.evaluate` rests on it. -/
 def rootLaidOut (P : Prog) : Bool :=
   let r := P.defs[P.root]!
   let offs := r.body.offsets
@@ -1009,7 +1009,7 @@ def calleesFirst (P : Prog) : Bool :=
   (List.range P.defs.size).all fun d => (P.defs[d]!).body.nodes.all fun n => n.fn < d
 
 /-- Every Definition as the decoder gives it (`Flock.Program.getDef`), checked at the cost of the nodes because the
-agreement with `InferenceOnlyVerifier.evaluate` rests on it, through `Prog.gate`'s walk: the root a composite, a primitive returning one
+agreement with `InferenceOnlyCheck.evaluate` rests on it, through `Prog.gate`'s walk: the root a composite, a primitive returning one
 `Value<w>`, a composite's offsets from 0 to its gates, each node's gates its members' callee's after the ones before, and
 an input node called with no arguments. -/
 def bodiesLaidOut (P : Prog) : Bool :=
@@ -1050,7 +1050,7 @@ def resolvable (P : Prog) : Bool :=
 
 /-- The walk is within `Flock.Steps.FUEL`, with room for `Prog.gate`'s descent. Past it a Program of a few hundred bytes
 can need more steps than `Prog.gate` takes: a gate reading the carry of a scan of `2^32` iterations, each a scan of
-`2^32` identity steps, needs `2^64`. There `InferenceOnlyVerifier.evaluate` refuses the gate (`program`), and this check, which
+`2^32` identity steps, needs `2^64`. There `InferenceOnlyCheck.evaluate` refuses the gate (`program`), and this check, which
 summarizes each Definition once, would give a verdict. The walk also reads every body as the decoder lays it out
 (`bodiesLaidOut`), and every reference it resolves ends at a gate (`resolvable`). -/
 def walkable (P : Prog) : Bool :=
@@ -1127,7 +1127,7 @@ def evaluate (j : Json) : Except String Json := do
   let r := (Array.range n).map fun u => (size[u]!, freshWidth into[u]!)
   return verdict (P.defs[P.root]!).gates r (failure i.gamma i.num i.den r)
 
-/-- A refusal of `j` as JSON: `unwalked` with its reason as the `message`, else as `InferenceOnlyVerifier.refusalOf` writes it. -/
+/-- A refusal of `j` as JSON: `unwalked` with its reason as the `message`, else as `InferenceOnlyCheck.refusalOf` writes it. -/
 def refusal (j : Json) (code : String) : Json :=
   if code.startsWith UNWALKED then
     Json.mkObj [("error", Json.str "unwalked"), ("message", Json.str ((code.drop UNWALKED.length).toString))]

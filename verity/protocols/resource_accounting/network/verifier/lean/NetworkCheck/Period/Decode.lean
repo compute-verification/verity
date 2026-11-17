@@ -615,13 +615,13 @@ refuses, and `K` would count the free inputs of a Program that only compares its
 
 Then what `NetTiming.BoundaryGates.Fits` asks of the layout the templates give (`Properties.NetworkScan.scanLayout`), read off
 the description, at the cost of its nodes and returns: the Program is laid out as Flock's decoder lays one out and
-within what its resolution walks (`InferenceOnlyVerifier.Desc`'s `rootLaidOut`, `inputsAtRoot` and `walkable`); the root returns
+within what its resolution walks (`InferenceOnlyCheck.Desc`'s `rootLaidOut`, `inputsAtRoot` and `walkable`); the root returns
 every egress leaf (one affine run from the egress node's first leaf over all `T` instances'); the egress template
 returns only gates it computes (`ownReturns`: no parameter's leaf passed through, so no egress gate is an input); the
 ingress template's row, and every template's row, state and egress argument, is one input node's leaves (`inputArg`),
 so each ingress gate is an input and a template reads only input gates outside its own; no egress template's argument
 is the ingress rows' input node, so no egress gate depends on an ingress gate; and the Program is topological
-(`Prog.orderViolation`, as `InferenceOnlyVerifier.Desc.evaluate` checks it), so a gate reads only gates before it.
+(`Prog.orderViolation`, as `InferenceOnlyCheck.Desc.evaluate` checks it), so a gate reads only gates before it.
 
 The ingress template's entry ports `prog<j>` all have one type, a slot entry's, and lane `j`'s read one input node of
 its own, distinct from every other lane's and from the rows, lane `j`'s slot entries (`T / every` rows each, `lanes ·
