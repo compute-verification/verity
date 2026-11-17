@@ -39,7 +39,8 @@ address = "${VY_AUDITOR_2_HOST}:47611"
 
 [node.vy-h100-1]
 VENV = "/workspace/venv312"
-CUDA_HOME = "/usr/local/cuda-13.0"
+# the taps build against the venv's torch, built with CUDA 12.9
+CUDA_HOME = "/usr/local/cuda-12.9"
 NVDISASM_PATH = "/usr/local/cuda-13.0/bin"
 HF_HOME = "/workspace/research/vllm-servedproof/hf"
 LLAMA_ROOT = "/workspace/research/vllm-servedproof/llama"
