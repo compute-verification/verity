@@ -4,9 +4,11 @@ gpu-lease: the lease's, with no lease of its own, as gpu-lease isn't re-entrant.
 grows as the cores fall."""
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -93,3 +95,84 @@ def test_the_lean_verdicts_limit_grows_as_the_cores_fall(tmp_path, cores, given,
     got = subprocess.run(["bash", "-c", f'{line[0]}\necho "$LEAN_TIMEOUT"'], env=env, capture_output=True, text=True,
                          check=True)
     assert got.stdout.strip() == limit
+
+
+#: a stand-in for benchmarks/one_stage/served_verdicts.py whose `piece` returns a row naming what it was asked
+PIECE_STUB = '''import json
+def piece(key, pieces_dir, run=None, **of_record):
+    asked = {"key": key, "pieces": str(pieces_dir), "run": run, **of_record}
+    return {"verdict": "missing", "owner": "compute-accounting", "why": "stub: " + json.dumps(asked, sort_keys=True)}, (None, "real")
+'''
+
+
+def verdicts(tmp_path, gate: dict | None, run_id: str = "") -> tuple[dict, str]:
+    """serve.sh's `verdicts` run alone in a tree whose served_verdicts.py is `PIECE_STUB`: the record it writes and its
+    line."""
+    fn = re.search(r"^verdicts\(\) \{.*?^\}$", SERVE.read_text(), re.M | re.S)
+    assert fn, "serve.sh's verdicts() moved: this test reads it"
+    tree, out = tmp_path / "tree", tmp_path / "out"
+    (tree / "benchmarks" / "one_stage").mkdir(parents=True)
+    (tree / "benchmarks" / "one_stage" / "served_verdicts.py").write_text(PIECE_STUB)
+    (out / "record").mkdir(parents=True)
+    (out / "compute-run.json").write_text(json.dumps({"challenger": "local"}))
+    if gate is not None:
+        (out / "auditor-gate.json").write_text(json.dumps(gate))
+    script = f'PY={sys.executable}\nOUT={out}\nREC=$OUT/record\n{fn[0]}\nverdicts\n'
+    got = subprocess.run(["bash", "-c", script], cwd=tree, env={**os.environ, "RESEARCH_RUN_ID": run_id},
+                         capture_output=True, text=True, check=True)
+    return json.loads((out / "record" / "verdicts.json").read_text()), got.stdout
+
+
+def test_pouws_row_is_the_window_composes_under_the_local_gates_key_pin_and_lane(tmp_path):
+    doc, line = verdicts(tmp_path, {"key_sha512": "ab" * 64, "lane": "vllm", "pin": "p"}, "run-under-test")
+    asked = {"key": "work", "pieces": str(tmp_path / "out" / "pieces"), "run": "run-under-test", "spot": None,
+             "key_sha512": "ab" * 64, "lane": "vllm"}
+    assert doc["protocols"] == {"work": {"verdict": "missing", "owner": "compute-accounting",
+                                         "why": "stub: " + json.dumps(asked, sort_keys=True)}}
+    assert doc["format"] == "verity-bench/compute-verdicts/v1" and doc["run"] == {"challenger": "local"}
+    assert line.startswith("work: missing: stub: ")
+
+
+def test_with_in_process_coins_the_row_is_asked_under_no_key_pin_or_lane(tmp_path):
+    doc, _ = verdicts(tmp_path, None)
+    assert '"key_sha512": null, "lane": null' in doc["protocols"]["work"]["why"]
+    assert '"run": null' in doc["protocols"]["work"]["why"]
+
+
+def steps() -> list[str]:
+    """serve.sh's step names in the order its lines run them."""
+    return re.findall(r"^\s*(?:\[ [^]]* \] \|\| )?step ([a-z-]+) ", SERVE.read_text(), re.M)
+
+
+def test_the_circuit_record_and_the_period_come_before_the_serve_and_its_close_before_the_sample():
+    got = steps()
+    for name in ("serve-phi", "circuit", "period-open", "serve", "retain", "period-close", "python-verify", "verdicts"):
+        assert got.count(name) == 1, (name, got)
+    at = got.index
+    assert at("serve-phi") < at("circuit") < at("gate") < at("period-open") < at("serve") < at("retain") \
+        < at("period-close") < at("python-verify") < at("verdicts")
+
+
+def period(tmp_path, verb: str) -> tuple[list[str], Path]:
+    """serve.sh's `period VERB` run alone with a `$PY` that only prints its arguments: those arguments, and W."""
+    fn = re.search(r"^period\(\) \{.*?^\}$", SERVE.read_text(), re.M | re.S)
+    assert fn, "serve.sh's period() moved: this test reads it"
+    py, w = tmp_path / "py", tmp_path / "w"
+    py.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n')
+    py.chmod(0o755)
+    env = {**os.environ, "PY": str(py), "W": str(w), "PIECE": str(tmp_path / "piece"), "REC": str(tmp_path / "rec"),
+           "SCHEME": "pearl-c-h100-v1-h3", "PEARLC_CHALLENGER_GATE": "gate cmd", "PEARLC_CHALLENGER_LANE": "vllm",
+           "RESEARCH_RUN_ID": "run-under-test"}
+    got = subprocess.run(["bash", "-c", f"{fn[0]}\nperiod {verb}"], env=env, capture_output=True, text=True, check=True)
+    return got.stdout.splitlines(), w
+
+
+def test_the_period_opens_on_the_runs_circuit_record_and_closes_once_the_serves_salt_session_has_ended(tmp_path):
+    opened, _ = period(tmp_path, "open")
+    assert opened == ["benchmarks/one_stage/served_verdicts.py", "pearlplus-period", "open", str(tmp_path / "piece"),
+                      "--gate", "gate cmd", "--name", "pearlplus-run-under-test", "--scheme", "pearl-c-h100-v1-h3",
+                      "--circuit-record", str(tmp_path / "rec" / "circuit-record.json")]
+    closed, w = period(tmp_path, "close")
+    assert closed == ["benchmarks/one_stage/served_verdicts.py", "pearlplus-period", "close", str(tmp_path / "piece"),
+                      "--gate", "gate cmd", "--lane", "vllm", "--windows", str(w / "pearl"), "--wait", "300"]
+    assert os.readlink(w / "pearl" / "w0" / "served.json") == str(tmp_path / "piece" / "served.json")

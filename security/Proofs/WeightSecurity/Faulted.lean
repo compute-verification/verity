@@ -229,19 +229,6 @@ variable {R Q Adv O V Tick F Θ' : Type} [Fintype Adv] [Fintype O] [DecidableEq 
 
 open WeightSecurity.Assumptions
 
-open Classical in
-/-- **The fault channel's covert strings**: each window's pattern or hint, then the served channel's strings. -/
-theorem card_faultChannel (κ : Cut (Q × Adv) (O → V)) (size : F → ℕ) (φ₀ : F) (T M K : ℕ) :
-    Fintype.card (faultChannel R Q Adv O V Tick F κ size φ₀ T M K).S =
-      Fintype.card {w : Fin T → F ⊕ κ.H // ∑ t, Sum.elim size κ.size (w t) ≤ M} *
-        Fintype.card (servedChannel R Q Adv O V Tick T K).S := by
-  classical
-  calc Fintype.card (faultChannel R Q Adv O V Tick F κ size φ₀ T M K).S
-      = Fintype.card ({w : Fin T → F ⊕ κ.H // ∑ t, Sum.elim size κ.size (w t) ≤ M} ×
-          (servedChannel R Q Adv O V Tick T K).S) :=
-        Fintype.card_congr' rfl
-    _ = _ := Fintype.card_prod _ _
-
 /-- The fault channel's query at a history of length `n < T` carries its string's `n`-th pattern, or the empty pattern
 at a hint. -/
 theorem faultChannel_ask_snd (κ : Cut (Q × Adv) (O → V)) (size : F → ℕ) (φ₀ : F) (T M K : ℕ)

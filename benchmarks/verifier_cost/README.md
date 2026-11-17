@@ -171,7 +171,7 @@ research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool
 
 `members_files.sh N|all...` times the per-member form's pass over every member's files against the members of one
 circuit file. `members_files.py` writes one per-member case as the executable's `check` takes it: a driver's (`MF_CASE`,
-an audit's `window/case-v2-members.json`), or a stand-in window's of `MEMBERS` members (default 300) of one proof block over
+an audit's `window/case-v2.json`), or a stand-in window's of `MEMBERS` members (default 300) of one proof block over
 two templates (`benchmarks/one_stage/members_standin.py`'s: one member of each template sampled, the rest sharing their
 template's circuit file unsampled), audited as a served window's audit step runs it, on Flock's prover, the Lean
 verifier and the ZK server; v2's `check` must accept the case, and its seconds and peak RSS go to inputs.jsonl.
