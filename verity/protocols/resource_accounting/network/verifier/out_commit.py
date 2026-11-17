@@ -69,7 +69,7 @@ SALT_BYTES = hm96.SHA512.salt_bytes
 REFUSALS = {
     "out-record": "the record isn't an out record: not a JSON object of exactly its keys, each of its type",
     "out-key": "the certificate is another key's",
-    "out-session": "the record is of another certifier session",
+    "out-session": "the record is of another attester session",
     "out-link": "the certificate is of another link or direction",
     "out-window": "the certificate is of another window",
     "out-width": "the record's words a row, word bits or row schema aren't the registered read's",
@@ -221,7 +221,7 @@ def commit_out(rows: Sequence[Sequence[int]], *, shape: OutShape, key: Signer | 
                link: str = LINK, salts: Sequence[bytes] | None = None) -> CertifiedOut:
     """The output value the attester relayed, committed at the registration's `shape` under the domain the verifier
     derives for the reading program's pinned value, and its head signed for the egress execution phase `(link, window)`
-    in certifier session `session`.
+    in attester session `session`.
 
     `rows`: the value's rows, exactly `shape.rows` of `shape.words` leaves of `shape.word_bits` bits. `key`: the
     attester's signer (which starts `session` at its first signature and refuses any other session), or its running
@@ -233,7 +233,7 @@ def commit_out(rows: Sequence[Sequence[int]], *, shape: OutShape, key: Signer | 
                          f"{sorted({len(r) for r in rows})} leaves")
     issuer = key if isinstance(key, Issuer) else Issuer(key, session)
     if issuer.session != session:
-        raise ValueError("the issuer signs in another certifier session than `session`")
+        raise ValueError("the issuer signs in another attester session than `session`")
     committed = G.Registered.commit(shape.program, shape.value, rows, salts, shape.word_bits, shape.schema)
     head = OutHead(shape.value, bytes.fromhex(committed.program), committed.words, committed.leaves, committed.word_bits,
                    committed.schema, committed.domain.domain_id, committed.root)
@@ -282,7 +282,7 @@ def _read(doc: Any) -> tuple[OutHead, Certificate, bytes]:
 def check_out(certificate: Any, key: PublicKey, session: bytes, shape: OutShape, *, window: int,
               link: str = LINK) -> str:
     """The verifier's read of the out record `certificate` (`CertifiedOut.public`) for the egress execution phase
-    `(link, window)` it expects, under the network attester's `key` in certifier session `session`: the root to pin
+    `(link, window)` it expects, under the network attester's `key` in attester session `session`: the root to pin
     (lowercase hex, `registration.check`'s `pinned` form), or `OutRefused` naming the first check that fails. `shape`
     is the verifier's own, from its registration of the reading program (module docstring, "The shape"), whose
     `domain` is the one `registered_entries` derives for the value pinned."""
