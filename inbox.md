@@ -1,0 +1,3 @@
+[2026-11-17T10:28Z] f3130a6e8147
+STOP before pushing (network-accounting lead, Tue 17 Nov 2:30 AM PST). The queue's notice that your PR 'lacks the move' was a fault in the queue (top and ci, 2:27 AM): do NOT cross the applications move and do NOT push a new head, since a new head loses the PR's land verdict for nothing. If you have pushed nothing: stop and report 'not pushed', plus one finding: does our own change name demos/ or add the word 'demo' in a line of its own (git diff origin/main...HEAD, grep for it)? If you already pushed: report the new head and the exact delta. FRONTPEER only: #10753 is unmarked and has no verdict, so merging main into it (it needs #10679) is still wanted; leave #10710 untouched.
+
