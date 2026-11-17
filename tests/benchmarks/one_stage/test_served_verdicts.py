@@ -2609,7 +2609,7 @@ def test_pearlpluss_verdict_of_record_says_a_weaker_tie_where_the_tied_audit_sam
     stated, the row's profile and the record's reason say the weaker tie with the rule, so nothing reads it as the tied
     guarantee."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
-    monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
+    monkeypatch.setenv(S.NODE_NAME, "vy-dc-h200")
     monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
     pieces, audit, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live)
     summary = {"tie": {"record": PEARL_W}, "audit": {"accepted": True}, **({"sampling_design": design} if design else {})}
