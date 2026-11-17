@@ -7,7 +7,8 @@ import pytest
 import run as R
 
 CARD = "NVIDIA RTX PRO 6000 Blackwell Server Edition"
-MEMBER = f"Llama-3.2-1B-INT8 on {CARD}, remote"
+UNMET = "challenger shares node-a with the developer's workers: Faithful and Secret unmet"
+MEMBER = f"Llama-3.2-1B-INT8 on {CARD}, remote, coins simulated ({UNMET})"
 
 
 @pytest.fixture
@@ -38,9 +39,11 @@ def stand_in(monkeypatch: pytest.MonkeyPatch, lines: list[dict] | None, rc: int)
     return seen
 
 
-def line(verdict: str = "accept", **components: str) -> dict:
-    return {"block": 0, "components": {"spot": "accept", "pearl-plus": "accept", "inference-only": "accept",
-                                       **components}, "product": "verity/remote/v1", "verdict": verdict}
+def line(verdict: str = "accept", coins: str | None = "simulated", simulated: list[str] | None = None,
+         **components: str) -> dict:
+    x = {"block": 0, "components": {"spot": "accept", "pearl-plus": "accept", "inference-only": "accept", **components},
+         "product": "verity/remote/v1", "verdict": verdict, "simulated": [UNMET] if simulated is None else simulated}
+    return x if coins is None else {**x, "coins": coins}
 
 
 def measurements(config: Path) -> dict[str, dict]:
@@ -75,6 +78,21 @@ def test_a_run_with_no_verdict_has_no_number(here, monkeypatch):
     assert R.main([str(here)]) == 2
     m = measurements(here)
     assert [(x["value"], x["why"]) for x in m.values()] == [(None, "verity run exited 2 with no verdict")] * 2
+    assert {x["member"] for x in m.values()} == {f"Llama-3.2-1B-INT8 on {CARD}, remote, no verdict, so no coins"}
+
+
+@pytest.mark.parametrize("lines, said", [
+    ([line(coins="development", simulated=[])], "coins development"),
+    ([line(), line(coins="development", simulated=[])], "coins disagree (development, simulated)"),
+    ([line(), line(coins=None)], "coins not stated"),
+    ([line(), line(simulated=["another premise"])], "coins simulated, simulated premises disagree"),
+    ([{k: v for k, v in line().items() if k != "simulated"}], "coins simulated, simulated premises not stated"),
+])
+def test_the_member_names_the_coins_the_record_states_and_says_where_it_states_none_or_disagrees(here, monkeypatch,
+                                                                                               lines, said):
+    stand_in(monkeypatch, lines, 0)
+    R.main([str(here)])
+    assert {x["member"] for x in measurements(here).values()} == {f"Llama-3.2-1B-INT8 on {CARD}, remote, {said}"}
 
 
 def test_the_state_is_the_runs_own(here, monkeypatch, capsys):

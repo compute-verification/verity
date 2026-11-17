@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """One application run, measured by the run itself: `verity run CONFIG ARGS` in this process, then how many of its
 verdicts accept of how many it gave, and its minutes where every one accepts (`metrics.toml`), each under a member
-naming the model, the card and the configuration.
+naming the model, the card, the configuration and the coins its verdicts state (`coins`).
 
     research run --on NODE --project verity --source . --cwd clone -- uv run python benchmarks/application_runs/run.py CONFIG [ARGS]
 """
@@ -28,9 +28,27 @@ def application(argv: list[str]) -> int:
     return run.run_main(argv)
 
 
-def member(config: Path, card: str) -> str:
+def coins(lines: list[dict]) -> str:
+    """The coins and unmet premises the record's lines state, as the lines give them; where the lines disagree or
+    state none, it says that."""
+    if not lines:
+        return "no verdict, so no coins"
+    stated = {x.get("coins") for x in lines}
+    if None in stated or "" in stated:
+        return "coins not stated"
+    if len(stated) > 1:
+        return f"coins disagree ({', '.join(sorted(stated))})"
+    said = f"coins {stated.pop()}"
+    if any(not isinstance(x.get("simulated"), list) for x in lines):
+        return f"{said}, simulated premises not stated"
+    if len({tuple(x["simulated"]) for x in lines}) > 1:
+        return f"{said}, simulated premises disagree"
+    return f"{said} ({'; '.join(lines[0]['simulated'])})" if lines[0]["simulated"] else said
+
+
+def member(config: Path, card: str, lines: list[dict]) -> str:
     model = tomllib.loads(config.read_text())["workload"]["params"]["model"]
-    return f"{model.rsplit('/', 1)[-1]} on {card}, {config.stem}"
+    return f"{model.rsplit('/', 1)[-1]} on {card}, {config.stem}, {coins(lines)}"
 
 
 def measured(lines: list[dict], minutes: float, rc: int, who: str) -> tuple[str, dict, list[dict]]:
@@ -57,7 +75,7 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     if "--state" in a.rest:
         ap.error("--state is the run's own: the record it measures is read from there")
-    who = member(a.config, kit.host_stamp()["card"])
+    card = kit.host_stamp()["card"]
     with tempfile.TemporaryDirectory(prefix="application-run-") as tmp:
         state = Path(tmp) / "state"
         t0 = clock()
@@ -65,6 +83,7 @@ def main(argv: list[str] | None = None) -> int:
         minutes = round((clock() - t0) / 60, 1)
         f = state / "record" / "verdicts.jsonl"
         lines = [json.loads(x) for x in f.read_text().splitlines()] if f.is_file() else []
+    who = member(a.config, card, lines)
     text, doc, points = measured(lines, minutes, rc, who)
     kit.report("application_run", f"application_run: {who}: {text}", doc, points)
     return rc
