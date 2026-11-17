@@ -15,9 +15,9 @@ _spec.loader.exec_module(C)
 
 
 def test_the_checks_figures_are_the_node_files_and_its_cards():
-    node = tomllib.loads((REPO / "hardware/nodes" / f"{C.NODE}.toml").read_text())
-    card = tomllib.loads((REPO / "hardware/cards" / f"{node['device']['sku']}.toml").read_text())
-    assert C.HARDWARE == REPO / "hardware"
+    node = tomllib.loads((REPO / "calibration/hardware/nodes" / f"{C.NODE}.toml").read_text())
+    card = tomllib.loads((REPO / "calibration/hardware/cards" / f"{node['device']['sku']}.toml").read_text())
+    assert C.HARDWARE == REPO / "calibration" / "hardware"
     assert C.WANT["gpus"] == node["device"]["count"]["value"]
     assert C.WANT["sms"] == card["sm"]["count"]["value"]
     assert C.WANT["ram_gib"] * 2**30 == node["memory"]["dram"]["bytes"]["value"]

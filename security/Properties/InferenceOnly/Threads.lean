@@ -34,7 +34,7 @@ proof needs `security_proofs` is stated here and proved there.
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties
+namespace InferenceOnlyVerifier.Properties
 
 open Lean (Json)
 open Flock.Program (Prog)
@@ -138,4 +138,4 @@ verdict is `ThrottledDarkSlots`. -/
 def ThrottlesDarkSlots : Prop :=
   ∀ (j out : Json), evaluate j = .ok out → ThrottledDarkSlots j out
 
-end InferenceOnlyCheck.Properties
+end InferenceOnlyVerifier.Properties

@@ -37,7 +37,7 @@ H100 = "pearl-c-h100-v1-h3"
 SOURCE = b"verifier" * 4
 pytestmark = [pytest.mark.slow, pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain"),
               pytest.mark.skipif(not (PACKAGE / "lakefile.toml").exists(),
-                                 reason="no PouwCheck.PearlPlus package in this tree (PR #7221)")]
+                                 reason="no PouwVerifier.PearlPlus package in this tree (PR #7221)")]
 
 
 def _module(name: str, path: Path):
@@ -97,14 +97,15 @@ def test_the_lean_step_writes_the_real_lean_answer_on_the_served_run_and_the_com
     pieces, audit, pin, lane = TV._pearlplus_piece(toy, monkeypatch, live, "no Lean")
     piece = pieces / "pouw"
     (piece / S.PEARLPLUS_ANSWER).write_text(json.dumps(answer))
-    (audit / S.WINDOW_REGISTRATION).write_text(json.dumps({"format": REG.FORMAT_V2, "previous": w, "registered": []}))
-    (audit / S.AUDIT_SUMMARY).write_text(json.dumps({"tie": {"record": w}, "audit": {"accepted": True}}))
+    reg, summary = (json.loads((audit / f).read_text()) for f in (S.WINDOW_REGISTRATION, S.AUDIT_SUMMARY))
+    (audit / S.WINDOW_REGISTRATION).write_text(json.dumps({**reg, "previous": w}))
+    (audit / S.AUDIT_SUMMARY).write_text(json.dumps({**summary, "tie": {"record": w}}))
 
     def row() -> dict:
         return S.piece_row("work", pieces, spot=audit, key_sha512=pin, lane=lane)
 
     before = row()
-    assert before["verdict"] == "missing" and f"no Lean PouwCheck.PearlPlus verdict ({S.PEARLPLUS_LEAN}" in before["why"]
+    assert before["verdict"] == "missing" and f"no Lean PouwVerifier.PearlPlus verdict ({S.PEARLPLUS_LEAN}" in before["why"]
     shutil.copyfile(node / S.PEARLPLUS_LEAN, piece / S.PEARLPLUS_LEAN)
     got = row()
     assert lean["work"]["credited"] == 0 and lean["work"]["credited_tiles"] > 0
