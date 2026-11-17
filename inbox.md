@@ -1,0 +1,3 @@
+[2026-11-17T23:27Z] 05c80e4e1112
+LEAD 3:32 PM, two notes, no change of order: (1) proofs' #10933 moved to 7ca7a920fccb and is marked: confirm window.pearl_b's shape against that head before you return. (2) A THIRD STEP is coming, after Wednesday, not now: the serve's registration must also register Pearl+'s A and y at their format widths (proofs' record reader refuses this morning's record at formats: 101 weights registered, none of Pearl+'s values). I asked proofs for the entry's shape; do not start it, but in your return say which file writes the serve's registration and roughly what the change would touch.
+
