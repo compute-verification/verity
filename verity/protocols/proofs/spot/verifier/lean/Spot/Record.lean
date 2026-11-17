@@ -285,7 +285,7 @@ numbers are integers, escaping every string as `canonical_json` does. -/
 def pyCanonical (rec : Json) : Bool := (Flock.canon rec).toOption.isSome
 
 structure Input where
-  registration : Json
+  docket : Json
   receipt : Json
   draw : Json
   units : Array Int
@@ -385,7 +385,7 @@ def inputOf (j : Json) : V Input := do
   let .str d := getD j "delta" | throw "delta is not a ratio"
   let delta ← Core.Ratio.ofString d "delta"
   need (delta.num != 0 && delta.num < delta.den) "delta is not in (0, 1)"
-  return { registration := reg, receipt, draw, units, samplingDesign, provedUnits, instances := getD j "instances",
+  return { docket := reg, receipt, draw, units, samplingDesign, provedUnits, instances := getD j "instances",
            statement := getD j "statement", verdicts, delta, sessions, served, sessionRoots, certified,
            windowValues }
 
@@ -447,7 +447,7 @@ theorem heldReads_nil (reg : Json) (opened : Option (Array (String × Json))) :
   cases opened <;> simp [heldReads, windowReads, h]
 
 def record (i : Input) : V Json := do
-  let reg := i.registration
+  let reg := i.docket
   let get := getD reg
   let digest ← Flock.WindowRecord.digestHex reg
   let opened := heldReads i.windowValues reg (sessionRegistered i.verdicts)

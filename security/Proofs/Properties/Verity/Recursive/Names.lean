@@ -109,7 +109,7 @@ structure InnerNames (o : VStar.Recursive.Own) (pr : VStar.Recursive.Proofs) (bs
   publicInputs : ri.publicInputs = none
   shape : ∀ h, VStar.Recursive.innerHeld o pr bs = .ok h →
     (do RecVStar.Inner.ofJson (← jsonOf "rec-inner" w.recInner)) = .ok h.shape
-  registration : (o.registration.mapM fun d => (bs.get d "rec inner registration").toOption) = some w.registration
+  registration : (o.docket.mapM fun d => (bs.get d "rec inner registration").toOption) = some w.registration
   links : w.links = none
   partitionB : (VStar.Recursive.canonBytes o.partition).map some = .ok ri.partition
   recInnerB : ∀ h, VStar.Recursive.innerHeld o pr bs = .ok h →

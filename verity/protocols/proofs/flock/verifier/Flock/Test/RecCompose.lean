@@ -109,7 +109,7 @@ def tampered : List Shared :=
   [{ sh with recInner := some (hex 'f') }, { sh with innerCircuit := some (hex 'f') },
     { sh with innerPublic := some (hex 'f') }, { sh with innerPartition := none },
     { sh with innerCoins := some (hex 'f') }, { sh with innerSession := some (hex 'f') },
-    { sh with transcript := some (hex 'f') }, { sh with registration := none },
+    { sh with transcript := some (hex 'f') }, { sh with docket := none },
     { sh with innerStatement := some "unbatched" }, { sh with innerTables := some [("range8", hex 'f')] },
     { sh with innerSample := some (hex 'f') },
     { sh with links := table }, { sh with innerProgram := some (hex 'f') }]
@@ -128,8 +128,8 @@ def tampered : List Shared :=
     { sh with innerTables := none }].all fun s =>
   !passes 2 [("L0", log 0 (verdict 0 s)), ("L1", log 1 (verdict 1 s))]
 -- what the compiled verifier leaves optional may be absent, alike in every part
-#guard passes 2 [("L0", log 0 (verdict 0 { sh with registration := none })),
-  ("L1", log 1 (verdict 1 { sh with registration := none }))] (r := run 2 { sh with registration := none })
+#guard passes 2 [("L0", log 0 (verdict 0 { sh with docket := none })),
+  ("L1", log 1 (verdict 1 { sh with docket := none }))] (r := run 2 { sh with docket := none })
 -- the composition's own inner shape
 #guard !passes 4 honest (hex 'f')
 -- a part checked against other rows
