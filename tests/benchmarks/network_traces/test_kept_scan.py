@@ -1,5 +1,5 @@
 """`prove_path.kept_scan`: a served window's scan state and slots off the network attester's run the attester front kept
-under the serve dir (`certifier_piece.PRIVATE`), on a synthetic run at the scan schedule of the class 8,32,4,4,16 (4 lanes,
+under the serve dir (`attester_piece.PRIVATE`), on a synthetic run at the scan schedule of the class 8,32,4,4,16 (4 lanes,
 boundaries at buckets 0 and 16 of a 32-bucket execution phase), published as `network_attester_serve.Publisher` publishes a served one
 and kept as the front keeps its fetch. Three requests admitted at bucket 0 are anchored at bucket 16 in lanes 0, 1 and
 2, so execution phase 0's class Programs 1, 3 and 5 start them (slot nb·j + b), each one's row at its anchor its prompt; a
@@ -7,14 +7,14 @@ fourth, admitted at bucket 5 and released in execution phase 0, is anchored at 3
 Each window's state rows are the scan's state tree's for its execution phase. A window whose requests start in two
 execution phases, a request the network attester didn't certify, a class whose window isn't its execution phase or whose scan
 doesn't serve it, and a prompt past the class's prompt cap are refused by name; so are a kept run that won't read, one
-whose certified I/O isn't accepted or whose ingress execution phases aren't 0, 1, …, and certified I/O read with a request
+whose attested I/O isn't accepted or whose ingress execution phases aren't 0, 1, …, and attested I/O read with a request
 that has no END or without a request the scan starts. A serve dir with no kept run gives None, and the unpacked fetch
 is removed. Reading the run leaves ``sys.path`` and the module ``replay`` as they were, so a5's ``import replay``
 still finds one_stage's where it did before. `prove_path.place_slots` places the window's
 slots off the scan's starts and rows without serving, and refuses by name a request started in two slots, a served
 request started in none, a started request that wasn't served, and a slot whose prompt or ``max_tokens`` isn't its
 served request's. SPOT imports neither the attester nor a benchmark: `kept_scan` reads the kept run by the reader its
-caller passes (here `certifier_piece.kept_ingress`), and refuses by name when none is passed."""
+caller passes (here `attester_piece.kept_ingress`), and refuses by name when none is passed."""
 from __future__ import annotations
 
 import contextlib
@@ -62,7 +62,7 @@ def network_traces() -> Iterator[None]:
 
 
 with network_traces():
-    import certifier_piece as CP
+    import attester_piece as CP
     from benchmarks.network_traces import network_attester_chain as WCH
     from verity.protocols.resource_accounting.network.attester import network_attester_serve as WS
 
@@ -98,7 +98,7 @@ def _served(users: Sequence[str] = USERS) -> ST.Served:
 
 def _kept(d: Path, served: ST.Served, records: Callable[[str, Any], Any] = lambda kind, rec: rec,
           deployment: Callable[[dict], dict] = lambda dep: dep) -> Path:
-    """A serve dir under ``d`` whose certifier front kept the network attester's run of ``served``, each of its records
+    """A serve dir under ``d`` whose attester front kept the network attester's run of ``served``, each of its records
     as ``records`` gives it (by its kind, ``ingress``, ``egress`` or ``failed``) and its deployment.json as
     ``deployment`` gives it."""
     params = served.params
@@ -122,7 +122,7 @@ def _kept(d: Path, served: ST.Served, records: Callable[[str, Any], Any] = lambd
 
 @pytest.fixture(scope="module")
 def serve_dir(tmp_path_factory) -> Path:
-    """A serve dir whose certifier front kept the network attester's run of `_served`."""
+    """A serve dir whose attester front kept the network attester's run of `_served`."""
     return _kept(tmp_path_factory.mktemp("kept"), _served())
 
 
@@ -203,14 +203,14 @@ def test_a_scan_with_no_reader_of_the_kept_run_is_refused_by_name(serve_dir, tmp
 
 def test_a_kept_run_that_wont_read_or_whose_io_or_phases_arent_whole_is_refused_by_name(serve_dir, tmp_path):
     """The kept run edited before it's packed: two kept runs, or a deployment.json whose digest isn't its parameters',
-    don't read; two requests naming one user leave its certified I/O unaccepted; and its second execution phase's ingress
+    don't read; two requests naming one user leave its attested I/O unaccepted; and its second execution phase's ingress
     record kept as execution phase 2 leaves its ingress execution phases 0 and 2."""
     two = shutil.copytree(serve_dir, tmp_path / "two")
     shutil.copytree(two / CP.PRIVATE / "RUN", two / CP.PRIVATE / "RUN2")
-    with pytest.raises(ValueError, match="the certifier front's kept run: 2 network certifier runs kept"):
+    with pytest.raises(ValueError, match="the network attester front's kept run: 2 network attester runs kept"):
         kept_scan(two, CLASS, USERS[:3])
     undigested = _kept(tmp_path / "digest", _served(), deployment=lambda dep: dep | {"digest": "00" * 64})
-    with pytest.raises(ValueError, match="the certifier front's kept run: .*deployment.json's digest isn't its param"):
+    with pytest.raises(ValueError, match="the network attester front's kept run: .*deployment.json's digest isn't its param"):
         kept_scan(undigested, CLASS, USERS[:3])
     twice = _kept(tmp_path / "twice", _served([*USERS[:3], USERS[0]]))
     with pytest.raises(ValueError, match="the kept run's certified I/O doesn't read whole off its cells"):
@@ -223,8 +223,8 @@ def test_a_kept_run_that_wont_read_or_whose_io_or_phases_arent_whole_is_refused_
 
 
 def test_an_accepted_ios_request_with_no_end_or_a_start_it_doesnt_hold_is_refused_by_name(serve_dir, monkeypatch):
-    """A request of the window with no END, and a connection the scan starts whose request the certified I/O doesn't
-    hold. No kept run whose certified I/O `network_attester_chain.io` accepts has either: an accepted request is a whole id
+    """A request of the window with no END, and a connection the scan starts whose request the attested I/O doesn't
+    hold. No kept run whose attested I/O `network_attester_chain.io` accepts has either: an accepted request is a whole id
     request, whose last bytes the network attester sends in an END cell (an id request never fills its last cell),
     and accepted I/O holds every connection whose cells carry a request. So it is `io`'s reading of the kept run that is
     edited."""
@@ -253,7 +253,7 @@ def test_a_windows_slots_hold_the_requests_the_scan_starts_or_are_refused_by_nam
     """`prove_path.place_slots`, window-commit's slots, without serving. With the scan's starts and rows, each slot
     holds the request the scan starts there, with the scan's row and ``max_tokens``; without them, slot k holds the
     k-th served request, with its own. Refused by name: one request started in two slots; a served request started in
-    none; a certified request started that wasn't served; and a slot whose prompt or ``max_tokens`` isn't its served
+    none; an attested request started that wasn't served; and a slot whose prompt or ``max_tokens`` isn't its served
     request's."""
     ingress = {u: {"prompt": list(p), "max_tokens": 4} for u, p in zip(USERS, PROMPTS, strict=True)}
     starts = [None, "user-0", None, "user-1", None, "user-2", None, None]

@@ -19,7 +19,7 @@ and `uv run verity bench NAME [ARGS]` runs one. These are the directories that h
 | `verity bench bandwidth` | the device ceilings PoUB's timing cites, one probe a run: `chip` (what a card holds on chip) and `write_gpu` on one GPU, `write_host` on the host's CPUs |
 | `verity bench bool_build_cost` | a workload's Boolean Build against its word Build: the descriptor's size and each Definition's proof-block rule, timed |
 | `verity bench certifier_term` | the network attester's term for GLM-5.3 at a scope's load, in bits and GB |
-| `verity bench certifier_timing` | the bits an interval a server moves through when the network attester releases its bytes: `run`, `guard`, `serve`, `observe`, `score`, `table` and `target` |
+| `verity bench attester_timing` | the bits an interval a server moves through when the network attester releases its bytes: `run`, `guard`, `serve`, `observe`, `score`, `table` and `target` |
 | `verity bench circuit_properties` | its circuits' fan-out, fan-in and s_×, counted exactly, beside the slowdown calculator's shape-derived ones; `--models llama32-1b --out DIR`, Llama 3.2 1B's layer alone and its point, on a CPU |
 | `verity bench compile_cost` | wall time and peak memory, by phase, of compiling a class-G window's Programs |
 | `verity bench compute` | the compute audit's number: the share of a served model's MACs that Pearl+ credits over the tokens a served run served, from the verifier's side of a recorded run's record |
@@ -194,7 +194,9 @@ the `command` of a metric whose newest value is older than its `every` as a `res
 docstring lists, and a metric whose command's script is under `infra/control/` is a loop's, which the loop sends. A
 metric's keys:
 
-- `id`: `OWNER/NAME`, under its owner's prefix.
+- `id`: `OWNER/NAME`, under its owner's prefix. A metric's line holds one quantity: when its meaning changes (a
+  denominator, a ceiling), it keeps its `id`, and the runs of the old quantity are labelled `superseded_by` the first
+  run from `main` that writes the new one.
 - `title`: the number's headline on the tab, three to six plain words with no digit or backtick.
 - `owner`: a handle in the registry.
 - `unit`: the unit its value is in, at most three words (`hours`, `GB`), a rate's two sides, either side of " a ",
@@ -239,6 +241,38 @@ doesn't list, an id declared twice across all the files, an unknown owner, an ow
 an id outside its owner's prefix, a `title`, `unit` or `axis` that breaks its rule above, a `better` other than `lower`
 or `higher`, an `every` that isn't a count of minutes, hours or days, a command whose script is missing, a metric
 the directory of the file declaring it never names, and a shared `metrics.toml` directly under `benchmarks/`.
+
+## The serving cost in five stages
+
+The serving cost of a model too large to optimize on (`serve_tax/README.md`'s "The serving cost") is to be had in
+five stages. No stage has its command in the tree yet: the table states what each stage's command stores when it
+lands. Parts of two run today under other names, without a stage's refusal: stage 2's check of bindings is
+`circuit-check` on a Definition module's sidecar, its replay is `serve_tax/replay.py`'s, and stage 5's measured figure
+is `serve_tax`'s serving cost. Each stage is to be a run of its own that stores what the next one reads and refuses to
+run without the stored benchmark result of the stage before it. Its numbers are to be measurements under "Metrics"'
+rules, and a stage whose record is a verdict is to record what the check or the verifier returned ("What a benchmark
+may import and write").
+
+| Stage | What it runs | What it stores |
+| --- | --- | --- |
+| 1. Minify | a small copy of the model from random weights on one card, keeping the selectors that choose each code path | the copy's identity, the selectors it keeps and its size class; and for each part and each code path the part can take, a unit cost in seconds a call or a step, `measured`, with the count of calls behind it |
+| 2. Exact | `circuit-check` on the full model's bindings, and a replay on the copy | a verdict, not a number: `circuit-check`'s on the bindings, and the replay's on the copy (its tokens equal to the served tokens, its steps reproduced), saying whether the replay was the Python replay or a proof the Lean verifier accepted, so that exact is not read as proved |
+| 3. Capture | a short run of the real model | for each part and code path its counts (calls a step, steps a request), the baseline step time, and the value-dependent inputs a price needs |
+| 4. Price | stage 1's unit costs times stage 3's counts, over stage 3's baseline step time | the priced serving cost under the real model's metric and `member`, `modeled`, with the stage 1 and stage 3 runs it read among its `inputs`, and every (part, code path) it could not price |
+| 5. Confirm | one run of the real model at scale | the measured serving cost, `measured`, and the measured minus the priced as a measurement of its own |
+
+Stage 1 is to write no serving-cost percentage and no point under the real model's metric: a `member` tells apart
+configurations that read the same quantity, and a copy from random weights does not read the real model's serving
+cost. Stage 4 is to name the runs it read in its `inputs` and not as `from_run`, since its number is its own and
+`from_run` writes no measurement.
+
+Two cases decide where a price comes from:
+
+- **A cost that depends on the load,** such as the certified tick's holding a request back until its admission step,
+  is stored as a count from stage 3, the steps an admission was held under the captured load, times the step time,
+  and never as a unit cost from the copy.
+- **A code path the copy never takes** is listed as unpriced, and stage 4's point is `partial`, not `modeled`, until
+  a unit cost for that path comes from another source.
 
 ## On VCF's Slurm cluster
 
@@ -321,8 +355,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 
 | Directory | What it measures | Status |
 | --- | --- | --- |
-| `one_stage/` | the one-stage audit end to end: committed values, registration, the sample, Flock's circuit prover and the Lean verifier, to the audit record and its integrity profile, with its negatives; and a served window's two-stage audit (`two_stage.py`: each class's first stage, and a class's second stage through that audit, round 2 and the stream's outcome; `two_stage_small.sh` runs both at small statics) | maintained |
-| `two_stage/` | the two-stage audit end to end on a toy replay block: the boundary registered, a first-stage sample of replay blocks, their interiors replayed and registered, a second-stage sample per (replay block, template) cell, one Flock `--zk` session per template with link ports read at the boundary record, the Lean verifier, and the stream's outcome, with its negatives | maintained |
+| `one_stage/` | the one-stage audit end to end: committed values, registration, the sample, Flock's circuit prover and the Lean verifier, to the audit record and its integrity profile, with its negatives; and a served window's two-stage audit (`two_stage.py`: each class's first stage, and a class's second stage through that audit, round 2 and the stream's outcome; `two_stage_small.sh` runs both at small statics); and the two-stage audit end to end on a toy replay block (`toy.py`, `audit.py`): the boundary registered, a first-stage sample of replay blocks, their interiors replayed and registered, a second-stage sample per (replay block, template) cell, one Flock `--zk` session per template with link ports read at the boundary record, the Lean verifier, and the stream's outcome, with its negatives | maintained |
 | `prove_path/` | a served run's proof blocks proved after the fact: the compiler's Programs, a sample on live coins, Flock `--zk` behind the Lean ZK server, and the Lean verifier | maintained |
 | `served_units/` | a served model's proof blocks proved one type at a time from synthetic values, the Lean verifier accepting the honest run and refusing forgeries | maintained |
 | `unit_walk/` | the device witness's host walk of a served proof-block type's unit: CPU and wall seconds a statement at each width (lane groups a pass), distance asked ahead and pool size, with and without its row vectors kept, every walk's packed words held to the first's | maintained |
@@ -371,7 +404,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | `network_e2e/` | the network chain's steps after N2 (`chain.py`) held on fakes and recorded endpoint runs, the advice encodings (`encodings/`) and vLLM's scheduler traces (`traces/`) | maintained |
 | `certifier_term/` | the network attester's term for GLM-5.3 at the load of a node, a datacenter and the world, in bits and GB, each row by its check's own counting rule: the scan as the monitoring-period check charges it, the scan under each change to its check, and the design with no run behind it, without its stop block and with it (`network_traces/leak_bounds.py`'s runner) | maintained |
 | `network_sim/` | the workload's Programs (`workload/`): a Boolean MLP and vLLM's serving Program, which `verifier_cost` measures a verifier on | maintained |
-| `../calibration/certifier_timing/` | the bits an interval a server moves through when the network attester releases its bytes: one number from a server that times its writes by a bit, with a guard, a target and the candidate fixes as flags | maintained |
+| `../calibration/attester_timing/` | the bits an interval a server moves through when the network attester releases its bytes: one number from a server that times its writes by a bit, with a guard, a target and the candidate fixes as flags | maintained |
 | `scan_cost/` | what the network attester's scan costs for each second of execution phase it covers: proving seconds (the round's sessions and their staging) and the Lean verifier's CPU seconds on one core, at a fixed identity, each with its stages, a guard on the round's answer, a baseline and two targets | maintained |
 | `attester_load/` | what the network attester costs the requests it carries, at the application's schedule: the added time to a response's first and last byte through it against straight to the endpoint, the ticks' lateness at the capacity its schedule states, on a stub endpoint on a CPU and on a model on a card. The model arm's network attester runs in the bytes form, relaying vLLM's own framing, where the application's runs in the id form: the schedule and its cells' buckets are the same, and only what a cell may carry differs | maintained |
 | `mempool/` | the network attester's prefix-cache pool as memory-checked RAM (`pool_ram`, held to vLLM's pool on the encodings' traces; `stream.py` holds `CacheStep_v3`'s stream to it after every call): a window's cost at its busiest stretch, and `MemCheck_v1`'s and `CacheStep_v3`'s vectors | maintained |

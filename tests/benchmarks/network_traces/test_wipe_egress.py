@@ -1,6 +1,6 @@
 """The wipe's egress count (`wipe_egress.py`) over a gate network attester run built here at the gate's scan schedule
 and signed under a small LMS key: the execution phases meeting [t0 − pad, t1 + pad) and none other, each at the
-schedule's capacity; a window reaching before the session's origin or past its last window, a certificate missing or
+schedule's capacity; a window reaching before the session's origin or past its last window, an attestation missing or
 failing to verify, a run the gate's check refused, and an `out/` file other than the one `end.json` hashed each leave
 the record uncovered, by name; the CLI reads the gate's `fetch` bundle as it reads the unpacked directory."""
 
@@ -61,8 +61,8 @@ def _certificate(link: str, w: int, q: int, session: bytes = SESSION) -> dict:
 def gate_run(root: Path, *, forged: frozenset = frozenset(), missing: frozenset = frozenset(),
              accepted: bool = True) -> Path:
     """A network attester run's `end.json` and `out/` as the gate publishes them: each window's egress and fails
-    certificates (signed in another session when (link, w) is in `forged`, left out when in `missing`), and of a run
-    its check didn't accept no certificate at all."""
+    attestations (signed in another session when (link, w) is in `forged`, left out when in `missing`), and of a run
+    its check didn't accept no attestation at all."""
     run = root / "c-test"
     (run / "out").mkdir(parents=True)
     key = LmsKey(_key().params, lms.public_key(_key()))
@@ -126,7 +126,7 @@ def test_a_window_past_the_sessions_end_or_before_its_origin_isnt_covered(tmp_pa
     assert not early["covered"] and early["why"] == ["the window starts at execution phase -1, before the session's origin"]
 
 
-def test_a_certificate_that_fails_to_verify_or_is_missing_uncovers_its_window(tmp_path: Path) -> None:
+def test_a_attestation_that_fails_to_verify_or_is_missing_uncovers_its_window(tmp_path: Path) -> None:
     run = gate_run(tmp_path / "forged", forged=frozenset({(LINK, 2)}), missing=frozenset({(FAILS, 4)}))
     assert egress(run, at(1_000), at(4_000))["covered"], "windows 0 and 1"
     forged = egress(run, at(7_000), at(8_000))
