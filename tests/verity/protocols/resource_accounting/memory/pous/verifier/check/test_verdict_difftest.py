@@ -1,4 +1,4 @@
-"""`PousCheck.Verdict`, the verdict proof block's Program `PousVerdict_v1{K, M, LIMIT}` as code, against the Definition
+"""`PousVerifier.Verdict`, the verdict proof block's Program `PousVerdict_v1{K, M, LIMIT}` as code, against the Definition
 `verdict_circuit.PousVerdict`, compiled, through the core difftest harness (`pous-verdict-difftest`).
 
 `Proofs.Pous.Continuous.VerdictCode` proves the code's `prog` is `PousVerdict.verdictProg` gate for gate, so

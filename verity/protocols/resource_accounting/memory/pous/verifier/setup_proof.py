@@ -1,11 +1,11 @@
 """PoUS's setup as a sampled proof about the store, the auditor's side: what its check takes in place of the store.
 
-Today's setup check (`setup.verifier_key_from_encoding`, `PousCheck.SetupProtocol`) reads all of C* and decodes it.  In
+Today's setup check (`setup.verifier_key_from_encoding`, `PousVerifier.SetupProtocol`) reads all of C* and decodes it.  In
 proofs it reads none of it: the store's blocks are committed and their root registered, the challenger samples
 `SAMPLE` blocks on its live coins after that (`sampling_design`), each sampled block is proved to decode to the
 registered rows of W at its place (`verity/protocols/resource_accounting/memory/pous/prover/window.py`, one instance of
 `PousP2SetupCheck_v1` a block), and the check takes the `Claim`: the parameters and commitment as today, the store's
-root, the unit's Program digest and SPOT's outcome.  The Lean check `PousCheck.SetupInProofs.check` decides; Python only
+root, the unit's Program digest and SPOT's outcome.  The Lean check `PousVerifier.SetupInProofs.check` decides; Python only
 carries the claim.
 
 Each sampled block's base and slot are rows the verifier makes from its own `expand_prefix` and the sample (`supplied`),
