@@ -5,10 +5,9 @@ public import Definitions.Core.RegisteredCircuit
 /-!
 # Coverings by inference blocks, and multiplication blocks
 
-The vocabulary of the covering bound, with one width `b` and one compression rate `r` for weights
-and activations alike. `C` is a declaration's circuit, read as a finite DAG: its
-sources `in(C)` are the gates with no predecessors (`sources`), and `θ ⊆ in(C)` are its registered parameters (the
-baseline). The statement counts gates; in the Boolean profile (`w = 1`) a gate is a bit.
+`C` is a declaration's circuit, read as a finite DAG: its sources `in(C)` are the gates with no predecessors
+(`sources`), and `θ ⊆ in(C)` are its registered parameters (the baseline). The statement counts gates; in the Boolean
+profile (`w = 1`) a gate is a bit.
 
 * A **subcircuit** `S` (`Subcircuit`) is a set of gates with inputs `in(S) ⊆ S`, every gate of `S \ in(S)` having all its
   predecessors in `S`: `S` computes `S \ in(S)` (`inner`) from `in(S)`. A gate of `in(C)` in `S` is one of its inputs,
@@ -22,8 +21,6 @@ baseline). The statement counts gates; in the Boolean profile (`w = 1`) a gate i
 * **Multiplication blocks** (`MulBlocks`): for `(i, j) ∈ P ⊆ θ' × J` (weights `i` of the updated parameters `θ'`, tokens
   `j`), pairwise disjoint `m_{i,j} ⊆ C \ in(C)`, each with an output gate `o_{i,j} ∈ m_{i,j}` that every gate of
   `m_{i,j}` reaches inside `m_{i,j}` (so `m_{i,j}` is nonempty), and pairwise disjoint token computations `T_j ⊆ C \ θ`.
-  `S` **completes** `m` when `m ⊆ S \ in(S)`, and `θ'_S` (`weightsCompleted`) is the set of weights `i` for which `S`
-  completes some `m_{i,j}`.
 -/
 
 @[expose] public section
@@ -80,24 +77,5 @@ structure MulBlocks (d : RegisteredCircuit) where
   T_disjoint : ∀ j j', j ≠ j' → Disjoint (T j) (T j')
   /-- `T_j ⊆ C \ θ`. -/
   T_θ : ∀ j, Disjoint (T j) d.θ
-
-namespace MulBlocks
-
-variable {d : RegisteredCircuit} (B : MulBlocks d)
-
-/-- `S` **completes** the multiplication block `m p`: `m p ⊆ S \ in(S)`. -/
-def Completes (S : Subcircuit d.D) (p : Fin B.nw × Fin B.nt) : Prop := B.m p ⊆ S.inner
-
-open Classical in
-/-- `θ'_S`: the weights `i` for which `S` completes some `m_{i,j}`. -/
-noncomputable def weightsCompleted (S : Subcircuit d.D) : Finset (Fin B.nw) :=
-  (B.P.filter fun p => B.Completes S p).image Prod.fst
-
-/-- `X ⊆ T_j` **cuts** `A` off from `m_{i',j}`: `X` meets `m_{i',j}`, or meets every path inside `T_j` from `o_{i',j}`
-to a gate of `A` (no such path runs inside `T_j \ X`). -/
-def Cuts (j : Fin B.nt) (A X : Finset (Fin d.D.N)) (i' : Fin B.nw) : Prop :=
-  (X ∩ B.m (i', j)).Nonempty ∨ ∀ a ∈ A, ¬ FeedsWithin d.D (B.T j \ X) (B.o (i', j)) a
-
-end MulBlocks
 
 end Slowdown.Covering

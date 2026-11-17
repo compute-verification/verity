@@ -7,7 +7,6 @@ public import Proofs.Slowdown.WeightsSlotsWitness
 public import Proofs.Slowdown.FitRate
 public import Proofs.Slowdown.FitWitness
 public import Proofs.Slowdown.Capability
-public import Proofs.Slowdown.CoveringTwoCostsWitness
 public import Proofs.Slowdown.Witnesses
 public import Proofs.Slowdown.Formalism
 public import Proofs.Slowdown.Cover

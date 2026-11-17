@@ -406,14 +406,7 @@
         "security/Properties/ResourceAccounting/RegisteredCircuit.lean",
         "security/Proofs/InferenceOnly.lean",
         "security/Definitions/Slowdown/Covering.lean",
-        "security/Definitions/Slowdown/Assumptions/Covering.lean",
-        "security/Definitions/Slowdown/Assumptions/CoveringTwoCosts.lean",
-        "security/Definitions/Slowdown/Guarantees/Covering.lean",
-        "security/Definitions/Slowdown/Guarantees/CoveringTwoCosts.lean",
-        "security/Proofs/Slowdown/Covering.lean",
-        "security/Proofs/Slowdown/CoveringTwoCosts.lean",
-        "security/Proofs/Slowdown/CoveringWitness.lean",
-        "security/Proofs/Slowdown/CoveringTwoCostsWitness.lean"
+        "security/Proofs/Slowdown/Covering.lean"
       ],
       "branch_suffixes": [
         "e3fa",
