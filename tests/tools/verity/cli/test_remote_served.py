@@ -1,4 +1,4 @@
-"""Remote's configuration (`demos/remote.toml`) under the table (`served_table.py`): `verity run --dry-run` resolves
+"""Remote's configuration (`applications/remote.toml`) under the table (`served_table.py`): `verity run --dry-run` resolves
 every party, Pearl+'s included, and without bindings Pearl+'s coins are an in-process challenger's on the workload's
 machine, which the verifier's line says, with no key blocking and no placeholder reaching the runner; a part of Pearl+'s
 live challenger is refused by name; the runner's variables under remote
@@ -18,8 +18,8 @@ from verity.protocols.proofs.spot.verifier import parties as SP
 from verity_cli import run as R
 
 ROOT = Path(R.ROOT)
-CONFIG = ROOT / "demos" / "remote.toml"
-ONSITE = ROOT / "demos" / "onsite_full.toml"
+CONFIG = ROOT / "applications" / "remote.toml"
+ONSITE = ROOT / "applications" / "onsite_full.toml"
 REG = R.registry()
 T = sys.modules["served_table"]
 PP = SP.IDS["pearl-plus"]
