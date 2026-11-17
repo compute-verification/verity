@@ -17,7 +17,8 @@ bits.
 one unit of it, by the template's id (`RecordRows.blockRows`). It reads the text's own templates and slots, the ones
 `Served` lays a circuit's blocks out by, and no summary.
 
-**The rate rule in rows** (`RowsComplies`): where the check accepts, the record check reads the case's instance and
+**The rate rule in rows** (`RowsComplies`, stated beside its proof in
+`Proofs.Properties.InferenceOnly.RecordRowsComplies`): where the check accepts, the record check reads the case's instance and
 trusted input, the rows table is the one its circuit files give, the record lays out a circuit, and in every circuit it
 lays out every block with a gate has, on the Program and the record the case sends, rows at most `Γ` and fresh bits at
 most `α = num / den` times its rows.
@@ -43,22 +44,5 @@ def rowsAt (P : Prog) (doc : Json) (m : String → Option ℕ) (u : ℕ) : Optio
   | .ok ts => InferenceOnlyVerifier.RecordRows.blockRows m (ts.map fun t =>
       (t.tid, ((List.range t.units).filter fun v => Spot.RecordText.slot P doc t.tid v == some u).length))
   | .error _ => none
-
-/-- **Accepting a record in rows gives the rate rule in rows on its circuit.** On every case
-`InferenceOnly.RowsProtocol.checkBlobs` accepts, the record check reads the case's instance and trusted input, the
-rows table is the one the case's circuit files give, the record lays out a circuit, and in every circuit it lays out,
-every block with a gate has, on the case's Program and record, rows at most `Γ` and fresh bits at most `num / den`
-times its rows. -/
-def RowsComplies : Prop :=
-  ∀ (p : InferenceOnly.RowsProtocol.Params) (c : InferenceOnlyVerifier.Protocol.Commitment)
-    (e : InferenceOnly.RowsProtocol.Evidence) (bs : Core.Blobs) (pub : Unit) (prof : Json),
-    InferenceOnly.RowsProtocol.checkBlobs p c e bs = .accept pub prof →
-      ∃ (r : InferenceOnlyVerifier.Record.Case) (table : Std.HashMap String ℕ),
-        InferenceOnlyVerifier.Record.read (InferenceOnly.RowsProtocol.instanceOf p e) (InferenceOnly.RowsProtocol.trustedOf p c) = .ok r ∧
-        InferenceOnly.RowsProtocol.tableOf p.circuits bs = .ok table ∧ (∃ d, Served form r d) ∧
-        ∀ d, Served form r d → ∀ u, d.𝓘.gates u ≠ ∅ →
-          ∃ (P : Prog) (doc : Json) (rows : ℕ), Flock.Program.decode p.program.toUTF8 = .ok P ∧
-            Flock.JsonParse.parse e.record = .ok doc ∧ rowsAt P doc (table[·]?) u.val = some rows ∧ rows ≤ p.gamma ∧
-            InferenceOnly.freshInput d (d.𝓘.gates u) * p.den ≤ p.num * rows
 
 end InferenceOnlyVerifier.Properties.Record

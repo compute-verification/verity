@@ -212,6 +212,42 @@ theorem rowsAt_summary {j tr : Json} {r : InferenceOnlyVerifier.Record.Case}
 
 /-! ## The guarantee -/
 
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs
+
+namespace InferenceOnlyVerifier.Properties.Record
+
+open Lean (Json)
+open Flock.Program (Prog)
+open InferenceOnlyVerifier.Record.SecurityProofs (form)
+
+/-- **Accepting a record in rows gives the rate rule in rows on its circuit.** On every case
+`InferenceOnly.RowsProtocol.checkBlobs` accepts, the record check reads the case's instance and trusted input, the
+rows table is the one the case's circuit files give, the record lays out a circuit, and in every circuit it lays out,
+every block with a gate has, on the case's Program and record, rows at most `Γ` and fresh bits at most `num / den`
+times its rows. -/
+def RowsComplies : Prop :=
+  ∀ (p : InferenceOnly.RowsProtocol.Params) (c : InferenceOnlyVerifier.Protocol.Commitment)
+    (e : InferenceOnly.RowsProtocol.Evidence) (bs : Core.Blobs) (pub : Unit) (prof : Json),
+    InferenceOnly.RowsProtocol.checkBlobs p c e bs = .accept pub prof →
+      ∃ (r : InferenceOnlyVerifier.Record.Case) (table : Std.HashMap String ℕ),
+        InferenceOnlyVerifier.Record.read (InferenceOnly.RowsProtocol.instanceOf p e) (InferenceOnly.RowsProtocol.trustedOf p c) = .ok r ∧
+        InferenceOnly.RowsProtocol.tableOf p.circuits bs = .ok table ∧ (∃ d, Served form r d) ∧
+        ∀ d, Served form r d → ∀ u, d.𝓘.gates u ≠ ∅ →
+          ∃ (P : Prog) (doc : Json) (rows : ℕ), Flock.Program.decode p.program.toUTF8 = .ok P ∧
+            Flock.JsonParse.parse e.record = .ok doc ∧ rowsAt P doc (table[·]?) u.val = some rows ∧ rows ≤ p.gamma ∧
+            InferenceOnly.freshInput d (d.𝓘.gates u) * p.den ≤ p.num * rows
+
+end InferenceOnlyVerifier.Properties.Record
+
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
+
+open Lean (Json)
+open Flock.Program (Prog)
+open Spot.RecordText (Tmpl templatesOf gridsOf slotIn)
+open InferenceOnlyVerifier.Record.SecurityProofs (form form_owns form_laidOut form_rates read_front finish_text
+  front_text front_inst ranges_spec tmplOf_spec)
+open InferenceOnlyVerifier.Record.SecurityProofs.Json (mapM_ok)
+
 /-- **Accepting a record in rows gives the rate rule in rows on its circuit.** -/
 theorem RowsComplies : Properties.Record.RowsComplies := by
   intro p c e bs pub prof h
