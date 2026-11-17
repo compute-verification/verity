@@ -222,7 +222,7 @@ def provenance(product: str, exe: Path, tree: Path) -> dict[str, Any]:
 
 
 def members_reached(cases: Sequence[dict[str, Any]]) -> tuple[int, int] | None:
-    """Of the sampled-proofs case in the per-member form, the members its accepted sample reached and the members it
+    """Of SPOT's case in the per-member form, the members its accepted sample reached and the members it
     registers; None for any other case."""
     for p in cases:
         proofs = p["params"].get("proofs") if p["id"] == SAMPLED else None
@@ -231,9 +231,9 @@ def members_reached(cases: Sequence[dict[str, Any]]) -> tuple[int, int] | None:
         if outcome(p["id"], p["answer"])["verdict"] != "accept":
             return None
         a = json.loads(p["answer"])
-        drawn = (a.get("public") or {}).get("drawn") or []
+        sample = (a.get("public") or {}).get("drawn") or []
         ms = proofs["members"].values()
-        return sum(any(lo <= u < hi for u in drawn for lo, hi in m["units"]) for m in ms), len(ms)
+        return sum(any(lo <= u < hi for u in sample for lo, hi in m["units"]) for m in ms), len(ms)
     return None
 
 

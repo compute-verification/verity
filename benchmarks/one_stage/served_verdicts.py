@@ -1877,11 +1877,11 @@ def spot_row(audit_dir: Path, run: str | None = None) -> dict[str, Any]:
 def members_reached(members: Mapping[str, Any], answer: Mapping[str, Any]) -> dict[str, Any]:
     from verity_e2e_demo import block_record as BR
 
-    drawn, delta = answer["public"].get("drawn") or [], Fraction(answer["profile"]["delta"])
+    sample, delta = answer["public"].get("drawn") or [], Fraction(answer["profile"]["delta"])
     by_member = []
     for name, m in sorted(members.items()):
         n = sum(hi - lo for lo, hi in m["units"])
-        k = sum(lo <= u < hi for u in drawn for lo, hi in m["units"])
+        k = sum(lo <= u < hi for u in sample for lo, hi in m["units"])
         if k:
             by_member.append({"member": name, "of": n, "drawn": k})
     return {"members": {"sampled": len(by_member), "registered": len(members)},
