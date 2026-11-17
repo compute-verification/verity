@@ -6361,7 +6361,7 @@ def test_a_missing_onsite_pieces_file_is_refused(tmp_path):
 ])
 def test_onsite_pieces_defaults_are_set_where_the_tree_has_each_piece_and_the_node_its_key(tmp_path, files, keys, want):
     """`onsite_piece_commands` (benchmarks/pous/onsite_pieces.sh) sets WIPE_CMD where the tree has the wipe's piece,
-    POUS_CMD where it has PoUS's and the node the memory challenger's key, and BANDWIDTH_CMD to collect PoUS's session
+    POUS_CMD where it has PoUS's and the node the memory attester's key, and BANDWIDTH_CMD to collect PoUS's session
     then, else to the bandwidth session where the tree has it and the node the verifier's key and its registered store."""
     tree, home = tmp_path / "tree", tmp_path / "home"
     for f in files:

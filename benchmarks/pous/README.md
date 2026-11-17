@@ -186,7 +186,7 @@ elsewhere.
 PoUS's verdict trusts the one memory-attester key `--trusted-sha512` pins, by default the one the run's configuration pins
 for the memory attester's PoUS sessions (`VERITY_PINS`). Its record says `trusted-device` holds only under a
 committed configuration, for a session signed under a key its `[[pin]]` entries give the memory attester
-(`memory_challenger.trusted_device`), whatever the names say; a run that pins its own key has its session accepted, and
+(`memory_attester.trusted_device`), whatever the names say; a run that pins its own key has its session accepted, and
 its record says so (`pous.json`'s `key_pin`, `run`) and is a rehearsal's, with no bound.
 The bandwidth piece collects PoUB-P2's answer. A run that ended while answering, or whose Lean didn't answer, is
 answered again from what the sessions kept (`--answers`), with no new session. Each of the three pieces' summaries (`pous.json`, `bandwidth.json`, the wipe's

@@ -23,7 +23,7 @@ What code outside this directory may use. Everything else here is internal.
 | The Lean package `lean/` (`core_memory_challenger`) | The verdicts on what the device signed, as executables, Lean modules and two Python callers. `lean/README.md` states its interface. |
 
 From Python there are eight modules, each imported by its path.
-`memory_challenger` is the timed rounds' device and its records: the device and its coin tree (`MemoryChallenger`,
+`memory_attester` is the timed rounds' device and its records: the device and its coin tree (`MemoryChallenger`,
 `CoinTree`, `CoinOpening`, `verify_coin`), what it publishes and signs (`SessionCommitment`, `SignedSession`, `Round`,
 `records_digest`, `message`), the check of a signed run (`verdict`, `Verdict`), its two logs (`SessionLog`, `SaltLog`), its
 signature schemes (`Signer`, `Verify`, `LmsSigner`, `SCHEMES`, `LMS`, `TEST_PREFIX`) and a block's digest
@@ -35,10 +35,10 @@ and the setups the host keeps (`setup_of`, `SETUPS`); the prover's side is `pous
 `PROTOCOL` and `SOURCE_BYTES`, the byte length of a salt's source. `timed_audit` is the timed audit's client and its
 record's verdicts: the wire (`OP_CHALLENGE`, `OP_PING`, `OP_CLOSE`, `HEADER`), `audit`, `calibrate`, `judge`, `accepted`,
 `verdict`, `lean_verdict`, `run_lean` and `lean_judges`, and the clocks, counters and parameters a harness reads beside them.
-`continuous` is the continuous audit's memory attester: `ContinuousMemoryChallenger`, `Reply` and `run_continuous`.
+`continuous` is the continuous audit's memory attester: `ContinuousMemoryAttester`, `Reply` and `run_continuous`.
 `onsite` is the memory attester's key as a deployment starts it: `device_key`, `signer` and `pin`. `wipe_challenger` is the
-streamed wipe's memory attester: `WipeMemoryChallenger`, one session over a socket (`serve`), its report (`report`),
-its party (`MemoryChallengerParty`, `start`, `PROTOCOL`) and the command (`main`). `wipe_stream` is the wipe's native
+streamed wipe's memory attester: `WipeMemoryAttester`, one session over a socket (`serve`), its report (`report`),
+its party (`MemoryAttesterParty`, `start`, `PROTOCOL`) and the command (`main`). `wipe_stream` is the wipe's native
 fill on the memory attester's CPUs (`Streamer`, over `wipe_stream.c`).
 
 What leaves the memory attester's host goes into the node that started its party. `challenger_party` answers on two
@@ -86,7 +86,7 @@ The proofs of the properties are in `security/Proofs/Properties/Pous/` (`MemoryC
 
 ## Where to look
 
-- `memory_challenger.py`: the timed rounds' device (`MemoryChallenger`, `CoinTree`, `SessionLog`, `LmsSigner`,
+- `memory_attester.py`: the timed rounds' device (`MemoryChallenger`, `CoinTree`, `SessionLog`, `LmsSigner`,
   `verdict`); its module docstring is the record formats' spec.
 - `challenger_session.py` and `challenger_party.py`: a run of timed rounds, from the node's side and as the memory attester's
   party on its own host.

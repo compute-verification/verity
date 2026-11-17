@@ -748,7 +748,7 @@ loads = [
 paths = [
     "verity/protocols/resource_accounting/memory/pous/verifier",
     "verity/protocols/resource_accounting/memory/pous/attester/challenger_session.py",
-    "verity/protocols/resource_accounting/memory/pous/attester/memory_challenger.py",
+    "verity/protocols/resource_accounting/memory/pous/attester/memory_attester.py",
 ]
 loads = [
     "verity/channel.py",

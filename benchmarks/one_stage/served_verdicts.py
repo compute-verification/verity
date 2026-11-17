@@ -250,7 +250,7 @@ PIECES: dict[str, tuple[str, str, str, str]] = {
              ("H1's credit on the served window, its coins from vy-challenger-1's gate (H1_GATE), or with POUW=pearlplus "
               "the reference replay of Pearl+'s own served run (served_pearlplus.sh)")),
     "space": ("PoUS", "pous", "memory-accounting",
-              ("PoUS over the served model's int8 weights on the serving card, against the memory challenger on "
+              ("PoUS over the served model's int8 weights on the serving card, against the memory attester on "
                "vy-auditor-2; served_verdicts.sh sets it where the tree has benchmarks/pous/served_piece.sh and this node "
                "the challenger's key")),
     "bandwidth": ("the bandwidth audit", "bandwidth", "memory-accounting",

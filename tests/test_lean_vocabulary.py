@@ -149,7 +149,7 @@ WHY = {"Extractor": "an extractor is a rerun program whose work `RP.eval` counts
        "Simulator": "a simulator is a program whose calls `SP.eval` counts, fixed before the witness"}
 
 RA, RA_PY = "verity/protocols/resource_accounting/memory/poub/verifier/lean/Poub/", "verity/protocols/resource_accounting/memory/poub/verifier/audit.py"
-MC, MC_PY = "verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryChallenger/", "verity/protocols/resource_accounting/memory/pous/"
+MC, MC_PY = "verity/protocols/resource_accounting/memory/pous/attester/lean/MemoryAttester/", "verity/protocols/resource_accounting/memory/pous/"
 #: A Python class held to a code-Lean declaration by a `verity_difftest` port, ``python key: (Lean key, port, reason)``: the
 #: pair counts once, as its Lean. The port is a `[[lean_exe]]` of a tracked lakefile.
 MIRRORS: dict[str, tuple[str, str, str]] = {
@@ -170,12 +170,12 @@ MIRRORS: dict[str, tuple[str, str, str]] = {
     f"{RA_PY}::Registration": (f"{RA}Window.lean::Poub.Registration", "poub-difftest", "PoUB's port"),
     f"{RA_PY}::Registry": (f"{RA}Registry.lean::Poub.Registry", "poub-difftest", "PoUB's port"),
     f"{RA_PY}::Verdict": (f"{RA}Window.lean::Poub.Verdict", "poub-difftest", "PoUB's port"),
-    f"{MC_PY}device/memory_challenger.py::CoinTree": (f"{MC}Records.lean::MemoryChallenger.CoinTree", "memory-challenger-difftest",
-                                               "the memory challenger's port"),
-    f"{MC_PY}device/memory_challenger.py::Verdict": (f"{MC}Verdict.lean::MemoryChallenger.Verdict", "memory-challenger-difftest",
-                                              "the memory challenger's port"),
+    f"{MC_PY}device/memory_attester.py::CoinTree": (f"{MC}Records.lean::MemoryChallenger.CoinTree", "memory-challenger-difftest",
+                                               "the memory attester's port"),
+    f"{MC_PY}device/memory_attester.py::Verdict": (f"{MC}Verdict.lean::MemoryChallenger.Verdict", "memory-challenger-difftest",
+                                              "the memory attester's port"),
     f"{MC_PY}verifier/streamed_wipe.py::Verdict": (f"{MC}StreamedWipe.lean::MemoryChallenger.StreamedWipe.Verdict",
-                                          "memory-challenger-difftest", "the memory challenger's port, for the streamed wipe"),
+                                          "memory-challenger-difftest", "the memory attester's port, for the streamed wipe"),
     "verity/circuits/layout.py::Gate": (f"{CIRCUITS}Gate.lean::Flock.Program.Gate", "verity-evaluate",
                                            "the evaluator's `gate` answers each gate of the Python's layout"),
     "verity/circuits/partition_object.py::Partition": (f"{CIRCUITS}Evaluated.lean::Flock.Extract.Partition", "verity-evaluate",
@@ -645,7 +645,7 @@ KNOWN: dict[str, str] = {
         "homonym, a one-round PoUW protocol in a machine model (RS-DEF): rename (compute-accounting)",
     # security/Properties/
     "security/Properties/Attest.lean::MemoryChallenger.Attest.Properties.Device":
-        "homonym, the memory challengers a property ranges over: rename (lean)",
+        "homonym, the memory attesters a property ranges over: rename (lean)",
     "security/Properties/Pous/Period/Audits.lean::Pous.Period.Strategy":
         "homonym, a PoUS prover in the ring model (what survives setup, and each round's answer): rename (lean)",
     "security/Properties/Poub/Remote/Line/Record.lean::Properties.Poub.Line.Node":
@@ -748,7 +748,7 @@ KNOWN: dict[str, str] = {
     "tests/tools/verity/cli/lifecycle/lifecycle.py::Registration":
         "duplicate of the registration log (`Verity.Registration`): becomes a client of it (top)",
     "tests/tools/verity/cli/lifecycle/lifecycle.py::Statement": "homonym, a drawn unit's public statement in the demo: rename (top)",
-    "tests/tools/verity/cli/lifecycle/onsite.py::Challenger": "duplicate of `parties.Challenger`: becomes a client of the memory challenger's (top)",
+    "tests/tools/verity/cli/lifecycle/onsite.py::Challenger": "duplicate of `parties.Challenger`: becomes a client of the memory attester's (top)",
     # infra/
     "infra/cluster/src/cluster/ledger.py::Ledger": "homonym, the shared machines' spend ledger: rename (infra)",
     "infra/cluster/src/cluster/model.py::Node": "homonym, a shared machine in the cluster's model: rename (infra)",

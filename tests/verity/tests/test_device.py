@@ -77,7 +77,7 @@ FIRST = {
                              Link("chal0-link", ("chal0", "node0"), 100_000, 1_000_000))),
     "remote": replace(NODE, links=(Link("uplink0", ("node0", OUTSIDE), 100_000, 100_000),)),
 }
-"""Each composite's first entry: onsite, the uplink split by the network certifier and the memory challenger's link to
+"""Each composite's first entry: onsite, the uplink split by the network certifier and the memory attester's link to
 the node; remote, a bare uplink."""
 LATER = Entry("", locs=(Loc("gpu2", "device", "node0", sheet=B), Loc("hbm2", "memory", "gpu2", tier="hbm", bytes=128 << 30),
                         leaf("nvme1", "disk")))
@@ -115,7 +115,7 @@ figures; `unrated-leaf`, `second-clock` and `chipless-host`, a host's leaf with 
 of time and a host with no on-chip state, each refused by `figures`; `keyed-host`, a prover's location stating a
 scheme; and `unrated-link`, a link that states no capacity and no reason."""
 REMOTE_ACCEPTS = {"bare-uplink", "unreached-host"}
-"""The entries a remote site accepts: it has no certifier and no memory challenger to hold its links to."""
+"""The entries a remote site accepts: it has no certifier and no memory attester to hold its links to."""
 
 
 def first(composite: str) -> Registration:
@@ -397,7 +397,7 @@ def _audit(node: dict, *ways: tuple[tuple, ...], **keys: str) -> Auditor:
 
 
 def _reached(entry: Entry, site: str = "site") -> Entry:
-    """`entry` with a memory challenger under `site` linked to host `n0`."""
+    """`entry` with a memory attester under `site` linked to host `n0`."""
     return replace(entry, locs=(*entry.locs, Loc("chal0", "challenger", site, "auditor", scheme=SCHEME)),
                    links=(*entry.links, Link("chal0-link", ("chal0", "n0"), 100_000, 1_000_000)))
 
@@ -407,7 +407,7 @@ def test_a_nodes_entry_from_its_files() -> None:
     on-chip state in bits and its tiers' shared rates, each device with one `hbm` leaf at the sheet's device memory,
     whole, the host's own leaves in the file's order at their rates, and its ways out as links. A second node on the
     same log adds neither the sheet nor the site again. Remote accepts both; onsite refuses the
-    entry by `uncertified`, and the same entry without its links out by `challenger-reach` until a memory challenger
+    entry by `uncertified`, and the same entry without its links out by `challenger-reach` until a memory attester
     links to the host."""
     sheet, auditor = Sheet.of_file(CARD_FILE), _audit(NODE_FILE, _ways(), _ways("n1"), chal0="")
     log = Registration("remote")

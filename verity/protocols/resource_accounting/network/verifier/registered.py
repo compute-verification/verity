@@ -7,7 +7,7 @@ what the registration states of them (`Registered`): the link's id, its host end
 key, the link's capacity β in bits a second each way, and the head of the log the site was read at, which it carries
 and doesn't read. `Refused`, with the Lean's message, for a link that is no link of the site, a link that doesn't join a
 network attester and a host (the network attester's other half, to the outside; a host's bare uplink; a link between two
-hosts; a memory challenger's link), a network attester whose registered key is not lower-case hex, a key that is not the
+hosts; a memory attester's link), a network attester whose registered key is not lower-case hex, a key that is not the
 network attester's registered key, and a network attester's link that states no capacity, with or without a reason no
 certifier splits it: there is no line rate to read for it.
 

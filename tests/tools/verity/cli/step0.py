@@ -153,7 +153,7 @@ CHECKS: dict[str, Check] = {"certifier": unserved("network-period check"), "pouw
                             "pearl-plus": unserved("Pearl+ run verdict"),
                             "inference-only": unserved("inference-only policy check"),
                             "pous": unserved("PoUS run check"), "bandwidth": unserved("PoUB session"),
-                            "wipe": unserved("memory challenger's wipe check")}
+                            "wipe": unserved("memory attester's wipe check")}
 
 
 class Machine:
