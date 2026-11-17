@@ -11,12 +11,26 @@ import itertools
 import random
 
 import pytest
-
-from tests.verity.protocols.resource_accounting.network.verifier.test_network_attester_advice import FIXTURE, RANDOM, packed, rebuild
-
 from verity.protocols.resource_accounting.network.verifier import advice as V
-from verity_vllm.compiler.advice_check import (DEFERRED, _sort_net, ands, arguments, comparators,
-                                                          evaluate, evaluate_bits, reference, size, unit)
+from tests.verity.protocols.resource_accounting.network.verifier.test_network_attester_advice import (
+    FIXTURE,
+    RANDOM,
+    packed,
+    rebuild,
+)
+
+from verity_vllm.compiler.advice_check import (
+    DEFERRED,
+    _sort_net,
+    ands,
+    arguments,
+    comparators,
+    evaluate,
+    evaluate_bits,
+    reference,
+    size,
+    unit,
+)
 
 P, D = "prefill", "decode"
 

@@ -68,7 +68,7 @@ def test_the_network_attester_always_paces_and_serve_and_rehearse_refuse_a_relea
              "--session", "00" * 32, "--windows", "1", "--out", str(tmp_path / "run")]
     for paced in ("0", "25", "100"):
         for argv in (serve, ["rehearse", "--fake", "--out", str(tmp_path / "run")]):
-            with pytest.raises(SystemExit, match="the network certifier always paces"):
+            with pytest.raises(SystemExit, match="the network attester always paces"):
                 ws.main([*argv, "--paced-ms", paced])
     assert not (tmp_path / "run").exists()
 
@@ -1039,7 +1039,7 @@ def test_a_registration_with_a_wrong_signature_gives_no_file_and_the_reader_hold
     problems = refused(out, lambda: edit_rows(out, other_signature), file, under)
     assert forged[0] != signed[1] and SV.head_of(forged[0]) == SV.head_of(signed[1])
     assert ("execution phase 1's connection rows: the registration's certificate doesn't verify under the network "
-            "certifier's key in the session") in problems
+            "attester's key in the session") in problems
     assert not any("execution phase 0" in p or "execution phase 2" in p for p in problems)
     assert not file.exists()
     left = answer(tmp_path / "left", file, signed)

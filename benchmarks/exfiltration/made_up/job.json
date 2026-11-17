@@ -1,5 +1,5 @@
 {
- "made_up": "written by hand from the tests' fixture runs r20261111-034244-ce3c (the planner's rows over the world's and a datacenter's year) and r20261111-044823-6457 (the world year's plan), their row `(i) honest` read as the command's row `(ii) honest`, and a row `(i) honest` made up at 1.25 times their bound; no run left this directory",
+ "made_up": "written by hand from the tests' fixture runs, their row `(i) honest` read as the command's row `(ii) honest`, and a row `(i) honest` made up at 1.25 times their bound; no run left this directory",
  "run": {
   "id": "made_up"
  },

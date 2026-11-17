@@ -889,9 +889,9 @@ def test_an_admission_record_that_cannot_be_read_leaves_no_host_peak(tmp_path, s
     assert ended.doc("verdict.json") == verdict_doc(MADE[0].roots[1:])
 
 
-def test_a_commit_whose_remote_session_did_not_accept_exits_3_after_its_verdict(tmp_path, stand_ins, capsys, monkeypatch):
+def test_a_commit_whose_poub_session_did_not_accept_exits_3_after_its_verdict(tmp_path, stand_ins, capsys, monkeypatch):
     """The session's answer is the Commit's last word: asked once, after the verdict is written and the PASS line printed."""
-    from verity_vllm.pipeline import remote_session
+    from verity_vllm.pipeline import poub_session
 
     asked = []
 
@@ -899,7 +899,7 @@ def test_a_commit_whose_remote_session_did_not_accept_exits_3_after_its_verdict(
         asked.append((rs, (tmp_path / "out" / "verdict.json").exists()))
         return False
 
-    monkeypatch.setattr(remote_session, "accepted", accepted)
+    monkeypatch.setattr(poub_session, "accepted", accepted)
     stand_ins.verdicts = [(True, None)]
     ended = run(tmp_path, capsys)
     assert ended.exit == 3 and asked == [(None, True)] and ended.printed[-1] == PASS_LINE.format(n=2)

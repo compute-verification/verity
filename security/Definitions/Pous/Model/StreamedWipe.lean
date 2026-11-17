@@ -81,4 +81,11 @@ the probability that some round finds more than `g` labels answerable while `z` 
 noncomputable def bound (N k b q M E g : ℕ) : ℝ≥0∞ :=
   ((g : ℝ≥0∞) / N) ^ k + (k : ℝ≥0∞) * (N.choose (g + 1) : ℝ≥0∞) * 2 ^ (M + E) / 2 ^ (q + (g + 1) * b)
 
+/-- **A fill of at least one 32 MiB segment**: `n` labels of 64 bytes, `n ≥ 2^19`. -/
+def FillsSegment (n : ℕ) : Prop := 2 ^ 19 ≤ n
+
+/-- **Prior content at least the published figure**: the `q` bits of prior content are at least the `foreign_bits` that
+`verity/wipe/v0` publishes for a fill of `n` labels and `E` bits of egress, `⌈M/19⌉ + E` with `M = n · 512`. -/
+def PriorAtLeastForeignBits (n E q : ℕ) : Prop := (n * 512 + 18) / 19 + E ≤ q
+
 end Pous.StreamedWipe

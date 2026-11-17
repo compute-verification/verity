@@ -173,8 +173,8 @@ def test_the_figure_is_the_plan_of_records_row_and_row_i_is_only_under_its_label
     assert (E.ROW, E.ASSUMED_ROW, doc["row"], doc["label"]) == ("(ii) honest", "(i) honest", "(ii) honest", None)
     assert doc["value"] == head["GB"] == year["compute_audit"]["GB"] == pytest.approx(YEAR_GB, rel=1e-12)
     for t in year["together"].values():
-        assert t["GB"] == pytest.approx(t["certifier_GB"] + YEAR_GB) and t["with_set_time_card"]["GB"] == pytest.approx(
-            t["with_set_time_card"]["certifier_GB"] + YEAR_GB)
+        assert t["GB"] == pytest.approx(t["attester_GB"] + YEAR_GB) and t["with_set_time_card"]["GB"] == pytest.approx(
+            t["with_set_time_card"]["attester_GB"] + YEAR_GB)
     a = doc["at_assumed_prices"]
     assert (a["row"], a["label"], a["run"], a["delta"], a["inside"], a["why"], a["sources"]) == (
         E.ASSUMED_ROW, E.ASSUMED_LABEL, ROWS, 0.01, True, None, None)

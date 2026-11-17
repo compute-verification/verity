@@ -22,8 +22,6 @@ from verity.circuits.codec import canonical_json, encode_program, program_digest
 from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Concat, Explicit, Strided, runs
-from verity_vllm.definitions.registry import b1
-from verity_vllm.definitions.registry.topp_geometry import registered_splits, splits_for
 
 from tests.check import test_batch_decomp_e2e as e2e
 from tests.check.test_batch_decomp_e2e import (
@@ -61,6 +59,8 @@ from verity_vllm.check.match import global_match as gm
 from verity_vllm.check.match import global_match_fast as GMF
 from verity_vllm.check.match import input_layout
 from verity_vllm.check.match import sampler_geometry as SG
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry.topp_geometry import registered_splits, splits_for
 from verity_vllm.observe.events import (
     DispatchEnter,
     DispatchExit,

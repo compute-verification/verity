@@ -1,5 +1,6 @@
 """`verity bench overhead`'s node side: the operating points' sweep and a scheme's timed run, each `bench.py` runs of the
-PoUW harness (`benchmarks/pouw/harness`) on the one GPU the run's lease holds. This side writes `$OUT` and the run's
+PoUW harness (`benchmarks/pouw/harness`) on the one GPU the run's lease holds. `overhead_node.sh` runs it in the node's
+Python with torch and vLLM, under the `research run` that `overhead_records` launches; this side writes `$OUT` and the run's
 `result.json` (its measurements through the kit's writer, under the kit's host stamp), and the store side reads them.
 
     python -m verity_bench.overhead_node points --card h200 --uuid GPU-... --out DIR --run-dir DIR --run-id RUN

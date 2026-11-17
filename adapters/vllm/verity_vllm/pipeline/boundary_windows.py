@@ -19,7 +19,8 @@ from typing import Any
 from verity.circuits.defs import SpecializedDefinition
 from verity.commitments import history as HT
 
-from verity_vllm.pipeline import boundary_logits as BL, boundary_tables as BT
+from verity_vllm.pipeline import boundary_logits as BL
+from verity_vllm.pipeline import boundary_tables as BT
 from verity_vllm.pipeline.boundary_rows import (
     FORMAT,
     ONE_RETURN,

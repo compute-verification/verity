@@ -33,7 +33,7 @@ commitment, and encodes every segment of C* on the node's GPUs (`libp2v1.so` thr
 - `setup.json`: the manifest, the generator's stream and its name of the weights (`program`, the generator's
   `model_id`), the layout's digest, the commitment, the source and the salt;
 - `seg/<s>.c`: segment s, its blocks of 2,056 bytes in order;
-- `rows/<s>.rows`: their `sha512/row/v2` digests, 64 bytes each (the memory challenger's table,
+- `rows/<s>.rows`: their `sha512/row/v2` digests, 64 bytes each (the memory attester's table,
   `VerifierKey.from_row_digests`);
 - `seg/<s>.json`: the segment's digests and roots, written last, so a segment that has it is done and a rerun resumes;
 - `SHA512SUMS` and `store.json`, the public outputs: `root`, C*'s root (`responder.server_root`'s tree, computed as RFC 6962's
