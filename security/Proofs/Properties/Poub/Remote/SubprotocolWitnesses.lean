@@ -12,56 +12,8 @@ import all Init.Data.Ord.String
 import all Init.Data.Range.Basic
 import all Lean.Data.Json.Basic
 
-/-!
-# The bandwidth component's properties hold at the honest node and fail at a verifier that accepts everything
-
-Each of `Properties.Poub.Subprotocol`'s three properties, and the memory line
-`Properties.Poub.Line.LineHeld`, is its form over the verifier at the deployed one (`acceptIsVerified_iff`,
-`publishedEps_iff`, `lineHeldAtSubprotocol_iff`, `lineHeld_iff`), and each form has its witnesses:
-
-* **AcceptIsVerified** (`AcceptIsVerifiedFor`). Honest: the deployed period's parameters and log decode to its session
-  at one window a sample, which the check leaves undecided until its windows verify (`acceptIsVerified_honest`), and the
-  check accepts, publishing `certify`'s outputs, wherever `Shared.run g` accepts the session it decodes
-  (`acceptIsVerified_complete`). Nontrivial: a check that accepts everything accepts a log that decodes to no session
-  (`acceptIsVerified_nontrivial`).
-* **PublishedEps** (`PublishedEpsFor`), whose antecedent is the same acceptance, so its honest witnesses are
-  `AcceptIsVerified`'s. Nontrivial: a check that accepts every log, certifying a byte read at eps 0, accepts the
-  deployed period's log, and 0 is below the sample term at every node of positive δ (`sampleTerm_pos`,
-  `publishedEps_nontrivial`).
-* **LineHeld** (`LineHeldBy`) and **LineHeldAtSubprotocol** (`LineHeldAtSubprotocolBy`), which take the same premises.
-  Honest: every premise holds at a node that holds its whole store in memory throughout, every receipt correct, no
-  outside device, nothing but the verifier's messages entering it as its certifiers count, and the sampler's fallbacks
-  0, on a schedule that runs each pass inside its window with each sample's receipts fixed (`HonestSchedule`), and at
-  its correct receipts the distinguishers' advantage and the hiding terms are 0 (`lineHeldAtSubprotocol_honest`); and
-  there the event is empty: the certifiers count nothing else entering and every line credits no more bits read than the
-  passes read (`lineHeld_honest`). Nontrivial: at a verifier that accepts everything and records one summary for every
-  record, the bound fails on a node whose four passes read its one block once (`lineHeld_nontrivial`,
-  `lineHeldAtSubprotocol_nontrivial`); and the line credits only what the passes read: on one record and summary its
-  claim holds of a trace with the store in memory and fails of the same trace with memory emptied at tick 10
-  (`lineHeldAtSubprotocol_bites`). The guarantees `Line.SecurityProofs.lineHeld` and
-  `Subprotocol.SecurityProofs.lineHeldAtSubprotocol` carry their own witnesses under their namespaces: the nontrivial
-  ones closed at the toy summary (`Toy.sm`, in the properties tree, which their statements read). `lineHeld`'s honest
-  one is `RecordAccepts`' accepted play, with no premise; `lineHeldAtSubprotocol`'s is at the honest one-window log,
-  taking that the deployed check accepts it (`HonestLogAccepted`): the check accepts it and `Shared.run` accepts the
-  session it decodes (`lineHeldAtSubprotocol_honest`).
-* **QBytesAtSubprotocol** (`QBytesAtSubprotocolBy`, `qBytesAtSubprotocolBy_iff`), which takes the samples' three of those
-  premises. Honest: at the same honest node and schedule they hold, and at `Poub.Protocol.DELTA` the
-  distinguishers' advantage and the hiding terms are 0 (`qBytesAtSubprotocolBy_honest`). Nontrivial: at a verifier that
-  accepts everything and records no receipts, the toy node meets every premise while a `q_bytes` of one byte exceeds
-  the record's none (`qBytesAtSubprotocolBy_nontrivial`); and the figure counts the trace's wrong receipts: on one record
-  and summary, at one figure, its claim holds of a trace whose one receipt is right and fails with it wrong
-  (`qBytesAtSubprotocolBy_bites`).
-
-At the deployed verifier the premises' acceptance is load-bearing and `Plays` is not: the line reads the record
-through `Record.summary`, which is some summary only where the Lean verifier accepts, so the event's failed read claim
-alone gives `Verified` (`verified_of_not_readBy`) and the bound holds at any acceptance in the event
-(`lineHeldAtSubprotocolBy_record`). The nontrivial witnesses therefore replace the verdict and the record with an
-accept-all's as well.
-
-The toy instance (`Toy`) is a node whose parameters have no window (`Node.windows` 0) at four windows a sample, so no
-sample (`Node.samples` 0), one block of one byte, whose recorded summary has four windows of one block each, one pass a
-group, and a line that reads no wrong receipt, so it credits `8 · 1 · (4 · 1 − 0) = 32` bits read.
--/
+/-! The bandwidth component's properties and the memory line hold at the honest node and fail at a verifier that accepts
+everything; `lineHeldAtSubprotocol`'s honest witness takes `HonestLogAccepted`, witnessed outside Lean. -/
 
 @[expose] public section
 
@@ -84,9 +36,6 @@ theorem lineHeld_iff : LineHeld ↔ LineHeldBy Verified Record.summary := Iff.rf
 theorem qBytesAtSubprotocolBy_iff : QBytesAtSubprotocol ↔ QBytesAtSubprotocolBy Publishes Verified Record.summary :=
   Iff.rfl
 
-/-! ## The premises at an honest node -/
-
-/-- A trace read over its own registered blocks is itself. -/
 theorem overBlocks_self {Ω : Type} (T : Trace Ω) : overBlocks T T.blocks = T := by
   have h : ∀ s : Finset (Fin T.blocks),
       (Finset.univ.filter fun j : Fin T.blocks => (j : ℕ) ∈ s.image Fin.val) = s := fun s => by
@@ -97,8 +46,6 @@ theorem overBlocks_self {Ω : Type} (T : Trace Ω) : overBlocks T T.blocks = T :
   simp only [h]
   all_goals rfl
 
-/-- The honest trace is over the node's registered blocks, so its trace of record is it with the Lean verifier's
-verdict. -/
 theorem ofRecord_honest {Ω : Type} (node : Node) (passes : ℕ) (tick : Ω → ℕ → ℕ) (rec : Ω → Record) :
     ofRecord (honestTrace node passes tick) node rec =
       { honestTrace node passes tick with accepts := fun ω => Verified node (rec ω) } := by
@@ -147,8 +94,6 @@ theorem offsets_zero_lt {m U k : ℕ} (b : Blocks m) (hk : k ≤ U) (hkm : k ≤
   show l + offset (U - l) 0 (b ⟨l, h⟩) < U
   omega
 
-/-- With the sampler's fallbacks 0, every receipt a sample opens is among its receipts, so at correct receipts that
-hold all of them nothing is refused. -/
 theorem refused_honest {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X]
     (D : ResourceAccounting.Remote.Sample.Run n m s κ X)
     (hc : ∀ t ω, range (D.size t ω : ℕ) ⊆ D.correct t ω) (prf : Fin n → Pous.Bits κ → Blocks m)
@@ -271,10 +216,6 @@ theorem qBytesAtSubprotocolBy_honest (node : Node) (κ : ℕ) (X Cm : Type) [Fin
     unfold Committed.hide
     rw [← e, tsub_self, tsub_self, add_zero]
 
-/-! ## What the passes read -/
-
-/-- A pass that plans every registered block, every receipt correct, and runs a tick or more with every registered
-block on the node at its first tick reads every registered block. -/
 theorem read_full {Ω : Type} (T : Trace Ω) (ω : Ω) (p : ℕ) (hp : T.plan ω p = univ) (hc : T.correct ω p = univ)
     (ht : T.tick ω p < T.tick ω (p + 1)) (hm : T.present ω (T.tick ω p) = univ) : (T.read ω p).card = T.blocks := by
   have hf : univ ⊆ (Ico (T.tick ω p) (T.tick ω (p + 1))).biUnion (T.present ω) := fun j _ =>
@@ -282,7 +223,6 @@ theorem read_full {Ω : Type} (T : Trace Ω) (ω : Ω) (p : ℕ) (hp : T.plan ω
   unfold Trace.read
   rw [hp, hc, Finset.inter_self, Finset.inter_eq_left.2 hf, Finset.card_univ, Fintype.card_fin]
 
-/-- A pass with no registered block on the node at any of its ticks reads none. -/
 theorem read_absent {Ω : Type} (T : Trace Ω) (ω : Ω) (p : ℕ)
     (h : ∀ t, T.tick ω p ≤ t → t < T.tick ω (p + 1) → T.present ω t = ∅) : T.read ω p = ∅ := by
   unfold Trace.read
@@ -312,8 +252,6 @@ theorem lineHeld_honest (node : Node) {Ω : Type} (passes : ℕ) (tick : Ω → 
   refine mul_le_mul_of_nonneg_left ?_ hb
   linarith
 
-/-! ## At the deployed verifier the event's acceptance is the summary's -/
-
 /-- Where the line's bits-read claim fails under any hypothesis, the Lean verifier accepted the record: its line reads
 `Record.summary`, which is some summary only where the session ended accepted. -/
 theorem verified_of_not_readBy {Ω : Type} {T : Trace Ω} {ω : Ω} {node : Node} {r : Record} {Q : Prop}
@@ -341,8 +279,6 @@ theorem lineHeldAtSubprotocolBy_record (acc : Node → Record → ByteArray → 
   exact le_trans (Pouw.pr_mono fun ω h => ⟨verified_of_not_readBy h.2, h.2⟩)
     (Properties.Poub.Line.SecurityProofs.lineHeld node κ X Cm prf rest recs correct com T R δs δnet O I hP hCv
       hSk hCov hIc hLive hRef hCnt)
-
-/-! ## A verifier that accepts everything -/
 
 namespace Toy
 
@@ -442,7 +378,6 @@ theorem toy_pool : ∃ b, Poub.Pooled.pooled #[(4, 4)] (Toy.node.delta : ℚ) = 
   | error _ => intro h; cases h
   | ok b => intro h; exact ⟨b, rfl, Option.some.inj h⟩
 
-/-- The wrong receipts' greedy fill (`stretches`) over groups `l` from `st`. -/
 def greedy (v cap : ℕ → ℚ) : List ℕ → ℚ × ℚ → ℚ × ℚ
   | [], st => st
   | g :: l, st => if st.1 ≤ 0 then st else greedy v cap l (st.1 - min st.1 (cap g), st.2 + min st.1 (cap g) * v g)
@@ -467,7 +402,6 @@ theorem forIn_fill_nonpos (v cap : ℕ → ℚ) (l : List ℕ) (st : ℚ × ℚ)
   rw [forIn_greedy]
   cases l <;> simp [greedy, h]
 
-/-- Whether the code computes a line, reading no wrong receipt. -/
 def probe (r : Except String _root_.Poub.Line.Line) : Bool :=
   match r with
   | .ok l => l.wrong == 0
@@ -497,8 +431,6 @@ theorem toy_groups : groupsBy Toy.sum Toy.node Toy.rec = Toy.gs := by decide +ke
 
 theorem toy_passes : firstPass Toy.gs Toy.gs.size = 4 := by decide +kernel
 
-/-- Where the passes after the first read nothing of the one block and the first reads it once, the toy line's claim
-of `4 · 1` blocks read, no wrong receipt, fails. -/
 theorem toy_not_read {Ω : Type} (T : Trace Ω) (ω : Ω) (hr : T.reads ω 4 ≤ 3) :
     ¬ ReadBy Toy.sum T ω Toy.node Toy.rec := fun h => by
   obtain ⟨l, hl, hw⟩ := toy_line
@@ -511,7 +443,6 @@ theorem toy_not_read {Ω : Type} (T : Trace Ω) (ω : Ω) (hr : T.reads ω 4 ≤
   push_cast at h1
   linarith
 
-/-- The toy trace's four passes read its one block once: the first over `[0, 10)`, the rest over no tick. -/
 theorem toy_reads {Ω : Type} (ω : Ω) : (Toy.trace (Ω := Ω)).reads ω 4 = 1 := by
   have h0 : ((Toy.trace (Ω := Ω)).read ω 0).card = 1 :=
     read_full _ ω 0 rfl rfl (by show (if 0 = 0 then 0 else 10) < (if 0 + 1 = 0 then 0 else 10); simp)
@@ -527,8 +458,6 @@ theorem toy_reads {Ω : Type} (ω : Ω) : (Toy.trace (Ω := Ω)).reads ω 4 = 1 
     omega
   simp [Trace.reads, Finset.sum_range_succ, h0, hp 1 le_rfl, hp 2 (by norm_num), hp 3 (by norm_num)]
 
-/-- The toy trace is over the toy node's one registered block, so at any verdict its trace of record is it with that
-verdict. -/
 theorem traceBy_toy {Ω : Type} (ver : Node → Record → Prop) :
     traceBy (Toy.trace (Ω := Ω)) Toy.node ver (fun _ => Toy.rec) =
       { Toy.trace (Ω := Ω) with accepts := fun _ => ver Toy.node Toy.rec } := by
@@ -752,8 +681,6 @@ theorem lineHeldAtSubprotocol_bites : ∃ (node : Node) (r : Record) (sm : Poub.
   rw [toy_groups, toy_passes, hsteady, hw]
   norm_num [Toy.node, Node.blocks, Toy.reg]
 
-/-! ## `QBytesAtSubprotocol` at a verifier that accepts everything -/
-
 /-- **`QBytesAtSubprotocol` fails at a verifier that accepts everything.** With an acceptance that holds of every
 record at every public output, a verdict that holds of every record and no record of receipts, the toy node (no
 sample, one block) meets every premise, while a `q_bytes` of one byte exceeds the record's none: the event has
@@ -789,8 +716,6 @@ theorem qBytesAtSubprotocolBy_bites : ∃ (node : Node) (r : Record) (sm : Poub.
   · simp only [QBytesBy, toy_receipts, h1]
     unfold Poub.Codec.BLOCK_BYTES
     omega
-
-/-! ## `AcceptIsVerified` at a check that accepts everything, and at the deployed check -/
 
 /-- **`AcceptIsVerified` fails at a check that accepts everything**: it accepts a log that decodes to no session. -/
 theorem acceptIsVerified_nontrivial : ¬ AcceptIsVerifiedFor (fun _ _ _ => .accept ⟨⟨0, 1⟩, 0⟩ Lean.Json.null) := by
@@ -851,9 +776,6 @@ theorem acceptIsVerified_complete {p : Poub.Protocol.Params} {reg : Poub.Registr
   rw [hrep]
   simp only [ho, hsm]
 
-/-! ## `PublishedEps` at a check that publishes reads at eps 0 -/
-
-/-- A node's sample term is positive at a positive δ. -/
 theorem sampleTerm_pos (node : Node) (hδ : 0 < (node.delta : ℚ)) :
     0 < (node.delta : ℚ) + ((∑ _c : Fin node.samples, node.params.samples : ℕ) : ℚ) / 2 ^ 64 :=
   add_pos_of_pos_of_nonneg hδ (by positivity)
@@ -874,8 +796,6 @@ theorem publishedEps_nontrivial : ¬ PublishedEpsFor (fun _ _ _ => .accept ⟨�
         rfl, rfl, rfl⟩
     have h0 := lt_of_lt_of_eq (sampleTerm_pos node (by rw [hδ]; exact hpos)) (hn node hp hg hδ).symm
     norm_num at h0
-
-/-! ## The honest one-window log -/
 
 /-- **`LineHeldAtSubprotocol`'s honest witness**: the deployed check accepts the honest one-window log
 (`HonestLogAccepted`, witnessed outside Lean), whose parameters and log decode to a session that `Shared.run` runs to

@@ -6,25 +6,7 @@ public import Std.Tactic.Do
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 
-/-!
-# The challenger's ledger, for `Properties.Pouw.LiveSalt.LedgerShows`
-
-`verifyLedger` folds the ledger's entries into its windows, one per `open`. `LedgerInv` is what the fold has established
-once it has read a prefix of the entries: each window is an `open` of the prefix, named by its open's root; no two
-windows share a root or a session; a window's `end` is in the prefix, in its session and after its open, and a v2 `end`
-that records a leaf records one inside the window; every `open` and every `end` has its window; and a `reserve` is v2
-and comes before every `open` of its session. Each kind of entry keeps it (`inv_open`, `inv_end`, `inv_keep`), so it
-holds of the whole ledger (`verifyLedger_inv`).
-
-`checked` parses the ledger's lines into the entries `LiveSalt.entries` reads (`checked_ok`); `auditedOpen` and
-`pinnedChallengePhase` take the window whose root the caller names, closed by its v2 `end` (`auditedOpen_ok`,
-`pinnedChallengePhase_ok`). So the ledger of a session pinned on root `R` shows its reserve, its one open on `R` and its end
-(`ledgerShows_of`). `challengePhaseNamed` returns the commitment whose root's hex the ledger's `end` recorded
-(`challengePhaseNamed_root`).
-
-The challenger's functions are monadic. Each fact about one is a Hoare triple proved by `mvcgen`, and `of_triple` reads
-it back at an `.ok` result.
--/
+/-! The challenger's ledger, for `Properties.Pouw.LiveSalt.LedgerShows`. -/
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -64,7 +46,6 @@ theorem forIn_zipIdx_ok {α σ ε : Type} (f : α × Nat → σ → Except ε (F
       have := ih (pre ++ [x]) s' r hP' (by simpa [List.length_append] using h)
       simpa using this
 
-/-- A loop over `xs.zipIdx` that only yields keeps `P` of the prefix it has read. -/
 theorem forIn_array_zipIdx_ok {α σ ε : Type} (xs : Array α) (init : σ) (f : α × Nat → σ → Except ε (ForInStep σ))
     (P : List α → σ → Prop) (h0 : P [] init)
     (hstep : ∀ pre x s t, P pre s → f (x, pre.length) s = .ok t → ∃ s', t = .yield s' ∧ P (pre ++ [x]) s')
@@ -72,7 +53,6 @@ theorem forIn_array_zipIdx_ok {α σ ε : Type} (xs : Array α) (init : σ) (f :
   rw [← Array.forIn_toList, Array.toList_zipIdx] at h
   simpa using forIn_zipIdx_ok f P hstep xs.toList [] init r h0 h
 
-/-- What `verifyLedger` has established once it has read the entries `pre`, of its windows `wins` and its flag `v2`. -/
 structure LedgerInv (pre : List LedgerEntry) (wins : Array Win) (v2 : Bool) : Prop where
   seq : ∀ x ∈ pre, x.seq < pre.length
   v2 : ∀ x ∈ pre, x.schema = LEDGER_SCHEMA → v2 = true
@@ -92,7 +72,6 @@ structure LedgerInv (pre : List LedgerEntry) (wins : Array Win) (v2 : Bool) : Pr
   reserves : ∀ rv ∈ pre, rv.kind = "reserve" → rv.schema = LEDGER_SCHEMA ∧
     ∀ o ∈ pre, o.kind = "open" → o.session = rv.session → rv.seq < o.seq
 
-/-- A triple whose postcondition is `Q` gives `Q` of an `.ok` result. -/
 theorem of_triple {ε α : Type} {x : Except ε α} {Q : α → Prop} {r : α}
     (hT : ⦃⌜True⌝⦄ x ⦃⇓? a => ⌜Q a⌝⦄) (h : x = .ok r) : Q r := by
   subst h; exact hT True.intro
@@ -173,7 +152,6 @@ theorem kind_ne {e : LedgerEntry} {k k' : String} (h : e.kind = k) (hne : k ≠ 
 theorem not_reserve {e : LedgerEntry} {P : Prop} (h : e.kind ≠ "reserve") : e.kind = "reserve" → P :=
   fun hk => absurd hk h
 
-/-- An entry that is neither an `open` nor an `end` keeps the invariant. -/
 theorem inv_keep {pre : List LedgerEntry} {wins : Array Win} {v2 : Bool} {e : LedgerEntry}
     (hI : LedgerInv pre wins v2) (hseq : e.seq = pre.length)
     (hko : e.kind ≠ "open") (hke : e.kind ≠ "end")
@@ -213,7 +191,6 @@ theorem inv_keep {pre : List LedgerEntry} {wins : Array Win} {v2 : Bool} {e : Le
         exact absurd hses (hw i hi)
       · exact absurd (hk.symm.trans hko') (by decide)
 
-/-- An `open` on a new root and a new session pushes its window. -/
 theorem inv_open {pre : List LedgerEntry} {wins : Array Win} {v2 : Bool} {e : LedgerEntry}
     (hI : LedgerInv pre wins v2) (hseq : e.seq = pre.length) (hk : e.kind = "open")
     (hn : ¬(((wins.any fun x => x.root == strOf (openRoot e)) || wins.any fun x => x.opened.session == e.session) = true)) :
@@ -281,7 +258,6 @@ theorem end_rec_none {e : LedgerEntry} {w : Win}
   intro hs hn
   exact absurd (by simp [hs, hn]) h
 
-/-- An `end` of an open window that hasn't ended closes it. -/
 theorem inv_end {pre : List LedgerEntry} {wins : Array Win} {v2 : Bool} {e : LedgerEntry} {k : Nat}
     (hI : LedgerInv pre wins v2) (hseq : e.seq = pre.length) (hv1 : v2 = true → e.schema ≠ LEDGER_SCHEMA_V1)
     (hk : e.kind = "end")
@@ -357,7 +333,6 @@ theorem inv_end {pre : List LedgerEntry} {wins : Array Win} {v2 : Bool} {e : Led
 
 -- `mvcgen` splits `verifyLedger`'s loop body into one goal per path through its checks
 set_option maxHeartbeats 4000000 in
-/-- The ledger's invariant holds of every ledger `verifyLedger` accepts. -/
 theorem verifyLedger_inv {es : Array LedgerEntry} {key : ChallengerKey} {r : Array Win × Array PeriodRecord}
     (h : verifyLedger es key = .ok r) : ∃ v2, LedgerInv es.toList r.1 v2 := by
   unfold verifyLedger at h
@@ -431,7 +406,6 @@ theorem ledgerTag_some {s t : String} (h : ledgerTag? s = some t) : s = LEDGER_S
 
 -- `mvcgen` splits `ledgerEntry?` into one goal per field it parses
 set_option maxHeartbeats 1000000 in
-/-- A parsed entry is v1 or v2. -/
 theorem ledgerEntry_schema {line : Json} {e : LedgerEntry} (h : ledgerEntry? line = some e) :
     e.schema = LEDGER_SCHEMA_V1 ∨ e.schema = LEDGER_SCHEMA := by
   refine of_triple_opt (Q := fun e => e.schema = LEDGER_SCHEMA_V1 ∨ e.schema = LEDGER_SCHEMA) ?_ h
@@ -452,7 +426,6 @@ theorem entries_arr {ls : Array Json} {es : Array LedgerEntry}
 
 -- the closers must not unfold `verifyLedger` or the key's hash while they search the context
 set_option maxHeartbeats 1000000 in
-/-- `checked` runs `verifyLedger` on the entries `LiveSalt.entries` reads. -/
 theorem checked_ok {ledger : Json} {key : ChallengerKey} {r : Array Win × Array PeriodRecord}
     (h : checked ledger key = .ok r) :
     ∃ es : Array LedgerEntry, entries ledger = es.toList ∧ verifyLedger es key = .ok r := by
@@ -475,7 +448,6 @@ theorem pinnedChallengePhase_ok {ledger window : Json} {key : ChallengerKey} {pi
 
 -- `mvcgen` splits `auditedOpen` into one goal per check it makes of the window and its `end`
 set_option maxHeartbeats 4000000 in
-/-- `auditedOpen` takes the v2 window named by the caller's root, closed by its `end`. -/
 theorem auditedOpen_ok {ledger window : Json} {key : ChallengerKey} {r : Audited × Json}
     (h : auditedOpen ledger window key = .ok r) :
     ∃ (wp : Array Win × Array PeriodRecord) (win : Win) (e : LedgerEntry), checked ledger key = .ok wp ∧
@@ -547,8 +519,6 @@ theorem find_mem {ledger : Json} {sid : String} {p : LedgerEntry → Bool} {x : 
   simp only [PouwCheck.challengePhaseEntries, List.mem_filter, beq_iff_eq] at hm
   exact ⟨hm.1, hm.2, List.find?_some h⟩
 
-/-- The ledger of a session pinned on root `R` shows its reserve, its one open on `R` and its end, from the entries
-`PouwCheck.liveSaltCheck` finds and checks. -/
 theorem ledgerShows_of {ledger : Json} {ck : ChallengerKey} {pins main : Json} {a : Audited} {R : ByteArray}
     {rv op en : LedgerEntry} (hR : Flock.hexOf R ≠ "")
     (hpin : pinnedChallengePhase ledger (Json.mkObj [("root", .str (Flock.hexOf R))]) ck pins main = .ok a)
@@ -636,7 +606,6 @@ theorem commitment_of {q l : Nat} {s t : String} (h : (q == l && s == t) = true)
 
 -- `mvcgen` splits `challengePhaseNamed` into one goal per check it makes of the session's record
 set_option maxHeartbeats 1000000 in
-/-- `challengePhaseNamed` returns the commitment whose root's hex the ledger's `end` recorded. -/
 theorem challengePhaseNamed_root {a : Audited} {key : ChallengerKey} {session : Json} {r : LiveCommitment × Roots}
     (h : challengePhaseNamed a key session = .ok r) : Flock.hexOf r.1.root = a.commitment := by
   refine of_triple (Q := fun r => Flock.hexOf r.1.root = a.commitment) ?_ h

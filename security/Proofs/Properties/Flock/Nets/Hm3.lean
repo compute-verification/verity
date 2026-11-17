@@ -3,13 +3,7 @@ module
 public import Proofs.Properties.Flock.Nets.Seg
 public import Proofs.Properties.Flock.Nets.Hm2
 
-/-!
-# `hm96`'s second salt block, chunk by chunk
-
-The compression of the salt's last 8 words and the padding from the first block's output (`hmTail`'s third): its
-certificate `hm3`, each of its fifteen chunks checked in the kernel, and the run they make (`seg_hm3`), whose chaining
-input is the first block's output as the kernel runs it (`ffOutK`).
--/
+/-! `hm96`'s second salt block, chunk by chunk. -/
 
 @[expose] public section
 
@@ -17,13 +11,10 @@ open Flock Flock.HmNets FlockSoundness.Discharge.Hm
 
 namespace FlockDeploy.Concrete.Nets
 
-/-- `hm96`'s second salt block's chaining input. -/
 noncomputable def hm3Cv : List Word := ffOutK hm2Cv hm2
 
-/-- `hm96`'s second salt block's message. -/
 def hm3Msg : List Word := (saltWords (vars 1536 1536)).drop 16 ++ saltTail.map constW
 
-/-- Where `hm96`'s second salt block's run puts each committed word. -/
 def hm3 : Cert :=
   ⟨165291, [165366, 165576, 165790, 166004, 166218, 166432, 166710, 166932, 167071, 167210, 167349, 167488, 167627,
   167766, 167978, 168256, 168545, 168834, 169123, 169412, 169701, 169990, 170279, 170568, 170857, 171146, 171435,

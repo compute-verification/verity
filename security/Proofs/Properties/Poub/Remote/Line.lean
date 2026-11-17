@@ -40,23 +40,7 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The memory line's arithmetic link, proved (`Properties.Poub.Line`: `LineChecked`, `StretchBound`,
-`LineRegistered`)
-
-`line` runs `check`, then `stretches` at each form's charge. `check_ok` reads `check`'s refusals off its `if … then
-throw`s (`ite_throw_ok`, `ite_throw_bind_ok`), and `line_spec` reads `line`'s result as its two forms. `stretches` is a
-`for` loop that refuses or pushes one stretch a step: `forIn_push` reads such a loop, and `stretches_spec` gives each
-stretch it pushes as `Spec`, the code's own expressions (`sA` … `capOf`) with its inner fill loop as `greedy`.
-
-The rest compares those expressions with stretch `m`'s paced session (`stretchPace`): the code's arrays at a group of
-the record are its groups' fields (`sA_get` … `gapA_get`); the paced session's group sizes, coins, `stop` and `longest`
-are the code's (`stretch_size` … `stretch_longest`, the code's `L` reading one more group, `lo − 1`); its rates are the
-code's or below (`stretch_rate`, the closing group's `L/n` at the paced session's `L`). The greedy fill highest rate
-first is the fractional knapsack's optimum (`le_fillR`, over `fillR`, the greedy in the reals, `greedy_cast`), so the
-model's `fill` is at most the code's (`stretch_fill`). `stretch_bound_of` puts the terms together: the code's `lost` is
-`S + (2·L·R + fill)/span` with `S` the chips' blocks, `chip/b` rounded up, as `ChipCeiling` reads them.
--/
+/-! The proofs of the memory line's arithmetic link (`LineChecked`, `StretchBound`, `LineRegistered`). -/
 
 @[expose] public section
 
@@ -64,8 +48,6 @@ namespace Properties.Poub.Line
 
 open _root_.Poub.Line ResourceAccounting.Remote.Held
 
-/-- A loop in `Except` whose every step pushes one value `x` with `P a x` (or refuses): each value of its result was in
-the initial array or pushed at some `a ∈ l`. -/
 theorem forIn_push {ε α β : Type} (l : List α) (f : α → Array β → Except ε (ForInStep (Array β)))
     (P : α → β → Prop)
     (hf : ∀ a acc r, f a acc = .ok r → ∃ x, r = .yield (acc.push x) ∧ P a x) :
@@ -96,7 +78,6 @@ def greedy (v cap : Nat → Rat) : List Nat → Rat × Rat → Rat × Rat
   | [], st => st
   | g :: l, st => if st.1 ≤ 0 then st else greedy v cap l (st.1 - min st.1 (cap g), st.2 + min st.1 (cap g) * v g)
 
-/-- The code's fill loop is `greedy`. -/
 theorem forIn_greedy (v cap : Nat → Rat) (l : List Nat) (st : Rat × Rat) :
     forIn (m := Except String) l st (fun g s => if s.1 ≤ 0 then pure (ForInStep.done (s.1, s.2))
       else pure (ForInStep.yield (s.1 - min s.1 (cap g), s.2 + min s.1 (cap g) * v g))) =
@@ -125,8 +106,6 @@ def orderOf (gs : Array Group) (per m : Nat) : List Nat :=
   (List.range' (m * per) ((m + 1) * per + 1 - m * per)).mergeSort fun g h => decide (vOf gs per m h ≤ vOf gs per m g)
 def capOf (gs : Array Group) (N : Nat) (g : Nat) : Rat := (((nA gs)[g]! * N : Nat) : Rat)
 
-/-- Stretch `x` as `stretches` pushes it at step `m`: the code's expressions for its span, `L`, charge back, fill, lost
-blocks and weights. -/
 structure Spec (gs : Array Group) (per N b chip : Nat) (W : Rat) (c : Charge) (m : Nat) (x : Stretch) : Prop where
   stretch : x.stretch = m
   nonempty : startOf gs per m < (sA gs)[(m + 1) * per]!
@@ -138,7 +117,6 @@ structure Spec (gs : Array Group) (per N b chip : Nat) (W : Rat) (c : Charge) (m
     (((chip + b - 1) / b : Nat) : Rat) + (2 * (x.lMaxNs : Rat) * x.rebuild + x.fill) / (x.spanNs : Rat)
   weights : x.time.weights = max 0 (x.weights - x.time.lost) * (b : Rat)
 
-/-- Every stretch `stretches` returns is `Spec` at a step `m < G/per − 1`. -/
 theorem stretches_spec {gs : Array Group} {per N b chip : Nat} {W : Rat} {c : Charge} {out : Array Stretch}
     (h : stretches gs per N b chip W c = .ok out) :
     ∀ x ∈ out, ∃ m, m < gs.size / per - 1 ∧ Spec gs per N b chip W c m x := by
@@ -173,7 +151,6 @@ theorem stretches_spec {gs : Array Group} {per N b chip : Nat} {W : Rat} {c : Ch
         · simp only [startOf, hm0, ↓reduceIte]; rfl
 
 
-/-- The greedy fill's value from budget `a`, in the reals. -/
 noncomputable def fillR (v cap : ℕ → ℝ) : List ℕ → ℝ → ℝ
   | [], _ => 0
   | g :: l, a => if a ≤ 0 then 0 else min a (cap g) * v g + fillR v cap l (a - min a (cap g))
@@ -199,7 +176,6 @@ theorem fillR_nonpos {l : List ℕ} {a : ℝ} (ha : a ≤ 0) : fillR v cap l a =
   | nil => rfl
   | cons g l => simp [fillR, ha]
 
-/-- At most `a · r` from budget `a ≥ 0` when every rate is at most `r`. -/
 theorem fillR_le (hc : ∀ g, 0 ≤ cap g) {r : ℝ} (hr : 0 ≤ r) :
     ∀ (l : List ℕ), (∀ g ∈ l, v g ≤ r) → ∀ a, 0 ≤ a → fillR v cap l a ≤ a * r := by
   intro l
@@ -217,7 +193,6 @@ theorem fillR_le (hc : ∀ g, 0 ≤ cap g) {r : ℝ} (hr : 0 ≤ r) :
         mul_le_mul_of_nonneg_left (hl g List.mem_cons_self) ht0
       nlinarith
 
-/-- The greedy's value grows at most `r` per unit of budget when every rate is at most `r`. -/
 theorem fillR_slope (hc : ∀ g, 0 ≤ cap g) {r : ℝ} (hr : 0 ≤ r) :
     ∀ (l : List ℕ), (∀ g ∈ l, v g ≤ r) → ∀ a d, 0 ≤ d → fillR v cap l (a + d) ≤ fillR v cap l a + d * r := by
   intro l
@@ -256,8 +231,6 @@ theorem fillR_slope (hc : ∀ g, 0 ≤ cap g) {r : ℝ} (hr : 0 ≤ r) :
       have h3 : (t' - t) * v g ≤ (t' - t) * r := mul_le_mul_of_nonneg_left hg (by linarith)
       nlinarith
 
-/-- The greedy over groups taken highest rate first attains the fractional knapsack's optimum: every point within the
-caps and the budget is worth at most the greedy's value. -/
 theorem le_fillR (hc : ∀ g, 0 ≤ cap g) (hv : ∀ g, 0 ≤ v g) :
     ∀ (l : List ℕ), l.Pairwise (fun g h => v h ≤ v g) → ∀ (x : ℕ → ℝ), (∀ g ∈ l, 0 ≤ x g ∧ x g ≤ cap g) →
       ∀ a, (l.map x).sum ≤ a → (l.map fun g => v g * x g).sum ≤ fillR v cap l a := by
@@ -273,7 +246,6 @@ theorem le_fillR (hc : ∀ g, 0 ≤ cap g) (hv : ∀ g, 0 ≤ v g) :
       obtain ⟨h, hh, rfl⟩ := List.mem_map.1 hy
       exact (hx' h hh).1
     simp only [List.map_cons, List.sum_cons] at ha ⊢
-    -- the rest is worth at most `v g` per unit of its total
     have hrest : (l.map fun h => v h * x h).sum ≤ v g * (l.map x).sum := by
       rw [← List.sum_map_mul_left]
       refine List.sum_le_sum fun h hh => ?_
@@ -308,7 +280,6 @@ theorem ite_throw_bind_ok {ε α β : Type} {c : Prop} [Decidable c] {e : ε} {x
   · simp only [hc, ↓reduceIte] at h; cases h
   · simp only [hc, ↓reduceIte] at h; exact ⟨hc, h⟩
 
-/-- What `check` accepting establishes of the rates and the bound on the wrong receipts. -/
 theorem check_ok {gs : Array Group} {per blocks blockBytes nodeBytes : ℕ} {wrong : ℚ} {rates : Rates} {u : Unit}
     (h : check gs per blocks blockBytes nodeBytes wrong rates = .ok u) :
     1 ≤ blockBytes ∧ 1 ≤ rates.encodeSquarings ∧ 0 ≤ rates.squaringsPerS ∧ 0 ≤ rates.diskBytesPerS ∧
@@ -336,7 +307,6 @@ theorem check_ok {gs : Array Group} {per blocks blockBytes nodeBytes : ℕ} {wro
   exact ⟨Nat.not_lt.1 h1, Nat.not_lt.1 h4, not_lt.1 h5, not_lt.1 h6, not_lt.1 h7,
     not_lt.1 h8, not_lt.1 h9, not_lt.1 h10, not_lt.1 h11⟩
 
-/-- The pooled bound is read only at a `δ` above 0 and below 1. -/
 theorem pooled_delta {ws : Array (ℕ × ℕ)} {δ : ℚ} {b : _root_.Poub.Pooled.Bound}
     (h : _root_.Poub.Pooled.pooled ws δ = .ok b) : 0 < δ ∧ δ < 1 := by
   by_contra hc
@@ -361,8 +331,6 @@ theorem line_delta {gs : Array Group} {per blocks blockBytes chipBytes nodeBytes
   | error e => rw [hp] at h; cases h
   | ok bd => exact pooled_delta hp
 
-/-- A line `line` computes: `check` accepted the wrong receipts' bound it read (`l.wrong`), and its forms are
-`stretches` at each form's charge and that bound. -/
 theorem line_spec {gs : Array Group} {per blocks blockBytes chipBytes nodeBytes : ℕ} {ws : Array (ℕ × ℕ)} {δ : ℚ}
     {rates : Rates} {l : Line} (h : line gs per blocks blockBytes chipBytes nodeBytes ws δ rates = .ok l) :
     check gs per blocks blockBytes nodeBytes l.wrong rates = .ok () ∧
@@ -530,7 +498,6 @@ theorem order_sorted : (orderOf gs per m).Pairwise (fun g h => (vOf gs per m h :
   simp only [decide_eq_true_eq] at h
   exact_mod_cast h
 
-/-- The model's `fill` of stretch `m`'s paced session is at most the code's greedy fill. -/
 theorem stretch_fill (hhi : (m + 1) * per < gs.size) {N : ℕ} {W : ℚ} (hW : 0 ≤ W) :
     (stretchPace (fun _ : Unit => gs) per m).fill () N W ≤
       fillR (fun g => (vOf gs per m g : ℝ)) (fun g => (capOf gs N g : ℝ)) (orderOf gs per m) W := by
@@ -561,7 +528,6 @@ theorem stretch_fill (hhi : (m + 1) * per < gs.size) {N : ℕ} {W : ℚ} (hW : 0
 
 end Fill
 
-/-- Each stretch `stretches` returns at charge `c`, a nonnegative rate and burst, meets `StretchBound`'s conjuncts. -/
 theorem stretch_bound_of {gs : Array Group} {per N b chip : ℕ} {W : ℚ} {c : Charge} {out : Array Stretch}
     {x : Stretch} (hb : 1 ≤ b) (hW : 0 ≤ W) (hcr : 0 ≤ c.rate) (hcb : 0 ≤ c.burst)
     (h : stretches gs per N b chip W c = .ok out) (hx : x ∈ out) :

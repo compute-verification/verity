@@ -2,13 +2,7 @@ module
 
 public import Proofs.Properties.Flock.Nets.Cert
 
-/-!
-# A compression's run from its chunks
-
-A run reads only the state's next bit and puts its rows in front of the state's (`Ext`), so what a chunk does from a state
-with no rows it does from any (`Seg.ofExt`), and chunks compose (`Seg.bind'`). `seg_compress`: a compression whose
-certificate's chunks all check runs from its first bit to `fin`, adding rows that each read at most 128 bits.
--/
+/-! A compression's run from its chunks. -/
 
 @[expose] public section
 
@@ -16,7 +10,6 @@ open Flock Flock.HmNets FlockSoundness.Discharge.Hm
 
 namespace FlockDeploy.Concrete.Nets
 
-/-- `m` reads only the state's next bit, and puts its rows in front of the state's. -/
 def Ext {α : Type} (m : M α) : Prop :=
   ∀ s : St, m.run s = ((m.run ⟨s.next, []⟩).1, ⟨(m.run ⟨s.next, []⟩).2.next, (m.run ⟨s.next, []⟩).2.rows ++ s.rows⟩)
 
@@ -192,7 +185,6 @@ theorem forall_lt10 {p : Nat → Prop} (h0 : p 0) (h1 : p 1) (h2 : p 2) (h3 : p 
   | 0, _ => h0 | 1, _ => h1 | 2, _ => h2 | 3, _ => h3 | 4, _ => h4 | 5, _ => h5 | 6, _ => h6 | 7, _ => h7 | 8, _ => h8
   | 9, _ => h9 | _ + 10, h => absurd h (by omega)
 
-/-- A certified compression's output. -/
 def ffOut (cv : List Word) (c : Cert) : List Word := ((ff cv (regsAt cv c 80)).run ⟨roundNext c 80, []⟩).1
 
 theorem seg_sched (msg : List Word) (c : Cert) (hs : ∀ j < 4, schedOk msg c j = true) :
@@ -213,8 +205,6 @@ theorem seg_rounds (cv msg : List Word) (c : Cert) (hr : ∀ j < 10, roundOk cv 
     rw [show 8 * (j + 1) = 8 * j + 8 by omega, rounds_add, Nat.zero_add]
     exact Seg.bind' (seg_rounds cv msg c hr j (by omega)) (seg_roundOk (hr j (by omega)))
 
-/-- **A certified compression**: when every chunk of `c` checks, `compress cv msg` runs from bit `c.n0` to `c.fin` with
-output `ffOut cv c`, adding rows that each read at most 128 bits. -/
 theorem seg_compress (cv msg : List Word) (c : Cert) (hs : ∀ j < 4, schedOk msg c j = true)
     (hr : ∀ j < 10, roundOk cv msg c j = true) (hf : ffOk cv c = true) :
     Seg 128 (compress cv msg) c.n0 (ffOut cv c) c.fin := by
@@ -222,13 +212,11 @@ theorem seg_compress (cv msg : List Word) (c : Cert) (hs : ∀ j < 4, schedOk ms
   exact Seg.bind' (seg_sched msg c hs 4 (by omega)) (Seg.bind' (seg_rounds cv msg c hr 10 (by omega))
     (Seg.ofExt (ext_ff _ _) rfl hf.1.1 hf.1.2))
 
-/-- `ffOut` as the kernel runs it. -/
 noncomputable def ffOutK (cv : List Word) (c : Cert) : List Word := ((ffK cv (regsAt cv c 80)).run ⟨roundNext c 80, []⟩).1
 
 theorem ffOutK_eq (cv : List Word) (c : Cert) : ffOutK cv c = ffOut cv c := by
   simp only [ffOutK, ffOut, ffK_eq]
 
-/-- A certified compression's output bits each read at most 16 bits. -/
 theorem ffOut_width {cv : List Word} {c : Cert} (hf : ffOk cv c = true) : ∀ w ∈ ffOut cv c, ∀ f ∈ w, f.s.length ≤ 16 := by
   simp only [ffOk, ffK_eq, Bool.and_eq_true, List.all_eq_true, Nat.ble_eq] at hf
   exact hf.2

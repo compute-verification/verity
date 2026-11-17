@@ -39,29 +39,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Encode
 
-/-!
-# A step of `acc_of_accepts`: V\* part `s`'s statement is the compiled part's inputs
-
-The model's V\* statement of part `s` (`RecDeploy.staged st x ms s`, the encoding of `RecDeploy.partRaw`) is read by the
-outer verifier's readers (`RecDeploy.insO`, `RecRaw.ins`) as exactly the recursive inputs compiled part `s`'s
-`VStar.Recursive.partVerdict` sets its session up on (`partIns`): the part's circuit and staged public file, its
-partition, program, registered reads, bindings and rows, the verifier's inner shape, check 5's source, the inner
-circuit's binding, the inner session's commits and link points, and the part's sample. `SetupChecks` holds `partIns`' setup to
-the compiled `setupOf` and so concludes `setupO (staged st x ms s) = some _`.
-
-* **Round trip** (`decode_encode_fits`, `decodeRec_encode_fits`): a statement whose lengths fit their 8-byte words reads
-  back as itself, so `staged` is `partRaw`'s encoding (`staged_eq`) and `insO` reads it as `partRaw`'s inputs
-  (`insO_staged`). Every field `partRaw` takes from `x` fits, since `x` decodes (`partRaw_fits`); the staged files and
-  the transcript, which come from the run, fit by hypothesis.
-* **The readers agree** where they are two pieces of code: the two `metaOf`s (`metaOf_eq`), `jsonOf` whatever it names
-  (`jsonOf_what`), `Blobs.get` whatever it names (`blobs_get_what`), and the compiled `registeredOf`'s ports
-  (`registeredOf_own`). `innerHeld_ok` reads `innerHeld`'s fields off the blobs.
-* **The correspondence** (`insO_staged_partIns`) takes `Names`' clauses (`Names`) and `Shows`' as hypotheses by
-  name, at `readX`'s reading `r` of `x` (`readXPre_spec` relates it to `Names`' `w` and `ri`), and `Names`'
-  `PartForm`, the form compiled part `s` sets up (statement `verity/flock-circuit`, `--zk`, one table, no work,
-  stratified, closure or public input words).
-* `vstarAt_eq_staged`: where part `s`'s staged numbers are `nums`' (`Numbers`), its V\* statement is the staged one.
--/
+/-! A step of `acc_of_accepts`: the outer verifier's readers read V\* part `s`'s staged statement as exactly the inputs
+compiled part `s`'s `partVerdict` sets its session up on (`partIns`). -/
 
 @[expose] public section
 
@@ -72,8 +51,6 @@ open RecDeploy
 open FlockDeploy (Raw encNat encBytes encStr encBool encOpt encList Rd rdTake rdNat rdBytes rdStr rdBool rdOpt rdList
   jsonOf)
 open Lean (Json)
-
-/-! ## The round trip -/
 
 theorem rdBool_encBool (b : Bool) (rest : List UInt8) : rdBool.run (encBool b ++ rest) = some (b, rest) := by
   cases b <;> rfl
@@ -100,8 +77,6 @@ def RawFits (w : Raw) : Prop :=
     (∀ n ∈ w.work, n < 2 ^ 64) ∧ (∀ b ∈ w.workTable, b.size < 2 ^ 64) ∧ (∀ n ∈ w.stratified, n < 2 ^ 64) ∧
     (∀ b ∈ w.closure, b.size < 2 ^ 64) ∧ (∀ b ∈ w.registered, b.size < 2 ^ 64) ∧ (∀ b ∈ w.publicInputs, b.size < 2 ^ 64)
 
-/-- **A V\* statement's lengths and numbers fit their 8-byte words**: Flock's statement's, its encoding's length (it is
-one field), and each recursive flag's. -/
 def RecRawFits (w : RecRaw) : Prop :=
   RawFits w.base ∧ w.base.encode.length < 2 ^ 64 ∧ (∀ b ∈ w.recInner, b.size < 2 ^ 64) ∧ (∀ n ∈ w.recPart, n < 2 ^ 64) ∧
     (∀ b ∈ w.recBindings, b.size < 2 ^ 64) ∧ (∀ b ∈ w.recRows, b.size < 2 ^ 64) ∧
@@ -150,7 +125,6 @@ theorem raw_read_encode {w : Raw} (h : RawFits w) (rest : List UInt8) :
     run_bind_of (rdOptBytes h14 _), run_bind_of (rdOptBytes h15 _)]
   rfl
 
-/-- **Flock's statement reads back as itself** where it fits. -/
 theorem decode_encode_fits {w : Raw} (h : RawFits w) : FlockDeploy.decode w.encode = some w := by
   have hr := raw_read_encode h []
   rw [List.append_nil] at hr
@@ -199,7 +173,6 @@ theorem recRaw_read_encode {w : RecRaw} (h : RecRawFits w) (rest : List UInt8) :
       rfl) _), run_bind_of (rdOptBytes h16 _)]
   rfl
 
-/-- **A V\* statement reads back as itself** where it fits. -/
 theorem decodeRec_encode_fits {w : RecRaw} (h : RecRawFits w) : decodeRec w.encode = some w := by
   have hr := recRaw_read_encode h []
   rw [List.append_nil] at hr
@@ -218,8 +191,6 @@ theorem toOption_ok {ε α : Type} {e : Except ε α} {a : α} (h : e.toOption =
   | error _ => cases h
   | ok a' => cases h; rfl
 
-/-- **What `readXPre` reads**: `x`'s fields (`decodeX`), the inner statement's (`FlockDeploy.decode`), the verifier's
-own inner shape and the inner statement's partition, each as `readXPre` reads it. -/
 theorem readXPre_spec {x : Claims.Msg} {r : XR} (h : readXPre x = some r) :
     decodeX x = some r.w ∧ FlockDeploy.decode r.w.inner = some r.innerRaw ∧
       (do RecVStar.Inner.ofJson (← jsonOf "rec-inner" r.w.recInner)) = .ok r.shape ∧
@@ -296,9 +267,6 @@ theorem partx_len (p : PartX) : p.base.encode.length + p.bindings.size ≤ p.enc
   simp only [PartX.encode, List.length_append, len_encBytes, hs]
   omega
 
-/-- **Part `s`'s statement fits** where the files the run stages for it do: every field it takes from `x` fits, since
-`x` decodes, Flock's statement with the staged public file is no longer than `x` and that file together, and `x`
-carries no link table. -/
 theorem partRaw_fits {x : Claims.Msg} {r : XR} (hr : readX x = some r) {st : Stage}
     {ms : List (Claims.Msg × Claims.Out)} {s : ℕ} {q : PartX} (hq : r.w.parts[s]? = some q) (hP : PartForm q.base)
     (hlinks : r.w.links = none)
@@ -370,7 +338,6 @@ theorem partRaw_fits {x : Claims.Msg} {r : XR} (hr : readX x = some r) {st : Sta
   · show ∀ l ∈ r.w.links, _; rw [hlinks]; intro l hl; cases hl
   · intro b hb; have := encOpt_le (o := r.innerRaw.program) b hb; omega
 
-/-- **Part `s`'s staged statement is `partRaw`'s encoding** where it fits. -/
 theorem staged_eq {x : Claims.Msg} {r : XR} (hr : readX x = some r) {st : Stage} {ms : List (Claims.Msg × Claims.Out)}
     {s : ℕ} {q : PartX} (hq : r.w.parts[s]? = some q) (hfit : RecRawFits (partRaw r st x ms s q)) :
     staged st x ms s = (partRaw r st x ms s q).encode := by
@@ -378,8 +345,6 @@ theorem staged_eq {x : Claims.Msg} {r : XR} (hr : readX x = some r) {st : Stage}
   rw [hr]
   simp only [hq, decodeRec_encode_fits hfit, if_true]
 
-/-- **The outer verifier reads part `s`'s staged statement as `partRaw`'s inputs** (`RecRaw.ins`), where it fits and is
-a `--zk` statement. -/
 theorem insO_staged {x : Claims.Msg} {r : XR} (hr : readX x = some r) {st : Stage}
     {ms : List (Claims.Msg × Claims.Out)} {s : ℕ} {q : PartX} (hq : r.w.parts[s]? = some q)
     (hfit : RecRawFits (partRaw r st x ms s q)) (hzk : q.base.zk = true) :
@@ -390,15 +355,11 @@ theorem insO_staged {x : Claims.Msg} {r : XR} (hr : readX x = some r) {st : Stag
   have hz : (partRaw r st x ms s q).base.zk = true := hzk
   simp only [Option.bind_eq_bind, Option.bind_some, hz, Bool.true_eq_false, ite_false]
 
-/-- **Where part `s`'s staged numbers are `nums`', its V\* statement is the staged one.** -/
 theorem vstarAt_eq_staged {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Claims.Out)} {s : ℕ}
     (hn : numsOf (staged st x ms s) = nums st x s) : vstarAt st x ms s = staged st x ms s := by
   unfold vstarAt
   rw [if_pos hn]
 
-/-! ## The readers agree -/
-
-/-- `linesAux` splits at the first newline. -/
 theorem linesAux_eq : ∀ (l cur : List UInt8), linesAux l cur =
     (cur.reverse ++ l.takeWhile (· != 10)) :: (match l.dropWhile (· != 10) with
       | [] => []
@@ -413,7 +374,6 @@ theorem linesAux_eq : ∀ (l cur : List UInt8), linesAux l cur =
         List.dropWhile_cons_of_pos (p := (· != 10)) hb']
       simp
 
-/-- **`lineEnd` is where the line from `i` stops**: the first newline at or after `i`, else the end. -/
 theorem lineEnd_spec (b : ByteArray) : ∀ (k i : Nat), b.size - i = k → i ≤ b.size →
     i ≤ VStar.Recursive.lineEnd b i ∧ VStar.Recursive.lineEnd b i ≤ b.size ∧
       (b.data.toList.drop i).takeWhile (· != 10) =
@@ -451,7 +411,6 @@ theorem lineEnd_spec (b : ByteArray) : ∀ (k i : Nat), b.size - i = k → i ≤
 termination_by k => k
 decreasing_by omega
 
-/-- The lines from byte `i` on, as the model's `linesAux` splits them; none past the end. -/
 def linesFrom (b : ByteArray) (i : Nat) : List (List UInt8) :=
   if i ≤ b.size then linesAux (b.data.toList.drop i) [] else []
 
@@ -471,7 +430,6 @@ theorem linesFrom_lt {b : ByteArray} {i : Nat} (h : i < b.size) :
 
 theorem ok_bind {ε α β : Type} (a : α) (f : α → Except ε β) : (Except.ok a >>= f) = f a := rfl
 
-/-- The model's reading of the lines `L`: their first `META` line among `n`, as JSON. -/
 def metaRead (n : Nat) (L : List (List UInt8)) : V Json := do
   let t ← metaLine n L
   match Flock.JsonParse.parse (t.drop 5).toString with
@@ -501,7 +459,6 @@ theorem metaRead_end {b : ByteArray} {i : Nat} (h : b.size ≤ i) (n : Nat) :
   · rw [if_neg hi]
     exact metaRead_nil n
 
-/-- `VStar.Recursive.metaOf`'s loop body. -/
 def metaBody (b : ByteArray) : Nat → Option Json × Nat → V (ForInStep (Option Json × Nat)) := fun _ s =>
   if s.2 < b.size then
     match String.fromUTF8? (b.extract s.2 (VStar.Recursive.lineEnd b s.2)) with
@@ -560,8 +517,6 @@ theorem loop_eq (b : ByteArray) : ∀ (l : List Nat) (i : Nat),
       rw [metaRead_end hb] at ih ⊢
       simpa using ih
 
-/-- **The compiled `metaOf` is the model's**: the first `META` line among a circuit file's first nine, as JSON, with the
-same refusals. -/
 theorem metaOf_eq (b : ByteArray) : VStar.Recursive.metaOf b = RecDeploy.metaOf b := by
   rw [metaOf_loop, Std.Legacy.Range.forIn_eq_forIn_range']
   have := loop_eq b (List.range' 0 (Std.Legacy.Range.size [:9]) 1) 0
@@ -572,7 +527,6 @@ theorem metaOf_eq (b : ByteArray) : VStar.Recursive.metaOf b = RecDeploy.metaOf 
   rw [if_pos (Nat.zero_le _), List.drop_zero]
   rfl
 
-/-- `jsonOf`'s reading doesn't depend on what it names. -/
 theorem jsonOf_what {a a' : String} {b : ByteArray} {j : Json} (h : jsonOf a b = .ok j) : jsonOf a' b = .ok j := by
   unfold jsonOf at h ⊢
   revert h
@@ -592,7 +546,6 @@ theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {
   | error => cases h
   | ok a => exact ⟨a, rfl, h⟩
 
-/-- A blob's lookup doesn't depend on what it names. -/
 theorem blobs_get_what {bs : Core.Blobs} {d a a' : String} {b : ByteArray} (h : bs.get d a = .ok b) :
     bs.get d a' = .ok b := by
   unfold Core.Blobs.get at h ⊢
@@ -607,7 +560,6 @@ theorem blobs_get_what {bs : Core.Blobs} {d a a' : String} {b : ByteArray} (h : 
     | none => rw [hf] at h; cases h
     | some p => rw [hf] at h; exact h
 
-/-- **The compiled `registeredOf`'s ports are `Registered.ofJson`'s**, the model's reading of a registered file. -/
 theorem registeredOf_own {j : Json}
     {t : Array Registered.Port × Bool × Array (String × Array (Array Nat × ByteArray)) × Array String}
     (h : VStar.Recursive.registeredOf j = .ok t) : Registered.ofJson j = .ok t.1 := by
@@ -620,7 +572,6 @@ theorem registeredOf_own {j : Json}
   cases h
   exact h1
 
-/-- `fits` passes only a file under `FIELD_MAX` bytes. -/
 theorem fits_ok {b : ByteArray} {what : String} (h : VStar.Recursive.fits b what = .ok ()) :
     b.size < VStar.Recursive.FIELD_MAX := by
   unfold VStar.Recursive.fits VStar.Recursive.need at h
@@ -634,7 +585,6 @@ theorem mapError_ok {ε ε' α : Type} {f : ε → ε'} {x : Except ε α} {a : 
   | error e => cases h
   | ok b => cases h; rfl
 
-/-- **The staged rows as the compiled `innerHeld` reads them are `RecRaw.ins`' `--rec-rows`**, port for port. -/
 theorem rows_model {b : ByteArray} {rows : Array Registered.Port}
     (h : ((do
         let some t := String.fromUTF8? b | throw "not UTF-8"
@@ -659,11 +609,6 @@ theorem rows_model {b : ByteArray} {rows : Array Registered.Port}
     rw [hjs, ok_bind, registeredOf_own hr]
     try rfl
 
-/-- **What `innerHeld` holds**, read off the blobs: the inner circuit, the inner public file, the inner session's
-record, the inner statement's sample, the challenger's live-coin part's transcript and the registration, each as text where `innerHeld`
-reads text; its shape (`shapeOf`), check 5's source, the inner circuit's binding, the commits and the link points; V*'s
-staged shared rows, read as `RecRaw.ins` reads `--rec-rows`; Flock's own checks on the inner statement (`innerOk`);
-and the record, transcript and staged rows each under `FIELD_MAX` bytes (`fits`). -/
 theorem innerHeld_ok {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} {bs : Core.Blobs}
     {h : VStar.Recursive.InnerHeld} (hh : VStar.Recursive.innerHeld o pr bs = .ok h) :
     ∃ (circuitB pubB recB sampleB trB rowsB : ByteArray) (record t : String) (reg : Option String),
@@ -728,12 +673,6 @@ theorem innerHeld_ok {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} {bs
           hreg, hcm, by rw [hj]; exact hl, hrowsB, rows_model hrows, mapError_ok hio, fits_ok hfr, fits_ok hft,
           fits_ok hfw⟩
 
-/-! ## The correspondence -/
-
-/-- **Compiled part `j`'s recursive inputs**, as `partVerdict` hands them to its setup: the statement's tags `tags0`,
-the part's circuit `circuitB` and public file `pubB`, its partition and program (`pj`'s), its registered reads, its sample,
-the inner session held (`h`: the verifier's inner shape, check 5's source, the inner circuit's binding, the commits and
-the link points), `--rec-part j`, the bindings, the rows and no link table. -/
 def partIns (tags0 : Tags) (circuitB pubB : ByteArray) (pj : VStar.Recursive.PartOwn)
     (registered : Option (Array Registered.Port)) (draw : Option Json) (h : VStar.Recursive.InnerHeld) (j : ℕ)
     (bindings : VStar.Bindings) (rows : Option (Array Registered.Port)) : RecIns where
@@ -758,8 +697,6 @@ def partIns (tags0 : Tags) (circuitB pubB : ByteArray) (pj : VStar.Recursive.Par
   rows
   links := none
 
-/-- **The session's tags at `partIns` are the compiled part's**: `verify --zk`'s (`ZkExec.zkTags`) at the keyed coin
-tree of one table and the part circuit's mask log, as `partVerdict` sets its session up. -/
 theorem partIns_tags (tags0 : Tags) (circuitB pubB : ByteArray) (pj : VStar.Recursive.PartOwn)
     (registered : Option (Array Registered.Port)) (draw : Option Json) (h : VStar.Recursive.InnerHeld) (j : ℕ)
     (bindings : VStar.Bindings) (rows : Option (Array Registered.Port)) :
@@ -767,10 +704,6 @@ theorem partIns_tags (tags0 : Tags) (circuitB pubB : ByteArray) (pj : VStar.Recu
       Zk.tags tags0 (Zk.maskLogOf circuitB) 1 :=
   (rfl)
 
-/-- **What the recursive setup reads of `partIns`** (`SetupChecks`'s `SetupMatch`, field by field, in its order): `--zk`, the
-statement's and the session's tags, the part's circuit and staged public file, no lookup table, one table, the part's
-partition and program, no public input words, the registered reads, the sample `draw`, the inner shape, check 5's
-source, the commits, the link, `--rec-part j`, the bindings, the rows and no link table. -/
 theorem partIns_fields (tags0 : Tags) (circuitB pubB : ByteArray) (pj : VStar.Recursive.PartOwn)
     (registered : Option (Array Registered.Port)) (draw : Option Json) (h : VStar.Recursive.InnerHeld) (j : ℕ)
     (bindings : VStar.Bindings) (rows : Option (Array Registered.Port)) :
@@ -791,7 +724,6 @@ theorem mapM_some_ok {ε α β : Type} {f : α → Except ε β} {a : α} {b : �
   simp only [Option.mapM, h]
   rfl
 
-/-- **`RecRaw.ins` from its readers' results**, on a statement with no link table (`linksOf`). -/
 theorem recIns_of {w : RecRaw} {b : FlockDeploy.Ins} {i : Option RecVStar.Inner} {f : Option VStar.Bindings}
     {src : Option RecCoins.Source} {c : Option RecVStar.InnerCommits} {l : Option RecVStar.InnerLink}
     {rw : Option (Array Registered.Port)} (h1 : w.base.ins = .ok b) (hL : w.recLinks = none)
@@ -814,7 +746,6 @@ theorem recIns_of {w : RecRaw} {b : FlockDeploy.Ins} {i : Option RecVStar.Inner}
   rw [h6]; simp only [ok_bind]
   rw [h7]; rfl
 
-/-- The registration `innerHeld` reads off the blobs is the one `Names` puts in the statement, as text. -/
 theorem reg_text {bs : Core.Blobs} {rd : Option String} {rw : Option ByteArray} {reg : Option String}
     (hI : (rd.mapM fun d => (bs.get d "rec inner registration").toOption) = some rw)
     (hC : (rd.mapM fun d => do
@@ -842,8 +773,6 @@ theorem reg_text {bs : Core.Blobs} {rd : Option String} {rw : Option ByteArray} 
       | none => intro hC; cases hC
       | some u => intro hC; cases hC; rfl
 
-/-- **The verifier's readers take part `s`'s statement to compiled part `s`'s inputs**: `RecRaw.ins` on `partRaw`,
-under `insO_staged_partIns`' hypotheses. -/
 theorem ins_partRaw {r : XR} {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Claims.Out)} {s : ℕ} {q : PartX}
     {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} {bs : Core.Blobs} {h : VStar.Recursive.InnerHeld}
     (hh : VStar.Recursive.innerHeld o pr bs = .ok h)
@@ -982,25 +911,8 @@ theorem ins_partRaw {r : XR} {st : Stage} {x : Claims.Msg} {ms : List (Claims.Ms
   rw [hb]
   rfl
 
-/-- **Part `s`'s staged statement is read as compiled part `s`'s inputs.** Take `readX`'s reading `r` of `x`
-and its part `s`, `q`; the compiled check's inner session held (`innerHeld`), and part `s`'s own inputs `pj` with what
-the compiled `partVerdict` reads of them (`registered`, `bindings`, the statement's tags `tags0`, the part's circuit and
-public file; its rows are `innerHeld`'s). Suppose:
-* `Names`' clauses: the inner statement's circuit, public file, partition and sample are the blobs' and `p.own`'s, its
-  statement and form those `innerHeld` sets up (`INNER_STATEMENT`, the challenger's live-coin part's coins, no tables), its own inner
-  shape `innerHeld`'s, the registration the blobs', no link table; part `s`'s circuit, partition, program and registered reads
-  `pj`'s, its own bindings `pj`'s, its form `PartForm`, and its sample, read as the verifier reads one, `draw`;
-* `Shows`' clauses: part `s`'s staged public file is `pubB`, the inner session's record and the challenger's live-coin part's
-  transcript the blobs', and V*'s staged shared rows the evidence's `rows` blob (`hSrows`, `RowsShow`), which
-  `innerHeld` reads once for every part;
-* `hplain`: the statement's tags `tags0` don't have plain SHA-512 leaves, which `Raw.ins` refuses under `--zk`. Lean
-  can't evaluate it (`Tags.plainLeaves` compares `Json`, whose `==` is a `partial def`); compiled `partVerdict`
-  refuses it (`need (!tags0.plainLeaves)`);
-* and the staged files fit their length words: `x` with part `s`'s public file, the inner session's record, the
-  transcript and the staged rows are each under `2^64` bytes (the compiled check refuses a file of `2^56` bytes or
-  more, `fits`).
-
-Then the outer verifier reads part `s`'s staged statement (`insO`) as `partIns`: compiled part `s`'s inputs. -/
+/-- `hplain` is a hypothesis because Lean can't evaluate `Tags.plainLeaves` (it compares `Json`, whose `==` is a
+`partial def`); compiled `partVerdict` refuses it (`need (!tags0.plainLeaves)`). -/
 theorem insO_staged_partIns {x : Claims.Msg} {r : XR} (hr : readX x = some r) {st : Stage}
     {ms : List (Claims.Msg × Claims.Out)} {s : ℕ} {q : PartX} (hq : r.w.parts[s]? = some q)
     {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} {bs : Core.Blobs} {h : VStar.Recursive.InnerHeld}

@@ -40,19 +40,7 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The verifier's pooled bound covers the sample's (`PooledCovers`)
-
-The budget: `powUp` is at least the power it rounds (`powUp_ge`, each product rounded up), so a numerator `below`
-accepts has `(m/2^64)^S ≤ δ` (`below_le`), and since `x ↦ x^S` is monotone on `[0, ∞)`, the root is at most `δ^(1/S)`
-(`root_le`, the fallback `0` trivially) and the code's budget at least `S·(1 − δ^(1/S))` (`budget_le`).
-
-W: `G` is `fill` over the reals (`fill_cast`). Over windows by `U/s` falling, `G` gains at most `r` a unit of budget when
-every ratio is at most `r` (`G_lip`), so a share vector that spends `b` on windows in that order wins at most what the
-greedy wins with `b` (`G_ge`): the head's share is at most the greedy's, and the budget the greedy spends beyond it on
-the head buys, on the rest, no more than the head's ratio. `order` permutes the windows (`List.mergeSort_perm`) and
-sorts them (`List.pairwise_mergeSort`), so every share vector `Sample.pooled` ranges over is one `G_ge` bounds.
--/
+/-! The verifier's pooled bound covers the sample's (`PooledCovers`). -/
 
 @[expose] public section
 
@@ -147,7 +135,6 @@ theorem budget_le {S : ℕ} {δ : ℚ} (hS : S ≠ 0) (hδ : 0 < δ) :
   push_cast
   exact mul_le_mul_of_nonneg_left (sub_le_sub_left (root_le hS hδ) 1) (by positivity)
 
-/-- The greedy over ℝ. -/
 noncomputable def G (u s : ℕ → ℝ) : List ℕ → ℝ → ℝ
   | [], _ => 0
   | i :: rest, b =>

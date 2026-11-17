@@ -4,15 +4,7 @@ public import Proofs.Properties.Spot.FactorUpper.Bounds
 public import Definitions.Claims.SamplingTwoRankin
 public import Properties.Spot.FactorUpper
 
-/-!
-# Rankin's factor bounded above: the sets' form
-
-`FactorUpperSound`. A cell's escape is at most `e^{−k m/n}` (`escCell_le_exp`), and `0` once `k ≥ n` and `m ≥ 1`, so
-`passes(U) ≤ φ(y(U))` at `φ(y) = 1 − q(1 − e^{−y})` and `y(U) = Σ_{v∈U} r_v`. The sum over the sets of a replay
-block's proof blocks groups them by stratum and width (`keysOf`). Below each chord of `h` it is at most the product
-`∏_g (1 + 2^{b_g} e^{−θ s r_g})^{n_g}` (`light_sound`), and a set meeting a cell sampled whole is charged at `h(∞)`
-(`whole_sound`).
--/
+/-! Rankin's factor bounded above in the sets' form (`FactorUpperSound`). -/
 
 @[expose] public section
 
@@ -24,8 +16,6 @@ open _root_.Spot.Interval
 open _root_.Spot.FactorUpper
 open Claims.Sampling
 open Nat
-
-/-! ## A cell's escape -/
 
 theorem sub_mul_le (a n k : ℕ) (ha : a ≤ n) : (a - k) * n ≤ a * (n - k) := by
   rcases le_or_gt a k with h | h
@@ -56,8 +46,6 @@ theorem escCell_zero (n k : ℕ) : escCell n k 0 = 1 := by
   rw [Nat.sub_zero, div_self]
   exact_mod_cast (Nat.choose_pos (min_le_right k n)).ne'
 
-/-- A cell of `n` proof blocks with `m` incorrect, `k` of them sampled, escapes with probability at most
-`(1 − m/n)^k`. -/
 theorem escCell_le_pow {n k m : ℕ} (hk : k ≤ n) (hm : m ≤ n) (hn : 0 < n) :
     escCell n k m ≤ (1 - (m : ℝ) / n) ^ k := by
   unfold escCell
@@ -85,7 +73,6 @@ theorem escCell_le_exp {n k m : ℕ} (hk : k ≤ n) (hm : m ≤ n) (hn : 0 < n) 
   calc (1 - (m : ℝ) / n) ^ k ≤ Real.exp (-((m : ℝ) / n)) ^ k := pow_le_pow_left₀ h0 h1 k
     _ = Real.exp (-((k : ℝ) * m / n)) := by rw [← Real.exp_nat_mul]; congr 1; ring
 
-/-- A cell sampled whole (`k ≥ n`) escapes only with no incorrect proof block. -/
 theorem escCell_whole {n k m : ℕ} (hk : n ≤ k) (hm : m ≤ n) (hm0 : 0 < m) : escCell n k m = 0 := by
   unfold escCell
   rw [min_eq_right hk, Nat.choose_eq_zero_of_lt (by omega : n - m < n)]
@@ -97,14 +84,11 @@ theorem escCell_le_one (n k m : ℕ) : escCell n k m ≤ 1 := by
   rw [div_le_one hC]
   exact_mod_cast Nat.choose_le_choose _ (Nat.sub_le n m)
 
-/-- The rate a cell's bound samples at, `0` when sampled whole. -/
 def rateOf (c : Cell) : ℚ := c.rate.getD 0
 
 theorem rateOf_nonneg (c : Cell) : 0 ≤ rateOf c := by
   unfold rateOf Cell.rate; split_ifs <;> simp; positivity
 
-/-- **A cell's escape at the bound's rate**: a cell of `n ≤ c.size` proof blocks, sampled at `k ≥ c.k`, with `m ≤ n`
-incorrect, escapes with probability at most `e^{−r m}`, `r` the bound's rate (`0` when sampled whole). -/
 theorem escCell_le_rate {n k m : ℕ} (hm : m ≤ n) {c : Cell} (hck : c.k ≤ k) (hcn : n ≤ c.size) :
     escCell n k m ≤ Real.exp (-((rateOf c : ℝ) * m)) := by
   rcases Nat.eq_zero_or_pos m with h0 | hm0
@@ -128,7 +112,6 @@ theorem escCell_le_rate {n k m : ℕ} (hm : m ≤ n) {c : Cell} (hck : c.k ≤ k
     rw [show (c.k : ℝ) / c.size * m = c.k * m / c.size by ring, div_le_div_iff₀ hsR hnR]
     nlinarith [mul_le_mul_of_nonneg_right (mul_le_mul hk' hn' hnR.le (by positivity : (0 : ℝ) ≤ k)) hmR]
 
-/-- A cell the bound samples whole is sampled whole. -/
 theorem escCell_rate_none {n k m : ℕ} (hm : m ≤ n) (hm0 : 0 < m) {c : Cell} (hck : c.k ≤ k) (hcn : n ≤ c.size)
     (hr : c.rate = none) : escCell n k m = 0 := by
   unfold Cell.rate at hr
@@ -143,8 +126,6 @@ open _root_.Spot.Interval
 open _root_.Spot.FactorUpper
 open Claims.Sampling
 open Nat
-
-/-! ## Sums over proof blocks, by key -/
 
 section Keys
 
@@ -187,8 +168,6 @@ theorem capped_le_keys (K : List G) (hK : K.Nodup) (D : Finset ℕ) (κ : ℕ �
     capP_mono (hn k (List.mem_toFinset.1 hk)) (hx k)
 
 end Keys
-
-/-! ## The checker's keys -/
 
 theorem mem_dedup {l : List ℕ} {x : ℕ} : x ∈ dedup l ↔ x ∈ l := by
   induction l with
@@ -253,12 +232,8 @@ open _root_.Spot.FactorUpper
 open Claims.Sampling
 open Nat
 
-/-! ## A replay block's proof blocks, by stratum and width -/
-
-/-- A proof block's width: the bits it commits. -/
 def wid (s : AuditStatement) (Pt : Partition) (v : ℕ) : ℕ := committed s.prog (Pt.blocks.getD v [])
 
-/-- A proof block's key: its stratum and width. -/
 def keyOf (s : AuditStatement) (Pt : Partition) (v : ℕ) : ℕ × ℕ := (Pt.stratumOf v, wid s Pt v)
 
 theorem mem_blocksIn {Pt Pρ : Partition} {ρ v : ℕ} (h : v ∈ blocksIn Pt Pρ ρ) :
@@ -310,7 +285,6 @@ theorem card_cell_le_size (hc : Properties.Spot.Covers s Pt d ρ cs) {t : ℕ} (
   rw [Finset.card_eq_sum_card_image (wid s Pt) (cell Pt d.part ρ t)]
   exact (Finset.sum_le_sum fun b _ => (covers_get hc ht).2 b).trans (sum_countIn_le _ _)
 
-/-- A set's `y`: the bound's rates summed over its proof blocks, `0` in the cells sampled whole. -/
 noncomputable def yOf (Pt : Partition) (cs : List Cell) (U : Finset ℕ) : ℝ :=
   ∑ v ∈ U, (rateOf (cs.getD (Pt.stratumOf v) default) : ℝ)
 
@@ -371,9 +345,6 @@ theorem passes_empty (q : ℝ) : d.passes Pt q (counts Pt d.part ∅) ρ = 1 := 
   unfold Design.Two.passes Design.Two.esc counts
   simp [escCell_zero]
 
-/-! ## The checker's groups of a replay block -/
-
-/-- The group of key `k` (`readGroups`). -/
 def grp (cs : List Cell) (reads : List (List (ℕ × ℕ))) (S p : ℕ) (k : ℕ × ℕ) : Group :=
   let n := countIn (reads.getD k.1 []) k.2
   ⟨k.1, n, k.2, (cs.getD k.1 default).rate, lnUpper n p, lnLower n p, lnUpper ((S / k.2 : ℕ) : ℚ) p,
@@ -395,7 +366,6 @@ theorem grp_ok {reads : List (List (ℕ × ℕ))} {S p : ℕ} {k : ℕ × ℕ} (
     have := log_le_lnUpper (y := ((S / k.2 : ℕ) : ℚ)) (by exact_mod_cast hm) p
     rw [Rat.cast_natCast] at this; exact this
 
-/-- The keys whose cells the bound samples at a rate, and those it samples whole. -/
 def finKeys (cs : List Cell) (reads : List (List (ℕ × ℕ))) : List (ℕ × ℕ) :=
   (keysOf cs reads).filter fun k => (cs.getD k.1 default).rate.isSome
 
@@ -423,8 +393,6 @@ theorem cntOf_keyOf (D : Finset ℕ) (k : ℕ × ℕ) :
   ext v
   simp [keyOf, Prod.ext_iff]
 
-/-- The sets' groups' counts: every proof block of `D ⊆ ρ` has a key of `cs`'s, and each key's count is at most its
-group's. -/
 theorem covers_keys (hc : Properties.Spot.Covers s Pt d ρ cs) {D : Finset ℕ}
     (hD : D ⊆ blocksIn Pt d.part ρ) :
     (∀ v ∈ D, keyOf s Pt v ∈ keysOf cs (cs.map Cell.parts)) ∧
@@ -498,7 +466,6 @@ theorem lnPassWhole_sound {q θ : ℚ} (hq1 : (q : ℝ) ≤ 1) (hθ : (0 : ℝ) 
     show (1 - (q : ℝ)) ^ (θ : ℝ) = 0
     rw [hq, sub_self, Real.zero_rpow (by exact_mod_cast h0)]
 
-/-- `Σ_{U ⊆ D} 2^{b(U)} e^{−c y(U)} = ∏_{v∈D} (1 + 2^{b_v} e^{−c f_v})`. -/
 theorem sum_bits_exp (s : AuditStatement) (Pt : Partition) (D : Finset ℕ) (c : ℝ) (f : ℕ → ℝ) :
     ∑ U ∈ D.powerset, (2 : ℝ) ^ bitsOf s Pt U * Real.exp (-(c * ∑ v ∈ U, f v)) =
       ∏ v ∈ D, (1 + 2 ^ wid s Pt v * Real.exp (-(c * f v))) := by
@@ -521,11 +488,9 @@ section Sets
 
 variable {s : AuditStatement} {Pt : Partition} {d : Design.Two} {ρ : ℕ} {cs : List Cell}
 
-/-- The replay block's proof blocks in cells the bound samples at a rate. -/
 noncomputable def finBlocks (Pt : Partition) (d : Design.Two) (ρ : ℕ) (cs : List Cell) : Finset ℕ :=
   (blocksIn Pt d.part ρ).filter fun v => (cs.getD (Pt.stratumOf v) default).rate.isSome
 
-/-- The replay block's proof blocks in cells the bound samples whole. -/
 noncomputable def infBlocks (Pt : Partition) (d : Design.Two) (ρ : ℕ) (cs : List Cell) : Finset ℕ :=
   (blocksIn Pt d.part ρ).filter fun v => ¬ (cs.getD (Pt.stratumOf v) default).rate.isSome
 
@@ -538,8 +503,6 @@ theorem one_le_prod_bits (D : Finset ℕ) (c : ℕ → ℝ) :
 theorem one_le_prod_bits' (D : Finset ℕ) : 1 ≤ ∏ w ∈ D, (1 + (2 : ℝ) ^ wid s Pt w) :=
   Finset.one_le_prod₀ fun w _ => by have := pow_nonneg (zero_le_two (α := ℝ)) (wid s Pt w); linarith
 
-/-- **Rankin's factor, split**: the empty set, the nonempty sets in cells sampled at a rate, and the sets meeting a cell
-sampled whole, each passing with probability `1 − q`. -/
 theorem rankinFactor_le (hc : Properties.Spot.Covers s Pt d ρ cs) (q θ : ℝ) :
     rankinFactor s Pt d q θ ρ ≤
       1 + ∑ U ∈ (finBlocks Pt d ρ cs).powerset.erase ∅,
@@ -583,7 +546,6 @@ theorem rankinFactor_le (hc : Properties.Spot.Covers s Pt d ρ cs) (q θ : ℝ) 
     _ = _ := by rw [hT0, hnot]
     _ ≤ _ := le_rfl
 
-/-- The keys and counts of the cells sampled at a rate, and of those sampled whole. -/
 theorem fin_keys (hc : Properties.Spot.Covers s Pt d ρ cs) :
     (∀ w ∈ finBlocks Pt d ρ cs, keyOf s Pt w ∈ finKeys cs (cs.map Cell.parts)) ∧
       ∀ k, cntOf (keyOf s Pt) (finBlocks Pt d ρ cs) k ≤ countIn ((cs.map Cell.parts).getD k.1 []) k.2 := by
@@ -599,7 +561,6 @@ theorem inf_keys (hc : Properties.Spot.Covers s Pt d ρ cs) :
       (Option.not_isSome_iff_eq_none.1 (Finset.mem_filter.1 hw).2),
     fun k => (cntOf_mono (Finset.filter_subset _ _) k).trans (hkeys.2 k)⟩
 
-/-- **A chord's sum**: at slope `σ`, the sets of the cells sampled at a rate, `Σ_U 2^{b(U)} e^{−θ σ y(U)}`. -/
 theorem light_sound (hc : Properties.Spot.Covers s Pt d ρ cs) (θ σ : ℚ) (p : ℕ) :
     LogUB (lightSets (Ln2.of p) (((finKeys cs (cs.map Cell.parts)).map (grp cs (cs.map Cell.parts) 0 p)).map
         fun g => (g, -(θ * σ * g.r))) p)
@@ -640,7 +601,6 @@ theorem light_sound (hc : Properties.Spot.Covers s Pt d ρ cs) (θ σ : ℚ) (p 
   push_cast
   ring_nf
 
-/-- **The sets meeting a cell sampled whole**: `(1 − q)^θ ∏_F (1 + 2^b)^n (∏_I (1 + 2^b)^n − 1)`. -/
 theorem whole_sound (hc : Properties.Spot.Covers s Pt d ρ cs) {q θ : ℚ} (hq1 : (q : ℝ) ≤ 1)
     (hθ : (0 : ℝ) ≤ θ) (p : ℕ) :
     LogUB (if ((infKeys cs (cs.map Cell.parts)).map (grp cs (cs.map Cell.parts) 0 p)).isEmpty then none
@@ -711,7 +671,6 @@ theorem whole_sound (hc : Properties.Spot.Covers s Pt d ρ cs) {q θ : ℚ} (hq1
 
 end Sets
 
-/-- **The bound is above Rankin's factor.** -/
 theorem factorUpper_sound : Properties.Spot.FactorUpperSound := by
   intro cs P v hv s Pt d ρ hc
   by_cases hP : P.valid = true

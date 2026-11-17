@@ -3,33 +3,7 @@ module
 public import Properties.Poub.Remote.Shared
 public import Proofs.Properties.Poub.Remote.Order
 
-/-!
-# One openings coin per sample: the properties at `g` windows a sample
-
-`Shared.close`'s three outcomes (`sclose_spec`): a refusal that leaves the state, a `few` or `coin` rejection after
-the group's windows are made final (`finalize`), or the sample, which gives each window of the group its share
-(`sampleStep`). `sampleIsSubset` reads the sample off it and `Properties.Poub.sampleIsSubset`, on the same `draws`.
-
-At `g ≤ 1`, `Shared.step g` is `Session.step` (`step_le_one`), and the session properties are today's. At `g ≥ 2`,
-each event keeps the invariant, the coins and every sample, and `DP`: a sampled window is below `W`, and so is sampled
-each window below `W` of its sample or an earlier one (`sstep`). With sample `c`'s first window unsampled, no window of
-sample `c` or later is sampled, so no close has read `coins[W + c]` or above, and the run is the same on coins that
-agree below it (`sclose_coins`, `sfold_coins`, `openingsUnreadUntilSampled`). And `Frozen`'s argument goes through
-with `Shared.close` (`frz_sclose`): under `DP` the windows a sample samples are unsampled before it, and it makes them final;
-it samples windows in order (`sclose_prefix`), so a sampled window's record is kept (`recordKeptAfterSample`).
-`liveUnder` is `Order`'s argument over `Shared.run g` (`srunL`): the event that samples window `t` is its sample's
-close, which keeps its record (`sdraw_keeps`), and with `t` unsampled so is its sample's first window (`undrawn_first`),
-which is what `OpeningsUnreadUntilSampled` and `ReleaseOrder` read. It needs `1 ≤ g`: at `g = 0` every window is sample
-0, and coins that agree below `W` leave every window's openings coin free.
-
-`acceptSamplesOpenable` is `Properties.Poub.acceptSamplesOpenable`'s argument across a sample's windows: each sampled
-`(i, p)` falls in the passes of one window `k` (`locatePass`), its share holds `(i − passCount, p)` (`shareOf_mem`),
-whose opening `checkWindow` passed (`checkWindow_accept`), and its number in the sample is the receipts before window
-`k` plus its number there (`flatMap_split`, `sum_take_mid`).
-
-`*_one`: at `g = 1` the session statements are today's (`Shared.run 1` is `Session.run`, `Poub.Shared.run_one`),
-and a sample of one window is `verifyWindow`'s (`acceptSamplesOpenable_one`).
--/
+/-! The session properties at `g` windows a sample, with one openings coin per sample. -/
 
 @[expose] public section
 
@@ -37,18 +11,14 @@ open Poub Poub.Session
 
 namespace Properties.Poub.Shared
 
-/-- `Shared.close`'s group: window `t`'s sample's windows up to `t`. -/
 def grp (g t : Nat) : List Nat := (List.range (t + 1 - t / g * g)).map (t / g * g + ·)
 
-/-- The first fold of `Shared.close`: each window of `l` final. -/
 def finalize (l : List Nat) (ws : Array Win) : Array Win :=
   l.foldl (fun ws u => ws.modify u ({· with final := true})) ws
 
-/-- A window's sample, as `Shared.close` sets it. -/
 def sampleW (now : Nat) (mine : Array (Nat × Nat)) (w : Win) : Win :=
   { w with drawn := some mine, openedNs := some now, verdict := if mine.isEmpty then some .accept else w.verdict }
 
-/-- One step of `Shared.close`'s second fold. -/
 def sampleStep (sampled : Array (Nat × Nat)) (now : Nat) (acc : Array Win × Nat) (u : Nat) : Array Win × Nat :=
   (acc.1.modify u (sampleW now (shareOf sampled acc.2 acc.1[u]!.plans.size)), acc.2 + acc.1[u]!.plans.size)
 
@@ -75,7 +45,6 @@ theorem finalize_range (first m : Nat) (ws : Array Win) (v : Nat) :
     repeat' split
     all_goals first | rfl | omega
 
-/-- The passes of `ws`'s windows `first … first + m − 1`. -/
 def passesIn (ws : Array Win) (first m : Nat) : Nat := ((List.range m).map fun j => ws[first + j]!.plans.size).sum
 
 theorem passesIn_succ (ws : Array Win) (first m : Nat) :
@@ -130,7 +99,6 @@ theorem find_none {p : Nat → Bool} {l : List Nat} (h : ∀ u, l.find? p = some
   | some v => exact (h v e).elim
   | none => simpa using List.find?_eq_none.1 e u hu
 
-/-- What a `Shared.close` that returns does: refuse, reject a window of its group once the group is final, or sample. -/
 theorem sclose_spec {g : Nat} {s : State} {t : Int} {now : Nat} {r : Result} {s' : State}
     (h : Shared.close g s t now = .ok (r, s')) :
     ((∃ why, r = .refused why) ∧ s' = s) ∨
@@ -223,9 +191,6 @@ theorem sampleIsSubset : SampleIsSubset := by
     rw [finalize_plans]
   rw [hp]
 
-/-! ## A sample's accepted windows -/
-
-/-- A window record's pass lengths. -/
 abbrev lens (w : WindowRecord) : List Nat := (w.passes.map (·.plan.length)).toList
 
 theorem length_lens (w : WindowRecord) : (lens w).length = w.passes.size := by simp
@@ -244,7 +209,6 @@ theorem receiptCount_eq (ws : List WindowRecord) : receiptCount ws = (ws.flatMap
     simp only [receiptCount, List.map_cons, List.sum_cons, List.flatMap_cons, List.sum_append] at ih ⊢
     rw [ih]
 
-/-- Each of the sample's passes is a pass of one of its windows. -/
 theorem locatePass : ∀ (ws : List WindowRecord) (i : Nat), i < passCount ws →
     ∃ k, ∃ hk : k < ws.length, passCount (ws.take k) ≤ i ∧ i < passCount (ws.take k) + ws[k].passes.size
   | [], i, h => by simp [passCount] at h
@@ -330,7 +294,6 @@ theorem filterMap_self {f : Nat × Nat → Option (Nat × Nat)} :
   | x :: l, h => by
     rw [List.filterMap_cons, h x (by simp), filterMap_self l fun y hy => h y (by simp [hy])]
 
-/-- A window's share of a sample over its passes alone is the whole sample. -/
 theorem shareOf_all (sampled : Array (Nat × Nat)) (n : Nat) (h : ∀ k (hk : k < sampled.size), sampled[k].1 < n) :
     shareOf sampled 0 n = sampled := by
   unfold shareOf
@@ -403,8 +366,6 @@ theorem sclose_coins {g : Nat} {s : State} {c : Array ByteArray} {t : Int} {now 
       rfl
     · cases h₁
 
-/-! ## The windows sampled -/
-
 theorem dr_finalize (first m : Nat) (ws : Array Win) (u : Nat) :
     dr (finalize ((List.range m).map (first + ·)) ws) u = dr ws u := by
   rw [dr_eq, dr_eq, finalize_range]; split <;> rfl
@@ -416,7 +377,6 @@ theorem dr_fail (s : State) (u : Nat) (f : Failure) (v : Nat) : dr (s.fail u f).
   · rw [dr_eq, dr_eq, getElem!_modify']; split <;> rfl
   · rfl
 
-/-- In the sample, window `v`'s sample is new exactly when `v` is in the group. -/
 theorem dr_sampled {g : Nat} {s : State} {t : Int} {sampled : Array (Nat × Nat)} {now : Nat} (v : Nat) :
     dr ((grp g t.toNat).foldl (sampleStep sampled now) (finalize (grp g t.toNat) s.windows, 0)).1 v =
       if t.toNat / g * g ≤ v ∧ v < t.toNat + 1 ∧ v < s.windows.size then
@@ -437,8 +397,6 @@ theorem dr_sampled {g : Nat} {s : State} {t : Int} {sampled : Array (Nat × Nat)
   · rename_i h
     rw [ite_eq_right (by omega), ← dr_eq, dr_finalize]
 
-/-- The sampled windows are below `W`, and with a window sampled so is each window below `W` of its sample or an earlier
-one. -/
 def DP (g W : Nat) (ws : Array Win) : Prop :=
   (∀ u, (dr ws u).isSome → u < W) ∧ ∀ u j, (dr ws u).isSome → j / g ≤ u / g → j < W → (dr ws j).isSome
 
@@ -456,7 +414,6 @@ theorem range_of_div {g j : Nat} (hg : 0 < g) : j / g * g ≤ j ∧ j < j / g * 
   have h3 : j / g * g = g * (j / g) := Nat.mul_comm _ _
   omega
 
-/-- What `Shared.close` does to the windows sampled: keeps each, and samples its group, which keeps `DP`. -/
 theorem sclose_dr {g : Nat} {s : State} {t : Int} {now : Nat} {r : Result} {s₁ : State}
     (h : Shared.close g s t now = .ok (r, s₁)) :
     (∀ u, (dr s.windows u).isSome → (dr s₁.windows u).isSome) ∧
@@ -489,7 +446,6 @@ theorem sclose_dr {g : Nat} {s : State} {t : Int} {now : Nat} {r : Result} {s₁
         split
         · simp_all
         · rename_i hc; simp only [hc, false_or]
-      -- no window at or past the group's first is sampled before the close
       have hnone : ∀ v, t.toNat / g * g ≤ v → (dr s.windows v).isSome → False := by
         intro v hv hd
         have hv' : v < s.params.windows := hD.1 v hd
@@ -510,8 +466,6 @@ theorem sclose_dr {g : Nat} {s : State} {t : Int} {now : Nat} {r : Result} {s₁
             rw [hj'] at r1 r2
             exact Or.inl ⟨r1, by omega, by omega⟩
         · exact (hnew j).2 (Or.inr (hD.2 v j h hj hjW))
-
-/-! ## The invariant -/
 
 theorem samePasses_of (P : Params) (ws ws' : Array Win) (hs : ws'.size = ws.size)
     (h : ∀ v, v < ws.size → Keeps P ws[v]! ws'[v]!) : SamePasses P ws ws' := by
@@ -546,8 +500,6 @@ theorem sclose_inv {g : Nat} {s : State} {t : Int} {now : Nat} {r : Result} {s�
       rw [finalize_roots]
       exact hfew v (List.mem_map.2 ⟨v - t.toNat / g * g, List.mem_range.2 (by omega), by omega⟩)
     · exact keeps_refl _ _
-
-/-! ## Each event -/
 
 theorem step_le_one {g : Nat} (hg : g ≤ 1) : Shared.step g = Session.step := by
   funext s e; unfold Shared.step; rw [ite_eq_left hg]
@@ -586,7 +538,6 @@ theorem keep_dr {ws ws' : Array Win} (k : Keep ws ws') (u : Nat) : dr ws' u = dr
   · exact e
   · rw [e, dr_none l]
 
-/-- `Shared.step` at `g ≥ 2` keeps the invariant and the frame, the coins, each window's sample, and `DP`. -/
 theorem sstep {g : Nat} (hg : 2 ≤ g) {s : State} {e : Event} {r : Result} {s' : State} (h : Inv s)
     (he : Shared.step g s e = .ok (r, s')) :
     Inv s' ∧ Frame s s' ∧ s'.coins = s.coins ∧ (∀ u, (dr s.windows u).isSome → (dr s'.windows u).isSome) ∧
@@ -625,9 +576,6 @@ theorem sstep_coins {g : Nat} (hg : 2 ≤ g) {s : State} {e : Event} {r : Result
   | close t now => exact sclose_coins he (hd t now rfl)
   | verify t openings => injection he with he; show pure _ = _; rw [verify_coins, he]; rfl
 
-/-! ## Runs -/
-
-/-- `Shared.run`'s fold, one event. -/
 abbrev sAcc (g : Nat) (acc : Array Result × State) (e : Event) : Except String (Array Result × State) := do
   let (r, s') ← Shared.step g acc.2 e
   pure (acc.1.push r, s')
@@ -723,8 +671,6 @@ theorem openingsUnreadUntilSampled : OpeningsUnreadUntilSampled := by
     exact sfold_coins hg c coins' _ (#[], Session.State.init params reg coins appendCoins notBeforeNs) (rs, s) hrun
       (inv_init ..) hW hag hlt
 
-/-! ## A sampled window's record is kept -/
-
 theorem keepsF_finalize (first m : Nat) (ws : Array Win) :
     KeepsF ws (finalize ((List.range m).map (first + ·)) ws) := by
   intro v
@@ -733,7 +679,6 @@ theorem keepsF_finalize (first m : Nat) (ws : Array Win) :
   · exact keepW_of ⟨rfl, rfl, rfl, rfl, rfl⟩ (fun _ => rfl)
   · exact keepW_refl _
 
-/-- `Shared.close` keeps each window's `KeepW`: under `DP` the windows it samples are unsampled, and it makes them final. -/
 theorem frz_sclose {g : Nat} (hg : 0 < g) {s : State} {t : Int} {now : Nat} {r : Result} {s' : State}
     (hD : DP g s.params.windows s.windows) (he : Shared.close g s t now = .ok (r, s')) : Frz s s' := by
   rcases sclose_spec he with ⟨-, rfl⟩ | ⟨u, f, -, rfl⟩ | ⟨d, -, ht0, hts, hund, hm, hpre, hfew, hdraws, rfl⟩
@@ -771,7 +716,6 @@ theorem frz_sclose {g : Nat} (hg : 0 < g) {s : State} {t : Int} {now : Nat} {r :
         cases ht
     · exact keepW_refl _
 
-/-- `Frz`'s invariant at `g ≥ 2` windows a sample: `FInv`, and `DP`. -/
 def SF (g : Nat) (s : State) : Prop := FInv s ∧ DP g s.params.windows s.windows
 
 theorem sf_step {g : Nat} (hg : 2 ≤ g) {s : State} {e : Event} {r : Result} {s' : State} (h : SF g s)
@@ -876,14 +820,11 @@ theorem recordKeptAfterSample : RecordKeptAfterSample := by
   · rintro ⟨i, p, o, hi, hp, hu, hc⟩; exact ⟨i, p, o, hi, hp, hu, (key i p o hi hp) ▸ hc⟩
   · rintro ⟨i, p, o, hi, hp, hu, hc⟩; exact ⟨i, p, o, hi, hp, hu, (key i p o hi hp).symm ▸ hc⟩
 
-/-! ## At `g = 1`: today's statements -/
-
 theorem sampleWindows_one {W c : Nat} (h : c < W) : sampleWindows 1 W c = [c] := by
   unfold sampleWindows
   rw [show min (c * 1 + 1) W - c * 1 = 1 by omega]
   simp
 
-/-- At `g = 1` sample `c`'s receipts are window `c`'s, as `Session.close` numbers them. -/
 theorem sampleLengths_one {s : State} {c : Nat} (h : c < s.params.windows) :
     sampleLengths 1 s c = s.windows[c]!.plans.map (·.length) := by
   unfold sampleLengths
@@ -913,7 +854,6 @@ theorem liveUnder_one (params : Params) (reg : Registration) (appendCoins : Arra
     subst ht
     exact h coins coins' t k k' rs rs' s s' hag h₁ h₂ hd hd'
 
-/-- A sample of one window is `verifyWindow`'s: its share is the whole sample, and its receipts are numbered from 0. -/
 theorem acceptSamplesOpenable_one (h : AcceptSamplesOpenable) : Properties.Poub.AcceptSamplesOpenable := by
   intro reg appends w coin samples openings hv
   obtain ⟨sampled, hd, hc⟩ := verifyWindow_accept hv
@@ -933,9 +873,6 @@ theorem acceptSamplesOpenable_one (h : AcceptSamplesOpenable) : Properties.Poub.
   subst this
   simpa [receiptCount] using ho
 
-/-! ## `Live` at `g` windows a sample -/
-
-/-- `Shared.run g` over a list of events. -/
 def srunL (g : Nat) (s : State) (l : List Event) : Except String (Array Result × State) := l.foldlM (sAcc g) (#[], s)
 
 theorem srun_srunL (g : Nat) (s : State) (events : Array Event) :
@@ -1019,7 +956,6 @@ theorem srun_extract (g : Nat) (s : State) (a : Array Event) (k : Nat) :
 theorem srun_toArray (g : Nat) (s : State) (l : List Event) : Shared.run g s l.toArray = srunL g s l := by
   rw [srun_srunL, List.toList_toArray]
 
-/-- A state a run from `State.init` reaches keeps the invariant, the parameters, and `DP`. -/
 theorem sreach {g : Nat} (hg : 2 ≤ g) {params : Params} {reg : Registration} {coins appendCoins : Array ByteArray}
     {notBeforeNs : Nat} {l : List Event} {rs : Array Result} {s : State}
     (h : srunL g (State.init params reg coins appendCoins notBeforeNs) l = .ok (rs, s)) :
@@ -1033,7 +969,6 @@ theorem sreach {g : Nat} (hg : 2 ≤ g) {params : Params} {reg : Registration} {
     rw [← hpx] at hD ⊢; exact hD' hD
   · exact ⟨inv_init .., rfl, fun u h => by simp [dr, State.init] at h, fun u j h => by simp [dr, State.init] at h⟩
 
-/-- Under `DP`, an unsampled window below `W` leaves its sample's first window unsampled. -/
 theorem undrawn_first {g W : Nat} (hg : 0 < g) {ws : Array Win} (hD : DP g W ws) {t : Nat} (ht : t < W)
     (h : dr ws t = none) : dr ws (t / g * g) = none := by
   cases e : dr ws (t / g * g) with
@@ -1046,7 +981,6 @@ theorem sameW_finalize (first m : Nat) (ws : Array Win) (v : Nat) :
     SameW ws[v]! (finalize ((List.range m).map (first + ·)) ws)[v]! := by
   rw [finalize_range]; split <;> exact ⟨rfl, rfl, rfl, rfl⟩
 
-/-- `Shared.close` keeps the record of each window it samples, and the appends. -/
 theorem sclose_keeps {g : Nat} {s : State} {t' : Int} {now : Nat} {r : Result} {s₁ : State}
     (he : Shared.close g s t' now = .ok (r, s₁)) {t : Nat} (h0 : dr s.windows t = none)
     (h1 : (dr s₁.windows t).isSome) : s₁.record t = s.record t ∧ s₁.appends = s.appends := by
@@ -1070,7 +1004,6 @@ theorem sclose_keeps {g : Nat} {s : State} {t' : Int} {now : Nat} {r : Result} {
     rw [h3 v]
     split <;> exact ⟨rfl, rfl, rfl, rfl⟩
 
-/-- The event that samples window `t` is the close of its sample, so it keeps the window's record and the appends. -/
 theorem sdraw_keeps {g : Nat} (hg : 2 ≤ g) {s : State} {e : Event} {r : Result} {s₁ : State}
     (he : Shared.step g s e = .ok (r, s₁)) {t : Nat} (h0 : sampledOf s t = none) (h1 : (sampledOf s₁ t).isSome) :
     s₁.record t = s.record t ∧ s₁.appends = s.appends := by
@@ -1078,7 +1011,6 @@ theorem sdraw_keeps {g : Nat} (hg : 2 ≤ g) {s : State} {e : Event} {r : Result
   · exact sclose_keeps hc h0 h1
   · exact (no_sample (keep_nonclose hn hs) h0 h1).elim
 
-/-- Up to the sample of window `t` on `coins`, the events on `coins'` are the same. -/
 theorem stake_agree {g : Nat} (hg : 2 ≤ g) (params : Params) (reg : Registration) (appendCoins : Array ByteArray)
     (notBeforeNs : Nat) (D : Array ByteArray → Array Event) (hD : ReleaseOrder g params reg appendCoins notBeforeNs D)
     {coins coins' : Array ByteArray} {t : Nat} (ht : t < params.windows)
@@ -1105,7 +1037,6 @@ theorem stake_agree {g : Nat} (hg : 2 ≤ g) (params : Params) (reg : Registrati
     rw [List.take_add_one, List.take_add_one, ih rs₁ s₁ h₁ hnd₁, Array.getElem?_toList, Array.getElem?_toList,
       e₂]
 
-/-- `Live` at `g ≥ 1` windows a sample, from `OpeningsUnreadUntilSampled`, `RecordKeptAfterSample` and the release order. -/
 theorem liveUnder (g : Nat) (params : Params) (reg : Registration) (appendCoins : Array ByteArray)
     (notBeforeNs : Nat) (D : Array ByteArray → Array Event) (hg : 1 ≤ g) (hW : 1 ≤ params.windows)
     (hm : 1 ≤ params.minPasses) (hD : ReleaseOrder g params reg appendCoins notBeforeNs D) :

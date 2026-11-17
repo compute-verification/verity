@@ -22,13 +22,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Std.Data.HashMap.Lemmas
 
-/-!
-# What `decode` returns
-
-`decode_spec`: a Program `Flock.Program.decode` returns holds the Definitions of a decoder state that keeps `Inv`
-(`specs`, from the empty state through `go`), and its root is a composite (`decode`'s own check). `decode_root`: the
-root is one of them (`getDef`'s index), a composite without parameters (`decode`'s check, `CalleeOk`).
--/
+/-! What `decode` returns, and that its root is a composite without parameters. -/
 
 @[expose] public section
 
@@ -42,8 +36,6 @@ theorem ex_throw_bind {α β : Type} {e : String} {f : α → Flock.V β} {b : �
   obtain ⟨a, h1, -⟩ := Walk.except_bind_ok h
   exact absurd h1 (by intro h; injection h)
 
-/-- `decode`'s `go`: the root, then the functions the program record names, each by `getDef`; the root is one of the
-Definitions. -/
 theorem go_inv (desc : Desc) (rootId programFn : String) (root : ℕ) (s0 st : DecState)
     (h : StateT.run (do
           let r ← getDef Flock.Steps.FUEL desc rootId
@@ -70,8 +62,6 @@ theorem go_inv (desc : Desc) (rootId programFn : String) (root : ℕ) (s0 st : D
   · obtain ⟨-, rfl⟩ := st_pure hf
     exact grows_refl _
 
-/-- **What `decode` returns**: the Definitions of a decoder state that keeps `Inv`, its root one of them, a composite
-without parameters. -/
 theorem decode_full (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
     ∃ st, P.defs = DecState.defs st ∧ Inv st ∧ (P.defs[P.root]!).prim = false ∧ P.root < P.defs.size ∧
       (P.defs[P.root]!).params.size = 0 := by
@@ -127,13 +117,11 @@ theorem decode_full (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
   simp only [rd, Bool.or_eq_true, not_or] at hrd
   exact ⟨st, rfl, hinv, by simpa using hrd.1, hlt, by simpa using hrd.2⟩
 
-/-- **What `decode` returns**: the Definitions of a decoder state that keeps `Inv`, its root a composite. -/
 theorem decode_spec (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
     ∃ st, P.defs = DecState.defs st ∧ Inv st ∧ (P.defs[P.root]!).prim = false := by
   obtain ⟨st, h1, h2, h3, -⟩ := decode_full bytes P h
   exact ⟨st, h1, h2, h3⟩
 
-/-- **The root of a decoded Program** is one of its Definitions, a composite whose body has no parameters. -/
 theorem decode_root (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
     P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false ∧ (P.defs[P.root]!).body.params.size = 0 := by
   obtain ⟨st, hP, hinv, hp, hr, hp0⟩ := decode_full bytes P h

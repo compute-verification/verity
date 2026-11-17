@@ -40,30 +40,8 @@ import Proofs.Flock.Claims.Recursion.LamDeployedTight
 import Proofs.Flock.Recursive.ZkServerZK
 import Proofs.Flock.Recursive.KSProved
 
-/-!
-# The recursive audit over SPOT's recursive form
-
-`Flock.Guarantees.RecursiveAuditC3` is SPOT at the recursive configuration, the sample checked by V\*'s
-compiled check (`verity/sampled-proofs/recursive/v1`, a component of its own: onsite's and remote's SPOT
-component refuses the recursive form by name), at every composite, with zero knowledge (`RecursiveZkServerPrivate`).
-
-* `SpotRecursive Acc` is `spotRecursive`'s bound at every deployment `RecursiveKS` is stated at
-  (`Dep.deployed`: the deployed weights, and any brings, live-coin record and decoders meeting the list-decoding spec)
-  and every composite `k`, at the verdict `Acc`, with the call bounds `nI₀`, `vS₀` and the level `λ = 135.7` fixed. The
-  guarantee takes it at the recursive configuration's verdict, `RecVerdict`.
-* Its knowledge-soundness term is `Dep.ksAt`: `t'·2^{-135.7}`, and at a sample whose statement is at the deployment's
-  tables (`Dep.OneTable`: one plain inner table, and each V\* part one `--zk` table) the least of it and
-  `2^{-167.7} + t'·2^{-174.95}` (`RecDeploy.kappa_eps_oneTable_cap`), where the inner setup's calls and `nI₀` are at
-  most `2^32` and `vS₀ = nS·138543104` (`RecDeploy.setupCalls_deployedB_le_cap`) is at most `16·138543104 ≤ 2^32`,
-  at the verifier's cap of `16` V\* parts (`RecDeploy.nS_le_sixteen`).
-* It follows from `RecursiveKS`, read by name (`spotRecursive_of_ks`): an accepted play shows an accepted run of
-  the deployed recursive verifier (`verdict_run`), off which `RecDeploy.lamLin2_R_ge_in` and
-  `RecDeploy.setupCalls_deployedB_le_cap` read the call bounds and `RecDeploy.lamLin2_deployed_ge_dep_tight` reads
-  `λ₂ ≥ 135.7` (`calls_lam`).
-
-The form is dense only: `recursive/v1` refuses every other, and `RecursiveKSAt` covers the dense statements
-(`DenseAt`). Candidate 3's Holo statement is `Flock.Guarantees.RecursiveAuditHolo`.
--/
+/-! The recursive audit over SPOT's recursive form (`Flock.Guarantees.RecursiveAuditC3`), dense only, because
+`recursive/v1` refuses every other form. -/
 
 @[expose] public section
 
@@ -92,12 +70,6 @@ def nI₀ : Msg → ℕ := fun _ => 2 ^ 28 + (SetupCount.innerB + 2 ^ 24)
 (`nS_le_of_partIn`). -/
 def vS₀ : Msg → ℕ := fun x => nS x * 138543104
 
-/-- **The call bounds and the level at an accepted statement**: where some run of the deployed recursive verifier
-accepts `x`, the inner verifier's calls are at most `nI₀ x` on every run (`RecDeploy.lamLin2_R_ge_in`), V\*'s setup
-calls at most `vS₀ x` (`RecDeploy.setupCalls_deployedB_le_cap`), route 2C's `λ₂` at those counts is at least `135.7`
-(`RecDeploy.lamLin2_deployed_ge_dep_tight`), and at the deployment's tables the inner setup's calls and `nI₀ x` are at
-most `2^32` (`RecDeploy.innerSetupIns_le_acc`, `SetupCount.innerB_eq`) and `vS₀ x` is `setupCalls_deployedB_le_cap`'s
-`nS x · 138543104`, every premise read from the run. -/
 theorem calls_lam (q : Dep) {x : Msg} (h : q.RunAccepts x) :
     (∀ cs ws, (q.D.innerCalls FlockDeploy.sha512 x cs ws).length ≤ nI₀ x) ∧
       (135.7 : ℝ) ≤ Claims.Recursion.lamLin2 q.D q.I FlockDeploy.KS.CpDep x (nI₀ x) (vS₀ x) ∧
@@ -178,8 +150,6 @@ def SpotRecursive
     (decO : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.ZkTrace),
     SpotRecursiveAt Acc (Dep.deployed b aux nOf hd recRest decI decO)
 
-/-- `SpotRecursiveAt` at the recursive configuration's verdict, from `RecursiveKSAt` at `q`'s brings:
-`spotRecursive` with the call bounds and the level `calls_lam` reads off an accepted run. -/
 theorem spotRecursive_at (q : Dep)
     (hKS : Flock.Guarantees.RecursiveKSAt DeployedR.rdR DeployedR.finalR OpenRows.elemR q.wE q.w (deployedB q.b)
       q.aux q.nOf q.hd q.recRest) :
@@ -189,7 +159,6 @@ theorem spotRecursive_at (q : Dep)
     (fun _ h => (calls_lam q h).2.2.1) (fun _ h => (calls_lam q h).2.1) (fun _ h => (calls_lam q h).2.2.2) V k θ F c
     σ S readX collOf dColl K₀ δs hK₀ hdraw hX hread hcoll hlive
 
-/-- **`RecursiveKS` gives SPOT at the recursive configuration.** -/
 theorem spotRecursive_of_ks (hKS : Flock.Guarantees.RecursiveKS) : SpotRecursive RecVerdict :=
   fun b aux nOf hd recRest decI decO =>
     spotRecursive_at (Dep.deployed b aux nOf hd recRest decI decO) (hKS b aux nOf hd recRest)

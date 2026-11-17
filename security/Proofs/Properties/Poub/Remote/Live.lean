@@ -5,25 +5,7 @@ public import Proofs.Properties.Poub.Remote.SharedLink
 import Batteries.Tactic.OpenPrivate
 import Proofs.Properties.Poub.Remote.Window
 
-/-!
-# The verifier's process accepts what `Shared.run g` accepts (`liveIsRun`)
-
-The recorded run is taken at `W c a s`, the process's session `s` with the coins `c` and the append coins `a`.
-
-* Each event commutes with `W` (`step_W`, `sclose_W`, `sstep_W`) as long as the coins it reads agree: the challenge it
-  releases, its sample's openings coin and the next append coin. No event changes the coins (`sstep_keeps`), and
-  `withCoin` only fills a coin not yet sent or pushes an append coin (`withCoin_le`), so every coin the process holds
-  stays, and `Agree c a` at the end holds at every request before it (`step_le`). The event's `unset` check says each
-  coin it read is sent and of a coin's size (`unset_released`, `unset_drew`), so `Agree` gives it in `c` (`event_W`).
-* A `verify`'s verdict is `checkWindowChunked`'s, which is `checkWindow`'s (`chunkedIsWhole`), at a point of the
-  recorded run where the window awaits openings (`ChecksOK`). At its `settle`, later, the window still awaits them, and
-  `checkWindow` gives the same verdict there (`verdict_kept`): its samples, record, registration and digest are kept
-  (`Shared.recordKeptAfterSample`, `srun_kept`), and the appends only grow past the blocks its samples read, which are
-  receipts of its plans (`Shared.SamplesIn`, `Shared.checkWindow_grow`). So the process's `verifyBy` on that verdict is
-  the recorded `verify` (`verifyBy_congr`).
-
-`run_sim` puts them together by induction on the requests, from the end (`snoc_induction`), over `Shared.srunL g`.
--/
+/-! The verifier's process accepts what `Shared.run g` accepts (`liveIsRun`). -/
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -35,9 +17,6 @@ open private Poub.Session.live from Poub.Session
 
 namespace Properties.Poub.Live
 
-/-! ## The session on other coins -/
-
-/-- The session `s` with the coins `c` and the append coins `a`. -/
 abbrev W (c a : Array ByteArray) (s : State) : State := { s with coins := c, appendCoins := a }
 
 theorem live_W (c a : Array ByteArray) (s : State) : Poub.Session.live (W c a s) = Poub.Session.live s :=
@@ -163,8 +142,6 @@ theorem receive_W {s : State} {c a : Array ByteArray} {t i : Int} {root : ByteAr
     · contradiction
     · exact key s₀ h₁ h₂
 
-/-- An event commutes with replacing the coins and the append coins, as long as the ones it reads agree: the challenge
-it releases, the openings coin it samples from, and the next append coin. -/
 theorem step_W {s : State} {e : Event} {r : Result} {s₁ : State} {c a : Array ByteArray}
     (he : Session.step s e = .ok (r, s₁))
     (hs : ∀ k, (∃ now, e = .start now ∨ e = .boundary now) → r = .released (some k) → c[k]! = s.coins[k]!)
@@ -188,7 +165,6 @@ theorem step_W {s : State} {e : Event} {r : Result} {s₁ : State} {c a : Array 
   | close t now => exact close_W he (hd t now · rfl)
   | verify t openings => injection he with he; show pure _ = _; rw [verify_W, he]; rfl
 
-/-- No event changes the coins or the append coins. -/
 theorem step_keeps {s : State} {e : Event} {r : Result} {s₁ : State} (he : Session.step s e = .ok (r, s₁)) :
     s₁.coins = s.coins ∧ s₁.appendCoins = s.appendCoins := by
   have h := step_W (c := s.coins) (a := s.appendCoins) he (fun _ _ _ => rfl) (fun _ _ _ _ _ => rfl) (fun _ h => h)
@@ -219,7 +195,6 @@ theorem withCoin_cases {g : Nat} {s : State} {e : Event} {c : ByteArray} {s₁ :
     | (left; cases h; exact ⟨_, _, ‹_›, ‹_›, rfl⟩)
     | (right; cases h; rfl)
 
-/-- What `s'` keeps of `s`'s coins: each of a coin's size, and each append coin. -/
 def CoinsLE (s s' : State) : Prop :=
   (∀ (i : Nat) (x : ByteArray), s.coins[i]? = some x → x.size = Codec.COIN_BYTES → s'.coins[i]? = some x) ∧
     ∀ (k : Nat) (x : ByteArray), s.appendCoins[k]? = some x → s'.appendCoins[k]? = some x
@@ -333,7 +308,6 @@ theorem sstep_verify {g : Nat} (s : State) (t : Int) (o : Array Opening) :
     Shared.step g s (.verify t o) = Session.step s (.verify t o) :=
   sstep_nonclose fun _ _ h => by cases h
 
-/-- `step_W` at `g` windows a sample: a close reads its sample's openings coin, `W + t / g`. -/
 theorem sstep_W {g : Nat} (hg : 1 ≤ g) {s : State} {e : Event} {r : Result} {s₁ : State} {c a : Array ByteArray}
     (he : Shared.step g s e = .ok (r, s₁))
     (hs : ∀ k, (∃ now, e = .start now ∨ e = .boundary now) → r = .released (some k) → c[k]! = s.coins[k]!)
@@ -351,7 +325,6 @@ theorem sstep_W {g : Nat} (hg : 1 ≤ g) {s : State} {e : Event} {r : Result} {s
     · rw [sstep_nonclose hn]
       exact step_W hs' hs (fun t now d he' _ => (hn t now he').elim) ha
 
-/-- No event changes the coins or the append coins. -/
 theorem sstep_keeps {g : Nat} {s : State} {e : Event} {r : Result} {s₁ : State}
     (he : Shared.step g s e = .ok (r, s₁)) : s₁.coins = s.coins ∧ s₁.appendCoins = s.appendCoins := by
   rcases Nat.lt_or_ge g 2 with hg2 | hg2
@@ -413,8 +386,6 @@ theorem unset_drew {g : Nat} {s : State} {t : Int} {now : Nat} {d : Array (Nat �
   | none => simp [hk] at h
   | some x => simp [hk] at h; exact ⟨x, rfl, h⟩
 
-/-! ## A window's verdict is kept -/
-
 theorem awaiting_some {s : State} {t : Int} {w : WindowRecord} {d : Array (Nat × Nat)}
     (h : s.awaiting t = some (w, d)) :
     0 ≤ t ∧ t.toNat < s.windows.size ∧ s.windows[t.toNat]!.drawn = some d ∧ w = s.record t.toNat := by
@@ -434,8 +405,6 @@ theorem awaiting_some {s : State} {t : Int} {w : WindowRecord} {d : Array (Nat �
     · cases h
       exact ⟨by omega, by omega, rfl, rfl⟩
 
-/-- What a run from `State.init` keeps from a point `sV` of it to a later one `s`: the invariant, each sampled window's
-samples in its plans (`Shared.SamplesIn`), `Frz`, and the registration. -/
 theorem srun_kept {g : Nat} (hg : 1 ≤ g) {params : Params} {reg : Registration} {c a : Array ByteArray} {nb : Nat}
     {es₀ es₂ : List Event} {rs₀ rs₂ : Array Result} {sV s : State} (hm : 1 ≤ params.minPasses)
     (h₀ : Shared.srunL g (State.init params reg c a nb) es₀ = .ok (rs₀, sV))
@@ -460,8 +429,6 @@ theorem srun_kept {g : Nat} (hg : 1 ≤ g) {params : Params} {reg : Registration
         ⟨hSF.1.1, rfl⟩ h₂).2
     exact ⟨hSF.1.1, Shared.samplesIn_of_link hg hSF.1.1 hpre hSF.2 hL, hS.1.1, hf, hr⟩
 
-/-- A window's verdict on its openings is the same at any later point of the session where it still awaits them: its
-samples, its record, the registration and the digest are kept, and the appends only grow past the blocks it reads. -/
 theorem verdict_kept {g : Nat} (hg : 1 ≤ g) {params : Params} {reg : Registration} {c a : Array ByteArray} {nb : Nat}
     {es₀ es₂ : List Event} {rs₀ rs₂ : Array Result} {sV s : State} (hm : 1 ≤ params.minPasses)
     (h₀ : Shared.srunL g (State.init params reg c a nb) es₀ = .ok (rs₀, sV))
@@ -487,16 +454,11 @@ theorem verdict_kept {g : Nat} (hg : 1 ≤ g) {params : Params} {reg : Registrat
   obtain ⟨more, happ⟩ := hf.2.2
   rw [hrec, hr, hf.2.1, Shared.checkWindow_grow hIV hI hinV more happ hr ht hd o]
 
-/-! ## The process's requests on the recorded run -/
-
-/-- Coins `c` and append coins `a` agree with the ones `s` holds: each coin of a coin's size, and each append coin. -/
 abbrev Agree (c a : Array ByteArray) (s : State) : Prop := CoinsLE s (W c a s)
 
 theorem agree_of_le {c a : Array ByteArray} {s s' : State} (h : CoinsLE s s') (h' : Agree c a s') : Agree c a s :=
   coinsLE_trans h h'
 
-/-- An event the process took on `s` is the same event on the recorded run, at `W c a s`, for coins that agree with
-the ones the process holds after it. -/
 theorem event_W {g : Nat} (hg : 1 ≤ g) {s : State} {e : Event} {coin : Option ByteArray} {r : Result} {s₂ : State}
     {c a : Array ByteArray} (h : Verifier.eventOn 2 g s e coin = .ok (r, s₂)) (hc : Agree c a s₂) :
     Shared.step g (W c a s) e = .ok (r, W c a s₂) ∧ CoinsLE s s₂ := by
@@ -522,7 +484,6 @@ theorem verifyBy_keeps (s : State) (t : Int) (f : Array (Nat × Nat) → Verdict
   have h2 := congrArg (fun x : Result × State => x.2.appendCoins) h
   exact ⟨h1, h2⟩
 
-/-- `verifyBy` reads its check only on the samples of a window that awaits openings. -/
 theorem verifyBy_congr {s : State} {t : Int} {f g : Array (Nat × Nat) → Verdict}
     (h : ∀ w d, s.awaiting t = some (w, d) → f d = g d) : verifyBy s t f = verifyBy s t g := by
   unfold verifyBy
@@ -600,7 +561,6 @@ theorem run_snoc {chunk g : Nat} {p p' : Proc} {qs : List Req} {q : Req} {answer
   obtain ⟨rfl, rfl, rfl⟩ := h₂
   exact ⟨x, e?, h₁, hs, rfl, rfl⟩
 
-/-- A request keeps the session's coins of a coin's size and its append coins. -/
 theorem step_le {chunk g : Nat} {p p' : Proc} {q : Req} {x : Reply} {e? : Option Event}
     (h : step chunk g p q = .ok (x, e?, p')) : CoinsLE p.session p'.session := by
   cases q with
@@ -627,8 +587,6 @@ theorem step_le {chunk g : Nat} {p p' : Proc} {q : Req} {x : Reply} {e? : Option
       exact coinsLE_of_eq h1 h2
     · cases h
 
-/-- Each check the process holds was spawned where the recorded run, on `c` and `a`, had its window awaiting openings,
-with the verdict `checkWindow` gives there. -/
 def ChecksOK (g : Nat) (params : Params) (reg : Registration) (c a : Array ByteArray) (nb : Nat) (p : Proc)
     (es : List Event) : Prop :=
   ∀ ch ∈ p.checks, ∃ es₀ es₁ rs₀ sV, es = es₀ ++ es₁ ∧
@@ -648,8 +606,6 @@ theorem results_snoc (ans : List Reply) (x : Reply) :
       (ans.filterMap Reply.result?).toArray ++ (x.result?.toList).toArray := by
   cases x <;> simp [Reply.result?]
 
-/-- The process's run, on any coins that agree with the ones it holds at the end, is the recorded run: its results,
-and its session but for the coins; and every check it holds is right. -/
 theorem run_sim {chunk g : Nat} (hg : 1 ≤ g) {params : Params} {reg : Registration}
     {coins appendCoins : Array ByteArray} {nb : Nat} (hm : 1 ≤ params.minPasses) (qs : List Req) :
     ∀ {answers : List Reply} {es : List Event} {p : Proc},

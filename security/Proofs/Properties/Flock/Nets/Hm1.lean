@@ -2,12 +2,7 @@ module
 
 public import Proofs.Properties.Flock.Nets.Seg
 
-/-!
-# `hm96`'s compression `F(cv, pad)`, chunk by chunk
-
-The compression of `hm96`'s inputs `cv` and `pad` (`hmTail`'s first): its certificate `hm1`, each of its fifteen chunks
-checked in the kernel, and the run they make (`seg_hm1`).
--/
+/-! `hm96`'s compression `F(cv, pad)`, chunk by chunk. -/
 
 @[expose] public section
 
@@ -15,13 +10,10 @@ open Flock Flock.HmNets FlockSoundness.Discharge.Hm
 
 namespace FlockDeploy.Concrete.Nets
 
-/-- `hm96`'s compression `F(cv, pad)`'s chaining input. -/
 def hm1Cv : List Word := words (vars 0 512) 8
 
-/-- `hm96`'s compression `F(cv, pad)`'s message. -/
 def hm1Msg : List Word := words (vars 512 1024) 16
 
-/-- Where `hm96`'s compression `F(cv, pad)`'s run puts each committed word. -/
 def hm1 : Cert :=
   ⟨3072, [3297, 3586, 3875, 4164, 4453, 4742, 5031, 5320, 5609, 5898, 6187, 6476, 6765, 7054, 7343, 7632, 7921, 8210,
   8499, 8788, 9077, 9366, 9655, 9944, 10233, 10522, 10811, 11100, 11389, 11678, 11967, 12256, 12545, 12834, 13123,

@@ -23,14 +23,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Properties.InferenceOnly.BodiesOk.Basic
 import Std.Data.HashMap.Lemmas
 
-/-!
-# The decoder's invariant
-
-`Flock.Program.decode` builds its Definitions with `getDef`, `composite` and `staticFns`, mutually recursive on a fuel.
-Every Definition it appends is `DefOk`: a primitive one gate with an empty body; a composite's nodes each call an
-earlier Definition as `NodeOk` says (`buildNode_spec`), and every reference of its body names a leaf of a parameter or
-of a node's declared output (`Walk.parsePartsIn_valid`). `decode_spec` proves it by induction on the fuel.
--/
+/-! The decoder's invariant: every Definition `Flock.Program.decode` appends is `DefOk`. -/
 
 @[expose] public section
 
@@ -60,7 +53,6 @@ theorem st_liftV {α : Type} {x : Flock.V α} {s : DecState} {a : α} {s' : DecS
   | ok a' => injection h with h; injection h with h1 h2; subst h1 h2; exact ⟨rfl, rfl⟩
   | error e => exact absurd h (by intro h; injection h)
 
-/-- A reference of body `b` names a leaf of one of its parameters or of one of its nodes' outputs. -/
 def RefIn (b : Body) (r : Ref) : Prop :=
   (r.p = true → r.i < b.params.size ∧ r.j < (b.params[r.i]!).2.leaves) ∧
   (r.p = false → r.i < b.nodes.size ∧ r.j < (b.nodes[r.i]!).out.leaves)
@@ -70,13 +62,10 @@ def PartInner : Part → Prop
   | .strided _ _ _ inner _ _ _ => 0 < inner
   | _ => True
 
-/-- Every part of body `b`'s references is `PartInner`: each argument's, and the return's. -/
 def BodyInner (b : Body) : Prop :=
   (∀ k < b.nodes.size, ∀ a < (b.nodes[k]!).args.size, ∀ q ∈ ((b.nodes[k]!).args[a]!).seq.parts, PartInner q) ∧
     ∀ q ∈ b.ret.parts, PartInner q
 
-/-- One unfolding of `parsePartsIn`, as `parsePartsIn_nonneg_step` takes it, for `PartInner`: a strided part is
-parsed only with a pattern of positive length. -/
 theorem parsePartsIn_inner_step (leaves : Bool → Nat → Option Nat) (args : Nat → Nat → Option Seq)
     (hargs : ∀ k x s, args k x = some s → ∀ q ∈ s.parts, PartInner q) (n : Nat)
     (b : Nat.below (motive := fun _ => Lean.Json → Flock.V (Array Part)) (n + 1))
@@ -185,8 +174,6 @@ theorem parsePartsIn_inner_step (leaves : Bool → Nat → Option Nat) (args : N
               trivial
             · exact absurd h (by intro h; injection h)
 
-/-- **Every parsed strided part repeats a pattern of positive length**, given every part of an argument an alias may
-name does. -/
 theorem parsePartsIn_inner (leaves : Bool → Nat → Option Nat) (args : Nat → Nat → Option Seq)
     (hargs : ∀ k x s, args k x = some s → ∀ q ∈ s.parts, PartInner q) :
     ∀ fuel j ps, Flock.Program.parsePartsIn fuel j leaves args = .ok ps → ∀ q ∈ ps, PartInner q := by
@@ -202,7 +189,6 @@ theorem parsePartsIn_inner (leaves : Bool → Nat → Option Nat) (args : Nat �
     exact parsePartsIn_inner_step leaves args hargs n _
       (fun x ps hx => ih x ps (by delta Flock.Program.parsePartsIn; exact hx)) j ps h
 
-/-- The width check passes the default body, which has no node and returns no reference. -/
 theorem bodyBad_default (defs : Array Defn) (key : String) (w : ℕ) :
     (Widths.bodyBad defs key (default : Body)).run w = .ok none w := by
   unfold Widths.bodyBad
@@ -213,10 +199,6 @@ theorem bodyBad_default (defs : Array Defn) (key : String) (w : ℕ) :
   simp only [Std.Legacy.Range.size, Nat.sub_self, Nat.zero_add, Nat.zero_div, List.range'_zero, List.forIn_nil]
   rfl
 
-/-- What the decoder establishes of the body of Definition `i`: each node calls an earlier Definition as `NodeOk`
-says, its arguments and its return are sequences of parts, none naming a negative position, and every reference names a
-leaf; every strided part repeats a pattern of positive length (`BodyInner`), and the width check (`Widths.bodyBad`)
-passed the body, on some Definitions for its callees. -/
 def BodyFacts (defs : Array Defn) (i : ℕ) (b : Body) : Prop :=
   (∀ k < b.nodes.size, (b.nodes[k]!).fn < i ∧ NodeOk defs[(b.nodes[k]!).fn]! (b.nodes[k]!) ∧
     ∀ a < (b.nodes[k]!).args.size,
@@ -228,15 +210,12 @@ def BodyFacts (defs : Array Defn) (i : ℕ) (b : Body) : Prop :=
 
 def DefOk (defs : Array Defn) (i : ℕ) (c : Defn) : Prop := CalleeOk c ∧ BodyFacts defs i c.body
 
-/-- `b` extends `a`. -/
 def Pre (a b : Array Defn) : Prop := a.size ≤ b.size ∧ ∀ i < a.size, b[i]! = a[i]!
 
-/-- The decoder's invariant: every Definition decoded so far is `DefOk`, and the index names decoded ones. -/
 def Inv (s : DecState) : Prop :=
   (∀ i < (DecState.defs s).size, DefOk (DecState.defs s) i (DecState.defs s)[i]!) ∧
   ∀ (k : String) (v : ℕ), (DecState.index s)[k]? = some v → v < (DecState.defs s).size
 
-/-- A step of the decoder: it keeps the invariant and only appends Definitions. -/
 def Grows (s s' : DecState) : Prop := Inv s → Inv s' ∧ Pre (DecState.defs s) (DecState.defs s')
 
 theorem pre_refl (a : Array Defn) : Pre a a := ⟨le_refl _, fun _ _ => rfl⟩
@@ -260,7 +239,6 @@ theorem bodyFacts_mono {a b : Array Defn} {i : ℕ} {body : Body} (hp : Pre a b)
 theorem defOk_mono {a b : Array Defn} {i : ℕ} {c : Defn} (hp : Pre a b) (hi : i ≤ a.size)
     (h : DefOk a i c) : DefOk b i c := ⟨h.1, bodyFacts_mono hp hi h.2⟩
 
-/-- `getDef`'s last step: the Definition appended and indexed. -/
 theorem push_spec (s s' : DecState) (fid : String) (defn : Defn) (hs : Inv s)
     (hd : DefOk (DecState.defs s) (DecState.defs s).size defn)
     (e1 : DecState.defs s' = (DecState.defs s).push defn)

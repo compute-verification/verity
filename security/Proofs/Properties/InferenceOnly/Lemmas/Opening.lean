@@ -8,41 +8,9 @@ public import Proofs.ResourceAccounting.ReadUnit
 public import Proofs.ResourceAccounting.ReadUnit.BitsPorts
 public import Proofs.Properties.InferenceOnly.RecordForm
 
-/-!
-# A pinned reader's unit returns its table's row
-
-`PinnedReadBinds` (`Properties.InferenceOnly.PinnedRead`) is a lemma, proved here by `pinnedReadBinds`: no lock lists it and
-nothing reads it. Let a check hold a record's row as an opening under a pin, and let its reader's circuit file parse
-to a templated statement whose unit template the read's check accepts (`Flock.ReadNet.check`) and whose unit returns
-the circuit's outputs. Let the file's unit be the record's (`laidOutAs`), with the read unit's gates `q` at the
-reader's roles (`portsOf`). Where the unit's constant is registered as 1, the unit is correct in a transcript, its
-verdict bit is 1 there, and a table is committed under the root and the domain id its root and domain gates hold: the
-row the unit returns in its local evaluation is that table's row at the key its key gates hold, or the fill row where
-the key is at or past the table's count, or SHA-512 collides on what the unit's check and the table's opening hashed.
-
-The record's names reach the circuit's gates by `Properties.InferenceOnly.Opening`'s map alone, and the map's gates are the
-ones the read's check proves the read at:
-
-* `portsAtGates_spec`: which gates `portsAtGates`'s are, bit by bit; `portsAtGates_eq`: so they are the gates at any
-  columns each of those bits' gates sits at.
-* `fieldBit_at`: `Spot.Bits.fieldBit` at a bit of a field's first instance, where no two fields share a name.
-* `rowGate_copyGate`, `outRowGate_copyGate`: the map's gate on a parameter's bit, and on an output row's, is the copy's
-  gate at the bit's column (`ResourceAccounting.ReadUnit.copyGate_colAt_inGate`, `copyGate_colAt_outGate`).
-* `portsOf_portsAt`: so the map's ports are the read template's (`ResourceAccounting.ReadUnit.portsAt`), at copy 0.
-
-There the read's gates compute its reference (`ResourceAccounting.ReadUnit.gatesRefine_check`). Inside the table the row is
-the table's by `ResourceAccounting.SecurityProofs.readUnitBinds`; at or past the count it is the fill row by the gates'
-refinement alone.
-
-**What it does not say.** It is on the row returned, not on the opened ports: at a key at or past the count the
-reference accepts any witness, and the opened ports hold what the prover likes. It reads no row the opening declares
-(`Form.openedRow`): `portsOf` names the row returned by the reader's layout, and `OpenedRowReturned` says what the
-declared row is. Of `laidOutAs` the proof reads the unit's number alone: that `Spot.Bits.check` gives no reason is
-what makes a row's name mean its port, and no step here needs it. It gives no file, record and transcript that meet
-its hypotheses (`PinnedRead`). Two statements not proved are a listing's witnesses: `PinnedReadHonest`, that the
-check's own form has some, and `PinnedReadNontrivial`, that with the verdict bit 0 the unit returns another row
-than the table's own opening holds.
--/
+/-! A pinned reader's unit returns its table's row (`pinnedReadBinds`), a lemma no lock lists; it is on the row
+returned, not on the opened ports, reads no row the opening declares, and gives no file, record and transcript that meet
+its hypotheses (`PinnedRead`), whose witnesses `PinnedReadHonest` and `PinnedReadNontrivial` are not proved. -/
 
 @[expose] public section
 
@@ -51,9 +19,6 @@ namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
 open Flock.Program (Prog Defn)
 open ResourceAccounting
 
-/-! ## The gates `portsAtGates` gives -/
-
-/-- **The gates `gatesOf` gives are `gate`'s**, each at its index. -/
 theorem gatesOf_some {N k : ℕ} {gate : ℕ → Option ℕ} {f : Fin k → Fin N} (h : gatesOf N k gate = some f)
     (i : Fin k) : gate i.val = some (f i).val := by
   unfold gatesOf at h
@@ -64,22 +29,15 @@ theorem gatesOf_some {N k : ℕ} {gate : ℕ → Option ℕ} {f : Fin k → Fin 
   · rw [dite_eq_right hg] at h
     cases h
 
-/-- `gatesOf_some` at an index and its bound. -/
 theorem gatesOf_at {N k : ℕ} {gate : ℕ → Option ℕ} {f : Fin k → Fin N} (h : gatesOf N k gate = some f) (i : ℕ)
     (hi : i < k) : gate i = some (f ⟨i, hi⟩).val :=
   gatesOf_some h ⟨i, hi⟩
 
-/-- **The gates `gatesOf` gives are the gates at the columns `col`**, where each bit's gate is the gate at its
-column. -/
 theorem gatesOf_eq {N k : ℕ} {gate : ℕ → Option ℕ} {f : Fin k → Fin N} (h : gatesOf N k gate = some f)
     (at_ : ℕ → Fin N) (col : ℕ → ℕ) (hat : ∀ b < k, ∀ g, gate b = some g → (at_ (col b)).val = g) :
     f = fun i => at_ (col i.val) :=
   funext fun i => Fin.ext (hat i.val i.isLt _ (gatesOf_some h i)).symm
 
-/-- **The gates `portsAtGates` gives are the roles' gates**, bit by bit: the index's are the key parameter's, the
-root's and the domain id's the root and domain parameters', the row returned the output row `out`'s and the verdict
-the first bit of the verdict's row; the opened parameters are three, whose bits are the witness row's, its salt's and
-its path's, a digest a level. -/
 theorem portsAtGates_spec {C : Verity.Circuit} {inG outG : String → ℕ → Option ℕ} {ro : Roles} {out : String}
     {count words : ℕ} {q : ReadUnit.Ports C} (h : portsAtGates C inG outG ro out count words = some q) :
     (∀ i : Fin 32, inG ro.key i.val = some (q.tok i).val) ∧
@@ -110,7 +68,6 @@ theorem portsAtGates_spec {C : Verity.Circuit} {inG outG : String → ℕ → Op
   · rw [ite_eq_right hlen] at h
     cases h
 
-/-- Two read units' gates of one table are equal where each of their ports' gates are. -/
 theorem ports_congr {C : Verity.Circuit} {count words : ℕ} {position : ℕ → ℕ} {tok tok' : Fin 32 → Fin C.N}
     {root root' domain domain' : Fin 512 → Fin C.N} {row row' : Fin (16 * words) → Fin C.N}
     {salt salt' : Fin (8 * Hash.Hm96.SALT_BYTES) → Fin C.N}
@@ -122,10 +79,6 @@ theorem ports_congr {C : Verity.Circuit} {count words : ℕ} {position : ℕ →
   subst h1 h2 h3 h4 h5 h6 h7 h8
   rfl
 
-/-- **The gates `portsAtGates` gives are the gates at the read's columns**, where each bit's gate is: with `at_ x`
-the gate at column `x`, and each bit of the key, the root, the domain id, the witness row, its salt, its path, the
-row returned and the verdict having its gate, if any, at its column (`ckey`, `croot`, `cdomain`, `crow`, `csalt`,
-`cpath`, `ch`, `cok`), the read unit's gates are the gates at those columns. -/
 theorem portsAtGates_eq {C : Verity.Circuit} {inG outG : String → ℕ → Option ℕ} {ro : Roles} {out : String}
     {count words : ℕ} {q : ReadUnit.Ports C} (h : portsAtGates C inG outG ro out count words = some q)
     (at_ : ℕ → Fin C.N) (ckey croot cdomain crow csalt ch : ℕ → ℕ) (cpath : ℕ → ℕ → ℕ) (cok : ℕ)
@@ -163,9 +116,6 @@ theorem portsAtGates_eq {C : Verity.Circuit} {inG outG : String → ℕ → Opti
   · rw [ite_eq_right hlen] at h
     cases h
 
-/-! ## A field's bit among a unit's ports -/
-
-/-- **The first field named `f` is field `i`**, where field `i` is named `f` and no two fields share a name. -/
 theorem findIdx?_fst : ∀ (ws : List (String × ℕ)) (i : ℕ) (f : String), (ws.map (·.1))[i]? = some f →
     (ws.map (·.1)).Nodup → ws.findIdx? (·.1 == f) = some i
   | [], _, _, h, _ => by cases h
@@ -180,9 +130,6 @@ theorem findIdx?_fst : ∀ (ws : List (String × ℕ)) (i : ℕ) (f : String), (
     rw [List.findIdx?_cons, ite_eq_right hne, findIdx?_fst ws i f hf hnd'.2]
     rfl
 
-/-- **`Spot.Bits.fieldBit` at a bit of field `i`'s first instance**: where field `i` of `ws` is named `f`, no two
-fields share a name and the file has an instance, bit `β` of `f`'s first instance's words is instance 0's port, or
-output leaf, `P + β / 16`, `P` the words of the fields before it, at bit `β % 16`. -/
 theorem fieldBit_at {c : Flock.Circuit} {ws : List (String × ℕ)} {f : String} {i β : ℕ}
     (hname : (ws.map (·.1))[i]? = some f) (hnd : (ws.map (·.1)).Nodup) (hupv : 0 < c.upv)
     (hβ : β < 16 * (ws.getD i default).2) :
@@ -199,12 +146,6 @@ theorem fieldBit_at {c : Flock.Circuit} {ws : List (String × ℕ)} {f : String}
     omega
   rw [ite_eq_right hc, Nat.div_eq_of_lt hw, Nat.mod_eq_of_lt hw]
 
-/-! ## The map's gates are the read template's -/
-
-/-- **The map's gate on a parameter's bit is the copy's gate at the bit's column.** In a templated circuit whose unit
-template the read's check accepts, let the Definition `d`'s parameters be `ws`, no two sharing a name, with parameter
-`i` named `port`, on `W` words after `P` words of parameters, all among the read's ports. Where `rowGate` gives the
-gate `g` on bit `b` of `port` in unit `u`, the gate of copy 0 of `u` at column `16 P + b` is `g`. -/
 theorem rowGate_copyGate {V H : ℕ} {ct : Flock.Circuit} {tu : Flock.TmplUnit} (ht : ct.tmpl = some tu)
     (hsz : ct.unitNet < ct.nets.size) (hcheck : Flock.ReadNet.check V H tu.t = true)
     (hB : FlockSoundness.Built (Flock.HmOut.unrolled ct).unit) (n : ℕ) (u : Fin n)
@@ -225,10 +166,6 @@ theorem rowGate_copyGate {V H : ℕ} {ct : Flock.Circuit} {tu : Flock.TmplUnit} 
     (ReadUnit.copyGate_colAt_inGate ht hsz hcheck hB n u hj (p := P + b / 16) (t := b % 16) (by omega)
       (Nat.mod_lt _ (by decide)) h)
 
-/-- **The map's gate on an output row's bit is the copy's gate at the bit's column.** Let the Definition `d`'s output
-rows be `ws`, no two sharing a name, with output row `i` named `out`, on `W` words after `P` words of output rows.
-Where `outRowGate` gives the gate `g` on bit `b` of `out` in unit `u` of the circuit `D` describes, the gate of copy 0
-of `u` at the column of bit `b % 16` of returned output `P + b / 16` (`Layout.outCol`) is `g`. -/
 theorem outRowGate_copyGate (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit) (n : ℕ) (u : Fin n)
     (hj : 0 < D.unroll.upv) {d : Defn} {ws : List (String × ℕ)} (hws : outWords d = ws) {i : ℕ} {out : String}
     {W P : ℕ} (hname : (ws.map (·.1))[i]? = some out) (hnd : (ws.map (·.1)).Nodup)
@@ -243,7 +180,6 @@ theorem outRowGate_copyGate (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll
   rw [hf] at h
   exact ReadUnit.copyGate_colAt_outGate D hU n u hj h
 
-/-- **What `readRows` decides**: the Definition's parameters and output rows are the read's, none sharing a name. -/
 theorem readRows_spec {d : Defn} {ro : Roles} {out : String} {count words : ℕ}
     (h : readRows d ro out count words = true) :
     paramWords d = [(ro.key, 2), (ro.root, 32), (ro.domain, 32), (ro.opened.getD 0 "", words),
@@ -255,7 +191,6 @@ theorem readRows_spec {d : Defn} {ro : Roles} {out : String} {count words : ℕ}
   simp only [Bool.and_eq_true, decide_eq_true_eq] at h
   exact ⟨h.1.1.1, h.1.1.2, h.1.2, h.2⟩
 
-/-- A templated statement `Desc.parseStmt` reads is the one `HmOut.parseTmpl` reads. -/
 theorem parseTmpl_of_parseStmt {tags : Flock.Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
     {ct : Flock.Circuit} (h : Flock.Desc.parseStmt tags bytes tables = .ok (.tmpl ct)) :
     Flock.HmOut.parseTmpl tags bytes tables = .ok ct := by
@@ -267,10 +202,6 @@ theorem parseTmpl_of_parseStmt {tags : Flock.Tags} {bytes : ByteArray} {tables :
   · unfold Flock.Desc.parse at h
     split at h <;> cases h
 
-/-- **The map's ports are the read template's.** Let the templated statement parse into `ct`, with its unit template
-passing the read's check for a table of `V` rows of `H` words and its unit returning the circuit's outputs. Where
-`portsOf` gives the read unit's gates `q` of unit `u` at the roles `ro` of a Definition and the output row `out`, they
-are the gates of copy 0 of `u` at the read template's columns (`ResourceAccounting.ReadUnit.portsAt`). -/
 theorem portsOf_portsAt {V H : ℕ} {tags : Flock.Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
     {ct : Flock.Circuit} {tu : Flock.TmplUnit} (hparse : Flock.HmOut.parseTmpl tags bytes tables = .ok ct)
     (ht : ct.tmpl = some tu) (hcheck : Flock.ReadNet.check V H tu.t = true) (ho : ct.outNet = ct.unitNet)
@@ -316,9 +247,6 @@ theorem portsOf_portsAt {V H : ℕ} {tags : Flock.Tags} {bytes : ByteArray} {tab
         (Nat.zero_add (b / 16)).symm).trans (outk 0 out H 0 rfl hno rfl rfl hb hg))
     (fun g hg => outk 1 ro.verdict 1 H rfl hno rfl rfl (show 0 < 16 * 1 by omega) hg)⟩
 
-/-! ## The statement -/
-
-/-- **A pinned reader's unit returns its table's row** (`PinnedReadBinds`). -/
 theorem pinnedReadBinds : PinnedReadBinds := by
   intro F c j tr P r name p pin k dfn ro out tags bytes tables ct tu hB n consts u q Yc table h
   unfold PinnedRead PinnedReadAt at h
