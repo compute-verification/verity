@@ -21,7 +21,7 @@ from verity.protocols.resource_accounting.memory.pous.verifier.audit import (
 )
 from verity.protocols.resource_accounting.memory.pous.verifier.codec import encode_segments
 from verity.protocols.resource_accounting.memory.pous.attester.continuous import (
-    ContinuousMemoryChallenger,
+    ContinuousMemoryAttester,
     Reply,
     run_continuous,
 )
@@ -44,7 +44,7 @@ def world():
 
 def _verifier(vk, n, clock, source=b"audit", **kw):
     kw.setdefault("late_deadline_ns", LATE)
-    return ContinuousMemoryChallenger(vk, challenge_key(source, vk), n, clock=clock, **kw)
+    return ContinuousMemoryAttester(vk, challenge_key(source, vk), n, clock=clock, **kw)
 
 
 def _wrong(blocks, i):
@@ -238,7 +238,7 @@ def test_a_stale_answer_is_not_credited_to_the_next_challenge(world):
 
 
 def test_a_bare_memory_attester_would_credit_it(world):
-    """Why the continuous audit runs only on `ContinuousMemoryChallenger`: the same sequence on a bare `UnsignedRounds` with a
+    """Why the continuous audit runs only on `ContinuousMemoryAttester`: the same sequence on a bare `UnsignedRounds` with a
     hard deadline credits answer 0, which names no challenge, to challenge 1 as a hit."""
     blocks, vk = world
     clock = Clock()
@@ -317,19 +317,19 @@ def test_the_hard_deadline_is_capped(world):
     wide = dataclasses.replace(vk, params=band.BandParams(16, 64, 16, 2))
     flat = dataclasses.replace(vk, params=dense.DenseParams(16, 64, 2))
     for target in (vk, wide, flat):
-        assert ContinuousMemoryChallenger(target, key, 1, late_deadline_ns=edge).late_limit_ns == 3_139_499
-        ContinuousMemoryChallenger(target, key, 1, late_deadline_ns=edge - 40_000, rtt_allowance_ns=40_000)
+        assert ContinuousMemoryAttester(target, key, 1, late_deadline_ns=edge).late_limit_ns == 3_139_499
+        ContinuousMemoryAttester(target, key, 1, late_deadline_ns=edge - 40_000, rtt_allowance_ns=40_000)
         for late, rtt in ((edge + 1, 0), (edge - 39_999, 40_000)):
             with pytest.raises(ValueError, match="fits D_late = 13 calls of 241500 ns, past the cap of 12"):
-                ContinuousMemoryChallenger(target, key, 1, late_deadline_ns=late, rtt_allowance_ns=rtt)
+                ContinuousMemoryAttester(target, key, 1, late_deadline_ns=late, rtt_allowance_ns=rtt)
     narrow = dataclasses.replace(vk, params=band.BandParams(16, 64, 4, 2))
-    ContinuousMemoryChallenger(narrow, key, 1, late_deadline_ns=5 * PARAMS.call_ns - 1)
+    ContinuousMemoryAttester(narrow, key, 1, late_deadline_ns=5 * PARAMS.call_ns - 1)
     with pytest.raises(ValueError, match="exceeds the band's in-degree d = 4"):
-        ContinuousMemoryChallenger(narrow, key, 1, late_deadline_ns=5 * PARAMS.call_ns)
+        ContinuousMemoryAttester(narrow, key, 1, late_deadline_ns=5 * PARAMS.call_ns)
     with pytest.raises(ValueError, match="the hard deadline is at least the deadline"):
-        ContinuousMemoryChallenger(vk, key, 1, late_deadline_ns=DEADLINE_NS - 1)
+        ContinuousMemoryAttester(vk, key, 1, late_deadline_ns=DEADLINE_NS - 1)
     with pytest.raises(ValueError, match="needs a hard deadline"):
-        ContinuousMemoryChallenger(vk, key, 1, late_deadline_ns=None)
+        ContinuousMemoryAttester(vk, key, 1, late_deadline_ns=None)
 
 
 def test_without_a_hard_deadline_the_single_audit_waits(world):
@@ -448,13 +448,13 @@ def test_the_cap_is_1505_calls_of_call_ns(world):
     assert AUDIT_CAP == 1505 and PARAMS.call_ns == 241_500 and CAP_NS == 363_457_500
     flat = dataclasses.replace(vk, params=dense.DenseParams(16, 64, 2))
     for target in (vk, flat):
-        v = ContinuousMemoryChallenger(target, key, 1, late_deadline_ns=LATE, audit_cap=AUDIT_CAP)
+        v = ContinuousMemoryAttester(target, key, 1, late_deadline_ns=LATE, audit_cap=AUDIT_CAP)
         assert v.timed.cap_ns == AUDIT_CAP * target.params.call_ns and v.ends_at is None
     assert UnsignedRounds(vk, key, audit_cap=1).cap_ns == PARAMS.call_ns
     for cap in (0, AUDIT_CAP + 1):
         with pytest.raises(ValueError, match="an audit's cap is from 1 to 1505 calls"):
-            ContinuousMemoryChallenger(vk, key, 1, late_deadline_ns=LATE, audit_cap=cap)
-    assert ContinuousMemoryChallenger(vk, key, 1, late_deadline_ns=LATE).timed.cap_ns is None
+            ContinuousMemoryAttester(vk, key, 1, late_deadline_ns=LATE, audit_cap=cap)
+    assert ContinuousMemoryAttester(vk, key, 1, late_deadline_ns=LATE).timed.cap_ns is None
     assert UnsignedRounds(vk, key).cap_ns is None
 
 

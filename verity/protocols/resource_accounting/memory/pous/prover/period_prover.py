@@ -164,7 +164,7 @@ def audit(node: str, held: EncodedStore, coins: bytes, *, signer: mc.Signer | No
     if party is None:
         session_id = challenger_session.coin_session_id(coins, SESSION_DOMAIN, node, published.root)
         tree = mc.CoinTree.draw(coins, session_id, q.blocks, point.k)
-        challenger = mc.MemoryChallenger(tree, signer, log=log, limit_ns=point.limit_ns, block_bytes=q.block_bytes,
+        challenger = mc.MemoryAttester(tree, signer, log=log, limit_ns=point.limit_ns, block_bytes=q.block_bytes,
                                          binding=published.root, clock=clock)
         signed = challenger.run(prover(held.blocks))
         session, key = R.ChallengePhaseRecord(signed, challenger.commitment, challenger.openings()), signer.public_key

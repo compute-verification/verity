@@ -169,7 +169,7 @@ class Challenger:
 
     def __init__(self, domain: str, warmups: int = WARMUPS, resolution_ns: float = 1) -> None:
         self.domain, self.warmups, self.resolution_ns = domain, warmups, resolution_ns
-        self.c: mc.MemoryChallenger | None = None
+        self.c: mc.MemoryAttester | None = None
         self.sid: bytes | None = None
         self._sampled: list[bytes] = []
         self.session: R.ChallengePhaseRecord | None = None
@@ -191,7 +191,7 @@ class Challenger:
         return [Send("coins", Message("CoinsDraw", {"n": COIN_BYTES}))]
 
     def _clock(self) -> int:
-        """The reading the challenger asked its clock for, used once: `memory_attester.MemoryChallenger` reads it here."""
+        """The reading the challenger asked its clock for, used once: `memory_attester.MemoryAttester` reads it here."""
         if self._reading is None:
             raise RuntimeError("the memory attester read its clock without a fresh reading")
         out, self._reading = self._reading, None
@@ -229,7 +229,7 @@ class Challenger:
         if self.sid is None:
             self.sid = coin_session_id(coins, self.domain, q["node"], binding)
         tree = mc.CoinTree.draw(coins, self.sid, q["blocks"], q["k"], key=mc.coin_key(key), salts=salts)
-        self.c = mc.MemoryChallenger(tree, self.signer, log=self.log, limit_ns=q["limit_ns"],
+        self.c = mc.MemoryAttester(tree, self.signer, log=self.log, limit_ns=q["limit_ns"],
                                      block_bytes=q["block_bytes"], binding=binding, clock=self._clock,
                                      resolution_ns=self.resolution_ns)
         return self._warmup()

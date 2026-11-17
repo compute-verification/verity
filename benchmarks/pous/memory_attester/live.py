@@ -318,7 +318,7 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
     if signer not in ("lms", "test") or (signer == "lms") != (lms_key is not None):
         raise ValueError(f"the signer is 'lms' with a key directory or 'test' without one, not {signer!r}, {lms_key!r}")
     if signer == "lms" and session_log_path is None:
-        raise ValueError("an LMS-signed audit takes the memory challenger's session log (--session-log FILE)")
+        raise ValueError("an LMS-signed audit takes the memory attester's session log (--session-log FILE)")
     if lms_key is not None and Path(session_log_path).resolve().is_relative_to(Path(lms_key).resolve()):
         raise ValueError(f"the session log {session_log_path} is inside the key's directory {lms_key}: it is a file of its own")
     params = scheme.params
@@ -332,7 +332,7 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
     cert = scheme.certificate
     k = k or (cert.k if cert is not None else pous_audit.CHALLENGES)
     binding = setup_root(params, salt, digests)
-    base = {"memory_attester": "memory_attester.MemoryChallenger", "protocol": mc.PROTOCOL, "coin_tree": mc.COIN_TREE, "records": mc.RECORDS,
+    base = {"memory_attester": "memory_attester.MemoryAttester", "protocol": mc.PROTOCOL, "coin_tree": mc.COIN_TREE, "records": mc.RECORDS,
             "strict": strict, "warmup_pings": WARMUP_PINGS, "limit_ns": limit, "limit_fixed_before_load": fixed, "deadline_ns": deadline_ns,
             "allowance": "cap", "allowance_kind": ALLOWANCE_KIND, "rtt_allowance_ns": limit - deadline_ns, "rtt_cap_ns": cap,
             "k": k, "scheme": scheme.name, "setup_root": binding.hex(), **({} if seed is None else {"seed": seed.hex()})}
@@ -365,7 +365,7 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
         cpu_before = cgroup_cpu()
         sessions = []
         drawn = [(os.urandom(32), os.urandom(32)) if seed is None else seeded_session(seed, j) for j in range(audits)]
-        challengers = [mc.MemoryChallenger(mc.CoinTree.draw(source, session, blocks, k), sig, log=log, limit_ns=limit,
+        challengers = [mc.MemoryAttester(mc.CoinTree.draw(source, session, blocks, k), sig, log=log, limit_ns=limit,
                                            block_bytes=nb, binding=binding, clock=clock, resolution_ns=resolution)
                        for source, session in drawn]
         try:

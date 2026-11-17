@@ -1,6 +1,6 @@
 """The streamed-label wipe (experimental): a proof of secure erasure for a memory wipe, run by the memory attester.
 `PROTOCOL.md` ("The streamed-label wipe") is its specification and states the guarantee. This module holds the records,
-the derivations and the verdict; the challenger that runs a session is the device's `WipeMemoryChallenger`
+the derivations and the verdict; the challenger that runs a session is the device's `WipeMemoryAttester`
 (`pous/attester/wipe_challenger.py`).
 
 The memory attester, the auditor's device on a machine the developer doesn't control, fills every memory tier of one
@@ -100,7 +100,7 @@ DEPLOYED_K = 74_000
 
 
 def raw_clock_ns() -> int:
-    """A reading of `CLOCK`, the raw monotonic clock, in ns: what a `WipeMemoryChallenger` reads unless a clock is injected."""
+    """A reading of `CLOCK`, the raw monotonic clock, in ns: what a `WipeMemoryAttester` reads unless a clock is injected."""
     return time.clock_gettime_ns(time.CLOCK_MONOTONIC_RAW)
 
 

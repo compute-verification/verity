@@ -30,7 +30,7 @@ of the role it checks, and refuses (exit 1, the reasons in its JSON verdict) unl
 
 - every peer the role must be separate from (:func:`separate`: :func:`assess` finds nothing; with ``--link``, a routed link with
   a TCP-connect round trip of at least :data:`RTT_FLOOR_MS`) is, and every peer it must share a machine with, the one node a
-  certifier or memory attester guards, is that machine (:func:`same_machine`: inside the node's isolation boundary);
+  network attester or memory attester guards, is that machine (:func:`same_machine`: inside the node's isolation boundary);
 - the ZK server is a VM guest;
 - a role on dedicated cores may run on exactly ``--cores``, and no task outside its own cgroup may run on any of them
   (:func:`dedicated_cores` over :func:`read_tasks`' ``/proc``; kernel threads are not counted).

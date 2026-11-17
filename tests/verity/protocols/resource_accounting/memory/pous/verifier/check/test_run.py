@@ -123,7 +123,7 @@ def runs(sample, signer: M.AtLeaf | None = None, stores: st.SearchStrategy | Non
     spends = sample(st.lists(st.sampled_from([0, 1, session_limit, session_limit + 1]), min_size=k, max_size=k))
     tampered = sample(st.sets(st.integers(0, k - 1), max_size=1))
     clock = M.Clock(sample(st.integers(0, 2 ** 40)))
-    c = mc.MemoryChallenger(tree, signer, log=M.ts.session_log(), limit_ns=session_limit, block_bytes=q.block_bytes,
+    c = mc.MemoryAttester(tree, signer, log=M.ts.session_log(), limit_ns=session_limit, block_bytes=q.block_bytes,
                             binding=root, clock=clock)
     while not c.done:
         j = len(c.rounds)
@@ -342,7 +342,7 @@ def _named(signer: M.AtLeaf) -> Run:
     root = VerifierKey.from_row_digests(q, salt, list(rows)).root
     tree = mc.CoinTree.draw(b"named source", bytes(32), q.blocks, 3, key=M.COIN_KEYS[0], salts=[bytes([j]) * 192 for j in range(3)])
     clock = M.Clock(1_000)
-    c = mc.MemoryChallenger(tree, signer, log=M.ts.session_log(), limit_ns=1_000, block_bytes=q.block_bytes, binding=root,
+    c = mc.MemoryAttester(tree, signer, log=M.ts.session_log(), limit_ns=1_000, block_bytes=q.block_bytes, binding=root,
                             clock=clock)
     while not c.done:
         i = c.challenge()
@@ -368,7 +368,7 @@ def _deployed_run(tmp: Path, tampered: int | None = None
         rows[i] = mc.block_digest(M.block(i, q.block_bytes))
     root = VerifierKey.from_row_digests(q, salt, rows).root
     signer, clock = M.deployed_signer(), M.Clock(10 ** 9)
-    c = mc.MemoryChallenger(tree, signer, log=M.ts.session_log(), limit_ns=d.limit_ns, block_bytes=q.block_bytes,
+    c = mc.MemoryAttester(tree, signer, log=M.ts.session_log(), limit_ns=d.limit_ns, block_bytes=q.block_bytes,
                             binding=root, clock=clock)
     while not c.done:
         j = len(c.rounds)

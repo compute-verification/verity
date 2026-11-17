@@ -63,7 +63,7 @@ def write_case(out_path: Path, size: int, workers: int) -> dict:
         signer = ts.TestSigner(b"big case", height=1, directory=d)
         sid = derive(coins, period.SESSION_DOMAIN, {"node": "big-case", "setup": held.published.root}).stream("session", 32)
         tree = mc.CoinTree.draw(coins, sid, q.blocks, point.k)
-        c = mc.MemoryChallenger(tree, signer, log=ts.session_log(d), limit_ns=point.limit_ns, block_bytes=q.block_bytes,
+        c = mc.MemoryAttester(tree, signer, log=ts.session_log(d), limit_ns=point.limit_ns, block_bytes=q.block_bytes,
                                 binding=held.published.root)
         session = R.ChallengePhaseRecord(c.run(period_prover.honest(held.blocks)), c.commitment, c.openings())
         key = signer.public_key

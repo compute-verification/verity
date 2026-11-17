@@ -59,7 +59,7 @@ def verify(public: bytes, message: bytes, signature: bytes) -> bool:
     return lms.verify(KEY, public, message, lms.Signature.decode(KEY, signature))
 
 
-def serve(monkeypatch, params: sw.WipeParams, secret: bytes, stop_after: int | None = None) -> WC.WipeMemoryChallenger:
+def serve(monkeypatch, params: sw.WipeParams, secret: bytes, stop_after: int | None = None) -> WC.WipeMemoryAttester:
     """`wipe_challenger.serve` over a socket pair, its OS samples taken in order from `SEED`'s seeded coins; the prover
     leaves after `stop_after` batches when given."""
     coins = S.SeededCoins(SEED)
@@ -91,7 +91,7 @@ def wipe(params: sw.WipeParams, secret: bytes, *, mode: str = "live", chunk: int
     """One wipe on the runtime: in a live run on `sources` (the memory attester's virtual clock and `SEED`'s coins unless
     given; `{}` for the runtime's own)."""
     capabilities = {C: challenger_capabilities(secret, params), P: {"store": store}}
-    protocol = ProtocolDef(WPS.MANIFEST, {C: lambda: WC.MemoryChallengerParty(chunk), P: prover})
+    protocol = ProtocolDef(WPS.MANIFEST, {C: lambda: WC.MemoryAttesterParty(chunk), P: prover})
     if sources is None:
         sources = {C: {"clock": S.VirtualClock(S.VirtualTime(T0), STEP), "coins": S.SeededCoins(SEED)}}
     given = {} if mode == "simulated" else {"sources": sources}
@@ -206,7 +206,7 @@ def test_large_fill_frames_are_kept_as_digests_and_the_challenger_replays(tmp_pa
     assert [(e.elided, len(e.data)) for e in fills] == [(True, 64), (True, 64)]
     assert all(e.kind != "private" for e in t.public())
     capabilities = {C: challenger_capabilities(b"replay", params)}
-    protocol = ProtocolDef(WPS.MANIFEST, {C: lambda: WC.MemoryChallengerParty(1 << 11), P: WR.Prover})
+    protocol = ProtocolDef(WPS.MANIFEST, {C: lambda: WC.MemoryAttesterParty(1 << 11), P: WR.Prover})
     again = run({"protocol": WPS.ID, "params": WP.request_of("n0", params)}, [C], "replay", None,
                 protocols={WPS.ID: protocol}, capabilities=capabilities, replay_dir=tmp_path / "runs/1")
     assert (again.status, again.divergence) == ("completed", None)

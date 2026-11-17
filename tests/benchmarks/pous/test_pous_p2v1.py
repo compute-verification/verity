@@ -596,7 +596,7 @@ def test_the_memory_attester_arm_audits_v3s_blocks_and_fails_closed_under_its_te
     raw = (tmp_path / "leaves-p2.bin").read_bytes()
     assert len(raw) == 64 * body["blocks"]
     honest = m["audit"]
-    assert honest["memory_attester"] == "memory_attester.MemoryChallenger" and honest["limit_ns"] == 854_000 and honest["limit_fixed_before_load"]
+    assert honest["memory_attester"] == "memory_attester.MemoryAttester" and honest["limit_ns"] == 854_000 and honest["limit_fixed_before_load"]
     assert honest["audits"] == honest["audits_accepted_under_signer"] == 2 and honest["audits_accepted"] == 0
     assert honest["answers"] == 2 * 105 and honest["profile"] is None and honest["signer"]["test"]
     assert honest["signer"]["scheme"] == "test/lms-sha512/n64-w1-h1/v0"
@@ -919,7 +919,7 @@ def test_an_lms_signed_audit_takes_a_session_log_of_its_own_and_an_existing_key_
                           limit_ns=500_000 + p2.RTT_ALLOWANCE_CAP_NS, clock=live.LogicalClock(), signer="lms", lms_key=key,
                           **kw)
 
-    with pytest.raises(ValueError, match="takes the memory challenger's session log"):
+    with pytest.raises(ValueError, match="takes the memory attester's session log"):
         audit()
     with pytest.raises(ValueError, match="inside the key's directory"):
         audit(session_log_path=key / "sessions")

@@ -88,7 +88,7 @@ lowrisk_excludes = ["*.lean", "lean-audit.json", "lakefile.*", "lean-toolchain",
                     "verity/protocols/registration/verifier/", "verity/protocols/compose/verifier/",
                     "verity/party.py", "verity/protocol.py", "verity/config.py", "verity/channel.py", "verity/device.py", "verity/errors.py", "tests/verity/", "hardware/",
                     "verity/protocols/resource_accounting/memory/poub/attester/", "benchmarks/network_traces/", "adapters/vllm/manifests/checkpoints-int8.json",
-                    "benchmarks/one_stage/", "verity/protocols/resource_accounting/memory/poub/verifier/bandwidth-mem69-v2.json", "benchmarks/remote_session/auditor_line.py",
+                    "benchmarks/one_stage/", "verity/protocols/resource_accounting/memory/poub/verifier/bandwidth-mem69-v2.json", "benchmarks/poub_session/auditor_line.py",
                     "__init__.py",
                     "verity/circuits/", "verity/circuits/ops/", "verity/circuits/silicon/", "verity/circuits/kernels/", "verity/commitments/", "adapters/vllm/verity_vllm/commitments/", "tests/adapters/vllm/tests/commitments/", "verity/commitments/crypto/", "verity/commitments/randomness/",
                     "tools/verity/lean/", "tests/", "tools/check/", "tools/verity/check/", "tools/verity/graph/", ".gitattributes",
@@ -110,7 +110,7 @@ verdict_excludes = ["verity/protocols/compose/verifier/", "verity/protocols/reso
 # place or the soundness path (tests/import_order.toml), no Lean, lock or Lake file, nothing under tools/research/,
 # tools/move/, tools/verity/check/ or tools/verity/lean/, and none of the code an auditor's device runs outside an `attester/` or `verifier/`
 # directory (tests/test_lowrisk_excludes.py): benchmarks/one_stage/, benchmarks/network_traces/ and
-# benchmarks/remote_session/auditor_line.py stay on the whole check with the devices, and tools/move/, which the loop runs
+# benchmarks/poub_session/auditor_line.py stay on the whole check with the devices, and tools/move/, which the loop runs
 # and certifies moves against, with tools/research/. The quick tier runs the root's suite on every
 # change, a changed test module's slow tests too; `main`'s whole check after the landing runs every suite with its slow tests,
 # the Lean steps, circuit-check and Flock's Rust build, and a red there reverts the PR it names

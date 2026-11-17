@@ -142,10 +142,10 @@ def wipe(params: sw.WipeParams, signer: M.AtLeaf, *, prover: Callable[[sw.WipePa
          spends: Callable[[int], int] = lambda b: 1, stop_after: int | None = None,
          coins: bytes = b"coins", session_id: bytes = bytes(32), server: bytes = SERVER,
          start: int = 1_000) -> tuple[sw.WipeCommitment, sw.SignedWipe | None]:
-    """One wipe of `WipeMemoryChallenger` against `prover(params)` on an injected clock: read `b` takes `spends(b)` ns,
+    """One wipe of `WipeMemoryAttester` against `prover(params)` on an injected clock: read `b` takes `spends(b)` ns,
     and with `stop_after` the prover leaves after that many reads, so the session is never signed."""
     clock = M.Clock(start)
-    c = WCH.WipeMemoryChallenger(WC.SECRET, server, session_id, params, signer, log=M.ts.session_log(), clock=clock,
+    c = WCH.WipeMemoryAttester(WC.SECRET, server, session_id, params, signer, log=M.ts.session_log(), clock=clock,
                                 coin_secret=coins)
     p = prover(params)
     for first, data in c.fill(max(1, params.labels // 3)):

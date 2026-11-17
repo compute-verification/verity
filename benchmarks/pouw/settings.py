@@ -128,7 +128,7 @@ REGISTRY = Registry(
     S("POUW_LIBNVML", str, "libnvidia-ml.so.1", WHERE, f"NVML, for the harness's clocks and power: {LIB}"),
     S("POUW_TIER", str, "2a", VALUE, "the evidence tier verify.py records a variant at (ledger.TIERS)"),
     S("POUW_LEDGER_PUBLISH", one, False, WHERE, "1: verify.py publishes the variant's record to the ledger"),
-    S("VERITY_BENCH_CUBIN", str, None, WHERE, "the cubin a run was sent (verity_bench's "
+    S("VERITY_BENCH_CUBIN", str, None, WHERE, "the cubin `verity bench overhead run --cubin ART` sent (verity_bench's "
                                               "overhead_node sets it), which pearl_c_sm90's overhead arm loads; unset, the "
                                               "arm builds one, for development only"),
     # ---------------------------------------------------------------- served H1

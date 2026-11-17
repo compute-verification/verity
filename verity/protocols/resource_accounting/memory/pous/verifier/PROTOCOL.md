@@ -392,7 +392,7 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
 
 ## The continuous audit's memory attester (`continuous`)
 
-`continuous.ContinuousMemoryChallenger(vk, key, n, late_deadline_ns=Δ_late, max_misses=f₀)` is the memory attester
+`continuous.ContinuousMemoryAttester(vk, key, n, late_deadline_ns=Δ_late, max_misses=f₀)` is the memory attester
 of the continuous audit's model, `security/Definitions/Pous/Model/Continuous.lean`, with the guarantee
 `Pous.SecurityProofs.ContinuousAudit`: `n` challenges over time, sampled as the timed audit's indices, accepted
 when at most `f₀` answers miss. A miss is an answer that is wrong or later than `Δ + RTT`. `n` is fixed before the
@@ -413,19 +413,19 @@ stream, so the stream is never stopped or extended on misses, though it may reje
    or the band's `d`, where
    `D_late` is the number of 241.5 µs calls that fit in `Δ_late + RTT`; at `d = 12`, `Δ_late + RTT` must be under
    3,139,500 ns. That cap is the graded audit's; `ContinuousAudit` holds at every `D_late`, so for it the cap is only
-   conservative. `ContinuousMemoryChallenger` refuses to run without a hard deadline.
+   conservative. `ContinuousMemoryAttester` refuses to run without a hard deadline.
 3. **Every late answer counted.** Every challenge closes with exactly one `ChallengeReply`, whether it was answered,
    rejected or expired. `AuditResult.misses` counts every wrong or late answer, and `AuditResult.late` every answer
    past `Δ + RTT`, rejected ones included.
 
-Run the continuous audit only on `ContinuousMemoryChallenger`, never on a bare `UnsignedRounds` with `late_deadline_ns`. Its
+Run the continuous audit only on `ContinuousMemoryAttester`, never on a bare `UnsignedRounds` with `late_deadline_ns`. Its
 `respond(block)` names no challenge, so once challenge `j` expires, an answer to `j` still in flight is credited to
 `j + 1`, a hit when both ask for the same block. That block was on the wire, not in the memory the model measures at
 the send time, so the audit would credit storage the responder does not hold, as the red team found.
 
 **The audit's duration cap.** `audit.AUDIT_CAP = 1,505` (`Pous.Rebuild.auditCap`) is the cap on a graded audit's
 window that `Pous.SecurityProofs.BackgroundRebuildExcluded` requires the memory attester to enforce.
-`UnsignedRounds(..., audit_cap=...)` and `ContinuousMemoryChallenger(..., audit_cap=...)` enforce it on the memory
+`UnsignedRounds(..., audit_cap=...)` and `ContinuousMemoryAttester(..., audit_cap=...)` enforce it on the memory
 attester's clock, counted in calls of the parameters' `call_ns` as `D` and `D_late` are, so the limit is 1,505 × 241.5
 µs ≈ 363.5 ms.
 - An answer received more than `audit_cap · call_ns` after the first challenge's send is rejected unchecked and aborts
@@ -510,7 +510,7 @@ end        = SHA-512("verity-pous/streamed-wipe/end/v1\0" ‖ u64be len(message)
 ~~~
 
 `start_message(commitment)` is `start` and `end_message(signed)` is `end`. The memory attester hands `start` to its mark
-source (`WipeMemoryChallenger(..., mark_source=)`) as the statement before `fill` or `fill_by` reads the clock, so no label is
+source (`WipeMemoryAttester(..., mark_source=)`) as the statement before `fill` or `fill_by` reads the clock, so no label is
 streamed until it holds the certificate. A source that raises, or returns no bytes, stops the fill there. The
 memory attester does not check the certificate: it signs the digest of the bytes it was given. A session with an empty mark
 is judged as any other: the mark says which certificate the memory attester held, and the judge reads no certificate.
@@ -565,7 +565,7 @@ and the Python's alike, rejects such a session however it ran (`batch size B is 
 
 **What is public.** The commitment (protocol structure, with the server's declared tiers: the model's size), the
 verdict (`Verdict.public()`) and the evidence's egress in whole MiB, 0 to `2^15 − 1`, in the profile (the protocol's
-outputs, 16 bits in all), and the coins once the session is signed (`WipeMemoryChallenger.coins()`, the verifier's samples). The signed
+outputs, 16 bits in all), and the coins once the session is signed (`WipeMemoryAttester.coins()`, the verifier's samples). The signed
 session (its start mark, its times and its batch records) is witness, as a memory-attester
 session is: the prover proves `verdict` of it through the proof system, and only the verdict is published. The marks
 make nothing new public: the start message is a digest of the commitment, which is public already, and the end message
@@ -723,8 +723,8 @@ which was not measured. The node's load average was about 930 during the run, wh
 | `setup` | `commit` (streamed over segments), `sample_salt`; `verifier_setup(params, prims, commitment, salt, encoded=C*, w=None, public_encoder=PUBLIC_ENCODER)`, which picks `verifier_key_from_encoding(params, prims, commitment, salt, C*, codec=params.codec)` (public encoder, the default) or `verifier_key(params, prims, W or its segments, commitment, salt, encoded=None, codec=params.codec)` (the verifier encodes); `server_root`, `check_server_root` |
 | `verifier` | `VerifierKey` (`root` and leaf digests; `build`, `from_leaves`, `from_segments`, `from_row_digests`), `leaf_hash` (whole or chunked blocks), `row_leaf` (from a block's row digest), `segment_leaves`, `MerkleTree` (audit paths), `verify_path` |
 | `audit` | `challenge_key`, `UnsignedRounds` and `run_timed` (wall clock; `respond` may return `(block, report)`, kept in `ChallengeReply.report`), `simulate` (oracle rounds); `k` and the adversary's call time default to the parameters' own (band and dense: 111 and 241.5 µs); `UnsignedRounds` refuses a band deadline past the cliff |
-| `memory_attester` | the memory attester, which signs its rounds and on the deployed path replaces `audit.UnsignedRounds`: `CoinTree` (its `k` indices from its own secret, committed on the device before the session and released after it; `CoinOpening`, `verify_coin`), `MemoryChallenger(coins, signer, log=, limit_ns=, block_bytes=, binding=)` with its `SessionCommitment` (`commitment`, released once the session is signed; `binding` the setup's 64-byte root of `C*`, required; `session` the auditor's id for the audit, which `log`, a `SessionLog`, records as used before the first challenge and refuses again), `challenge()`, `receive(block)` (one `Round` each: index, send and receipt times, `H(block)`; the first late round ends the session), `close()` (one signature, `SignedSession`) and `openings()`; `LmsSigner`, `register`; `verdict` (what the prover will prove of a signed session, checked in the clear; its public output is `Verdict.public`); `covering_certificate` |
-| `pous/device/wipe_challenger` | the streamed wipe's memory attester: `WipeMemoryChallenger(secret, server, session, params, signer, log=, mark_source=)` with `fill(chunk)`, `challenge()`, `receive(answers)`, `run`, `close()` (one signature, `SignedWipe`) and `coins()`; `serve`, one session over a socket, and `report`; the honest server is the prover's `wipe_store.Prover` |
+| `memory_attester` | the memory attester, which signs its rounds and on the deployed path replaces `audit.UnsignedRounds`: `CoinTree` (its `k` indices from its own secret, committed on the device before the session and released after it; `CoinOpening`, `verify_coin`), `MemoryAttester(coins, signer, log=, limit_ns=, block_bytes=, binding=)` with its `SessionCommitment` (`commitment`, released once the session is signed; `binding` the setup's 64-byte root of `C*`, required; `session` the auditor's id for the audit, which `log`, a `SessionLog`, records as used before the first challenge and refuses again), `challenge()`, `receive(block)` (one `Round` each: index, send and receipt times, `H(block)`; the first late round ends the session), `close()` (one signature, `SignedSession`) and `openings()`; `LmsSigner`, `register`; `verdict` (what the prover will prove of a signed session, checked in the clear; its public output is `Verdict.public`); `covering_certificate` |
+| `pous/device/wipe_challenger` | the streamed wipe's memory attester: `WipeMemoryAttester(secret, server, session, params, signer, log=, mark_source=)` with `fill(chunk)`, `challenge()`, `receive(answers)`, `run`, `close()` (one signature, `SignedWipe`) and `coins()`; `serve`, one session over a socket, and `report`; the honest server is the prover's `wipe_store.Prover` |
 | `streamed_wipe` | the streamed-label wipe (experimental): `wipe_key`, `label`, `labels`, `sample_indices`; `WipeParams(labels, k, batch, limit_ns, tiers)` (`covered`: batch 1, the only size `verdict` accepts), `WipeCommitment`, `SignedWipe` (which holds no egress count); `start_message(commitment)` and `end_message(signed)`, the two marks' messages, and `mark_of`, which reads a start mark's hex; `verdict` (its public output `Verdict.public`: the verdict alone), the reference of the Lean verdict that decides it (`MemoryChallenger.StreamedWipe`, `wipe_verdict.judge`), with `to_json` on the records it reads; `egress_units`, the unit the wipe's check takes its egress in; the bound, `log2_error`, `retained_bits`, `challenges_for` |
 | `run` | the composed check of a recorded run: `check(trusted, setup, digests, session, session_id)` over the verifier's list of memory-attester keys (never the run's record), the setup's public outputs (`Setup`), the memory attester's table of `C*`'s row digests, its record of one session (`ChallengePhaseRecord`: signed session, commitment, openings) and the id the auditor designated for the session, at P2's deployed point (`DEPLOYED`) under `memory_attester.SCHEMES`, raising `Refused` with the first reason; `check_at` at another `Point`; `PousCheck.Run.check` (`pous-run`) in Lean |
 | `adversary` | holdings (Lean `ColState`), `schedule`, `answer_prog`, strategies, `measure`; `col_round` is Lean's `colRound` |

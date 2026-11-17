@@ -4,7 +4,7 @@ of them miss.
 Its model is the memory attester of `security/Definitions/Pous/Model/Continuous.lean`, with the
 guarantee `Pous.SecurityProofs.ContinuousAudit`.  That memory attester sends `n` uniform, independent indices and
 counts a miss for every round that is not a hit: wrong, late or rejected.  Three requirements are theorems about it
-(`security/Proofs/Pous/Continuous/Verifier.lean`), and `ContinuousMemoryChallenger` enforces each one on a single
+(`security/Proofs/Pous/Continuous/Verifier.lean`), and `ContinuousMemoryAttester` enforces each one on a single
 `audit.UnsignedRounds` over the whole stream, with its clock and its index samples:
 
 1. **No pipelining.** Challenge `j + 1` is revealed only once answer `j` is in or its hard deadline has passed
@@ -63,7 +63,7 @@ class Reply:
     report: object = None
 
 
-class ContinuousMemoryChallenger:
+class ContinuousMemoryAttester:
     """`n` challenges, each closed by its answer or its hard deadline before the next is revealed.
 
     `challenge()` returns `(j, index)`; `respond(j, block)` answers challenge `j` and refuses any other than the open
@@ -182,7 +182,7 @@ class ContinuousMemoryChallenger:
         return self.timed.result()
 
 
-def run_continuous(challenger: ContinuousMemoryChallenger, send: Callable[[int, int], None],
+def run_continuous(challenger: ContinuousMemoryAttester, send: Callable[[int, int], None],
                    receive: Callable[[int], Reply | None], wait: Callable[[int], None] | None = None) -> AuditResult:
     """Drive `challenger` through all `n` challenges over a transport.  `wait(j)` returns at challenge `j`'s arrival
     time on the memory attester's own schedule; without it each challenge is sent once the last one closes.
@@ -208,4 +208,4 @@ def run_continuous(challenger: ContinuousMemoryChallenger, send: Callable[[int, 
     return challenger.result()
 
 
-__all__ = ["ContinuousMemoryChallenger", "Reply", "run_continuous"]
+__all__ = ["ContinuousMemoryAttester", "Reply", "run_continuous"]

@@ -447,7 +447,6 @@
         "tests/benchmarks/pouw/test_lean_headline.py",
         "tests/benchmarks/pouw/test_lean_headline_dc.py",
         "benchmarks/tensor_duty/",
-        "benchmarks/int8_class_rate/",
         "security/Definitions/ResourceAccounting/Actual.lean",
         "security/Definitions/ResourceAccounting/Actual/",
         "security/Definitions/Compose/Additive.lean",
@@ -892,7 +891,6 @@
         "verity/commitments/periods/",
         "adapters/vllm/",
         "benchmarks/demo_minutes/metrics.toml", "benchmarks/demo_minutes/minutes.py", "tests/benchmarks/demo_minutes/pyproject.toml", "benchmarks/demo_minutes/settings.py", "tests/benchmarks/demo_minutes/test_minutes.py",
-        "benchmarks/replay_determinism/",
         "benchmarks/prod_repro/",
         "benchmarks/serve_tax/metrics.toml",
         "ruff.toml"
@@ -1051,6 +1049,7 @@
     },
     {
       "handle": "goals",
+      "holder": "489498eb-101a-8858-41e4-1e3c3168a091",
       "remit": "Writes Daniel's Goals page: every goal change goes through it. Leads tell it what changed; it checks and writes.",
       "linear": "CON",
       "linear_label": "lane:goals",

@@ -290,7 +290,7 @@ class Record:
 class ClockOracle:
     """The memory attester on its own clock (the module docstring, "On the memory attester's clock"): `n`
     challenges, the `j`th asking for label `index(j)` of `C`. `named` is a memory attester whose answers name their
-    challenge (`ContinuousMemoryChallenger.respond(j, …)`); an unnamed one credits every answer to the open challenge.
+    challenge (`ContinuousMemoryAttester.respond(j, …)`); an unnamed one credits every answer to the open challenge.
     Each action takes the clock reading `t` and returns what the memory attester must do: the `(j, index)` it reveals,
     the `Record` it closes, or a `Refused`."""
 

@@ -43,7 +43,7 @@ def coins(session: bytes = SESSION) -> mc.CoinTree:
 def session(respond=None, *, signer=None, clock=None, spend=lambda j: 20_000):
     clock = clock or Clock(1_000_000)
     signer = signer or ts.TestSigner(b"challenger key", height=2)
-    c = mc.MemoryChallenger(coins(), signer, log=ts.session_log(), limit_ns=LIMIT, block_bytes=BLOCK_BYTES, binding=ROOT,
+    c = mc.MemoryAttester(coins(), signer, log=ts.session_log(), limit_ns=LIMIT, block_bytes=BLOCK_BYTES, binding=ROOT,
                             clock=clock)
     j = 0
 
@@ -66,7 +66,7 @@ def test_coin_tree_is_released_after_the_last_answer():
     tree = coins()
     want = derive(SOURCE, mc.COIN_DOMAIN, {"session": SESSION, "blocks": BLOCKS, "k": K})
     assert tree.indices == tuple(want.uniform(BLOCKS, j) for j in range(K))
-    c = mc.MemoryChallenger(tree, ts.TestSigner(b"k", height=1), log=ts.session_log(), limit_ns=LIMIT,
+    c = mc.MemoryAttester(tree, ts.TestSigner(b"k", height=1), log=ts.session_log(), limit_ns=LIMIT,
                             block_bytes=BLOCK_BYTES, binding=ROOT, clock=Clock())
     for j in range(K):
         with pytest.raises(RuntimeError, match="released after the session"):
@@ -162,7 +162,7 @@ def test_receipt_time_is_read_before_hashing(monkeypatch):
         events.append("hash")
         return real(data)
 
-    c = mc.MemoryChallenger(coins(), ts.TestSigner(b"k", height=1), log=ts.session_log(), limit_ns=LIMIT,
+    c = mc.MemoryAttester(coins(), ts.TestSigner(b"k", height=1), log=ts.session_log(), limit_ns=LIMIT,
                             block_bytes=BLOCK_BYTES, binding=ROOT, clock=Seen(1_000_000))
     i = c.challenge()
     monkeypatch.setattr(mc, "block_digest", digest)
@@ -184,7 +184,7 @@ def test_a_rounds_digest_is_the_blocks_sha512_row_v2_digest_in_a_92_byte_record(
     assert mc.records_digest(signed.rounds) == rowleaf.sha512_row_v2_digest(stream, 8 * len(stream))
     with pytest.raises(ValueError, match="digest is 64 bytes"):
         dataclasses.replace(signed.rounds[0], digest=signed.rounds[0].digest + b"\0").value()
-    plain = mc.MemoryChallenger(coins(), signer, log=ts.session_log(), limit_ns=LIMIT, block_bytes=BLOCK_BYTES,
+    plain = mc.MemoryAttester(coins(), signer, log=ts.session_log(), limit_ns=LIMIT, block_bytes=BLOCK_BYTES,
                                 binding=ROOT, clock=Clock(1_000_000))
     while not plain.done:
         i = plain.challenge()
@@ -235,7 +235,7 @@ def test_openings_must_match_the_revealed_indices():
 
 def test_refusals():
     def open_(**kw):
-        return mc.MemoryChallenger(coins(), ts.TestSigner(b"k", height=1), log=ts.session_log(), limit_ns=LIMIT,
+        return mc.MemoryAttester(coins(), ts.TestSigner(b"k", height=1), log=ts.session_log(), limit_ns=LIMIT,
                                    block_bytes=BLOCK_BYTES, clock=Clock(1_000_000), **kw)
 
     with pytest.raises(ValueError, match="coarser than 1000 ns"):
@@ -256,7 +256,7 @@ def test_refusals():
     with pytest.raises(lms.StateError, match="all 2\\^1 leaves are used"):
         signer.sign(SESSION, b"c")
     with pytest.raises(TypeError, match="log"):
-        mc.MemoryChallenger(coins(), signer, limit_ns=LIMIT, block_bytes=BLOCK_BYTES, binding=ROOT, clock=Clock(1_000_000))
+        mc.MemoryAttester(coins(), signer, limit_ns=LIMIT, block_bytes=BLOCK_BYTES, binding=ROOT, clock=Clock(1_000_000))
 
 
 def test_a_session_id_is_used_once_and_on_disk_before_the_first_challenge(tmp_path, monkeypatch):
@@ -276,8 +276,8 @@ def test_a_session_id_is_used_once_and_on_disk_before_the_first_challenge(tmp_pa
     mc.SessionLog.create(path)
     log, signer = mc.SessionLog(path), ts.TestSigner(b"k", height=2)
 
-    def open_(log: mc.SessionLog, session: bytes = SESSION) -> mc.MemoryChallenger:
-        return mc.MemoryChallenger(coins(session), signer, log=log, limit_ns=LIMIT, block_bytes=BLOCK_BYTES,
+    def open_(log: mc.SessionLog, session: bytes = SESSION) -> mc.MemoryAttester:
+        return mc.MemoryAttester(coins(session), signer, log=log, limit_ns=LIMIT, block_bytes=BLOCK_BYTES,
                                    binding=ROOT, clock=Seen(1_000_000))
 
     events.clear()

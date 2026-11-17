@@ -120,7 +120,7 @@ def test_m0_is_the_memory_attesters_verdict(wrong):
     session = hashlib.sha512(b"verdict session %r" % (wrong,)).digest()[:32]
     coins = mc.CoinTree.draw(b"secret", session, BLOCKS, ROUNDS, key=mc.HM96.key_from_label(b"coin key"),
                              salts=[hashlib.sha512(b"salt%d" % j).digest() * 3 for j in range(ROUNDS)])
-    c = mc.MemoryChallenger(coins, signer, log=ts.session_log(), limit_ns=LIMIT_NS, block_bytes=BLOCK_BYTES,
+    c = mc.MemoryAttester(coins, signer, log=ts.session_log(), limit_ns=LIMIT_NS, block_bytes=BLOCK_BYTES,
                             binding=hashlib.sha512(b"root").digest(), clock=clock)
     j = 0
 

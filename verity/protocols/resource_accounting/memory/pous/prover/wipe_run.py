@@ -175,7 +175,7 @@ def run(node: str, params: sw.WipeParams | None = None, *, signer: mc.Signer | N
     server = node.encode()
     if party is None:
         assert signer is not None and log is not None, "an in-process wipe needs the memory attester's signer and log"
-        c = WC.WipeMemoryChallenger(secrets.token_bytes(32) if secret is None else secret, server,
+        c = WC.WipeMemoryAttester(secrets.token_bytes(32) if secret is None else secret, server,
                                     secrets.token_bytes(32) if session_id is None else session_id, params, signer,
                                     log=log, clock=clock, coin_secret=coin_secret)
         p = prover(params)

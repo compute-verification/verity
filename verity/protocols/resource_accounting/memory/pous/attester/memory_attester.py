@@ -712,7 +712,7 @@ def resolution_of(clock: Callable[[], int]) -> float:
     return time.clock_getres(time.CLOCK_MONOTONIC) * 1e9 if clock is time.perf_counter_ns else 1
 
 
-class MemoryChallenger:
+class MemoryAttester:
     """One session of the memory attester over `coins`, judged against `limit_ns`, signed by `signer`, bound to
     `binding`, the setup's root of the `C*` it audits (module docstring).  The session's id, `coins.session`, goes into
     `log` (`SessionLog.claim`) before anything else can happen: a used id is refused.  `challenge()` reveals the next
@@ -878,7 +878,7 @@ __all__ = ["CLOCK_RESOLUTION_NS", "COIN_DOMAIN", "COIN_TREE", "COMMITTED", "COMP
            "PROTOCOL", "REHEARSAL", "SEED_BYTES", "UNCOMMITTED", "committed", "create_leaf_state",
            "deployed_key", "holds", "key_tree", "pinned", "premise", "trusted_device",
            "RECORDS", "RECORD_BYTES", "SALT_BYTES", "SALT_LOG", "SCHEMES", "SESSION_LOG", "SETUP_RECORD_TAG",
-           "TEST_PREFIX", "CoinOpening", "CoinTree", "LmsSigner", "MemoryChallenger", "Round", "SaltLog",
+           "TEST_PREFIX", "CoinOpening", "CoinTree", "LmsSigner", "MemoryAttester", "Round", "SaltLog",
            "SessionCommitment", "SessionLog", "SessionLogError", "SetupRecord", "SignedSession", "SignedSetupRecord",
            "Signer", "Verdict", "Verify", "block_digest", "coin_digest", "coin_key", "collector_paused",
            "covering_certificate", "lms_verify", "message", "records_digest", "register", "resolution_of",

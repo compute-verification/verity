@@ -170,7 +170,7 @@ class UnsignedRounds:
     `LATE_ROUNDS` calls of the parameters' `call_ns`, or more than the band's `d`.  An answer past `Δ_late + RTT` is
     rejected without checking its block.  Once that deadline has passed with no answer, `expire()` closes the challenge
     as rejected, and so does the next `challenge()` before it reveals another index.  Without it, the memory attester
-    waits for each answer however late it is.  The continuous audit runs on `continuous.ContinuousMemoryChallenger`,
+    waits for each answer however late it is.  The continuous audit runs on `continuous.ContinuousMemoryAttester`,
     never on this class alone: `respond(block)` names no challenge, so a stale answer to an expired challenge would
     answer the next one.
 

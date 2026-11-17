@@ -138,7 +138,7 @@ def signed_run(signer, coins: bytes = COINS, prover=period_prover.honest, setup_
     h, pub = held(), held().published
     q = h.point.params
     sid = challenger_session.coin_session_id(coins, period.SESSION_DOMAIN, "n0", pub.root)
-    challenger = mc.MemoryChallenger(mc.CoinTree.draw(coins, sid, q.blocks, h.point.k), signer, log=M.ts.session_log(),
+    challenger = mc.MemoryAttester(mc.CoinTree.draw(coins, sid, q.blocks, h.point.k), signer, log=M.ts.session_log(),
                                      limit_ns=h.point.limit_ns, block_bytes=q.block_bytes, binding=pub.root,
                                      clock=M.Clock(10 ** 9))
     signed = challenger.run(prover(h.blocks))

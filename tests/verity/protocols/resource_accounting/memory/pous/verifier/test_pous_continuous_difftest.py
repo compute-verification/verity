@@ -11,7 +11,7 @@ attester from Lean `ContMachine` scripts and checks its verdicts against `cont_r
 `contRecords`, and its acceptance against `contAccepts`.
 
 The memory attesters: `UnsignedRounds` without a hard deadline (the single audit's), `UnsignedRounds` with one, and
-`ContinuousMemoryChallenger`.
+`ContinuousMemoryAttester`.
 """
 
 from __future__ import annotations
@@ -51,7 +51,7 @@ from verity.protocols.resource_accounting.memory.pous.verifier.audit import (
 )
 from verity.protocols.resource_accounting.memory.pous.verifier.codec import encode_segments
 from verity.protocols.resource_accounting.memory.pous.attester.continuous import (
-    ContinuousMemoryChallenger,
+    ContinuousMemoryAttester,
     Reply,
     run_continuous,
 )
@@ -110,7 +110,7 @@ class Subject:
     def __init__(self, kind, vk, key, n, deadline, late, rtt, clock, max_misses):
         self.kind, self.named, self.hard = kind, kind == "continuous", kind != "timed"
         if self.named:
-            self.v = ContinuousMemoryChallenger(vk, key, n, late_deadline_ns=late, max_misses=max_misses, deadline_ns=deadline,
+            self.v = ContinuousMemoryAttester(vk, key, n, late_deadline_ns=late, max_misses=max_misses, deadline_ns=deadline,
                                         rtt_allowance_ns=rtt, clock=clock)
             self.timed = self.v.timed
         else:

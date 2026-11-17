@@ -1,4 +1,4 @@
-"""The release order on the server's side. Each request a certifier releases reaches the server with three headers:
+"""The release order on the server's side. Each request a network attester releases reaches the server with three headers:
 `x-verity-release: N`, N its 0-based index in the attester run's release order (dense: each released request once, a
 request a fault drops before its release unnumbered); `x-verity-release-run: ID`, the run's id in hex; and, from the
 network attester, `x-verity-release-bucket: A`, the bucket of the release, counted from 0 at the run's origin. So
@@ -41,7 +41,7 @@ from typing import Sequence
 from urllib.parse import unquote_to_bytes
 
 RELEASE_HEADER, RUN_HEADER, BUCKET_HEADER = b"x-verity-release", b"x-verity-release-run", b"x-verity-release-bucket"
-#: the bytes of a certifier's run id, which it samples at its construction
+#: the bytes of a network attester's run id, which it samples at its construction
 RUN_ID_BYTES = 32
 WATERMARK_PATH = b"/verity/watermark"
 WATERMARK_END = b"0\r\n\r\n"
