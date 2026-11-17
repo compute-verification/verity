@@ -8,23 +8,7 @@ import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Fp8Atom.Fp32Proofs
 import Proofs.Pouw.Fp8Atom.H1TAtomProofs
 
-/-!
-# P3: the atom-mix's `PairErr` (staging)
-
-`Forming.lean`'s atom-mix instances take the chain's relative error on a flip pair as the named hypothesis `PairErr`.
-This file proves it on Pearl's flat pairs, at `ε = 1/64`.
-
-* **The step's error** (`hopperStep_err`). On a finite accumulator term `tc` and finite codes, with the step's exponent
-  `E` in `[−113, 120]`, the value the cast reads is within `33·g + (|S| + 33·g)·2^−13` of the exact sum
-  `S = c + Σ_l a_l·b_l`, for the grid `g = 2^(E − 13)` (`hopperStep_value`: two truncations toward zero).
-* **`f32Word`'s error** (`f32Word_spec`): the accumulator input `f32(α·x)` is finite and within half an FP32 ulp.
-* **Flat pairs** (`atomMix_flat_err`, `atomMix_pairErr`). On `(flat (fun _ => false), flatF s')` every noise line code
-  is `E′ = e4m3(f32(44β))` (`lineCode`), the noise is `N = E′·Σ_t flatF s' t = (11/4)·E′·(32 − 2j)` (`flatNoise`,
-  `flatNoise_eq`), and every product's exponent has `2^e ≤ 16·|E′| ≤ (32/11)·|N|`. With `|E′| ≥ 2^−9`, the step's
-  error is at most `(α|x| + |N|)/64`. Flipping the `F` line's signs flips `N` (`flatNoise_not`).
-* **The instances without `PairErr`**: `atomMixChain_saltLive_flat` and `rhoD_atomMix_pi_flat`, modulo the noise floor
-  and `FlatPairs`. `lineCode_err` bounds `E′` against `44β`, for computing the pair's `c`.
--/
+/-! P3: the atom-mix's `PairErr` on Pearl's flat pairs at `ε = 1/64` (staging). -/
 
 @[expose] public section
 
@@ -32,9 +16,6 @@ namespace Pouw.PearlC.AtomErr
 
 open Pouw.Fp8Atom Pouw.Fp8Atom.Proofs Pouw.Fp8Atom.H1T Pouw.Fp8Atom.H1T.Proofs Pouw.PearlC Pouw.PearlC.Forming
 
-/-! ## FP32 words -/
-
-/-- A word from its fields: sign bit `sb`, exponent field `e < 255` and mantissa `m < 2^23`. -/
 theorem fp32Value_word (sb e m : ℕ) (hs : sb ≤ 1) (he : e < 255) (hm : m < 2 ^ 23) :
     fp32Value (sb * 2 ^ 31 + e * 2 ^ 23 + m) =
       if e = 0 then (if m = 0 then .fin Term.zero else .fin ⟨sb == 1, -126, m⟩)
@@ -55,8 +36,6 @@ theorem abs_roundEven_sub_le (t : ℚ) : |(roundEven t : ℚ) - t| ≤ 1 / 2 := 
   unfold roundEven; dsimp only
   split_ifs with ha hb hc <;> push_cast <;> rw [abs_le] <;> constructor <;> (try simp only [not_lt] at *) <;> linarith
 
-/-- **`f32Word`'s value.** Below `2^127` the word is finite, and its value is within half an FP32 ulp of `y`: at most
-`|y|·2^−24`, or `2^−150` among the subnormals. -/
 theorem f32Word_spec {y : ℚ} (hy : |y| < 2 ^ 127) :
     ∃ t : Term, fp32Value (f32Word y) = .fin t ∧ |t.value - y| ≤ max (|y| / 2 ^ 24) (2 ^ (-150 : ℤ)) := by
   rcases eq_or_ne y 0 with rfl | hy0
@@ -106,7 +85,6 @@ theorem f32Word_spec {y : ℚ} (hy : |y| < 2 ^ 127) :
     · apply le_max_of_le_right
       have hE : E₀ = -126 := max_eq_right h.le
       rw [hu_def, hE]; norm_num
-  -- the value `f32Word` encodes
   set sb : ℕ := if y < 0 then 1 else 0 with hsb
   have hs1 : sb ≤ 1 := by rw [hsb]; split <;> omega
   have hs2 : (if y < 0 then 2 ^ 31 else 0) = sb * 2 ^ 31 := by rw [hsb]; split <;> simp
@@ -176,11 +154,6 @@ theorem f32Word_spec {y : ℚ} (hy : |y| < 2 ^ 127) :
   rw [h1, one_mul]
   exact le_trans herr hhalf
 
-/-! ## The step on a finite accumulator -/
-
-/-- **The step's value.** On a finite accumulator term `tc` and finite codes, with the step's exponent
-`E = stepExp tc a b` between −113 and 120, the step writes a finite word whose value is two truncations toward zero:
-the accumulator and each product to the grid `g = 2^(E − 13)`, then their sum to 14 significant bits. -/
 theorem hopperStep_value {w : Nat} {tc : Term} (hw : fp32Value w = .fin tc) (a b : Fin 32 → Code)
     (ha : ∀ l, (a l).isNaN = false) (hb : ∀ l, (b l).isNaN = false) (hE1 : -113 ≤ Freeze.stepExp tc a b)
     (hE2 : Freeze.stepExp tc a b ≤ 120) :
@@ -226,7 +199,6 @@ theorem hopperStep_value {w : Nat} {tc : Term} (hw : fp32Value w = .fin tc) (a b
   dsimp only
   rw [ite_eq_right (fun h => absurd h.2 (by omega)), packValue, wordQ_packTerm m1 m2 e1 e2, hv]
 
-/-- Truncation to 14 significant bits moves `y` by at most `|y|·2^−13`. -/
 theorem abs_trunc14_sub_le (y : ℚ) : |trunc14 y - y| ≤ |y| / 2 ^ 13 := by
   rcases eq_or_ne y 0 with rfl | hy
   · simp [trunc14_zero]
@@ -238,10 +210,6 @@ theorem abs_trunc14_sub_le (y : ℚ) : |trunc14 y - y| ≤ |y| / 2 ^ 13 := by
   rw [e] at h1
   linarith
 
-/-- **The step's error.** Under `hopperStep_value`'s hypotheses, the value the cast reads (`wordVal`) is within
-`33·g + (|S| + 33·g)·2^−13` of the exact sum `S = c + Σ_l a_l·b_l`, where `c` is the accumulator's value and
-`g = 2^(E − 13)` is the step's grid: `33·g` for the first truncation of the accumulator and the 32 products, and the
-rest for the second truncation, to 14 significant bits. -/
 theorem hopperStep_err {w : Nat} {tc : Term} (hw : fp32Value w = .fin tc) (a b : Fin 32 → Code)
     (ha : ∀ l, (a l).isNaN = false) (hb : ∀ l, (b l).isNaN = false) (hE1 : -113 ≤ Freeze.stepExp tc a b)
     (hE2 : Freeze.stepExp tc a b ≤ 120) :
@@ -279,8 +247,6 @@ theorem hopperStep_err {w : Nat} {tc : Term} (hw : fp32Value w = .fin tc) (a b :
   have h3 : |T| / 2 ^ 13 ≤ (|S| + 33 * g) / 2 ^ 13 := div_le_div_of_nonneg_right hTa (by norm_num)
   exact abs_le.2 ⟨by linarith, by linarith⟩
 
-/-! ## The step's grid -/
-
 theorem maxExp_cases (z : ℤ) (ts : List Term) :
     maxExp z ts = z ∨ ∃ t ∈ ts, t.mag ≠ 0 ∧ maxExp z ts = t.exp := by
   unfold maxExp
@@ -295,8 +261,6 @@ theorem maxExp_cases (z : ℤ) (ts : List Term) :
       · exact Or.inl rfl
     · exact Or.inr ⟨t', List.mem_cons_of_mem _ ht', hm, h⟩
 
-/-- `2^E ≤ B` for the step's exponent `E`, when `2^−139 ≤ B` and `2^e ≤ B` for the accumulator and every nonzero
-product. -/
 theorem two_zpow_stepExp_le (tc : Term) (a b : Fin 32 → Code) {B : ℚ} (hz : (2 : ℚ) ^ (-139 : ℤ) ≤ B)
     (hc : tc.mag ≠ 0 → (2 : ℚ) ^ tc.exp ≤ B)
     (hp : ∀ l, (product (a l) (b l)).mag ≠ 0 → (2 : ℚ) ^ (product (a l) (b l)).exp ≤ B) :
@@ -313,7 +277,6 @@ theorem abs_termValue (t : Term) : |t.value| = (t.mag : ℚ) * 2 ^ (t.exp - 23) 
   unfold Term.value
   split <;> simp [abs_mul, abs_of_pos (two_zpow_pos _)]
 
-/-- A finite FP32 term is zero, subnormal (exponent −126) or normal (significand at least `2^23`). -/
 theorem fp32Value_cases {w : Nat} {t : Term} (h : fp32Value w = .fin t) :
     t.mag = 0 ∨ t.exp = -126 ∨ 2 ^ 23 ≤ t.mag := by
   unfold fp32Value at h
@@ -327,7 +290,6 @@ theorem fp32Value_cases {w : Nat} {t : Term} (h : fp32Value w = .fin t) :
     rw [← Nat.shiftLeft_add_eq_or_of_lt hm, Nat.one_shiftLeft]
     omega
 
-/-- A nonzero finite FP32 term has `2^e ≤ |value| + 2^−126`. -/
 theorem two_zpow_acc_le {w : Nat} {t : Term} (h : fp32Value w = .fin t) (hm : t.mag ≠ 0) :
     (2 : ℚ) ^ t.exp ≤ |t.value| + 2 ^ (-126 : ℤ) := by
   have h126 := two_zpow_pos (-126)
@@ -343,7 +305,6 @@ theorem two_zpow_acc_le {w : Nat} {t : Term} (h : fp32Value w = .fin t) (hm : t.
     rw [e, ← abs_termValue] at *
     linarith
 
-/-- A nonzero product's exponent: `2^e·(sig_a·sig_b) = 64·|a·b|`. -/
 theorem product_two_zpow {a b : Code} (ha : a.isNaN = false) (hb : b.isNaN = false)
     (hm : (product a b).mag ≠ 0) :
     (2 : ℚ) ^ (product a b).exp * ((a.sig * b.sig : ℕ) : ℚ) = 64 * |val a * val b| := by
@@ -360,17 +321,10 @@ theorem product_two_zpow {a b : Code} (ha : a.isNaN = false) (hb : b.isNaN = fal
     push_cast
     ring
 
-/-! ## Flat pairs under the atom-mix -/
-
-/-- The noise line's code on a flat `E` line of `+44`s: `E′ = e4m3(f32(β·44))`. -/
 def lineCode (β : ℚ) : Code := e4m3Word (f32Word (β * 44))
 
-/-- The noise the atom adds on the flat pair `(flat (fun _ => false), flatF s')`: `E′`'s value times the sum of the
-`F` line's values, `(11/4)·(32 − 2j)` for `j` negative entries (`flatNoise_eq`). -/
 def flatNoise (β : ℚ) (s' : Fin 32 → Bool) : ℚ := codeVal (lineCode β) * ∑ t, codeVal (flatF s' t)
 
-/-- The cast of a finite FP32 word reads the word's value: `e4m3Word u` and `e4m3` of its value have the same value
-(the codes differ only at `−0`). -/
 theorem codeVal_e4m3Word {u : Nat} {t : Term} (h : fp32Value u = .fin t) :
     codeVal (e4m3Word u) = codeVal (e4m3 t.value) := by
   have hq : wordQ u = some t.value := by simp [wordQ, h, Value.finite?]
@@ -414,8 +368,6 @@ theorem codeVal_e4m3Word {u : Nat} {t : Term} (h : fp32Value u = .fin t) :
     dsimp only
     simp only [e]
 
-/-- **The noise line's value.** For `0 ≤ β` and `44β ≤ 448`, `E′ = e4m3(f32(β·44))` is within `44β/15 + 1/1000` of
-`44β`: E4M3's relative error `1/16` (or its subnormal spacing) after FP32's. -/
 theorem lineCode_err {β : ℚ} (hβ : 0 ≤ β) (hβ' : β * 44 ≤ 448) :
     |codeVal (lineCode β) - β * 44| ≤ β * 44 / 15 + 1 / 1000 := by
   have hy : |β * 44| = β * 44 := abs_of_nonneg (by positivity)
@@ -457,7 +409,6 @@ theorem sum_flat_not {r : Nat} (s : Fin r → Bool) :
 theorem flatNoise_not (β : ℚ) (s' : Fin 32 → Bool) : flatNoise β (fun t => !s' t) = -flatNoise β s' := by
   rw [flatNoise, flatNoise, sum_flat_not, mul_neg]
 
-/-- A nonzero sum of a flat `F` line of length 32 is at least `11/2` in magnitude. -/
 theorem abs_sum_flat_ge (s : Fin 32 → Bool) (h : ∑ t, codeVal (flatF s t) ≠ 0) :
     11 / 2 ≤ |∑ t, codeVal (flatF s t)| := by
   rw [sum_flat] at h ⊢
@@ -472,7 +423,6 @@ theorem abs_sum_flat_ge (s : Fin 32 → Bool) (h : ∑ t, codeVal (flatF s t) �
 theorem e4m3_flat {r : Nat} (s : Fin r → Bool) (t : Fin r) : (flatF s t).isNaN = false ∧ (flatF s t).sig = 11 := by
   unfold flatF; split <;> decide +kernel
 
-/-- `E′` on a flat `E` line of `+44`s is `lineCode`'s, `β = 0` included (`+0`: the zero product's signs agree). -/
 theorem lineCodes_flat (β : ℚ) (t : Fin 32) : lineCodes β (flat fun _ => false : Fin 32 → Code) t = lineCode β := by
   have h44 : codeVal (flat (fun _ => false) t : Code) = 44 := by rw [codeVal_flat]; rfl
   have hs : (flat (fun _ : Fin 32 => false) t : Code).sign = false := by
@@ -489,7 +439,6 @@ theorem lineCodes_flat (β : ℚ) (t : Fin 32) : lineCodes β (flat fun _ => fal
 theorem val_ne_zero_spec : ∀ c : Code, val c ≠ 0 → c.isNaN = false ∧ 1 / 512 ≤ |val c| ∧ 1 ≤ c.sig := by
   decide +kernel
 
-/-- A product of a noise line code `L` and a flat `F` entry: `2^e ≤ 16·|L|`. -/
 theorem product_flat_two_zpow {L : Code} (hLn : L.isNaN = false) (hLs : 1 ≤ L.sig) (s' : Fin 32 → Bool) (l : Fin 32)
     (hm : (product L (flatF s' l)).mag ≠ 0) : (2 : ℚ) ^ (product L (flatF s' l)).exp ≤ 16 * |val L| := by
   obtain ⟨hn, hs⟩ := e4m3_flat s' l
@@ -502,8 +451,6 @@ theorem product_flat_two_zpow {L : Code} (hLn : L.isNaN = false) (hLs : 1 ≤ L.
   have hLs' : (1 : ℚ) ≤ L.sig := by exact_mod_cast hLs
   nlinarith
 
-/-- **The atom-mix on a flat pair.** For `0 ≤ α`, `α·|x| ≤ 448` and a nonzero noise `N = flatNoise β s'`, the value
-the cast reads on the pair `(flat (fun _ => false), flatF s')` is within `(α·|x| + |N|)/64` of `α·x + N`. -/
 theorem atomMix_flat_err {α x β : ℚ} (s' : Fin 32 → Bool) (hα : 0 ≤ α) (hax : α * |x| ≤ 448)
     (hN : flatNoise β s' ≠ 0) :
     |FormChain.atomMix.value α x β (flat fun _ => false) (flatF s') - (α * x + flatNoise β s')| ≤
@@ -533,12 +480,10 @@ theorem atomMix_flat_err {α x β : ℚ} (s' : Fin 32 → Bool) (hα : 0 ≤ α)
       rw [Nat.shiftLeft_eq, (e4m3_flat s' l).2]
       exact Nat.mul_ne_zero (Nat.mul_ne_zero (by omega) (by norm_num)) (by positivity)
     unfold product; dsimp only; rw [ite_eq_right h1]; exact h1
-  -- the powers of two the bound meets, as fractions
   have z150 : (2 : ℚ) ^ (-150 : ℤ) = 1 / 2 ^ 150 := by norm_num
   have z139 : (2 : ℚ) ^ (-139 : ℤ) = 1 / 2 ^ 139 := by norm_num
   have z126 : (2 : ℚ) ^ (-126 : ℤ) = 1 / 2 ^ 126 := by norm_num
   have z120 : (2 : ℚ) ^ (120 : ℤ) = 2 ^ 120 := by norm_num
-  -- the accumulator
   have hc0 : |tc.value - α * x| ≤ α * |x| / 2 ^ 24 + 1 / 2 ^ 150 := by
     rw [hy, z150] at hc
     refine le_trans hc (max_le ?_ ?_)
@@ -548,7 +493,6 @@ theorem atomMix_flat_err {α x β : ℚ} (s' : Fin 32 → Bool) (hα : 0 ≤ α)
       linarith
   have hTv : |tc.value| ≤ α * |x| + |tc.value - α * x| := by
     have := abs_sub_abs_le_abs_sub tc.value (α * x); rw [hy] at this; linarith
-  -- the step's exponent
   have hE1 : -113 ≤ Freeze.stepExp tc a b := by
     have h := le_maxExp (-139) (tc :: List.ofFn fun l => product (a l) (b l)) (product (a 0) (b 0))
       (List.mem_cons_of_mem _ (List.mem_ofFn.2 ⟨0, rfl⟩)) (hpm 0)
@@ -568,7 +512,6 @@ theorem atomMix_flat_err {α x β : ℚ} (s' : Fin 32 → Bool) (hα : 0 ≤ α)
     rw [flatNoise, codeVal, ← val, Finset.mul_sum]
     exact Finset.sum_congr rfl fun l _ => by rw [hal, hbl]; rfl
   rw [hsum] at herr
-  -- the grid
   have hNabs : |flatNoise β s'| = |val (lineCode β)| * |∑ t, codeVal (flatF s' t)| := by
     rw [flatNoise, codeVal, ← val, abs_mul]
   have hK88 := abs_sum_flat_ge s' hK0
@@ -585,7 +528,6 @@ theorem atomMix_flat_err {α x β : ℚ} (s' : Fin 32 → Bool) (hα : 0 ≤ α)
   have hg : (2 : ℚ) ^ (Freeze.stepExp tc a b - 13) = 2 ^ Freeze.stepExp tc a b / 2 ^ 13 := by
     rw [zpow_sub₀ two_ne_zero]; norm_num
   rw [hg] at herr
-  -- the bound
   have hS : |tc.value + flatNoise β s'| ≤ |tc.value| + |flatNoise β s'| := abs_add_le _ _
   have htri := abs_sub_le (PearlC.wordVal (hopperStep (f32Word (α * x)) a b)) (tc.value + flatNoise β s')
     (α * x + flatNoise β s')
@@ -593,8 +535,6 @@ theorem atomMix_flat_err {α x β : ℚ} (s' : Fin 32 → Bool) (hα : 0 ≤ α)
   rw [e] at htri
   linarith
 
-/-- **`PairErr` for the atom-mix at `ε = 1/64`.** On Pearl's flat pairs `(flat (fun _ => false), flatF ¬s')` and
-`(flat (fun _ => false), flatF s')`, with `0 ≤ α`, `α·|x| ≤ 448` and the noise `N = flatNoise β s'` positive. -/
 theorem atomMix_pairErr {α x β : ℚ} (s' : Fin 32 → Bool) (hα : 0 ≤ α) (hax : α * |x| ≤ 448)
     (hN : 0 < flatNoise β s') :
     PairErr FormChain.atomMix.value α x β (flatNoise β s') (1 / 64)
@@ -608,11 +548,6 @@ theorem atomMix_pairErr {α x β : ℚ} (s' : Fin 32 → Bool) (hα : 0 ≤ α) 
     rw [abs_of_pos hN] at h
     exact h
 
-/-! ## `atomMixChain_saltLive` and `rhoD_atomMix_pi` without `PairErr` -/
-
-/-- **`atomMixChain_saltLive` on flat pairs, without `PairErr`.** With `FlatPairs S` and the noise floor `ασ ≥ 1`, a
-sign pattern `s'` whose flat-pair noise is `flatNoise β s' = c·ασ` with `8/15 ≤ c ≤ 4` makes the element salt-live
-when `(81/64)·|x| < (943/64)·c·σ` (`atomMix_pairErr`'s `ε = 1/64`). -/
 theorem atomMixChain_saltLive_flat {S : Support 32} (hS : FlatPairs S) {α x β σ c : ℚ} (s' : Fin 32 → Bool)
     (hN : flatNoise β s' = c * (α * σ)) (hα : 0 < α) (hfloor : 1 ≤ α * σ) (hsat : α * (|x| + 4 * σ) ≤ 448)
     (hc : 8 / 15 ≤ c) (hc4 : c ≤ 4) (hx : (1 + 17 * (1 / 64)) * |x| < (15 - 17 * (1 / 64)) * c * σ) :
@@ -624,9 +559,6 @@ theorem atomMixChain_saltLive_flat {S : Support 32} (hS : FlatPairs S) {α x β 
   rw [hN] at herr
   exact atomMixChain_saltLive (hS _ _) (hS _ _) herr hα hfloor hsat hc hc4 (by norm_num) (by norm_num) hx
 
-/-- **`rhoD_atomMix_pi` on flat pairs, without `PairErr`.** With `FlatPairs S`, the noise floor and §5's scale, per row
-a sign pattern `s' i` whose flat-pair noise is `flatNoise (β i) (s' i) = c_i·α_iρ_i` with `648/943 ≤ c_i ≤ 4`: the
-liveness rule gives the forming budget with `ρ_D = 1/64`, as for Pearl's chain (`rhoD_bf16_pi`). -/
 theorem rhoD_atomMix_pi_flat (fs : ℕ) (s : Shape) {S : Support Params.pi.r} (hS : FlatPairs S)
     {α β ρ c : Fin s.m → ℚ} {X : Matrix (Fin s.m) (Fin s.k) ℚ} (s' : Fin s.m → Fin 32 → Bool)
     (hN : ∀ i, flatNoise (β i) (s' i) = c i * (α i * ρ i)) (hα : ∀ i, 0 < α i) (hfloor : ∀ i, 1 ≤ α i * ρ i)

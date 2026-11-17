@@ -8,55 +8,8 @@ import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.PearlC.AtomErr
 import Proofs.Pouw.PearlC.PeelExactProofs
 
-/-!
-# Pearl-C4's replayed debit: exactness, and the soundness of terms 2 and 3
-
-Proofs about `Pouw.PearlC.Fp4Skip` on any `Fp4Atom` (`sm120Nvf4`, `sm120Mxf4`), for TT_OUT-FP4's debit.
-
-* **The exactness lemma** (`step_exact`, `chainMask_exact`, `cTilde_exact`, `cTilde_dot`). A step is exact when
-  - `NoLoss`: no addend loses a bit to the step's grid `2^lsb` (`gridLsb`), i.e. every group's scaled dot and the
-    accumulator's significand are multiples of `2^lsb` (the FP4 census's step with no `glost` and no `alost`); and
-  - `Fits`: the exact sum is a binary32 value (no `nlost`, no overflow).
-
-  Such a step writes exactly the accumulator plus `Σ mant·2^unit` (`step_exact`). An `ExactRun`, whose unskipped steps
-  are all exact from their exact partial sums, writes the word of the exact sum of the unskipped atoms' contributions
-  (`chainMask_exact`). From `+0`, C̃ is then the exact dot product, taken group by group with each group's block scales
-  (`cTilde_dot`). `OnGrid` reads `NoLoss` off the windows: 27 fraction bits below every participating group and 35 below
-  the accumulator. It is sufficient when `accWindow ≥ 24` (`OnGrid.noLoss`).
-* **The gap: D₄ gives neither hypothesis.**
-  - `NoLoss`: D-SS lets a pair's unit weights span 31.6 binades, past the 27-bit window, and a participating group whose
-    dot cancels still anchors the grid. `noLoss_gap` is an `sm120Nvf4` firing with scale bytes inside D-SS (a spread
-    of 2^13.1 per operand) whose grid drops a bit of a sum that fits binary32. InertWork term 5 (sub-grid blocks) charges the
-    blocks that drop out entirely. A partial loss like this one skips nothing.
-  - `Fits`: the running sum's bit span, which D₄ doesn't bound (`K` up to 2^16). Once the sum needs more than 24 bits,
-    the binary32 write drops the low ones.
-
-  So exactness is a per-run hypothesis (`ExactRun`), which the census measures; it does not follow from D₄.
-* **Term 2** (`fp4PureFlags_iff`, `unitPureFlags_iff`). Unconditionally, atom `t` is flagged iff the chain is in the
-  model and skipping `t` alone leaves its word unchanged. So the debit charges exactly the atoms a program may skip.
-  On exact runs (the chain and the lone skip both) it flags exactly the atoms whose exact contribution is 0, the
-  zero-sum atoms (`fp4PureFlags_exact_iff`). Off them it also flags frozen atoms.
-* **Term 3** (`blockTerms_congr`, `deadPair_salt_free`, `deadBlocks_salt_free`). A block's group terms read only its
-  codes and scale byte on each side. This needs `BlockShape` (groups inside blocks inside firings), which both atoms
-  have. Assume `DeadFixes`: the forming gives every dead block the same codes and scale byte at every salt. Then a dead ×
-  dead (word, block) is the same at every salt, and every pair-word that `pairWords` counts is precomputable.
-  `DeadFixes` is not given by D₄. `dead` screens the clean row for noise below 1/8 of the code step, so the codes
-  barely depend on the salt; whether they depend on it at all is a property of the forming.
-* **What terms 1 and 4 need** (stated, not proved here):
-  - Term 1 (2:4) needs:
-    - a per-code salt-dead flag at the FP4 forming;
-    - the count of 4-groups with at least 2 flagged codes, per (row, k-block);
-    - the 2:4 saving (0.5 per MAC, 1.0 when all 4 are salt-dead) as a hardware price.
-
-    Its base split reproduces words only on exact runs (`ExactRun`). What it leaves (a 2:4 pass over a correction that
-    is not E2M1) is TT_OUT-FP4's `no-exact-rewrite/fp4-sm120`.
-  - Term 4 (forming) needs:
-    - the same salt-dead flag;
-    - the FP4 `needed`: element `(i, l)` is read by atom `l / p.k` of a word the flags leave unflagged (`Skip.needed`,
-      whose atoms are 32 wide, at the FP4 atom's width);
-    - the salt-dead bound `#salt-dead ≤ ρ_D·m·k`, as a hypothesis;
-    - `f_s`, as a price.
--/
+/-! Pearl-C4's replayed debit: exactness and the soundness of terms 2 and 3; D₄ gives none of `NoLoss`, `Fits`
+and `DeadFixes`, which are hypotheses, and terms 1 and 4 are not proved here. -/
 
 @[expose] public section
 
@@ -64,7 +17,6 @@ namespace Pouw.PearlC.Fp4Freeze
 
 open Pouw.Fp8Atom Pouw.PearlC Pouw.PearlC.Fp4 Pouw.PearlC.Fp4Skip Pouw.PearlC.AccumProofs
 
-/-- A value binary32 holds exactly: zero, or a 24-bit significand at an exponent of at least −149, below `2^128`. -/
 def Fits (v : ℚ) : Prop := v = 0 ∨ ∃ m e : ℤ, |m| < 2 ^ 24 ∧ -149 ≤ e ∧ v = m * 2 ^ e ∧ |v| < 2 ^ 128
 
 theorem bitLength_of_bounds {q a : ℕ} (h1 : 2 ^ a ≤ q) (h2 : q < 2 ^ (a + 1)) : bitLength q = a + 1 := by
@@ -110,8 +62,6 @@ theorem shift_or (E Q : ℕ) : (E <<< 23 ||| (Q &&& 0x7FFFFF)) = E * 2 ^ 23 + Q 
 theorem natAbs_cast (N : ℤ) : ((N.natAbs : ℕ) : ℚ) = |(N : ℚ)| := by
   rw [Nat.cast_natAbs, Int.cast_abs]
 
-/-- **`toF32RZ` is exact on what binary32 holds**: a nonzero `N·2^lsb` that `Fits` is written as a word of exactly that
-value, a word as a step leaves it (below `2^32`, not `−0`, finite). -/
 theorem toF32RZ_exact {N lsb : ℤ} (hN : N ≠ 0) (hfit : Fits ((N : ℚ) * 2 ^ lsb)) :
     ∃ w, toF32RZ N lsb = some w ∧ StepWord w ∧ wordQ w = some ((N : ℚ) * 2 ^ lsb) := by
   have two : (1 : ℚ) < 2 := by norm_num
@@ -253,34 +203,23 @@ theorem toF32RZ_exact {N lsb : ℤ} (hN : N ≠ 0) (hfit : Fits ((N : ℚ) * 2 ^
       · rw [ite_eq_left hN0, ite_eq_left hN0, ite_eq_left (by rfl)]; ring
       · rw [ite_eq_right hN0, ite_eq_right hN0, ite_eq_right (by decide)]; ring
 
-/-! ## One step -/
-
-/-- The exact value of group terms: `Σ mant·2^unit`. -/
 def termsValue (ts : List GroupTerm) : ℚ := (ts.map fun t => (t.mant : ℚ) * 2 ^ t.unit).sum
 
-/-- The step's grid anchors on group terms `ts` and the accumulator term `c` (`step`'s `anchors`): `X_g − fracBits` for
-each participating group, and `E_acc − (accWindow − 1)` if the accumulator is nonzero. -/
 def anchors (p : Fp4Atom) (ts : List GroupTerm) (c : Term) : List ℤ :=
   ts.filterMap (fun t => if t.live then some (t.unit - p.fracBits) else none) ++
     (if c.mag = 0 then [] else [c.exp - ((p.accWindow - 1 : Nat) : Int)])
 
-/-- The step's grid exponent `lsb`: the largest anchor, and at least the grid floor (the floor if there is no anchor,
-where the step writes `+0`). -/
 def gridLsb (p : Fp4Atom) (ts : List GroupTerm) (c : Term) : ℤ :=
   match anchors p ts c with
   | [] => p.gridFloor
   | x :: xs => max (xs.foldl max x) p.gridFloor
 
-/-- **No addend loses a bit to the grid** (the FP4 census's step without `glost` or `alost`): every group's scaled dot
-`mant·2^unit` and the accumulator's significand `mag·2^(exp − 23)` are multiples of `2^lsb`. -/
 structure NoLoss (p : Fp4Atom) (ts : List GroupTerm) (c : Term) : Prop where
   groups : ∀ h ∈ ts, h.unit < gridLsb p ts c → (2 ^ (gridLsb p ts c - h.unit).toNat : ℤ) ∣ h.mant
   acc : c.exp - 23 < gridLsb p ts c → (2 ^ (gridLsb p ts c - (c.exp - 23)).toNat : ℤ) ∣ c.mag
 
-/-- **The windows' reading of `NoLoss`**, sufficient but not necessary (it ignores trailing zero bits, such as UE8M0's
-mantissa 8): each nonzero group's unit weight is at most `fracBits` (27) below every participating group's and at most
-`accWindow − 1` (35) below a nonzero accumulator's exponent, a nonzero accumulator's ulp is at most `fracBits` below
-every participating group's unit weight, and both are at or above the grid floor. -/
+/-- The windows' reading of `NoLoss`, sufficient but not necessary: it ignores trailing zero bits, such as UE8M0's
+mantissa 8. -/
 structure OnGrid (p : Fp4Atom) (ts : List GroupTerm) (c : Term) : Prop where
   groups : ∀ g ∈ ts, ∀ h ∈ ts, g.live = true → h.mant ≠ 0 → g.unit - p.fracBits ≤ h.unit
   acc_groups : c.mag ≠ 0 → ∀ h ∈ ts, h.mant ≠ 0 → c.exp - ((p.accWindow - 1 : ℕ) : ℤ) ≤ h.unit
@@ -376,7 +315,6 @@ theorem anchors_le {p : Fp4Atom} {ts : List GroupTerm} {c : Term} (hw : 24 ≤ p
       subst hy
       exact ⟨fun t ht hm => hg.acc_groups h0 t ht hm, fun _ => by omega⟩
 
-/-- `OnGrid` gives `NoLoss` when the accumulator window is at least binary32's 24 bits. -/
 theorem OnGrid.noLoss {p : Fp4Atom} {ts : List GroupTerm} {c : Term} (hw : 24 ≤ p.accWindow) (hg : OnGrid p ts c) :
     NoLoss p ts c where
   groups h hh hlt := by
@@ -437,8 +375,6 @@ theorem stepWord_zero : StepWord 0 := ⟨by norm_num, by norm_num, by decide⟩
 
 theorem wordQ_zero : wordQ 0 = some 0 := by simp [wordQ, fp32Value, Term.zero, Term.value, Value.finite?]
 
-/-- **One exact step**: on group terms `ts` and a finite accumulator term `c`, a step on which no addend loses a bit to
-the grid and whose exact result `Fits` binary32 writes exactly `c + Σ mant·2^unit`, as a step word. -/
 theorem step_exact (p : Fp4Atom) {acc : Nat} {a b : List Nib} {sa sb : List (Fin 256)} {ts : List GroupTerm}
     {c : Term} (hts : p.groupTerms a b sa sb = some ts) (hc : fp32Value acc = .fin c) (hg : NoLoss p ts c)
     (hfit : Fits (c.value + termsValue ts)) :
@@ -492,9 +428,6 @@ theorem step_exact (p : Fp4Atom) {acc : Nat} {a b : List Nib} {sa sb : List (Fin
     · rw [← hval] at hfit ⊢
       exact toF32RZ_exact ht0 hfit
 
-/-! ## The chain -/
-
-/-- The `u`-th slice of width `w`. -/
 def slice {α : Type} (l : List α) (u w : Nat) : List α := (l.drop (u * w)).take w
 
 theorem slice_zero {α : Type} (l : List α) (w : Nat) : slice l 0 w = l.take w := by simp [slice]
@@ -504,8 +437,6 @@ theorem slice_drop {α : Type} (l : List α) (u w : Nat) : slice (l.drop w) u w 
   congr 2
   ring
 
-/-- **Atom `u`'s exact contribution**: `Σ mant·2^unit` over its group terms, the exact sum of its scaled products; 0
-outside the model. -/
 def atomVal (p : Fp4Atom) (a b : List Nib) (sa sb : List (Fin 256)) (u : Nat) : ℚ :=
   ((p.groupTerms (slice a u p.k) (slice b u p.k) (slice sa u p.scales) (slice sb u p.scales)).map termsValue).getD 0
 
@@ -513,24 +444,17 @@ theorem atomVal_drop (p : Fp4Atom) (a b : List Nib) (sa sb : List (Fin 256)) (u 
     atomVal p (a.drop p.k) (b.drop p.k) (sa.drop p.scales) (sb.drop p.scales) u = atomVal p a b sa sb (u + 1) := by
   simp only [atomVal, slice_drop]
 
-/-- The exact partial sum ahead of atom `u` on the run with skip mask `ms` from the value `v`: `v` plus every earlier
-unskipped atom's exact contribution. -/
 def partialSum (p : Fp4Atom) (ms : List Bool) (v : ℚ) (a b : List Nib) (sa sb : List (Fin 256)) (u : Nat) : ℚ :=
   v + ∑ t ∈ Finset.range u, if ms.getD t false then 0 else atomVal p a b sa sb t
 
-/-- **An exact step from the value `v`**: the firing is in the model with group terms `ts`, `v + Σ mant·2^unit`
-`Fits` binary32, and the step word of value `v` meets the grid condition with `ts`. -/
 def ExactAt (p : Fp4Atom) (v : ℚ) (a b : List Nib) (sa sb : List (Fin 256)) : Prop :=
   ∃ ts, p.groupTerms a b sa sb = some ts ∧ Fits (v + termsValue ts) ∧
     ∀ w c, StepWord w → wordQ w = some v → fp32Value w = .fin c → NoLoss p ts c
 
-/-- **An exact run** of the first `n` atoms with skip mask `ms` from the value `v`: every atom the mask doesn't skip is
-an exact step from its exact partial sum. -/
 def ExactRun (p : Fp4Atom) (ms : List Bool) (v : ℚ) (a b : List Nib) (sa sb : List (Fin 256)) (n : Nat) : Prop :=
   ∀ u < n, ms.getD u false = false →
     ExactAt p (partialSum p ms v a b sa sb u) (slice a u p.k) (slice b u p.k) (slice sa u p.scales) (slice sb u p.scales)
 
-/-- The lengths `chain` accepts. -/
 def Shaped (p : Fp4Atom) (a b : List Nib) (sa sb : List (Fin 256)) : Prop :=
   b.length = a.length ∧ a.length % p.k = 0 ∧ sa.length = a.length / p.k * p.scales ∧
     sb.length = a.length / p.k * p.scales
@@ -563,8 +487,6 @@ theorem exactRun_succ {p : Fp4Atom} {ms : List Bool} {v : ℚ} {a b : List Nib} 
   have := h (u + 1) (by omega) hm
   rwa [partialSum_succ, ← slice_drop, ← slice_drop, ← slice_drop, ← slice_drop] at this
 
-/-- **An exact masked run writes its exact partial sum**: from a step word of value `v`, `n` firings whose unskipped
-steps are exact write the step word of value `v + Σ` of the unskipped atoms' exact contributions. -/
 theorem chainMaskN_exact (p : Fp4Atom) :
     ∀ (n : Nat) (ms : List Bool) (c : Nat) (v : ℚ) (a b : List Nib) (sa sb : List (Fin 256)), StepWord c →
       wordQ c = some v → ExactRun p ms v a b sa sb n →
@@ -602,7 +524,6 @@ theorem chainMaskN_nil (p : Fp4Atom) :
     simp only [chainMaskN, Fp4Atom.chainN, List.headD_nil, List.tail_nil, Bool.false_eq_true, ite_false,
       chainMaskN_nil p n]
 
-/-- The empty mask is the chain. -/
 theorem chainMask_nil (p : Fp4Atom) (c : Nat) (a b : List Nib) (sa sb : List (Fin 256)) :
     chainMask p [] c a b sa sb = p.chain c a b sa sb := by
   unfold chainMask Fp4Atom.chain
@@ -618,8 +539,6 @@ theorem chainMask_exact (p : Fp4Atom) {ms : List Bool} {c : Nat} {v : ℚ} {a b 
   rw [ite_eq_left hs]
   exact chainMaskN_exact p _ ms c v a b sa sb hc hv hr
 
-/-- **The exactness lemma**: on an exact run from `+0`, C̃ is the step word of the exact sum of the atoms' exact
-contributions. -/
 theorem cTilde_exact (p : Fp4Atom) {a b : List Nib} {sa sb : List (Fin 256)}
     (hs : Shaped p a b sa sb) (hr : ExactRun p [] 0 a b sa sb (a.length / p.k)) :
     ∃ w, cTilde p a b sa sb = some w ∧ StepWord w ∧
@@ -630,11 +549,6 @@ theorem cTilde_exact (p : Fp4Atom) {a b : List Nib} {sa sb : List (Fin 256)}
   rw [h3]
   simp [partialSum]
 
-/-! ## Term 2: the lone-skip flags -/
-
-/-- **Term 2's flag is the lone skip's invariance**, unconditionally: atom `t` is flagged iff it is one of the chain's
-atoms and the chain with atom `t` alone skipped writes the chain's word. So the debit is sound (it charges only atoms a
-program may skip without changing the word) and complete (it charges every such atom). -/
 theorem fp4PureFlags_iff (p : Fp4Atom) (c : Nat) (a b : List Nib) (sa sb : List (Fin 256)) (t : Nat) :
     fp4PureFlags p c a b sa sb t = true ↔
       t < a.length / p.k ∧ ∃ w, p.chain c a b sa sb = some w ∧ skipOne p t c a b sa sb = some w := by
@@ -646,7 +560,6 @@ theorem fp4PureFlags_iff (p : Fp4Atom) (c : Nat) (a b : List Nib) (sa sb : List 
   · rintro ⟨ht, w, hw, hs⟩
     exact ⟨⟨ht, w, hw⟩, hs.trans hw.symm⟩
 
-/-- `fp4PureFlags_iff` on a unit's rows, from `+0`. -/
 theorem unitPureFlags_iff {m n k s : Nat} (p : Fp4Atom) (Aq : Matrix (Fin m) (Fin k) Nib)
     (SA : Matrix (Fin m) (Fin s) (Fin 256)) (Bq : Matrix (Fin n) (Fin k) Nib) (SB : Matrix (Fin n) (Fin s) (Fin 256))
     (i : Fin m) (j : Fin n) (t : Nat) :
@@ -685,9 +598,6 @@ theorem stepWord_inj {w₁ w₂ : Nat} (h₁ : StepWord w₁) (h₂ : StepWord w
     rw [wordQ_zero_word h₁ hy₁, wordQ_zero_word h₂ hy₂]
   · rw [← f32Word_word h₁.1 (finite?_exp h₁.2.2) hy₁ h0, f32Word_word h₂.1 (finite?_exp h₂.2.2) hy₂ h0]
 
-/-- **Under exactness, term 2 flags exactly the atoms that contribute 0**: when the chain and the chain with atom `t`
-skipped are exact runs, atom `t` is flagged iff its exact contribution is 0. This covers the exact zero-sum atoms; a
-frozen atom (a nonzero contribution the chain drops) is flagged by `fp4PureFlags_iff` outside exactness. -/
 theorem fp4PureFlags_exact_iff (p : Fp4Atom) {c : Nat} {v : ℚ} {a b : List Nib}
     {sa sb : List (Fin 256)} {t : Nat} (hs : Shaped p a b sa sb) (hc : StepWord c) (hv : wordQ c = some v)
     (ht : t < a.length / p.k) (hfull : ExactRun p [] v a b sa sb (a.length / p.k))
@@ -710,8 +620,6 @@ theorem fp4PureFlags_exact_iff (p : Fp4Atom) {c : Nat} {v : ℚ} {a b : List Nib
     rw [h0, add_zero] at hv₁
     exact ⟨ht, w₁, rfl, by rw [stepWord_inj hw₂ hw₁ hv₂ hv₁]⟩
 
-/-! ## The exact dot product -/
-
 theorem numerator_decode (c : Nib) : (numerator c : ℚ) = 2 * Fp4.decode c := by
   fin_cases c <;> norm_num [numerator, Fp4.decode, Nib.sign, Nib.sig, Nib.expField, Nib.manField, Nib.expOr1, Nib.lsbExp]
 
@@ -723,16 +631,12 @@ theorem sum_numerators (L : List (Nib × Nib)) :
     simp only [List.map_cons, List.sum_cons, Int.cast_add, Int.cast_mul, numerator_decode, ih]
     ring
 
-/-- A scale byte's value, 0 if it is absent or invalid. -/
 def scaleAt (f : ScaleFmt) (s : List (Fin 256)) (i : Nat) : ℚ := ((s[i]?).bind (scaleValue f)).getD 0
 
-/-- **Group `j`'s exact dot**: the sum of its code pairs' exact products, times its block's scale on each side (a group
-lies in one block). -/
 def groupDot (p : Fp4Atom) (a b : List Nib) (sa sb : List (Fin 256)) (j : Nat) : ℚ :=
   (((slice a j p.group).zip (slice b j p.group)).map fun x => Fp4.decode x.1 * Fp4.decode x.2).sum *
     scaleAt p.fmt sa (j * p.group / p.block) * scaleAt p.fmt sb (j * p.group / p.block)
 
-/-- A group term's value is the group's exact dot. -/
 theorem groupTerm_value {p : Fp4Atom} {a b : List Nib} {sa sb : List (Fin 256)} {j : ℕ} {t : GroupTerm}
     (h : p.groupTerm a b sa sb j = some t) : (t.mant : ℚ) * 2 ^ t.unit = groupDot p a b sa sb j := by
   unfold Fp4Atom.groupTerm at h
@@ -783,7 +687,6 @@ theorem sum_list_range (G : ℕ → ℚ) (n : ℕ) : ((List.range n).map G).sum 
   | zero => simp
   | succ n ih => rw [List.range_succ, List.map_append, List.sum_append, ih, Finset.sum_range_succ]; simp
 
-/-- A firing's group terms sum to its exact dot, group by group. -/
 theorem groupTerms_value {p : Fp4Atom} {a b : List Nib} {sa sb : List (Fin 256)} {ts : List GroupTerm}
     (h : p.groupTerms a b sa sb = some ts) :
     termsValue ts = ∑ j ∈ Finset.range (p.k / p.group), groupDot p a b sa sb j := by
@@ -791,12 +694,10 @@ theorem groupTerms_value {p : Fp4Atom} {a b : List Nib} {sa sb : List (Fin 256)}
   split_ifs at h
   rw [termsValue_mapM (fun j t ht => groupTerm_value ht) h, sum_list_range]
 
-/-- **Atom `u`'s exact dot**: the sum of its groups' exact dots. -/
 def atomDot (p : Fp4Atom) (a b : List Nib) (sa sb : List (Fin 256)) (u : Nat) : ℚ :=
   ∑ j ∈ Finset.range (p.k / p.group),
     groupDot p (slice a u p.k) (slice b u p.k) (slice sa u p.scales) (slice sb u p.scales) j
 
-/-- **C̃ is the exact dot product on an exact run**: `cTilde_exact` with each atom's contribution its exact dot. -/
 theorem cTilde_dot (p : Fp4Atom) {a b : List Nib} {sa sb : List (Fin 256)} (hs : Shaped p a b sa sb)
     (hr : ExactRun p [] 0 a b sa sb (a.length / p.k)) :
     ∃ w, cTilde p a b sa sb = some w ∧ StepWord w ∧
@@ -809,10 +710,6 @@ theorem cTilde_dot (p : Fp4Atom) {a b : List Nib} {sa sb : List (Fin 256)} (hs :
   obtain ⟨ts, hts, -, -⟩ := hr u (Finset.mem_range.1 hu) (by simp)
   simp only [atomVal, atomDot, hts, Option.map_some, Option.getD_some, groupTerms_value hts]
 
-/-! ## Term 3: dead × dead block pairs -/
-
-/-- The block layout `blockTerms` reads: groups of `group` inside blocks of `block` inside firings of `k`. Both sm_120
-atoms have it (`sm120Nvf4_blockShape`, `sm120Mxf4_blockShape`). -/
 def BlockShape (p : Fp4Atom) : Prop := 0 < p.group ∧ p.group ∣ p.block ∧ p.block ∣ p.k ∧ 0 < p.k
 
 theorem sm120Nvf4_blockShape : BlockShape sm120Nvf4 := by unfold BlockShape; decide
@@ -866,7 +763,6 @@ theorem groupTerm_congr (p : Fp4Atom) {A B A' B' : List Nib} {SA SB SA' SB' : Li
   unfold Fp4Atom.groupTerm
   rw [h1, h2, h3, h4]
 
-/-- **A block's group terms read only the block**: its codes and its scale byte on each side. -/
 theorem blockTerms_congr {p : Fp4Atom} (hp : BlockShape p) {a a' b b' : List Nib} {sa sa' sb sb' : List (Fin 256)}
     {β : ℕ} (hA : blockOf p a sa β = blockOf p a' sa' β) (hB : blockOf p b sb β = blockOf p b' sb' β) :
     blockTerms p a b sa sb β = blockTerms p a' b' sa' sb' β := by
@@ -887,15 +783,10 @@ theorem blockTerms_congr {p : Fp4Atom} (hp : BlockShape p) {a a' b b' : List Nib
   · unfold Fp4Atom.scales
     rw [scale_of_block sb h3 h4, scale_of_block sb' h3 h4, hB2]
 
-/-- **Term 3's hypothesis, not given by D₄**: at every salt, the forming `form` (a salt to the row's codes and scale
-bytes) gives each block that is dead on the clean row `x` the same codes and scale byte. `dead` is a salt-free screen
-(noise below 0.16 of the block's code step), so its codes *barely* depend on the salt; this is the exact version. -/
+/-- Term 3's hypothesis, not given by D₄: the forming fixes every dead block's codes and scale byte at every salt. -/
 def DeadFixes {σ : Type} {k : Nat} (p : Fp4Atom) (x : Fin k → ℚ) (form : σ → List Nib × List (Fin 256)) : Prop :=
   ∀ β, dead p x β = true → ∀ s s', blockOf p (form s).1 (form s).2 β = blockOf p (form s').1 (form s').2 β
 
-/-- **A dead × dead (word, k-block) is salt-free**: where block `β` is dead on both clean rows and both formings fix
-their dead blocks, the block's group terms, the (word, block)'s whole contribution to its firing, are the same at every
-salt, so a program can compute them before the salt. -/
 theorem deadPair_salt_free {σ : Type} {k : Nat} {p : Fp4Atom} (hp : BlockShape p) {x y : Fin k → ℚ}
     {formA formB : σ → List Nib × List (Fin 256)} (hA : DeadFixes p x formA) (hB : DeadFixes p y formB) {β : ℕ}
     (hβ : deadPair p x y β = true) (s s' : σ) :
@@ -905,8 +796,6 @@ theorem deadPair_salt_free {σ : Type} {k : Nat} {p : Fp4Atom} (hp : BlockShape 
   rw [Bool.and_eq_true] at hβ
   exact blockTerms_congr hp (hA β hβ.1 s s') (hB β hβ.2 s s')
 
-/-- **Term 3's debit is sound**: every (word, block) that `pairWords` counts is a dead × dead pair, salt-free by
-`deadPair_salt_free`. -/
 theorem deadBlocks_salt_free {σ : Type} {m n k : Nat} {p : Fp4Atom} (hp : BlockShape p) {X : Matrix (Fin m) (Fin k) ℚ}
     {Y : Matrix (Fin n) (Fin k) ℚ} {formA : Fin m → σ → List Nib × List (Fin 256)}
     {formB : Fin n → σ → List Nib × List (Fin 256)} (hA : ∀ i, DeadFixes p (X i) (formA i))
@@ -916,21 +805,13 @@ theorem deadBlocks_salt_free {σ : Type} {m n k : Nat} {p : Fp4Atom} (hp : Block
       blockTerms p (formA i s').1 (formB j s').1 (formA i s').2 (formB j s').2 β :=
   deadPair_salt_free hp (hA i) (hB j) (Finset.mem_filter.1 hβ).2 s s'
 
-/-! ## The gap: D-SS's scale bytes don't give `NoLoss` -/
-
-/-- The witness's A codes: group 0 `6, −6`, group 1 `1/2, 6`, the rest 0. -/
 def gapA : List Nib := [7, 15] ++ List.replicate 14 0 ++ [1, 7] ++ List.replicate 46 0
 
-/-- The witness's B codes: group 0 `6, 6`, group 1 `1/2, 0, 6`, the rest 0. -/
 def gapB : List Nib := [7, 7] ++ List.replicate 14 0 ++ [1, 0, 7] ++ List.replicate 45 0
 
-/-- The witness's UE4M3 scale bytes on both sides: `0x78` (256) on block 0 and `0x0F` (15·2⁻⁹) on blocks 1–3, inside
-D-SS's range `0x01..0x7E` with a spread of `2^17/15 ≈ 2^13.1`, under even T1-b's `2^15`. -/
 def gapS : List (Fin 256) := [0x78, 0x0F, 0x0F, 0x0F]
 
-/-- **`NoLoss` is a hypothesis beyond D-SS**: on this `sm120Nvf4` firing from `+0`, with scale bytes inside D-SS, group 0
-participates and cancels, anchoring the grid at `2^−19`; group 1's scaled dot `225·2^−20` loses its last bit, and the
-step writes `224·2^−20` though the exact sum `225·2^−20` fits binary32. -/
+/-- `NoLoss` is a hypothesis beyond D-SS: this firing's grid drops a bit of a sum that fits binary32. -/
 theorem noLoss_gap : ∃ ts c, sm120Nvf4.groupTerms gapA gapB gapS gapS = some ts ∧ fp32Value 0 = .fin c ∧
     ¬ NoLoss sm120Nvf4 ts c ∧ c.value + termsValue ts = 225 * 2 ^ (-20 : ℤ) ∧
     Fits (c.value + termsValue ts) ∧ sm120Nvf4.step 0 gapA gapB gapS gapS = some 0x39600000 ∧

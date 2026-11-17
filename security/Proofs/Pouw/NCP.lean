@@ -8,14 +8,8 @@ public import Proofs.Pouw.NCP.RouteUProofs
 public import Proofs.Pouw.NCP.RouteUWordProofs
 public import Proofs.Pouw.Lemmas.NCP
 
-/-!
-# Proofs of NCP's guarantees
-
-One theorem `Pouw.SecurityProofs.NCP.G : Pouw.Guarantees.NCP.G` per guarantee, which is the theorem in
-`Pouw.NCP.Proofs`, `Pouw.NCP.GameProofs`, `Pouw.NCP.RelationWitness`, `Pouw.NCP.RouteUProofs` and
-`Pouw.NCP.RouteUWordProofs` that proves the same statement under its old name. `GapFromTTNCP_U`'s statement keeps its
-source's namespace, `Pouw.NCP.RouteU`.
--/
+/-! One theorem `Pouw.SecurityProofs.NCP.G : Pouw.Guarantees.NCP.G` per NCP guarantee; `GapFromTTNCP_U`'s
+statement keeps its source's namespace, `Pouw.NCP.RouteU`. -/
 
 @[expose] public section
 

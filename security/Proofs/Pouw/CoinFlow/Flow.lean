@@ -46,17 +46,7 @@ import Proofs.Poub.Tag.LittlewoodOfford
 import Proofs.Poub.Tag.Signs
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The coin rules, proved on the dataflow model
-
-`viewIndependent` and `coinsThroughNoise` are strong inductions over the node order: a node's value is its `op` on what
-it reads (`eval_congr`), so two samples give it one value when they agree on its coins and on its earlier reads. Under rule
-(b) no node outside a noise injection's forward cone reads its coins; under rule (a) and sink confinement a non-fold
-node's coins are its own fresh coins, and its reads are non-fold. `pointMass` moves the run's coins to
-`Ω₀ × (J → Bool)`, the coins a noise injection doesn't make fresh and the ones it does, through an equivalence that
-keeps the uniform measure (`prob_comp_equiv`). The view is then a function of `Ω₀` (`viewIndependent`), and
-`ResourceAccounting.HMuProofs.coinPointMass` applies.
--/
+/-! The coin rules, proved on the dataflow model by strong induction over the node order. -/
 
 @[expose] public section
 
@@ -74,7 +64,6 @@ theorem eval_eq [Inhabited V] (P : FlowGraph m C V) (σ : C → Bool) (n : Fin m
     P.eval σ n = P.op n (fun k => if _h : k.1 < n then P.eval σ k.1 else default) (fun c => σ c.1) := by
   rw [FlowGraph.eval]
 
-/-- Two samples give node `g` one value when they agree on its coins and give its earlier reads one value. -/
 theorem eval_congr [Inhabited V] (P : FlowGraph m C V) {σ σ' : C → Bool} {g : Fin m}
     (hc : ∀ c ∈ P.coins g, σ c = σ' c) (hr : ∀ k ∈ P.reads g, k < g → P.eval σ k = P.eval σ' k) :
     P.eval σ g = P.eval σ' g := by
@@ -87,7 +76,6 @@ theorem eval_congr [Inhabited V] (P : FlowGraph m C V) {σ σ' : C → Bool} {g 
   · funext c
     exact hc c.1 c.2
 
-/-- Strong induction over the node order. -/
 theorem fin_strong {Q : Fin m → Prop} (h : ∀ g, (∀ k, k < g → Q k) → Q g) (g : Fin m) : Q g := by
   suffices ∀ n (g : Fin m), g.val = n → Q g from this g.val g rfl
   intro n
@@ -147,11 +135,9 @@ theorem prob_comp_equiv {α β : Type} [Fintype α] [Fintype β] (e : α ≃ β)
 
 variable [DecidableEq C] (S : Finset C)
 
-/-- A sample of every coin from the coins outside `S` and the coins in it. -/
 def glue (ω : ({c // c ∉ S} → Bool) × ({c // c ∈ S} → Bool)) (c : C) : Bool :=
   if h : c ∈ S then ω.2 ⟨c, h⟩ else ω.1 ⟨c, h⟩
 
-/-- The run's coins as the coins outside `S` and the coins in it. -/
 def split : (({c // c ∉ S} → Bool) × ({c // c ∈ S} → Bool)) ≃ (C → Bool) where
   toFun := glue S
   invFun σ := (fun c => σ c.1, fun c => σ c.1)

@@ -4,21 +4,8 @@ public import Proofs.Pouw.Deadline
 public import Proofs.Pouw.Witness
 import Proofs.Pouw.Prob
 
-/-!
-# The deadline guarantees say something (witnesses)
-
-`Pouw.Guarantees.WorkBetweenSaltAndDeadline` and `Pouw.Guarantees.SpareCapacityAtDeadline`:
-
-* honest: the milestone's sixteen units are in `D1.m1Domain`, and the honest reference in the output-priced model, on
-  the run that delivers at the deadline `1` and spends the milestone's `16·2^44` over `(0, 1]`
-  (`Witness.Deadline.honestRun`), meets the honest clock with `A' = A` and the budget of `16·2^44` and `16·m1Queries`
-  oracle calls;
-* nontrivial: a protocol that compares nothing, on one unit of shape `0×0×0`, makes every committed unit correct, so the
-  audit accepts everything. An adversary that commits that unit at no cost, on a run that spends nothing and delivers
-  on time, passes one sample with probability 1, above the bound `1/2` at `ε_s = 1/2` and error 0.
-
-The instances are `Definitions.Pouw.Witness.Honest`'s.
--/
+/-! Witnesses that the deadline guarantees say something: an honest run meets the honest clock, and a protocol
+that compares nothing breaks the bound. -/
 
 @[expose] public section
 

@@ -35,18 +35,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Compose.ComposeMonitoringPeriod
 import Proofs.Pouw.MonitoringPeriodJ10R
 
-/-!
-# Proof of `H1J10RCheckedCreditMonitoringPeriodStrata`
-
-At each stratum `s ∈ S`, what `Proofs.Pouw.MonitoringPeriodJ10R` applies to its one stratum:
-`ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod` at `tileRun`, on stratum `s`'s view of the period's coins
-(`pathsAt`). Its joint soundness comes from `StrataSampleIsCoin`'s half that puts stratum `s`'s sampled proof blocks among the
-proof blocks `Credit.window`'s sample demands, with its `TileServiceSound` (`jointSound_strata`); its pins from the period's
-salt being its live coin, read on the view (`saltAt`). Its accepted prefix and live words are the period's
-(`prefixLen_eq`, `creditedLive_eq`, `stratumLive_symm`), and the view is a relabelling of the period's coins, so the
-bound holds on the period's coins (`stratum_bound`). An accepted period whose fixed words, summed over `S`, fall short of
-the summed credit has a stratum whose own fall short, so the union bound gives the statement.
--/
+/-! Proof of `H1J10RCheckedCreditMonitoringPeriodStrata`. -/
 
 @[expose] public section
 
@@ -55,34 +44,28 @@ namespace Properties.Pouw.MonitoringPeriodJ10RStrata.SecurityProofs
 open Properties.Pouw.MonitoringPeriodJ10R Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs Properties.Pouw.MonitoringPeriodJ10RStrata
 open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
 
-/-! ## Stratum `s`'s view, window by window -/
-
 theorem coinAt_pathsCongr {α β : Type} (e : α ≃ β) :
     ∀ {n : ℕ} (x : Paths α n) (w : Fin n), coinAt (pathsCongr e n x) w = e (coinAt x w)
   | 0, _, w => w.elim0
   | _ + 1, _, ⟨0, _⟩ => rfl
   | _ + 1, x, ⟨w + 1, h⟩ => coinAt_pathsCongr e x.2 ⟨w, Nat.lt_of_succ_lt_succ h⟩
 
-/-- **A window's coins on stratum `s`'s view are its coins' `atStratum`.** -/
 theorem coinAt_view {C : Type} {r m nB mB : ℕ} (h : r = m) (σ : Fin nB → Fin mB) (s : Fin mB) {n : ℕ}
     (y : Paths (Coin C (Rest σ s) r σ s) n) (w : Fin n) :
     coinAt y w = atStratum h σ s (coinAt ((pathsAt C h σ s n).symm y) w) := by
   conv_lhs => rw [← (pathsAt C h σ s n).apply_symm_apply y]
   exact coinAt_pathsCongr (atStratum h σ s) _ w
 
-/-- The view's rounds' coins are the window's, relabelled by `r = m`. -/
 theorem coinAt_atStratum_fst {C : Type} {r m nB mB : ℕ} (h : r = m) (σ : Fin nB → Fin mB) (s : Fin mB)
     (z : StrataCoin C m σ) (hr : 0 < r) (hm : 0 < m) :
     coinAt (atStratum h σ s z).1 ⟨0, hr⟩ = coinAt z.1 ⟨0, hm⟩ := by
   subst h
   rfl
 
-/-- The view's tile stratum's permutation is the block's at `s`. -/
 theorem atStratum_perm {C : Type} {r m nB mB : ℕ} (h : r = m) (σ : Fin nB → Fin mB) (s : Fin mB)
     (z : StrataCoin C m σ) : (atStratum h σ s z).2.1 = z.2 s :=
   rfl
 
-/-- **The period's salt is its live coin on stratum `s`'s view.** -/
 theorem saltAt {C : Type} {r nB mB n : ℕ} (h : r = 1) (hr : 0 < r) (σ : Fin nB → Fin mB) (s : Fin mB)
     (ws : CreditExecutionPhases (StrataCoin C 1 σ) n) {enc : C → ByteArray}
     (hs : Properties.Pouw.MonitoringPeriod.SaltIsLiveCoin Nat.one_pos (saltOf ws) enc) :
@@ -91,9 +74,6 @@ theorem saltAt {C : Type} {r nB mB n : ℕ} (h : r = 1) (hr : 0 < r) (σ : Fin n
   show saltOf ws ((pathsAt C h σ s n).symm y) w = _
   rw [hs, coinAt_view h σ s y w, coinAt_atStratum_fst h σ s _ hr Nat.one_pos]
 
-/-- **Joint soundness at stratum `s`'s run**: a window whose sampled tile of stratum `s` has an opening failing its
-relation is one `Credit.window` credits with that tile's window proof block among the proof blocks its sample demanded, since
-`StrataSampleIsCoin` puts every stratum's sampled proof blocks there, which stratum `s`'s `TileServiceSound` bounds. -/
 theorem jointSound_strata {ι C V : Type} [Fintype C] (Cd : Declared ι) (hr : 0 < Cd.rounds) {m nB mB n : ℕ}
     (hM : Cd.rounds = m) (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (S : Finset (Fin mB)) (s : Fin mB) (hsS : s ∈ S) (unitOf : Fin nB → ℕ) (ws : CreditExecutionPhases (StrataCoin C m σ) n)
@@ -113,7 +93,6 @@ theorem jointSound_strata {ι C V : Type} [Fintype C] (Cd : Declared ι) (hr : 0
   unfold tileDraw
   exact Finset.mem_image.2 ⟨i, Finset.mem_univ _, rfl⟩
 
-/-- **Stratum `s`'s live words on its view** are its `creditLive` at the period's `Credit.window` inputs there. -/
 theorem stratumLive_symm {ι K C : Type} (Sc : Scheme K) (Cd : Declared ι) {m nB mB n : ℕ} (hM : Cd.rounds = m)
     (σ : Fin nB → Fin mB) (s : Fin mB) (Wp : ExecutionPhasePlay C (Coin C (Rest σ s) Cd.rounds σ s) (Fin (tileCount σ s)) Cd.rounds n)
     (ws : CreditExecutionPhases (StrataCoin C m σ) n) (y : Paths (Coin C (Rest σ s) Cd.rounds σ s) n) :
@@ -122,16 +101,11 @@ theorem stratumLive_symm {ι K C : Type} (Sc : Scheme K) (Cd : Declared ι) {m n
   simp only [Equiv.apply_symm_apply]
   rfl
 
-/-- **The period's accepted prefix on stratum `s`'s view** is the view's. -/
 theorem prefixLen_symm {C : Type} {r m nB mB n : ℕ} (h : r = m) (σ : Fin nB → Fin mB) (s : Fin mB)
     (ws : CreditExecutionPhases (StrataCoin C m σ) n) (y : Paths (Coin C (Rest σ s) r σ s) n) :
     ws.prefixLen ((pathsAt C h σ s n).symm y) = (creditAt h σ s ws).prefixLen y :=
   rfl
 
-/-! ## One stratum's bound, and the union -/
-
-/-- **Stratum `s`'s bound on the period's coins**: `CircuitCreditMonitoringPeriod` at stratum `s`'s run, as
-`Proofs.Pouw.MonitoringPeriodJ10R` applies it, carried from the view to the period's coins. -/
 theorem stratum_bound {ι K T L U C V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C]
     [Nonempty V] {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (S : Finset (Fin mB)) (s : Fin mB) (hsS : s ∈ S) (unitOf : Fin nB → ℕ) (Sc : Scheme K) (Cd : Declared ι) {n : ℕ}

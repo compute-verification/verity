@@ -3,12 +3,8 @@ module
 public import Proofs.Pouw.Barrier.Proofs
 public import Proofs.Pouw.Lemmas.Barrier
 
-/-!
-# Proofs of the degenerate-input barrier's guarantee
-
-One theorem `Pouw.SecurityProofs.Barrier.G : Pouw.Guarantees.Barrier.G` per guarantee, which is the theorem in
-`Pouw.Barrier.Proofs` that proves the same statement under its old name.
--/
+/-! One theorem `Pouw.SecurityProofs.Barrier.G : Pouw.Guarantees.Barrier.G` per degenerate-input barrier
+guarantee. -/
 
 @[expose] public section
 

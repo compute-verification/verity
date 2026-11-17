@@ -3,9 +3,7 @@ module
 public import Definitions.Pouw.Assumptions.NCP.Chain
 public import Proofs.Pouw.NCP.RelationWitness
 
-/-!
-# The chain end to end: proofs
--/
+/-! The chain end to end. -/
 
 @[expose] public section
 

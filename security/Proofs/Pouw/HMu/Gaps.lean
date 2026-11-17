@@ -37,17 +37,8 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Pouw.HMu.Luck
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# Why the coins don't give the rest
-
-* `readsCoin`: a cheater whose view reads the fresh bit (it holds σ and has computed a word that shares the coin, or a
-  bit leaked) skips only when the bit pins the skipped value, and is lucky on every deficient round, which has
-  probability `1/2`. So the view's independence from the fresh bits can't be dropped, and no bound relative to the
-  deficiency survives a leak.
-* `twoCopies`: a step `s + x` on `Z/2` is injective in the state and in the word, yet a pattern with two positions
-  before the checkpoint leaves the checkpoint's state unchanged for every skipped value. So Lemma B′ with two words in
-  a unit needs a fibre bound at the start state, which injectivity alone doesn't give.
--/
+/-! Why the coins don't give the rest of (H-μ⁺): a view that reads the coin is lucky on every deficient round, and
+two words in one unit cancel under a step injective in both arguments. -/
 
 @[expose] public section
 
@@ -55,8 +46,6 @@ namespace ResourceAccounting.HMuProofs
 
 open ResourceAccounting.HMu Pouw.RelativeSecurity Finset
 
-/-- One fresh bit as the skipped value, a view that reads it, a skip exactly when it is `1`, and the receipt for `1`
-committed. -/
 noncomputable def readsCoinRound : SkipRound Bool Bool ℤ ℤ where
   view := id
   skipped := fun e => if e then 1 else 0

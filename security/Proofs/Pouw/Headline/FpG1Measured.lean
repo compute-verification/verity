@@ -37,38 +37,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Pouw.TS
 
-/-!
-# FP8-g1's and W4A8-g1's headlines on sm_120's measured vector, and an honest g1 window that meets every premise
-
-`Sm120FpG1MeasuredHeadline` and `Sm120W4a8G1MeasuredHeadline` are the measured record's argument with binding at
-`δ_bind` (`sm120MeasuredHeadline_bind`, which `Sm120MeasuredHeadline` takes at `√δ_fork`) at `V = Leaves × W` and
-`n_π + 1` proofs a round: the g1 premise is dropped and the argument applies as it stands. The g1 premise does no work
-in the bound. The 0.591% rests on the measured record's premises, (I3) at `9/8` (`ScalarRoute`) among them, which is
-assumed, as it is for the record itself: at A6's proved `½` floor the same bound is 7.791%. Beside the g1 premise, which
-narrows the windows covered, the statements take no premise the measured record doesn't: binding at `δ_bind` is what
-the record's fork form gives at `√δ_fork`.
-
-The witness is `Proofs.Pouw.Headline.FpG1`'s honest window with its run on the measured data:
-
-* its receipt game, unfolded share and proof layer are `FpG1`'s (`honestGame`, `honestUnfolded`, `honestLayer`);
-* its run (`honestRunM`) is ♭'s counts on VF3s-16 at ♭'s bound `B_♭` there (`BqM`, the load at π* = JI3t_0) cycles and
-  `f_max`, its word production IMMA16832's (writer kind 6, `ω = 128`) with ♭'s operand floor, its fold ♭'s lane fold, no
-  filler, and its 128 committed words a unit fixed and headed by IMMA16832. The facet ceilings hold since every
-  VF3s-16 row's load of ♭ is at most `B_♭` (`sm120m_max`), and every facet is SM-clocked; no word is vector- or
-  table-headed, so SCALAR-ROUTE holds with nothing to route; and FOLD-OPT at `π*` holds since ♭'s fold is 128 lane
-  folds, priced `128 φ_q` there, and `φ* ≤ φ_q` (`phiStarM_le`), `φ_q` the lane fold's load at `π*` (`phiqM`).
-
-`MeasuredPremises` is the measured statements' hypotheses but the g1 premise, as one conjunction, and
-`measured_bound_of_premises` feeds it to `sm120MeasuredHeadline_bind`. `measured_honest_premises` proves it at that
-window, for any `v` in H1's ranges; `sm120FpG1Measured_honest` and `sm120W4a8G1Measured_honest` add the g1 premise at
-the honest encoders' leaves, and `sm120FpG1Measured_honest_applies` and `sm120W4a8G1Measured_honest_applies` feed them
-to the statements. The honest window is accepted on every path, its time exactly the credit
-(`measured_honest_accepted`). `measured_offGrid_premises`: at `Pouw.FpG1.offGrid`'s leaves the other premises all hold
-and FP8-g1's fails.
-
-The witness isn't a served window, for `FpG1`'s reasons: its relation checks H1's ranges, its receipt game is the
-honest one, and its time is exactly the credit, so it shows only that every premise can hold at once.
--/
+/-! FP8-g1's and W4A8-g1's headlines on sm_120's measured vector, with an honest g1 window that meets every
+premise; the bound rests on (I3) at `9/8` (`ScalarRoute`), which is assumed, and the window is not a served one. -/
 
 @[expose] public section
 
@@ -91,24 +61,18 @@ theorem Sm120W4a8G1MeasuredHeadline : ResourceAccounting.Guarantees.FpG1.Sm120W4
   intro Ω _ Pl G Uf W nπ pf δbind δzk _
   exact ResourceAccounting.SecurityProofs.TS.sm120MeasuredHeadline_bind Pl G Uf pf δbind δzk
 
-/-! ## The honest run on VF3s-16 -/
-
-/-- ♭'s word production, the MMA and its operand floor, headed by IMMA16832 (writer kind 6). -/
 noncomputable def honestNwordM : Head (Fin 15) Unit Empty → Fin 122 → ℝ
   | .writer t, k => if t = 6 then Sparse.counts Sm120.flatWords k else 0
   | .vector, _ => 0
   | .table _, _ => 0
   | .side _, _ => 0
 
-/-- The 128 committed words a unit, every one IMMA16832's. -/
 def honestWordsM : Head (Fin 15) Unit Empty → ℝ
   | .writer t => if t = 6 then 128 else 0
   | .vector => 0
   | .table _ => 0
   | .side _ => 0
 
-/-- **The honest run on VF3s-16**: ♭'s counts at ♭'s bound `B_♭` cycles and `f_max`, its word production
-IMMA16832's, its fold ♭'s lane fold, no filler, and its 128 committed words a unit fixed. -/
 noncomputable def honestRunM : Anatomy (Fin 122) (Fin 15) Unit Empty where
   run := ⟨Sparse.counts flatAllM, (BqM : ℝ), Sm120Measured.model.G.fmax⟩
   nword := honestNwordM
@@ -181,8 +145,6 @@ theorem honestRunM_split : honestRunM.Split := by
     rw [add_zero]
     exact_mod_cast hq
 
-/-- (I1) at the honest run: every VF3s-16 row's load of ♭ is at most `B_♭` (`sm120m_max`), its counts are `≥ 0`, its
-clock is `f_max`, and every facet is SM-clocked. -/
 theorem honestRunM_ceilings : FacetCeilings Sm120Measured.machine honestRunM.run := by
   refine ⟨fun k => Rat.cast_nonneg.mpr (coeff_nonneg _ _), ?_, ?_, le_rfl, fun r => ⟨fun _ => ?_, fun h => ?_⟩⟩
   · show (0 : ℝ) ≤ (BqM : ℝ)
@@ -219,7 +181,6 @@ theorem honestRunM_noSum : NoSum honestRunM := by
   show (128 : ℝ) ≤ ∑ h, honestWordsM h
   exact honestWordsM_sum.ge
 
-/-- `φ*(π*) ≤ φ_q`, the lane fold's load at `π*` (`phiqM`). -/
 theorem phiStarM_le : Sm120Measured.model.phiStar (onFacet Sm120Measured.piStar) ≤ (phiqM : ℝ) := by
   refine (ResourceAccounting.SecurityProofs.TS.iInf_le_price (onFacet Sm120Measured.piStar) Sm120Measured.model.fold 0).trans
     (le_of_eq ?_)
@@ -228,7 +189,6 @@ theorem phiStarM_le : Sm120Measured.model.phiStar (onFacet Sm120Measured.piStar)
   rw [load_counts _ vfRow sm120m_hG]
   rfl
 
-/-- ♭'s fold is 128 lane folds, so it costs `128 φ_q` a unit at `π*`. -/
 theorem honestM_foldPrice :
     Sm120Measured.model.G.price (onFacet Sm120Measured.piStar) (Sparse.counts Sm120.flatFold) =
       128 * (phiqM : ℝ) := by
@@ -249,7 +209,6 @@ theorem honestRunM_foldOpt (Ω : Type) (n : ℕ) (x : Paths Ω n) :
   simp only [sub_zero, zero_div, one_mul]
   linarith
 
-/-- The honest window's time on VF3s-16 is exactly the credit `B_♭/f_max`. -/
 theorem honestRunM_time : honestRunM.run.time / Sm120Measured.model.credit Sm120Measured.flat = 1 := by
   have hB : (0 : ℝ) < BqM := by exact_mod_cast sm120m_Bpos
   have hf : (0 : ℝ) < Sm120Measured.model.G.fmax := by
@@ -259,10 +218,6 @@ theorem honestRunM_time : honestRunM.run.time / Sm120Measured.model.credit Sm120
   show (BqM : ℝ) / Sm120Measured.model.G.fmax / ((BqM : ℝ) / Sm120Measured.model.G.fmax) = 1
   exact div_self (div_pos hB hf).ne'
 
-/-! ## The honest play -/
-
-/-- **The honest play on the measured model's heads**: the honest game's acceptance, the window accepted on every path,
-the run `A` on each. -/
 noncomputable def honestPlayM (Ω : Type) (n : ℕ) (A : Anatomy (Fin 122) (Fin 15) Unit Empty) :
     Play Ω n (Fin 122) (Fin 15) Unit Empty :=
   ⟨(honestGame Ω n).game, fun _ => True, fun _ => A⟩
@@ -282,11 +237,6 @@ theorem honestLayer_rightFixedM (Ω : Type) [Fintype Ω] (v : Leaves) :
   rw [honestGame_deficiency, sm120m_Nw]
   norm_num
 
-/-! ## The witnesses -/
-
-/-- **The measured statements' premises at a window but the g1 premise**, `sm120MeasuredHeadline_bind`'s hypotheses
-in its order (`measured_bound_of_premises` feeds them to it): `Sm120MeasuredHeadline`'s, with binding at `δ_bind` in
-place of its fork form. -/
 def MeasuredPremises {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm120.checks (Fin 122) (Fin 15) Unit Empty)
     (G : ReceiptGame Ω Sm120.checks) (Uf : Unfolded Ω Sm120.checks) {V : Type} {nπ : ℕ}
     (pf : ProofLayer Ω Sm120.checks nπ V) (δbind δzk : ℝ) : Prop :=
@@ -299,7 +249,6 @@ def MeasuredPremises {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm120.checks (Fin 12
     Pl.game = G.game ∧ G.Pinned ∧ OperandHMu (3 / 4) G ∧ ReceiptLuckAt (1 / 2) G ∧ WholeLuckAt (1 / 2) G Uf ∧
     pf.Of Pl ∧ pf.BindingAt δbind ∧ ProofSoundAt pf δzk ∧ ProofsPin pf ∧ RightFixed Pl pf Sm120Measured.model.Nw
 
-/-- The measured statements' conclusion at a window whose premises but the g1 premise hold. -/
 theorem measured_bound_of_premises {Ω : Type} [Fintype Ω] {Pl : Play Ω Sm120.checks (Fin 122) (Fin 15) Unit Empty}
     {G : ReceiptGame Ω Sm120.checks} {Uf : Unfolded Ω Sm120.checks} {V : Type} {nπ : ℕ}
     {pf : ProofLayer Ω Sm120.checks nπ V} {δbind δzk : ℝ} (h : MeasuredPremises Pl G Uf pf δbind δzk) :
@@ -309,10 +258,7 @@ theorem measured_bound_of_premises {Ω : Type} [Fintype Ω] {Pl : Play Ω Sm120.
   exact ResourceAccounting.SecurityProofs.TS.sm120MeasuredHeadline_bind Pl G Uf pf δbind δzk h0 h1 h2 h3 h4 h5 h6 h7 h8 h9
     h10 h11 h12 h13 h14 h15 h16
 
-/-- **Every premise but the g1 premise holds at the honest window on VF3s-16**, for any leaves `v` in H1's ranges:
-the honest play on `honestRunM`, receipt game and unfolded share over `S = 48,000` rounds, the honest proof layer at
-`v`, and `δ_bind = δ_ZK = 0`. The witness isn't a served window: its relation is H1's ranges, not a served
-Program's. -/
+/-- The witness isn't a served window: its relation is H1's ranges, not a served Program's. -/
 theorem measured_honest_premises (Ω : Type) [Fintype Ω] {v : Leaves} (hv : v.InH1) :
     MeasuredPremises (honestPlayM Ω Sm120.checks honestRunM) (honestGame Ω Sm120.checks)
       (honestUnfolded Ω Sm120.checks) (honestLayer Ω Sm120.checks v) 0 0 :=
@@ -324,15 +270,12 @@ theorem measured_honest_premises (Ω : Type) [Fintype Ω] {v : Leaves} (hv : v.I
     honestLayer_binding Ω Sm120.checks v, honestLayer_sound Ω Sm120.checks hv, honestLayer_pins Ω Sm120.checks v,
     honestLayer_rightFixedM Ω v⟩
 
-/-- **The honest window on VF3s-16 is accepted on every path, its time exactly the credit.** -/
 theorem measured_honest_accepted (Ω : Type) (x : Paths Ω Sm120.checks) :
     (honestPlayM Ω Sm120.checks honestRunM).accepts x ∧
       ((honestPlayM Ω Sm120.checks honestRunM).run x).run.time / Sm120Measured.model.credit Sm120Measured.flat = 1 :=
   ⟨trivial, honestRunM_time⟩
 
-/-- **Every premise of FP8-g1's measured statement holds at an honest FP8-g1 window on VF3s-16**: the honest
-encoder's leaves on H1's grids, at any scales and model values, committed at every round, with the other premises.
-The witness isn't a served window (`measured_honest_premises`). -/
+/-- The witness isn't a served window (`measured_honest_premises`). -/
 theorem sm120FpG1Measured_honest (Ω : Type) [Fintype Ω] (sa sw : ℕ → ℚ) (x y : ℕ → ℕ → ℚ) :
     (∀ p w i, ((honestLayer Ω Sm120.checks (encodeFp8 Grids.h1 sa sw x y)).committed p w i).1.Fp8 Grids.h1) ∧
       MeasuredPremises (honestPlayM Ω Sm120.checks honestRunM) (honestGame Ω Sm120.checks)
@@ -340,9 +283,7 @@ theorem sm120FpG1Measured_honest (Ω : Type) [Fintype Ω] (sa sw : ℕ → ℚ) 
   ⟨fun _ _ _ => encodeFp8_fp8 Grids.h1 sa sw x y,
     measured_honest_premises Ω (Leaves.fp8_inH1 (encodeFp8_fp8 _ sa sw x y))⟩
 
-/-- **Every premise of W4A8-g1's measured statement holds at an honest W4A8-g1 window on VF3s-16**: the honest
-encoder's leaves on H1's grids, at any scales, block scales and model values, committed at every round, with the
-other premises. The witness isn't a served window (`measured_honest_premises`). -/
+/-- The witness isn't a served window (`measured_honest_premises`). -/
 theorem sm120W4a8G1Measured_honest (Ω : Type) [Fintype Ω] (sa sw : ℕ → ℚ) (m : ℕ → ℕ → ℕ) (x y : ℕ → ℕ → ℚ) :
     (∀ p w i, ((honestLayer Ω Sm120.checks (encodeW4a8 Grids.h1 sa sw m x y)).committed p w i).1.W4a8 Grids.h1) ∧
       MeasuredPremises (honestPlayM Ω Sm120.checks honestRunM) (honestGame Ω Sm120.checks)
@@ -350,8 +291,6 @@ theorem sm120W4a8G1Measured_honest (Ω : Type) [Fintype Ω] (sa sw : ℕ → ℚ
   ⟨fun _ _ _ => encodeW4a8_w4a8 sa sw m x y,
     measured_honest_premises Ω (Leaves.w4a8_inH1 (encodeW4a8_w4a8 sa sw m x y))⟩
 
-/-- **FP8-g1's measured headline applies at the honest FP8-g1 window**: `sm120FpG1Measured_honest`'s premises fed to
-it. -/
 theorem sm120FpG1Measured_honest_applies (Ω : Type) [Fintype Ω] (sa sw : ℕ → ℚ) (x y : ℕ → ℕ → ℚ) :
     prob (fun p => (honestPlayM Ω Sm120.checks honestRunM).accepts p ∧
       ((honestPlayM Ω Sm120.checks honestRunM).run p).run.time / Sm120Measured.model.credit Sm120Measured.flat <
@@ -362,8 +301,6 @@ theorem sm120FpG1Measured_honest_applies (Ω : Type) [Fintype Ω] (sa sw : ℕ �
     (honestUnfolded Ω Sm120.checks) (honestLayer Ω Sm120.checks (encodeFp8 Grids.h1 sa sw x y)) 0 0 hg h0 h1 h2 h3 h4
     h5 h6 h7 h8 h9 h10 h11 h12 h13 h14 h15 h16
 
-/-- **W4A8-g1's measured headline applies at the honest W4A8-g1 window**: `sm120W4a8G1Measured_honest`'s premises fed
-to it. -/
 theorem sm120W4a8G1Measured_honest_applies (Ω : Type) [Fintype Ω] (sa sw : ℕ → ℚ) (m : ℕ → ℕ → ℕ)
     (x y : ℕ → ℕ → ℚ) :
     prob (fun p => (honestPlayM Ω Sm120.checks honestRunM).accepts p ∧
@@ -375,9 +312,6 @@ theorem sm120W4a8G1Measured_honest_applies (Ω : Type) [Fintype Ω] (sa sw : ℕ
     (honestUnfolded Ω Sm120.checks) (honestLayer Ω Sm120.checks (encodeW4a8 Grids.h1 sa sw m x y)) 0 0 hg h0 h1 h2
     h3 h4 h5 h6 h7 h8 h9 h10 h11 h12 h13 h14 h15 h16
 
-/-- **The other premises don't imply the g1 premise on VF3s-16 either**: at `offGrid`'s leaves, in H1's ranges with
-a weight off E4M3's grid, every premise of the measured statement but the g1 premise holds, so the bound does, and
-FP8-g1's premise fails at every round's commitment. -/
 theorem measured_offGrid_premises (Ω : Type) [Fintype Ω] :
     MeasuredPremises (honestPlayM Ω Sm120.checks honestRunM) (honestGame Ω Sm120.checks)
         (honestUnfolded Ω Sm120.checks) (honestLayer Ω Sm120.checks offGrid) 0 0 ∧

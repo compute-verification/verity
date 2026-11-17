@@ -10,18 +10,7 @@ import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Dimension.MixingProofs
 import Proofs.Pouw.Dimension.PipeProofs
 
-/-!
-# The open quadratic pipe: proofs
-
-* **The index form** (`openOK_get`): instruction `i` of an open pipe is priced, and it is big or an FP32 step that is
-  a `QuadStep` over the values of the instructions before it (`vals`).
-* **The count** (`theorem1Open`). On Q-parts, the FP32 steps are `forestBound`'s merge-free steps `F` and the big
-  values are the others. The family's words are slots, not inputs (an input is free, so its Q-part is `0`), so they
-  are values; independence gives `|U|·nonFinal ≤ dim`. The cost splits over `F` and its complement:
-  `pb·(N − |F|) + cs·|F| ≤ cost`, and with `μ = min(pb, 2·cs)`, `2·μ·dim ≤ μ·(2·(N − |F|) + |F|) ≤ 2·cost`.
-* **The closed pipe is open** (`quadToOpen`): a closed pipe's FP32 step reads earlier FP32 outputs only, a sublist
-  of all earlier priced values (`quadStep_mono`).
--/
+/-! Theorem 1 and Theorem D in the open quadratic pipe. -/
 
 @[expose] public section
 
@@ -36,7 +25,6 @@ def val {G : Type} : Instr G → (G → ℚ)
   | .free _ _ => 0
   | .priced _ f => f
 
-/-- The values of a program's instructions, in order. -/
 def vals {G : Type} (P : List (Instr G)) : List (G → ℚ) := P.map val
 
 theorem openOK_get (pb cs : ℕ) :
@@ -155,7 +143,6 @@ theorem quadToOpen : QuadToOpen := by
   intro N m n k cs P hP
   exact quad_open cs P [] [] (fun _ h => h) hP.1.1 hP.1.2.1 (fun i h => by simpa using hP.2 i h)
 
-/-- **Theorem 1 in the open quadratic pipe, for any word family.** -/
 theorem theorem1Open : Theorem1Open := by
   intro N m n k w U h2 hli pb cs L P hL hP S hS hout
   classical
@@ -232,7 +219,6 @@ theorem theorem1Open : Theorem1Open := by
   have e4 : μ * F.card ≤ 2 * cs * F.card := Nat.mul_le_mul_right _ hμ2
   nlinarith
 
-/-- **Theorem D in the open quadratic pipe.** -/
 theorem algBoundOpenQuad : AlgBoundOpenQuad := by
   intro k m n N R A B U L P pb cs hind hMR hU hL hP hout
   obtain ⟨h2, hli⟩ := gridNear k m n N R A B U (word k m n N R A B) hind hMR hU
@@ -270,7 +256,6 @@ theorem openOK_big (pb cs : ℕ) :
     obtain ⟨p, f, rfl, hp⟩ := h _ (List.mem_cons_self ..)
     exact ⟨Or.inl hp, ih _ fun ins hm => h ins (List.mem_cons_of_mem _ hm)⟩
 
-/-- **An open-pipe program that no closed pipe is.** -/
 theorem openPipeWitness : OpenPipeWitness := by
   intro k hk h16 m n N A B U u₀ hU hu₀ hm hn
   have hu₀N : u₀ < N := Finset.mem_range.1 (hU hu₀)

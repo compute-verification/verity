@@ -47,18 +47,7 @@ import Proofs.Flock.Soundness.Game
 import Proofs.Flock.VBridge.Full
 import Std.Tactic.BVDecide.Normalize.Bool
 
-/-!
-# Proofs: the ε a served window's credit reports (`WorkDrawMisses`, `EpsAtSound`, `EstablishedSound`)
-
-The sample `drawnOn` runs over the strata `samplingDesign` gives misses a set `B` only if every stratum's own `subset` sample misses
-`B`'s units in it, and the streams are independent (`miss_le_prod`, the first steps of
-`SamplingDesign.stratified_exec_escape_le`): the miss probability is at most `∏_s C(n_s − m_s, k_s)/C(n_s, k_s)`, `m_s` the units
-of stratum `s` in `B` (`localOf`). The work sampling design's sizes make that product at most `((W − Σ_s w_s m_s)/W)^K`
-(`prod_le_pow`, `SamplingDesign.work_escape_le`'s weighted AM-GM over the strata, here with strata that may overlap and floors
-that may be zero), and `B`'s work (`unitWork`) is at most `Σ_s w_s m_s` (`unitWork_le`). So a set of work `ε·C`
-escapes with at most `(1 − εC/W)^K ≤ (1 − εC/W)^K′ ≤ δ` (`kPrimeLeast`) when `K′ < W`; at `K′ = W ≤ K` every stratum
-doing work samples all its units, and a set of positive work escapes never.
--/
+/-! The ε a served window's credit reports (`WorkDrawMisses`, `EpsAtSound`, `EstablishedSound`). -/
 
 @[expose] public section
 
@@ -69,7 +58,6 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit Finset
 open Properties.Pouw.Strata (unitWork)
 open scoped ENNReal NNReal
 
-/-- Stratum `s`'s local indices whose units are in `B`. -/
 def localOf (S : Array Flock.Draw.Stratum) (B : Finset ℕ) (s : Fin S.size) : Finset (Fin S[s].size) :=
   univ.filter fun j => S[s].unit j.val ∈ B
 
@@ -77,7 +65,6 @@ theorem card_localOf_le (S : Array Flock.Draw.Stratum) (B : Finset ℕ) (s : Fin
     (localOf S B s).card ≤ S[s].size :=
   (Finset.card_filter_le _ _).trans (by rw [Finset.card_univ, Fintype.card_fin])
 
-/-- **The sample misses `B` no more often than each stratum's `subset` sample misses `B`'s units in it, independently.** -/
 theorem miss_le_prod (S : Array Flock.Draw.Stratum) (hk : ∀ s : Fin S.size, S[s].k ≤ S[s].size) (B : Finset ℕ) :
     prCoin (fun g : (i : Fin S.size) → Fin S[i].need → Fin 256 => ∃ d, drawnOn S g = some d ∧ ∀ u ∈ B, u ∉ d) ≤
       ∏ s : Fin S.size, ((S[s].size - (localOf S B s).card).choose S[s].k : ℝ≥0∞) /
@@ -107,7 +94,6 @@ theorem miss_le_prod (S : Array Flock.Draw.Stratum) (hk : ∀ s : Fin S.size, S[
         Finset.prod_le_prod fun s _ => SamplingDesign.subset_exec_escape_le _ _ _ (hk s) _
     _ = _ := Finset.prod_congr rfl fun s _ => SamplingDesign.subset_escape (hk s) _
 
-/-- `miss_le_prod` as `prob` reads it, the product in `ℝ≥0`. -/
 theorem prob_le (S : Array Flock.Draw.Stratum) (hk : ∀ s : Fin S.size, S[s].k ≤ S[s].size) (B : Finset ℕ) :
     Pouw.RelativeSecurity.prob
         (fun g : (i : Fin S.size) → Fin S[i].need → Fin 256 => ∃ d, drawnOn S g = some d ∧ ∀ u ∈ B, u ∉ d) ≤
@@ -128,8 +114,6 @@ theorem prob_le (S : Array Flock.Draw.Stratum) (hk : ∀ s : Fin S.size, S[s].k 
   rw [heq] at h
   exact (ENNReal.toReal_mono ENNReal.coe_ne_top h).trans_eq (ENNReal.coe_toReal _)
 
-/-- **The work sampling design's weighted AM-GM**: strata of `N s` units, `k s` sampled and `M s` in the set, each unit doing `w s`,
-sample sizes at least `K w_s N_s / W` (or all), missProb with at most `((W − Σ_s w_s M_s)/W)^K`. -/
 theorem prod_le_pow {ι : Type} [Fintype ι] (N M k w : ι → ℕ) (K W : ℕ) (hMN : ∀ s, M s ≤ N s) (hkN : ∀ s, k s ≤ N s)
     (hW : 0 < W) (hWsum : ∑ s, w s * N s = W) (hge : ∀ s, k s = N s ∨ K * w s * N s ≤ W * k s)
     (hk1 : ∀ s, 0 < w s → 0 < N s → 1 ≤ k s) :
@@ -200,9 +184,6 @@ theorem prod_le_pow {ι : Type} [Fintype ι] (N M k w : ι → ℕ) (K W : ℕ) 
         pow_le_pow_left₀ zero_le (NNReal.geom_mean_le_arith_mean_weighted univ a x ha1) K
     _ = _ := by rw [hax]
 
-/-- **The work bound over executable strata**: the sample over strata `S` sized by the work sampling design at `K` (`hge`, `hk1`),
-units of stratum `s` doing `w s` and all of them `W`, misses a set `B` with at most `((W − T)/W)^K` for any `T` at most
-`Σ_s w_s m_s`. -/
 theorem prob_le_pow (S : Array Flock.Draw.Stratum) (w : Fin S.size → ℕ) (K W T : ℕ) (hW : 0 < W)
     (hWsum : ∑ s, w s * S[s].size = W) (hkN : ∀ s : Fin S.size, S[s].k ≤ S[s].size)
     (hge : ∀ s : Fin S.size, S[s].k = S[s].size ∨ K * w s * S[s].size ≤ W * S[s].k)
@@ -220,7 +201,6 @@ theorem prob_le_pow (S : Array Flock.Draw.Stratum) (w : Fin S.size → ℕ) (K W
   calc _ ≤ ((((((W - T : ℕ) : ℝ≥0) / (W : ℝ≥0)) ^ K : ℝ≥0)) : ℝ) := NNReal.coe_le_coe.2 (h.trans h2)
     _ = _ := by rw [NNReal.coe_pow, NNReal.coe_div, NNReal.coe_natCast, NNReal.coe_natCast]
 
-/-- A unit doing work is one of a stratum's units, in a stratum doing that work. -/
 theorem holder (ss : Array Flock.Draw.WorkStratum) (S : Array Flock.Draw.Stratum) (hsz : S.size = ss.size)
     (hunits : ∀ s : Fin S.size, S[s].units = ss[s.val]!.units) {u : ℕ} (hu : 0 < unitWork ss u) :
     ∃ s : Fin S.size, ss[s.val]!.work = unitWork ss u ∧ ∃ j : Fin S[s].size, S[s].unit j.val = u := by
@@ -233,11 +213,9 @@ theorem holder (ss : Array Flock.Draw.WorkStratum) (S : Array Flock.Draw.Stratum
   obtain ⟨j, hj, hju⟩ := FlockVBridge.Full.mem_unit _ u hany
   exact ⟨⟨j, hj⟩, hju⟩
 
-/-- The units of stratum `s`'s local indices in `B`. -/
 def unitsIn (S : Array Flock.Draw.Stratum) (B : Finset ℕ) (s : Fin S.size) : Finset ℕ :=
   (localOf S B s).image fun j => S[s].unit j.val
 
-/-- **`B`'s work is at most `Σ_s w_s m_s`**: each unit of `B` doing work is a unit of a stratum doing that work. -/
 theorem unitWork_le (ss : Array Flock.Draw.WorkStratum) (S : Array Flock.Draw.Stratum) (hsz : S.size = ss.size)
     (hunits : ∀ s : Fin S.size, S[s].units = ss[s.val]!.units) (B : Finset ℕ) :
     ∑ u ∈ B, unitWork ss u ≤ ∑ s : Fin S.size, ss[s.val]!.work * (localOf S B s).card := by
@@ -266,7 +244,6 @@ theorem unitWork_le (ss : Array Flock.Draw.WorkStratum) (S : Array Flock.Draw.St
               Finset.card_le_card fun x hx => (Finset.mem_filter.1 hx).2
           _ ≤ (localOf S B s).card := Finset.card_image_le
 
-/-- The strata's work, read stratum by stratum over the sampling design's strata `S` (as many as `ss`). -/
 theorem sum_work (ss : Array Flock.Draw.WorkStratum) (S : Array Flock.Draw.Stratum) (hsz : S.size = ss.size) :
     ∑ s : Fin S.size, ss[s.val]!.work * ss[s.val]!.size = Flock.Draw.totalWork ss := by
   rw [Properties.Spot.SecurityProofs.totalWork_eq, ← Fin.sum_univ_fun_getElem]
@@ -378,8 +355,6 @@ theorem sum_range_list (g : ℕ → ℕ) : ∀ n, ∑ i ∈ Finset.range n, g i 
     rw [Finset.sum_range_succ, List.range_succ, List.map_append, List.sum_append, sum_range_list g n]
     simp
 
-/-- `EstablishedSound` from the tiling: the total work `established` passes `epsAt` is the strata's, and its credited
-work is `creditedWork`. -/
 theorem establishedSound_of (htile : Properties.Pouw.Strata.StrataTile) : EstablishedSound := by
   intro layout ss K strata got served e hss hlaw hest B hB
   obtain ⟨-, -, -, htotal, -⟩ := htile layout ss hss
@@ -395,8 +370,6 @@ theorem establishedSound_of (htile : Properties.Pouw.Strata.StrataTile) : Establ
 /-- **The ε a credit reports is established** (`EstablishedSound`): `strata` tiles the window's units
 (`Properties.Pouw.Strata.strataTile`), so the total work `established` passes `epsAt` is the strata's. -/
 theorem establishedSound : EstablishedSound := establishedSound_of Properties.Pouw.Strata.strataTile
-
-/-! ## The sampling coin's session is withheld (`DrawWithheld`) -/
 
 section Withheld
 
@@ -437,8 +410,6 @@ theorem drawWithheld : DrawWithheld := by
   cases u
   exact creditedDraw_withheld hu
 
-/-- The sample session's step (`drawChallengePhase`) accepts every session the ledger opens withheld on the sample root and
-`trustedChallengePhaseOf` trusts, as a withheld deployment's is. -/
 theorem drawChallengePhase_honest {ledger : Json} {k : ChallengerKey} {pins main session : Json} {root : String} {x}
     (ht : trustedChallengePhaseOf ledger (Json.mkObj [("root", Json.str root)]) k pins main session = .ok x)
     (hw : withheldOn ledger root = true) : PouwCheck.Credit.drawChallengePhase ledger k pins main session root = .ok x := by
@@ -452,8 +423,6 @@ theorem drawWithheld_nontrivial :
   rintro r ⟨-, hw⟩
   simp [withheldOn] at hw
 
-/-- **`DrawWithheld` fails at a verifier that accepts everything**: such a verifier credits the empty ledger and the sample
-`{root: ""}`, where the conclusion fails (`drawWithheld_nontrivial`). -/
 theorem drawWithheld_acceptAll
     (f : Json → Json → Json → Json → Json → Json → Json → Json → Json → Json → Except (String × String) (List Nat))
     (hall : ∀ key ledger pins main salt calls served commit rounds draw,
@@ -486,12 +455,6 @@ theorem groupedDrawMisses : GroupedDrawMisses := by
   exact workDrawMisses layout ss K strata eps δ C k' hss hlaw hk' (Bb.image leafOf) hk'K
     (hB.trans (Nat.cast_le.mpr hle))
 
-/-! ## `GroupedDrawMisses`'s witnesses
-
-The compiled `strata` and `samplingDesign` on the lanes window are `Proofs.Pouw.Credit.Lanes`'s (`strata_lanes`, `samplingDesign_lanes`);
-`kPrime`'s `K′` is pinned by `kPrime_least` as `Accept` pins H1's. -/
-
-/-- **`K′ ≤ 8` at ε = 1/2 and δ = 1/256 over the whole window's work**: `q = 1/2`, and `q^8 = δ`. -/
 theorem kPrime_lanes : ∃ k', PouwWindow.kPrime (1 / 2) (1 / 256) (Flock.Draw.totalWork lanesStrata)
     (Flock.Draw.totalWork lanesStrata) 1 = .ok k' ∧ k' ≤ lanesK := by
   have hd : PouwWindow.KPrimeDomain (1 / 2) (1 / 256) (Flock.Draw.totalWork lanesStrata)
@@ -502,8 +465,6 @@ theorem kPrime_lanes : ∃ k', PouwWindow.kPrime (1 / 2) (1 / 256) (Flock.Draw.t
   obtain ⟨k, hk, -, -, -, hmin⟩ := h
   exact ⟨k, hk, Nat.le_of_not_lt fun hlt => absurd (hmin 8 (by decide) hlt) (by decide +kernel)⟩
 
-/-- **No leaf's blocks do more than the leaf**: leaf `u < 16`'s 32 lanes do its 32·32·2048, and no block is past
-leaf 15. -/
 theorem leaves_lanes (u : ℕ) :
     ∑ b ∈ lanesBlocks.filter (fun b => lanesLeaf b = u), lanesWork b ≤ unitWork lanesStrata u := by
   by_cases hu : u < 16

@@ -4,30 +4,7 @@ public import Proofs.Pouw.Headline.EpsJl
 public import Proofs.Pouw.Headline.Sm120
 public import Proofs.ResourceAccounting.Lemmas.TS
 
-/-!
-# sm_120's headline on its measured vector
-
-`Sm120MeasuredHeadline` is `DIdealFloor` at sm_120's measured data (`Definitions.Pouw.Headline.Sm120Measured`),
-with the data's hypotheses discharged and the terms bounded as at the data sheet:
-
-* the data, by `decide`: π* (JI3t_0) is the floor program's largest facet of VF3s-16's 130 (`sm120m_max`), so `B_♭`
-  is its load there, `≈ 19.259` (`sm120m_bnd`); no writer kind's word is cheaper there than IMMA16832's
-  (`sm120m_writers`), nor a vector or table word at `9/8` (`sm120m_vec`), so `w*` is IMMA16832's `≈ 0.02926`
-  (`sm120m_wStar`); each fold route costs at least the lane fold's `≈ 0.1204` there (`sm120m_phiStar`);
-* (I5) `SideUnits` and FILL-OPT hold at any run: the model has no side unit and no filler;
-* the folded branch (`Λ = κ/ln(8/7)`): `identity` at `d̄ = ā = 0` gives
-  `ε_skip + ε_cert + ε_route + ε_mand ≤ 1 − (N_w w* + N_w φ*)/B_♭`, `epsJl_le` (`Headline/EpsJl.lean`) bounds
-  `ε_jl` by `κ·41 ln 2/(48,000 · 2/15)` at `p = 7/8`, and their sum is below `591/100000`, by `decide` on the rationals
-  (`sm120m_final`), and it binds;
-* the unfolded branch (`Λ = (κ + f)/ln 2`, a run that skips folds charged at the whole-unit luck `½`): the floor is
-  `(N_w w* + N_w φ*)/B_♭ · (1 − 41/48000)` (`Whole.unfolded_floor`), below `591/100000` by `decide`
-  (`sm120m_unfolded`);
-* (I7) at `7/8` is the receipt split's (`luck_of_receipt_half`).
-
-The argument is `sm120MeasuredHeadline_bind`, with binding at `δ_bind` (`ProofLayer.BindingAt`), and
-`Sm120MeasuredHeadline` takes it at `√δ_fork` (`Whole.moved_le_sqrt`), as the sheet's `Sm120SheetHeadline` takes
-`sm120SheetHeadline_bind`.
--/
+/-! sm_120's headline on its measured vector. -/
 
 @[expose] public section
 
@@ -35,27 +12,20 @@ namespace ResourceAccounting.SecurityProofs.TS.Headline
 
 open ResourceAccounting.TS ResourceAccounting.TS.Headline ResourceAccounting.Assumptions.TS Pouw.RelativeSecurity ResourceAccounting.SecurityProofs.TS
 
-/-- VF3s-16's row `r` as rationals, by class index. -/
 def vfCoef (r i : ℕ) : ℚ := Sparse.coeff (Sm120Measured.vf3s16.getD r []) i
 
-/-- The measured machine's row `r`. -/
 def vfRow (r : Fin 130) (i : ℕ) : ℚ := vfCoef r.val i
 
-/-- The measured floor program's counts, its four lists in `labelled`'s order. -/
 def flatAllM : Sparse := Sm120.flatWords ++ Sm120.flatFold ++ [] ++ Sm120Measured.flatSkip
 
-/-- `B_♭` on VF3s-16 as a rational: the floor program's load on π*. -/
 def BqM : ℚ := dot (vfCoef Sm120Measured.piStar.val) 122 flatAllM
 
-/-- `w*` at π* as a rational: the writer kind `wStarKind`'s coefficient there over its `ω`. -/
 def wqM : ℚ :=
   vfCoef Sm120Measured.piStar.val ((Sm120Measured.h1fx1.writers.getD Sm120Measured.wStarKind.val (0, 0)).1 % 122) /
     (Sm120Measured.h1fx1.writers.getD Sm120Measured.wStarKind.val (0, 0)).2
 
-/-- The least vector-class coefficient at π* that keeps the scalar routes at `9/8` from undercutting `w*`. -/
 def vqM : ℚ := 256 / 9 * wqM
 
-/-- `φ*` at π* as a rational: the lane fold's load there. -/
 def phiqM : ℚ := dot (vfCoef Sm120Measured.piStar.val) 122 (Sm120Measured.h1fx1.folds.getD 0 [])
 
 theorem sm120m_max : ∀ i < 130, dot (vfCoef i) 122 flatAllM ≤ BqM := by decide +kernel
@@ -140,8 +110,6 @@ theorem sm120m_vecMin : (vqM : ℝ) ≤ Sm120Measured.model.vecMin Sm120Measured
   rw [sm120m_hG, ← hk]
   exact Rat.cast_le.mpr (sm120m_vec j hj)
 
-/-- `w*` at `π*` is the writer kind `wStarKind`'s (IMMA16832's) word: every other writer kind's is at least that
-(`sm120m_writers`), and so are the vector and table routes' at `9/8` (`sm120m_vec`). -/
 theorem sm120m_wStar : Sm120Measured.model.wStar (onFacet Sm120Measured.piStar) = (wqM : ℝ) := by
   have hvec : (wqM : ℝ) ≤ 9 / 8 / 32 * Sm120Measured.model.vecMin Sm120Measured.piStar := by
     have h0 : (wqM : ℝ) ≤ ((9 / 8 / 32 * vqM : ℚ) : ℝ) := Rat.cast_le.mpr sm120m_wv
@@ -188,7 +156,6 @@ theorem sm120m_wStar : Sm120Measured.model.wStar (onFacet Sm120Measured.piStar) 
       exact hvec
     | side u => exact u.elim
 
-/-- `φ*` at `π*` is at least the lane fold's load there. -/
 theorem sm120m_phiStar : (phiqM : ℝ) ≤ Sm120Measured.model.phiStar (onFacet Sm120Measured.piStar) := by
   unfold Model.phiStar
   refine le_ciInf fun φ => ?_
@@ -198,7 +165,6 @@ theorem sm120m_phiStar : (phiqM : ℝ) ≤ Sm120Measured.model.phiStar (onFacet 
   rw [load_counts _ vfRow sm120m_hG]
   exact Rat.cast_le.mpr (sm120m_fold φ.val φ.isLt)
 
-/-- FILL-OPT on any run: the model has no filler, so `χ* = 0` and the run's filler is priced `≥ 0`. -/
 theorem sm120m_fillOpt {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm120.checks (Fin 122) (Fin 15) Unit Empty)
     (hSplit : ∀ x, (Pl.run x).Split) : ∀ x, FillOpt Sm120Measured.model (Pl.run x) := by
   intro x lam hlam
@@ -224,7 +190,6 @@ theorem sm120m_final :
   push_cast at h
   linarith
 
-/-- The terms at `π*`, `p = 7/8` and `δ′ ≥ 2^-41` sum to at most `591/100000`. -/
 theorem sm120m_eps_le (δ' : ℝ) (hδ' : (1 / 2 : ℝ) ^ 41 ≤ δ') :
     1 - 591 / 100000 ≤ 1 - Sm120Measured.model.epsSkip Sm120Measured.flat (onFacet Sm120Measured.piStar) -
       Sm120Measured.model.epsCert Sm120Measured.flat (onFacet Sm120Measured.piStar) -
@@ -263,7 +228,6 @@ theorem sm120m_eps_le (δ' : ℝ) (hδ' : (1 / 2 : ℝ) ^ 41 ≤ δ') :
   have hfin := sm120m_final
   linarith
 
-/-- The unfolded branch's floor at `π*`: `(N_w w* + N_w φ*)/B_♭ · (1 − 41/48000) ≥ 1 − 591/100000`. -/
 theorem sm120m_unfolded :
     1 - 591 / 100000 ≤ (Sm120Measured.model.Nw * Sm120Measured.model.wStar (onFacet Sm120Measured.piStar) +
       (1 - Sm120Measured.model.muF) * Sm120Measured.model.Nw *
@@ -293,12 +257,7 @@ namespace ResourceAccounting.SecurityProofs.TS
 open ResourceAccounting.TS ResourceAccounting.TS.Headline ResourceAccounting.Assumptions.TS Pouw.RelativeSecurity
   ResourceAccounting.SecurityProofs.TS.Headline
 
-/-- sm_120's headline on VF3s-16 with binding at `δ_bind` (`ProofLayer.BindingAt`), the form (I8)'s pieces take:
-`Whole.dIdealFloor_whole` at `π*`, `p = 7/8`, `p₀ = ½`, `Λ = max(κ/ln(8/7), (κ + f)/ln 2)`, `S = 48,000` and
-`δ = 2^-40`, (I7) from the receipt split (`luck_of_receipt_half`), (I8) from its pieces (`ProofsSoundOfPinned`),
-(I5) `SideUnits` and FILL-OPT from the data, and the terms bounded by `Whole.headline_of_branches`: the folded branch by
-`sm120m_eps_le`, the unfolded one by `sm120m_unfolded`. The 0.591% rests on the record's premises, (I3) at `9/8`
-(`ScalarRoute`) among them, which is assumed: at A6's proved `½` floor the same bound is 7.791%. -/
+/-- It rests on the record's premises, (I3) at `9/8` (`ScalarRoute`) among them, which is assumed. -/
 theorem sm120MeasuredHeadline_bind {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm120.checks (Fin 122) (Fin 15) Unit Empty)
     (G : ReceiptGame Ω Sm120.checks) (Uf : Unfolded Ω Sm120.checks) {V : Type} {nπ : ℕ}
     (pf : ProofLayer Ω Sm120.checks nπ V) (δbind δzk : ℝ)

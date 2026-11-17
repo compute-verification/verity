@@ -4,43 +4,13 @@ public import Mathlib.Tactic.FinCases
 public import Proofs.Pouw.Fp8Atom.H1TSliceProofs
 public import Proofs.Pouw.Fp8Atom.H1TProofs
 
-/-!
-# The one-flip clauses (`H1TOneFlip`, M4a and M4b)
-
-The involution toggles one raw bit: bit 31 of `r17`, bit 15 of `r16` or bit 31 of `r16`, which `extract` reads as tag
-lane `29 + k`'s sign bit and nothing else (`extract_rawFlip`). On the slice salts it is `flipS τ k`, and by
-`H1TSlice` it moves the slice's block-1 sum by `−2·v·t` and its block-2 sum by `+2·v·t`, with `|v| ≥ 32F`.
-
-* A flip of lane 0 moves the flipped fresh-step word by at least `4096F − 256F ≥ 960` (the cell of each sum is at
-  most `128F`, `t₀ ≥ 64`), in the direction of `∓v` (`fresh_move`), and so a block-1 running word by at least
-  `960 − 512 = 448` (L4: the ulp is at most 512; `run_move`).
-* `I` against `I`: other slices (flip one), the two blocks of one slice (they move in opposite directions), and two
-  columns in one block (a flip of a lane where their tuples differ moves the difference of the sums by
-  `2·|v|·|Δt| ≥ 256F`, and equal truncations lie within `128F`).
-* A block-1 `R_q` against `I_p`: if `I_p` is not of slice `q`, flip slice `q`. If it is, flip slice `q − 1`: then
-  `I_p` and `I_q` stay, and `RN(R_(q−1) + I_q) = I_p` with `|I_p| < 2^23` puts `R_(q−1) + I_q` within `1/4` of
-  `I_p` at both salts, while `R_(q−1)` moves by at least 448.
-* A block-1 `R_q` against a later `R_q'` of block 1: flip slice `q'`.
-* A block-2 `R_p` against a later `I_p'`: flip slice `p' − T`. The running word moves weakly one way (L7), and the
-  block-2 fresh-step word strictly the other.
-
-By column (M4b), a flip of lane `k` of slice `q`:
-* Two block-1 `R_q` of columns whose tuples are at least 72 apart in lane `k` (`FarTags`): both `R_(q−1)` stay, and
-  the difference of the two sums moves by `2·|v|·|Δt| ≥ 4608F`. Equal roundings put each pair of sums within 512
-  (L4), and the four cells take less than `512F`, so it cannot be absorbed (`sep_run_columns`).
-* A block-2 `R_p` against a block-1 word of slice `q` of a column whose tuple has the opposite sign in lane `k`
-  (`OppLater`), for `p < T + q`: `R_p` reads slice `q` only through `I_q`, so it moves weakly one way (L7), and the
-  other column's `I_q` strictly the other (`sep_opp_fresh`). So does its `R_q` if its value in lane `k` is at least
-  36 in magnitude: `I_q` then moves by more than 512 and `R_(q−1)` stays (`sep_opp_run`).
--/
+/-! The one-flip clauses (`H1TOneFlip`, M4a and M4b). -/
 
 @[expose] public section
 
 namespace Pouw.Fp8Atom.H1T.Proofs
 
 open Pouw.Fp8Atom Pouw.Fp8Atom.Proofs Pouw.Fp8Atom.H1T
-
-/-! ## The raw flip -/
 
 theorem bitAt_eq (w c : ℕ) : bitAt w c = w.testBit c := by
   rw [Nat.testBit_eq_decide_div_mod_eq, bitAt, Nat.shiftRight_eq_div_pow]
@@ -61,7 +31,6 @@ theorem bits3_xor (w b c : ℕ) (h : b < c ∨ c + 3 ≤ b) : bits3 (w ^^^ 2 ^ b
     simp [this]
   · simp [hi]
 
-/-- Bit `b < 32` of a raw word toggled. -/
 def flipBit (w : Fin (2 ^ 32)) (b : ℕ) (hb : b < 32) : Fin (2 ^ 32) :=
   ⟨w.val ^^^ 2 ^ b, Nat.xor_lt_two_pow w.isLt (Nat.pow_lt_pow_right (by norm_num) hb)⟩
 
@@ -74,7 +43,6 @@ theorem bitAt_flipBit (w : Fin (2 ^ 32)) (b : ℕ) (hb : b < 32) (c : ℕ) :
 theorem bits3_flipBit (w : Fin (2 ^ 32)) (b : ℕ) (hb : b < 32) (c : ℕ) (h : b < c ∨ c + 3 ≤ b) :
     bits3 (flipBit w b hb).val c = bits3 w.val c := bits3_xor _ _ _ h
 
-/-- Tag lane `29 + k`'s sign bit toggled in the raw words: bit 31 of `r17`, bit 15 of `r16` or bit 31 of `r16`. -/
 def rawFlip (k : Fin 3) (r : RawSlice) : RawSlice :=
   if k.val = 0 then Function.update r 17 (flipBit (r 17) 31 (by norm_num))
   else if k.val = 1 then Function.update r 16 (flipBit (r 16) 15 (by norm_num))
@@ -104,7 +72,6 @@ theorem extract_rawFlip (k : Fin 3) (r : RawSlice) : extract (rawFlip k r) = neg
   unfold negFlip
   rw [← e1, ← e2, ← e3]
 
-/-- The raw flip of slice `τ` of a row's salt. -/
 def psi {T : ℕ} (τ : Fin T) (k : Fin 3) (s : Fin T → RawSlice) : Fin T → RawSlice :=
   Function.update s τ (rawFlip k (s τ))
 
@@ -112,7 +79,6 @@ theorem psi_invol {T : ℕ} (τ : Fin T) (k : Fin 3) : Function.Involutive (psi 
   intro s
   simp [psi, Function.update_idem, rawFlip_rawFlip, Function.update_eq_self]
 
-/-- Slice `τ` of `σ` with tag lane `k`'s sign bit flipped. -/
 def flipS (τ : ℕ) (k : Fin 3) (σ : ℕ → SliceSalt) : ℕ → SliceSalt := Function.update σ τ (negFlip k (σ τ))
 
 theorem flipS_self (τ : ℕ) (k : Fin 3) (σ : ℕ → SliceSalt) : flipS τ k σ τ = negFlip k (σ τ) := by
@@ -135,20 +101,14 @@ theorem rowSalt_psi (U : Unit) (i : Fin U.m) (τ : Fin U.T) (k : Fin 3) (s : Fin
       simp [psi, Function.update_of_ne this]
     · rfl
 
-/-! ## The block sums under a flip -/
-
-/-- The sum `trunc14` truncates at position `p`: block 1 of slice `p`, or block 2 of slice `p − T`. -/
 def bsum (T : ℕ) (x b : ℕ → Code) (j : ℕ) (σ : ℕ → SliceSalt) (p : ℕ) : ℚ :=
   if p < T then preSum (formSlice (realLanes x p) (σ p)).1 (colLanes b j p)
   else preSum (formSlice (realLanes x (p - T)) (σ (p - T))).2 (colLanes b j (p - T))
 
-/-- The slice position `p` reads. -/
 def slc (T p : ℕ) : ℕ := if p < T then p else p - T
 
-/-- Slice `τ`'s floor `F`. -/
 def fl (x : ℕ → Code) (τ : ℕ) : ℚ := floorF (sliceMax (realLanes x τ))
 
-/-- Tag lane `k`'s value in slice `τ`. -/
 def tv (x : ℕ → Code) (σ : ℕ → SliceSalt) (τ : ℕ) (k : Fin 3) : ℚ := tagVal (fl x τ) ((σ τ).neg k) ((σ τ).man k)
 
 theorem fresh_fixed {T : ℕ} {x b : ℕ → Code} (j : ℕ) (σ : ℕ → SliceSalt) {τ p : ℕ} (k : Fin 3)
@@ -194,8 +154,6 @@ theorem bsum_lt (j : ℕ) (σ : ℕ → SliceSalt) (p : ℕ) {fi : ℕ} (hF : fl
     unfold bsum; rw [ite_eq_right hp]; exact hS.2.1.2
 
 end
-
-/-! ## Cells and moves -/
 
 theorem fOf_ge (fi : ℕ) : 1 / 4 ≤ fOf fi := by
   rw [fOf_eq, show (1 / 4 : ℚ) = 2 ^ (-2 : ℤ) by norm_num]
@@ -244,7 +202,6 @@ theorem rn_sep {y y' : ℚ} (hy : |y| < 2 ^ 33) (hy' : |y'| < 2 ^ 33) : |y' - y|
   rw [abs_sub_comm] at h2
   rw [e]; linarith
 
-/-- A value that rounds to below `2^23` in magnitude is within a quarter of it. -/
 theorem rn_small {y w : ℚ} (h : rn y = w) (hw : |w| < 2 ^ 23) : |y - w| ≤ 1 / 4 := by
   have hr : Representable ((2 : ℚ) ^ 23) := ⟨2 ^ 23, 0, by norm_num, by norm_num⟩
   have e23 : rn ((2 : ℚ) ^ 23) = 2 ^ 23 := rn_exact hr
@@ -283,8 +240,6 @@ theorem tagVal_abs_ge (F : ℚ) (hF : 0 < F) (neg : Bool) (m : Fin 8) : 32 * F �
 
 theorem A1_abs_ge : ∀ i : Fin 62, 32 * 512 ≤ |intVal (A1 i)| := by decide +kernel
 
-/-- Every tag lane's tuple value is at least 32 in magnitude (lane 0's is in `[64, 448]`, lanes 1 and 2's in
-`±[32, 448]`). -/
 theorem tuple_abs_ge (j : ℕ) (k : Fin 3) : 32 ≤ |val (tuple j k)| := by
   rw [val_eq_intVal (tuple_facts j k).1, abs_div, abs_of_pos (by norm_num : (0 : ℚ) < 512), le_div_iff₀ (by norm_num),
     ← Int.cast_abs]
@@ -317,7 +272,6 @@ theorem tv_ne_zero {x : ℕ → Code} (hx : ∀ r, (x r).isNaN = false) (σ : �
   have hv := tagVal_abs_ge (fl x τ) (by rw [hF]; exact fOf_pos _) ((σ τ).neg k) ((σ τ).man k)
   intro h0; unfold tv at h0; rw [h0, abs_zero, hF] at hv; linarith [fOf_pos fi]
 
-/-- A flip of lane `k` moves a sum by `2·v·w` with `|v| ≥ 32F`: at least `64F·c` if `|w| ≥ c`. -/
 theorem tv_move_ge {x : ℕ → Code} {σ : ℕ → SliceSalt} {τ fi : ℕ} (hF : fl x τ = fOf fi) (k : Fin 3) {c w : ℚ}
     (hc : 0 ≤ c) (hw : c ≤ |w|) : 64 * fOf fi * c ≤ |2 * tv x σ τ k * w| := by
   have hv := tagVal_abs_ge (fl x τ) (by rw [hF]; exact fOf_pos _) ((σ τ).neg k) ((σ τ).man k)
@@ -333,10 +287,6 @@ theorem tv_opp {x : ℕ → Code} (hx : ∀ r, (x r).isNaN = false) (σ : ℕ �
   calc tv x σ τ k * t * (tv x σ τ k * t') = (tv x σ τ k * tv x σ τ k) * (t * t') := by ring
     _ < 0 := mul_neg_of_pos_of_neg h2 h
 
-/-! ## A flip of lane 0 moves the flipped words -/
-
-/-- A flip of lane 0 of slice `slc T p` moves `I_p` by at least 960: strictly down in block 1 and up in block 2 when
-the lane's tag value `v` is positive, and the other way when it is negative. -/
 theorem fresh_move {T : ℕ} {x b : ℕ → Code} (hx : ∀ r, (x r).isNaN = false) (hb : ∀ r, (b r).isNaN = false)
     (j : ℕ) (σ : ℕ → SliceSalt) {p : ℕ} (hp : p < 2 * T) :
     960 ≤ |freshVal T x b j (flipS (slc T p) 0 σ) p - freshVal T x b j σ p| ∧
@@ -424,7 +374,6 @@ theorem fresh_lt {T : ℕ} {x b : ℕ → Code} (hx : ∀ r, (x r).isNaN = false
   have := (fresh_facts (T := T) hx hb j σ p).2
   split_ifs at this <;> norm_num <;> linarith
 
-/-- A flip of lane 0 of slice `q < T` moves the block-1 running word `R_q` by at least 448. -/
 theorem run_move {T : ℕ} {x b : ℕ → Code} (hT : T ≤ 1130) (hx : ∀ r, (x r).isNaN = false)
     (hb : ∀ r, (b r).isNaN = false) (j : ℕ) (σ : ℕ → SliceSalt) {q : ℕ} (hq : q < T) :
     448 ≤ |runVal T x b j (flipS q 0 σ) q - runVal T x b j σ q| := by
@@ -448,21 +397,16 @@ theorem run_move {T : ℕ} {x b : ℕ → Code} (hT : T ≤ 1130) (hx : ∀ r, (
       freshVal T x b j (flipS (q + 1) 0 σ) (q + 1) - freshVal T x b j σ (q + 1) by ring] at this
     linarith
 
-/-! ## The pairs one flip separates -/
-
-/-- A credited word of one row and column as a function of the row's slice salts. -/
 def W (T : ℕ) (x b : ℕ → Code) (j : ℕ) : Pos T → (ℕ → SliceSalt) → ℚ
   | .inl p, σ => freshVal T x b j σ p.val
   | .inr p, σ => runVal T x b j σ p.val.val
 
-/-- The flip of lane `k` of slice `τ` separates `A` and `B` wherever they agree. -/
 def Sep (τ : ℕ) (k : Fin 3) (A B : (ℕ → SliceSalt) → ℚ) : Prop :=
   ∀ σ, A σ = B σ → A (flipS τ k σ) ≠ B (flipS τ k σ)
 
 theorem Sep.symm {τ : ℕ} {k : Fin 3} {A B : (ℕ → SliceSalt) → ℚ} (h : Sep τ k A B) : Sep τ k B A :=
   fun σ e e' => h σ e.symm e'.symm
 
-/-- If a flip moves `A` weakly and `B` strictly, in directions of opposite signs `u` and `u'`, it separates them. -/
 theorem sep_of_opposite {τ : ℕ} {k : Fin 3} {A B u u' : (ℕ → SliceSalt) → ℚ} (hu : ∀ σ, u σ * u' σ < 0)
     (hA : ∀ σ, (0 ≤ u σ → A (flipS τ k σ) ≤ A σ) ∧ (u σ ≤ 0 → A σ ≤ A (flipS τ k σ)))
     (hB : ∀ σ, (0 < u' σ → B (flipS τ k σ) < B σ) ∧ (u' σ < 0 → B σ < B (flipS τ k σ))) : Sep τ k A B := by
@@ -503,7 +447,6 @@ variable {T : ℕ} {x b b' : ℕ → Code} (hT : T ≤ 1130) (hx : ∀ r, (x r).
   (hb : ∀ r, (b r).isNaN = false) (hb' : ∀ r, (b' r).isNaN = false)
 
 include hx hb in
-/-- `I` against `I` of another slice: flip the first one's slice. -/
 theorem sep_fresh_slices (j j' : ℕ) {p p' : ℕ} (hp : p < 2 * T) (h : slc T p' ≠ slc T p) :
     Sep (slc T p) 0 (fun σ => freshVal T x b j σ p) (fun σ => freshVal T x b' j' σ p') := by
   intro σ e e'
@@ -513,7 +456,6 @@ theorem sep_fresh_slices (j j' : ℕ) {p p' : ℕ} (hp : p < 2 * T) (h : slc T p
   norm_num at hm
 
 include hx hb hb' in
-/-- The two blocks of one slice: a flip of lane 0 moves them in opposite directions. -/
 theorem sep_fresh_blocks (j j' : ℕ) {τ : ℕ} (hτ : τ < T) :
     Sep τ 0 (fun σ => freshVal T x b j σ τ) (fun σ => freshVal T x b' j' σ (T + τ)) := by
   intro σ e e'
@@ -539,7 +481,6 @@ theorem sep_fresh_blocks (j j' : ℕ) {τ : ℕ} (hτ : τ < T) :
     rw [e, e'] at a1; exact a2 a1
 
 include hx hb hb' in
-/-- Two columns at one position: flip a lane where their tuples differ. -/
 theorem sep_fresh_columns {j j' : ℕ} {p : ℕ} (hp : p < 2 * T) {k : Fin 3} (hk : tuple j k ≠ tuple j' k) :
     Sep (slc T p) k (fun σ => freshVal T x b j σ p) (fun σ => freshVal T x b' j' σ p) := by
   intro σ e e'
@@ -573,7 +514,6 @@ theorem sep_fresh_columns {j j' : ℕ} {p : ℕ} (hp : p < 2 * T) {k : Fin 3} (h
     rw [← e4] at this; linarith
 
 include hT hx hb in
-/-- A block-1 running word against a fresh-step word of another slice: flip the running word's slice. -/
 theorem sep_run_fresh (j j' : ℕ) {q p : ℕ} (hq : q < T) (hs : slc T p ≠ q) :
     Sep q 0 (fun σ => runVal T x b j σ q) (fun σ => freshVal T x b' j' σ p) := by
   intro σ e e'
@@ -583,8 +523,6 @@ theorem sep_run_fresh (j j' : ℕ) {q p : ℕ} (hq : q < T) (hs : slc T p ≠ q)
   norm_num at hm
 
 include hT hx hb hb' in
-/-- `R_q` against a fresh-step word of slice `q`: flip slice `q − 1`, which moves `R_(q−1)` by at least 448 but not the
-fresh-step words, while `RN(R_(q−1) + I_q)` equal to a word below `2^23` pins `R_(q−1)` to within a quarter. -/
 theorem sep_run_fresh_same (j j' : ℕ) {q p : ℕ} (hq : q < T) (hq1 : 1 ≤ q) (hs : slc T p = q) :
     Sep (q - 1) 0 (fun σ => runVal T x b j σ q) (fun σ => freshVal T x b' j' σ p) := by
   obtain ⟨r, rfl⟩ : ∃ r, q = r + 1 := ⟨q - 1, by omega⟩
@@ -609,7 +547,6 @@ theorem sep_run_fresh_same (j j' : ℕ) {q p : ℕ} (hq : q < T) (hq1 : 1 ≤ q)
   linarith
 
 include hT hx hb' in
-/-- Two block-1 running words at different positions: flip the later one's slice. -/
 theorem sep_run_run (j j' : ℕ) {q q' : ℕ} (h : q < q') (hq' : q' < T) :
     Sep q' 0 (fun σ => runVal T x b j σ q) (fun σ => runVal T x b' j' σ q') := by
   intro σ e e'
@@ -619,8 +556,6 @@ theorem sep_run_run (j j' : ℕ) {q q' : ℕ} (h : q < q') (hq' : q' < T) :
   norm_num at hm
 
 include hx hb hb' in
-/-- A block-2 running word `R_p` against a later fresh-step word `I_(T+τ)`: flip slice `τ`, which moves `R_p` weakly
-(L7) and `I_(T+τ)` strictly the other way. -/
 theorem sep_run2_fresh (j j' : ℕ) {p τ : ℕ} (hp : T ≤ p) (hτ : τ < T) (h : p < T + τ) :
     Sep τ 0 (fun σ => runVal T x b j σ p) (fun σ => freshVal T x b' j' σ (T + τ)) := by
   intro σ e e'
@@ -655,11 +590,7 @@ theorem sep_run2_fresh (j j' : ℕ) {p τ : ℕ} (hp : T ≤ p) (hτ : τ < T) (
       lt_of_le_of_ne (not_lt.1 fun h => absurd ((m2.2.1 hpos).2 h) (by omega)) (Ne.symm hne2)
     rw [e, e'] at hmono; linarith
 
-/-! ### By column: O1 for far tuples, and O2 against a later slice of an opposite-signed column -/
-
 include hx hb in
-/-- A flip of lane `k` of slice `q < T` moves `I_q`'s sum by `−2·v·t`, and so `I_q` by more than `2·|v·t| − 256F`,
-weakly down if `v·t ≥ 0` and weakly up if `v·t ≤ 0` (L7). -/
 theorem fresh1_flip (j : ℕ) (σ : ℕ → SliceSalt) {q : ℕ} (hq : q < T) (k : Fin 3) {fi : ℕ} (hF : fl x q = fOf fi) :
     |2 * tv x σ q k * val (tuple j k)| - 256 * fOf fi <
       |freshVal T x b j (flipS q k σ) q - freshVal T x b j σ q| ∧
@@ -679,7 +610,6 @@ theorem fresh1_flip (j : ℕ) (σ : ℕ → SliceSalt) {q : ℕ} (hq : q < T) (k
   · rw [hd]; linarith
 
 include hx hb in
-/-- With `|t| ≥ 32`, that move of `I_q` is strict: at least `2048F − 256F`. -/
 theorem fresh1_strict (j : ℕ) (σ : ℕ → SliceSalt) {q : ℕ} (hq : q < T) (k : Fin 3) :
     (0 < tv x σ q k * val (tuple j k) → freshVal T x b j (flipS q k σ) q < freshVal T x b j σ q) ∧
     (tv x σ q k * val (tuple j k) < 0 → freshVal T x b j σ q < freshVal T x b j (flipS q k σ) q) := by
@@ -693,8 +623,6 @@ theorem fresh1_strict (j : ℕ) (σ : ℕ → SliceSalt) {q : ℕ} (hq : q < T) 
   exact ⟨fun h => lt_of_le_of_ne (hdn h.le) h0, fun h => lt_of_le_of_ne (hup h.le) (Ne.symm h0)⟩
 
 include hT hx hb in
-/-- With `|t| ≥ 36`, `I_q` moves by more than `2304F − 256F ≥ 512` and `R_(q−1)` stays, so the block-1 running word
-`R_q` moves strictly the same way (L4: the rounding error is at most 256). -/
 theorem run1_strict (j : ℕ) (σ : ℕ → SliceSalt) {q : ℕ} (hq : q < T) (hq1 : 1 ≤ q) (k : Fin 3)
     (ht : 36 ≤ |val (tuple j k)|) :
     (0 < tv x σ q k * val (tuple j k) → runVal T x b j (flipS q k σ) q < runVal T x b j σ q) ∧
@@ -723,8 +651,6 @@ theorem run1_strict (j : ℕ) (σ : ℕ → SliceSalt) {q : ℕ} (hq : q < T) (h
     fun h => lt_of_le_of_ne (rn_mono (by linarith [hup h.le])) (Ne.symm hne)⟩
 
 include hx hb in
-/-- A running word `R_p` before slice `q`'s block 2 (`p < T + q`) reads slice `q` only through `I_q`, so it moves
-weakly the way `I_q` does (L7). -/
 theorem run_weak (j : ℕ) (σ : ℕ → SliceSalt) {p q : ℕ} (hq : q < T) (h : p < T + q) (k : Fin 3) :
     (0 ≤ tv x σ q k * val (tuple j k) → runVal T x b j (flipS q k σ) p ≤ runVal T x b j σ p) ∧
     (tv x σ q k * val (tuple j k) ≤ 0 → runVal T x b j σ p ≤ runVal T x b j (flipS q k σ) p) := by
@@ -742,8 +668,6 @@ theorem run_weak (j : ℕ) (σ : ℕ → SliceSalt) {p q : ℕ} (hq : q < T) (h 
     · exact (hfix t ht htq).ge
 
 include hx hb hb' in
-/-- O2 against a fresh-step word: `R_p` (`p < T + q`) of column `j` against the block-1 `I_q` of a column `j'` whose
-tuple has the opposite sign in lane `k`. A flip of lane `k` of slice `q` moves them in opposite directions. -/
 theorem sep_opp_fresh {j j' p q : ℕ} (hq : q < T) (h : p < T + q) {k : Fin 3}
     (hk : val (tuple j k) * val (tuple j' k) < 0) :
     Sep q k (fun σ => runVal T x b j σ p) (fun σ => freshVal T x b' j' σ q) :=
@@ -751,8 +675,6 @@ theorem sep_opp_fresh {j j' p q : ℕ} (hq : q < T) (h : p < T + q) {k : Fin 3}
     (fun σ => tv_opp hx σ q k hk) (fun σ => run_weak hx hb j σ hq h k) (fun σ => fresh1_strict hx hb' j' σ hq k)
 
 include hT hx hb hb' in
-/-- O2 against a running word: the same against the block-1 `R_q`, if column `j'`'s value in lane `k` is at least 36
-in magnitude. -/
 theorem sep_opp_run {j j' p q : ℕ} (hq : q < T) (hq1 : 1 ≤ q) (h : p < T + q) {k : Fin 3}
     (hk : val (tuple j k) * val (tuple j' k) < 0) (ht : 36 ≤ |val (tuple j' k)|) :
     Sep q k (fun σ => runVal T x b j σ p) (fun σ => runVal T x b' j' σ q) :=
@@ -761,10 +683,6 @@ theorem sep_opp_run {j j' p q : ℕ} (hq : q < T) (hq1 : 1 ≤ q) (h : p < T + q
     (fun σ => run1_strict hT hx hb' j' σ hq hq1 k ht)
 
 include hT hx hb hb' in
-/-- O1 for far tuples: two columns' block-1 running words at one position `q ≥ 1`, with tuples at least 72 apart in
-lane `k`. A flip of lane `k` of slice `q` keeps both `R_(q−1)` and moves the difference of the two sums by
-`2·|v|·|Δt| ≥ 4608F`. Equal roundings put each pair of sums within 512 (L4), and the four cells take less than
-`512F`, so `4608F − 512F ≥ 1024` is too much to absorb. -/
 theorem sep_run_columns {j j' q : ℕ} (hq : q < T) (hq1 : 1 ≤ q) {k : Fin 3}
     (hk : 72 ≤ |val (tuple j k) - val (tuple j' k)|) :
     Sep q k (fun σ => runVal T x b j σ q) (fun σ => runVal T x b' j' σ q) := by
@@ -814,10 +732,7 @@ theorem sep_run_columns {j j' q : ℕ} (hq : q < T) (hq1 : 1 ≤ q) {k : Fin 3}
   rw [d2] at c4a c4b
   rcases le_abs.1 hmv with hm | hm <;> linarith
 
-/-! ### Near the start of block 2: a flip of the last slice (M4c) -/
-
 include hT hx hb in
-/-- Every running word and the next fresh-step word sum to less than `2^33` in magnitude (L4). -/
 theorem run_sum_lt (j : ℕ) (σ : ℕ → SliceSalt) {p : ℕ} (hp : p + 1 < 2 * T) :
     |runVal T x b j σ p + freshVal T x b j σ (p + 1)| < 2 ^ 33 := by
   by_cases h1 : p + 1 < T
@@ -836,8 +751,6 @@ theorem run_sum_lt (j : ℕ) (σ : ℕ → SliceSalt) {p : ℕ} (hp : p + 1 < 2 
       norm_num; linarith
 
 include hT hx hb in
-/-- A flip of slice `τ = T − 1` reaches `R_(τ+d)` (`d < T`) only through `I_τ` and the `d + 1` roundings from `R_τ`
-on, since the block-2 words before `I_(2T−1)` read earlier slices. Each rounding takes at most 512 of the move (L4). -/
 theorem run_last_chain (j : ℕ) (σ : ℕ → SliceSalt) {τ : ℕ} (hτ : τ + 1 = T) (h1 : 1 ≤ τ) (k : Fin 3) {d : ℕ}
     (hd : d < T) :
     |freshVal T x b j (flipS τ k σ) τ - freshVal T x b j σ τ| - 512 * (d + 1) ≤
@@ -878,8 +791,6 @@ theorem run_last_chain (j : ℕ) (σ : ℕ → SliceSalt) {τ : ℕ} (hτ : τ +
     linarith
 
 include hT hx hb in
-/-- An `Early` block-2 running word `R_p` moves under a flip of its large lane `k` of slice `T − 1`: `I_(T−1)` moves
-by more than `64F·|t| − 256F ≥ 512·(p − T + 2)`, and the `p − T + 2` roundings take at most that. -/
 theorem run_early_moves (j : ℕ) (σ : ℕ → SliceSalt) {p : ℕ} (hp : T ≤ p) (hp2 : p + 3 ≤ 2 * T) {k : Fin 3}
     (hk : 32 * ((p + 2 - T : ℕ) : ℚ) + 4 ≤ |val (tuple j k)|) :
     runVal T x b j (flipS (T - 1) k σ) p ≠ runVal T x b j σ p := by
@@ -898,8 +809,6 @@ theorem run_early_moves (j : ℕ) (σ : ℕ → SliceSalt) {p : ℕ} (hp : T ≤
   nlinarith [mul_nonneg (sub_nonneg.2 hF4) (by linarith : (0 : ℚ) ≤ ((p - T + 1 : ℕ) : ℚ) + 1)]
 
 include hT hx hb in
-/-- An `Early` block-2 running word against a word that skips the last slice: a flip of the large lane of slice
-`T − 1` moves the first and keeps the second. -/
 theorem sep_early {j j' : ℕ} (a a' : Pos T) (hr : Run2 a) (he : Early j a) (hs : SkipsLast a') :
     ∃ k : Fin 3, Sep (T - 1) k (W T x b j a) (W T x b' j' a') := by
   obtain ⟨k, hk⟩ := he
@@ -915,8 +824,6 @@ theorem sep_early {j j' : ℕ} (a a' : Pos T) (hr : Run2 a) (he : Early j a) (hs
   · exact run_early_moves hT hx hb j σ hr.2 hq2 hk (e'.trans (hfix.trans e.symm))
 
 end
-
-/-! ## Every pair that is not `Hard`, and every word that is not `Stuck` -/
 
 theorem pair_sep {T : ℕ} {x b b' : ℕ → Code} (hT : T ≤ 1130) (hx : ∀ r, (x r).isNaN = false)
     (hb : ∀ r, (b r).isNaN = false) (hb' : ∀ r, (b' r).isNaN = false) {j j' : ℕ}
@@ -1034,8 +941,6 @@ theorem word_moves {T : ℕ} {x b : ℕ → Code} (hT : T ≤ 1130) (hx : ∀ r,
     · obtain ⟨k, hk⟩ : Early j (Sum.inr ⟨q, hq1, hq2⟩ : Pos T) := by
         by_contra hc; exact hr ⟨⟨rfl, not_lt.1 hq⟩, hc⟩
       exact ⟨T - 1, by omega, k, fun σ => run_early_moves hT hx hb j σ (not_lt.1 hq) hq2 hk⟩
-
-/-! ## On a unit -/
 
 theorem word_eq_W (U : Unit) (i : Fin U.m) (j : Fin U.n) (a : Pos U.T) (g : U.Salt) :
     U.word (i, j, a) g = W U.T (U.row i) (U.col j) j.val a (U.rowSalt g i) := by

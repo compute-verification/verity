@@ -3,18 +3,7 @@ module
 public import Mathlib.LinearAlgebra.Matrix.Rank
 public import Mathlib.Data.Int.Interval
 
-/-!
-# Lifting MinRank: grid density (L3) and slices (L2)
-
-Two self-contained lemmas of `Lift_MinRank` (`internal/pouw/new-crypto/lifting/README.md`).
-
-* **L3 (grid density).** Points with every coordinate in a finite set `G` whose pairwise differences lie in a
-  subspace `V` number at most `|G| ^ finrank V`. On the noise grid `{−31, …, 32}^ι` a set inside an affine subspace
-  of codimension `r` has at most `64 ^ (|ι| − r)` points.
-* **L2 (slices), in the form used.** If every functional of a subspace `W` of `ι → ℚ` (acting by the dot product)
-  is constant on a set of grid points, that set has at most `64 ^ (|ι| − finrank W)` points. For a fixed `F₁`, `W`
-  is the image `Ψ_f(C)`, so the slice `Z_f` has at most `64 ^ (m·k − rank Ψ_f)` points.
--/
+/-! Lifting MinRank: grid density (L3) and slices (L2). -/
 
 @[expose] public section
 
@@ -26,8 +15,6 @@ section Density
 
 variable {ι K : Type*} [Fintype ι] [Field K]
 
-/-- **L3.** Points with coordinates in `G` and pairwise differences in `V`, with `finrank V ≤ n`, number at most
-`|G| ^ n`. -/
 theorem card_le_pow_of_sub_mem (G : Finset K) (hG : G.Nonempty) :
     ∀ (n : ℕ) (V : Submodule K (ι → K)), finrank K V ≤ n →
       ∀ s : Finset (ι → K), (∀ x ∈ s, ∀ i, x i ∈ G) → (∀ x ∈ s, ∀ y ∈ s, x - y ∈ V) →
@@ -73,7 +60,6 @@ theorem card_le_pow_of_sub_mem (G : Finset K) (hG : G.Nonempty) :
 
 end Density
 
-/-- The noise grid `{−31, …, 32}` as rationals. -/
 def grid : Finset ℚ := (Finset.Icc (-31 : ℤ) 32).image (Int.cast : ℤ → ℚ)
 
 theorem grid_card : grid.card = 64 := by
@@ -86,13 +72,10 @@ section Slices
 
 variable {ι : Type*} [Fintype ι]
 
-/-- **L3 on the noise grid.** A set of grid points inside a translate of `V` has at most `64 ^ finrank V`
-points; for an affine subspace of codimension `r`, `finrank V = |ι| − r`. -/
 theorem grid_card_le (V : Submodule ℚ (ι → ℚ)) (s : Finset (ι → ℚ)) (hs : ∀ x ∈ s, ∀ i, x i ∈ grid)
     (hsub : ∀ x ∈ s, ∀ y ∈ s, x - y ∈ V) : s.card ≤ 64 ^ finrank ℚ V := by
   simpa [grid_card] using card_le_pow_of_sub_mem grid grid_nonempty _ V le_rfl s hs hsub
 
-/-- The dimension count behind L2: the common kernel of `r` independent functionals has codimension `r`. -/
 theorem finrank_ker_mulVecLin {κ : Type*} [Fintype κ] (A : Matrix κ ι ℚ) :
     finrank ℚ (LinearMap.ker A.mulVecLin) = Fintype.card ι - A.rank := by
   have h := LinearMap.finrank_range_add_finrank_ker A.mulVecLin
@@ -100,8 +83,6 @@ theorem finrank_ker_mulVecLin {κ : Type*} [Fintype κ] (A : Matrix κ ι ℚ) :
   rw [Matrix.rank]
   omega
 
-/-- **L2 with L3 (a family of functionals).** If each functional `w c` takes the constant value `h c` on a set of
-grid points, the set has at most `64 ^ (|ι| − rank)` points, `rank` being that of the family. -/
 theorem slice_card_le {κ : Type*} [Fintype κ] (w : κ → ι → ℚ) (h : κ → ℚ) (s : Finset (ι → ℚ))
     (hs : ∀ x ∈ s, ∀ i, x i ∈ grid) (hZ : ∀ x ∈ s, ∀ c, w c ⬝ᵥ x = h c) :
     s.card ≤ 64 ^ (Fintype.card ι - (Matrix.of w).rank) := by
@@ -112,16 +93,11 @@ theorem slice_card_le {κ : Type*} [Fintype κ] (w : κ → ι → ℚ) (h : κ 
   simp only [Matrix.mulVec, Matrix.of_apply]
   exact (hZ x hx c).trans (hZ y hy c).symm
 
-/-- **The counting core of L4.** Grid solutions of `A·x = y` number at most `64 ^ (|ι| − rank A)`. With `A` a
-nonzero element of the checkpoint span, `rank A ≥ ρ` (MinRank), so `Pr_{f_j}[A·f_j = y] ≤ 64 ^ (−ρ)`. -/
 theorem solutions_card_le {κ : Type*} [Fintype κ] (A : Matrix κ ι ℚ) (y : κ → ℚ) (s : Finset (ι → ℚ))
     (hs : ∀ x ∈ s, ∀ i, x i ∈ grid) (hA : ∀ x ∈ s, A.mulVec x = y) :
     s.card ≤ 64 ^ (Fintype.card ι - A.rank) :=
   slice_card_le (fun c => A c) y s hs fun x hx c => congrFun (hA x hx) c
 
-/-- **L2 with L3 (intrinsic form).** If every functional in a subspace `W` of `ι → ℚ` is constant on a set of grid
-points, the set has at most `64 ^ (|ι| − finrank W)` points. For a fixed `F₁` and `W = Ψ_f(C)` this is
-`|Z_f| ≤ 64 ^ (m·k − rank Ψ_f)`, so `Pr_E[Z_f] ≤ 64 ^ (−rank Ψ_f)`. -/
 theorem slice_card_le_of_subspace (W : Submodule ℚ (ι → ℚ)) (s : Finset (ι → ℚ))
     (hs : ∀ x ∈ s, ∀ i, x i ∈ grid) (hW : ∀ w ∈ W, ∀ x ∈ s, ∀ y ∈ s, w ⬝ᵥ x = w ⬝ᵥ y) :
     s.card ≤ 64 ^ (Fintype.card ι - finrank ℚ W) := by

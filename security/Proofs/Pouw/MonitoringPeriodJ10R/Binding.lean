@@ -8,37 +8,9 @@ public import Proofs.Hash.RowBinding
 public import Proofs.Pouw.TS.FixedMeets
 public import Definitions.Compose.Guarantees.PeriodBinding
 
-/-!
-# A sampled layer's binding from its hashed openings
-
-The reduction behind binding's premise at a sampled window's proofs whose openings are frame-v3-sha512 paths
-(`ResourceAccounting.TS.HashedOpenings`), for any `SampledLayer`, at J10-R's (`tileLayer`), and at every period's
-(`Declared.monitoringPeriodLayer`) as the guarantee `Pouw.SecurityProofs.MonitoringPeriodBindingPerProver`, with its two witnesses. The
-open terms are explicit.
-
-* **A fork is a break, an unverified opening or a split** (`fork_cases`). Two accepted openings of one position
-  `ℓ ∈ L` to different values on a run `x` and on its continuation from `ℓ`'s cut (`SampledLayer.Forked`), each
-  `Verified` at one verifier, root and rank (no `Split`), have different rows, since a row decodes to the value it
-  opens; so the two checks hashed a SHA-512 collision (`Hash.SecurityProofs.RowBinding`), which the fork finder
-  outputs (`HashedOpenings.Finds`).
-* **The fork's probability** (`forked_le`): at most the finder's success (`Claims.Finder.Pr`) plus
-  `2·Σ_{ℓ ∈ L} Pr[Unverified at ℓ]` plus `Pr[some ℓ ∈ L splits]`. A continuation from `ℓ`'s cut is uniform
-  (`prob_cont`: `(x, z) ↦ (cont x z, cont z x)` is an involution), so the unverified opening on either run is
-  `Pr[Unverified at ℓ]` once per position.
-* **Binding** (`movedIn_le`, `movedIn_le_sqrt`). With `κ` the last two terms, `BindingOfECR` gives
-  `Pr[MovedIn w] ≤ δ' + |L|²/(4δ')·(ecr(finder) + κ)`, and under `ecr/sha-512` at the finder's `q` calls
-  `SampledBindingOfFork` gives `Pr[MovedIn w] ≤ |L|·√(q/2^256 + κ)`.
-* **At J10-R** (`tile_binding`): `tileLayer`'s `BindingAt` at that bound, the binding premise of
-  `H1J10RCheckedCreditMonitoringPeriod`, for any relation and rightness, since `MovedIn` reads neither.
-* **At every period** (`Pouw.SecurityProofs.MonitoringPeriodBindingPerProver`, `Pouw.Guarantees.MonitoringPeriodBindingPerProver`): the
-  same bound at `Declared.monitoringPeriodLayer` for any circuit and outcomes, at `L` the period's positions
-  (`Declared.monitoringPeriodPositions`, which hold every slot: `monitoringPeriodPositions_mem`). Its honest witness is `oneMonitoringPeriod` under
-  `honestOutcomes`, where `κ = 0` and binding never fails; its nontrivial one is `oneMonitoringPeriod` under
-  `acceptAllOutcomes`, where `κ = 0` and the opened coin bit moves with every fresh sample (`acceptAll_moved`).
-
-Neither open term is bounded here: no premise ties an accepted proof's `opened` to a verified opening of its
-position's leaf, and none fixes a position's verifier, root and rank by its cut.
--/
+/-! A sampled layer's binding from its hashed openings; its unverified and split terms are not bounded here,
+because no premise ties an accepted proof's `opened` to a verified opening or fixes a position's verifier, root
+and rank. -/
 
 @[expose] public section
 
@@ -52,7 +24,6 @@ variable {C B : Type} [Fintype C] [Fintype B] {S m s : ℕ} {J Q Pos V : Type}
   (hl : HashedOpenings C B S m s Q Pos V) (pf : SampledLayer C B S m s J Q Pos V)
 
 omit [Fintype C] [Fintype B] in
-/-- **A fork at `ℓ ∈ L` is a break the fork finder outputs, an unverified opening on either run, or a split.** -/
 theorem fork_cases (H : Hash.Msg → Hash.Digest) {L : Finset Pos} {ℓ : Pos} (hℓ : ℓ ∈ L)
     {x z : Paths (Paths C m × B) S} (h : pf.Forked ℓ x z) :
     (∃ uv, hl.Finds pf H L x z uv) ∨ hl.Unverified pf H x ℓ ∨ hl.Unverified pf H (pf.cont ℓ x z) ℓ ∨
@@ -92,7 +63,6 @@ theorem fork_cases (H : Hash.Msg → Hash.Digest) {L : Finset Pos} {ℓ : Pos} (
   · exact ⟨(a, b), hab, ℓ, hℓ, w, i, k, w', i', k', hp, hA, hp', hA', hmem a (Or.inl ha), hmem b (Or.inl hb)⟩
   · exact ⟨(a, b), hab, ℓ, hℓ, w, i, k, w', i', k', hp, hA, hp', hA', hmem a (Or.inr ha), hmem b (Or.inr hb)⟩
 
-/-- A continuation from `ℓ`'s cut on fresh coins is a uniform path. -/
 theorem prob_cont (ℓ : Pos) (P : Paths (Paths C m × B) S → Prop) :
     prob (fun p : Paths (Paths C m × B) S × Paths (Paths C m × B) S => P (pf.cont ℓ p.1 p.2)) =
       prob (fun p : Paths (Paths C m × B) S × Paths (Paths C m × B) S => P p.1) := by
@@ -104,7 +74,6 @@ theorem prob_cont (ℓ : Pos) (P : Paths (Paths C m × B) S → Prop) :
   rw [prob_equiv (hΦ.toPerm Φ) (fun p => P p.1)]
   rfl
 
-/-- What the fork finder finds is at most its success. -/
 theorem finds_le [Nonempty (Paths (Paths C m × B) S)] (H : Hash.Msg → Hash.Digest) (L : Finset Pos) (q : ℕ) :
     prob (fun p : Paths (Paths C m × B) S × Paths (Paths C m × B) S => ∃ uv, hl.Finds pf H L p.1 p.2 uv) ≤
       (hl.finder pf H L q).Pr (fun u => (H u).bytes) := by
@@ -113,8 +82,6 @@ theorem finds_le [Nonempty (Paths (Paths C m × B) S)] (H : Hash.Msg → Hash.Di
   refine ⟨hy.choose.1, hy.choose.2, ?_, hy.choose_spec.1⟩
   simp [HashedOpenings.finder, hy]
 
-/-- **The fork form's probability at `L`**: at most the fork finder's success, plus twice the unverified openings'
-probability summed over `L`, plus the probability that some position of `L` splits. -/
 theorem forked_le [Nonempty (Paths (Paths C m × B) S)] (H : Hash.Msg → Hash.Digest) (L : Finset Pos) (q : ℕ) :
     prob (fun p : Paths (Paths C m × B) S × Paths (Paths C m × B) S => ∃ ℓ ∈ L, pf.Forked ℓ p.1 p.2) ≤
       (hl.finder pf H L q).Pr (fun u => (H u).bytes) +
@@ -144,9 +111,6 @@ theorem forked_le [Nonempty (Paths (Paths C m × B) S)] (H : Hash.Msg → Hash.D
         ((prob_or_le _ _).trans (add_le_add hU le_rfl)))
 
 open Classical in
-/-- **Binding through `ecr/sha-512` at the fork finder** (`ResourceAccounting.Guarantees.Compose.BindingOfECR` at
-`forked_le`): for every `δ' > 0`, `Pr[MovedIn w] ≤ δ' + |L|²/(4δ')·(ecr(finder) + κ)`, `κ` the unverified and split
-terms. -/
 theorem movedIn_le [Nonempty V] [Nonempty (Paths (Paths C m × B) S)] (H : Hash.Msg → Hash.Digest) (L : Finset Pos)
     (q : ℕ) (w : Fin S) (hL : ∀ j k, pf.pos w j k ∈ L) (δ' : ℝ) (hδ : 0 < δ') :
     ENNReal.ofReal (prob (fun x => pf.MovedIn x w)) ≤
@@ -159,8 +123,6 @@ theorem movedIn_le [Nonempty V] [Nonempty (Paths (Paths C m × B) S)] (H : Hash.
   ResourceAccounting.SecurityProofs.Compose.Binding.bindingOfECR C B S m s pf w L (fun u => (H u).bytes)
     (hl.finder pf H L q) _ δ' hL hδ (forked_le hl pf H L q)
 
-/-- **Binding under `ecr/sha-512` at the fork finder's `q` calls**: `Pr[MovedIn w] ≤ |L|·√(q/2^256 + κ)`, `κ` the
-unverified and split terms (`SampledBindingOfFork` at `forked_le`). -/
 theorem movedIn_le_sqrt [Nonempty V] [Nonempty (Paths (Paths C m × B) S)] (H : Hash.Msg → Hash.Digest)
     (L : Finset Pos) (q : ℕ) (w : Fin S) (hL : ∀ j k, pf.pos w j k ∈ L)
     (hcr : Claims.ExpectedCR (fun u => (H u).bytes) (hl.finder pf H L q)) :
@@ -188,10 +150,6 @@ theorem movedIn_le_sqrt [Nonempty V] [Nonempty (Paths (Paths C m × B) S)] (H : 
 
 end Layer
 
-/-- **J10-R's binding premise from its hashed openings**: for any relation and rightness, the period's proofs under
-`Credit.window` (`tileLayer`) bind at `δ_bind = |L|·√(q/2^256 + κ)` (`BindingAt`, the binding premise of
-`H1J10RCheckedCreditMonitoringPeriod`) when `L` holds every round's slots and the fork finder at `L` and `q` calls meets
-`ecr/sha-512`, `κ` the unverified and split terms. -/
 theorem tile_binding {ι C Ξ V : Type} [Fintype C] [Fintype Ξ] [Nonempty V] (Cd : Declared ι) {nB mB n : ℕ}
     (hr : 0 < Cd.rounds) (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB)
     (unitOf : Fin nB → ℕ) (ws : CreditExecutionPhases (Coin C Ξ Cd.rounds σ sT) n)
@@ -211,7 +169,6 @@ theorem tile_binding {ι C Ξ V : Type} [Fintype C] [Fintype Ξ] [Nonempty V] (C
   intro w
   exact movedIn_le_sqrt hl _ H L q w (hL w) hcr
 
-/-- Every slot of a period's tile is at one of the period's positions. -/
 theorem monitoringPeriodPositions_mem {ι C Ξ V : Type} (Cd : Declared ι) {n Np Kd : ℕ} (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
     (pr : Outcomes C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np n V) (w : Fin n) (t : Fin Np) (k : ℕ) :
     (Cd.monitoringPeriodLayer hr hK pr).pos w t k ∈ Cd.monitoringPeriodPositions n Np := by
@@ -242,24 +199,20 @@ theorem oneProb_pos {Ω : Type} [Fintype Ω] {p : Ω → Prop} (ω : Ω) (h : p 
   exact div_pos (Nat.cast_pos.mpr (Finset.card_pos.mpr ⟨ω, Finset.mem_filter.mpr ⟨Finset.mem_univ _, h⟩⟩))
     (Nat.cast_pos.mpr (Fintype.card_pos_iff.mpr ⟨ω⟩))
 
-/-- A plurality reads its continuations only. -/
 theorem plural_of_sp {X W : Type} [Fintype X] [Nonempty W] (sp : X → X → X) (opens : X → W → Prop) {x x' : X}
     (h : sp x = sp x') : plural sp opens x = plural sp opens x' := by
   unfold plural tally
   rw [h]
 
-/-- A path of `oneMonitoringPeriod`'s coins with coin bit `b`. -/
 def oneCoins (b : Bool) : OneCoins := (((b, ()), (1, ())), ())
 
 instance instNonemptyOneCoins_proofs : Nonempty OneCoins := ⟨oneCoins false⟩
 
 variable (o : Outcomes Bool (Equiv.Perm (Fin 1) × Unit) 1 1 1 1 Bool)
 
-/-- `oneMonitoringPeriod`'s tile reads the gate `dag.length = 0` at every slot. -/
 theorem oneMonitoringPeriod_pos (w t : Fin 1) (k : ℕ) : (oneMonitoringPeriod.monitoringPeriodLayer Nat.one_pos le_rfl o).pos w t k = (w, 0) := by
   simp [Declared.monitoringPeriodLayer, Declared.slots, unitGates, oneMonitoringPeriod]
 
-/-- Every position of `oneMonitoringPeriod` is cut before the coin bit, so its continuations are the fresh coins. -/
 theorem oneMonitoringPeriod_cont (ℓ : Fin 1 × ℕ) (x z : OneCoins) :
     (oneMonitoringPeriod.monitoringPeriodLayer Nat.one_pos le_rfl o).cont ℓ x z = z := by
   obtain ⟨w, g⟩ := ℓ
@@ -271,7 +224,6 @@ theorem oneMonitoringPeriod_cont (ℓ : Fin 1 × ℕ) (x z : OneCoins) :
   rw [hc]
   rfl
 
-/-- An opening of the value `v x` by `oneOpenings v` is verified. -/
 theorem one_verified (v : OneCoins → Bool) (x : OneCoins) (w i : Fin 1) (k : ℕ) (hv : o.opened x w i k = v x) :
     (oneOpenings v).Verified (oneMonitoringPeriod.monitoringPeriodLayer Nat.one_pos le_rfl o) zeroHash x w i k := by
   refine ⟨⟨?_, ?_, ?_⟩, hv.symm⟩
@@ -291,14 +243,12 @@ theorem one_split (v : OneCoins → Bool) (p : OneCoins × OneCoins) :
   rintro ⟨_, -, hs⟩
   exact hs ⟨rfl, rfl, rfl⟩
 
-/-- Under `acceptAllOutcomes` a position's committed value is the same on every path. -/
 theorem acceptAll_committed (x x' : OneCoins) (ℓ : Fin 1 × ℕ) :
     acceptAllLayer.committed x ℓ = acceptAllLayer.committed x' ℓ := by
   unfold SampledLayer.committed
   exact plural_of_sp _ _ (funext fun z => (oneMonitoringPeriod_cont acceptAllOutcomes ℓ x z).trans
     (oneMonitoringPeriod_cont acceptAllOutcomes ℓ x' z).symm)
 
-/-- Under `acceptAllOutcomes` binding fails on the path whose coin bit isn't the committed value. -/
 theorem acceptAll_moved : ∃ x, acceptAllLayer.MovedIn x 0 := by
   refine ⟨oneCoins (!acceptAllLayer.committed (oneCoins false) (0, 0)), 0, trivial, fun h => ?_⟩
   have h0 := congrFun h 0
@@ -309,7 +259,6 @@ theorem acceptAll_moved : ∃ x, acceptAllLayer.MovedIn x 0 := by
   revert h1
   cases acceptAllLayer.committed (oneCoins false) (0, 0) <;> decide
 
-/-- Under `honestOutcomes` every position a tile reads is committed to `false`. -/
 theorem honest_committed (x : OneCoins) (w : Fin 1) : honestLayer.committed x (w, 0) = false := by
   unfold SampledLayer.committed
   refine ResourceAccounting.SecurityProofs.TS.FixedMeets.plural_of_val _ _ (fun _ => false) (fun y v => ⟨?_, ?_⟩) x

@@ -11,20 +11,7 @@ import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.PearlC.DeviceInertBoundRev1Gap
 import Proofs.Pouw.Prob
 
-/-!
-# Proofs of the deadline's guarantees
-
-The honest clock names a program that outputs the adversary's trace wherever it is received by the deadline, after
-the same preprocessing, at a cost within the run's spending between the salt and the deadline. That program is within
-the budget `EndToEnd` (or `GGapSampled`) reads, and its accepted transcripts include every one the verifier accepts by the
-deadline.
-
-The sm_120 instances (`Proofs.Pouw.Lemmas.Deadline`) are stated at W1: each is `PearlCSampledByDeadline` at
-`CM := W1.w1Priced dv salt`, with its sampled g from the old reduction at that cost model (`Proofs.Pouw.PearlC.TTOutW1`).
-
-The honest clock is stated once over `Adversaries`; at each game's `CostModel.adversaries` it unfolds to that game's own
-reading (`CostModel.honestClock_iff`, by `Iff.rfl`; `PearlC.CostModel.honestClock_iff`, whose adversaries hash nothing).
--/
+/-! The deadline's guarantees; the sm_120 instances are stated at W1 (`Proofs.Pouw.Lemmas.Deadline`). -/
 
 @[expose] public section
 
@@ -32,7 +19,6 @@ namespace Pouw
 
 variable {Q R S : Type}
 
-/-- The honest clock at the integer game's adversaries of `CM` on `U`, unfolded. -/
 theorem CostModel.honestClock_iff {CM : CostModel Q R S} {U : Workload} {A : Adversary CM} {run : TimedRun Q R S}
     {td : ℝ} :
     Assumptions.HonestClock (CM.adversaries U) A run td ↔
@@ -42,7 +28,6 @@ theorem CostModel.honestClock_iff {CM : CostModel Q R S} {U : Workload} {A : Adv
         CM.calls A'.online H U A'.act (A'.pre.eval H) s ≤ CM.calls A.online H U A.act (A.pre.eval H) s :=
   Iff.rfl
 
-/-- The honest clock at Pearl-C's adversaries of `CM` on `U`, unfolded. -/
 theorem PearlC.CostModel.honestClock_iff {CM : PearlC.CostModel Q R S} {U : PearlC.Workload} {A : PearlC.Adversary CM}
     {run : TimedRun Q R S} {td : ℝ} :
     Assumptions.HonestClock (CM.adversaries U) A run td ↔

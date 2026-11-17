@@ -9,24 +9,8 @@ import Proofs.Pouw.PearlC.TileGap
 import Proofs.Pouw.Prob
 public import Proofs.Pouw.PearlC.Records
 
-/-!
-# rev1: it asserts less than the granted TT_OUT, and g from it
-
-Staged; nothing pinned.
-* **rev1 is weaker:** at any device record whose add and BF16 prices are non-negative, and any cap `0 ≤ ρ ≤ 1`,
-  `TTOutPearlCDev` gives `TTOutPearlCDevRev1` (`ttOutPearlCDevRev1_of_granted`), and likewise per tile
-  (`ttOutTilePearlCDevRev1_of_granted`). A unit or tile good under rev1 is good under the granted rows (rev1's debit is
-  larger and its cap stricter), and its rev1 credit is at most the granted one. These are implications only: their
-  premise, the granted row, is falsified by the first-promotion skip (rating D) at the H100 and sm_120 records
-  (`TTOutRev1.lean`), so they carry no evidence for rev1, whose rating B rests on its own review alone.
-* **The H100 record in the granted form:** `creditDevRev1_h100`, `wrefDevRev1_h100`.
-* **The gap at any record,** on the one-shape domain where `wrefDevRev1 = ω·(1 − ρ)·creditDevRev1`: `pearlCGapDevRev1At`
-  and `pearlCSampledDevRev1At`, at `g = 1 − (399/400)/ω`.
-* **The H100 headline under rev1**, cap `1/400`: `140237/26090000` (0.53751%) at 8192³ and `89359/17230000` (0.51862%)
-  at 16384³, per unit (`pearlCGapH100Rev1_8192`, `_16384`) and per audit tile (`pearlCSampledH100Rev1_8192`,
-  `_16384`). The granted values were `281273/52340000` (0.53740%) and `536953/103540000` (0.51860%): the credit and
-  `W_ref` drop by the same add.
--/
+/-! rev1 asserts less than the granted TT_OUT, and g from it (staged, nothing pinned); the implications carry no
+evidence for rev1, because their premise is falsified by the first-promotion skip at the H100 and sm_120 records. -/
 
 @[expose] public section
 
@@ -88,7 +72,6 @@ section
 variable {Q R S : Type}
 
 open Classical in
-/-- Under rev1 the correct units' credit is at most the granted protocol's, on any transcript. -/
 theorem rev1_credit_sum_le (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) (hadd : 0 ≤ d.prices.add)
     (hbf : 0 ≤ d.prices.bf16) (hρ0 : 0 ≤ ρ) (hρ1 : ρ ≤ 1) (U : Workload) (H : Q → R) (s : S) (τ : Trace) :
     ∑ u ∈ correctSet (pearlCProtocolDevRev1 d sem ρ) U H s τ,
@@ -128,8 +111,7 @@ theorem rev1_credit_sum_le (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ)
           nlinarith
         exact_mod_cast this
 
-/-- **rev1 asserts less than the granted TT_OUT at the same record**, for non-negative prices and `0 ≤ ρ ≤ 1`. An
-implication only: its premise `TTOutPearlCDev` is falsified by the first-promotion skip (rating D) at the H100 and
+/-- An implication only: its premise `TTOutPearlCDev` is falsified by the first-promotion skip at the H100 and
 sm_120 records, so it carries no evidence for rev1. -/
 theorem ttOutPearlCDevRev1_of_granted [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
     (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16)
@@ -139,7 +121,6 @@ theorem ttOutPearlCDevRev1_of_granted [Fintype Q] [DecidableEq Q] [Fintype R] [F
   exact lt_of_lt_of_le hx (rev1_credit_sum_le d sem ρ hadd hbf hρ0 hρ1 U x.1 x.2 _)
 
 open Classical in
-/-- Under rev1 the good tiles' credit is at most the granted tiles', on any transcript. -/
 theorem rev1_tile_credit_sum_le (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) (hadd : 0 ≤ d.prices.add)
     (hbf : 0 ≤ d.prices.bf16) (hρ0 : 0 ≤ ρ) (hρ1 : ρ ≤ 1) (U : Workload) (H : Q → R) (s : S) (τ : Trace) :
     ∑ g ∈ goodTiles (pearlCProtocolDevRev1 d sem ρ) (pearlCTilesDevRev1 d sem ρ) U H s τ,
@@ -193,9 +174,8 @@ theorem rev1_tile_credit_sum_le (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ :
           mul_nonneg (mul_nonneg (by linarith) h2) hsh
         exact_mod_cast this
 
-/-- **rev1 per tile asserts less than the granted TT_OUT per tile at the same record.** An implication only: its premise
-`TTOutTilePearlCDev` is falsified by the first-promotion skip (rating D) at the H100 and sm_120 records, so it carries
-no evidence for rev1. -/
+/-- An implication only: its premise `TTOutTilePearlCDev` is falsified by the first-promotion skip at the H100 and
+sm_120 records, so it carries no evidence for rev1. -/
 theorem ttOutTilePearlCDevRev1_of_granted [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
     (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16)
     (hρ0 : 0 ≤ ρ) (hρ1 : ρ ≤ 1) (h : TTOutTilePearlCDev CM d sem ρ) : TTOutTilePearlCDevRev1 CM d sem ρ := by
@@ -205,8 +185,6 @@ theorem ttOutTilePearlCDevRev1_of_granted [Fintype Q] [DecidableEq Q] [Fintype R
 
 end
 
-/-- TT_OUT rev1 at a device record gives `G_g` on the one-shape domain at `g = 1 − (399/400)/ω`, where
-`wrefDevRev1 = ω·(1 − ρ)·creditDevRev1`. -/
 theorem pearlCGapDevRev1At {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) (s : Shape) (ω g : ℚ) (hω0 : 0 < ω)
     (hω : wrefDevRev1 d s = ω * ((1 - ρ) * creditDevRev1 d s)) (hg : g = 1 - (1 - 1 / 400) / ω)
@@ -234,8 +212,6 @@ theorem pearlCGapDevRev1At {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R
   rw [e]
   exact key
 
-/-- TT_OUT rev1 per tile at a device record gives `GGapSampled` on the one-shape domain at `γ = 1 − (399/400)/ω`, where
-`wrefDevRev1 = ω·(1 − ρ)·creditDevRev1 ≥ 0`. -/
 theorem pearlCSampledDevRev1At {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) (s : Shape) (ω γ : ℚ) (hω0 : 0 < ω)
     (hw0 : 0 ≤ wrefDevRev1 d s) (hω : wrefDevRev1 d s = ω * ((1 - ρ) * creditDevRev1 d s))
@@ -269,7 +245,6 @@ theorem pearlCSampledDevRev1At {Q R S : Type} [Fintype Q] [DecidableEq Q] [Finty
   rw [e]
   exact key
 
-/-- **The H100 headline under rev1, 8192³**, worst case under the cap `1/400`: `g = 140237/26090000` (0.53751%). -/
 theorem pearlCGapH100Rev1_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (sem : PearlCSem Q R S) (hTT : TTOutPearlCH100Rev1 CM sem (1 / 400)) :
     GGap CM (pearlCProtocolDevRev1 devH100 sem (1 / 400)) (pearlCDomainDevAt devH100 sh8192)
@@ -278,7 +253,6 @@ theorem pearlCGapH100Rev1_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Finty
     (by norm_num [wrefDevRev1, creditDevRev1, firstAddDev, creditDev, devH100, Prices.h100, Params.pi,
       Costs.adopted, sh8192]) (by norm_num) hTT
 
-/-- **The H100 headline under rev1, 16384³**, worst case under the cap `1/400`: `g = 89359/17230000` (0.51862%). -/
 theorem pearlCGapH100Rev1_16384 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (sem : PearlCSem Q R S) (hTT : TTOutPearlCH100Rev1 CM sem (1 / 400)) :
     GGap CM (pearlCProtocolDevRev1 devH100 sem (1 / 400)) (pearlCDomainDevAt devH100 sh16384)
@@ -287,7 +261,6 @@ theorem pearlCGapH100Rev1_16384 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fint
     (by norm_num [wrefDevRev1, creditDevRev1, firstAddDev, creditDev, devH100, Prices.h100, Params.pi,
       Costs.adopted, sh16384]) (by norm_num) hTT
 
-/-- **The H100 headline under rev1 per audit tile, 8192³**: `GGapSampled` at `g = 140237/26090000`. -/
 theorem pearlCSampledH100Rev1_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (sem : PearlCSem Q R S) (hTT : TTOutTilePearlCH100Rev1 CM sem (1 / 400)) :
     GGapSampled CM (pearlCProtocolDevRev1 devH100 sem (1 / 400)) (pearlCTilesDevRev1 devH100 sem (1 / 400))
@@ -298,7 +271,6 @@ theorem pearlCSampledH100Rev1_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [F
     (by norm_num [wrefDevRev1, creditDevRev1, firstAddDev, creditDev, devH100, Prices.h100, Params.pi,
       Costs.adopted, sh8192]) (by norm_num) hTT
 
-/-- **The H100 headline under rev1 per audit tile, 16384³**: `GGapSampled` at `g = 89359/17230000`. -/
 theorem pearlCSampledH100Rev1_16384 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (sem : PearlCSem Q R S) (hTT : TTOutTilePearlCH100Rev1 CM sem (1 / 400)) :
     GGapSampled CM (pearlCProtocolDevRev1 devH100 sem (1 / 400)) (pearlCTilesDevRev1 devH100 sem (1 / 400))

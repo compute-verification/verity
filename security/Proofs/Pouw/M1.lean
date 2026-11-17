@@ -4,12 +4,7 @@ public import Definitions.Pouw.Witness.Honest
 import Mathlib.Tactic.Positivity.Finset
 public import Definitions.Pouw.Assumptions.GameStatements
 
-/-!
-# Facts about the named instance `D1.m1`
-
-Its parameters and sharing, noise range, query bound and unit-specific `E_L` queries, a 16-unit workload in its
-domain, and the bound on its explicit `W_ref`.
--/
+/-! Facts about the named instance `D1.m1`. -/
 
 @[expose] public section
 
@@ -19,8 +14,6 @@ open Finset
 
 variable {Q R S : Type}
 
-/-- Entry bounds on the factors give `NoiseRange` when `r·α·β ≤ 63` for `E = E_L·E_R` and `r·α'·β' ≤ 63` for
-`F = F_L·F_R`. W6's distribution (outer `[−3, 3]`, inner `±1`, `r = 16`) has `16·3·1 = 16·1·3 = 48`. -/
 theorem noiseRange_of_factor_bounds (P : D1.Params Q R S) (α β α' β' : ℤ) (hE : (P.r : ℤ) * (α * β) ≤ 63)
     (hF : (P.r : ℤ) * (α' * β') ≤ 63)
     (hEL : ∀ sh a b, ∀ i < sh.m, ∀ t < P.r, |(P.expAct sh a b).1 i t| ≤ α)
@@ -69,7 +62,6 @@ theorem entry_append (f : M1R → ℤ) (a b : List M1R) (i : ℕ) : m1Entry f (a
   unfold m1Entry
   rw [List.getElem?_append_right (by omega), Nat.add_sub_cancel_left]
 
-/-- `E_R` reads only the answers to its group's queries. -/
 theorem expAct_snd (sh : Shape) (H : M1Q → M1R) (s : Salt) (u : ℕ) (A : Mat) (w : ℕ) (b : List M1R) :
     ((m1 Wref).expAct sh (((m1 Wref).qAct s u A w).map H) b).2 =
       fun t l => m1Entry m1Sign ((m1ERQ s w (u / 16)).map H) (t * sh.k + l) := by
@@ -97,7 +89,6 @@ theorem queryBound : (m1 Wref).QueryBound m1Queries := fun s u A w => by
   rw [qAct_length]
   simp [m1, m1FQ, m1Queries]
 
-/-- A unit's `E_L` queries are asked for no other unit below `2^64`. -/
 theorem elQ_unique (s s' : Salt) (u u' : ℕ) (A A' : Mat) (w w' : ℕ) (hu : u < 2 ^ 64) (hu' : u' < 2 ^ 64)
     (x : M1Q) (hx : x ∈ m1ELQ s u A w) (hx' : x ∈ (m1 Wref).qAct s' u' A' w' ++ (m1 Wref).qWt s' u' w') : u = u' := by
   simp only [m1, m1ELQ, m1ERQ, m1FQ, List.mem_append, List.mem_map] at hx hx'
@@ -130,7 +121,6 @@ theorem entry_const (f : M1R → ℤ) (l : List M1Q) (c : M1R) (i : ℕ) (hi : i
   rw [List.getElem?_map, List.getElem?_eq_getElem hi]
   rfl
 
-/-- The constant oracle `(4, +)` gives the noise entry `16` at `(0, 0)`. -/
 theorem noise_ne_zero (s : Salt) (A : Mat) :
     mm (m1 Wref).r ((m1 Wref).actF (fun _ => ((4 : Fin 7), true)) s sixteen 0 A).1
       ((m1 Wref).actF (fun _ => ((4 : Fin 7), true)) s sixteen 0 A).2 0 0 ≠ 0 := by
@@ -148,8 +138,6 @@ theorem noise_ne_zero (s : Salt) (A : Mat) :
   simp
 
 theorem salt_zero_lt : 0 < 2 ^ 128 := Nat.two_pow_pos 128
-
-/-! ## The schedule `m1Wref` -/
 
 theorem rowShare_le (work mu rows c : ℕ) (hrows : 0 < rows) (h : work * mu ≤ rows * c) :
     rowShare work mu rows ≤ c := by
@@ -203,21 +191,17 @@ theorem m1Wref_real (L : Layout) (hD : m1Domain L) (u : ℕ) (hu : u < L.N) :
 
 end M1
 
-/-- **The named instance.** -/
 theorem milestoneInstance : GameStatements.MilestoneInstance := fun Wref =>
   ⟨M1.isMilestone Wref, M1.noiseRange Wref, M1.queryBound Wref,
     fun s s' u u' A A' w w' hu hu' x hx hx' => M1.elQ_unique Wref s s' u u' A A' w w' hu hu' x hx hx',
     fun _ => ((4 : Fin 7), true), ⟨0, M1.salt_zero_lt⟩, M1.sixteen, 0, M1.sixteen_inDomain,
     by norm_num [M1.sixteen], M1.noise_ne_zero Wref _ 0⟩
 
-/-- **The milestone's `W_ref`**: `W_mm ≤ m1Wref ≤ (65769/65536)·W_mm` on the domain, and `g = 14017/1644225`. -/
 theorem milestoneWref : GameStatements.MilestoneWref :=
   ⟨fun U hU u hu => ⟨M1.Wmm_le_m1Wref U.layout u, M1.m1Wref_real U.layout hU.2.1 u hu⟩,
     by unfold D1.m1Omega; norm_num,
     by unfold reductionGap Params.gap0 D1.m1Omega; norm_num⟩
 
-/-- **`E_R` is separated across (weight, group)**, beside `MilestoneInstance`'s `E_L` clause: the `E_R` queries of
-two (weight, group) pairs with weight ids below `2^64` and groups below `2^60` meet only if the pairs are equal. -/
 theorem milestoneERSeparated (s s' : Salt) (w w' g g' : ℕ) (hw : w < 2 ^ 64) (hw' : w' < 2 ^ 64)
     (hg : g < 2 ^ 60) (hg' : g' < 2 ^ 60) (x : D1.M1Q) (hx : x ∈ D1.m1ERQ s w g) (hx' : x ∈ D1.m1ERQ s' w' g') :
     w = w' ∧ g = g' := by

@@ -2,23 +2,8 @@ module
 
 public import Definitions.Pouw.Game.Defs
 
-/-!
-# Cost models that truncate
-
-The per-run form of PoUW's bound takes `Accounting.BudgetAbort` over its cost model: costs are nonnegative,
-and for every program and budget `b ≥ 0` one program, fixed before the oracle, the state and the salt, costs at most `b`,
-makes at most the original's calls, and commits the original's transcript and hashes its inputs wherever the original
-costs at most `b`.
-`BudgetAbortG` is that property, word for word, over the game's `CostModel`.
-
-- `budgetAbortG_of_constCost`: a model truncates when a program's cost doesn't read the oracle, the state or the salt,
-  and some program costs nothing and calls nothing. This is M4090's shape (straight-line programs, a correct unit's
-  operand free by its instruction kind), where the copy is the program itself or the empty program.
-- `fixedPrice` is such a model, so the hypothesis holds of one (`fixedPrice_budgetAbort`).
-
-W1, which prices a correct unit's operand fetches by the transcript's correctness, doesn't truncate:
-`Pouw.PearlC.W1BudgetAbort.w1_not_budgetAbort`.
--/
+/-! Cost models that truncate (`Accounting.BudgetAbort` over the game's `CostModel`); W1 does not truncate
+(`Pouw.PearlC.W1BudgetAbort.w1_not_budgetAbort`). -/
 
 @[expose] public section
 
@@ -26,7 +11,6 @@ namespace Pouw.BudgetAbort
 
 variable {Q R S : Type}
 
-/-- **The model truncates**: `Accounting.BudgetAbort`'s statement over the game's `CostModel`. -/
 def BudgetAbortG (CM : CostModel Q R S) : Prop :=
   (∀ (prog : CM.Prog) (H : Q → R) (U : Workload) (act : ℕ → Mat) (σ : State) (s : S),
       0 ≤ CM.cost prog H U act σ s) ∧
@@ -36,8 +20,6 @@ def BudgetAbortG (CM : CostModel Q R S) : Prop :=
           (CM.cost prog H U act σ s ≤ b → CM.run prog' H U act σ s = CM.run prog H U act σ s ∧
             CM.hashed prog' H U act σ s = CM.hashed prog H U act σ s)
 
-/-- **A model whose costs don't read the oracle, the state or the salt truncates**, given a program that costs and calls
-nothing: the copy is the program itself when it fits the budget, and that program when it doesn't. -/
 theorem budgetAbortG_of_constCost (CM : CostModel Q R S)
     (hnn : ∀ (prog : CM.Prog) (H : Q → R) (U : Workload) (act : ℕ → Mat) (σ : State) (s : S),
       0 ≤ CM.cost prog H U act σ s)
@@ -55,7 +37,7 @@ theorem budgetAbortG_of_constCost (CM : CostModel Q R S)
     rw [(hhalt H U act σ s).2]
     exact Nat.zero_le _
 
-/-- **A fixed-price model**: a program is a price and what it commits, or nothing, which commits blanks at no cost. -/
+/-- A program is a price and what it commits, or nothing, which commits blanks at no cost. -/
 def fixedPrice (Q R S : Type) : CostModel Q R S where
   Prog := Option (ℕ × (Workload → (ℕ → Mat) → State → S → Trace))
   run := fun p _ U act σ s => match p with
