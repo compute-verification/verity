@@ -1058,9 +1058,12 @@
     {
       "handle": "codex",
       "holder": "01a1eb50-14dc-7fb2-86f3-046badfabe75",
-      "remit": "Second reader for completion claims in pull requests and research updates. Asks wait until Daniel opens the chat; nothing wakes it.",
-      "linear": "CON",
+      "remit": "Reports what the evidence establishes about completion claims in pull requests and research updates. Only ci’s staffed readers issue land verdicts. Desktop pilot: nothing wakes it; asks wait until Daniel opens it.",
+      "linear": "TOP",
       "linear_label": "lane:codex",
+      "branch_suffixes": [
+        "be75"
+      ],
       "examples": [
         "Does the evidence on main support this pull request’s completion claim?"
       ]
