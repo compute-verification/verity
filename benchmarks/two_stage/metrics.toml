@@ -1,0 +1,9 @@
+[[metric]]
+id = "proofs/two-stage-audit-seconds"
+title = "Two-stage toy audit time"
+owner = "proofs"
+unit = "s"
+axis = "Wall seconds of the honest two-stage toy audit on a CPU node, both stages' registrations, samples and sessions through the stream's outcome, written only when the audit is as expected, one line per toy size and machine as its member names them."
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd clone --cpus 32 --mem-gb 64 --timeout 2h -- env TWO_GUARD=0 bash benchmarks/two_stage/audit.sh"
+every = "7d"
