@@ -447,7 +447,6 @@
         "tests/benchmarks/pouw/test_lean_headline.py",
         "tests/benchmarks/pouw/test_lean_headline_dc.py",
         "benchmarks/tensor_duty/",
-        "benchmarks/int8_class_rate/",
         "security/Definitions/ResourceAccounting/Actual.lean",
         "security/Definitions/ResourceAccounting/Actual/",
         "security/Definitions/Compose/Additive.lean",
