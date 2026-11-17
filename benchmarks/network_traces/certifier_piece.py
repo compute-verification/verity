@@ -51,7 +51,7 @@ the active network attester in front of serve-openai there (its ``CERTIFIER_FRON
      reject (`rehearsed`). Its records are then audited as rows (`rows_check`): `network_attester_chain.rows_audit_case` of the
      run, checked by ``network-rows`` (``--rows``, else built in verity/protocols/resource_accounting/network/verifier/lean;
      `NetworkCheck.RowsAudit`, `ROWS`), which holds each record to its certified head and each certificate to the
-     deployment's key in its session, then runs the certifier program's rows audit (`NetworkAttester.Rows.audit`):
+     deployment's key in its session, then runs the attester program's rows audit (`NetworkAttester.Rows.audit`):
      every egress row must be the one the schedule the records show renders, so cells cut, clocked or ordered
      otherwise are refused. It holds no egress cell to the id egress form; step 2 does (`network_attester_chain.io`, which
      refuses an egress cell that isn't an id-form cell), and step 3's chain does, in its rerun of the network
@@ -92,7 +92,7 @@ the active network attester in front of serve-openai there (its ``CERTIFIER_FRON
   run (no kept run, a rehearsal the gate's check didn't pass, a build, a tool or the chain failing without a report,
   an input missing, the leak guard failing, or SIGTERM from the piece's time limit) is `NotRun`, and the piece then
   refuses, releasing nothing from the hold and keeping no case: DIR keeps only its logs (`LOGS`) and gets
-  DIR/`REFUSED` naming why, with no answer, which `served_verdicts.py` reads as the certifier missing.
+  DIR/`REFUSED` naming why, with no answer, which `served_verdicts.py` reads as the attester missing.
   Each step it runs (the build, the chain, the check and the leak
   guard) is a process group of its own, which the piece ends however the step ends (`run_group`: SIGTERM, `GRACE_S`,
   SIGKILL), so nothing a step started outlives it; a SIGTERM while a step runs is held until the step's group has
@@ -139,7 +139,7 @@ the active network attester in front of serve-openai there (its ``CERTIFIER_FRON
   - The piece answers for a session's run as for a rehearsal's, only when the gate's check accepted the whole run
     (`rehearsed`). One connection the relay failed closed, one cut from s + D on at the session's end, one refused at
     a full queue or one execution phase the relay faulted, whichever load it carried, leaves every window of the
-    workload without the certifier's answer. The run's records cover the connections that crossed the relay; that
+    workload without the attester's answer. The run's records cover the connections that crossed the relay; that
     nothing else reaches the endpoint is the placement's, as a rehearsal's.
   - ``--gate local`` is the dry run's: this tree's gate on a scratch host under SERVE_DIR/`PRIVATE`, its unit a
     process of the front's (`local_unit`) with a `relay` each way in the place of its ssh.
@@ -179,7 +179,7 @@ ENDPOINT = ("advice_trace.jsonl", "requests.jsonl", "windows.jsonl", "serve.json
 PROTOCOL = "verity/certifier/v0"
 #: the protocol ``network-rows`` answers, step 1's rows audit of the network attester's records
 ROWS = "verity/network-rows/v1"
-#: the named assumption the certifier's guarantee reads (`NetworkCheck.Period`): the certifier is the auditor's device
+#: the named assumption the attester's guarantee reads (`NetworkCheck.Period`): the attester is the auditor's device
 PREMISE = "trusted-device"
 #: What a placement says of it, word for word, followed by ``; `` and the names
 UNMET = "unmet: this piece establishes no trusted-device and gives no bound on that ground"
@@ -524,7 +524,7 @@ class NotRun(Exception):
 
 
 class Rejected(Exception):
-    """The window isn't what the certifier certified."""
+    """The window isn't what the attester certified."""
 
 
 def kept_run(serve_dir: Path) -> str:
@@ -575,7 +575,7 @@ def placement(serve_dir: Path, run: str, steps: dict[str, str] | None = None) ->
     attester ran on the gate's machine (the kept `SESSION`'s ``gate``; ``local`` is the developer's node), and
     ``steps`` (`ran_on`, this machine by default) names the machine that ran the chain's checks and samples and the one
     that ran the period check and its proofs' challenges. This piece establishes no `trusted-device` and gives no bound
-    on that ground (`UNMET`), whatever the names say. ``kind`` is ``prover-node`` where the certifier ran on the
+    on that ground (`UNMET`), whatever the names say. ``kind`` is ``prover-node`` where the attester ran on the
     developer's node, else ``not-placed``. ``links`` are the node's to the gate, and K counts the certified one
     alone."""
     kept = serve_dir / PRIVATE / run
@@ -1009,7 +1009,7 @@ def rm(*paths: Path) -> None:
 
 
 def refuse(d: Path, why: str) -> int:
-    """DIR emptied but for its logs, and DIR/`REFUSED` naming why: no answer, so the certifier reads missing. SIGTERM is
+    """DIR emptied but for its logs, and DIR/`REFUSED` naming why: no answer, so the attester reads missing. SIGTERM is
     ignored while it writes and then handled as before, so the children of a process that refused don't inherit it
     ignored."""
     was = signal.signal(signal.SIGTERM, signal.SIG_IGN)
@@ -1207,7 +1207,7 @@ def parser() -> argparse.ArgumentParser:
     f.add_argument("--tokens", type=int, default=TOKENS)
     f.add_argument("--vocab", type=int, default=SS.VOCAB)
     f.add_argument("--scan-class", choices=sorted(SS.A.SCAN_CLASSES), default=V3C_SCAN_CLASS,
-                   help=f"the gate's scan class, the schedule its network certifier runs at (default {V3C_SCAN_CLASS})")
+                   help=f"the gate's scan class, the schedule its network attester runs at (default {V3C_SCAN_CLASS})")
     f.add_argument("--height", type=int, default=HEIGHT)
     f.add_argument("--minutes", type=int)
     f.add_argument("--bucket-ms", type=int, metavar="MS",

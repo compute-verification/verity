@@ -1621,7 +1621,8 @@ def test_the_audit_counts_a_listed_record_with_window_ingress_and_prints_its_win
 def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, monkeypatch, capsys):
     """``warm`` hands `a5.warm` the verifier's window and its composers, each saying what it composes from (the record's
     statement under the stager's label, which a5's cache keys), with ``--compose-cache`` and ``--jobs``; the audit hands a5
-    that cache, and none without ``--compose-cache``. It hands a5 ``--archive-link`` too, and only where it is given."""
+    that cache, and none without ``--compose-cache``. It hands a5 ``--archive-link`` and ``--gpus`` (its proof server's
+    cards, `a5.devices`) too, each only where it is given."""
     import a5 as A5
     from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
 
@@ -1644,7 +1645,7 @@ def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, mo
         pass
 
     def audit(a, *args, **kw):
-        seen["audit"] = a.compose_cache, a.archive_link
+        seen["audit"] = a.compose_cache, a.archive_link, A5.devices(a)
         raise Opened
 
     session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
@@ -1655,10 +1656,13 @@ def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, mo
     args = ["audit", "--window", str(written.dir), "--sampling-design", _rate(written.dir), "--circuit", written.rec["window"]["circuit"], "--run", RUN,
             "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--zk-server", "f", "--out", str(tmp_path / "out"),
             "--skip-negatives", "--challenger", "local", "--main", "m.txt"]
-    for extra, want in ((["--compose-cache", cache], (cache, False)), ([], (None, False)), (["--archive-link"], (None, True))):
+    for extra, want in ((["--compose-cache", cache], (cache, False, None)), ([], (None, False, None)),
+                        (["--archive-link"], (None, True, None)), (["--gpus", "0,2"], (None, False, [0, 2]))):
         with pytest.raises(Opened):
             RA.main([*args, *extra])
         assert seen["audit"] == want
+    with pytest.raises(SystemExit):
+        RA.main([*args, "--gpus", "0,0"])
 
 
 def test_a_table_reads_composer_is_keyed_by_the_verifiers_executable_and_no_other_composer_is(tmp_path, monkeypatch):

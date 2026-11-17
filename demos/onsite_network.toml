@@ -1,6 +1,6 @@
 # The workload under the network certifier, SPOT and the memory wipe (verity/onsite-network/v0, a
 # deployment of its own, never onsite), each party on its machine, and the key the auditor pinned for
-# its memory challenger.
+# its memory attester.
 # `verity run` stops on it with NotImplementedError until goal demos/onsite-demo brings it.
 format = "verity/config/v0"
 protocols = ["sampled-proofs", "certifier", "wipe"]

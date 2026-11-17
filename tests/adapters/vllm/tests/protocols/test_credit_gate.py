@@ -25,6 +25,14 @@ else:
     torch = pytest.importorskip("torch")
 
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import live as L
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import credit_gate as CG
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import commit as CT
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import prover as PV
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import records as ZR
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import requests as RQ
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
 from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
 from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
@@ -36,6 +44,7 @@ from verity.protocols.proofs.spot.verifier.challenger import remote as R
 from verity.protocols.proofs.spot.verifier.challenger.challenger import LiveOpening, LiveRecord
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity_torch.pouw import credit_gate_device as CGD
 
 from tests.protocols import challenger_host as CH
 from tests.protocols import pouw_h1_gpu as GPU
@@ -46,15 +55,6 @@ from verity_vllm.commit.served_record import PORT_NAMES
 from verity_vllm.engine import int8_exact as E
 from verity_vllm.engine import int8_ops
 from verity_vllm.protocols import pouw
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import credit_gate as CG
-from verity_torch.pouw import credit_gate_device as CGD
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import commit as CT
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import prover as PV
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import records as ZR
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import requests as RQ
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
 
 K = 64
 #: the window's T

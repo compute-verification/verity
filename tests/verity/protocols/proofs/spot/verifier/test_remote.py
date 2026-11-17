@@ -601,7 +601,7 @@ def _raw(sock: socket.socket) -> tuple[int, dict] | None:
 
 def test_a_withheld_release_past_one_frame_comes_in_frames_each_under_the_head_limit(tmp_path, signer):
     """A withheld session that opened 722 coins: its release as one frame would be past `MAX_HEAD`, which the client
-    and the certifier's coin link refuse whole, so the session could never close. `serve` releases them in frames each
+    and the network attester's coin link refuse whole, so the session could never close. `serve` releases them in frames each
     at most `RELEASE_HEAD`, `releasing` from index 0 on, each from where the last stopped, then `released` with the
     commitment; their openings, in order, are every coin it gave, each opening against the commitment. The client
     (`RemoteChallenger`, `ChallengerCoins`) closes such a session and settles every coin, the segment the one an

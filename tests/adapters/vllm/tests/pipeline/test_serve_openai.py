@@ -17,11 +17,15 @@ from typing import Any
 import numpy as np
 import pytest
 import torch
-
-from verity_vllm.compiler import compile_slice as CS, served_rows as SRW
-from verity.protocols.resource_accounting.network.verifier import id_form as IDF, io_tie as IT, release as REL
+from verity.protocols.resource_accounting.network.verifier import id_form as IDF
+from verity.protocols.resource_accounting.network.verifier import io_tie as IT
+from verity.protocols.resource_accounting.network.verifier import release as REL
 from verity.protocols.resource_accounting.network.verifier.link_frame import HEADER
+
+from tests.pipeline import predicted
 from verity_vllm.commit import served_record as SR
+from verity_vllm.compiler import compile_slice as CS
+from verity_vllm.compiler import served_rows as SRW
 from verity_vllm.engine import served_seed
 from verity_vllm.engine.served_seed import DEFAULT_SEED, UNSEEDED, derived
 from verity_vllm.engine.step_trace import scheduler_config
@@ -32,8 +36,6 @@ from verity_vllm.pipeline import serve_protocol as proto
 from verity_vllm.pipeline import serve_seal as ss
 from verity_vllm.pipeline.serve_admit import Admission, Delta
 from verity_vllm.records.predicted_row import FILE
-
-from tests.pipeline import predicted
 
 CERTIFIER_BODY = {"model": "m", "prompt": [128000, 791, 4062], "max_tokens": 4, "min_tokens": 4, "stream": True,
                   "ignore_eos": True, "temperature": 0}
@@ -847,6 +849,7 @@ def test_a_seedless_greedy_request_commits_the_default_a_stochastic_one_its_deri
     want = derived(bytes.fromhex(w["seed_coin"]["coin"]), "u-hot")
     assert by_rule["derived"]["ingress"]["seed"] == by_rule["derived"]["ingress"]["params"]["seed"] == want != DEFAULT_SEED
     assert by_rule["derived"]["committed_seeds"] == [want]
+    assert s.windows is not None
     assert all(r["check"]["passed"] for r in by_rule.values()) and s.windows.summary()["passed"]
 
 
@@ -1056,8 +1059,9 @@ def test_each_close_exports_the_prefix_cache_s_pool_row(tmp_path):
     """With the engine's pool and its block size, each close writes the pool's row and root to pool_rows/w<k>.json and
     its NB and root to the window's line. A pool a running request holds blocks of is refused by name in the line, and
     the window, which no coin reads the row of yet, still passes."""
-    from tests.engine.test_pool_row import B, WANT, pool
     from verity.commitments import pool_row as R
+
+    from tests.engine.test_pool_row import WANT, B, pool
 
     root = R.root(WANT).hex()
     (tmp_path / "free").mkdir()

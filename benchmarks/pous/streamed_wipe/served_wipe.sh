@@ -10,13 +10,13 @@
 # It refuses (exit 3, no answer, the reason in DIR/refused.txt) a card that isn't idle, any process on it or more than
 # WIPE_IDLE_MIB (1024) of its memory in use, a challenger command whose ssh key (-i) isn't on this node, and a run with
 # no challenger key pinned; it kills nothing.
-# The memory challenger is vy-auditor-2's, through infra's wipe gate, as in Demo B:
+# The memory attester is vy-auditor-2's, through infra's wipe gate, as in Demo B:
 #   WIPE_CHALLENGER  its host (vy-auditor-2)
 #   WIPE_ADDRESS     where the prover connects to it (10.96.0.36:47611)
 #   WIPE_COMMAND     what starts its side (ssh -i ~/.ssh/vy-auditor2-wipe -o BatchMode=yes research@10.96.0.36)
 #   WIPE_KEY_SHA512  the SHA-512 of its public key (the gate's `party_key wipe`), in 128 lowercase hex digits: the one
 #                    key the verifier trusts, a session signed under another rejected. By default the key the run's
-#                    configuration pins for the memory challenger's wipe sessions (VERITY_PINS, its [[pin]] entries as
+#                    configuration pins for the memory attester's wipe sessions (VERITY_PINS, its [[pin]] entries as
 #                    JSON, which the runner passes beside VERITY_CONFIGURATION, its hash), so another challenger needs
 #                    its own. The pin is the deployment's, never read from the session it judges: set empty, or with
 #                    no such pin, no key is pinned and the piece refuses. It decides only which session is accepted:

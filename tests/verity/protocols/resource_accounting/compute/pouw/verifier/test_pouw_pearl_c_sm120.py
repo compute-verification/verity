@@ -1,4 +1,4 @@
-"""``pearl-c-sm120-v1``: Pearl-C's device seam.  The H100's record is every other file's default, so their pinned vectors are
+"""Pearl-C's device seam.  The H100's record is every other file's default, so their pinned vectors are
 its outputs; here the sm_120 record carries the card's captured atom and names its stand-ins, `pearl_c_u` restates its steps
 (and a multi-group atom group by group), the scheme and its debit run on the record's atom, the accounting reads the
 record's G and prices, and the unpromoted record chains one accumulator over all of k."""
@@ -51,16 +51,14 @@ def test_records_are_leans_pipelines():
 
 
 def test_registry_names_the_device_and_its_standins():
-    s = get("pearl-c-sm120-v1")
-    assert s.name == "pearl-c-sm120-v1" and s.device is SM120 and s.forming == "v1"
+    s = get("pearl-c-sm120-v1-h3")
+    assert s.name == "pearl-c-sm120-v1-h3" and s.device is SM120 and s.forming == "v1"
     params = dict(s.certificate.parameters)
     assert (params["device"], params["atom"], params["peel"], params["g"], params["window"]) == (
         "sm120", "blackwell_sm120_e4m3_m16n8k32", "hopper_bf16_m16n8k16", 4, 128)
     assert all(f"stand-in: {x}" in s.certificate.hypotheses for x in SM120.standins)
-    assert dict(get("pearl-c-h100-v1").certificate.parameters)["device"] == "h100"
-    assert not any(h.startswith("stand-in") for h in get("pearl-c-h100-v1").certificate.hypotheses)
-    with pytest.raises(ValueError):
-        C.PearlC(forming="v0", device=SM120, hashing="h0")
+    assert dict(get("pearl-c-h100-v1-h3").certificate.parameters)["device"] == "h100"
+    assert not any(h.startswith("stand-in") for h in get("pearl-c-h100-v1-h3").certificate.hypotheses)
 
 
 def test_u_restates_the_sm120_steps():
@@ -152,7 +150,7 @@ def test_the_inert_bound_is_the_records(monkeypatch):
     from verity.protocols.resource_accounting.compute.pouw.verifier.audit import Epoch, Workload
     from clear_audit import Prover
 
-    s, h = get("pearl-c-sm120-v1"), get("pearl-c-h100-v1")
+    s, h = get("pearl-c-sm120-v1-h3"), get("pearl-c-h100-v1-h3")
     assert (s.cap, h.cap, D.INERT_SHARE, SM120_UNPROMOTED.cap) == (Fraction(1, 1000), Fraction(1, 400), Fraction(1, 400), Fraction(1, 1000))
     assert C.PearlC(forming="v1", prices=C.SM120_PRICES, hashing="h0").cap == Fraction(1, 400)
     assert dict(s.certificate.parameters)["cap"] == "1/1000" and dict(h.certificate.parameters)["cap"] == "1/400"
@@ -222,8 +220,8 @@ def test_accounting_reads_the_record(m, k, n):
     """sm120's W_ref, credit and weight side are the H100's atom's at SM120_PRICES (the same G = 4 window), below the
     H100's own; another record's G and prices move each term by its own price."""
     sh = Shape(m, k, n)
-    h, s, hs = get("pearl-c-h100-v1"), get("pearl-c-sm120-v1"), C.PearlC(forming="v1", prices=C.SM120_PRICES, hashing="h0")
-    assert s.prices == C.SM120_PRICES and hs.name == "pearl-c-h100-v1@sm_120"
+    h, s, hs = get("pearl-c-h100-v1-h3"), get("pearl-c-sm120-v1-h3"), C.PearlC(forming="v1", prices=C.SM120_PRICES)
+    assert s.prices == C.SM120_PRICES and hs.name == "pearl-c-h100-v1-h3@sm_120"
     assert (s.wref(sh), s.credit_of(sh), s.job_cost(n, k)) == (hs.wref(sh), hs.credit_of(sh), hs.job_cost(n, k))
     assert s.credit_of(sh) < h.credit_of(sh)
     pr = Prices("test", fadd=16, bf16_mac=3, forming_credited=60, forming_a_only=5)

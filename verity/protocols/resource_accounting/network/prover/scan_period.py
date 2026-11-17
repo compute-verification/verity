@@ -109,7 +109,7 @@ def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = 
         raise SystemExit(f"{run}: the period check's schedule is the id egress form's, not {dep['params']['egress']!r}'s")
     if "start" not in dep:
         raise SystemExit(f"{run}: deployment.json holds no signed start, and the period check reads each listed entry's "
-                         "session's: take a run whose network certifier certified its session's start")
+                         "session's: take a run whose network attester certified its session's start")
     doc = json.loads((answers or scan / "answers.json").read_text())
     if v3c is not None:
         doc["audits"] = [json.loads(v3c.read_text())]

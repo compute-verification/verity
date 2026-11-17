@@ -39,6 +39,8 @@ Files:
 - `job.sh`: builds, stages, proves and verifies every proof block of `SU_UNITS` (its header lists the checks and the environment);
   the builds, the run and the controls are `benchmarks/pouw/hidden_zk/job.sh`'s.
 - `summarize.py`: `out/<tag>/summary.json` and one table row per proof block.
+- `run.sh`: `verity bench served_units`; `record.py` writes each proof block's prove seconds and peak memory
+  (`metrics.toml`) into the run's result, only where every check gave the verdict it must.
 - `prove_time.sh`: the prover's time on statements of each `PT_UNITS` type (`TYPE[:S=V,...]`, `+public-weights` or
   `+packed-weights` for those arms)
   at each size of `PT_NS`, on one leased GPU (`PT_DEVICE=gpu`) or the CPU prover (`cpu`); `prove_time.py` fits each type's

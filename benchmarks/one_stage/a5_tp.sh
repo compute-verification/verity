@@ -63,7 +63,7 @@
 #   session, so A5_JOBS covers every audited rank. It opens once every rank has passed its checks before the sample, with
 #   coins sized from every rank's sample, and not at all if one hasn't. The session's files, the ledger and the host's pins log are kept in
 #   $OUT/<name>/challenger/. The verifier's own copy of main's first-parent history (a5.py --main) is A5_MAIN, else this
-#   clone's fetch of origin/main ($OUT/main.txt, as benchmarks/remote_session/auditor.sh writes it).
+#   clone's fetch of origin/main ($OUT/main.txt, as benchmarks/poub_session/auditor.sh writes it).
 # A5_COMPOSE_CACHE=DIR: this machine's composed circuits (a5.py --compose-cache, compose_circuit.py --cache), so that the ranks
 #   audited here, in this run or another of the same tree, compose each chunked template once, and every later rank takes the
 #   kept circuit with its own partition and program (GLM-5.3's all-families sample composes ~95 min a rank without it).

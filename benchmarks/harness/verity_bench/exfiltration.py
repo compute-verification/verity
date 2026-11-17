@@ -83,13 +83,13 @@ part, and the command sums them per scope and monitoring period under each of th
 `TOGETHER` (`together`): at the jitter bound of record, and under the label at the other. It prices no advice.
 
 * **How the stop class is charged** is the answer of the stop verdicts' reader
-  (`verity/protocols/resource_accounting/network/prover/stop_verdicts.py`'s `of_runs`), which the command hands the calculator (`certifier`'s
+  (`verity/protocols/resource_accounting/network/prover/stop_verdicts.py`'s `of_runs`), which the command hands the calculator (`attester`'s
   ``stop``). The rows the calculator reads from verdict records (its document's `stop`'s `rows`: those that hold
   the lengths by a stop block) are charged below their schedules only on the execution phases the answer holds, and
   their whole schedules on every other. The runs handed to the reader are every run that carries the record
   `VERDICTS`, with those of them another run replaces: `stop_verdicts`' own list, the one the print names. With no
   run carrying the record the reader is not asked, and the rows are the calculator's with no record read. The
-  document keeps the answer as the calculator's document states it, with the runs handed (`certifier`'s `stop`),
+  document keeps the answer as the calculator's document states it, with the runs handed (`attester`'s `stop`),
   and the print says how the stop class is charged and why. A row whose stop class the answer charges its whole
   schedule on some execution phase is called by `WHOLE`, not by `TOGETHER`: nothing holds its lengths there.
 * **The output count.** Until a served audit has sampled a stop block the server chooses a response's output count,
@@ -271,17 +271,17 @@ def measurements(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> list[dic
 
     if bad := sorted(set(metrics.values()) - set(FIGURES)):
         raise ValueError(f"no figure of the document is named {', '.join(bad)}: a metric records one of {', '.join(FIGURES)}")
-    share, cert, runs = doc["share"], doc["certifier"], list(doc["runs"])
-    scan = cert["legend"]["scan"].get("mark")
-    term = (f"the network attester's term of record, its `scan` row {TOGETHER['scan']} at D_j = {cert['of_record']}, on "
-            f"an assumed class of at most {_n(cert['response_ids'])} ids a response")
+    share, att, runs = doc["share"], doc["attester"], list(doc["runs"])
+    scan = att["legend"]["scan"].get("mark")
+    term = (f"the network attester's term of record, its `scan` row {TOGETHER['scan']} at D_j = {att['of_record']}, on "
+            f"an assumed class of at most {_n(att['response_ids'])} ids a response")
     out = []
     for p in sorted(doc["periods"], key=lambda p: (p["compute"], p["period"]) == ("world", "year")):
         scope, span, eps = f"{p['compute']} {p['period']}", f"{p['compute']}'s {p['period']}", p["eps"]
-        error = (f"its error: ε = {_p(eps)} over the {span}, at a scan's δ of {_p(cert['scan_delta']['value'])} "
-                 f"({cert['scan_delta']['mark']})")
+        error = (f"its error: ε = {_p(eps)} over the {span}, at a scan's δ of {_p(att['scan_delta']['value'])} "
+                 f"({att['scan_delta']['mark']})")
         figures: dict[str, tuple[Any, str, list[str], str | None]] = {
-            "network_certifier": (p["together"]["scan"]["certifier_GB"], "modeled",
+            "network_attester": (p["together"]["scan"]["attester_GB"], "modeled",
                                          [f"modeled{f' ({scan})' if scan else ''}: {term}", error],
                                          f"{NO_BOUND}: ε = {_n(eps)} over the {span}")}
         head = next((x for x in doc["compute_audit"] if x["scope"] == scope), None)
@@ -316,10 +316,10 @@ def record(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> None:
     kept.parent.mkdir(parents=True, exist_ok=True)
     kept.write_text(json.dumps(doc, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
     head = next(p for p in doc["compute_audit"] if p["scope"] == "world year")
-    cert = doc["certifier"]
+    att = doc["attester"]
     writer.fingerprint(benchmark="exfiltration", row=doc["row"], step=head["step"], variant=doc["variant"],
                        share=doc["share"], network_check_share=doc["network_check"]["share"],
-                       response_ids=cert["response_ids"], scan_delta=cert["scan_delta"]["value"],
+                       response_ids=att["response_ids"], scan_delta=att["scan_delta"]["value"],
                        workload=doc["compute_share"]["run"], runs=list(doc["runs"]))
     writer.measurement_file(DOCUMENT)
     for m in measurements(doc, metrics):

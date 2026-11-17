@@ -104,17 +104,17 @@ P2_CLAIMS = ("m1-ideal-permutations", "sms-m1-instantiation", "seq-root", "rando
 - the help-accounted row (`perfect-isolation`, the earlier model's id): the certificate bounds what the audited location
   held plus the help it received, and nothing attests the developer's machine;
 - SHA-512 collision resistance for the commitment to W and for `vk`;
-- a live, designated verifier, whose memory challenger is the auditor's hardware, a VM under the auditor's account
+- a live, designated verifier, whose memory attester is the auditor's hardware, a VM under the auditor's account
   that the developer doesn't control and nothing attests (core's `trusted-device`)."""
 
 WIDE_CLAIMS = (*P2_CLAIMS, "p2-ring-round-secure-wide", "pous-ring-device-at")
 """What `wide_certificate` rests on: `P2_CLAIMS`, and one claim for each premise `periodHeldAt` takes at `N` blocks, the
 conjecture `Pous.P2.Assumptions.P2RingRoundSecureWide` and the device model `Pous.Period.RingDeviceAt`.  It takes no
-hiding premise on the memory challenger's coin tree, whose root leaves the device only after the last answer."""
+hiding premise on the memory attester's coin tree, whose root leaves the device only after the last answer."""
 
 WIDE320_CLAIMS = (*WIDE_CLAIMS, "prf/sha-512")
 """What `wide320_certificate` rests on: `WIDE_CLAIMS`, and `prf/sha-512` (`Hash.Assumptions.Sha512Prf`) for the
-memory challenger's indices, which `ObligationWide320` reads as uniform: they are derived by SHA-512 from its 64-byte
+memory attester's indices, which `ObligationWide320` reads as uniform: they are derived by SHA-512 from its 64-byte
 secret source."""
 
 POINT = (16448, 21065, 1 << 16)
@@ -507,7 +507,7 @@ def family_certificate(params: P2Params) -> CapacityBound | None:
     """`P2SlackFamilyUncond`'s `λ = 128` row for a v4 store at the registered width and prime of any block count in
     `CERT_FAMILY_BLOCKS`, in any number of segments: the theorem is about `m1p B 16448 (2^16448 − 21065) b` for every such
     `B`, and segments only frame each block's keys.  `P2.certificate` stays the registered point's alone, the one the
-    memory challenger's coverage and the timed audit's Lean properties read; the run protocol (`period.gaps`,
+    memory attester's coverage and the timed audit's Lean properties read; the run protocol (`period.gaps`,
     `PousCheck.RunProtocol.gaps`) takes this one where the registered one doesn't fit."""
     lo, hi = CERT_FAMILY_BLOCKS
     if (params.w, params.c0) != POINT[:2] or params.expander != SHA512_CTR or not lo <= params.blocks <= hi:
@@ -534,7 +534,7 @@ def wide320_certificate(params: P2Params) -> CapacityBound | None:
     `CERT_WIDE_BLOCKS`, in any number of segments: a window of `CERT_K_WIDE320` reads at the store's snapshot, the state
     at most `⌊ρ·N·16448⌋` bits at each challenge, passes with probability at most `2^-20`, read at `N` = the store's
     blocks, under `WIDE_CLAIMS`, at uniform indices.  `delta` is that `2^-20`, the theorem's whole bound.  `2^eps_log2`
-    is `2^-127`, the advantage of `prf/sha-512` for the memory challenger's SHA-512 indices, assumed at that figure:
+    is `2^-127`, the advantage of `prf/sha-512` for the memory attester's SHA-512 indices, assumed at that figure:
     `Hash.Assumptions.Sha512Prf` takes the advantage as a parameter, which no model fixes, and the theorem doesn't read
     it.  The run protocol doesn't take it (`period.certificate`, `PousCheck.RunProtocol.certificate`)."""
     lo, hi = CERT_WIDE_BLOCKS

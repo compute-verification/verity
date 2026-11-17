@@ -11,12 +11,12 @@ from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
+from verity.protocols.resource_accounting.network.prover import window_charge as WC
 
-from verity_vllm.compiler import compile_slice as CS
 from tests.compiler.test_network_attester_compile_slice import BOOK
 from tests.compiler.test_network_attester_compile_slice_w212 import CARRY, OWN, _load
+from verity_vllm.compiler import compile_slice as CS
 from verity_vllm.compiler import compile_slice_v7 as V7
-from verity.protocols.resource_accounting.network.prover import window_charge as WC
 
 
 @pytest.fixture(scope="module", params=["demo", "demo_async"])
@@ -54,9 +54,9 @@ def test_an_output_length_past_max_tokens_is_refused(x):
     """A slot's max_tokens below its certified output length's width, 2^bitlen(mt) <= olen, leaves the length term
     uncodable: the reference refuses ``code`` and leaves ``charge`` unspecified, and the circuit clears bit 2."""
     honest = V7.case(x.S, x.sl, BOOK)
-    k, (_id, _P, O, *_rest) = max(enumerate(x.sl.arrivals), key=lambda a: a[1][2])
-    assert O >= 2
-    short = _with_mt(x.S, honest, k, O >> 1)
+    k, (_id, _P, n_out, *_rest) = max(enumerate(x.sl.arrivals), key=lambda a: a[1][2])
+    assert n_out >= 2
+    short = _with_mt(x.S, honest, k, n_out >> 1)
     flags = V7.check(x.S, short.rows)
     assert flags["code"] is False and flags["charge"] is None
     assert V7.evaluate(x.st, [short])[0] & (1 << 2) == 0

@@ -15,7 +15,8 @@
 # what a node needs and what its other variables do: they pass through, among them C4, PLAN_FILE, PRIVATE, VENV,
 # CHECKPOINT, FLASHINFER, LDCONFIG, MAX_MIN and BUDGET_MIN). The arms are by default the arms at vLLM's published
 # settings (prod, prod-again, prod-record) for a model whose recipe the benchmark holds, else stock compiled vLLM,
-# stock again and the step record (prod_repro.py arms), each a server lifetime of its own; --again none serves stock
+# stock again and the step record (prod_repro.py arms), which keeps each request's ids (record-ids) for a model with
+# ids and no recipe (llama32-1b), each a server lifetime of its own; --again none serves stock
 # once, and the cost then has no noise floor; --stock none serves ours alone, and there is then no cost. --arms names
 # every arm the job serves, in the order it serves them: ours and, unless --stock none, stock are among them; stock
 # again is served only where it is among them; any other is served beside them, an arm that differs from stock or

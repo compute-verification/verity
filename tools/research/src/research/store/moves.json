@@ -5023,7 +5023,6 @@
         "benchmarks/harness/specs/pyproject.toml": "tests/benchmarks/harness/specs/pyproject.toml",
         "benchmarks/hash/dither/pyproject.toml": "tests/benchmarks/hash/dither/pyproject.toml",
         "benchmarks/inference_only/pyproject.toml": "tests/benchmarks/inference_only/pyproject.toml",
-        "benchmarks/int8_class_rate/pyproject.toml": "tests/benchmarks/int8_class_rate/pyproject.toml",
         "benchmarks/kernels/exactlin/pyproject.toml": "tests/benchmarks/kernels/exactlin/pyproject.toml",
         "benchmarks/kernels/numabind/pyproject.toml": "tests/benchmarks/kernels/numabind/pyproject.toml",
         "benchmarks/kernels/s8_linear/pyproject.toml": "tests/benchmarks/kernels/s8_linear/pyproject.toml",
@@ -5052,7 +5051,6 @@
         "benchmarks/recursion_e2e/pyproject.toml": "tests/benchmarks/recursion_e2e/pyproject.toml",
         "benchmarks/recursion_figures/pyproject.toml": "tests/benchmarks/recursion_figures/pyproject.toml",
         "benchmarks/remote_session/pyproject.toml": "tests/benchmarks/remote_session/pyproject.toml",
-        "benchmarks/replay_determinism/pyproject.toml": "tests/benchmarks/replay_determinism/pyproject.toml",
         "benchmarks/replay_ladder/pyproject.toml": "tests/benchmarks/replay_ladder/pyproject.toml",
         "benchmarks/route_capture/pyproject.toml": "tests/benchmarks/route_capture/pyproject.toml",
         "benchmarks/sampling_plan/pyproject.toml": "tests/benchmarks/sampling_plan/pyproject.toml",
@@ -5129,6 +5127,27 @@
         "verity/protocols/resource_accounting/network/verifier/network/pyproject.toml": "tests/verity/protocols/resource_accounting/network/verifier/network/pyproject.toml",
         "verity/protocols/workload_classification/training_detection/inference_only/verifier/pyproject.toml": "tests/verity/protocols/workload_classification/training_detection/inference_only/verifier/pyproject.toml",
         "verity/runtime/pyproject.toml": "tests/verity/runtime/pyproject.toml"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/pous/memory_challenger/": "benchmarks/pous/memory_attester/",
+        "tests/verity/protocols/resource_accounting/memory/pous/verifier/test_pous_memory_challenger.py": "tests/verity/protocols/resource_accounting/memory/pous/verifier/test_pous_memory_attester.py",
+        "verity/protocols/resource_accounting/memory/pous/attester/memory_challenger.py": "verity/protocols/resource_accounting/memory/pous/attester/memory_attester.py"
+      }
+    },
+    {
+      "paths": {
+        "adapters/vllm/verity_vllm/pipeline/remote_session.py": "adapters/vllm/verity_vllm/pipeline/poub_session.py",
+        "adapters/vllm/verity_vllm/pipeline/serve_remote.py": "adapters/vllm/verity_vllm/pipeline/serve_poub.py",
+        "benchmarks/remote_session/": "benchmarks/poub_session/",
+        "tests/adapters/vllm/tests/pipeline/test_serve_remote.py": "tests/adapters/vllm/tests/pipeline/test_serve_poub.py",
+        "tests/adapters/vllm/tests/pipeline/test_serve_remote_built.py": "tests/adapters/vllm/tests/pipeline/test_serve_poub_built.py",
+        "tests/benchmarks/remote_session/": "tests/benchmarks/poub_session/",
+        "tests/verity/protocols/resource_accounting/memory/poub/test_remote_session.py": "tests/verity/protocols/resource_accounting/memory/poub/test_poub_session.py",
+        "tests/verity/protocols/resource_accounting/memory/poub/verifier/test_remote_coins.py": "tests/verity/protocols/resource_accounting/memory/poub/verifier/test_poub_coins.py",
+        "verity/protocols/resource_accounting/memory/poub/prover/remote_session/": "verity/protocols/resource_accounting/memory/poub/prover/poub_session/",
+        "verity/protocols/resource_accounting/memory/poub/verifier/remote_session/": "verity/protocols/resource_accounting/memory/poub/verifier/poub_session/"
       }
     },
     {

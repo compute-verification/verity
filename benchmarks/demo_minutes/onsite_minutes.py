@@ -5,7 +5,7 @@
     research run --cwd source -- python3 benchmarks/demo_minutes/onsite_minutes.py PROVER_RUN AUDITOR_RUN
         [--runs-dir DIR] [--main REF]
 
-A run of record runs the demo's two commands (`tools/verity/cli/README.md`, "The onsite workload") each under
+A run of record runs the demo's two commands each under
 ``research run``: PROVER_RUN is the prover node's, AUDITOR_RUN the auditor device's, whose log (``stdout.log``) holds
 the period's ``VERDICT`` line. The minutes run from PROVER_RUN's ``started_utc`` to AUDITOR_RUN's ``ended_utc``. Finding
 the runs, the served commit (the prover node's run's), what is refused and what is written are `minutes.py`'s, the

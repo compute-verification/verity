@@ -21,7 +21,7 @@ of the scan's statement:
   outputs, NR·T / EVERY slot entries of NE bits (`ingress_scan.entry_bits`), so they are that audit's free inputs,
   which the rows form charges to the sampling block (`tiedAudits`). If ``prog`` is an input only at its anchored
   entries, they are an entry's 33 + KO·IDB bits a request (`ingress_scan.entry_layout`);
-* no faulty proof block, every one being drawn;
+* no incorrect proof block, every one being drawn;
 * the jitter term at D_j = `JITTER_BOUND`, ⌈log2 D_j^T⌉ = T bits a sampling block, one a bucket (`JITTER`).
 
 A link runs m = s / (T·τ) sampling blocks and certifies rate·s requests over a monitoring period of s seconds
@@ -572,7 +572,7 @@ Stop = SV.Stop
 #: the four verdicts a stop class owes, as the network attester's rule names them
 VERDICTS = CC.VERDICTS
 #: what a row that holds the lengths by a stop block, and is not the design's, says of how that block is read
-BY_VERDICTS = ("its stop class is charged as the row `design`'s is, by a workload's verdict records: with one "
+BY_VERDICTS = ("its stop class is charged as the row `design`'s is, by a served run's verdict records: with one "
                "verdict lacking or no record read, each connection is charged its schedule, as is each connection "
                "of an execution phase no registration was read for")
 #: what the count's line says of when a head leaves: no tick holds it, so the line prices no late head
@@ -613,7 +613,7 @@ ROWS = {
         stop=False, count=True),
     "design": Kind("a design with no run behind it", ("lengths", "entries"),
                    "head checks, a lengths unit on the network certifier's records, and a stop block sampled on a "
-                   "served audit. Its stop class is charged as a workload's verdict records say, by the network "
+                   "served audit. Its stop class is charged as a served run's verdict records say, by the network "
                    "certifier's rule: below its schedule only with a count above 0 and its four verdicts, each "
                    "accepted, complete and on the signed head of its execution phase. Then the lengths are held, the stop block holding a "
                    "response's output count to its ids, and its term is the jitter, the failed connections' "

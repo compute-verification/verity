@@ -403,7 +403,7 @@ tree's Lean toolchain, through `elan`) from the tree themselves. Each writes its
 `$RESEARCH_RUN_DIR/out` (a5's `./out` outside a run, recursion's `/tmp/rec-bench-PID/out`); give that directory to the
 printer's flag. Each from the tree's root:
 
-1. **The Flock, zero-knowledge and sampling layers**, on one H200 with at least 96 GB of host memory available and 25 GB
+1. **The Flock, zero-knowledge and sampling layers**, on one H200 with at least 96 GB of host memory available and 96 GB
    of disk free under `WORK` (`benchmarks/one_stage/README.md`'s "The three benchmarks of the proof-layers table"):
    `A5_CARD=0 A5_CORES=40-59 WORK=/workspace/a5-layers GPU_LEASE_WHO=$USER bash benchmarks/one_stage/proof_layers.sh`.
    It prints the three; give `./out`'s `out-flock`, `out-zk` and `out-sampling` to `--flock`, `--zk` and `--sampling`.

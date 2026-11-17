@@ -676,10 +676,7 @@ def pass_macs(p: Pass) -> int:
 
 def assumption_of(scheme: Any) -> str:
     """The named assumption a run of `scheme` is credited at (`ASSUMPTION_H100`, else `ASSUMPTION_DEV` at its device
-    record, and at its prices where they are another device's). Only a v1 scheme has TT_OUT accounting; any other is
-    refused."""
-    if scheme.forming != "v1":
-        raise ValueError(f"{scheme.name}: only a v1 scheme is credited at a named assumption (TT_OUT rev1)")
+    record, and at its prices where they are another device's)."""
     own = scheme.prices == scheme.device.prices
     if scheme.device.name == "h100" and own:
         return ASSUMPTION_H100

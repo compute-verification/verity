@@ -1,85 +1,42 @@
 # `verity`
 
-`verity` is the repository's one command (the distribution `verity-cli`, its package `verity_cli`). It dispatches to the
-tools beside it and holds no check of its own. `uv run verity --help` prints the usage `verity_cli/__init__.py` states.
+`verity` is the repository's one command. It does no work of its own: each subcommand hands off to the tool that does
+it, such as the check, a benchmark's runner, Flock's Lean verifier or a configuration's parties.
 
-| Command | What it runs |
-| --- | --- |
-| `verity check [ARGS]` | the whole check, `tools/check/check.py` |
-| `verity check tests\|circuits\|lean` | only those parts of it, with the jobs `tools/check/ci.toml` puts in each |
-| `verity check --record [ARGS]` | the check of a clean commit, recorded as an Attempt |
-| `verity check move BASE HEAD` | the certificate that BASE..HEAD is a pure move (`tools/check/move_check.py`) |
-| `verity ci ls [--hours H]` | recent check runs, running and ended, from the store's live records (`tools/check/live.py`) |
-| `verity ci inspect RUN` | a check's steps: state, elapsed, an ETA from each step's recorded median, and its reds so far |
-| `verity tasks list --json [ARGS]` | the check's task graph here (`tasks/v1`, `tools/check/tasks.py`; its README's "Tasks") |
-| `verity tasks run ID [--out FILE]` | one task run here as check runs it, with its verdict, outputs, seconds and key |
-| `verity graph [--json [--packed]] [--family F]` | the fine-grained check's task graph of this checkout (`verity-graph/v2`, `tools/verity/graph/README.md`) |
-| `verity graph unpack [FILE]` | the graph/v2 a packed listing (`--packed`) packs |
-| `verity graph run ID --work DIR` | one task of it run here, with its result (`verity-result/v1`) |
-| `verity graph check --local [--family F]` | the graph run serially here, uncached: the reference executor |
-| `verity bench NAME [ARGS]` | `benchmarks/<NAME>/`'s runner, its `run.py` or `run.sh` |
-| `verity demo [NAME] [ARGS]` | `verity run demos/NAME.toml ARGS`, the demo's one file (`demos/README.md`); NAME defaults to `onsite_compute` |
-| `verity run CONFIG` | the parties a configuration places on this machine, and its verdict |
-| `verity config new\|check\|hash` | write, check or hash a configuration |
-| `verity verify proof [ARGS]` | Flock's Lean verifier, the executable `lake build` writes in `verity/protocols/proofs/flock/verifier`, with ARGS as its own, in the directory you are in |
-| `verity lean try FILE` | `lake env lean FILE` in the Lake package that holds it, the Lean edit loop; with `--on NODE` on a project machine |
-| `verity lean deployed [--rev REV] [--today YYYY-MM-DD]` | the deployed guarantees' rows as one JSON object, read from the locks at REV by git alone: each one's gap as `check.trust_gaps` computes it beside the lock's `trust_gap` and the witness halves its lock shows it lacks (`lacks_witness`), and each open or gap premise once by name (`verity_cli/deployed.py` has the keys). The gap is computed by the running checkout's Lean check, on REV's locks |
-
-In a NAME, a `-` stands for a `_`.
-
-## Modules
-
-| Module | What it holds |
-| --- | --- |
-| `verity_cli/__init__.py` | the dispatch, `verity check`, `verity verify proof` and `verity lean try` |
-| `verity_cli/deployed.py` | `verity lean deployed`, over `tools/verity/lean/check.py`'s `trust_gaps` |
-| `verity_cli/run.py` | `verity run` and `verity config`, over `verity.config` |
-| `verity_cli/served_table.py` | the workload's table `verity run` loads (`run.REGISTRY`): each subprotocol's declaration, the workload, each demo's configuration and each party's piece |
-| `verity_cli/settings.py` | the environment variables `verity run` reads, declared once |
-
-The suite runs a table of its own (`tests/step0.py`).
+## Try it
 
 ~~~sh
-uv run tools/check/suites.py tools/verity/cli   # the suite, on a node through `research run --on auto`
+uv run verity --help
+uv run verity run demos/onsite_full.toml --dry-run
 ~~~
 
-## The onsite workload
+The first prints every subcommand with a line each. The second resolves the onsite demo's eight parties and the
+channels between them and runs nothing: it prints a `PLAN` line for each party, a `CHANNEL` line for each channel, and a
+`DRY` line with the counts and the bindings still missing. Neither needs a GPU.
 
-`demos/onsite_full.toml` is one configuration (`verity/config/v0`, `verity.config`) of onsite's seven
-subprotocols on the workload: one execution phase of Llama-3.2-1B in int8 served through the vLLM adapter's
-committing endpoint. `verity run` executes it, reading `verity_cli/served_table.py`. The file is
-`served_table.configuration` rendered by `verity.config.render`, and `tests/test_onsite_served.py` holds it to that byte for
-byte, as it does each other demo file. It names no host and no address: those are the bindings' (`--bindings`, `verity_cli.run`'s
-docstring), so binding another host changes no hash. It pins the memory attester's two keys, one for PoUS's runs
-and one for the wipe's (`[[pin]]`, their only statement: `served_table.configuration` reads them from this file, and each
-smaller demo file holds those of the subprotocols it lists), and they are inside its hash, which
-`verity_cli/configurations.toml` holds.
+## What it runs
 
-### Interface
+| Command | What it hands off to |
+| --- | --- |
+| `verity check` | The whole check, or with `tests`, `circuits` or `lean` only those parts of it. |
+| `verity ci` | The check's recent runs, and one run's steps. |
+| `verity tasks`, `verity graph` | The check as a graph of tasks: listed, or one task run here. |
+| `verity bench NAME` | A benchmark's runner. |
+| `verity demo NAME`, `verity run CONFIG` | A configuration's parties on this machine, and its verdict. A demo is one configuration file. |
+| `verity config` | Writes, checks or hashes a configuration. |
+| `verity verify proof` | Flock's Lean verifier, with its own arguments. |
+| `verity lean try FILE`, `verity lean deployed` | One Lean file elaborated, the edit loop; the deployed guarantees' rows from the locks. |
 
-| Entry point | What it is |
-|---|---|
-| `verity run demos/onsite_full.toml [--dry-run] [--on MACHINE] [--bindings FILE] [--state DIR]` | Reads the configuration and the bindings, runs the pieces of the parties placed on this machine, and keeps the run under `STATE`: the workload's public record in `STATE/out`, and the monitoring period's `VERDICT` line, printed and written to `STATE/record/verdicts.jsonl`. |
-| `served_table.configuration(commit: str, demo: str = "onsite_full") -> dict[str, Any]` | A demo file's configuration as data (`served_table.DEMOS`). |
-| `served_table` | What `verity run` reads of the workload: `MANIFESTS` (each subprotocol's declaration, a `Component`), `WORKLOADS` (the workload's declaration with its piece), `PARTIES` (each subprotocol's piece for each of its parties, a `Piece`), `ORDER`, and `live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result`, which runs the pieces of the parties here and returns each party's outcome or refusal. |
+In a NAME, a `-` stands for a `_`. `verity run`'s options, what it prints and its exit codes are in its module's
+docstring (`verity_cli/run.py`).
 
-### Running it
+## Running a demo on machines
 
-Every party resolved, every channel and piece, and nothing run (no GPU); with `--bindings`, a missing binding refused:
-
-    verity run demos/onsite_full.toml --dry-run --bindings BINDINGS
-
-On the developer's node, from the commit `research deploy install` installed (set `[program] commit` to it, else the verdict
-names the difference under `simulated`): the workload, every piece inside it, the auditor's sides opened through
-their bindings:
+A configuration names roles, not hosts. The onsite demo places the developer's parties on `prover-node`, and the
+auditor's on `gate-host` and `auditor-host`. A bindings file (`--bindings FILE`) gives each party's hosts, addresses and
+gate commands, so binding another host changes no hash. On the developer's node, then on the auditor device:
 
     verity run demos/onsite_full.toml --on prover-node --bindings BINDINGS --state STATE
-
-The gate's and the auditor device's sides are started by their gates when the developer's pieces open them, so
-`verity run --on gate-host` starts nothing. On the auditor device, with `STATE/out` holding the workload's public
-record, the onsite check and the period's verdict:
-
     verity run demos/onsite_full.toml --on auditor-host --state STATE
 
-A run of record launches each of the two commands under `research run`, and `benchmarks/demo_minutes/onsite_minutes.py`
-reads the minutes from those two runs (`vllm/onsite-demo-minutes` in `benchmarks/demo_minutes/metrics.toml`).
+The gate's sides start when the developer's pieces open them.

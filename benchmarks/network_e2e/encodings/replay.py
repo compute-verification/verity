@@ -56,7 +56,7 @@ STEP_TRACE = "verity-vllm/step-trace/v1"
 @dataclass(frozen=True)
 class Releases:
     """A tick-admitted run's certified releases, as the network attester (or the trace corpus's stand-in for it) gave
-    them: the registered tick, the certifier run's origin (unix seconds; bucket a is [origin + a·τ_b, origin + (a + 1)·τ_b)),
+    them: the registered tick, the attester run's origin (unix seconds; bucket a is [origin + a·τ_b, origin + (a + 1)·τ_b)),
     and each request's release number N and bucket a, in the trace's engine order."""
 
     tick: Tick
@@ -68,7 +68,7 @@ class Releases:
 @dataclass
 class Trace:
     """A workload's step trace (`verity-vllm/step-trace/v1`), its requests in the order they reached the engine, with
-    the certifier's view of its timing when the trace has a clock: each request's ingress time and each step's release
+    the attester's view of its timing when the trace has a clock: each request's ingress time and each step's release
     time (its output's tokens leaving through the egress certifier), or each kept output's own (`output_t`) where the
     recorder saw them leave one by one; and `releases`, a run served under the certified tick's releases."""
 
@@ -184,7 +184,7 @@ def load_step_trace(records: Iterable[dict[str, Any]], *, tokens: dict[str, Sequ
     `finished` (in a workload the committed sampled tokens and the certified egress say the same); with a draft (the
     header's `speculative`), so do the drafts each row kept, its `emitted` less its own token. An `arrive` or
     `step` record's `t` is the engine's clock; a record's `ingress_t` / `release_t`, where the recorder has the
-    certifier's, wins, and otherwise the engine's clock less `ingress_lag_s` (plus `release_lag_s`) stands in for it."""
+    attester's, wins, and otherwise the engine's clock less `ingress_lag_s` (plus `release_lag_s`) stands in for it."""
     recs = list(records)
     if not recs or recs[0].get("kind") != "header" or recs[0].get("schema") != STEP_TRACE:
         raise ValueError(f"not a {STEP_TRACE} trace")
@@ -366,7 +366,7 @@ def read_corpus_trace(d: str | Path, *, num_gpu_blocks: int | None = None, block
     release order (a, ordinal) leaves order exceptions to charge (the corpus's `<trace>.released` traces carry it as
     their ingress). `ingress="warden"` is the floor a server admitting in release order at the next bucket would give.
 
-    A trace served under ``--admit tick`` (meta.json's ``tick``: τ and the certifier run's origin) has each request's
+    A trace served under ``--admit tick`` (meta.json's ``tick``: τ and the attester run's origin) has each request's
     release number and bucket from its network attester, a network attester trace's network attester or the corpus's stand-in for it
     (`requests.jsonl`'s ``release`` and ``bucket``), as `Trace.releases`."""
     d = Path(d)
@@ -1078,8 +1078,8 @@ def main(argv: Sequence[str] | None = None) -> None:
                     help="a trace-corpus output's release time: its step's (engine) or its streamed chunk's (client)")
     ap.add_argument("--ingress", choices=("client", "warden"), default="client",
                     help="a trace-corpus request's certified ingress: the client's send time (client) or the engine's "
-                         "arrival stamp (network_attester: the floor a server admitting in the network certifier's release order would "
-                         "give; the network certifier certifies the release order, which a trace's .released view carries)")
+                         "arrival stamp (network_attester: the floor a server admitting in the network attester's release order would "
+                         "give; the network attester certifies the release order, which a trace's .released view carries)")
     ap.add_argument("--span", help="of each step trace, only the requests whose id holds this, as a trace of their own: "
                                    "one load of a serve that ran others, begun with the engine drained and its prefix "
                                    "cache reset")

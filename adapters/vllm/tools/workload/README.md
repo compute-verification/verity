@@ -26,7 +26,7 @@ session, the committed trace is outside the sampling relation with probability a
 errors. But the remote protocol's composed theorem, `Verity.remote_soundness_of_subprotocols`, takes its three subprotocols'
 targets as open premises, and no Lean statement carries the acceptance of remote's one-stage form, one-stage v2, which runs the proof check
 itself, to `SampledKSLiveV3`'s event (`verity/protocols/compose/verifier/remote/README.md`, "What's open"). PoUW's proof layer needs `AcceptedLive`, which no served path
-meets. Onsite's chain has a gap of its own: network certification's `NetTiming.Guarantees.SampledAuditAccepted` takes
+meets. Onsite's chain has a gap of its own: network attestation's `NetTiming.Guarantees.SampledAuditAccepted` takes
 `Claims.SamplingGeneric.Compiled.KS` as a hypothesis, and the theorem that gives it at the deployed record,
 `SamplingDeploy.ks_compiled`, is not a lock guarantee and takes the verifier's own facts as hypotheses
 (`benchmarks/prove_path/e2e_chains/README.md`).
@@ -40,7 +40,7 @@ it serves (`--scheme rows-sha512`), and every closed execution phase is sealed. 
 `benchmarks/one_stage/served_verdicts.sh`'s, whose header gives each step:
 
 1. the endpoint, under a GPU lease, with the committer's weights registration before the first request;
-2. greedy requests from network certification's traffic generator (`serve_load.py --varied`), closed into one execution phase;
+2. greedy requests from network attestation's traffic generator (`serve_load.py --varied`), closed into one execution phase;
 3. SPOT on that execution phase: its advice and request Programs, the circuit of the served execution blocks
    at each class, and the records audit (Flock `--zk` on the sampled proof blocks behind the Lean ZK server, and the
    Lean verifier's verdict);
@@ -93,6 +93,8 @@ doesn't control.
   `run.sh` hands a run's script its node's paths as its environment, so no script names a node. It holds no machine's
   address: the gate's value names the variable that holds the challenger host's (`VY_CHALLENGER_1_HOST`), which
   `run.sh` fills from the environment the run is launched in, and without it the window run starts nothing and says so.
+- `local_gate.py`: the challenger's gate (`live_challenger/auditor.py`) on one node under a test key, its coins the
+  Lean verifier's; `init` refuses when that verifier doesn't build.
 - `workloads/` keeps a bf16 RTX PRO 6000 workload, which the demo doesn't serve.
 
 ## Commands

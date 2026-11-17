@@ -6,7 +6,7 @@ it lies in DIR, as any file DIR doesn't declare is, a log among them. A field no
 count of requests in an answer, a registration's head beside a certificate. The chain's endpoint step (CR_ENDPOINT's
 rebuild), or any step the network attester path doesn't run, is a finding naming the check.
 
-What a verifier on another machine receives of a workload's OUT (``--received``: the certifier's piece, V3c's audit,
+What a verifier on another machine receives of a workload's OUT (``--received``: the attester's piece, V3c's audit,
 the registered compiler, the advice and weights registrations and the window circuit's count) scans clean as the run
 writes it, and anything that reads the advice or counts the window is a finding: a log left in either dir, an undeclared
 file, the advice's own length in its registration, a workload in φ, the advice's length in a count, a compile in the
@@ -197,7 +197,7 @@ WEIGHTS = {"schema": "verity-vllm/weights-registration/v1", "program": "window-c
 
 
 def _out(tmp_path: Path, period, v3c: dict = V3C_WINDOW) -> Path:
-    """A workload's OUT as the verifier receives it (`RECEIVED`): the certifier's piece (with the served.json a
+    """A workload's OUT as the verifier receives it (`RECEIVED`): the attester's piece (with the served.json a
     deferral's follow-on leaves, naming the served node it audited), V3c's audit as the run
     copies it (its summary and audit record as `served_integrity.public_copy` writes them, the registration it audited
     and its period audit), the registered compiler, the window's advice registration in its public form

@@ -27,7 +27,7 @@ connection, each answered and the connection closed:
 Its generated ids are SHA-512's, not a model's: byte k of the counter-mode stream (`_stream`) of
 ``verity/demo-stub/v1/outputs``, 0x00, then the prompt's bytes, mod ``--vocab``.
 
-**With ``--out``** it keeps the records a `verity-vllm serve-openai` endpoint writes, the ones network certification's
+**With ``--out``** it keeps the records a `verity-vllm serve-openai` endpoint writes, the ones network attestation's
 endpoint step binds to the certified I/O (`network_e2e/chain.py`'s ``served_advice``, through `verity-vllm advice`): a
 class request goes through `demo_endpoint`'s scheduler (`Toy`, the class's outputs as its engine: vLLM V1's synchronous
 FCFS as network-e2e's derivation models it, each request one prefill row of its prompt, then a decode row a step), and
@@ -184,7 +184,7 @@ class Endpoint:
         n = re.search(rb"(?im)^content-length:\s*(\d+)", head)
         raw = await reader.readexactly(int(n.group(1))) if n else b""
         fields = network_attester_request(head + raw, self.shape.payload) if head.startswith(b"POST /v1/completions ") else None
-        why = (f"a network certifier's id request (id_form.id_request in {self.shape.payload + 9}-byte cells from their first "
+        why = (f"a network attester's id request (id_form.id_request in {self.shape.payload + 9}-byte cells from their first "
                "byte) to POST /v1/completions") if fields is None else refusal(fields, self.shape)
         if why is not None:
             self.refused += 1
