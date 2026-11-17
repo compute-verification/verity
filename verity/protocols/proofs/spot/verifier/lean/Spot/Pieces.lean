@@ -1129,7 +1129,7 @@ def table : List (String × (Json → V Json)) :=
 /-- The verifier's pieces: `table`'s, by name, the challenger's ledger and session checks among them. -/
 def verifier : List (String × (Json → V Json)) :=
   table.filter fun p => ["registration", "matches_public", "select", "select_second", "check_draw", "check_proved",
-    "record", "across", "across_all", "check_public", "check_verdicts", "run", "second_statements", "hello", "stream",
-    "fleet", "challenger_ledger", "challenger_head", "challenger_session", "challenger_credited", "challenger_pinned"].contains p.1
+    "record", "across", "across_all", "check_public", "check_verdicts", "run", "hello", "stream", "fleet",
+    "challenger_ledger", "challenger_head", "challenger_session", "challenger_credited", "challenger_pinned"].contains p.1
 
 end Spot.Pieces
