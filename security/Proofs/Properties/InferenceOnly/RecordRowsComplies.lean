@@ -232,4 +232,22 @@ theorem RowsComplies : Properties.Record.RowsComplies := by
     exact (front_inst hf).2
   · exact Nat.le_trans (Nat.mul_le_mul_right _ hfresh) hR.2
 
+theorem rows_unread_refused :
+    (InferenceOnlyVerifier.Record.read
+      (InferenceOnly.RowsProtocol.instanceOf ⟨0, 0, 1, #[], #[], #[], ""⟩ ⟨"", none⟩)
+      (InferenceOnly.RowsProtocol.trustedOf ⟨0, 0, 1, #[], #[], #[], ""⟩ ⟨.null, "", .empty⟩)).toBool = false := by
+  decide +kernel
+
+/-- **`RowsComplies` fails without `InferenceOnly.RowsProtocol.checkBlobs`.** At a case whose Program is no text,
+which a verifier that accepted every case would accept, the record check reads no record: its conclusion's first part
+fails. -/
+theorem RowsComplies_nontrivial :
+    ∀ r, ¬ InferenceOnlyVerifier.Record.read
+      (InferenceOnly.RowsProtocol.instanceOf ⟨0, 0, 1, #[], #[], #[], ""⟩ ⟨"", none⟩)
+      (InferenceOnly.RowsProtocol.trustedOf ⟨0, 0, 1, #[], #[], #[], ""⟩ ⟨.null, "", .empty⟩) = .ok r := by
+  intro r h
+  have := rows_unread_refused
+  rw [h] at this
+  simp [Except.toBool] at this
+
 end InferenceOnlyVerifier.Properties.Record.SecurityProofs
