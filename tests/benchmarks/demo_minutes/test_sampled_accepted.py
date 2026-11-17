@@ -1,5 +1,5 @@
 """`sampled_accepted.py`: the share of a served run's sampled proof blocks whose proofs the Lean verifier accepted on the
-host that composed its record, 100 only for SPOT's accept recomputed there on a commit of main, else 0 with the
+auditor's machine, 100 only for SPOT's accept recomputed there off the served node on a commit of main, else 0 with the
 first condition it fails."""
 from __future__ import annotations
 
@@ -65,11 +65,9 @@ def test_lean_here_is_the_head_of_served_verdicts_own():
     assert whole.startswith(M.LEAN_HERE)
 
 
-@pytest.mark.parametrize("served_node", [False, True])
-def test_an_accept_recomputed_on_the_auditors_machine_from_main_is_every_sampled_proof_block(tmp_path, repo, monkeypatch, capsys,
-                                                                                            served_node):
+def test_an_accept_recomputed_on_the_auditors_machine_from_main_is_every_sampled_proof_block(tmp_path, repo, monkeypatch, capsys):
     r, on, _ = repo
-    runs = demo(tmp_path / "runs", on, spot(), served_node)
+    runs = demo(tmp_path / "runs", on, spot())
     out = tmp_path / "me"
     out.mkdir()
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(out))
@@ -86,6 +84,7 @@ def test_an_accept_recomputed_on_the_auditors_machine_from_main_is_every_sampled
 
 @pytest.mark.parametrize("row, served_node, off, why", [
     (spot(), False, True, "served from .*, not a commit of main"),
+    (spot(), True, False, "composed on the served node"),
     (spot(answer_from="as the served node wrote it"), False, False, "not recomputed there by the Lean verifier"),
     (spot(verdict="reject"), False, False, "the Lean verifier's verdict is reject"),
 ])
