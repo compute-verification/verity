@@ -674,7 +674,7 @@ def test_a_foreign_fragment_and_a_frame_that_isnt_ip_are_skipped_only_when_told_
 # --- against a run of the network attester ---------------------------------------------------------------------------
 
 class _Uncommitted(ws.Publisher):
-    """`Publisher` with no commitment to a record's rows (`attest`): each record kept and certified, as `keep` does."""
+    """`Publisher` with no commitment to a record's rows (`attest`): each record kept and attested, as `keep` does."""
 
     def attest(self, record, link, direction, withheld=False) -> None:
         pass
@@ -684,12 +684,12 @@ def _served(out: Path, key: Path, requests: list[bytes], responses: list[bytes],
             watermark: bool = True, params: NetworkAttesterParams = PARAMS, order=None, phases: int = 1,
             arrive: tuple[int, ...] = ()) -> tuple[NetworkAttester, list[_Writer], _Writer]:
     """`phases` execution phases of the network attester at `params` on a `VirtualClock`, one unless given, published
-    as `serve` publishes a run: its records and certificates through `Publisher`, `deployment.json`, and
+    as `serve` publishes a run: its records and attestations through `Publisher`, `deployment.json`, and
     `warden.json`'s connections and, with `watermark`, its watermark. Every request arrives before the first tick,
     or with `arrive` request k before tick `arrive[k]`, none earlier than the one before it. The server answers
     connection k (in connect order, from 0) `responses[k]` and ends, or for k in `held` sends it and never ends. With
     `order`, the network attester's connections are sorted by it once they are admitted, so it cuts each bucket's
-    cells, and releases its `END`s, in that order and not in their ordinals'; its records are then kept and certified
+    cells, and releases its `END`s, in that order and not in their ordinals'; its records are then kept and attested
     with no commitment to their rows, which refuses cells that aren't where the schedule lays them. Returns the
     network attester, the server's side of each connection in connect order, and its side of the watermark stream."""
     tau = params.bucket_ms / 1000
@@ -828,8 +828,8 @@ def test_a_run_of_two_execution_phases_is_counted_across_both_phases_records(tmp
     served whole in the first phase, one whose response starts in the first and ends in the second, one whose request
     does, and one served whole in the second. Each phase's ingress record and egress record hold some of the bytes,
     and the record's count in each direction is their sum over both: each connection's is what its server's side
-    saw, whichever phase's records hold its cells. All six records, three a phase, are counted as certified, and
-    five once one's certificate is gone. A capture of exactly the bytes the server's side saw agrees in each
+    saw, whichever phase's records hold its cells. All six records, three a phase, are counted as attested, and
+    five once one's attestation is gone. A capture of exactly the bytes the server's side saw agrees in each
     direction and pairs every connection."""
     out, key = tmp_path / "run", tmp_path / "key"
     out.mkdir()
@@ -869,7 +869,7 @@ def test_a_run_of_two_execution_phases_is_counted_across_both_phases_records(tmp
                               "unpaired_connections": 0, "unpaired_flows": 0, "partial_flows": 0, "says": "agrees"}
     assert cf.table(result).splitlines()[1] == \
         "record: 5 connection(s) to the server; 6 of its execution phases' 6 records certified"
-    # one record's certificate gone: the other five are counted, of the six
+    # one record's attestation gone: the other five are counted, of the six
     certificates = (out / "certified.jsonl").read_text().splitlines()
     assert len(certificates) == 6
     (out / "certified.jsonl").write_text("".join(line + "\n" for line in certificates[:-1]))
@@ -896,7 +896,7 @@ def test_a_run_in_the_id_egress_form_at_the_id_fronts_cell_agrees_in_each_direct
     bytes a token and then the trailer, and the watermark stream. The device's own read accepts the run, so every
     egress cell is one the id form reads. The schedule the reader rebuilds from the deployment is the id form's,
     whose digest each record's head holds and the bytes form's is not, so all three records are counted as
-    certified. A connection's count to the server is its request with its release headers, and from it P bytes a
+    attested. A connection's count to the server is its request with its release headers, and from it P bytes a
     token and the trailer. A capture of exactly the bytes the server's side saw agrees in each direction and pairs
     every connection, the server's answer on the watermark's in no sum."""
     out, params, tokens, requests, responses, relay, servers, mark = _three_ids(tmp_path)
@@ -1130,7 +1130,7 @@ def test_a_connection_that_failed_is_a_bound_and_an_uncertified_record_is_said(t
     """The server sends 100 bytes of a response and never ends it, so the network attester fails the connection
     (late) with one cell of them in its record and stops reading. The record's count of that connection is a floor
     from the server and a ceiling to it: the capture's 100 bytes are inside it, the flow pairs inside the bounds, and
-    each direction says the range, never that it agrees. A record with no certificates is counted as one."""
+    each direction says the range, never that it agrees. A record with no attestations is counted as one."""
     out, key = tmp_path / "run", tmp_path / "key"
     out.mkdir()
     requests = [ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 20)]
