@@ -14,8 +14,7 @@ says. In a fresh clone, `uv sync --all-packages --extra torch-cpu` makes the env
 and `uv run verity bench NAME [ARGS]` runs one. What each measures is its row in the index below, and its runner's
 header gives its machine, its arguments and what it writes. These are the directories that have one, with a runner's
 subcommands or defaults in parentheses: `attester_load`, `attester_timing` (`run`, `guard`, `serve`, `observe`,
-`score`, `table`, `target`), `bandwidth` (one probe a run: `chip` and `write_gpu` on one GPU, `write_host` on the
-host's CPUs), `bool_build_cost`, `certifier_term`, `circuit_properties` (`--models llama32-1b --out DIR`, Llama 3.2
+`score`, `table`, `target`), `bool_build_cost`, `certifier_term`, `circuit_properties` (`--models llama32-1b --out DIR`, Llama 3.2
 1B's layer alone and its point, on a CPU), `compile_cost`, `compute`, `dsa_topk`, `exfiltration`, `f32_exhaustive`,
 `flock_s8_block`, `inference_only`, `landing`, `lean_unread_gate` (`--against REV`, its guard), `memory`, `mempool`
 (`--quick`), `native_peak` (bf16 at 8192^3), `network_traces`, `numerical` (one of `verity_numerical`'s tools by
@@ -29,7 +28,9 @@ layer from its four runs, as `prove/README.md` says), `prove_path`, `poub_sessio
 "The serving cost in five stages"), `served_commit`, `served_errors`, `served_units` (`fp8-coord:K=6144`),
 `tc_probe` (`sm120.mma.m16n8k32.e4m3`'s canary), `tc_probe_fp4` (`nvf4` with its SASS check), `tensor_duty`,
 `training_slowdown` (`CONFIG`; `ENTRY --library --root DIR`, one library entry's step traced on a CPU), `unit_block`,
-`unit_lowering`, `unit_walk`, `verifier_cost` and `word_codec`.
+`unit_lowering`, `unit_walk`, `verifier_cost` and `word_codec`. `verity calibrate bandwidth` runs
+`calibration/bandwidth/`'s: the device ceilings PoUB's timing cites, one probe a run (`chip` and `write_gpu` on one GPU,
+`write_host` on the host's CPUs).
 
 A directory without a runner is run by the commands its README names, or its main module's docstring where it has no
 README. `benchmarks/kernels/`'s directories have no `verity bench` name: each runs as its script's header says. `verity-bench` is the
@@ -112,6 +113,12 @@ made_up=True)`: the line `a made-up record, not a run's` is printed under the au
 `made_up: true` and is no audit, and every measurement written from it is marked `modeled` (figures no run measured)
 and carries `made_up: true`, so its `result.json` passed on alone never reads as a run's measurement. A fixture record
 passes `made_up=True` wherever it is reported, whatever its own files say of its coins, parameters or commit.
+
+**A trial** is a run whose numbers are for its launcher alone: a probe from a branch, a study at other settings, a run
+on a stand-in model, a comparison run. Start one with `research run --env VERITY_BENCH_TRIAL=1 ...` in front of the
+registered command (the overhead, vLLM and steady doors forward the variable from the launcher's environment). Its
+writer puts every measurement in `out/trial-measurements.json` and none in `result.json`, which says `trial: true`, so no
+number of it reaches a metric's line; a trial's run is never labelled a run of record, a plan's passing run or a served row.
 
 `kit.report(name, text, doc, measured, ran_with=..., accepted=..., why=..., made_up=..., withdrawn=..., from_run=...)` is the command's
 last step, and the printed and written forms are the kit's (`harness/README.md`'s "The kit").

@@ -265,6 +265,8 @@ class Arm:
     attester: bool = False
     #: what of a served deployment the arm leaves off, in words (`parts_of`)
     off: tuple[str, ...] = ()
+    #: the tick rule's catch-up forms that only a measurement may take (`tick_rule`) and that this arm measures
+    catch_ups: tuple[str, ...] = ()
 
 
 BATCH_INVARIANT = {"VLLM_BATCH_INVARIANT": "1"}
@@ -344,7 +346,8 @@ ARMS = {
     "prod-tick": Arm("prod", "+ admission on the certified tick, its releases and watermark from a stand-in release "
                      "front on the node: prod-all-on's tick with nothing recorded and no edge, its client sending each user's seed as "
                      "prod-all-on's does", plugin=("idle_reset",), published=True, tick=True, seeds=True, off=("the network attester's egress pacing", "useful-work kernels",
-                                                     "commitment of values", "the record", "the edge snapshot")),
+                                                     "commitment of values", "the record", "the edge snapshot"),
+                     catch_ups=("open",)),
     "prod-all-on": Arm("prod-record", "+ admission on the certified tick, its releases and watermark from a stand-in "
                        "release front on the node (`release_front`: admission real, no answer paced), and the edge "
                        "snapshot every --edges-every-s seconds as a server would take it, every rank's KV cache hashed "
@@ -1778,6 +1781,19 @@ def run(a: argparse.Namespace) -> int:
         return serve(a, outside(Path(d).resolve()))
 
 
+def tick_rule(name: str, text: str) -> dict:
+    """``--tick-rule``'s JSON for arm ``name``, with ``arm`` set where its catch-up is one only a measurement takes
+    (``open``: the gate open from the start, which orders nothing). Refused where the arm doesn't name it
+    (`Arm.catch_ups`)."""
+    rule = json.loads(text)
+    if rule.get("catch_up") != "open":
+        return rule
+    if "open" not in ARMS[name].catch_ups:
+        raise SystemExit(f"arm {name}: catch_up 'open' opens the tick's gate, which then orders nothing, and only an arm "
+                         "that names it in Arm.catch_ups measures it")
+    return rule | {"arm": name}
+
+
 def corpus_only(arm: Arm) -> str | None:
     """Why vLLM's client can't send ``arm``'s passes, None where it can. Under it a tick arm's requests come through a
     `release_front`, and its server refuses ``/reset_prefix_cache``, so its engine must empty its prefix cache when idle."""
@@ -1836,7 +1852,7 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
         print(f"[serve-tax] plan: {len(plan)} requests in {time.monotonic() - t:.1f} s", flush=True)
     tick = tick_args(a.tick_from, a.tick_ms) if arm.tick else None
     if tick and a.tick_rule:
-        tick["rule"] = json.loads(a.tick_rule)
+        tick["rule"] = tick_rule(a.arm, a.tick_rule)
     srv = out / "server"
     srv.mkdir(exist_ok=True)
     site = plugin_site(out / ".site", arm)
@@ -2440,9 +2456,9 @@ def certified_client(a: argparse.Namespace, run: Callable[..., subprocess.Comple
 def busy_cycle(recs: list[dict]) -> dict:
     """The engine's mean busy cycle over a step trace with times (`StepTrace` with a clock): from one step's output to the
     next's, between consecutive steps that scheduled tokens, where a request was in the engine (arrived, not yet finished)
-    once the first's output was back,     as `summary.busy_cycle` reads the corpus's traces. ``per_token``: the least-squares fit of each cycle to a fixed
-    amount and an amount for each non-draft token of the step it ends, a row past its prompt being one token and its
-    drafts where the engine drafts."""
+    once the first's output was back, as `summary.busy_cycle` reads the corpus's traces. ``per_token``: the least-squares
+    fit of each cycle to a fixed amount and an amount for each non-draft token of the step it ends, a row past its prompt
+    being one token and its drafts where the engine drafts."""
     flight: set[str] = set()
     prompt: dict[str, int] = {}
     drafts = any(r.get("kind") == "header" and (r.get("config") or {}).get("speculative") for r in recs)
