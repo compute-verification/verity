@@ -50,7 +50,7 @@ for one server block and the Lean check's answer for it. It extends the all-prot
 (`verity/all-protocols-period/v1` and `-window/v1`) with:
 
 - the block's server and steps, `server_time: [{server, steps: [lo, hi)}]`;
-- the subprotocols, keyed `integrity` (SPOT), `pouw`, `pous`, `bandwidth`, `certifier` and `wipe`. Each is
+- the subprotocols, keyed `integrity` (SPOT), `pouw`, `pous`, `bandwidth`, `attester` and `wipe`. Each is
   `null` when the block ran no such audit, else its protocol, the core answer, its certificate (integrity's count bound,
   `profile.Stratified.count_bound` over its sample: over the answer's own `strata`, which the quantity then carries,
   where its profile samples each stratum on its own, and over a uniform sample of the checked level otherwise; W_cert,

@@ -351,7 +351,7 @@ def spot(case: Any) -> dict:
                     check=lambda p, c, e: _one_stage_check(p, c, e, blobs))
 
 
-CERTIFIER = Ported("verity/certifier/v0", PERIOD.reference)
+ATTESTER = Ported("verity/certifier/v0", PERIOD.reference)
 INFERENCE_ONLY = Ported("verity/inference-only/v0", INFERENCE.reference)
 
 
@@ -865,7 +865,7 @@ REMOTE_V1 = TiedSame("verity/remote/v1", (INFERENCE_ONLY, PEARL_PLUS, SPOT),
                      (INFERENCE_ONLY.id, SPOT.id), (RUN, WINDOW))
 REMOTE = TiedSame("verity/remote/v0", (INFERENCE_ONLY, POUW_PERIOD, SPOT), (INFERENCE_ONLY.id, SPOT.id),
                   (WINDOWS,))
-ONSITE = TiedSame("verity/onsite/v1", (CERTIFIER, INFERENCE_ONLY, POUS, PEARL_PLUS, BANDWIDTH, SPOT, WIPE),
+ONSITE = TiedSame("verity/onsite/v1", (ATTESTER, INFERENCE_ONLY, POUS, PEARL_PLUS, BANDWIDTH, SPOT, WIPE),
                   (INFERENCE_ONLY.id, SPOT.id), (STORE, RUN, WINDOW))
 #: `Core.Onsite.counted`: onsite with the count over the wipe's span beside it and the wipe's count held to it.
 ONSITE_COUNTED = TiedSame("verity/onsite/counted/v1", (HOST_SPAN, *ONSITE.components[:-1], COUNTED_WIPE), ONSITE.same,

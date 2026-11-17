@@ -23,4 +23,4 @@ A new benchmark adds its own entry under `contents/` and edits nothing else, whi
 runner that needs a GPU or a whole node is the command of a `research run`, as its header says.
 
 Served results (`pearl_c_vllm/`) are measured against stock vLLM's FP8 with its CUDA graphs. The ACCEL model and the ε
-vocabulary these benchmarks use are [`machine_model/`](../machine_model/README.md)'s.
+vocabulary these benchmarks use are [`machine_model/`](../../calibration/machine_model/README.md)'s.

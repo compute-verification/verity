@@ -46,10 +46,10 @@ BINDINGS = {
 UNBOUND = sorted(f"{p}.{c}.{k}" for p, cs in BINDINGS.items() for c, ks in cs.items() for k in ks)
 #: the served window's runner's variables under `BINDINGS`, and the bindings the pieces read, in the pieces' order
 VARIABLES = {
-    "CERTIFIER_CHAIN_CMD": '.venv/bin/python benchmarks/network_traces/certifier_piece.py chain "$@"',
-    "CERTIFIER_PERIOD_CMD": '.venv/bin/python benchmarks/network_traces/certifier_piece.py period "$@"',
+    "CERTIFIER_CHAIN_CMD": '.venv/bin/python benchmarks/network_traces/attester_piece.py chain "$@"',
+    "CERTIFIER_PERIOD_CMD": '.venv/bin/python benchmarks/network_traces/attester_piece.py period "$@"',
     "CLASSES": "4,32,4 8,32,4,4,16", "V3C_CLASS": "8,32,4,4,16",
-    "CERTIFIER_FRONT": '.venv/bin/python benchmarks/network_traces/certifier_piece.py front "$1" "$2" "$3" '
+    "CERTIFIER_FRONT": '.venv/bin/python benchmarks/network_traces/attester_piece.py front "$1" "$2" "$3" '
                        "--gate user@gate-1 --peer peer-1",
     "DEVELOPMENT": "1", "H1_KEY_SHA512": KEY, "LOAD": "varied", "PEARLC_CHALLENGER_GATE": "gate-command",
     "PEARLC_CHALLENGER_PEER": "peer-1", "PEARLPLUS_TIE": "1", "POUW": "pearlplus",
@@ -200,11 +200,11 @@ def test_the_parties_are_the_manifests_names_and_onsite_is_the_product():
     assert sorted(T.PROTOCOLS) == sorted(K.COMPOSITES[T.ONSITE])
 
 
-def test_the_certifier_and_the_policy_are_declared_from_their_manifests_whole():
-    certifier, policy = REG.components["certifier"], REG.components["inference-only"]
-    assert (certifier.id, certifier.parties, certifier.channels) == (NC.ID, NC.MANIFEST.parties, NC.MANIFEST.channels)
+def test_the_attester_and_the_policy_are_declared_from_their_manifests_whole():
+    attester, policy = REG.components["certifier"], REG.components["inference-only"]
+    assert (attester.id, attester.parties, attester.channels) == (NC.ID, NC.MANIFEST.parties, NC.MANIFEST.channels)
     assert (policy.id, policy.parties, policy.channels) == (IO.ID, IO.MANIFEST.parties, IO.MANIFEST.channels)
-    assert list(REG.parties["certifier"]) == [NC.WORKERS, NC.NETWORK_CERTIFIER, NC.VERIFIER]
+    assert list(REG.parties["certifier"]) == [NC.WORKERS, NC.NETWORK_ATTESTER, NC.VERIFIER]
     assert list(REG.parties["inference-only"]) == [IO.VERIFIER]
     cfg = R.load(CONFIG, REG)
     sent = {(c["from"], c["to"]): c["messages"] for c in cfg["channel"]}
@@ -306,11 +306,11 @@ def test_the_runners_variables_and_the_bindings_keys_are_these():
     assert all(unbound[k] == VARIABLES[k] for k in ("CERTIFIER_CHAIN_CMD", "CERTIFIER_PERIOD_CMD"))
 
 
-def test_the_certifiers_script_is_its_developer_sides_and_no_gate_piece_names_one(tmp_path, capsys):
+def test_the_attesters_script_is_its_developer_sides_and_no_gate_piece_names_one(tmp_path, capsys):
     cfg = R.load(CONFIG, REG)
-    side, device = REG.parties["certifier"][NC.WORKERS], REG.parties["certifier"][NC.NETWORK_CERTIFIER]
-    assert (side.runs, side.scripts, side.reaches, side.binds) == (T.SERVED_WINDOW, (T.CERTIFIER_PIECE,),
-                                                                    NC.NETWORK_CERTIFIER, ("gate", "peer"))
+    side, device = REG.parties["certifier"][NC.WORKERS], REG.parties["certifier"][NC.NETWORK_ATTESTER]
+    assert (side.runs, side.scripts, side.reaches, side.binds) == (T.SERVED_WINDOW, (T.ATTESTER_PIECE,),
+                                                                    NC.NETWORK_ATTESTER, ("gate", "peer"))
     assert set(side.variables(cfg, BINDINGS)) == {"SERVE_ARGS", "CERTIFIER_FRONT", "CERTIFIER_CHAIN_CMD",
                                                     "CERTIFIER_PERIOD_CMD", "V3C_CLASS", "CLASSES"}
     assert device.runs == T.GATE
@@ -323,10 +323,10 @@ def test_the_certifiers_script_is_its_developer_sides_and_no_gate_piece_names_on
                if e.runs == T.SERVED_WINDOW)
     rc, got, _ = dry(capsys, "--bindings", bindings(tmp_path))
     plan = {x["party"]: {e["component"]: e for e in x["entries"]} for x in got["plan"]}
-    mine, its = plan[NC.WORKERS]["certifier"], plan[NC.NETWORK_CERTIFIER]["certifier"]
-    assert rc == 0 and (mine["runs"], mine["reaches"], mine["scripts"]) == (T.SERVED_WINDOW, NC.NETWORK_CERTIFIER,
-                                                                            [T.CERTIFIER_PIECE])
-    assert (its["runs"], its["reaches"], its["scripts"], its["hooks"], its["unbound"]) == (T.GATE, NC.NETWORK_CERTIFIER,
+    mine, its = plan[NC.WORKERS]["certifier"], plan[NC.NETWORK_ATTESTER]["certifier"]
+    assert rc == 0 and (mine["runs"], mine["reaches"], mine["scripts"]) == (T.SERVED_WINDOW, NC.NETWORK_ATTESTER,
+                                                                            [T.ATTESTER_PIECE])
+    assert (its["runs"], its["reaches"], its["scripts"], its["hooks"], its["unbound"]) == (T.GATE, NC.NETWORK_ATTESTER,
                                                                                          [], {}, [])
 
 

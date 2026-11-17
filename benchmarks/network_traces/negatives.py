@@ -12,9 +12,9 @@ I3's (serve-openai's).
 **What is tampered, by whom** (`Negative.tampers`):
 - ``plan``: what the endpoint sent, tampered by a shim between the endpoint and the network attester while serving:
   the network attester certifies what the shim wrote.
-- ``certified``: the certified records the prover commits (`certified.jsonl`) after the run, under the certificates the
+- ``certified``: the attested records the prover commits (`certified.jsonl`) after the run, under the attestations the
   attester issued.
-- ``frames``: the certified frames the prover opens under each record's frames root (the I/O tie's reads).
+- ``frames``: the attested frames the prover opens under each record's frames root (the I/O tie's reads).
 - ``advice``: the advice string the prover hands the compiler after serving (I1).
 - ``commit``: the Commit record of the run's committed values (I3).
 
@@ -23,11 +23,11 @@ it that fails. On the proof system's stream every refusal shows only ``reject`` 
 verifier); the code is what the verifier establishes:
 - ``NetworkHeadCheck_v2.{opening,fields,counts,signed}``: N2's head check of each end (`head_check.reference_parts`):
   the head opens under the registered root, its fields (link, end, window, grid, status complete), its counts the
-  profile's row, and its record digest under the attester's salt the certificate's signed digest;
+  profile's row, and its record digest under the attester's salt the attestation's signed digest;
 - ``NetworkServedCounts_v1``: N2's served counts on a served link (`served.reference`);
 - ``audit.VIOLATION``: N2's audit of both records (`audit.Audit`, the Python reference of the Lean check of record);
 - ``Issuer.refused``: no check's but the attester's: it certifies no record whose status isn't complete
-  (`certificate.Issuer`, which lists the execution phase in `refused`), so the window has no certified record and the
+  (`certificate.Issuer`, which lists the execution phase in `refused`), so the window has no attested record and the
   link stops there;
 - pending checks, by the names their drafts give them: ``IoTieRequest`` (`io_request`'s ingress tie, a unit a bucket
   row of the network attester's ingress execution phase at selection All, `io_request.reference`: each lane's cells, read from its
@@ -54,7 +54,7 @@ names the part that refuses it (`TIE_PARTS`).
 
 **The ingress tie on a fake upstream** (`advice_suite`): the network attester's own ingress of the advice's requests, id
 requests at the link's cell size (each from its record, `--ids` as serve-openai writes it: prompt ids, user and what it
-brought), each window's arriving whole so their request cells are the honest `received`'s (`certified_ingress`), under
+brought), each window's arriving whole so their request cells are the honest `received`'s (`attested_ingress`), under
 the network attester's framing (`link_framing`). Each advice negative is IoTieRequest's reference on every bucket row on the
 verifier's lanes from its advice and the network attester's release (`request_tie`), whose verdict the verifier takes
 from its own tie source (`tie_service.Ties`).
@@ -89,7 +89,7 @@ FORMAT = "verity-network-negatives/v1"
 ADVICE_MODULE = "verity.protocols.resource_accounting.network.verifier.advice"
 IO_TIE_MODULE = "verity.protocols.resource_accounting.network.verifier.io_tie"
 IO_REQUEST_MODULE = "verity.protocols.resource_accounting.network.verifier.io_request"
-NETWORK_CERTIFIER_ROWS_MODULE = "verity.protocols.resource_accounting.network.verifier.network_attester_rows"
+NETWORK_ATTESTER_ROWS_MODULE = "verity.protocols.resource_accounting.network.verifier.network_attester_rows"
 SAMPLED = "runner.sampler/sampled_token_ids"
 HEAD = "NetworkHeadCheck_v2"
 SERVED = "NetworkServedCounts_v1"
@@ -97,7 +97,7 @@ TIE = "IoTieWindow"
 REQUEST_TIE = "IoTieRequest"
 #: the verifier's registered read of a network attester cell at its position under the network attester's signed root
 #: (`network_attester_rows.opens`, the Lean verifier's check of a proof block's registered port)
-NETWORK_CERTIFIER_READ = "Flock.Registered.checkPort"
+NETWORK_ATTESTER_READ = "Flock.Registered.checkPort"
 #: the part of the I/O tie (`TIE`) that refuses each negative it reads; None: one it must accept while its outputs are
 #: honest's (each one's step, batch row, request, index and bucket), which content refuses once the edit moves them
 TIE_PARTS = {"drop": "content", "token": "content", "frame": "cells_root", "advice-length": "content",
@@ -116,7 +116,7 @@ class NotApplicable(ValueError):
 
 def frame_byte(frames: list[bytes], k: int = 0, at: int = -1) -> list[bytes]:
     """The window's frames with byte `at` of frame `k` flipped (its low bit), every other frame and the record's frames
-    root kept: what a prover that opens a frame other than the certified one hands over. Its path no longer reaches
+    root kept: what a prover that opens a frame other than the attested one hands over. Its path no longer reaches
     the root (`certificate.verify_frame`); under the network attester, the I/O tie recomputes the cells' root and
     refuses it (`TIE`.cells_root, `tie_suite`)."""
     out = list(frames)
@@ -139,9 +139,9 @@ def network_attester_frame(run: Path, at: int | None = None) -> dict:
     registration (v2) checked under the network attester's key and the schedule, and its record's bucket rows and
     wiring committed under their salts to the registered head; then byte `at` of that cell (its first payload byte by
     default) changed in its bucket's row, and the row opened at its position. The honest row's read climbs to the
-    signed root and the changed one's doesn't (`NETWORK_CERTIFIER_READ`)."""
+    signed root and the changed one's doesn't (`NETWORK_ATTESTER_READ`)."""
     try:
-        WR = importlib.import_module(NETWORK_CERTIFIER_ROWS_MODULE)
+        WR = importlib.import_module(NETWORK_ATTESTER_ROWS_MODULE)
         WS = importlib.import_module("verity.protocols.resource_accounting.network.attester.network_attester_serve")
     except ModuleNotFoundError as err:
         raise NotApplicable(f"no network attester cells: {err.name} isn't in this tree") from None
@@ -170,7 +170,7 @@ def network_attester_frame(run: Path, at: int | None = None) -> dict:
         bad[j * B + (HEADER.size if at is None else at % B)] ^= 1
         honest, tampered = cell_reads(WR, cells, t, rows[t]), cell_reads(WR, cells, t, bytes(bad))
         return {"negative": "frame", "window": w, "row": t, "slot": j, "rows": len(rows), "cell_bytes": B,
-                "row_bytes": len(rows[t]), "code": NETWORK_CERTIFIER_READ, "honest_reads": honest, "tampered_reads": tampered,
+                "row_bytes": len(rows[t]), "code": NETWORK_ATTESTER_READ, "honest_reads": honest, "tampered_reads": tampered,
                 "ok": honest and not tampered}
     raise NotApplicable(f"{run}: no registered egress execution phase with a data cell")
 
@@ -182,7 +182,7 @@ def network_attester_frame(run: Path, at: int | None = None) -> dict:
 # leaves its argument, and keeps the advice valid under v0's schedule rules (a row continues at its request's computed
 # position, or at its cache hit when it admits the request; `kind` is decode exactly when n = 1 past the prompt; a row
 # keeps a sample when it reaches its request's known tokens), so that what refuses it is a check of the advice against
-# the certified I/O or the committed values, not its form. The advice is built once, at the end (`_build`): I1's
+# the attested I/O or the committed values, not its form. The advice is built once, at the end (`_build`): I1's
 # classes refuse an invalid advice on construction.
 
 def _rows(advice) -> list[tuple[int, int, Any]]:
@@ -242,7 +242,7 @@ def output_length(advice, request: int = 0, by: int = 1):
     """Request `request`'s output length one more (`by` = 1) or one less (−1), the rest of the advice as served. One
     more: its row past its last kept sample keeps one (the row async scheduling runs past an EOS), or, if it has none,
     a decode row in the step after its last row does. One less: its last kept sample discarded, as a row past an EOS
-    is, and any row of it after that left out. The advice's frames then disagree with what the egress certified."""
+    is, and any row of it after that left out. The advice's frames then disagree with what the egress attested."""
     if by not in (1, -1):
         raise ValueError("an output length one more (by = 1) or one less (by = -1)")
     q, steps = advice.requests[request], _plain(advice)
@@ -267,7 +267,7 @@ def output_length(advice, request: int = 0, by: int = 1):
 
 def missing_request(advice, request: int = -1):
     """Request `request` left out with its rows, the later requests' indices moved down: the advice serves one request
-    fewer than the ingress certified."""
+    fewer than the ingress attested."""
     i = range(len(advice.requests))[request]
 
     def moved(row):
@@ -283,7 +283,7 @@ def missing_request(advice, request: int = -1):
 def extra_request(advice, request: int = 0, suffix: str = "~extra"):
     """A request more: a copy of request `request` under another id, next to it in the requests' order, each of its
     rows right after the original's and each output released with the original's, so the advice is whole but serves
-    one request more than the ingress certified."""
+    one request more than the ingress attested."""
     i = range(len(advice.requests))[request]
     q = advice.requests[i]
 
@@ -304,7 +304,7 @@ def extra_request(advice, request: int = 0, suffix: str = "~extra"):
 def release_moved(advice, output: int = 0, by: int = 1):
     """Kept output `output`'s frame (the first by default) released `by` buckets later, and each output after it that
     was released before that bucket moved up to it, so the release stays in order. The advice's release disagrees
-    with the egress buckets certified."""
+    with the egress buckets attested."""
     if not advice.release:
         raise NotApplicable("the advice keeps no output")
     rel = list(advice.release)
@@ -421,7 +421,7 @@ def prompt_split(advice, request: int | None = None):
     else the first whose prompt is shorter, each prefilled to the other's length and decoded on from there
     (`_relaid`), the rest as served, so every output is honest's, released in its bucket. Where the two take different
     frames under the link's framing, the earlier one's end moves (down, for a longer first: phase 6's acausal release).
-    Either way the requests' frames are honest's, so only the tie of each request's prompt length to the certified
+    Either way the requests' frames are honest's, so only the tie of each request's prompt length to the attested
     ingress (IoTieRequest) refuses it."""
     qs, steps, why = advice.requests, _plain(advice), "no request's prompt length differs from the next one's"
     pairs = [range(len(qs) - 1)[request]] if request is not None else \
@@ -498,8 +498,8 @@ class Negative:
 
 
 NEGATIVES = {n.name: n for n in [
-    Negative("late", "io", "plan", "the shim holds a window-0 session past every sync; the certifier faults the window "
-             "and certifies none of it", "the certifier (it certifies no incomplete status)", ISSUER_REFUSED),
+    Negative("late", "io", "plan", "the shim holds a window-0 session past every sync; the network attester faults the window "
+             "and certifies none of it", "the network attester (it certifies no incomplete status)", ISSUER_REFUSED),
     Negative("extra", "io", "plan", "the shim writes one event more than the endpoint sent; certified",
              "N2's counts against the profile", f"{HEAD}.counts", served=SERVED),
     Negative("drop", "io", "plan", "the shim drops the first event of a response; certified",
@@ -565,7 +565,7 @@ def link_received(advice, request_frames, received: list[int]) -> list[int]:
     """`received` as a prover declares it beside `advice`: the request frames the advice's requests take under the
     link's framing (`request_frames[prompt_len − 1]` each) that `received` doesn't sum to go to its first window that
     receives any, as a prover that serves other requests than were received would declare them, so the advice's frames
-    are the windows' and only its tie to the certified ingress (`request_tie`) can refuse it."""
+    are the windows' and only its tie to the attested ingress (`request_tie`) can refuse it."""
     got = list(received)
     w = next((w for w, g in enumerate(got) if g > 0), 0)
     got[w] += sum(request_frames[q.prompt_len - 1] for q in advice.requests
@@ -597,7 +597,7 @@ def read_requests(path: Path) -> dict[str, dict]:
 
 def id_requests(advice, records: dict[str, dict] | None, frame_bytes: int, model: str = "") -> list[bytes]:
     """The id requests (`id_form.id_request` at `frame_bytes`-byte cells and offset 0, as the network attester's cells
-    carry them) of the advice's requests in its order, the ingress the network attester certified: each from its record
+    carry them) of the advice's requests in its order, the ingress the network attester attested: each from its record
     (`read_requests`: its prompt ids, user, and the
     max_tokens, temperature, top_p and seed it brought, a seed it brought none of 0, id requests' default), or, for a
     request without one, a prompt of its length of id 0 under its own id. Raises NotApplicable for a record whose
@@ -634,7 +634,7 @@ class Ingress(NamedTuple):
     T: int
 
 
-def certified_ingress(Q, requests: list[bytes], received: list[int], *, T: int, frame_bytes: int) -> Ingress:
+def attested_ingress(Q, requests: list[bytes], received: list[int], *, T: int, frame_bytes: int) -> Ingress:
     """The network attester's own ingress (`io_request.serve`) of `requests` (id requests at offset 0, in arrival
     order) at `frame_bytes`-byte cells, T ≥ 2 buckets a window, `len(received)` windows: each request in the window its
     first cell falls in when the windows take `received`'s request cells in order (the network attester's cut), the
@@ -683,8 +683,8 @@ def advice_suite(advice, *, T: int, request_frames, received: list[int], frame_b
     round-trips through I1's codec, its bits, and the ingress tie's verdict on it by window (``request_tie``):
     IoTieRequest's reference (`request_tie`) on the network attester's ingress at `frame_bytes`-byte cells, whose framing
     `request_frames` must be (`link_framing`), of the honest advice's id requests (`id_requests`, from `records` and
-    `model`), each window's the honest `received`'s (`certified_ingress`), since a tampering of the advice leaves the
-    certified ingress; ``IoTieRequest`` is among its codes when a window is refused. `ok`: the codes are exactly those
+    `model`), each window's the honest `received`'s (`attested_ingress`), since a tampering of the advice leaves the
+    attested ingress; ``IoTieRequest`` is among its codes when a window is refused. `ok`: the codes are exactly those
     it names, its code and `also`, that the ingress tie reads (none for a negative that only the I/O tie or the step
     unit refuses, whose requests are honest's)."""
     mod, Q = advice_module(), io_request_module()
@@ -692,7 +692,7 @@ def advice_suite(advice, *, T: int, request_frames, received: list[int], frame_b
         raise NotApplicable(f"no advice codec: {ADVICE_MODULE} (I1) isn't in this tree")
     if Q is None:
         raise NotApplicable(f"no ingress tie: {IO_REQUEST_MODULE} isn't in this tree")
-    cells = certified_ingress(Q, id_requests(advice, records, frame_bytes, model),
+    cells = attested_ingress(Q, id_requests(advice, records, frame_bytes, model),
                               link_received(advice, request_frames, received), T=T, frame_bytes=frame_bytes)
 
     def judged(b) -> dict:
@@ -809,7 +809,7 @@ def tie_schedule(advice, slots: int | None = None) -> tuple[list[int], int]:
     holds a bucket (`slots`, or by default the most outputs a request releases in its first release bucket), with no
     delay: request i is admitted at its first kept output's release bucket, a request that keeps none at the one before
     it (bucket 0 for the first). The admissions are the network attester's wiring, which the verifier takes from the
-    certified record, so every tampering of the advice is read against the honest advice's."""
+    attested record, so every tampering of the advice is read against the honest advice's."""
     first: dict[int, int] = {}
     there: dict[int, int] = {}
     for (_, _, q, _), b in zip(_kept(advice.requests, _plain(advice)), advice.release):

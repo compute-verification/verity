@@ -28,7 +28,7 @@ from verity_config.settings import of
 
 settings = of(__file__)
 HERE = Path(__file__).resolve().parent
-CARD_FILES = HERE.parents[2] / "hardware/cards"
+CARD_FILES = HERE.parents[2] / "calibration/hardware/cards"
 TILES = ((128, 256), (128, 128), (128, 64), (64, 256), (64, 128), (64, 64))
 BK, SMEM_BUDGET, MAX_STAGES = 128, 220 * 1024, 12
 #: CUtensorMapDataType UINT8, CUtensorMapSwizzle 128B, CUtensorMapL2promotion 128B; CUfunction_attribute
