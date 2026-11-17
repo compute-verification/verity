@@ -41,7 +41,7 @@ import Proofs.Flock.Claims.ZK.LinkRecheck
 
 The finish on the session loop's frames port reads table `i`'s level-0 commitment off the loop's `Level0`
 (`Finish.commitOf`) instead of committing it again (`Finish.commit0`, `flock-zk-server finish`'s `table` path). Here the
-two are one, wherever the loop sampled that `Level0` (`Level0.ofSamples`):
+two are one, wherever the loop drew that `Level0` (`Level0.ofSamples`):
 
 * `commitRowsP_tree`: through `Hashes` whose node and leaf are functions, `FlockComplete.commitRowsP` returns, its
   layers are the tree's layers from the leaves to the cap and its cap the top one (`commitRowsP_cap_eq`'s, with the

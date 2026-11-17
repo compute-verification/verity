@@ -51,7 +51,7 @@ import Proofs.Flock.VBridge.Pinned
 # Check 5's `dirs` tie at the deployed run
 
 `CopyDirsR` asks that a `rec-open` piece's copy hold, at its position columns (`idxCol`), the `dirs` row of the
-position the verifier sampled (`DirsTie`). Check 5 (`RecCoins.checkOpen`, at the statement's recursive setup) holds each
+position the verifier drew (`DirsTie`). Check 5 (`RecCoins.checkOpen`, at the statement's recursive setup) holds each
 instance's public commit string of port `dirs` to `commitRow` of the verifier's own row `openDirs` under `verifierSalt`,
 and `DeployedR.layR` records the part's hm96 calls at `dirs` (`openPorts`, `portCalls_sub_layR_open`), whose verifier
 evaluations are `openSetupSt`. So `port_tie` gives the part's `dirs` bytes as the verifier's row, at every instance of
