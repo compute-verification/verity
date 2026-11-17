@@ -24,7 +24,7 @@ PoUW's verdict on the served run credits nothing. The challenger's gate holds a 
 run is a development run. And an H1 commitment's served execution blocks aren't yet a `verity/pouw/period/v1` case, the form
 remote's PoUW subprotocol reads. So the remote verdict can't accept on this run yet, and the run's record stays `pending`.
 
-Its run is `moved` (`demos/README.md`, `remote.toml`'s row): it has no passing run of record. Its proof level
+Its run is `moved` (`applications/README.md`, `remote.toml`'s row): it has no passing run of record. Its proof level
 is none. SPOT's guarantee, `Flock.Guarantees.SampledKSLiveV3`, is proved: when the verifier accepts a `--zk`
 session, the committed trace is outside the sampling relation with probability at most δ plus the proof system's
 errors. But the remote protocol's composed theorem, `Verity.remote_soundness_of_subprotocols`, takes its three subprotocols'
@@ -149,7 +149,7 @@ run starts. FLAGs go to the recorder (`--timeout 200m` to end with the row); `--
    none, after the node's env files (`env_files`, each mode 600) are read and each `${NAME}` they or the environment
    set is filled in, the INT8 pin linked and the venv's CUDA headers found. The window run's `served_verdicts.sh` runs
    so. A demo's command takes no bindings: every party runs on node A, the challenger with coins of its own. For a run
-   on the auditor's coins, `uv run bash run.sh bindings demos/X.toml` prints `verity run --bindings` for that demo:
+   on the auditor's coins, `uv run bash run.sh bindings applications/X.toml` prints `verity run --bindings` for that demo:
    node A's `bindings` values, each to every party whose piece reads its key, the addresses such `${NAME}`s.
 
 The scripts reach the integration by `PYTHONPATH`, which holds the tree and `adapters/vllm`, and run
