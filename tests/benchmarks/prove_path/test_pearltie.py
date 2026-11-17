@@ -46,7 +46,6 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import re
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -68,7 +67,6 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c im
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import HM96, HM96_WEIGHTS, Workload, activation_binding, commit_rows, weight_binding
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registered as G, docket as REG
-from verity.circuits import partition_object as PO
 from verity.circuits.codec import canonical_json
 from verity.circuits.evaluation import evaluate_batch
 from verity.commitments.periods import interface as IF, rows as CS
@@ -286,27 +284,6 @@ def test_a_w_whose_root_isnt_the_credited_one_is_refused_and_its_row_is_off_its_
     x = toy.slots[0].operand(toy.low.fn.body.nodes[j].args[0])
     got = np.asarray(evaluate_batch(toy.rows.fns[tid], x[None])).astype("<u4").view("<u2").reshape(-1)
     assert np.array_equal(got, toy.pearl[FLIP[0]][FLIP[1]]) and not np.array_equal(got, flipped.pearl[FLIP[0]][FLIP[1]])
-
-
-@pytest.mark.slow
-def test_the_cut_circuits_wired_record_names_its_wired_program_and_neither_reader_nor_window_takes_it_yet(toy):
-    """With ``wired`` the cut circuit's descriptor record names its one wired Program and partition, its wires and
-    registered reads the population record's: each call's A rows an output read of a `LinearARow_v3`'s ``o0``, its y an
-    input read of a `LinearOut_v3`'s ``y``. `window_of_record` refuses it by name (`WIRED_UNREAD`), and a period of the
-    cut circuit under its wired Program is refused by name (`WIRED_MEMBERS`): its converter batches have no members yet."""
-    c = toy.low.circuit
-    plain, wired, part = IF.descriptor_record(c, 64), IF.descriptor_record(c, 64, wired=True), PO.build(*c.wired_program())
-    assert (wired["program"], wired["partition"]) == (part["program"], PO.digest(part))
-    assert part["program"] != plain["program"] and PO.digest(part) != plain["partition"]
-    assert wired["wires"] == plain["wires"] and wired["registered"] == plain["registered"] and wired["wires"]
-    assert {(r["param"].split("/")[0], r["reader"].split("{")[0], r["port"]) for r in wired["registered"]["reads"]
-            if r["param"].startswith("pearl-")} == {("pearl-a", "LinearARow_v3", "o0"), ("pearl-y", "LinearOut_v3", "y")}
-    with pytest.raises(ValueError, match=f"^the circuit record {re.escape(IF.WIRED_UNREAD)}$"):
-        IF.window_of_record({**wired, "run": RUN, "context": ""}, SAMPLING_DESIGN, WT.catalog_resolve)
-    with pytest.raises(ValueError, match=re.escape(IF.WIRED_MEMBERS) + r" \(here .*WordBits"):
-        IF.window_program(c, wired=True)
-    with pytest.raises(ValueError, match=re.escape(IF.WIRED_MEMBERS)):
-        IF.Window(c, RUN, SAMPLING_DESIGN, 64, registered={**toy.values, **_reuse(toy, toy.W)}, forms=WRS.FORMS, wired=True)
 
 
 @pytest.fixture(scope="module")

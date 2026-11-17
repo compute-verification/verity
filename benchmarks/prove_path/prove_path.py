@@ -1471,7 +1471,7 @@ def window_circuit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     except Unexpressible as e:
         raise ValueError(f"I2's window circuit refuses the advice: {e}") from None
     lowered = time.time() - t0
-    doc = circuit.description() if a.description else IF.descriptor_record(circuit, a.cap, wired=getattr(a, "wired", False))
+    doc = circuit.description() if a.description else IF.descriptor_record(circuit, a.cap)
     Path(a.out).write_bytes(IF.circuit_bytes(doc))
     c = AW.codec_of()
     roots = registration_roots(json.loads((Path(a.serve_run) / "advice" / f"w{a.window}" / "registration.json").read_text()))
@@ -1521,7 +1521,7 @@ def class_circuit_of_serve(a: argparse.Namespace) -> dict[str, Any]:
     except Unexpressible as e:
         raise ValueError(f"I2's class circuit refuses φ: {e}") from None
     lowered = time.time() - t0
-    doc = circuit.description() if a.description else IF.descriptor_record(circuit, a.cap, wired=getattr(a, "wired", False))
+    doc = circuit.description() if a.description else IF.descriptor_record(circuit, a.cap)
     Path(a.out).write_bytes(IF.circuit_bytes(doc))
     return {"count": IF.input_count(doc, pins=pins), "seconds": {"circuit": round(lowered, 1),
                                                                   "record": round(time.time() - t0 - lowered, 1)}}
@@ -1687,16 +1687,15 @@ def h1_tie(a: argparse.Namespace, cls: Any, key: bool = True) -> tuple[dict[str,
     return w, meta, WC.Tables(*CT.shape(meta["layout"], int(meta["steps"])))
 
 
-def window_design(rule: str, circuit: IF.Circuit, wired: bool = False) -> dict[str, Any]:
+def window_design(rule: str, circuit: IF.Circuit) -> dict[str, Any]:
     """The sampling design a window of ``circuit`` is committed under (``window-commit --sampling-design``): the one the rate ``rule``,
     which the window's audit states to its stream, names over the circuit's proof blocks (`service.params_sampling_design`), so the
     window registers the design the stream holds it to. A fixed count is refused by name (`service.SamplingDesign`): no stream
-    takes it, and the audit would hold the window to another design. With ``wired``, over its wired Program
-    (`interface.window_program`, which refuses a circuit whose members wait on it)."""
+    takes it, and the audit would hold the window to another design."""
     from verity.protocols.proofs.spot.verifier import service as S
 
     S.SamplingDesign(rule)
-    program, query = IF.window_program(circuit, wired)
+    program, query = circuit.program()
     return dict(S.params_sampling_design(rule, program, query, None)[0])
 
 
@@ -1820,7 +1819,6 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
         low = WC.lower(registered, cls, tables=tables)
     except Unexpressible as e:
         raise ValueError(f"I2's window circuit refuses the advice: {e}") from None
-    design = window_design(a.sampling_design, low.circuit, getattr(a, "wired", False))
     lap("lower")
     r = record1(str(a.bundle), str(a.row_dir))
     run = bytes(r.run.run_root).hex()
@@ -1880,7 +1878,7 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
         values |= PWR.reuse(pw, manifests, filled.value, rounds)
         previous = R.digest(pw)
     lap("rows")
-    win = IF.Window(low.circuit, run, design, a.cap, registered=values, forms=WRS.FORMS, wired=getattr(a, "wired", False))
+    win = IF.Window(low.circuit, run, window_design(a.sampling_design, low.circuit), a.cap, registered=values, forms=WRS.FORMS)
     win.supply(CR)
     filled.record(win)
     lap("record")
@@ -2125,10 +2123,6 @@ def main(argv: list[str] | None = None, kept_ingress: KeptIngress | None = None,
     sub.choices["window-circuit"].add_argument("--pearl-tables", metavar="SCHEME", help="the circuit cut at its linears, "
                                                "as a window tied to Pearl+'s W under PoUW scheme SCHEME commits it "
                                                "(`window_class.PearlTables`)")
-    for name in ("window-circuit", "class-circuit", "window-commit"):
-        sub.choices[name].add_argument("--wired", action="store_true", help="the record names the circuit's wired Program "
-                                       "(`interface.Circuit.wired_program`), which no reader reads yet; window-commit "
-                                       "refuses a circuit whose members wait on it (`interface.WIRED_MEMBERS`)")
     for name in ("window-circuit", "class-circuit", "class-size", "window-commit"):
         sub.choices[name].add_argument("--class", dest="window_class", help="the window class SLOTS,PROMPT,OUTPUTS[,LANES,"
                                        "EVERY] (`window_circuit.WindowClass`; by default `CLASS_OF_RECORD`, 8,1024,64,4,16)")

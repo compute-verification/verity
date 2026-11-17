@@ -134,7 +134,6 @@ from verity.circuits.codec import canonical_json, descriptor_id
 from verity.circuits.defs import (CATALOG_PACKAGES, REGISTRY, CompositeDefinition, PrimitiveDefinition, SpecializedDefinition,
                                   bind)
 from verity.circuits.evaluation import evaluate_batch
-from verity.circuits.population import wired_population_program
 from verity.circuits.types import Array
 from verity.commitments import advice as AC, history as HT
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
@@ -1675,9 +1674,6 @@ class Circuit:
         (`rows.population_program`, `program_values`)."""
         return CS.population_program(list(self.templates), values=program_values(self.registered))
 
-    def wired_program(self) -> tuple[Any, dict[str, Any]]:
-        return wired_population_program(list(self.templates), {**self.description(), "external": list(self.external)})
-
     def template(self, tid: str) -> Any:
         """The template of descriptor id ``tid``."""
         if (got := self._by_id.get(tid)) is None:
@@ -2170,15 +2166,13 @@ def listed_reads(members: Sequence[CS.Member], templates: Sequence[Sequence[Any]
     return out
 
 
-def descriptor_record(circuit: Circuit, cap: int, wired: bool = False) -> dict[str, Any]:
+def descriptor_record(circuit: Circuit, cap: int) -> dict[str, Any]:
     """``circuit``'s ``circuit.json`` less its `RUN_FIELDS` (`circuit_of`) but ``cap``, from its description alone: what a
     compiler emits before any unit runs, at the cap its members are stated by. Its partition is the one `members` tiles, its
-    members stated by ``cap``, its wires and its cuts, so building it is work per template and per wire, never per unit.
-    With ``wired``, the record names the wired Program (`Circuit.wired_program`) and its partition, which `window_of_record`
-    refuses (`WIRED_UNREAD`)."""
+    members stated by ``cap``, its wires and its cuts, so building it is work per template and per wire, never per unit."""
     if isinstance(cap, bool) or not isinstance(cap, int) or cap < 1:
         raise ValueError(f"a statement holds at least one unit, not {cap!r}")
-    program, query = circuit.wired_program() if wired else circuit.program()
+    program, query = circuit.program()
     part = PO.build(program, query)
     sts, seg = {}, seg_ports(circuit.registered)
     for fn, tid in zip((f for f, _ in circuit.templates), circuit.ids):
@@ -2190,42 +2184,6 @@ def descriptor_record(circuit: Circuit, cap: int, wired: bool = False) -> dict[s
            **({"boundary": circuit.boundary} if circuit.boundary is not None else {}),
            **({"blocks": circuit.blocks.doc(sum(circuit.units.values()), PO.digest(part))} if circuit.blocks else {})}
     return {**circuit_of(json.loads(circuit_bytes(doc))), "cap": cap}
-
-
-#: why a reader of the population Program refuses a record naming its wired Program (`names_wired`)
-WIRED_UNREAD = "names its wired Program, which this reader does not read yet"
-#: why a period isn't committed under its wired Program (`window_program`)
-WIRED_MEMBERS = ("a period under its wired Program waits on members cut over that Program's ranges: its converter batches "
-                 "(WordBits, BitsWord) and its order's ranges need members of their own")
-
-
-def names_wired(doc: Mapping[str, Any], defs: Sequence[tuple[Any, int]]) -> bool:
-    """Whether circuit record ``doc`` over ``defs`` names its wired Program (`wired_population_program`): work per unit,
-    so only on a record already refused."""
-    if "wires" not in doc:
-        return False
-    try:
-        return PO.build(*wired_population_program(list(defs), doc))["program"] == doc.get("program")
-    except (ValueError, KeyError, TypeError):
-        return False
-
-
-def _ranges(built: tuple[Any, Mapping[str, Any]]) -> list[tuple[str, int, int]]:
-    return [(t, lo, n) for _k, t, lo, n in CS.template_partition(*built).ranges]
-
-
-def window_program(circuit: Circuit, wired: bool = False) -> tuple[Any, dict[str, Any]]:
-    """The Program and query a period of ``circuit`` is committed under: its population Program, or with ``wired`` its
-    wired Program, refused (ValueError, `WIRED_MEMBERS`) where that Program's template ranges aren't the population's,
-    the ones `members` cuts."""
-    population = circuit.program()
-    if not wired:
-        return population
-    got = circuit.wired_program()
-    if _ranges(got) != _ranges(population):
-        extra = sorted({t for t, _, _ in _ranges(got)} - set(circuit.ids))
-        raise ValueError(f"{circuit.name}: {WIRED_MEMBERS}" + (f" (here {', '.join(extra)})" if extra else ""))
-    return got
 
 
 def templates_of(w: CS.Binding) -> list[tuple[str, int]]:
@@ -2486,8 +2444,6 @@ def window_of_record(doc: Mapping[str, Any], sampling_design: Mapping[str, Any],
     w = CS.Binding(program, query, dict(sampling_design), doc["run"], ms, tables, doc["context"], doc["work_table"])
     got = {"query": dict(query), "program": w.partition["program"], "partition": w.partition_digest}
     if bad := sorted(k for k, v in got.items() if v != doc[k]):
-        if names_wired(doc, defs):
-            raise ValueError(f"the circuit record {WIRED_UNREAD}")
         raise ValueError(f"the circuit record's {bad} are not the ones its templates make: {got}")
     if not stated:
         ingress = window_ingress(doc)
@@ -2531,8 +2487,7 @@ class Window:
     ``one_stage.registered.Registered`` (rows of the reading port's words, its salts the prover's; a table's in its
     opening's row format), which the verifier pinned by its entry, and its tables' supplied values (`supply`); ``forms``,
     the forms of unit the integration's lowering has, which a label's ``form`` names (`record`). Each template's units are
-    `record`ed in order, then `close` commits them and `write` writes and registers the period. With ``wired``, the period
-    is committed under its wired Program (`window_program`)."""
+    `record`ed in order, then `close` commits them and `write` writes and registers the period."""
     circuit: Circuit
     run: str
     law: Mapping[str, Any]
@@ -2541,7 +2496,6 @@ class Window:
     registered: Mapping[str, Any] | None = None
     work_table: Mapping[str, Any] | None = None
     forms: tuple[str, ...] = ()
-    wired: bool = False
     window: CS.Binding = field(init=False)
     _recorded: dict[str, list[_Recorded]] = field(init=False, default_factory=dict)
     _entries: dict[str, dict[str, Any]] = field(init=False, default_factory=dict)
@@ -2570,7 +2524,7 @@ class Window:
             if got is not None and got != (h.program, h.name, h.words, h.capacity):
                 raise ValueError(f"history {h.name!r}: committed as (program, table, words, capacity) {got}, not its "
                                  f"declaration's {(h.program, h.name, h.words, h.capacity)}")
-        program, query = window_program(self.circuit, self.wired)
+        program, query = self.circuit.program()
         self.window = CS.Binding(program, query, dict(self.law), self.run, members(self.circuit, self.cap, (program, query)),
                                 work_table=None if self.work_table is None else dict(self.work_table))
         if self.advice is not None:

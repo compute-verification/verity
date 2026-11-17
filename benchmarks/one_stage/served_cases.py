@@ -584,8 +584,7 @@ def parameters(desc: Mapping[str, Any], root: Any, given: Any = None) -> list[li
                 return got
     raise Refused("v1's Program isn't the population program over its root's templates"
                   + (" and the values its params' parameters name" if values else "")
-                  + ", so its program function's parameters aren't known (a record naming its wired Program is not read "
-                    "here yet)")
+                  + ", so its program function's parameters aren't known")
 
 
 def inference_only_case(v1: Mapping[str, Any], alpha: Fraction | int | str, gamma: int,

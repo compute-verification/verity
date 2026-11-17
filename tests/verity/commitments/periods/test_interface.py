@@ -1065,61 +1065,6 @@ def test_a_period_commits_a_cut_ports_rows_each_under_its_writers_salt():
         bad.close(salt_key=bytes(32))
 
 
-#: `sliced`'s rows no wire fills, open to the run
-OPEN = (f"{G8ID}/x", f"{G8ID}/w", f"{GID}/w")
-
-
-def test_a_wired_descriptor_record_names_the_wired_program_and_without_it_the_record_is_todays():
-    """With ``wired`` the descriptor record names the one wired Program and its partition, every other field the record's;
-    without it the record is the default's byte for byte."""
-    c = sliced(external=OPEN)
-    plain, wired, part = I.descriptor_record(c, 2), I.descriptor_record(c, 2, wired=True), PO.build(*c.wired_program())
-    assert I.circuit_bytes(I.descriptor_record(c, 2, wired=False)) == I.circuit_bytes(plain)
-    assert (wired["program"], wired["partition"]) == (part["program"], PO.digest(part))
-    assert part["program"] != plain["program"] and PO.digest(part) != plain["partition"]
-    rest = lambda d: {k: v for k, v in d.items() if k not in ("program", "partition")}  # noqa: E731
-    assert rest(wired) == rest(plain) and wired["wires"] == [w.doc() for w in c.wires]
-
-
-def test_a_reader_of_the_population_program_refuses_a_wired_record_by_name():
-    """`window_of_record` refuses a record naming its wired Program in words (`WIRED_UNREAD`), and any other Program by
-    digest."""
-    rec = {**I.descriptor_record(sliced(external=OPEN), 2, wired=True), "run": RUN, "context": ""}
-    with pytest.raises(ValueError, match=f"^the circuit record {re.escape(I.WIRED_UNREAD)}$"):
-        I.window_of_record(rec, SAMPLING_DESIGN, I.resolve)
-    with pytest.raises(ValueError, match=r"\['partition', 'program'\] are not the ones its templates make"):
-        I.window_of_record({**rec, "program": "00" * 64}, SAMPLING_DESIGN, I.resolve)
-
-
-def test_a_period_whose_wired_program_has_its_templates_ranges_commits_under_it():
-    """A period of a circuit whose wired Program has the population's template ranges (no converter, no order) is committed
-    under the wired Program with ``wired``: the same members, its record the wired descriptor record's, and every port's
-    root under the wired Program's partition."""
-    c, (ins8, outs8, ins, outs) = sliced(external=OPEN), sliced_values()
-    part, got = PO.build(*c.wired_program()), {}
-    for wired in (False, True):
-        win = I.Window(c, RUN, SAMPLING_DESIGN, 2, wired=wired)
-        win.record(G8, ins8, outs8)
-        win.record(GEMM, ins, outs)
-        got[wired] = (win, win.close(salt_key=bytes(32)))
-    (plain, pc), (win, wc) = got[False], got[True]
-    assert [m.key for m in win.window.members] == [m.key for m in plain.window.members]
-    doc = json.loads(I.circuit_bytes(win.circuit_record()))
-    assert (doc["program"], doc["partition"]) == (part["program"], PO.digest(part)) != (plain.window.partition["program"],
-                                                                                       plain.window.partition_digest)
-    assert I.circuit_of(doc) == I.circuit_of(I.descriptor_record(c, 2, wired=True))
-    assert wc.roots.keys() == pc.roots.keys() and all(wc.roots[p] != pc.roots[p] for p in pc.roots)
-
-
-def test_a_period_whose_wired_program_batches_otherwise_is_refused_by_name():
-    """A circuit whose wired Program's template ranges aren't its templates' (here its order's) waits on members cut over
-    that Program: ``wired`` refuses it by name (`WIRED_MEMBERS`), never with a KeyError."""
-    c = sliced(external=OPEN, order=((G8ID, 0, 2), (G8ID, 2, 4), (GID, 0, 3)))
-    with pytest.raises(ValueError, match=re.escape(I.WIRED_MEMBERS)):
-        I.Window(c, RUN, SAMPLING_DESIGN, 2, wired=True)
-    assert I.Window(c, RUN, SAMPLING_DESIGN, 2).window.partition_digest == PO.digest(PO.build(*c.program()))
-
-
 def latent(n: int = 6, at: int = 0, capacity: int = 16, **edit) -> I.History:
     """History table ``latent``: `sliced`'s six ``Gemm_v2{K=16, N=8}`` outputs, unit u at position ``at + u``, after ``at``
     rows the verifier holds from the table's earlier periods."""
