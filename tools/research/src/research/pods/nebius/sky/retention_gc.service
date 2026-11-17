@@ -9,6 +9,8 @@
 # with terabytes collectable while the fill runner holds every queued run. Never inside a timed window on node 2, like the
 # store eviction (store_evict_timed.conf): deleting a few TB competes with a timed measurement for the disk. A pass takes the
 # unpreserved runs (`--unpreserved-runs`) only where VY_GC_UNPRESERVED_RUNS is 1 (retention_gc_unpreserved.conf).
+# It takes the preserved runs whose files custody trimmed (`--partly-stored-runs`) only where VY_GC_PARTLY_STORED_RUNS is 1
+# (retention_gc_partly_stored.conf).
 [Unit]
 Description=retention gc: delete expired research paths while /workspace is over 80%
 
@@ -20,4 +22,4 @@ IOSchedulingClass=idle
 Environment=RESEARCH_STORE=/workspace/research/store
 Environment=VY_RESEARCH_TOOL=/usr/local/lib/vy-monitoring/clean-up
 ExecCondition=/bin/sh -c '! grep -qs "timed True" /workspace/pouw/fill/status.txt'
-ExecStart=/bin/sh -c 'T=$(readlink -e -- "$VY_RESEARCH_TOOL" 2> /dev/null); if [ -z "$T" ] || [ ! -d "$T/research" ]; then echo "vy-retention-gc: no research package at VY_RESEARCH_TOOL ($VY_RESEARCH_TOOL), where research deploy install places the copy of main; nothing was deleted" >&2; exit 1; fi; echo "vy-retention-gc: research from $T" >&2; F=; [ "$VY_GC_UNPRESERVED_RUNS" = 1 ] && F=--unpreserved-runs; cd "$T" && PYTHONPATH="$T" exec timeout 3000 python3 -m research retention gc --apply $F'
+ExecStart=/bin/sh -c 'T=$(readlink -e -- "$VY_RESEARCH_TOOL" 2> /dev/null); if [ -z "$T" ] || [ ! -d "$T/research" ]; then echo "vy-retention-gc: no research package at VY_RESEARCH_TOOL ($VY_RESEARCH_TOOL), where research deploy install places the copy of main; nothing was deleted" >&2; exit 1; fi; echo "vy-retention-gc: research from $T" >&2; F=; [ "$VY_GC_UNPRESERVED_RUNS" = 1 ] && F=--unpreserved-runs; [ "$VY_GC_PARTLY_STORED_RUNS" = 1 ] && F="$F --partly-stored-runs"; cd "$T" && PYTHONPATH="$T" exec timeout 3000 python3 -m research retention gc --apply $F'

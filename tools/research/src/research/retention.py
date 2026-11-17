@@ -5,7 +5,9 @@
     research keep show PATH [--root R]
     research retention report [--root R] [--depth N] [--json]
     research retention gc [--root R] [--policy default] [--high-pct 80] [--low-pct 75] [--force] [--max-paths 200] [--jobs-dir D]...
-                          [--store S] [--unpreserved-runs] [--launcher-copies] [--json] [--apply]
+                          [--store S] [--unpreserved-runs] [--partly-stored-runs] [--launcher-copies] [--json] [--apply]
+    research retention partly-stored [--root R] [--store S] [--json]
+    research retention lost [--root R] [--json]
     research retention rm PATH... --approved-by @OWNER --ref REF [--by URL] [--root R] [--jobs-dir D]... [--store S] [--json] [--apply]
 
 A record is a sidecar: `<dir>/.retention.json` for a directory, `<file>.retention.json` beside a file, so it travels with its data
@@ -100,10 +102,15 @@ passes over it, as custody does (`custody.run_files`). It keeps the path on `unc
 file now under the path at its size, so files custody trimmed never count as stored, whatever the remote says; the check answers
 it only when the remote would otherwise have let the path go), except a preserved run's under its implicit record (`.custody`):
 custody marked it preserved with those files only listed, so they are its only copy, as a never-stored run's directory is, and
-gc deletes it under --unpreserved-runs once UNPRESERVED_RUN_EXPIRY (7 days) has passed since custody verified the run (its marker's
-`verified_utc`, which its record's expiry is RUN_EXPIRY after; never the last write, which the store eviction moves when it
-removes the stored files), and lists it with that date and how to keep it until then; its line says how many bytes of it were
-stored nowhere else, and the plan's `trimmed` counts such runs apart. A run with a sidecar keep record is never one. It keeps the path on `mismatch` (the remote's copy is not the artifact's, or a blob is absent that neither
+gc deletes it under --partly-stored-runs once UNPRESERVED_RUN_EXPIRY (7 days) has passed since custody verified the run (its
+marker's `verified_utc`, which its record's expiry is RUN_EXPIRY after; never the last write, which the store eviction moves when
+it removes the stored files), and lists it with that date and how to keep it until then; its line says how many bytes of it were
+stored nowhere else, and the plan's `trimmed` counts such runs apart. Before it deletes one it appends the run's `loss_record` to
+the deletion log, `<root>/LOG` (the run, when custody preserved it, each path it lacks with its size), and a log it can't write
+keeps the run; `research retention lost` lists those lines, and `research retention partly-stored` lists, by owner, the runs a
+pass would take (a dry run). A run with a sidecar keep record is never one, and neither is one whose record lacks a file custody
+always uploads (its own, out/ or --declared-output: `declared_lost`): that is custody's failure, which a pass reports as
+CUSTODY_FAILED and exits 1 on. It keeps the path on `mismatch` (the remote's copy is not the artifact's, or a blob is absent that neither
 rule explains), on `unknown` (the remote has no manifest for it: it never stored it) and on `unreachable` (the remote, or with none
 this store, could not be asked), and an `unreachable` fails the pass (exit 1). Every --apply reports how many of each it found.
 
@@ -126,6 +133,7 @@ default) deletes and logs nothing.
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import fcntl
 import json
 import math
@@ -884,11 +892,12 @@ def covers(man: Any, path: Path, launcher: bool = False, out: list[tuple[str, in
 @dataclass(frozen=True)
 class Stored:
     """A remote check's answer for one preserved path: `state`, one of STORED, and `why` in words. An `uncovered` answer also
-    counts the files the artifact lacks and their bytes, which are stored nowhere else."""
+    counts the files the artifact lacks and their bytes, which are stored nowhere else, and lists each (path, bytes)."""
     state: str
     why: str
     lost_files: int = field(default=0, compare=False)
     lost_bytes: int = field(default=0, compare=False)
+    lost: tuple[tuple[str, int], ...] = field(default=(), compare=False)
 
 
 def store_check(store_root: str | None = None, now: Callable[[], datetime] = utc_now) -> Callable[[str, Path], Stored]:
@@ -909,7 +918,7 @@ def store_check(store_root: str | None = None, now: Callable[[], datetime] = utc
         lost: list[tuple[str, int]] = []
         found = held(art, path, lacking, lost)
         if lacking and found.state in COLLECTED:
-            return Stored("uncovered", lacking[0], len(lost), sum(n for _, n in lost))
+            return Stored("uncovered", lacking[0], len(lost), sum(n for _, n in lost), tuple(lost))
         return found
 
     def held(art: str, path: Path, lacking: list[str], lost: list[tuple[str, int]]) -> Stored:
@@ -1087,7 +1096,7 @@ def _lost(found: Stored) -> str:
     return f"{_size(found.lost_bytes)} stored nowhere else ({found.why})"
 
 
-def _uncovered_wait(row: Row, path: Path, found: Stored, now: datetime, unpreserved: bool) -> str | None:
+def _uncovered_wait(row: Row, path: Path, found: Stored, now: datetime, partly_stored: bool) -> str | None:
     """Why gc keeps a preserved run whose run record lacks files custody trimmed (`uncovered`), or None once it may go."""
     until, days = uncovered_until(row.record), UNPRESERVED_RUN_EXPIRY // timedelta(days=1)
     lack = f"custody trimmed {_lost(found)} from its run record {row.record['preserved']}"
@@ -1095,9 +1104,49 @@ def _uncovered_wait(row: Row, path: Path, found: Stored, now: datetime, unpreser
             f"(--declared-output)")
     if now < until:
         return (f"{lack}: it goes {fmt_utc(until)}, {days} d after custody verified the run"
-                + ("" if unpreserved else ", under --unpreserved-runs") + keep)
-    if not unpreserved:
-        return f"{lack}: its {days} d after custody verified the run are over, and only --unpreserved-runs deletes it{keep}"
+                + ("" if partly_stored else ", under --partly-stored-runs") + keep)
+    if not partly_stored:
+        return f"{lack}: its {days} d after custody verified the run are over, and only --partly-stored-runs deletes it{keep}"
+    return None
+
+
+def declared_lost(path: Path, found: Stored) -> list[str]:
+    """The files of `found.lost` that custody uploads whatever their size (out/, its $OUT, and the run's --declared-output globs,
+    `custody.declared_globs`): a run record lacking one is custody's failure, never a trim."""
+    globs = CU.declared_globs(path)
+    return [rel for rel, _ in found.lost if CU.is_run_file(rel) or any(fnmatch.fnmatchcase(rel, g) for g in globs)]
+
+
+CUSTODY_FAILED = "CUSTODY FAILED"
+
+
+def _custody_failed(row: Row, path: Path, found: Stored, declared: list[str]) -> str:
+    return (f"{CUSTODY_FAILED}: its run record {row.record['preserved']} lacks {len(declared)} file(s) custody always uploads (its own, "
+            f"out/ or --declared-output), e.g. {declared[0]}, so no rule deletes it: publish it again, `research data custody "
+            f"{path.name} --publish`, or keep it, `research keep {path} --owner @LANE --expires DATE --priority P`")
+
+
+LOSS_RULE = "partly-stored"
+
+
+def loss_record(row: Row, found: Stored, now: datetime, node: str) -> dict[str, Any]:
+    """The deletion log's line gc appends before it deletes a run whose files custody trimmed: the run, when custody preserved it,
+    and each path it lacks with its size, the bytes nothing else holds (`research retention lost` lists them)."""
+    return {"schema": LOG_SCHEMA, "t": fmt_utc(now), "node": node, "by": "research retention gc", "action": "delete", "path": row.path,
+            "rule": LOSS_RULE, "owner": row.record.get("owner"), "files": found.lost_files, "bytes": found.lost_bytes, "age_h": None,
+            "preserved": row.record["preserved"], "preserved_utc": fmt_utc(uncovered_until(row.record) - UNPRESERVED_RUN_EXPIRY),
+            "lost": [{"path": rel, "bytes": n} for rel, n in found.lost],
+            "reason": f"custody trimmed {found.lost_files} file(s), {_size(found.lost_bytes)}, which no other copy holds"}
+
+
+def _append_log(log_path: Path, line: dict[str, Any]) -> str | None:
+    """None once `line` is in the deletion log; else why it could not be written."""
+    try:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(log_path, "a") as fh:
+            fh.write(json.dumps(line) + "\n")
+    except OSError as e:
+        return f"can't write the deletion log {log_path} ({e.strerror or e}), so nothing would record what it loses"
     return None
 
 
@@ -1250,18 +1299,22 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
        remote_check: Callable[[str, Path], Stored] | None = None, in_use: Callable[[Path], str | None] | None = None,
        node: str | None = None, store_root: str | None = None,
        inodes: Callable[[Path], tuple[int, int]] | None = None, max_paths: int | None = None,
-       unpreserved: bool = False, launcher: bool = False, copy_check: Callable[[Path], Stored] | None = None) -> dict[str, Any]:
+       unpreserved: bool = False, launcher: bool = False, copy_check: Callable[[Path], Stored] | None = None,
+       partly_stored: bool = False) -> dict[str, Any]:
     """The policy (module docstring) over `root`: the plan, and with `apply` its deletions. `jobs_dirs` None means the
     DEFAULT_JOBS_DIRS that exist; `remote_check` None is `store_check(store_root, now)`; `in_use` None is `JobScripts(jobs_dirs)`;
     `inodes` (`inode_usage`) makes the filesystem's use the larger of its blocks' and its inodes', None its blocks' alone;
     `max_paths` limits the paths this pass deletes, None not at all; `unpreserved` (--unpreserved-runs) lets it delete the
-    unpreserved runs, which it otherwise lists and leaves; `launcher` (--launcher-copies) gives the launchers' copies of runs
+    unpreserved runs, which it otherwise lists and leaves; `partly_stored` (--partly-stored-runs) the preserved runs whose files
+    custody trimmed, once UNPRESERVED_RUN_EXPIRY has passed since custody verified them, each after its `loss_record` is in the
+    deletion log; `launcher` (--launcher-copies) gives the launchers' copies of runs
     their records and holds the pass to them: an --apply deletes one only on `copy_check`'s answer (None is
     `launcher_check(now)`), and every other path the pass would have taken is listed as left (ONLY_LAUNCHER). The plan's
     `stored` counts the remote checks' answers (STORED) over the paths an --apply asked about, `capped` the paths the limit left
     for the next pass, and `unpreserved` the unpreserved runs, apart from every other path (`unpreserved_runs`), with the
     `deleted` ones this pass deleted, or in a dry run would. `trimmed` counts the preserved runs whose files custody trimmed
-    (`uncovered`) apart again: those deleted, with the `files` and `bytes` of theirs stored nowhere else, and those `kept`."""
+    (`uncovered`) apart again: those deleted, with the `files` and `bytes` of theirs stored nowhere else, those `kept`, and those
+    `custody_failed` (their record lacks a file custody always uploads: `declared_lost`), which nothing deletes."""
     if policy not in POLICIES:
         raise ValueError(f"unknown policy {policy!r} (have: {', '.join(POLICIES)})")
     if low_pct > high_pct:
@@ -1280,7 +1333,8 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
                             "inodes_pct_before": round(100 * iused / itotal, 2) if itotal else None,
                             "max_paths": max_paths, "acting": force or pct > high_pct, "actions": [], "freed_bytes": 0, "errors": [],
                             "stored": dict.fromkeys(STORED, 0), "capped": 0, "deletes_unpreserved": unpreserved,
-                            "trimmed": {"deleted": 0, "files": 0, "bytes": 0, "kept": 0},
+                            "deletes_partly_stored": partly_stored,
+                            "trimmed": {"deleted": 0, "files": 0, "bytes": 0, "kept": 0, "custody_failed": 0},
                             "deletes_launcher_copies": launcher,
                             "unpreserved": {**unpreserved_runs([]), "deleted": unpreserved_runs([])["expired"]}}
     if not plan["acting"]:
@@ -1336,9 +1390,14 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
         elif apply and row.record.get("preserved"):
             found = remote_check(row.record["preserved"], p)
             plan["stored"][found.state] += 1
-            if found.state == "uncovered" and row.source == "custody":
-                why = _uncovered_wait(row, p, found, t, unpreserved)
+            if found.state == "uncovered" and row.source == "custody" and (declared := declared_lost(p, found)):
+                why = _custody_failed(row, p, found, declared)
+                plan["trimmed"]["custody_failed"] += 1
+            elif found.state == "uncovered" and row.source == "custody":
+                why = _uncovered_wait(row, p, found, t, partly_stored)
                 plan["trimmed"]["kept"] += bool(why)
+                if why is None:
+                    why = _append_log(root / LOG, loss_record(row, found, now(), node))
             elif found.state not in COLLECTED:
                 why = f"preserved {row.record['preserved']} is not verified on the remote: {found.why}"
         elif apply and row.source == LAUNCHER:
@@ -1379,6 +1438,40 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
                            "deleted": unpreserved_runs([a for a in plan["actions"] if a["action"] == "delete" and not a["error"]])["expired"]}
     plan["pct_after"] = round(pct, 2)
     return plan
+
+
+def partly_stored(root: Path | str = DEFAULT_ROOT, *, now: Callable[[], datetime] = utc_now, store_root: str | None = None,
+                  remote_check: Callable[[str, Path], Stored] | None = None, node: str | None = None, depth: int = 2) -> dict[str, Any]:
+    """A dry run of --partly-stored-runs over `root`, deleting nothing: every expired preserved run of this node under its implicit
+    record whose marker still vouches for it and whose run record lacks files (`uncovered`), with its owner, when custody preserved
+    it, what it loses and its `state`: `goes` (a pass with the flag deletes it now), `waits` (it goes at `goes_utc`) or
+    `custody failed` (`declared_lost`: nothing deletes it). `remote_check` None is `store_check(store_root, now)`."""
+    root, t = Path(os.path.abspath(root)), now()
+    node, remote_check = node or socket.gethostname(), remote_check or store_check(store_root, now)
+    sc, runs = scan(root, depth), []
+    for row in sorted(sc.rows, key=lambda r: r.path):
+        p = root / row.path
+        if row.source != "custody" or ineligible(row, t, node) or CU.marker_problem(p):
+            continue
+        found = remote_check(row.record["preserved"], p)
+        if found.state != "uncovered":
+            continue
+        declared, until = declared_lost(p, found), uncovered_until(row.record)
+        runs.append({"path": row.path, "owner": _handle(row.record.get("owner")), "bytes": row.bytes,
+                     "preserved_utc": fmt_utc(until - UNPRESERVED_RUN_EXPIRY), "goes_utc": None if declared else fmt_utc(until),
+                     "state": "custody failed" if declared else "goes" if t >= until else "waits", "lost_files": found.lost_files,
+                     "lost_bytes": found.lost_bytes, "example": (declared or [found.lost[0][0]])[0]})
+    return {"schema": "research/retention-partly-stored/v0", "root": str(root), "node": node, "now": fmt_utc(t), "runs": runs,
+            "errors": sc.errors}
+
+
+def losses(root: Path | str = DEFAULT_ROOT, log: Path | str | None = None) -> list[dict[str, Any]]:
+    """The deletion log's `loss_record` lines, oldest first."""
+    path = Path(log) if log else Path(root) / LOG
+    if not path.exists():
+        return []
+    lines = (json.loads(x) for x in path.read_text().splitlines() if x.strip())
+    return [d for d in lines if d.get("rule") == LOSS_RULE]
 
 
 # ---- rm -----------------------------------------------------------------------------------------------------------------------------------
@@ -1762,6 +1855,9 @@ def main(argv: list[str]) -> int:
         ap.add_argument("--unpreserved-runs", action="store_true", help="take the unpreserved runs too: ended runs, and launches refused "
                         "before they ran, that custody did not preserve, each directory its run's only copy, expired "
                         f"{UNPRESERVED_RUN_EXPIRY // timedelta(days=1)} d after its last write. Without it they are listed, apart, and left")
+        ap.add_argument("--partly-stored-runs", action="store_true", help="take the preserved runs whose files custody trimmed too, "
+                        f"{UNPRESERVED_RUN_EXPIRY // timedelta(days=1)} d after custody verified each, after writing what each loses "
+                        f"to <root>/{LOG}. Without it they are listed with the date they go, and left")
         ap.add_argument("--launcher-copies", action="store_true", help="a pass over the launchers' copies of runs on other machines, "
                         "and nothing else: a directory named as a run id that holds the launcher's remote.json, expired "
                         f"{LAUNCHER_COPY_EXPIRY // timedelta(hours=1)} h after its last write, goes only once the remote holds the run's "
@@ -1781,12 +1877,13 @@ def main(argv: list[str]) -> int:
         try:
             plan = gc(ns.root, policy=ns.policy, high_pct=ns.high_pct, low_pct=ns.low_pct, force=ns.force, apply=ns.apply,
                       now=utc_now, usage=disk_usage, remote_check=store_check(ns.store, utc_now), in_use=JobScripts(jobs, ns.root),
-                      inodes=inode_usage, max_paths=ns.max_paths or None, unpreserved=ns.unpreserved_runs, launcher=ns.launcher_copies)
+                      inodes=inode_usage, max_paths=ns.max_paths or None, unpreserved=ns.unpreserved_runs, launcher=ns.launcher_copies,
+                      partly_stored=ns.partly_stored_runs)
         except ValueError as e:
             print(f"research retention gc: {e}", file=sys.stderr)
             return 2
         failed = [a for a in plan["actions"] if a["error"]]
-        rc = 1 if failed or plan["stored"]["unreachable"] else 0
+        rc = 1 if failed or plan["stored"]["unreachable"] or plan["trimmed"]["custody_failed"] else 0
         if ns.json:
             print(json.dumps(plan, indent=2))
             return rc
@@ -1829,10 +1926,63 @@ def main(argv: list[str]) -> int:
                 print(f"runs whose files custody trimmed, apart from the never-stored and the covered: {tr['deleted']} deleted, "
                       f"{tr['files']} file(s), {_size(tr['bytes'])} of them stored nowhere else; {tr['kept']} kept until "
                       f"{UNPRESERVED_RUN_EXPIRY // timedelta(days=1)} d after custody verified each"
-                      + ("" if ns.unpreserved_runs else ", then for --unpreserved-runs"))
+                      + ("" if ns.partly_stored_runs else ", then for --partly-stored-runs"))
+            if tr["custody_failed"]:
+                print(f"{CUSTODY_FAILED}: {tr['custody_failed']} preserved run(s) lack a file custody always uploads, so no rule deletes "
+                      f"them: publish each again (`research data custody RUN --publish`); the lines above name them", file=sys.stderr)
         for e in plan["errors"]:
             print(f"error: {e}", file=sys.stderr)
         return rc
+    if sub == "partly-stored":
+        ap = argparse.ArgumentParser(prog="research retention partly-stored", description="the preserved runs whose files custody "
+                                     "trimmed, by owner: which a pass with --partly-stored-runs deletes now, which wait, and which "
+                                     "custody failed. Deletes nothing")
+        ap.add_argument("--root", default=str(DEFAULT_ROOT))
+        ap.add_argument("--store", default=None, metavar="ROOT", help="the evidence store (on a node, /workspace/research/store)")
+        ap.add_argument("--json", action="store_true")
+        ns = ap.parse_args(rest)
+        doc = partly_stored(ns.root, now=utc_now, store_root=ns.store)
+        if ns.json:
+            print(json.dumps(doc, indent=2))
+            return 0
+        print(f"research retention partly-stored: {doc['root']} on {doc['node']} at {doc['now']}, a dry run: nothing was deleted. "
+              f"To keep a run: `research keep RUNDIR --owner @LANE --expires DATE --priority P`")
+        lanes: dict[str, list[dict[str, Any]]] = {}
+        for r in doc["runs"]:
+            lanes.setdefault(r["owner"], []).append(r)
+
+        def tally(rs: list[dict[str, Any]]) -> str:
+            go = [r for r in rs if r["state"] == "goes"]
+            return (f"{len(go)} run(s) go, {sum(r['lost_files'] for r in go)} file(s), {_size(sum(r['lost_bytes'] for r in go))} "
+                    f"stored nowhere else; {sum(r['state'] == 'waits' for r in rs)} wait; "
+                    f"{sum(r['state'] == 'custody failed' for r in rs)} custody failed")
+
+        for owner, rs in sorted(lanes.items()):
+            print(f"\n{owner}: {tally(rs)}")
+            print(f"  {'state':<14} {'lost':>10} {'files':>6}  {'preserved':<20} {'goes':<20} path  e.g.")
+            for r in rs:
+                print(f"  {r['state']:<14} {_size(r['lost_bytes']):>10} {r['lost_files']:>6}  {r['preserved_utc']:<20} "
+                      f"{r['goes_utc'] or '-':<20} {r['path']}  {r['example']}")
+        print(f"\nall: {tally(doc['runs'])}")
+        for e in doc["errors"]:
+            print(f"error: {e}", file=sys.stderr)
+        return 0
+    if sub == "lost":
+        ap = argparse.ArgumentParser(prog="research retention lost", description=f"what the runs gc deleted under --partly-stored-runs "
+                                     f"lost: each path no other copy held, from <root>/{LOG}")
+        ap.add_argument("--root", default=str(DEFAULT_ROOT))
+        ap.add_argument("--json", action="store_true")
+        ns = ap.parse_args(rest)
+        found = losses(ns.root)
+        if ns.json:
+            print(json.dumps(found, indent=2))
+            return 0
+        for d in found:
+            print(f"{d['t']}  {d['path']}  {d['owner']}  preserved {d['preserved']} at {d['preserved_utc']}: lost {d['files']} file(s), "
+                  f"{_size(d['bytes'])}")
+            for f in d["lost"]:
+                print(f"    {_size(f['bytes']):>10}  {f['path']}")
+        return 0
     if sub == "rm":
         ap = argparse.ArgumentParser(prog="research retention rm", description="delete PATHs with their owner's yes, checked against "
                                      "every record that covers them or lies beneath them; a dry run unless --apply")
@@ -1880,4 +2030,4 @@ def main(argv: list[str]) -> int:
 __all__ = ["COLLECTED", "DEFAULT_JOBS_DIRS", "FIELDS", "JobScripts", "KIND", "LAUNCHER", "LAUNCHER_COPY_EXPIRY", "MAX_PATHS", "ONLY_LAUNCHER",
            "POLICY", "PRIORITIES", "RUN_EXPIRY", "SCHEMA", "SIDECAR", "STORED", "UNPRESERVED", "UNPRESERVED_RUN_EXPIRY", "RecordError", "Stored",
            "beside", "check", "covers", "find", "gc", "implicit", "keep", "keep_main", "keeping", "launcher_check", "load", "main",
-           "problems", "record_at", "report", "scan", "sidecar", "store_check", "target", "uncovered_until", "unpreserved_runs", "write"]
+           "losses", "partly_stored", "problems", "record_at", "report", "scan", "sidecar", "store_check", "target", "uncovered_until", "unpreserved_runs", "write"]
