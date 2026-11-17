@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace as NS
@@ -334,6 +335,23 @@ def test_only_the_batch_invariant_arms_run_vllms_batch_invariant_kernels(tmp_pat
                                             600.0, 600.0, boundary_rows={"check": "t"}, private=tmp_path)["VLLM_BATCH_INVARIANT"] == "1"}
     assert on == {"bi-compiled", "bi-eager"}
     assert (S.ARMS["bi-compiled"].parent, S.ARMS["bi-eager"].parent) == ("compiled", "eager")
+
+
+def test_on_a_node_without_gpu_lease_run_sh_waits_only_for_the_cards_the_job_may_use(tmp_path: Path):
+    """Under a scheduler that sets CUDA_VISIBLE_DEVICES, another job's full card does not hold this job's start; with it
+    unset, every card counts."""
+    used_line = next(x.strip() for x in (S.HERE / "run.sh").read_text().splitlines() if "--query-gpu=memory.used " in x)
+    smi = tmp_path / "nvidia-smi"
+    smi.write_text('#!/usr/bin/env bash\nused=(70000 10 20 30)\nids=0,1,2,3\n'
+                   '[ "$1" = -i ] && ids=$2\nfor i in ${ids//,/ }; do echo "${used[$i]}"; done\n')
+    smi.chmod(0o755)
+
+    def used(visible: str | None) -> str:
+        env = {"PATH": f"{tmp_path}:/usr/bin:/bin", **({"CUDA_VISIBLE_DEVICES": visible} if visible is not None else {})}
+        return subprocess.run(["bash", "-c", f'{used_line}; echo "$used"'], env=env, capture_output=True, text=True,
+                              check=True).stdout.strip()
+
+    assert (used("1,3"), used("2"), used(None), used("0,1")) == ("30", "20", "70000", "70000")
 
 
 def test_run_shs_replay_runs_at_the_models_width_and_captures_what_it_is_told():

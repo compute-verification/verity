@@ -348,9 +348,10 @@ if command -v gpu-lease > /dev/null; then
   GPU_LEASE_WHO=${GPU_LEASE_WHO:-serve-tax} gpu-lease "$GPUS" --wait --max-min "$MAX_MIN" -- bash "$here/run.sh" leased
   rc=$?
 else
-  # a node without gpu-lease queues its jobs by other means: refuse to start on GPUs another job still holds
+  # a node without gpu-lease queues its jobs by other means: refuse to start on GPUs another job still holds, of those
+  # this job may use (CUDA_VISIBLE_DEVICES, as a scheduler such as Slurm sets it), else of all
   for _ in $(seq 31); do
-    used=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits | sort -n | tail -1)
+    used=$(nvidia-smi ${CUDA_VISIBLE_DEVICES:+-i "$CUDA_VISIBLE_DEVICES"} --query-gpu=memory.used --format=csv,noheader,nounits | sort -n | tail -1)
     [ "${used:-0}" -lt "${FREE_MIB:-2048}" ] && break
     sleep 20
   done
