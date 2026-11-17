@@ -1635,6 +1635,19 @@ def main(argv: list[str] | None = None) -> int:
         return _combine_main(a, ap)
     if a.jobs is not None and a.jobs < 0:
         ap.error(f"--jobs {a.jobs} would start no target and wait forever: give 1 or more, or 0 for one per core")
+    if a.check and a.reached is None:
+        ap.error("--check checks the targets --reached names: give --reached BASE")
+    if a.reached is not None:
+        if a.targets or a.all or a.no_cache or a.update_pins or a.shard or a.binding or a.records_only or a.bindings or a.ranges:
+            ap.error("--reached names the targets of --all a change reaches: give no target, --all, --no-cache, --update-pins, "
+                     "--shard, --binding, --records-only, --bindings or --ranges")
+        if not (paths := SH.reaching(SH.changed(REPO, a.reached), SH.declared(REPO))):
+            print(f"circuit-check --reached {a.reached}: no target reached: the change touches no path a check reads")
+            return 0
+        if not a.quiet:
+            print(f"circuit-check --reached {a.reached}: {len(paths)} path(s) a check may read: {', '.join(paths[:8])}"
+                  + (", ..." if len(paths) > 8 else ""))
+        a.all, a.catalog_units, a.cache = True, True, a.cache or default_cache()
     if a.records_only and (a.targets or not a.all or a.cache is None or a.no_cache or a.update_pins or a.shard or a.shard_dir):
         ap.error("--records-only stores every catalog binding's record in --cache DIR and checks no target: give --all and "
                  "--cache, and no target, --no-cache, --update-pins, --shard or --shard-dir")
@@ -1657,19 +1670,6 @@ def main(argv: list[str] | None = None) -> int:
     if a.accept_task_list and (a.targets or not a.all or a.shard or a.binding or a.records_only or a.bindings):
         ap.error("--accept-task-list writes the whole --all task list's counts: give --all, and no target, --shard, --binding, "
                  "--records-only or --bindings")
-    if a.check and a.reached is None:
-        ap.error("--check checks the targets --reached names: give --reached BASE")
-    if a.reached is not None:
-        if a.targets or a.all or a.no_cache or a.update_pins or a.shard or a.binding or a.records_only or a.bindings or a.ranges:
-            ap.error("--reached names the targets of --all a change reaches: give no target, --all, --no-cache, --update-pins, "
-                     "--shard, --binding, --records-only, --bindings or --ranges")
-        if not (paths := SH.reaching(SH.changed(REPO, a.reached), SH.declared(REPO))):
-            print(f"circuit-check --reached {a.reached}: no target reached: the change touches no path a check reads")
-            return 0
-        if not a.quiet:
-            print(f"circuit-check --reached {a.reached}: {len(paths)} path(s) a check may read: {', '.join(paths[:8])}"
-                  + (", ..." if len(paths) > 8 else ""))
-        a.all, a.catalog_units, a.cache = True, True, a.cache or default_cache()
     if a.ranges is not None:
         try:
             a.targets = [*a.targets, *(s for s in RG.spots(a.ranges) if s not in a.targets)]
