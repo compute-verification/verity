@@ -6,9 +6,9 @@ public import PouwVerifier.Difftest
 public import PouwPearlPlus.Load
 
 /-!
-# The difftest's functions for a served execution phase's credit (`PouwVerifier.Credit`)
+# The difftest's functions for a served execution phase's credit (`PouwCheck.Credit`)
 
-Beside `PouwVerifier.Difftest`'s, behind the same `pouw-verifier-difftest` (`PouwVerifier.DifftestMain` reads both tables):
+Beside `PouwCheck.Difftest`'s, behind the same `pouw-check-difftest` (`PouwCheck.DifftestMain` reads both tables):
 
 * `credit` (`key`, `ledger`, `pins`, `main` as `rounds` reads them, `salt` the execution phase's Program salt as hex, `calls`
   the manifest's rows, `served` the served trees' digest or null, `commit` the execution phase's Commit record in hex, `rounds`
@@ -22,7 +22,7 @@ Beside `PouwVerifier.Difftest`'s, behind the same `pouw-verifier-difftest` (`Pou
   execution phase's call count, and `rows`, `{value: rows}` the layout gives or null for none, as `credit._a_link` takes them),
   `Credit.Internal`'s: null, or `{"refused": [code, why]}`.
 * `leaf-words` (`k`): `{"leaf_words": w}`, `Credit.leafWords` (`weights.leaf_words`), or `{"leaf_words": null}` for a K
-  `Credit.chunks?` refuses (`PouwVerifier.Difftest`'s `chunks` holds the count itself).
+  `Credit.chunks?` refuses (`PouwCheck.Difftest`'s `chunks` holds the count itself).
 * `window` (`credit`'s, `descriptor` in hex, `entries`, `proofs`, `live`, `k` and `rows`, as `credit._window_outcomes`
   takes them): `{"credited": [indices]}`,
   and `period` (`key`, `ledger`, `pins`, `main`, `name`, `windows`, as `credit._period_outcomes` takes them, each execution phase's evidence
@@ -37,7 +37,7 @@ Beside `PouwVerifier.Difftest`'s, behind the same `pouw-verifier-difftest` (`Pou
   `{"file": …, "partition": …}`, `Credit.registeredFile` and `Credit.partitionOf` over the `layoutOf` and `shapeOf` of
   the descriptor's Program (`credit.registered_file` and `credit.partition_of`), or `{"refused": [code, why]}`.
 * `passes-distinct` (`passes`, the Pearl-C pass manifests credited together, as `credit.passes_distinct` takes them):
-  Pearl+'s `PouwVerifier.PearlPlus.passesDistinct`, null, or `{"refused": [code, why]}`.
+  Pearl+'s `PouwCheck.PearlPlus.passesDistinct`, null, or `{"refused": [code, why]}`.
 * `commit-parsers` (`commit`, a Commit record as `credit` takes it): `{"core": [value], "total": [value]}`, the value
   Lean's own JSON parser and the total one (`Flock.JsonParse.parse`, which `Credit.commitOf?` reads the record with)
   each read the record's text as; `[]` for a parser that refuses the text, and for both when `commit` is not bytes in
@@ -150,7 +150,7 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("window", executionPhaseOf), ("period", periodOf), ("period-roots", periodRootsOf), ("a-link", aLinkOf), ("weights", weightsOf), ("registered-file", registeredFileOf), ("leaf-words", leafWordsOf),
   ("passes-distinct", passesDistinctOf)]
 
-/-- `pouw-verifier-difftest`'s functions: `PouwVerifier.Difftest.table`'s, then these. -/
+/-- `pouw-check-difftest`'s functions: `PouwCheck.Difftest.table`'s, then these. -/
 def all (name : String) : Option _root_.Difftest.Fn := PouwVerifier.Difftest.table name <|> table name
 
 end PouwVerifier.CreditDifftest

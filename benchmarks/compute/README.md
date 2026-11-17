@@ -59,7 +59,7 @@ What the number is of, and the verifier that decides it. Change any of these and
   by come from the model's shape and the class (`MODELS`, `model_macs` in `run.py`); attention is counted and never
   credited.
 - **The verifier**: the Lean program `pouw-pearlplus` (package `pouw_pearlplus` in
-  `verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus/`, `PouwVerifier.PearlPlus`'s `check`) and its Python twin
+  `verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus/`, `PouwCheck.PearlPlus`'s `check`) and its Python twin
   `benchmarks/pouw/pearl_c_vllm/verify_run.py`, which must agree. The number needs the Lean verdict.
 - **The scheme**: `pearl-c-h100-v1-h3` alone (`schemeOf` refuses the RTX PRO 6000's schemes by name), with 64 × 64
   tiles and a matrix depth k (the length of the products' dot products) of at least 1,024 (`TILE`, `K_MIN`) or

@@ -14,7 +14,7 @@ public import Proofs.Pouw.PearlC.Records
 /-!
 # Pearl+'s bridge, part (b): a tile's words under -h3's noise are the semantics'
 
-`PouwVerifier.PearlPlus.Words.encode` and `checked` form a tile's operands from its opened rows and compute its checked words
+`PouwCheck.PearlPlus.Words.encode` and `checked` form a tile's operands from its opened rows and compute its checked words
 C̃ and U. The game reads the reference words of `pearlCProtocolDevRev1 devH100 sem ρ` at the deployed semantics `semH3`:
 Pearl-C at `pc8`'s row arithmetic on core's primitives and the H100 atom, with -h3's noise from SHA-512
 (`sha512Sem`). `WordsAreTheSemantics` says the check's words are those values on every word of a credited row.
