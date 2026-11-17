@@ -47,25 +47,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Refine.Arith
 import Proofs.Flock.VBridge.Algebra.RunSkel
 
-/-!
-# Row G: the verdict's setup is the reader's
-
-Row G of the verdict's rows (`VerdictRows`), the facts about the setup:
-
-* `DecAt.read_setup`, `DecAt.setup_eq`: at SHA-512 the verifier's setup is the shipped one (`setupWith_sha512`), so it
-  is the one `decR` read (`setupOf`), `spec` and `sts` both.
-* `DecAt.sts_hidden`: where the statement is read at the inner tags (`RecVStar.innerTags`), `setupTables` sets every
-  table up with `setupHidden` (`setupTables_okH`), at untyped tags naming `flock-leaf/sha512-unsalted`.
-* `DecAt.tab_eq`, `DecAt.merkle_of_tags`, `DecAt.foldKLog_of`, `DecAt.kLog_le_of_tags`: so table `i`'s setup commits
-  under the registry's plain SHA-512 scheme (`Hidden.setupHidden_plain`), a `Named` one, its fold's `k_log` is its
-  own, and its `k_log` is at most its `m` (`Hidden.setupHidden_wf`).
-* `extras_shape`, `folds_ofCircuit`, `slotOk_of_hidden`: a hidden-output table's extra claims are of the claims' shapes,
-  and its fold returns 64 entries at every lincheck point `residualLins` samples (`fold_ok`, on the ranges `HmRow.check`
-  passed).
-* `dense_inner`: at a statement the reader reads at the dense form, Flock's plain verifier sets the inner statement up
-  as one table at the files' tags, whose `m` has a `fast100` schedule (`innerSetup_files`, `repRounds_size`).
-* **`DecAt.rowG`**: so row G holds at every table of a decision of an inner statement read at the dense form.
--/
+/-! Row G: the verdict's setup is the reader's (`DecAt.rowG`). -/
 
 @[expose] public section
 
@@ -73,8 +55,6 @@ namespace RecDeploy.Rows
 
 open Flock
 open FlockDeploy (Coin FinalP tabsOf)
-
-/-! ## A hidden-output table -/
 
 theorem forall₂_right {α β : Type} {R : α → β → Prop} :
     ∀ {l₁ : List α} {l₂ : List β}, List.Forall₂ R l₁ l₂ → ∀ b ∈ l₂, ∃ a, R a b
@@ -84,7 +64,6 @@ theorem forall₂_right {α β : Type} {R : α → β → Prop} :
     · exact ⟨_, hab⟩
     · exact forall₂_right h b hm
 
-/-- **The extra claims are of the claims' shapes**: 64 skip weights and `m − 6` coordinates each. -/
 theorem extras_shape {s : Stmt} {pts : Array (Array F128)} {e : Array Claim} (h : s.extraClaims pts = .ok e)
     (hm : 6 ≤ s.m) : ∀ j < e.size, e[j]!.skip.size = 64 ∧ e[j]!.x.size = s.m - 6 := by
   intro j hj
@@ -103,8 +82,6 @@ theorem extras_shape {s : Stmt} {pts : Array (Array F128)} {e : Array Claim} (h 
   · show ((s.regionPoint reg pt).extract 6 (s.regionPoint reg pt).size).size = s.m - 6
     rw [Array.size_extract, FlockSoundness.Refine.regionPoint_size, Nat.min_self]
 
-/-- **A hidden-output table's ranges fold**: at untyped tags its circuit is the committed one, which `HmRow.check`
-passed (`parseCommit_check`). -/
 theorem slotOk_of_hidden {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt} (ht : tags.typed = false)
     (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
@@ -113,10 +90,6 @@ theorem slotOk_of_hidden {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tabl
     (FlockSoundness.Discharge.Hidden.setupHidden_parseCommit h)
   exact FlockComplete.JsonRT.hm_check_kinds hl
 
-/-- **The circuit fold returns 64 entries at the lincheck's point**: wherever `residualLins` runs at a shape of the
-statement's `m` and `k_log`, its lincheck point has 64 skip weights and `k_log − 6` block coordinates (`lincheck_coins`,
-`zerocheck_coins`), where the statement's fold returns (`fold_ok`), and halving its `2^k_log` entries at the
-`k_log − 6` challenges leaves 64. -/
 theorem folds_ofCircuit {S : Setup} {s : Stmt} (hS : S = Setup.ofCircuit s) (hwf : FlockSoundness.Refine.StmtWF s)
     (hs : ∀ r ∈ s.c.ranges.toList, FlockComplete.JsonRT.SlotOk s.c r) (h14 : 14 ≤ s.m) {sh : Shape}
     (hm : sh.m = s.m) (hk : sh.kLog = s.c.kLog) {rounds : Array (Array F128)} {extras : Array Claim}
@@ -150,12 +123,6 @@ theorem folds_ofCircuit {S : Setup} {s : Stmt} (hS : S = Setup.ofCircuit s) (hwf
   rw [hd, Nat.add_sub_cancel, pow_add, Nat.mul_div_cancel_left _ (Nat.two_pow_pos _)]
   all_goals rfl
 
-/-! ## The inner statement at the dense form -/
-
-/-- **The inner statement at the dense form**: at a statement the reader reads at the dense form, Flock's plain
-verifier sets the inner statement up as one table (`innerSetup_files`), at the files' tags, and that table's `m` is the
-inner shape's (`checkShape_files`), whose plain schedule the verifier's list holds (`repSched_of_statements`), so it
-has a `fast100` schedule (`repRounds_size`). -/
 theorem dense_inner {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) :
     ∃ s spec st sch, FlockDeploy.setupOf false (xIOf xo) = some (s, spec, #[st]) ∧
@@ -183,20 +150,16 @@ theorem dense_inner {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement}
   rw [hm, ← e1]
   exact hsch
 
-/-! ## Row G at a decision -/
-
 namespace DecAt
 
 variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
   (D : DecAt rd x ms cs)
 
-/-- **At SHA-512 the verifier's setup is the shipped one**, at the statement's read. -/
 theorem read_setup : D.d.s.read.setup = .ok (D.spec, D.sts) := by
   have h := D.setup
   rw [FlockDeploy.hOf_sha512, FlockDeploy.setupWith_sha512] at h
   exact h
 
-/-- **The verifier's setup is the reader's**: the session spec and statements `decR` read (`setupOf`). -/
 theorem setup_eq : D.spec = D.d.spec ∧ D.sts = D.d.sts := by
   obtain ⟨⟨s, spec, sts⟩, c₁, r₀, rss, fl, link, pf, hv, -, -, -, -, -, hd⟩ := FlockDeploy.decR_some D.dec
   obtain ⟨-, hs⟩ := FlockDeploy.setupOf_some hv
@@ -208,9 +171,6 @@ theorem setup_eq : D.spec = D.d.spec ∧ D.sts = D.d.sts := by
   rw [hd]
   exact ⟨e.1.symm, e.2.symm⟩
 
-/-- **Every table is a hidden-output table at untyped plain leaves** where the statement is read at the inner tags:
-`setupTables` sets each table up with `setupHidden` (`setupTables_okH`), at tags naming
-`flock-leaf/sha512-unsalted`. -/
 theorem sts_hidden (hT : D.d.s.read.tags = RecVStar.innerTags ∧ D.d.s.read.publicInputs = none) :
     ∀ t ∈ D.sts, ∃ (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tables : List (String × ByteArray))
       (draw partition : Option Lean.Json) (program : Option ByteArray),
@@ -231,12 +191,10 @@ theorem sts_hidden (hT : D.d.s.read.tags = RecVStar.innerTags ∧ D.d.s.read.pub
     obtain ⟨d, hd⟩ := hall j hj
     exact ⟨_, _, _, _, _, _, _, _, rfl, rfl, hd⟩
 
-/-- Table `i`'s setup is its statement's. -/
 theorem tab_eq {i : ℕ} (hi : i < D.sts.size) : (tabsOf D.sts)[i]! = Setup.ofCircuit D.sts[i] := by
   unfold FlockDeploy.tabsOf
   rw [getElem!_pos (D.sts.map Setup.ofCircuit) i (by simpa using hi), Array.getElem_map]
 
-/-- **Row G's `merkle` and `named`**: table `i`'s setup commits under plain SHA-512, a `Named` scheme. -/
 theorem merkle_of_tags (hT : D.d.s.read.tags = RecVStar.innerTags ∧ D.d.s.read.publicInputs = none) {i : ℕ}
     (hi : i < D.sts.size) :
     (tabsOf D.sts)[i]!.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted" ∧
@@ -251,13 +209,11 @@ theorem merkle_of_tags (hT : D.d.s.read.tags = RecVStar.innerTags ∧ D.d.s.read
 
 variable (cls : FlockSoundness.Discharge.Recursion.HClass)
 
-/-- **Row G's `foldKLog`**: table `i`'s fold is at its own `k_log`. -/
 theorem foldKLog_of {i : ℕ} (hi : i < D.sts.size) : (D.files cls i).st.fold.kLog = (D.sh cls i).kLog := by
   show (tabsOf D.sts)[i]!.fold.kLog = (tabsOf D.sts)[i]!.kLog
   rw [D.tab_eq hi]
   rfl
 
-/-- **Row G's `kLog_le`**: table `i`'s `k_log` is at most its `m` (`StmtWF`). -/
 theorem kLog_le_of_tags (hT : D.d.s.read.tags = RecVStar.innerTags ∧ D.d.s.read.publicInputs = none) {i : ℕ}
     (hi : i < D.sts.size) :
     (D.files cls i).st.kLog ≤ (D.files cls i).st.m := by
@@ -266,10 +222,6 @@ theorem kLog_le_of_tags (hT : D.d.s.read.tags = RecVStar.innerTags ∧ D.d.s.rea
   obtain ⟨_, _, _, _, _, _, _, _, -, -, hs⟩ := D.sts_hidden hT _ (Array.getElem_mem hi)
   exact (FlockSoundness.Discharge.Hidden.setupHidden_wf hs).1.hk
 
-/-- **Row G** at every table of a decision of an inner statement the reader reads at the dense form: the statement's
-read is at the files' tags and its one table has a `fast100` schedule (`dense_inner`), so every table is a hidden-output
-table at untyped plain leaves (`sts_hidden`), whose regions carry their free bits (`setupHidden_regionBytes`), whose
-ranges fold (`slotOk_of_hidden`) and which is well formed (`setupHidden_wf`). -/
 theorem rowG (acc : ℕ → Array F128) {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) {i : ℕ} (hi : i < D.sts.size) :
     RowG D cls acc i := by

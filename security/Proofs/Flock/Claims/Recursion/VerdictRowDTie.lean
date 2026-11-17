@@ -38,23 +38,7 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.VBridge.Algebra.RunSkel
 
-/-!
-# Row D's ties at the deployed layout: the side's schedule and check 5's positions
-
-`OpenLowerDeployed` lowers a `rec-open` piece at the deployed layout from facts about the side and position readers it
-is handed. This file gives two of them at row D's readers `RecDeploy.Rows.sideAt` and `RecDeploy.Rows.posAt`:
-
-* `sideSchR_sideAt`: `SideSchR` at `Rows.sideAt`, outright: its schedule is `schOf`, which is `schAt`, whatever the
-  messages.
-* `PosTieR`: check 5's `dirs` rows at a staged `rec-open` part (`openRows`, at its source's inner session) are the low
-  `HH` bits of the positions `posAt` reads off the coins. `posTieR_of` proves it from `InnerCoinsR`: check 5's inner
-  session is the inner statement's table at the coins (its `m`, `k_log`, its extra claims at the first coin's link
-  points, and each rep's rounds `canonRounds` of the coins after the link). The rest is the verifier's own algebra:
-  `openRows`' `dirs` row `r q + j` is rep `r`'s query `j` at the one level of `LANES` lanes and `HH` siblings
-  (`openRows_dirs`, `openDirs_get`), that level is the piece's (`levelMatch`, `innerLevels_unique`), and `verifierRows`
-  reads the same positions at check 5's shape (`RecResiduals.shape?`) as at the reader's (`shapeOf`), which differ only
-  in the Merkle widths it doesn't read (`verifierRows_congr`), and at any comb (`verifierRows_comb`).
--/
+/-! Row D's ties at the deployed layout: the side's schedule (`sideSchR_sideAt`) and check 5's positions (`posTieR_of`, from `InnerCoinsR`). -/
 
 @[expose] public section
 
@@ -68,8 +52,6 @@ open FlockSoundness.Refine (shapeOf)
 open FlockSoundness.Discharge.Recursion (openRows openDirs innerLevels)
 open RecDeploy.Rows (canonRounds posAt sideAt schOf verifierRows_comb)
 
-/-! ## The side's schedule -/
-
 theorem schOf_eq (x : Msg) (t : ℕ) : schOf x t = schAt x t := by
   unfold schOf schAt
   cases setupOf false x <;> rfl
@@ -80,7 +62,6 @@ variable {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {shape : Claims.Re
   {untr : TrReader} {b : Brings} {cmt : Msg → ℕ → Msg → Msg} {L : LayoutB}
   {Bd : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace}
 
-/-- **`SideSchR` at row D's side reader**: `Rows.sideAt`'s schedule is the table's, whatever the messages. -/
 theorem sideSchR_sideAt (rd : Msg → Option FinalP) (pieces : Msg → List OpenPiece) :
     SideSchR H D shape untr b cmt L Bd (sideAt rd) pieces := by
   unfold SideSchR AtPieces AtOpened
@@ -90,13 +71,10 @@ theorem sideSchR_sideAt (rd : Msg → Option FinalP) (pieces : Msg → List Open
 
 end Side
 
-/-! ## The verifier rows read only the algebra's fields of the shape -/
-
 section Congr
 
 variable {sh sh' : Shape}
 
-/-- The fields of a shape the rep's algebra reads: not the Merkle widths. -/
 abbrev algFields (sh : Shape) : ℕ × ℕ × ℕ × Schedule × Bool := (sh.m, sh.kLog, sh.claims, sh.sched, sh.holo)
 
 theorem algFields_eq (h : algFields sh = algFields sh') :
@@ -192,8 +170,6 @@ theorem structureOf_congr (h : algFields sh = algFields sh') :
   unfold RecAlgebra.structureOf RecAlgebra.extrasLike
   simp only [hm, hc, residualLins_congr h, build_congr h]
 
-/-- **`verifierRows` doesn't read the Merkle widths**: at shapes of the same `m`, `k_log`, claims, schedule and
-`holo`, it computes the same rows. -/
 theorem verifierRows_congr (h : algFields sh = algFields sh') (rounds : Array (Array F128)) (extras : Array Claim)
     (comb : Array F128) :
     RecAlgebra.verifierRows sh rounds extras comb = RecAlgebra.verifierRows sh' rounds extras comb := by
@@ -202,10 +178,6 @@ theorem verifierRows_congr (h : algFields sh = algFields sh') (rounds : Array (A
 
 end Congr
 
-/-! ## The verifier rows read only the rounds that hold coins -/
-
-/-- **`verifierRows` skips rounds of no coins** (`RoundCoins.ofRounds`): at recorded rounds equal but for them, it computes
-the same rows. -/
 theorem verifierRows_filter {sh : Shape} {a b : Array (Array F128)} {extras : Array Claim} {comb : Array F128}
     (h : a.filter (·.size ≠ 0) = b.filter (·.size ≠ 0)) :
     RecAlgebra.verifierRows sh a extras comb = RecAlgebra.verifierRows sh b extras comb := by
@@ -215,8 +187,6 @@ theorem verifierRows_filter {sh : Shape} {a b : Array (Array F128)} {extras : Ar
   unfold RecAlgebra.verifierRows
   rw [e]
 
-/-- **`verifierRows` reads a round**: the zerocheck flips its first coins before anything else, so no rows come of no
-rounds. -/
 theorem verifierRows_pos {sh : Shape} {rounds : Array (Array F128)} {extras : Array Claim} {comb : Array F128}
     {w : Array F128 × RecAlgebra.Info RecAlgebra.Lin × Array (Array (Array F128))}
     (h : RecAlgebra.verifierRows sh rounds extras comb = .ok w) : 0 < rounds.size := by
@@ -234,10 +204,6 @@ theorem verifierRows_pos {sh : Shape} {rounds : Array (Array F128)} {extras : Ar
       simp [RecAlgebra.RoundCoins.ofRounds] at hr6
   · exact h0
 
-/-! ## Check 5's `dirs` rows -/
-
-/-- **Check 5's `rec-open` rows, opened**: where `openRows` gives rows, the inner session's algebra, the one level of
-`LANES` lanes and `H` siblings, both reps, and the `dirs` rows `openDirs` builds of them. -/
 theorem openRows_dirs {inn : RecCoins.Inner} {LANES H : ℕ} {cr dr : Array (Array ℕ)}
     (h : openRows inn LANES H = some (cr, dr)) :
     ∃ sh extras l r0 r1, inn.algebra = .ok (sh, extras) ∧ innerLevels sh LANES H = [l] ∧
@@ -263,8 +229,6 @@ theorem openRows_dirs {inn : RecCoins.Inner} {LANES H : ℕ} {cr dr : Array (Arr
         simp only [Option.some.injEq, Prod.mk.injEq] at h
         exact ⟨sh, extras, l, r0, r1, rfl, hl, h0, h1, h.2.symm⟩
 
-/-- **`dirs` row `r q + j` is rep `r`'s query `j`**: at level `l` of `q` queries, instance `r q + j` (`r < 2`,
-`j < q`) holds the low `H` bits of rep `r`'s `j`-th position there. -/
 theorem openDirs_get (sh : Shape) (l H : ℕ) (r0 r1 : RecCoins.Rep) {r j : ℕ} (hr : r < 2)
     (hj : j < (sh.sched.levels[l]!).q) :
     (openDirs sh l H r0 r1)[r * (sh.sched.levels[l]!).q + j]! =
@@ -284,7 +248,6 @@ theorem openDirs_get (sh : Shape) (l H : ℕ) (r0 r1 : RecCoins.Rep) {r j : ℕ}
       rw [Nat.add_mod_left, Nat.mod_eq_of_lt hj]
     simp [h1, h2]
 
-/-- **The one level of `LANES` lanes and `H` siblings is any level of them.** -/
 theorem innerLevels_unique {sh : Shape} {LANES H l l' : ℕ} (h : innerLevels sh LANES H = [l])
     (hl' : l' < sh.sched.levels.size) (hL : 2 ^ (sh.sched.levels[l']!).lanes = LANES)
     (hH : (sh.sched.levels[l']!).d - (sh.sched.levels[l']!).cap = H) : l' = l := by
@@ -320,15 +283,6 @@ theorem shape?_ok {m k c : ℕ} {sh : Shape} (h : RecResiduals.shape? m k c = so
     obtain ⟨-, rfl⟩ := h
     exact ⟨rfl, rfl, rfl, rfl, rfl⟩
 
-/-! ## The position tie -/
-
-/-- **Check 5's inner session is the inner statement at the coins** (`InnerCoinsR`): at a V\* statement `xO` part `s`
-stages at `x` and shows the coins `c` at, where check 5 loads the staged table's (table 0's) inner session from its
-source, the session is the inner statement's table 0 (its `m` and `k_log`), its extra claims are the table's at the
-first coin's link points, and each rep's rounds are `canonRounds` of the coins after the link, as row D's readers take
-them, up to rounds of no coins (which `verifierRows` skips, `verifierRows_filter`) and wherever the rep has a round
-(which any rows it gives do, `verifierRows_pos`). This is the coin side of check 5 at every value it registers
-(`staged_rep_sampled` is its round-by-round form). -/
 def InnerCoinsR (untr : TrReader) (b : Brings) (Bk : Msg → ℕ) (s : ℕ) (x : Msg) (c : ℕ → Coin) : Prop :=
   ∀ (xO : Msg), showsPart untr b s x xO c → ∀ (i : RecIns) (spec : SessionSpec) (sts : Array Stmt),
     setupO xO = some (i, spec, sts) → ∀ (_ : 0 < sts.size) (f : RecCoins.Source) (inn : RecCoins.Inner),
@@ -339,11 +293,6 @@ def InnerCoinsR (untr : TrReader) (b : Brings) (Bk : Msg → ℕ) (s : ℕ) (x :
           rounds.filter (·.size ≠ 0) =
             (canonRounds v.2.1 v.2.2 ((List.range (Bk (xIOf x))).map c).tail.dropLast r).filter (·.size ≠ 0)
 
-/-- **The position tie** (`PosTieR`, the coin side of `CopyDirsTieR`): at a V\* statement `xO` part `s` stages at `x`
-and shows the coins `c` at, where check 5 loads the staged table's (table 0's) inner session from its source and
-builds `rec-open`'s rows at the level part's `LANES`, `HH` (`openRows`), the `dirs` row of a piece `ownQR` gives part
-`s`, instance `rep · q + query` (check 5's order, `copyAtR`'s), is the low `HH` bits of the position `posAt` reads off
-the coins. -/
 def PosTieR (untr : TrReader) (b : Brings) (pieces : Msg → List OpenPiece)
     (posAt : Msg → List Coin → OpenPiece → ℕ) (Bk : Msg → ℕ) (s : ℕ) (x : Msg) (c : ℕ → Coin) : Prop :=
   ∀ (xO : Msg), showsPart untr b s x xO c → ∀ (i : RecIns) (spec : SessionSpec) (sts : Array Stmt),
@@ -356,8 +305,6 @@ def PosTieR (untr : TrReader) (b : Brings) (pieces : Msg → List OpenPiece)
         dr[q.rep * qAt (xIOf x) q.level + q.query]! =
           RecCoins.dirsRow (posAt (xIOf x) ((List.range (Bk (xIOf x))).map c) q) HH
 
-/-- **`PosTieR` at row D's position reader**, from `InnerCoinsR`, at a statement the reader reads at the dense form
-and pieces in range. -/
 theorem posTieR_of {untr : TrReader} {b : Brings} {pieces : Msg → List OpenPiece} {Bk : Msg → ℕ} {s : ℕ}
     {x : Msg} {c : ℕ → Coin} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st)
     (hd : Claims.Recursion.Form.Dense st.form) (hR : PiecesInRangeR pieces)
@@ -367,7 +314,6 @@ theorem posTieR_of {untr : TrReader} {b : Brings} {pieces : Msg → List OpenPie
   obtain ⟨sh, extras, l, r0, r1, halg, hl, h0, h1, rfl⟩ := openRows_dirs hop
   obtain ⟨hext, hsh'⟩ := algebra_ok halg
   obtain ⟨sch, hsch, hshm, hshk, hshc, hshs, hshh⟩ := shape?_ok hsh'
-  -- the piece's level is the statement's
   obtain ⟨hq0, r', ss', hr', hss', L', H', n', hsv'⟩ := ownQR_some ho
   rw [hr] at hr'
   cases hr'
@@ -391,20 +337,17 @@ theorem posTieR_of {untr : TrReader} {b : Brings} {pieces : Msg → List OpenPie
   rw [hS, ← hlvs, hlvq] at hLANES hHH
   have hql : q.level = l := innerLevels_unique hl (by rw [hshs]; exact hlev) (by rw [hshs]; exact hLANES.symm)
     (by rw [hshs]; exact hHH.symm)
-  -- check 5's row
   have hqa : qAt (xIOf x) q.level = (sh.sched.levels[l]!).q := by
     unfold qAt
     rw [hS, hshs, hql]
   rw [hqa, openDirs_get sh l HH r0 r1 hrep (by rw [hshs, ← hql]; exact hquery)]
   refine congrArg (fun p => RecCoins.dirsRow p HH) ?_
-  -- rep `q.rep`'s rounds and rows
   have hrq : inn.rep sh extras q.rep = .ok (if q.rep = 0 then r0 else r1) := by
     obtain h | h : q.rep = 0 ∨ q.rep = 1 := by omega
     · rw [h]; simpa using h0
     · rw [h]; simpa using h1
   obtain ⟨hrounds, hvr⟩ := rep_ok hrq
   rw [verifierRows_filter (hrd q.rep hrep _ hrounds (verifierRows_pos hvr)), verifierRows_comb] at hvr
-  -- the reader's position
   have hexs : ((tabsOf v.2.2)[0]!.extra (pointsOf v.2.1 (((List.range (Bk (xIOf x))).map c).headD default))) =
       .ok extras := by rw [← hex, hext]
   unfold posAt

@@ -38,23 +38,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The verdict's rows, assembled at a table
-
-`DecAt.runs_assembled`: table `i`'s reps run (`TableFiles.Runs`, `runs_of_rows`) at a decision of an inner statement
-the reader reads at the dense form, from the rows as their owners proved them:
-
-* **G** outright (`rowG`).
-* **B**: S11's stream, S12's rounds and their coins (`finds`, `roundsWF`, `noEmpty`); the frames (`hframed`) stay a
-  hypothesis.
-* **C** from G, the session's points and each rep's shaped proof (`rowC_of`).
-* **L** stays a hypothesis (`hL`).
-* **D** from G, C's decode and the `rec-open` pieces (`rowD_of_pieces`), at the pieces' holding, layout (`hside`),
-  coin (`hpos`) and cover (`hcover`) ties.
-* **R** from S, its groups, the rounds' sizes, `w`'s size and the parts' residuals (`rowR_of_parts`).
-* **E** from G and, at each rep, the units' sums (`UnitSums`) and the algebra's reading of their ends (`ReadsEnds`)
-  (`rowE_of_units`), where `verifierRows` returns by R's sizes (`verifierRows_rep`).
--/
+/-! The verdict's rows, assembled at a table (`DecAt.runs_assembled`). -/
 
 @[expose] public section
 
@@ -74,8 +58,7 @@ namespace DecAt
 variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
   (D : DecAt rd x ms cs) (cls : HClass) (acc : ℕ → Array F128)
 
-/-- **Table `i`'s reps run at the decision**, from rows G, B, C, D, R and E as proved, at the hypotheses they still
-take: B's frames, row L, D's pieces and their ties, R's structure, sizes and residuals, and E's unit sums and ends. -/
+/-- Still takes as hypotheses B's frames, row L, D's pieces and their ties, R's structure, sizes and residuals, and E's unit sums and ends. -/
 theorem runs_assembled {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) {i : ℕ} (hi : i < D.sts.size)
     (hti : i < D.spec.tables.size)

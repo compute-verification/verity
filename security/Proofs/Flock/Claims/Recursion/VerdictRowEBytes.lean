@@ -47,29 +47,7 @@ import Proofs.Flock.Soundness.Discharge.Hm.Bc
 import Proofs.Flock.Soundness.Discharge.Layout.OutShape
 import Proofs.Flock.VBridge.Pinned
 
-/-!
-# A rec-open copy's `acc` and `acc_out` columns are its unit's rows
-
-`accHolds_recorded_layR` reads a piece's running sums off the bytes `bi`, `bo` its copy's columns hold
-(`FlockVBridge.ColsHold`) at the verifier's layout, `acc` from column `128 L + 1024 max(1, ⌈H/2⌉)` and `acc_out` from
-`Family.outCol L H + 1024`, and asks that they be the rows `layR` commits: `bi` the bytes `accSegs` reads at the unit's
-`acc` row, `bo` the bytes `accOutForms` reads at its `acc_out` row. Both are the copy's own columns:
-
-* `colsHold_inRow`: input row `q` of a circuit whose unit reads its input words in order (`rowHidden_eq`) is the copy's
-  columns from the row's first input column;
-* `colsHold_acc`: at a circuit `RecOpen.check` accepts at `rec-open/l<L>-h<H>`, the `acc` row is three rows in, at the
-  copy's column `128 L + 1024 max(1, ⌈H/2⌉)` (`rowsOk`, `leavesOk`, its input group at column 0);
-* `colsHold_outRow`, `colsHold_accOut`: output row `jo` of V*'s output layout (`OutsLaid`, one output port per output
-  row) is the copy's columns from the output group's first column plus `1024 jo` (`outCol_leaf`), and `acc_out`'s row
-  is row 1, from `Family.outCol L H + 1024` (`outCols_of_laid` at `RecOpen.unitLaid`);
-* `accBytes_staged`, `accOutBytes_staged`, `accOutBytes_hidden`: `bi` and `bo` at a staged level part's copy
-  (`copyAtR`'s, at `p.sts[0]!`), with `accHolds_recorded_layR`'s `hbi`, `hszi`, `hbi'` and `hbo`, `hszo`, `hbo'`.
-
-`accOutBytes_staged` takes the output rows one port each (`c.outRowPorts = replicate 2 1`). On the hidden-output path
-`out_rows_v1` gives it (`HmOut.checkRows` makes a `sha512/row/v1` output row a lone padded port), so
-`accOutBytes_hidden` doesn't. On the public-output path `HmRow.parse` refuses a run of no ports, which with
-`out_row_ports`' sum gives it too, but `parse_rowPorts` exposes only the sum.
--/
+/-! A rec-open copy's `acc` and `acc_out` columns are its unit's rows, as `accHolds_recorded_layR` asks. -/
 
 @[expose] public section
 
@@ -79,8 +57,6 @@ section Hidden
 
 open FlockSoundness FlockSoundness.Discharge Exec
 
-/-- **A hidden-output table's output rows are one port each**: its circuit passed `HmOut.parse`, so `checkRows`, and
-at `sha512/row/v1` rows (`out_rows_v1`) every output row is a lone port. -/
 theorem outRowPorts_of_hidden {r : Read} {sts : Array Stmt} (hs : r.tablesOf = some sts) (ht : r.tags.typed = false)
     (hpi : r.publicInputs = none) (hh : r.tags.hiddenOutputs = true) {j : ℕ} (hj : j < sts.size)
     (hv1 : ∀ q ∈ sts[j].c.ports.toList, q.v2 = false) :
@@ -98,7 +74,6 @@ theorem outRowPorts_of_hidden {r : Read} {sts : Array Stmt} (hs : r.tablesOf = s
 
 end Hidden
 
-/-- `outRowPorts_of_hidden` at a statement the parser read. -/
 theorem outRowPorts_hidden {decode : Claims.Msg → Option Read} {x : Claims.Msg} {p : Parsed}
     (hx : parseBytes decode x = some p) (ht : p.tags.typed = false) (hpi : p.publicInputs = none)
     (hh : p.tags.hiddenOutputs = true) {t : ℕ} (htl : t < p.sts.size)
@@ -118,8 +93,6 @@ open Claims.Recursion.VStarB
 open FlockSoundness.Discharge.Hm (bitL)
 open FlockVBridge (ColsHold)
 
-/-! ## Bytes and columns -/
-
 theorem extract_two (ps : Array Port) (h : 2 ≤ ps.size) :
     (ps.extract 0 2).foldl (· + ·.words) 0 = (ps[0]'(by omega)).words + (ps[1]'(by omega)).words := by
   rw [extract_words Port.words]
@@ -131,8 +104,6 @@ theorem extract_two (ps : Array Port) (h : 2 ≤ ps.size) :
 theorem length_bytesOf (bs : List Bool) : (Claims.Recursion.VStar.bytesOf bs).length = (bs.length + 7) / 8 := by
   simp [Claims.Recursion.VStar.bytesOf]
 
-/-- **Columns that hold a bit string hold its bytes**: where columns `base`, … hold the bits `bs`, a whole number of
-bytes, they hold `bytesOf bs`. -/
 theorem colsHold_bytesOf {v : ℕ → Bool} {base : ℕ} {bs : List Bool} (h8 : bs.length % 8 = 0)
     (h : ∀ t (ht : t < bs.length), v (base + t) = bs[t]) :
     ColsHold v base ⟨(Claims.Recursion.VStar.bytesOf bs).toArray⟩ := by
@@ -147,11 +118,6 @@ theorem colsHold_bytesOf {v : ℕ → Bool} {base : ℕ} {bs : List Bool} (h8 : 
   rw [bitL_bytesOf ht']
   exact h t ht'
 
-/-! ## An input row -/
-
-/-- **A copy's columns hold its unit's input row**: where the unit reads its input words in order (`hl`, so
-`rowHidden_eq`), the bytes `accSegs` reads at row `q`'s instance `n` are what copy `n` (`n / g`, `n % g`) holds from
-the row's first input column. -/
 theorem colsHold_inRow {p : Flock.Readable.Parsed} (h1 : p.sts.size = 1) (h0 : 0 < p.sts.size) {c : Circuit}
     (hc0 : p.sts[0].c = c) (w : Claims.Flock.Wit) {N q : ℕ} {nm : String} (n : ℕ)
     (hl : c.leavesIn.getD 0 #[] = (Array.range N).map Int.ofNat) (hq : c.ports.findIdx? (·.name == nm) = some q)
@@ -183,10 +149,6 @@ theorem colsHold_inRow {p : Flock.Readable.Parsed} (h1 : p.sts.size = 1) (h0 : 0
   rw [Claims.Recursion.VStar.copyOf_eq hj]
   simp only [Claims.Recursion.VStar.copyIdx, hc0, h1, Nat.mul_one, Nat.add_zero]
 
-/-- **A rec-open copy's `acc` columns hold its unit's `acc` row**: at a circuit `RecOpen.check` accepts at
-`rec-open/l<L>-h<H>`, its rows are `row`, `aux`, `acc`, … (`rowsOk`), its unit's input group is at column 0 and reads
-its input words in order (`leavesOk`), so its `acc` row of 64 words is the copy's columns from
-`128 L + 1024 max(1, ⌈H/2⌉)`. -/
 theorem colsHold_acc {p : Flock.Readable.Parsed} (h1 : p.sts.size = 1) (h0 : 0 < p.sts.size) {c : Circuit}
     (hc0 : p.sts[0].c = c) {tags : Flock.Tags} (P : FlockSoundness.ParseFacts tags c) {LANES HH : ℕ}
     (hn : c.unit.name = Flock.RecOpen.unitName LANES HH) (w : Claims.Flock.Wit) (n : ℕ) :
@@ -235,10 +197,6 @@ theorem colsHold_acc {p : Flock.Readable.Parsed} (h1 : p.sts.size = 1) (h0 : 0 <
   obtain ⟨hcs, hlen⟩ := colsHold_inRow h1 h0 hc0 w n hl0 hqa hq2 (by omega) hN hC hbase
   exact ⟨hcs, by rw [hlen]; omega⟩
 
-/-! ## An output row -/
-
-/-- **The unit's returned output `j` is at its output group's column `16 j`** (`outCol_leaf` at copy 0), wherever the
-unit returns the outputs. -/
 theorem outCol_unit {tags : Flock.Tags} {c : Circuit} (P : FlockSoundness.ParseFacts tags c)
     (ho : c.outNet = c.unitNet) (g : ℕ) {j : ℕ} (hj : j < (c.leavesOut.getD 0 #[]).size) :
     HmOut.outCol c g (c.leavesOut.getD 0 #[])[j] =
@@ -258,9 +216,6 @@ theorem outCol_unit {tags : Flock.Tags} {c : Circuit} (P : FlockSoundness.ParseF
     h16 (fun u hu => by rw [hget u hu]; exact (hlo u hu).1) hpv g hupv hj
   rwa [Nat.add_zero] at h
 
-/-- **A copy's columns hold its unit's output row `jo`**: at V*'s output layout (`OutsLaid`), one output port per
-output row, the bytes `accOutForms` reads at output row `jo < 2`'s instance `n` are what copy `n` holds from the output
-group's first column `B` plus `1024 jo`. -/
 theorem colsHold_outRow {p : Flock.Readable.Parsed} (h1 : p.sts.size = 1) (h0 : 0 < p.sts.size) {c : Circuit}
     (hc0 : p.sts[0].c = c) {tags : Flock.Tags} (P : FlockSoundness.ParseFacts tags c) (ho : c.outNet = c.unitNet)
     (hlaid : FlockC3.RegLevels.OutsLaid c 0) (hr : c.outRowPorts = Array.replicate c.outPorts.size 1) {B : ℕ}
@@ -307,10 +262,6 @@ theorem colsHold_outRow {p : Flock.Readable.Parsed} (h1 : p.sts.size = 1) (h0 : 
     Claims.Recursion.VStar.copyOf_eq hj]
   simp only [Claims.Recursion.VStar.copyIdx, hc0, h1, Nat.mul_one, Nat.add_zero]
 
-/-- **A rec-open copy's `acc_out` columns hold its unit's `acc_out` row**: at a circuit `RecOpen.check` accepts at
-`rec-open/l<L>-h<H>`, of V*'s seven rows, one output port per output row, `acc_out` is output row 1 (its rows'
-names, `rowsOk` and `OutsLaid`), at the copy's columns from `Family.outCol L H + 1024` (`outCols_of_laid` at
-`RecOpen.unitLaid`, which also bounds the outputs within the computed columns). -/
 theorem colsHold_accOut {p : Flock.Readable.Parsed} (h1 : p.sts.size = 1) (h0 : 0 < p.sts.size) {c : Circuit}
     (hc0 : p.sts[0].c = c) {tags : Flock.Tags} (P : FlockSoundness.ParseFacts tags c) (ho : c.outNet = c.unitNet)
     {LANES HH : ℕ} (hn : c.unit.name = Flock.RecOpen.unitName LANES HH) (hsz : c.ports.size = 7)
@@ -368,12 +319,6 @@ theorem colsHold_accOut {p : Flock.Readable.Parsed} (h1 : p.sts.size = 1) (h0 : 
   have := colsHold_outRow h1 h0 hc0 P ho hlaid hr hB' hE' w n (jo := 1) (by omega)
   rwa [Nat.mul_one] at this
 
-/-! ## At a staged level part -/
-
-/-- **What a staged level part's statement gives its one table**: where part `s` is V*'s level statement
-`.recOpen lv L H n` and stages, its statement has one table, whose circuit is the part's (`partCircuit_staged`),
-accepted by `HmRow.parse` and named `rec-open/l<L>-h<H>` (`stagedTables`), within the headlines' scope (`staged_scope`:
-it returns its outputs, every row a `sha512/row/v1` row), with V*'s seven row ports (`checkParsed_ok`). -/
 theorem stagedRecOpen {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {p : Flock.Readable.Parsed}
     (hx : Flock.Readable.parseBytes readOfO xO = some p) (h0 : 0 < p.sts.size) {r : XR} (hr : readX x = some r)
     {ss : Array VStar.Stmt} (hss : Flock.RecVStar.statements r.shape = .ok ss) {lv LANES HH n : ℕ}
@@ -418,9 +363,6 @@ theorem stagedRecOpen {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s 
   exact ⟨h1, hc0, ⟨tags, P⟩, hn, ho, h7, fun q hq => (FlockSoundness.Discharge.Layout.scopeOk_ports hsc q hq).1,
     ht, hpi⟩
 
-/-- **`accHolds_recorded_layR`'s `bi`**: at a staged level part `.recOpen lv L H n` with circuit `c`, the bytes
-`accSegs` reads at the unit's `acc` row, instance `m`, are what copy `m` of its one table (`copyAtR`'s, at
-`p.sts[0]!`) holds from column `128 L + 1024 max(1, ⌈H/2⌉)`, at least 32 of them. -/
 theorem accBytes_staged {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {p : Flock.Readable.Parsed}
     (hx : Flock.Readable.parseBytes readOfO xO = some p) (h0 : 0 < p.sts.size) {r : XR} (hr : readX x = some r)
     {ss : Array VStar.Stmt} (hss : Flock.RecVStar.statements r.shape = .ok ss) {lv LANES HH n : ℕ}
@@ -438,8 +380,7 @@ theorem accBytes_staged {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st 
   rw [List.size_toArray, hlen]
   omega
 
-/-- **`accHolds_recorded_layR`'s `bo`**, where the part's output rows are one port each: the bytes `accOutForms` reads
-at the unit's `acc_out` row `qo`, instance `m`, are what copy `m` holds from column `Family.outCol L H + 1024`. -/
+/-- Takes the output rows one port each, which `accOutBytes_hidden` discharges on the hidden-output path; on the public-output path `parse_rowPorts` exposes only their sum. -/
 theorem accOutBytes_staged {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {p : Flock.Readable.Parsed}
     (hx : Flock.Readable.parseBytes readOfO xO = some p) (h0 : 0 < p.sts.size) {r : XR} (hr : readX x = some r)
     {ss : Array VStar.Stmt} (hss : Flock.RecVStar.statements r.shape = .ok ss) {lv LANES HH n : ℕ}
@@ -458,8 +399,6 @@ theorem accOutBytes_staged {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart 
   rw [List.size_toArray, hlen]
   omega
 
-/-- `accOutBytes_staged` at a hidden-output statement, whose output rows are one port each
-(`Flock.Readable.outRowPorts_hidden`). -/
 theorem accOutBytes_hidden {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {p : Flock.Readable.Parsed}
     (hx : Flock.Readable.parseBytes readOfO xO = some p) (h0 : 0 < p.sts.size) (hh : p.tags.hiddenOutputs = true)
     {r : XR} (hr : readX x = some r)

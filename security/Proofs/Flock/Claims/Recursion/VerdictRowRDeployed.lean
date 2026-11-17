@@ -44,30 +44,7 @@ import Proofs.Flock.Claims.Recursion.VerdictAssembly
 import Proofs.Flock.Claims.Recursion.VerdictRowG
 import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
 
-/-!
-# Row R at the deployed reader
-
-`DecAt.runs_assembled` (`VerdictAssembly`) takes row R as S and its groups (`hS`, `hg`), the rep's coin rounds' sizes
-(`hsz`), `w`'s size (`hw`) and every part's residuals vanishing (`hparts`, `PartsZero`). At a decision of an inner
-statement the reader reads at the dense form:
-
-* **S and its groups** (`DecAt.structure_ok`): the reader's scope check builds V\*'s list (`RecVStar.statements`), which
-  computes the verifier's groups at the inner shape (`groups_of_statements`). That shape is table `i`'s decode shape
-  (`DecAt.sh`) in every field V\*'s algebra reads (`DecAt.sh_alg`): `m`, `k_log` and the claims are the files'
-  (`checkShape_files`, `innerSetup_files`; two claims a region at the session's two points, `extras_size`), the schedule
-  `fast100`'s. The digest and salt widths, which `Refine.shapeOf` sets and `RecResiduals.shape?` leaves at their
-  defaults, are read by neither `structureOf` nor `portSizes` (`structureOf_alg`, `portSizes_alg`, `part_alg`).
-* **`w`'s size** (`DecAt.w_size`, `DecAt.hw_of_acc`): `w` is the frames' values (`chunks_vals`), one per element of the
-  rounds (`vals_repFrames_rounds`), then the rep's accumulators, and S's `nw` is the rounds' elements and the four
-  running sums (`structureOf_nw`). So `hw` is `(acc k).size = 4`.
-* **The parts' residuals** (`DecAt.partsZero_of_pieces`): from the `rec-residuals` pieces as `resPieces_computes` gives
-  them (`resHolds elemAt vvAt`), with one piece per (rep, group) at the copy `keyAt r p` (`hcover`), the copy's
-  elements being `w` at the group's row ports (`hE`, the layout's tie) and its verifier values being `verifierRows`' `v`
-  at the group's `V` (`hvv`, check 5's tie at the verifier's values, the vcalls tie).
-* **`runs_assembled_R`**: `runs_assembled` with `hS`, `hg` and `hw` discharged, `hparts` as the pieces and their ties,
-  and `hsz` kept: the record's rounds are the prover's JSON (`jAt` substitutes only coins and digests), so their
-  sizes need the canonical record or the coin tie.
--/
+/-! Row R at the deployed reader (`runs_assembled_R`). -/
 
 @[expose] public section
 
@@ -84,10 +61,6 @@ open FlockSoundness.Discharge.Exec (repFrames)
 open FlockSoundness.Discharge.Recursion (HClass)
 open FlockSoundness.Discharge.DecodeZL (ProofSizes decodeProof_sizes)
 
-/-! ## The fields V\*'s algebra reads -/
-
-/-- **A shape's algebra fields**: `m`, `k_log`, the claims, the schedule and `holo`, with the digest and salt widths at
-their defaults. -/
 def algShape (sh : Shape) : Shape :=
   { m := sh.m, kLog := sh.kLog, claims := sh.claims, sched := sh.sched, holo := sh.holo }
 
@@ -161,7 +134,6 @@ theorem portSizes_alg (sh : Shape) : portSizes (algShape sh) = portSizes sh := b
 theorem part_alg (sh : Shape) (j : ℕ) : RecResiduals.part (algShape sh) j = RecResiduals.part sh j := by
   simp only [RecResiduals.part, structureOf_alg, portSizes_alg]
 
-/-- **S's `nw` is w's names**: the rounds' elements, then the four running sums. -/
 theorem structureOf_nw {sh : Shape} {S : RecAlgebra.GfS} (h : structureOf sh = .ok S) :
     S.nw = (rounds sh).flatten.size + 4 := by
   unfold RecAlgebra.structureOf at h
@@ -179,15 +151,12 @@ theorem structureOf_nw {sh : Shape} {S : RecAlgebra.GfS} (h : structureOf sh = .
     subst hb
     simp [wNames, accNames]
 
-/-! ## V\*'s list computes the groups -/
-
 theorem ok_of_mapError' {ε A : Type} {e : Except ε A} {g : ε → ε} {a : A} (h : e.mapError g = .ok a) :
     e = .ok a := by
   cases e with
   | error _ => simp [Except.mapError] at h
   | ok _ => simpa [Except.mapError] using h
 
-/-- `RecResiduals.shape?`'s shape: `fast100`'s schedule, the other fields at their defaults. -/
 theorem shape?_some {m k c : ℕ} {sh : Shape} (h : RecResiduals.shape? m k c = some sh) :
     ∃ s, fast100 m = some s ∧ sh = { m := m, kLog := k, claims := c, sched := s } := by
   unfold RecResiduals.shape? at h
@@ -199,8 +168,6 @@ theorem shape?_some {m k c : ℕ} {sh : Shape} (h : RecResiduals.shape? m k c = 
     obtain ⟨-, rfl⟩ := h
     exact ⟨s, rfl, rfl⟩
 
-/-- **V\*'s list holds the verifier's groups**: `RecVStar.statements` returns only where the inner shape is
-`RecResiduals.shape?`'s and its algebra's S and groups are computed (`RecResiduals.lean:119-139`). -/
 theorem groups_of_statements {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss) :
     ∃ sh0 S gs, RecResiduals.shape? i.m i.kLog i.claims = some sh0 ∧
       structureOf { sh0 with holo := i.holo } = .ok S ∧
@@ -219,7 +186,6 @@ theorem groups_of_statements {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : R
   obtain ⟨S, hS, hg⟩ := FlockC3.VStarList.eok_bind hgs'
   exact ⟨sh0, S, gs, hsh, hS, hg⟩
 
-/-- **The extra claims number the regions times the points.** -/
 theorem extras_size {s : Stmt} {pts : Array (Array F128)} {e : Array Claim} (h : s.extraClaims pts = .ok e) :
     e.size = s.regions.size * pts.size := by
   obtain ⟨ess, hess, hfl⟩ := FlockSoundness.Refine.extraClaims_ok s pts e h
@@ -236,8 +202,6 @@ namespace DecAt
 variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
   (D : DecAt rd x ms cs) (cls : HClass)
 
-/-- **Table `i`'s decode shape is V\*'s inner shape** in every field V\*'s algebra reads, at a decision of an inner
-statement the reader reads at the dense form, where the session's points are the link's. -/
 theorem sh_alg {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) {i : ℕ} (hi : i < D.sts.size)
     (hpts : D.sess.points = pointsOf D.spec D.d.c₁) :
@@ -301,8 +265,6 @@ theorem sh_alg {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst
   congr 1
   all_goals first | exact hmm | exact hkk | exact hcc | exact hsc | exact hh.symm
 
-/-- **S and its groups at table `i`** (row R's `hS` and `hg`): V\*'s list, which the reader's scope check builds,
-computes them at the inner shape, which is table `i`'s decode shape in the fields they read. -/
 theorem structure_ok {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) {i : ℕ} (hi : i < D.sts.size)
     (hpts : D.sess.points = pointsOf D.spec D.d.c₁) :
@@ -318,18 +280,13 @@ theorem structure_ok {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement
   · rw [← portSizes_alg (D.sh cls i), he]
     exact hg
 
-/-! ## `w`'s size -/
-
 variable (acc : ℕ → Array F128) (i : ℕ) (r : Fin 2)
 
-/-- Rep `k`'s `w` is its frames' values, then its accumulators. -/
 theorem w_toList (k : ℕ) (a : Array F128) :
     (D.w k a).toList =
       vals (repFrames (D.ctx k).st (D.ctx k).sch (D.ctx k).dom (D.ctx k).n D.d.f.ps[k]! (D.T k)) ++ a.toList := by
   rw [DecAt.w, Array.toList_append, List.toList_toArray, FlockDeploy.chunksOf, FlockDecodeTies.chunks_vals]
 
-/-- **Rep `r`'s `w` has one value per element of the rounds, then its accumulators**, where the session's points
-are the link's and the rep's proof is shaped for its file. -/
 theorem w_size (hG : D.RowG cls acc i) (hpts : D.sess.points = pointsOf D.spec D.d.c₁)
     (hk : 2 * i + r < D.d.f.ps.size)
     (hsh : ProofShaped (FlockDeploy.shapeAt (tabsOf D.sts) (pointsOf D.spec D.d.c₁) (2 * i + r))
@@ -352,7 +309,6 @@ theorem w_size (hG : D.RowG cls acc i) (hpts : D.sess.points = pointsOf D.spec D
   show (D.w (2 * i + r) (acc (2 * i + r))).toList.length = _
   rw [w_toList, List.length_append, hv, List.length_map, Array.length_toList, Array.length_toList]
 
-/-- **Row R's `hw`**: at S, `w` has S's `nw` elements where the rep's accumulators are the four running sums. -/
 theorem hw_of_acc (hG : D.RowG cls acc i) (hpts : D.sess.points = pointsOf D.spec D.d.c₁)
     (hk : 2 * i + r < D.d.f.ps.size)
     (hsh : ProofShaped (FlockDeploy.shapeAt (tabsOf D.sts) (pointsOf D.spec D.d.c₁) (2 * i + r))
@@ -361,12 +317,6 @@ theorem hw_of_acc (hG : D.RowG cls acc i) (hpts : D.sess.points = pointsOf D.spe
     (D.rep cls acc i r).w.size = S.nw := by
   rw [D.w_size cls acc i r hG hpts hk hsh, hacc, structureOf_nw hS]
 
-/-! ## The parts' residuals from the `rec-residuals` pieces -/
-
-/-- **Row R's `hparts` from the pieces**: where every `rec-residuals` piece holds at the decision (`resHolds`), each
-group `p` of S has a piece at the copy `keyAt p` whose group is the verifier's part `p` (`hcover`), that copy's
-elements are `w` at the group's row ports (`hE`) and its verifier values `verifierRows`' `v` at the group's `V` (`hvv`),
-every part's residuals vanish at rep `r`'s values. -/
 theorem partsZero_of_pieces {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (rpieces : List ResPiece)
     (elemAt : Claims.Msg → List Claims.Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → F128)
     (vvAt : Claims.Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → F128)
@@ -386,11 +336,7 @@ theorem partsZero_of_pieces {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (
   rw [← hkey]
   exact hres q hq
 
-/-! ## The assembly with row R discharged -/
-
-/-- **Table `i`'s reps run at the decision**, as `runs_assembled`, with row R's S, groups and `w`'s size discharged,
-its parts' residuals given by the `rec-residuals` pieces and their two ties (the layout's `hE`, check 5's `hvv`), and
-its coin rounds' sizes (`hsz`) and the accumulators' number (`hacc`) as hypotheses. -/
+/-- Takes the coin rounds' sizes (`hsz`), which the prover's JSON record leaves unfixed, and the accumulators' number (`hacc`) as hypotheses. -/
 theorem runs_assembled_R {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) (hi : i < D.sts.size)
     (hti : i < D.spec.tables.size)

@@ -34,16 +34,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# Row E's chain at any statement, messages and coins (`Top.chainHolds_exists`, `Top.rowEJoint_holds`)
-
-`ChainHolds` asks one chain per table whose row past each row D piece's position is `consTerm` of the piece's opened
-row, the chain's row at that position and the piece's `coef`, each read off the statement, the messages and the
-coins. Within a table the pieces sit at distinct positions (`chainPos_inj`: rep-major, then by level and by query,
-each below the rep's `nOpen`), so a chain built row by row from any start (`recChain`) carries every piece's running
-sum. So `Top.RowEJoint` holds at every layout, check and witnesses (`rowEJoint_holds`), with no tie to the parts'
-`rec-acc` slots.
--/
+/-! Some chain carries row D's running sums at any statement, messages and coins (`Top.chainHolds_exists`), so `Top.RowEJoint` holds at every layout, check and witnesses with no tie to the parts' `rec-acc` slots. -/
 
 @[expose] public section
 
@@ -73,8 +64,6 @@ theorem levSum_inj (a : ℕ → ℕ) {ℓ ℓ' j j' : ℕ} (hj : j < a ℓ) (hj'
     rw [levSum_succ] at h1
     omega
 
-/-- **Distinct openings of one schedule sit at distinct chain positions**: at reps `< 2`, levels of the schedule and
-queries of their level. -/
 theorem chainPos_inj {sch : Schedule} {r r' ℓ ℓ' j j' : ℕ} (hr : r < 2) (hr' : r' < 2)
     (hℓ : ℓ < sch.levels.size) (hℓ' : ℓ' < sch.levels.size) (hj : j < (sch.levels[ℓ]!).q)
     (hj' : j' < (sch.levels[ℓ']!).q) (h : chainPos sch r ℓ j = chainPos sch r' ℓ' j') :
@@ -106,8 +95,6 @@ theorem chainPos_inj {sch : Schedule} {r r' ℓ ℓ' j j' : ℕ} (hr : r < 2) (h
   exact ⟨rfl, levSum_inj (fun ℓ' => (sch.levels.getD ℓ' default).q) hj hj' h'⟩
 
 open Classical in
-/-- **A chain built row by row**: row `p + 1` of table `t` is `step q` of row `p` at the piece `q` of `pcs` at table
-`t` and position `p`, where there is one, and row `p` again where there is none. -/
 noncomputable def recChain (pcs : List OpenPiece) (pos : OpenPiece → ℕ)
     (step : OpenPiece → Array F128 → Array F128) (t : ℕ) : ℕ → Array F128
   | 0 => #[]
@@ -115,7 +102,6 @@ noncomputable def recChain (pcs : List OpenPiece) (pos : OpenPiece → ℕ)
     if h : ∃ q ∈ pcs, q.table = t ∧ pos q = p then step (Classical.choose h) (recChain pcs pos step t p)
     else recChain pcs pos step t p
 
-/-- **The chain steps at each piece**, where no two pieces of one table share a position. -/
 theorem recChain_step {pcs : List OpenPiece} {pos : OpenPiece → ℕ} {step : OpenPiece → Array F128 → Array F128}
     (hinj : ∀ q ∈ pcs, ∀ q' ∈ pcs, q.table = q'.table → pos q = pos q' → q = q') {q : OpenPiece} (hq : q ∈ pcs) :
     recChain pcs pos step q.table (pos q + 1) = step q (recChain pcs pos step q.table (pos q)) := by
@@ -136,7 +122,6 @@ open RecDeploy.Rows (accHolds sideAt coefRead rowDPieces chainPos recChain)
 
 variable (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ)
 
-/-- **The row past a piece's position** that its running sum asks, from the row `a` at its position. -/
 noncomputable def accStep (x : Msg) (ms : List Msg) (cs : List Coin) (q : OpenPiece) (a : Array F128) :
     Array F128 :=
   #[FlockVBridge.consTerm (2 ^ ((sideAt rd x ms q).sch.levels[q.level]!).lanes)
@@ -146,8 +131,6 @@ noncomputable def accStep (x : Msg) (ms : List Msg) (cs : List Coin) (q : OpenPi
       (FlockSoundness.Refine.openAt (sideAt rd x ms q).lig ((sideAt rd x ms q).sch.levels.size - 1) q.level).1[q.query]!
       a (coefRead x cs q) 1]
 
-/-- **Row D's pieces of one table sit at distinct chain positions**: two pieces of `rowDPieces key x` at one table and
-one position are one piece (`chainPos_inj` at the table's schedule, and the key is `key`'s). -/
 theorem rowDPieces_pos_inj (x : Msg) (ms : List Msg) :
     ∀ q ∈ rowDPieces key x, ∀ q' ∈ rowDPieces key x, q.table = q'.table →
       chainPos (sideAt rd x ms q).sch q.rep q.level q.query =
@@ -174,8 +157,6 @@ theorem rowDPieces_pos_inj (x : Msg) (ms : List Msg) :
     subst ht h1 h2 h3
     rw [hk, hk']
 
-/-- **Some chain carries row D's running sums** at every statement, messages and coins: `recChain` at
-`accStep`. -/
 theorem chainHolds_exists (x : Msg) (ms : List Msg) (cs : List Coin) : ∃ ch, ChainHolds rd key x ms cs ch := by
   refine ⟨recChain (rowDPieces key x) (fun q => chainPos (sideAt rd x ms q).sch q.rep q.level q.query)
     (accStep rd x ms cs), ?_⟩
@@ -185,8 +166,6 @@ theorem chainHolds_exists (x : Msg) (ms : List Msg) (cs : List Coin) : ∃ ch, C
   obtain rfl | rfl : k = 0 ∨ k = 1 := by omega
   all_goals first | rfl | simp [accStep]
 
-/-- **Row E's leaf holds** at every layout, check and witnesses: `chainHolds_exists` at the messages the last
-message opens and the coins. -/
 theorem rowEJoint_holds (H : Msg → Msg) (D : Claims.Recursion.Deploy Coin)
     (Bd : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace) (L : LayoutB)
     (shape : Claims.Recursion.Form → Prop)

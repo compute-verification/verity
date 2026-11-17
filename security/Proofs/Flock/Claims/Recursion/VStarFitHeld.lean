@@ -45,24 +45,7 @@ import Proofs.Flock.Claims.Recursion.VStarCap0
 import Proofs.Flock.Claims.Recursion.VStarHh
 import Proofs.Flock.Claims.Recursion.VStarPortsM
 
-/-!
-# The slots a part holds are fitted to their rounds' rows (`hfit_A0`)
-
-`hh_of_fit`'s `hfit` at the deployed builder (`g := fitPin`, the fitted records `InnerRec.fit x`): each round before
-the last that part `s`'s message reads at `layoutBTops` (`msgAt`) is as many hm96 slots as the round has rows, and the
-`k`-th slot's port reads, at the fitted port inputs, the round's `k`-th row.
-
-* **Round 0** is RecCap's `N` instances of port `top` (`capHold`), which read round 0's rows in order
-  (`portRow_cap0`, `fit_cap0`).
-* **Stream round `j + 1`**, held where it has no tops and absorbs a row, is one slot: the port of part `s` that reads
-  the row (`heldRows`), an algebra part's `m<k>` at rep `rep`, whose input is message round `k`'s rep-`rep` row
-  (`portRow_algebra`), the last row of inner round `msgRound rs rep k + 1 = j + 1` (`msgsOf`). That round's one row is
-  fitted to the slot `rowSlot` names, the first part holding it, so it reads unchanged at part `s` where the two ports
-  have one word count (`hW`) (`fit_stream`).
-
-Part `s`'s stager accepts (`hok`) and its circuit is the staged one (`hS`, for `checkParsed` and the slots' input
-columns, `rowHidden_staged`).
--/
+/-! The slots a part holds are fitted to their rounds' rows (`hfit_A0`). -/
 
 @[expose] public section
 
@@ -79,7 +62,6 @@ theorem claimIndex_top : RecVStar.claimIndex "top" = none := by
   unfold RecVStar.claimIndex
   exact ite_eq_right_iff.2 fun h => absurd h (by decide +kernel)
 
-/-- **A statement's own port is never `top`.** -/
 theorem ownPort_ne_top {sv : _root_.VStar.Stmt} {q : String × String × Array (Option ℕ)}
     (hq : q ∈ RecVStar.ownPorts sv) : q.1 ≠ "top" := by
   cases sv with
@@ -125,14 +107,12 @@ theorem ownPort_ne_top {sv : _root_.VStar.Stmt} {q : String × String × Array (
   | cap _ _ => simp [RecVStar.ownPorts] at hq
   | link _ _ _ => simp [RecVStar.ownPorts] at hq
 
-/-- A round's rows read off a longer history are the same. -/
 theorem roundRows_take (I : InnerRec) (w : Claims.Flock.Wit) (ρ : I.Tape) (hist : List (Msg × Msg)) {K i : ℕ}
     (h : i ≤ K) : roundRows I w ρ (hist.take K) i = roundRows I w ρ hist i := by
   have h1 : min i K = i := Nat.min_eq_left h
   have h2 : min K i = i := by omega
   simp only [roundRows, List.take_take, h1, h2]
 
-/-- Part `s`'s statement and circuit, where `partAt` has them. -/
 theorem partAt_some {x : Msg} {s : ℕ} {sv : _root_.VStar.Stmt} {c : Circuit} {r : XR} (hr : readX x = some r)
     (hp : partAt x s = some (sv, c)) :
     (RecVStar.statements r.shape).toOption.bind (·[s]?) = some sv ∧ r.w.parts[s]?.bind partCircuit = some c := by
@@ -148,7 +128,6 @@ theorem partAt_some {x : Msg} {s : ℕ} {sv : _root_.VStar.Stmt} {c : Circuit} {
       obtain ⟨rfl, rfl⟩ := hp
       exact ⟨rfl, rfl⟩
 
-/-- **A staged part's circuit parses as its statement's** (`checkParsed`). -/
 theorem checkParsed_staged {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {r : XR} {c : Circuit}
     {sv : _root_.VStar.Stmt} (hr : readX x = some r) (hpc : r.w.parts[s]?.bind partCircuit = some c)
     (hsv : (RecVStar.statements r.shape).toOption.bind (·[s]?) = some sv) :
@@ -164,7 +143,6 @@ theorem checkParsed_staged {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart 
   rw [← hc0]
   exact (htab 0 h0).2.2
 
-/-- A part holding a row has a statement. -/
 theorem heldRows_stmt {r : XR} {s : ℕ} {h : ℕ × String × ℕ × ℕ} (hh : h ∈ heldRows r s) :
     ∃ sv, (RecVStar.statements r.shape).toOption.bind (·[s]?) = some sv := by
   cases hst : (RecVStar.statements r.shape).toOption.bind (·[s]?) with
@@ -174,7 +152,6 @@ theorem heldRows_stmt {r : XR} {s : ℕ} {h : ℕ × String × ℕ × ℕ} (hh :
     rw [hst] at hh
     simp at hh
 
-/-- **The absorbed row's slot**, where part `s` holds the row: one slot, the first holder's port and instance. -/
 theorem rowSlot_of_held {r : XR} {s j : ℕ} {h : ℕ × String × ℕ × ℕ} {c : Circuit}
     (hf : (heldRows r s).find? (·.1 == j) = some h) (hc : r.w.parts[s]?.bind partCircuit = some c) :
     ∃ s0 c0 h0, rowSlot r j = [(s0, h0.2.2.1, h0.2.2.2)] ∧ (heldRows r s0).find? (·.1 == j) = some h0 ∧
@@ -203,7 +180,6 @@ theorem rowSlot_of_held {r : XR} {s j : ℕ} {h : ℕ × String × ℕ × ℕ} {
         try rw [hF]
         exact ⟨s0, c0, h0, rfl, hf0, hc0⟩
 
-/-- **Stream round `j + 1`'s slots** where it has no tops and absorbs a row: the absorbed row's. -/
 theorem slotsAt_held {x : Msg} {r : XR} {rs : Array RecVStar.SchedRound} {j : ℕ} (hr : readX x = some r)
     (hrs : repSched r.shape = some rs) (hj : j < 2 * rs.size)
     (he : (rs.getD (j % rs.size) default).2.1.isEmpty = true) (ha : (rs.getD (j % rs.size) default).2.2.2 = true) :
@@ -211,7 +187,6 @@ theorem slotsAt_held {x : Msg} {r : XR} {rs : Array RecVStar.SchedRound} {j : �
   simp only [slotsAt, hr, hrs, Option.map, Option.getD]
   rw [if_pos he, if_pos (by rw [ha, decide_eq_true hj]; rfl)]
 
-/-- **A round of one slot** at the fitted records: its one row, fitted to the slot, under the round's first salt. -/
 theorem roundRows_single (I : InnerRec) {x : Msg} (w : Claims.Flock.Wit) (ρ : (I.fit x).Tape)
     {hist : List (Msg × Msg)} {i : ℕ} {sl : ℕ × ℕ × ℕ} (hl : i ≤ hist.length) (hs : slotsAt x i = [sl]) :
     roundRows (I.fit x) w ρ hist i =
@@ -227,7 +202,6 @@ theorem roundRows_single (I : InnerRec) {x : Msg} (w : Claims.Flock.Wit) (ρ : (
   rw [hrows]
   simp
 
-/-- **Message round `k`'s rep-`rep` row** is the last row of inner round `msgRound rs rep k + 1`. -/
 theorem msgsOf_rep {rs : Array RecVStar.SchedRound} {rr : ℕ → List _root_.VStar.In.Row} {k rep j : ℕ}
     {mr : Array _root_.VStar.In.Row} (hrep : rep < 2) (hk : (msgsOf rs rr)[k]? = some mr)
     (hj : msgRound rs rep k = some j) :
@@ -241,14 +215,12 @@ theorem msgsOf_rep {rs : Array RecVStar.SchedRound} {rr : ℕ → List _root_.VS
   · rw [List.getElem?_eq_none_iff.2 (by simpa using hkL)] at hk
     cases hk
 
-/-- A fitted row at a port that is not a cap's `top` is of the port's words, each 16 bits. -/
 theorem fitSlot_notTop {x : Msg} {sl : ℕ × ℕ × ℕ} (ws : Array ℕ) (ht : isTop x sl = false) :
     (fitSlot x sl ws).size = widthAt x sl ∧ ∀ j (h : j < (fitSlot x sl ws).size), (fitSlot x sl ws)[j] < 65536 := by
   have he : fitSlot x sl ws = fitRow (widthAt x sl) ws := by simp [fitSlot, ht]
   rw [he]
   exact ⟨fitRow_size _ _, fitRow_lt _ _⟩
 
-/-- **Round 0's slots are fitted to its rows**: RecCap's `N` instances of port `top` read round 0's rows in order. -/
 theorem fit_cap0 (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (I.fit x).Tape} {hist : List (Msg × Msg)} {s K : ℕ}
     {stg : Stage} {xO : Msg} {r : XR} {rs : Array RecVStar.SchedRound} (hr : readX x = some r)
@@ -291,9 +263,6 @@ theorem fit_cap0 (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg ×
   · rw [if_neg hsp] at hm0
     cases hm0
 
-/-- **A held stream round's slot is fitted to its row**: at stream round `j + 1`, where part `s` holds the absorbed
-row at its port `m<k>`'s instance `rep`, the port reads, at the fitted port inputs, the round's one row, as the slot
-`rowSlot` names has the port's word count (`hW`). -/
 theorem fit_stream (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (I.fit x).Tape} {hist : List (Msg × Msg)} {s K j : ℕ}
     {stg : Stage} {xO : Msg} {r : XR} {rs : Array RecVStar.SchedRound} (hr : readX x = some r)
@@ -408,9 +377,6 @@ theorem fit_stream (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg 
   | opening _ _ _ _ _ _ =>
     first | cases hpin | simp [_root_.VStar.In.partIn, throw, throwThe, MonadExceptOf.throw] at hpin
 
-/-- **`hh_of_fit`'s `hfit` at the deployed builder** (`g := fitPin`, the fitted records): every round before the last
-that part `s` reads (`msgAt`) is as many slots as the round has rows, the `k`-th reading the `k`-th row; round 0 at
-RecCap (`fit_cap0`), a held stream round at the part's `m<k>` port (`fit_stream`). -/
 theorem hfit_A0 (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (I.fit x).Tape} {hist : List (Msg × Msg)} {s : ℕ}
     {stg : Stage} {xO : Msg} {r : XR} {rs : Array RecVStar.SchedRound} (hr : readX x = some r)

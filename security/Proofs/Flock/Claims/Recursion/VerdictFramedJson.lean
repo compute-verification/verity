@@ -37,21 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Json.Hex
 import Proofs.Flock.Claims.Recursion.NextRHonest
 
-/-!
-# The decided record's rep streams: the reader's frames, through the substitutions
-
-Row B's `framed` asks that rep `r`'s rounds in the decoded session hold the rep's frames. At a decision of `nextR`, the
-record the verdict decodes (`jAt`) is the reader's (`recJ`) with its coins substituted and its proof digests replaced,
-and the reader's rep streams carry, round by round, the round messages `readPs` read with its schedule's coin counts
-(`recStreams`):
-
-* **The round messages are the frames** (`readPs_framesR`, `decR_framesR`): rep `k`'s block of the round messages is its
-  proof's framed bytes at the `T` it fits at.
-* **The substitutions keep what custody reads** (`arr_streams_jAt`): every stream's name, and every round's count and
-  message, read in `jAt` as in the reader's record (`KeptS`, `KeptR`); only the coins and the link's points change.
-* **A round reads back** (`roundFields_roundObj`): where the decoder read a round of the reader's record, its count is
-  the round's and its bytes are the round's message.
--/
+/-! The decided record's rep streams are the reader's frames, kept through the coin and digest substitutions. -/
 
 @[expose] public section
 
@@ -63,10 +49,6 @@ open FlockComplete.JsonRT (roundObj roundList streamObj streamList recordObj rec
   roundList_distinct streamList_distinct recordList_distinct)
 open Claims.Bridge.Custody (RoundFields)
 
-/-! ## The reader's round messages are the frames -/
-
-/-- **Each rep's block of the round messages `readPs` reads is its proof's framed bytes**, at a `T` the proof fits its
-opened rounds at. -/
 theorem readPs_framesR {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r₀ : List ByteArray}
     {rss : List (List ByteArray)} {cs : List Coin} {fl : FinalP} {pf : Array Flock.Proof × List Claims.Msg}
     (h : readPs spec sts c₁ r₀ rss cs fl = some pf) :
@@ -110,8 +92,6 @@ theorem readPs_framesR {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r�
   · rw [if_neg hc] at h
     cases h
 
-/-- **At a decision, the record's round messages are the reps' frames**: the reader's record is `recJ` at round
-messages `ms` whose `k`-th block is rep `k`'s proof's framed bytes, at a `T` the proof fits its opened rounds at. -/
 theorem decR_framesR {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     {d : DecR} (h : decR rd x as cs = some d) :
     ∃ (r₀ : List ByteArray) (rss : List (List ByteArray)) (ms : List Claims.Msg),
@@ -124,19 +104,15 @@ theorem decR_framesR {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : 
   obtain ⟨v, c₁, r₀, rss, fl, link, pf, -, -, h6, h7, -, h9, rfl⟩ := decR_some h
   exact ⟨r₀, rss, pf.2, h6, h7, rfl, readPs_framesR h9⟩
 
-/-! ## The substitutions keep the streams' names, counts and messages -/
-
 theorem forall₂_getElem {α β : Type _} {R : α → β → Prop} {l₁ : List α} {l₂ : List β} :
     List.Forall₂ R l₁ l₂ ↔ l₁.length = l₂.length ∧ ∀ i (h₁ : i < l₁.length) (h₂ : i < l₂.length), R l₁[i] l₂[i] := by
   rw [List.forall₂_iff_get]
   simp only [List.get_eq_getElem]
 
-/-- `b` reads as `a` at a round's count and message. -/
 structure KeptR (a b : Json) : Prop where
   n : b.getObjVal? "n" = a.getObjVal? "n"
   msg : b.getObjVal? "msg" = a.getObjVal? "msg"
 
-/-- `b` reads as `a` at a stream's name, and its rounds as `a`'s at their counts and messages. -/
 structure KeptS (a b : Json) : Prop where
   stream : b.getObjVal? "stream" = a.getObjVal? "stream"
   rounds : ∀ rs, Record.arr a "rounds" = .ok rs →
@@ -171,8 +147,6 @@ theorem arr_eraseCoins (j : Json) :
   unfold eraseCoins mapRounds setPoints
   rw [arr_mapKey_mapArr, arr_mapKey_ne _ _ (by decide : "streams" ≠ "link")]
 
-/-- **The verdict's record keeps the reader's streams**: each rep stream of `jAt` reads as the reader's record's, at
-its name and at its rounds' counts and messages. -/
 theorem arr_streams_jAt {H : Claims.Msg → Claims.Msg} {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f : FinalP} {recs : Array Json}
     (h : Record.arr (jAt H spec sts c₁ mids f) "streams" = .ok recs) :
@@ -194,8 +168,6 @@ theorem arr_streams_jAt {H : Claims.Msg → Claims.Msg} {spec : SessionSpec} {st
     split
     · exact keptR_coins _ _
     · exact ⟨rfl, rfl⟩
-
-/-! ## The reader's record -/
 
 theorem arr_recordObj_streams (spec : SessionSpec) (h : ByteArray → ByteArray) (rootB : Array ByteArray)
     (points : Array (Array F128)) (streams : Array (Array Round)) (proofs : Array ByteArray) :
@@ -228,8 +200,6 @@ theorem roundObj_msg (spec : SessionSpec) (h : ByteArray → ByteArray) (k : ℕ
     (roundObj spec h k r).getObjVal? "msg" = .ok (FlockComplete.hexJ (r.bytes.getD ByteArray.empty)) :=
   getObjVal?_mkObj (roundList_distinct ..) (by simp [roundList])
 
-/-- **A round of the reader's record reads back**: where the decoder read a round that reads as round `k` of the
-reader's record, its count is the round's and its bytes the round's message. -/
 theorem roundFields_roundObj {spec : SessionSpec} {h : ByteArray → ByteArray} {k : ℕ} {r : Round} {x : Json}
     (hx : KeptR (roundObj spec h k r) x) {rd : Round} (hf : RoundFields x rd.n rd.coins rd.bytes) :
     rd.n = r.n ∧ rd.bytes = some (r.bytes.getD ByteArray.empty) := by
@@ -255,7 +225,6 @@ theorem roundFields_roundObj {spec : SessionSpec} {h : ByteArray → ByteArray} 
   injection hn with hn
   exact ⟨hn.symm, hbytes⟩
 
-/-- **The stream at a name is the one at its index**, where the names are distinct. -/
 theorem find_name {l : List StreamRec} {name : String} {k : ℕ} (hk : k < l.length) (hn : l[k].name = name)
     (hnd : (l.map (·.name)).Nodup) : l.find? (·.name == name) = some l[k] := by
   rw [List.find?_eq_some_iff_getElem]

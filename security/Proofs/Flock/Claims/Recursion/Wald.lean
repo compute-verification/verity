@@ -2,24 +2,12 @@ module
 
 public import Proofs.Flock.Claims.Recursion.Serve
 
-/-!
-# `E^rep`'s weighted reruns: Wald's identity
-
-When an outer stage serves `E^rep`'s reruns, each rerun costs what serving it costs, so the composed extractor's cost is
-`E^rep`'s reruns weighted by a cost `w` of the sample each is at. A wait's samples are uniform and independent, and whether
-it reruns its `j`-th sample reads only the samples before it, so its expected weighted reruns are the expected weight times
-its expected reruns (`waitCost_exp`, Wald's identity, by induction on the samples as `waitRuns_exp` is). With one wait's
-`ε · N(K, 0) ≤ k`, `E^rep` over any sample type `D` (`erepProg`, of which `ERep`'s program is the instance at the run's
-coins) has expected weighted reruns at most `(1 + m·k) · 𝔼[w]` (`erepProg_cost_exp`), and at most `1 + m·K` reruns on
-every sample (`erepProg_runs_le`), against every run.
--/
+/-! `E^rep`'s expected weighted reruns, by Wald's identity (`waitCost_exp`, `erepProg_cost_exp`). -/
 
 @[expose] public section
 
 namespace Claims
 
-/-- **`E^rep`'s program over samples `D`**: rerun the judged sample `d₀`; if it accepted, make the `m` waits over the
-samples `ρ`, each stopping at `k` accepted reruns, and return the first assembled candidate that `check` accepts. -/
 def erepProg {D W Op : Type} (m k K : ℕ) (opens : Seen → List Op) (assemble : List Op → Option W)
     (check : W → Bool) (d₀ : D) (ρ : Fin m → Fin K → D) : RP D (Option W) :=
   .rerun d₀ fun v₀ =>
@@ -27,9 +15,6 @@ def erepProg {D W Op : Type} (m k K : ℕ) (opens : Seen → List Op) (assemble 
       firstWait k opens assemble check ((List.finRange m).map fun i => (List.finRange K).map (ρ i))
     else .ret none
 
-/-! ## One wait -/
-
-/-- **A wait's weighted reruns**: `Σ w` over the samples `rs` it reruns at, from `a` accepted so far. -/
 def waitCost {R : Type} (run : R → Transcript) (w : R → ℝ) (k : ℕ) : List R → ℕ → ℝ
   | [], _ => 0
   | r :: rs, a => if k ≤ a then 0 else w r + waitCost run w k rs (if (run r).out = .acc then a + 1 else a)
@@ -61,8 +46,6 @@ theorem waitAcc_cost_eq {R : Type} (H : Msg → Msg) (run : R → Transcript) (w
         List.length_append, List.length_singleton]
     · simp only [RP.rerunsAt, List.map_cons, List.sum_cons, Transcript.seen, hacc, ↓reduceIte, ih]
 
-/-- **Wald's identity for one wait**: over `K` uniform samples, its expected weighted reruns from `a` accepted are the
-expected weight times its expected reruns `N(K, a)`. -/
 theorem waitCost_exp {D : Type} [Fintype D] [Nonempty D] (run : D → Transcript) (w : D → ℝ) (k K : ℕ) :
     ∀ a, Ex (fun σ : Fin K → D => waitCost run w k ((List.finRange K).map σ) a) = Ex w * waitExp run k K a := by
   induction K with
@@ -106,9 +89,6 @@ theorem waitCost_exp {D : Type} [Fintype D] [Nonempty D] (run : D → Transcript
       rw [congrArg Ex (funext hin), Ex_add, Ex_mul_left, Ex_add, Ex_const]
       ring
 
-/-! ## The waits and `E^rep` -/
-
-/-- The waits' weighted reruns are at most the waits', each on its own, for a nonnegative weight. -/
 theorem firstWait_cost_le_sum {R W Op : Type} (H : Msg → Msg) (run : R → Transcript) {w : R → ℝ} (hw : ∀ r, 0 ≤ w r)
     (k : ℕ) (opens : Seen → List Op) (assemble : List Op → Option W) (check : W → Bool) :
     ∀ rss : List (List R), (((firstWait k opens assemble check rss).rerunsAt H run).map w).sum ≤
@@ -130,7 +110,6 @@ theorem firstWait_cost_le_sum {R W Op : Type} (H : Msg → Msg) (run : R → Tra
       · exact ih
     · exact ih
 
-/-- **`E^rep` reruns at most `1 + m·K` times** over any samples, against every run. -/
 theorem erepProg_runs_le {D W Op : Type} (H : Msg → Msg) (run : D → Transcript) (m k K : ℕ) (opens : Seen → List Op)
     (assemble : List Op → Option W) (check : W → Bool) (d₀ : D) (ρ : Fin m → Fin K → D) :
     ((erepProg m k K opens assemble check d₀ ρ).eval H run).2.2 ≤ 1 + m * K := by
@@ -142,8 +121,6 @@ theorem erepProg_runs_le {D W Op : Type} (H : Msg → Msg) (run : D → Transcri
     simp [List.map_map, Function.comp_def, List.sum_replicate]
   · simp [RP.eval]
 
-/-- **`E^rep`'s expected weighted reruns**: over a uniform judged sample and uniform waits' samples, against every run and
-for every nonnegative weight `w` of a sample, `𝔼[Σ w] ≤ (1 + m·k) · 𝔼[w]`. -/
 theorem erepProg_cost_exp {D W Op : Type} [Fintype D] [Nonempty D] (H : Msg → Msg) (run : D → Transcript) {w : D → ℝ}
     (hw : ∀ d, 0 ≤ w d) (m k K : ℕ) (opens : Seen → List Op) (assemble : List Op → Option W) (check : W → Bool) :
     Ex (fun s : D × (Fin m → Fin K → D) =>

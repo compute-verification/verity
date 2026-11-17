@@ -41,22 +41,7 @@ import Proofs.Flock.Claims.Recursion.NextRCounts
 import Proofs.Flock.Claims.Recursion.NextRFits
 import Proofs.Flock.Recursive.HoloRepCoins
 
-/-!
-# V\*'s inner parts' port names (`innerPorts_named`)
-
-Every port of an inner part at the compiled statement (`partAt x s = some (.inner j nm pt, c)`) is `acc0`, `acc1`, or
-`m<i>` at one of the rep schedule's message rounds (`i < (commitRounds rs).length`, `rs` the inner shape's `repSched`):
-
-* **The part is one of V\*'s** (`inner_mem`): the statement list is `statementsOf`'s, whose inner statements are the parts
-  of `parts (specOf vsh holo)`.
-* **Its ports are the spec's** (`parts_ports`, `innerUnit_sizes`): `parts` gives each part ports `S.ports[p]!`, and the
-  part's own `checkRepS` (in `checkParsed`'s unit, which `readX` ran) holds each port to at least one element, so `p` is in
-  range (the default port has none).
-* **The spec's names** (`specOf_names`): `spec`'s are `m0 … m(N−1)` then `acc0, acc1`, `N` the size of
-  `Algebra.rounds`; `specHolo`'s are `m0 … mN` then the same two.
-* **The count** (`vrounds_size`, `repRounds_countP`, `holoRepRounds_countP`): `repRounds` absorbs at `N` of its rounds
-  (`m ≥ 22`), and `holoRepRounds` at one more.
--/
+/-! V\*'s inner parts' port names: `acc0`, `acc1` or a message round's `m<i>` (`innerPorts_named`). -/
 
 @[expose] public section
 
@@ -68,20 +53,14 @@ open FlockSoundness.Refine (ebind_ok)
 open Flock.Guarantees.HoloRepCoins (obind_some)
 open _root_.VStar.Algebra (Name)
 
-/-! ## The size of `Algebra.rounds` -/
-
-/-- `rounds`' state in its loops: the rounds so far, the message counter and the out-of-domain counter. -/
 abbrev VSt := Array (Array Name) × ℕ × ℕ
 
-/-- `rounds`' push of a message, at the message counter. -/
 def vF1 (b : Array (Array Name) × ℕ) (_ : ℕ) : Array (Array Name) × ℕ :=
   (b.1.push (_root_.VStar.Algebra.msgNames b.2), b.2 + 1)
 
-/-- `rounds`' push of an out-of-domain value with a message, at the message and out-of-domain counters. -/
 def vF2 (b : VSt) (_ : ℕ) : VSt :=
   (b.1.push (#[Name.ood b.2.2] ++ _root_.VStar.Algebra.msgNames b.2.1), b.2.1 + 1, b.2.2 + 1)
 
-/-- `rounds` before `T`: the zerocheck's, the lincheck's and the ring switches' rounds. -/
 def vPre (sh : _root_.VStar.Algebra.Shape) : Array (Array Name) :=
   (List.range' 0 sh.claims).foldl (fun out k => out.push ((Array.range 128).map (Name.rs k)))
     ((((List.range' 0 (sh.kLog - 6)).foldl (fun out j => out.push #[Name.q1 j, Name.qinf j])
@@ -89,24 +68,20 @@ def vPre (sh : _root_.VStar.Algebra.Shape) : Array (Array Name) :=
         #[(Array.range 64).map Name.ab ++ (Array.range 64).map Name.c]).push #[Name.fa, Name.fb])).push
       ((Array.range 64).map Name.zp)))
 
-/-- `rounds` before its level loop. -/
 def v0 (s : Schedule) (pre : Array (Array Name)) : VSt :=
   let a1 := List.foldl vF1 ((pre.push #[Name.T]).push #[Name.ood 0], 0) (List.range' 0 (s.k0 + 1))
   let a := List.foldl vF2 (a1.1, a1.2, 1) (List.range' 0 2)
   (a.1.push (_root_.VStar.Algebra.msgNames a.2.1), a.2.1 + 1, a.2.2)
 
-/-- A level of `rounds`' loop but the last. -/
 def vMid (s : VSt) : VSt :=
   let a1 := List.foldl vF1 (s.1, s.2.1) (List.range' 0 4)
   let a := List.foldl vF2 (a1.1, a1.2, s.2.2) (List.range' 0 2)
   (a.1.push (_root_.VStar.Algebra.msgNames a.2.1), a.2.1 + 1, a.2.2)
 
-/-- The last level of `rounds`' loop, with the final `yr`. -/
 def vLast (ext : ℕ) (s : VSt) : VSt :=
   let a := List.foldl vF1 (s.1, s.2.1) (List.range' 0 3)
   (a.1.push (_root_.VStar.Algebra.msgNames a.2 ++ Array.map Name.yr (Array.range (2 <<< ext))), a.2 + 1, s.2.2)
 
-/-- `rounds`' level loop over the levels `l`, of `R` after the first: `G1` at each but the last, `G2` there. -/
 def vLevels (R : ℕ) (G1 G2 : VSt → VSt) (l : List ℕ) (init : VSt) : VSt :=
   Id.run (forIn l init fun i s => if i + 1 < R then pure (ForInStep.yield (G1 s)) else pure (ForInStep.yield (G2 s)))
 
@@ -162,7 +137,6 @@ theorem vLevels_foldl (R : ℕ) (G1 G2 : VSt → VSt) (l : List ℕ) (init : VSt
   rw [e, List.forIn_pure_yield_eq_foldl]
   rfl
 
-/-- A level's message rounds: seven at each but the last, four there. -/
 def levelAbs (R : ℕ) : ℕ := ((List.range' 0 R).map fun i => if i + 1 < R then 7 else 4).sum
 
 theorem foldl_levels_size (R : ℕ) (G1 G2 : VSt → VSt)
@@ -178,9 +152,6 @@ theorem foldl_levels_size (R : ℕ) (G1 G2 : VSt → VSt)
     · simp only [hi, ↓reduceIte, h2]
       omega
 
-/-- **`Algebra.rounds`' size**: the zerocheck's `1 + (m − 6)`, the lincheck's `1 + (kLog − 6)` and `z_partial`'s, the ring
-switches' `claims`, `T`'s and the first out-of-domain value's two, Ligerito's first level's `k₀ + 4`, and its later
-levels'. -/
 theorem vrounds_size (sh : _root_.VStar.Algebra.Shape) (s : Schedule) :
     (_root_.VStar.Algebra.rounds sh s).size =
       (sh.m - 6) + (sh.kLog - 6) + sh.claims + s.k0 + 9 + levelAbs (s.levels.size - 1) := by
@@ -188,12 +159,8 @@ theorem vrounds_size (sh : _root_.VStar.Algebra.Shape) (s : Schedule) :
     vPre_size, levelAbs]
   omega
 
-/-! ## The rep schedule's message rounds -/
-
-/-- A later level's rounds' absorbing flags past `repRounds`' level 0. -/
 def lvAbs : List Bool := [true, true, false, true, false, false, true]
 
-/-- Pass `i` of `repRounds`' level loop, of `r`: its four rounds, then the next level's or the last's three. -/
 def passAbs (r i : ℕ) : List Bool := [false, true, true, true] ++ if i + 1 < r then lvAbs else [true, false, false]
 
 theorem count_passAbs (r i : ℕ) : (passAbs r i).count true = if i + 1 < r then 7 else 4 := by
@@ -212,7 +179,6 @@ theorem count_map_true {α : Type} (f : α → Bool) : ∀ l : List α, (l.map f
   | a :: l => by
     cases h : f a <;> simp [List.count_cons, List.countP_cons, h, count_map_true f l]
 
-/-- **`repRounds` absorbs at `(m − 5) + (kLog − 6) + claims + k₀ + 8` rounds and its later levels'.** -/
 theorem repRounds_countP {m kLog claims : ℕ} {sch : Schedule} {rs : Array RecVStar.SchedRound}
     (hs : fast100 m = some sch) (h : RecVStar.repRounds m kLog claims = some rs) :
     rs.toList.countP (·.2.2.2) = (m - 5) + (kLog - 6) + claims + sch.k0 + 8 + levelAbs (sch.levels.size - 1) := by
@@ -246,7 +212,6 @@ theorem countP_splice {α : Type} (p : α → Bool) (l : List α) (k : ℕ) (x a
   simp only [List.countP_append, List.countP_cons, List.countP_nil, hpx, ha, hb, ↓reduceIte]
   omega
 
-/-- **`holoRepRounds` absorbs at one round more than `repRounds`**: it puts two absorbing rounds for `z_partial`'s. -/
 theorem holoRepRounds_countP {m kLog claims : ℕ} {rs : Array RecVStar.SchedRound}
     (h : RecVStar.holoRepRounds m kLog claims = some rs) :
     ∃ out, RecVStar.repRounds m kLog claims = some out ∧
@@ -274,8 +239,6 @@ theorem commitRounds_length (rs : Array RecVStar.SchedRound) :
   exact (congrArg List.length (FlockC3.Reps.RoundOfHolo.msgRounds_toArray l)).trans
     (FlockC3.Reps.RoundOfHolo.msgL_length l)
 
-/-! ## The spec's port names -/
-
 theorem ctx_rounds {vsh : _root_.VStar.Algebra.Shape} {cx : _root_.VStar.Algebra.Ctx}
     (h : _root_.VStar.Algebra.Ctx.make vsh = .ok cx) :
     ∃ s, vsh.sched = .ok s ∧ cx.rounds = _root_.VStar.Algebra.rounds vsh s := by
@@ -288,7 +251,6 @@ theorem ctx_rounds {vsh : _root_.VStar.Algebra.Shape} {cx : _root_.VStar.Algebra
   subst h
   rfl
 
-/-- **`spec`'s port names**: `m<i>` for each of `rounds`' rounds, then the running sums' two. -/
 theorem spec_names {vsh : _root_.VStar.Algebra.Shape} {sp : _root_.VStar.RepS}
     (h : _root_.VStar.Algebra.spec vsh = .ok sp) :
     ∃ cx, _root_.VStar.Algebra.Ctx.make vsh = .ok cx ∧
@@ -309,7 +271,6 @@ theorem spec_names {vsh : _root_.VStar.Algebra.Shape} {sp : _root_.VStar.RepS}
   rw [FlockVBridge.Family.foldl_push_map]
   simp [Std.Legacy.Range.size]
 
-/-- **`specHolo`'s port names**: `m<i>` for `i` up to the plain spec's round count, then the plain spec's last two. -/
 theorem specHolo_names {vsh : _root_.VStar.Algebra.Shape} {sp : _root_.VStar.RepS}
     (h : _root_.VStar.Algebra.specHolo vsh = .ok sp) :
     ∃ S, _root_.VStar.Algebra.spec vsh = .ok S ∧ ∀ n ∈ sp.ports.map Prod.fst,
@@ -335,7 +296,6 @@ theorem specHolo_names {vsh : _root_.VStar.Algebra.Shape} {sp : _root_.VStar.Rep
         omega
       · exact .inr hn
 
-/-- **`specOf`'s port names**: `acc0`, `acc1`, and `m<i>` below `rounds`' size, one more over a holo session. -/
 theorem specOf_names {vsh : _root_.VStar.Algebra.Shape} {holo : Bool} {sp : _root_.VStar.RepS}
     (h : _root_.VStar.Algebra.specOf vsh holo = .ok sp) :
     ∃ s, vsh.sched = .ok s ∧ ∀ n ∈ sp.ports.map Prod.fst, n = "acc0" ∨ n = "acc1" ∨
@@ -376,8 +336,6 @@ theorem specOf_names {vsh : _root_.VStar.Algebra.Shape} {holo : Bool} {sp : _roo
       · exact .inl h1
       · exact .inr (.inl h1)
 
-/-! ## A part's ports are its spec's -/
-
 theorem forIn_pushes_all {ε α β : Type} (P : β → Prop) (f : α → Array β → Except ε (ForInStep (Array β)))
     (hf : ∀ a r y, f a r = .ok y → ∃ x, y = .yield (r.push x) ∧ P x) :
     ∀ (L : List α) (init v : Array β), (∀ x ∈ init, P x) → forIn L init f = .ok v → ∀ x ∈ v, P x
@@ -394,7 +352,6 @@ theorem forIn_pushes_all {ε α β : Type} (P : β → Prop) (f : α → Array �
     · exact hi z hz
     · exact hx
 
-/-- **Each part's ports are its S's** (`parts`, `Parts.lean:100`): part `(R, P, V)`'s are `S.ports[p]!` for `p ∈ P`. -/
 theorem parts_ports {S : _root_.VStar.RepS} {ps : Array _root_.VStar.Part} (h : _root_.VStar.parts S = .ok ps) :
     ∀ pt ∈ ps, ∀ q ∈ pt.S.ports, ∃ p : ℕ, q = S.ports.toArray[p]! := by
   unfold _root_.VStar.parts at h
@@ -446,7 +403,6 @@ theorem checkParsed_unit {s : _root_.VStar.Stmt} {c : Circuit} (h : (RecVStar.ch
     obtain ⟨u, hu, -⟩ := FlockSoundness.Discharge.Recursion.checkParsed_ok hcp
     exact ⟨u, hu⟩
 
-/-- **A statement of the list tagged `.inner` holds one of V\*'s parts**: one of `parts (specOf vsh holo)`. -/
 theorem inner_mem {i : RecVStar.Inner} {vs : Array _root_.VStar.Stmt} (h : RecVStar.statements i = .ok vs) {s j : ℕ}
     {nm : String} {pt : _root_.VStar.Part} (hs : vs[s]? = some (.inner j nm pt)) :
     ∃ sp ps, _root_.VStar.Algebra.specOf (FlockC3.Reps.vshOf i) i.holo = .ok sp ∧ _root_.VStar.parts sp = .ok ps ∧
@@ -468,10 +424,6 @@ theorem inner_mem {i : RecVStar.Inner} {vs : Array _root_.VStar.Stmt} (h : RecVS
         ⟨_, _, _, _, _, _, he⟩ <;> cases he
   · rcases FlockC3.VStarList.tail_cases hK hL n _ hm with ⟨_, _, he⟩ | ⟨_, _, _, he⟩ <;> cases he
 
-/-! ## The names -/
-
-/-- **Every port of an inner part at the compiled statement is `acc0`, `acc1`, or a message round's `m<i>`**: `i` below
-the count of the rep schedule's message rounds (`commitRounds`), at the inner shape's `repSched`. -/
 theorem innerPorts_named {x : Msg} {s j : ℕ} {nm : String} {pt : _root_.VStar.Part} {c : Circuit}
     (hp : partAt x s = some (.inner j nm pt, c)) {r : XR} (hr : readX x = some r)
     {rs : Array RecVStar.SchedRound} (hrs : repSched r.shape = some rs) :
