@@ -1142,7 +1142,9 @@ def _registered_addresses() -> dict[str, str]:
     """{name: address} of each machine of the register here, for a local run's records; none where the register can't be read."""
     try:
         return remote.registered_addresses(remote.load_machines())
-    except (OSError, ValueError, remote.Refused):
+    except (OSError, ValueError, remote.Refused) as e:
+        print(f"research run: the register was not read ({type(e).__name__}: {e}), so this run's records hide only its *_HOST "
+              "values", file=sys.stderr)
         return {}
 
 
