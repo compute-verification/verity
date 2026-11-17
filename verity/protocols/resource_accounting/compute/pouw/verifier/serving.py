@@ -48,7 +48,7 @@ HASH_FORMATS: dict[str, HashFormat] = {
 
 #: `pearl_c_device.DEVICES`' records: the panel's pearl-c-sm120 v1 is ``sm120`` (G = 4), its v2 ``sm120-unpromoted``
 FP8_DEVICES = ("h100", "sm120", "sm120-unpromoted")
-FP8_FORMINGS = ("v0", "v1")
+FP8_FORMINGS = ("v1",)
 FP4_PRECISIONS = ("nvfp4", "mxfp4")
 _FP8 = re.compile(r"pearl-c-(?P<device>[a-z0-9]+(?:-(?!v[0-9])[a-z0-9]+)*)-(?P<forming>v[0-9]+)(?:-(?P<hashing>h[0-9]+))?"
                   r"(?:@(?P<prices>[a-z0-9_]+))?")

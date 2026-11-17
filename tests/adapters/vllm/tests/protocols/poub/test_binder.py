@@ -15,6 +15,16 @@ if TYPE_CHECKING:
 else:
     torch = pytest.importorskip("torch")
 
+from verity.protocols.resource_accounting.memory.poub.prover.node_store.interface import (
+    Append,
+    WindowRecord,
+)
+from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry import (
+    NodeMemory,
+    PoubReceipt,
+    chain,
+)
+from verity.protocols.resource_accounting.memory.poub.prover.node_store.verify import verify_opening
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, memory_map
 from verity.protocols.resource_accounting.memory.poub.verifier import receipts as rb
 
@@ -31,13 +41,6 @@ from verity_vllm.protocols.poub.binder import (
     page_layout,
     storage_bytes,
 )
-from verity.protocols.resource_accounting.memory.poub.prover.node_store.interface import Append, WindowRecord
-from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry import (
-    NodeMemory,
-    PoubReceipt,
-    chain,
-)
-from verity.protocols.resource_accounting.memory.poub.prover.node_store.verify import verify_opening
 
 PAGES, SLOTS, HEADS, DIM = 6, 16, 2, 32          # a slot is 2 x 32 bf16 = 128 bytes; a plane-page 2 KiB
 

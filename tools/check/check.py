@@ -1,5 +1,5 @@
 """`check`: the repository's one check, what a merge into `main` requires (`research merge`), but for the jobs drive's policy
-takes off the merge gate (policy.toml's `off_gate`: circuit-check and ratchet-gate, which run after landing, in drive's
+takes off the merge gate (policy.toml's `off_gate`: circuit-check, ratchet-gate and added-lines, which run after landing, in drive's
 after-landing run on `checked`'s tip).  It reports each step's real verdict; what gates and what may stay red is drive's
 (`research.policy`).
 
@@ -32,7 +32,7 @@ after-landing run on `checked`'s tip).  It reports each step's real verdict; wha
                                                             run, where a cold `--all` (~4 h) outlasted every run
     uv run python tools/check/check.py --record [--on M]    the same through `research run --tool check` (on machine M, a
                                                             multi-core CPU pod), but for the jobs off the merge gate (`OFF_GATE`,
-                                                            policy.toml's `off_gate`: circuit-check, ratchet-gate), which only
+                                                            policy.toml's `off_gate`: circuit-check, ratchet-gate, added-lines), which only
                                                             `--deferred` and `--no-cache` run: an Attempt of the clean commit
                                                             checked out, the record `research merge` reads; with presigned URLs
                                                             for the pinned upstream build and inputs when the commit changes
@@ -120,7 +120,7 @@ parts, each once (the preflight's steps once, passed in every shard), when `rese
 shards' Attempts are passing runs of the declared command with `--shard K/N` on that clean commit, their results passed with
 no step failed or stopped, all of one plan (one N, K = 1..N once each) and one config (the commit's), and their parts are
 every part, each once, covering every job the commit's `ci.toml` puts on the gate (a shard skips a job off it, which a plan
-may still name: circuit-check and ratchet-gate run after landing alone). `research merge` takes the combined Attempt only
+may still name: circuit-check, ratchet-gate and added-lines run after landing alone). `research merge` takes the combined Attempt only
 after judging its shards again the same way and finding its steps theirs, so a missing, repeated, failed or mismatched shard
 passes nothing. A step skipped in its shard (lean-agreement without the upstream build) is skipped in the combined check too.
 When circuit-check is on the gate and its parts ran in more than one shard, the combine also joins their records
@@ -207,6 +207,10 @@ doesn't name:
                     verified `main`); one that names no commit here skips it.  Off the
                     gate: a recorded check skips it, and the after-landing run, `--deferred` with every job, runs it
                     (sharded, in the shard its plan names, else in the last)
+    added-lines     `tools/check/added_lines.py BASE HEAD`, as BASE has it (BASE the commit in the run's `check-base.txt`,
+                    else origin/main): whether the change from BASE adds a retired term, an issue id or a run id to a file.
+                    Off the gate (policy.toml's `off_gate`), so a red holds nothing; a ready mark's preflight and the
+                    sync run `main`'s copy as a warn gate (drive.toml's `warn_gates`)
 
 Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for a cold run, whose every step also runs with Lake's
 local artifact cache off, `suites.UNCACHED_ENV`), each a hit only on identical inputs:
@@ -261,6 +265,9 @@ A pass travels in a pack only once its run has ended, so the check of a candidat
 whose check is still running finds none of that check's passes.  The queue names that candidate (`TRAIN_SUITES_FROM`), and a
 `--record --on --deferred` launch whose base it is sends it (`lender`, `LEND_FILE`): each suite step then leaves out the
 suites whose key in its tree is their key here (`suites.py --lend-from`, a row marked `lent`), which that check answers for.
+A run sent its base (`BASE_FILE`, every `--record --on` run) gives both suite steps `suites.py --allowances BASE`: the tests an
+unexpired allowance of policy.toml at BASE names, where the verified queue reads them, run as expected failures, so a suite
+red only on them passes and its pass is reused, until the allowance lapses.
 
 The evidence store.  A recorded check runs the store-backed tests (adapters/vllm's `store_io`) on the store's remote, never
 skipped: its steps get VERITY_STORE_REQUIRED=1 (a missing remote fails those tests) and, as CHECK_STORE_CUSTODY, the run's custody
@@ -316,6 +323,8 @@ STORE_REQUIRED_ENV = "VERITY_STORE_REQUIRED"
 REGRESSION_ENV = "VERITY_REGRESSION"
 #: the vLLM integration's ratchet gate, which ratchet-gate runs as its base has it, so no change it judges can weaken it
 RATCHET_GATE = "adapters/vllm/tools/ratchet_gate.py"
+#: what a change's added lines bring of retired terms, issue ids and run ids, which added-lines runs as its base has it
+ADDED_LINES = "tools/check/added_lines.py"
 
 
 def custody_dir() -> Path | None:
@@ -2117,6 +2126,20 @@ def ratchet_gate(out: Path, cache: bool) -> list[str] | str:
     return ["bash", "-c", script, "ratchet-gate", base, RATCHET_GATE, keep, sys.executable]
 
 
+def added_lines(out: Path) -> list[str] | str:
+    """added-lines' command: `added_lines.py BASE HEAD` as BASE has it, BASE being the commit in the run's `BASE_FILE` (`--record
+    --on` sends it), else origin/main; skipped where BASE names no commit here or has no such script."""
+    sent = out / "inputs" / BASE_FILE
+    named = sent.read_text().strip() if sent.is_file() else "origin/main"
+    if not (base := _rev(f"{named}^{{commit}}")):
+        return f"skipped: no base: {named} names no commit here"
+    if subprocess.run(["git", "cat-file", "-e", f"{base}:{ADDED_LINES}"], cwd=ROOT, capture_output=True).returncode:
+        return f"skipped: its base {named} has no {ADDED_LINES}"
+    script = ('g=$(mktemp -d) && trap \'rm -rf "$g"\' EXIT && git show "$1:$2" > "$g/added_lines.py" && '
+              '"$3" "$g/added_lines.py" "$1" HEAD')
+    return ["bash", "-c", script, "added-lines", base, ADDED_LINES, sys.executable]
+
+
 def suite_args(held: list[str], splits: dict[str, dict] | None, out: Path) -> list[str]:
     """`suites.py`'s arguments for a shard's suites of one step (``held``: `SUITE` or `SUITE:K/M`): each suite once, a split one
     as `SUITE:K1,K2/M` with the parts it holds, pinned to the partition ``splits`` names (`@` its digest) when it names one; and
@@ -2175,9 +2198,12 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
         2 if with_lean or with_cc else 1)
     # the commit the run was sent as its suites' lender (`LEND_FILE`): each suite step leaves out what its check answers for
     lend = out / "inputs" / LEND_FILE
+    # the run's base (`BASE_FILE`), where the verified queue reads the allowances: the tests they name run as expected failures
+    base = out / "inputs" / BASE_FILE
     tail = ["--timeouts", "--jobs", str(a), *([] if cache else ["--fresh"]), *(["--mem-gb", str(tests_gb)] if tests_gb is not None else []),
             *(["--run", rid] if (rid := SETTINGS.RESEARCH_RUN_ID) else []),
-            *(["--lend-from", lend.read_text().strip()] if cache and lend.is_file() else [])]
+            *(["--lend-from", lend.read_text().strip()] if cache and lend.is_file() else []),
+            *(["--allowances", base.read_text().strip()] if base.is_file() else [])]
     lean = lean_steps(out, cache, urls, regenerate, bookkeeping, agreement_urls)
     # an auto shard's suites (`pytest:SUITE`, `lean-suites:SUITE`): only those
     held = {job: [p.partition(":")[2] for p in only or () if p.partition(":")[0] == job and p.partition(":")[2]]
@@ -2213,7 +2239,8 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     rust = ["env", f"CARGO_BUILD_JOBS={b}", f"RUST_TEST_THREADS={b}", *build, "test"]
     built = {"pytest": ("pytest", pytest, ROOT), "flock-circuit-build": ("flock-circuit-build", build, ROOT),
              "circuit-check": ("circuit-check", cc, ROOT), "flock-rust-tests": ("flock-rust-tests", rust, ROOT),
-             "ratchet-gate": ("ratchet-gate", ratchet_gate(out, cache), ROOT)}
+             "ratchet-gate": ("ratchet-gate", ratchet_gate(out, cache), ROOT),
+             "added-lines": ("added-lines", added_lines(out), ROOT)}
     if len(lean) > 1:
         built |= {s[0]: s for s in lean}
     else:

@@ -1,8 +1,8 @@
 """The network attester's link and key read from the registered hardware (`registered.py`): the accepting case, each
 refusal by its message, a site that is no site, and the Python held to the Lean (`NetworkCheck.Registered`) on the same
-vectors: the cases below and seeded sites around them, each answered by `tests/lean/RegisteredVectors.lean` in the
-certifier check's Lake package and by the Python, which agree on the registered link, on each refusal's message and on
-which sites are malformed."""
+vectors: the cases below and seeded sites around them, each answered by `tests/lean/RegisteredVectors.lean` in network
+attestation's check's Lake package and by the Python, which agree on the registered link, on each refusal's message
+and on which sites are malformed."""
 
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ def link(i: str, a: str, b: str, beta: int | None, unmediated: str | None = None
 
 def view_site() -> dict:
     """A site as a registration log's view writes it: a host behind a network attester, which splits its uplink, and
-    a memory challenger; beside them a second host behind a second certifier, a link between the two hosts, the second
+    a memory attester; beside them a second host behind a second certifier, a link between the two hosts, the second
     host's bare uplink, which states no capacity and says why no certifier splits it, and an auditor's device with a
     link to the first host. Each field a location may state is stated on one of them."""
     return {
@@ -96,14 +96,14 @@ def test_a_link_that_is_no_link_of_the_site_is_refused():
     ("ah0", "auditor-host aud0 and host node0"),
 ])
 def test_a_link_that_joins_no_certifier_and_host_is_refused(name, joins):
-    """The certifier's half to the outside, a host's bare uplink, a link between two hosts, the memory challenger's,
+    """The attester's half to the outside, a host's bare uplink, a link between two hosts, the memory attester's,
     an auditor's device's."""
     assert refusal(view_site(), name, KEY0) == (f"link {name}: it joins {joins}, not a network certifier and a host; "
                                                  f"{LINKS}")
 
 
 def no_capacity(why: str | None) -> dict:
-    """A site whose first certifier's link states no capacity, with or without a reason no certifier splits it."""
+    """A site whose first network attester's link states no capacity, with or without a reason no certifier splits it."""
     site = view_site()
     site["links"][0] = link("up0", "node0", "cert0", None, why)
     return site
@@ -111,7 +111,7 @@ def no_capacity(why: str | None) -> dict:
 
 @pytest.mark.parametrize("why", [None, "no line rate"])
 def test_a_certifiers_link_that_states_no_capacity_is_refused(why):
-    """After a key that is not the certifier's, and whatever the link says of why no certifier splits it."""
+    """After a key that is not the attester's, and whatever the link says of why no certifier splits it."""
     assert refusal(no_capacity(why), "up0", KEY0) == ("link up0: it states no capacity; a network certifier's link "
                                                       "states its line rate")
     assert refusal(no_capacity(why), "up0", KEY1).startswith(f"link up0: the key {KEY1} is not network certifier cert0's")
@@ -126,7 +126,7 @@ def test_a_link_to_an_end_nothing_registers_is_refused():
 
 
 def outside_named() -> dict:
-    """A site with a host named as the outside is, and the first certifier's link to that name."""
+    """A site with a host named as the outside is, and the first network attester's link to that name."""
     site = view_site()
     site["locs"].append(loc("outside", "host"))
     site["links"].insert(0, link("up5", "cert0", "outside", 9))
@@ -139,7 +139,7 @@ def test_the_outside_is_the_outside_whatever_is_registered_under_its_name():
 
 
 def repeated() -> dict:
-    """A site that names a link and a certifier twice: the first of each is read."""
+    """A site that names a link and a network attester twice: the first of each is read."""
     site = view_site()
     site["locs"].append(loc("cert0", "certifier", owner="auditor", key=KEY1))
     site["links"].append(link("up0", "node1", "cert1", 7))
@@ -258,7 +258,7 @@ KEYS = (KEY0, KEY1, "00", "k0", "AB", "abc", "", "0g", "١٢")
 
 def seeded(rng: random.Random) -> dict:
     """A vector near the example's: its site with locations and links dropped, repeated, re-kinded, re-keyed and
-    re-ended, or a site made whole at random, and a link and a key that are likely ones of it: the key of a certifier at the
+    re-ended, or a site made whole at random, and a link and a key that are likely ones of it: the key of a network attester at the
     link's end, most often. One vector in five has the link it names state no capacity."""
     if rng.random() < 0.6:
         site = view_site()
