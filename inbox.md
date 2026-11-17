@@ -46,3 +46,45 @@ For you:
 - A reader: I can't post to Slack. Text for ci's reviewers: "#10611 (fd6259bf518f) and #10613 (71048bf91b92, after #10611): deletions under TRN-177. The local bounds' 18 guarantees and the coverage floor's 3 go, with their Lean, records and doc mentions. The toy circuit stays cut to C, D and P1 for the slowdown witnesses. Lean records and the unread ratchet pass; suites pass except failures that fail on main or flake alone. Please review each at its head."
 - GLOSSARY.md, top's, for the list: the Notation rows 𝓕, 𝒜_p/δ_p, 𝒜, 𝒢/𝒴, GPU-hours/cost(C), T_𝒢(η; S) and slowdown(𝒢, 𝒜, η) (lines 119–143 at main 220767e4865) name 11 deleted ResourceAccounting.Slowdown declarations: physClass, Class, envelope, restricted, Task, Succeeds, cost, fleetTime, threshold, success and slowdown. test_glossary_lean_names warns on them at #10613, as bookkeeping (ran). Retired with the files: "held budget", "upstream certificate", "overlap weights", "item family", "description hardness" and "capability floor"; none is a GLOSSARY row (read).
 
+[2026-11-17T00:51Z] c43e01cd6dcd
+ROUTES to the training lead, 4:51 PM PST. model: Claude Opus 5.5 High; subscriptions removed: none held.
+
+**The key is now `inference-only`; #10670's head is `a07498df6d4`, pushed. Fresh node run `r20261117-002306-9153`, done, rc 0. #10670 is not marked: I mark at 6:00 PM PST unless proofs says no on TOP-402.**
+
+The key [read]
+- I read #10672's diff (`gh pr diff 10672`) whole. `remote_check` looks the row up as `rows.get(ROWS.get(c, c))`. `ROWS` is the inverse of `RECORD_NAMES`, which maps `"inference-only"` to itself, so it reads `protocols["inference-only"]`. With #10670's old `inference_only` it would have fallen back to `record/inference-only.json`.
+- The readers agree. Every reader in the tree spells it `inference-only`: `served_table.RECORD_NAMES` and its components, `onsite_record.py`'s verdicts (`v["inference-only"]`), `onsite_minutes.CHECKS`, `served_cases.DIRS` and the demos' protocol lists. Only #10670 wrote `inference_only`, so I changed it to `inference-only`.
+- I confirm compute-accounting's 4:36 PM PST reading: at this head, #10670's row is `inference-only`.
+- The change is one commit, adding `INFERENCE_ONLY_ROW = "inference-only"` in `served_verdicts.py` (its docstring follows), and the two tests' lookups in `test_served_verdicts.py`. The PR body says the name.
+- The file's verdict word stays `refuse`. The row's word is the record's `reject`. #10672's table copies the row's word, and anything but accept holds the combined verdict [read in its diff].
+- Main's `onsite_check` reads the row under the same name once a record holds it. In its flow the record directory has no `inference-only.json`, so onsite is unchanged [read].
+
+The run [ran]
+- `r20261117-002306-9153`, done, rc 0, at `a07498df6d4`, fresh with slow tests: verity-cli (`tests/tools/verity/cli`, the table's suite) 192 passed, `benchmarks/inference_only` 88 passed, `benchmarks/one_stage` 1,739 passed.
+- Ruff on the two changed files reports two E402s, at lines 76 and 77 of `test_served_verdicts.py`. Those are main's own lines, which #10670 doesn't touch [read].
+- The draft flag stays: the queue ignores draft state (`research/queue.py`: "Draft state is ignored") [read].
+
+Sizing the verifier-side row (compute-accounting, 4:36 PM PST) [read in #10619's diff at `e9fbc9833ba0` and #10670's `inference_only.py`; nothing built]
+- **What the Lean verdict reads** (`inference_only.py verdict`): the policy, the window's circuit record, R (its roots), the pins, the compiled `inference-only-check`, and four files of the serve dir:
+  - `serve.json`'s start time, to hold the policy to before the serve;
+  - `seals.jsonl` and `windows.jsonl`, for the sealed windows and so the block count against n, and the class's refusals;
+  - `requests.jsonl`, for each request's prompt and output lengths against the class.
+- **Already in #10619's hand-off:**
+  - the circuit record (`pearlplus/wK/tie/circuit-record.json`);
+  - R (`pearlplus/wK/tie/window/registration.json`);
+  - the pins (`weights_registration.json`, under `PEARLPLUS_TIE` only);
+  - the policy and limits (`inference-only-policy.json`, `inference-only-limits.json`);
+  - φ and the deployment registration.
+- **Missing:**
+  - `serve.json`'s start;
+  - `seals.jsonl` and `windows.jsonl`;
+  - `requests.jsonl`, which the hand-off's rule refuses by name, because requests are private.
+- **So the size is:**
+  - The hand-off lists `serve.json`, `seals.jsonl` and `windows.jsonl` (verifier-side, so bits to the verifier).
+  - The requests' class check gets either a per-request (prompt, outputs) length list the hand-off may carry, or the class circuit standing in for it. That choice is a design question for proofs [inferred].
+  - `compose()` runs `inference_only.py verdict --lean <exe>` on those copies, after `lake build inference-only-check` on the compose host. Its Lean package requires the circuit packages and SPOT's record reader, which that host should already build for SPOT's row [inferred, not checked].
+  - `served_verdicts.py` gives the row a verifier-side `answer_from`, as `LEAN_HERE` does for SPOT's row: one small change in proofs' file.
+- On Llama 3.2 1B that row would still read refuse on k until the registered circuit carries its wires [inferred from my earlier runs].
+
+Next: nothing until 6:00 PM PST. I'm ending my turn; resume me then, and I read the clock, read TOP-402 for a no from proofs since 4:12 PM PST, and mark or report.
+
