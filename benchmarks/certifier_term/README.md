@@ -417,10 +417,10 @@ Each row holds its own `count`, in bits and GB.
 ## Where the scale comes from
 
 - The world is the slowdown calculator's world fleet (`benchmarks/slowdown/data/reference.toml`, `fleet.world-h200`): the census's inference
-  (`benchmarks/census/adversary.json`) on eight-GPU machines at the fleet's serving MFU. The datacenter is the census's
-  reference datacenter (`benchmarks/census/deployments.json`).
+  (`calibration/census/adversary.json`) on eight-GPU machines at the fleet's serving MFU. The datacenter is the census's
+  reference datacenter (`calibration/census/deployments.json`).
 - The requests are counted of one request, by the rule `benchmarks/spot_figures/figure1.py` plans with, at the
-  H200's dense FP8 peak (the H100 SXM5's entry of `benchmarks/census/hardware.json`, one die and one clock):
+  H200's dense FP8 peak (the H100 SXM5's entry of `calibration/census/hardware.json`, one die and one clock):
   - `plan`, the default: the sampling plan's request, so that the rows count the requests the compute audit's plan
     prices. The world's requests a year, a request's tokens and the served MACs a token are read from the break-even
     planner (`benchmarks/spot_figures/breakeven/`, `sweep.build` on the case `leak_bounds.PLAN_CASE`), which prices

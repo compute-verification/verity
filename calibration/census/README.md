@@ -108,6 +108,6 @@ that SPOT assigns in the source run; the census records the run's counts, not a 
 
 ## Dependency direction
 
-- Verity core never reads `benchmarks/census/`. `tests/test_boundaries.py` enforces this.
+- Verity core never reads `calibration/census/`. `tests/test_boundaries.py` enforces this.
 - Core takes such numbers as parameters: a target names only its `anchor_device`. The benchmark
   (`verity_numerical.bench.census`) reads the peak of that device and dtype from `hardware.json`.

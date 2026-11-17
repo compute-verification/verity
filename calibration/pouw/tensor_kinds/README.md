@@ -7,7 +7,7 @@ one MMA of that form takes from the lanes beside it. A form's issue price for ea
 s8 m16n8k32's. The instruction counts are read from each kernel's SASS, so a program counts what ptxas emitted. It only
 times: clocks are read, never set.
 
-The ACCEL model reads it: `../../../benchmarks/machine_model/data/forms.toml` takes its forms from `tensor_kinds.py` and names these
+The ACCEL model reads it: `../../machine_model/data/forms.toml` takes its forms from `tensor_kinds.py` and names these
 runs as its source.
 
 ## Run it

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "benchmarks/census/schemas/adversary.schema.json",
+  "$id": "calibration/census/schemas/adversary.schema.json",
   "title": "Census adversary resource models: the compute every result is stated against",
   "type": "array",
   "items": {
