@@ -145,7 +145,7 @@ DOC_TERMS = {
     "physical block": "server block",
     "thread block": "CTA",
     "KV block": "KV page",
-    "the accelerator model, the machine model": "the ACCEL model (`benchmarks/machine_model/` and its `machine-model` "
+    "the accelerator model, the machine model": "the ACCEL model (`calibration/machine_model/` and its `machine-model` "
                                                 "command keep the name)",
     "coverage premise, coverage table": "the card assumption, the opcode table",
     "envelope ISA, envelope op": "the ACCEL ops",
@@ -239,9 +239,9 @@ ALLOWED: dict[str, str] = {
     "no faulty proof block, every one being drawn": "`benchmarks/network_traces/leak_bounds.py`'s docstring: a queued PR on "
                                                     "next rewrites the line beside it; renamed after it lands",
     "a tied audit no faulty term (its wrong units' outputs are the egress's)": "the network period check's refusal in "
-        "`period_case.py`, which mirrors `NetworkCheck.Period`'s Lean message word for word; renamed with the Lean",
+        "`period_case.py`, which mirrors `NetworkVerifier.Period`'s Lean message word for word; renamed with the Lean",
     "K charges a tied audit no faulty term": "the refusal `test_network_period_protocol.py` expects from Lean "
-                                             "(`NetworkCheck.Period`); renamed with the Lean",
+                                             "(`NetworkVerifier.Period`); renamed with the Lean",
     "an *active warden* in network steganography's sense": "network steganography's own term, which `GLOSSARY.md` "
                                                            "names to say it is not the network certifier's name",
     "where a passive warden only watches": "network steganography's own term, beside the one above",
@@ -483,8 +483,8 @@ def test_spot_s_older_name_only_falls():
 
 
 #: Where "rho" and ρ only ever named the slowdown (GLOSSARY.md, Older names), so no file there says either.
-SLOWDOWN_HOME = ("benchmarks/slowdown/", "benchmarks/circuit_properties/", "benchmarks/inference_only/",
-                 "benchmarks/training_slowdown/", "security/README.md", "verity/protocols/compose/verifier/remote/README.md")
+SLOWDOWN_HOME = ("benchmarks/slowdown/", "calibration/circuit_properties/", "benchmarks/inference_only/",
+                 "calibration/training/", "security/README.md", "verity/protocols/compose/verifier/remote/README.md")
 #: the word alone or as one part of a name (`rho_worst`, `RHO_MODEL`, `Overhead.rho`, `rhos`), and the symbol
 _RHO = re.compile(r"(?<![A-Za-z])(?:rho|Rho|RHO)s?(?![A-Za-z])|ρ")
 #: What stays under SLOWDOWN_HOME, each spelling with its reason; an entry that matches nothing fails too.

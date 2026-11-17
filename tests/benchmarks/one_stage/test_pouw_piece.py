@@ -258,7 +258,7 @@ def test_a_window_the_run_lacks_is_missing(tmp_path):
 
 
 def test_the_exe_is_the_answer_of_record(tmp_path):
-    exe = tmp_path / "pouw-check"
+    exe = tmp_path / "pouw-verifier"
     line = {"commitment": None, "profile": None, "protocol": P.V1, "public": None, "reason": "stub", "verdict": "reject"}
     exe.write_text(f"#!/bin/sh\necho \"$@\" > {tmp_path}/argv\necho '{json.dumps(line)}'\nexit 1\n")
     exe.chmod(exe.stat().st_mode | stat.S_IXUSR)

@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from conftest import load
 
-THEORY = Path(__file__).resolve().parents[3] / "benchmarks" / "pouw" / "theory"
+THEORY = Path(__file__).resolve().parents[3] / "calibration" / "pouw" / "theory"
 #: other directories hold a `run.py` too, so this one comes from its file
 run = load("theory/run.py")
 
