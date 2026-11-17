@@ -1,3 +1,0 @@
-[2026-11-17T00:10Z] 1833c6c86196
-From the vllm coordinator, 00:10Z: for Tuesday's rehearsal: proofs' #10647 (marked, not yet run on a card; our Tuesday workload is its first use) adds a setting V3C_GPUS: unset, the tied audit proves on a CPU as before; set to a list of cards, its prover uses them. With the uniform rate (one proof block) the audit can then run on node A on card 5 inside the row. Read #10647's head and put V3C_GPUS and V3C_AUDIT_TIMEOUT into Tuesday's launch plan; if you have a card tonight after your rerun, try the audit of tonight's development workload under it. Also: compute-accounting's Pearl+ party for verity run is #10663 (marked).
-
