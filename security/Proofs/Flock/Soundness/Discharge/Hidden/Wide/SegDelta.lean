@@ -3,15 +3,7 @@ module
 public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Copies
 public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegShape
 
-/-!
-# Δ at a segmented row, and Δ for rows of every kind
-
-`HmRow.delta` writes a `sha512/row-seg/v1` row's constants compression by compression, its `hm96` slot as compression
-`w.size` (`segPairsOf`): at a chain start (`HmRow.chainStart`) the `cv` is the midstate of the segment's first block, or of
-the outer message's for `j = s`, and every message bit that is not a row bit (`HmRow.msgBit`) is a constant from the pin or
-the forced-zero row, or a copy of a segment's last output. `delta_flat_any` is `delta_flat_all` for rows of every kind,
-each row's pairs `rowPairsAny`: `rowPairsOf`'s for an unsegmented row, `segPairsOf`'s for a segmented one.
--/
+/-! Δ at a `sha512/row-seg/v1` row, and Δ without a typed template for rows of every kind. -/
 
 @[expose] public section
 
@@ -23,8 +15,6 @@ namespace FlockSoundness.Discharge.Hidden
 
 open Hm Compose Flock.DeriveAll Types.Dag
 
-/-- Template instance `g`, segmented row `p`: compression `k`'s `cv` and `msg` inputs' first columns, the `hm96` slot's
-`cv` and `pad` for `k = w.size`. -/
 def segCols (c : Circuit) (g p k : ℕ) : ℕ × ℕ :=
   if k < ((HmRow.rowSlots c.ports).2[p]!).size then
     (c.slotCol c.shaNet g ((HmRow.rowSlots c.ports).2[p]!)[k]!.1 +
@@ -38,19 +28,15 @@ def segCvCol (c : Circuit) (g p k : ℕ) : ℕ := (segCols c g p k).1
 
 def segMsgCol (c : Circuit) (g p k : ℕ) : ℕ := (segCols c g p k).2
 
-/-- A segment's digest bit's source: column `col` of compression `kk`'s output. -/
 def digestSrc (c : Circuit) (g p kk col : ℕ) : ℕ :=
   c.slotCol c.shaNet g ((HmRow.rowSlots c.ports).2[p]!)[kk]!.1 +
     (portCols (c.nets.getD c.shaNet default).2.outGroups)[((HmRow.rowSlots c.ports).2[p]!)[kk]!.2]!.1 + col
 
-/-- Δ's pairs at column `x` of a segmented row's message bit. -/
 def segBitPairs (c : Circuit) (pin g p x : ℕ) : HmRow.MsgBit → List (ℕ × ℕ)
   | .const v => [(x, x), (x, if v then pin else zeroCol c)]
   | .digest kk col => [(x, x), (x, digestSrc c g p kk col)]
   | .row _ => []
 
-/-- Δ's pairs at compression `k` of template instance `g`'s segmented row `p`: its chain start's midstate, then its
-message's constant and digest bits. -/
 def segPairsK (c : Circuit) (pin g p : ℕ) (segs : Array (ℕ × ℕ)) (k : ℕ) : List (ℕ × ℕ) :=
   (match HmRow.chainStart c.ports[p]! k with
     | some j => (List.range 512).flatMap fun t => [(segCvCol c g p k + t, segCvCol c g p k + t),
@@ -59,11 +45,9 @@ def segPairsK (c : Circuit) (pin g p : ℕ) (segs : Array (ℕ × ℕ)) (k : ℕ
     | none => []) ++
   (List.range 1024).flatMap fun t => segBitPairs c pin g p (segMsgCol c g p k + t) (HmRow.msgBit c.ports[p]! k t)
 
-/-- Δ's pairs at template instance `g`'s segmented row `p`, its compressions then its `hm96` slot. -/
 def segPairsOf (c : Circuit) (pin g p : ℕ) (segs : Array (ℕ × ℕ)) : List (ℕ × ℕ) :=
   (List.range (((HmRow.rowSlots c.ports).2[p]!).size + 1)).flatMap (segPairsK c pin g p segs)
 
-/-- Δ's pairs at template instance `g`'s row `p`, of either kind. -/
 def rowPairsAny (c : Circuit) (pin g p : ℕ) : List (ℕ × ℕ) :=
   match c.ports[p]!.segs with
   | none => rowPairsOf c pin g p
@@ -72,11 +56,9 @@ def rowPairsAny (c : Circuit) (pin g p : ℕ) : List (ℕ × ℕ) :=
 def rowPairsAnyAll (c : Circuit) (pin : ℕ) : List (ℕ × ℕ) :=
   (List.range c.g).flatMap fun g => (List.range (HmRow.rowSlots c.ports).2.size).flatMap fun p => rowPairsAny c pin g p
 
-/-- Δ's pairs, without a typed template, for rows of every kind. -/
 def flatPairsAny (c : Circuit) (pin : ℕ) : List (ℕ × ℕ) :=
   constPairs c pin ++ rowPairsAnyAll c pin ++ Flat.leafPairs c ++ Flat.cutPairs c ++ Flat.wirePairs c
 
-/-- **Δ without a typed template, pair by pair, for rows of every kind.** -/
 theorem delta_flat_any (c : Circuit) (pin : ℕ) (ht : c.typed = none) :
     (HmRow.delta c pin).1.toList = flatPairsAny c pin := by
   unfold HmRow.delta
@@ -212,17 +194,12 @@ theorem delta_flat_any (c : Circuit) (pin : ℕ) (ht : c.typed = none) :
   rw [hd3, hd2, hd1, hd0, hd]
   rfl
 
-/-! ## The rows' wires, for rows of every kind -/
-
-/-- Row `p`'s wires: compression `k ≥ 1`'s `cv` from compression `k − 1`'s output where no chain starts at `k`, then
-the `hm96` slot's `cv` from the last compression's output when the row has one and no chain starts at the slot. -/
 def rowWiresOf (ports : Array Port) (sha hm p : ℕ) : List Wire :=
   (List.range' 1 (((HmRow.rowSlots ports).2[p]!).size - 1)).flatMap (fun k =>
       if (HmRow.chainStart ports[p]! k).isNone then [chainWire ports sha p k] else []) ++
     (if 0 < ((HmRow.rowSlots ports).2[p]!).size &&
         (HmRow.chainStart ports[p]! ((HmRow.rowSlots ports).2[p]!).size).isNone then [hmWire ports sha hm p] else [])
 
-/-- **The rows' wires**, port by port, for rows of every kind (`rowWiresOf`). -/
 theorem rowWires_any (ports : Array Port) (sha hm : ℕ) :
     (HmRow.rowWires ports sha hm).toList =
       (List.range (HmRow.rowSlots ports).2.size).flatMap (rowWiresOf ports sha hm) := by
@@ -254,7 +231,6 @@ theorem rowWires_any (ports : Array Port) (sha hm : ℕ) :
   · simp only [h, Bool.false_eq_true, ↓reduceIte, List.append_nil]
     exact ⟨_, rfl, by rw [hd', hd'l]⟩
 
-/-- The rows' wires' copies at template instance `g`'s row `p`, for rows of every kind. -/
 def wireFAny (c : Circuit) (g p : ℕ) : List (ℕ × ℕ) :=
   (rowWiresOf c.ports c.shaNet c.hmNet p).flatMap
     fun w => (List.range (Flat.wireWidth c w)).map fun t => (Flat.wireDst c g w + t, Flat.wireSrc c g w + t)

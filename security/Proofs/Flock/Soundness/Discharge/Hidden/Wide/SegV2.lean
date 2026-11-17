@@ -26,16 +26,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegRowBc
 import Proofs.Flock.Soundness.Discharge.Hm.Bc
 import Proofs.Flock.Soundness.Discharge.Hm.Nets
 
-/-!
-# Output rows unsegmented, input rows of any kind (`OutputsCommittedSeg`, `OutputsBindingSeg`)
-
-`Wide.V2` with only the output rows unsegmented, so an input row may be a `sha512/row-seg/v1` row (the PoUW tile's
-`x`): the flat twin's Δ is `flatPairsAny` (`delta_flat_any`), whose copies at an output row's message bit are none
-(`Any.msg_filterAll`), so a satisfying witness of the hidden statement satisfies its flat twin (`Any.sat_flatAll`) and
-holds each output row's message bit's copy (`Any.msg_copyAll`); the row's `b ‖ c` is under its own prefix
-(`Any.row_bc_tgt`). An output row's columns and `outPairs`' copies need only the output rows unsegmented
-(`Any.OutRows`, `Any.deltaMsgCol_inj`).
--/
+/-! `Wide.V2` with only the output rows unsegmented, so an input row may be a `sha512/row-seg/v1` row. -/
 
 @[expose] public section
 
@@ -47,8 +38,6 @@ namespace FlockSoundness.Discharge.Hidden
 
 open Hm Compose Flock.DeriveAll Types.Dag
 
-/-- **`OutputsCommittedSeg`**: `OutputsCommittedV2` with only the output rows unsegmented (an input row may be a
-`sha512/row-seg/v1` row). -/
 def OutputsCommittedSeg : Prop :=
   ∀ {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)} {d : Lean.Json}
     {partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt},
@@ -71,7 +60,6 @@ def OutputsCommittedSeg : Prop :=
           outBytes (Hm.chunkBit (L.model regs) z o) st.c g j)
         (Hm.bytesOf (Hm.chunkBit (L.model regs) z o) 192 (Hm.saltCol st.c g (HmOut.nIn st.c + j)))
 
-/-- **`OutputsBindingSeg`** (under `cr/sha-512`): `OutputsBindingV2` under `OutputsCommittedSeg`'s conditions. -/
 def OutputsBindingSeg : Prop :=
   ∀ {tags : Tags} {cf pf : ByteArray} {coins coins' : Coins} {tables : List (String × ByteArray)} {d d' : Lean.Json}
     {partition partition' : Option Lean.Json} {program program' : Option ByteArray} {st st' : Stmt},
@@ -112,8 +100,6 @@ section Cols
 variable {c : Circuit} (R : RowRanges c)
 include R
 
-/-- **Row `p`'s message bit `t` of byte `b`** is at its compression `b / 128`'s `sha512x3` slot, past the `cv`, below
-the net's self rows. -/
 theorem deltaMsgCol_at {g p b t : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (hsg : (c.ports.getD p default).segs = none)
     (hb : b < 128 * c.ports[p]!.chunks)
     (ht : t < 8) :
@@ -134,7 +120,6 @@ theorem deltaMsgCol_lt {g p b t : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (h
     (ht : t < 8) : deltaMsgCol c g p b t < 2 ^ c.kLog :=
   (deltaMsgCol_at R hg hp hsg hb ht).1.lt R.bound (R.range R.shaNet).1
 
-/-- **Distinct message bits are distinct columns**: template instance, row, byte and bit. -/
 theorem deltaMsgCol_inj {g p b t g' p' b' t' : ℕ} (hg : g < c.g) (hp : p < c.ports.size)
     (hsg : (c.ports.getD p default).segs = none) (hb : b < 128 * c.ports[p]!.chunks) (ht : t < 8) (hg' : g' < c.g) (hp' : p' < c.ports.size)
     (hsg' : (c.ports.getD p' default).segs = none) (hb' : b' < 128 * c.ports[p']!.chunks) (ht' : t' < 8) (h : deltaMsgCol c g p b t = deltaMsgCol c g' p' b' t') :
@@ -159,8 +144,6 @@ theorem deltaMsgCol_inj {g p b t g' p' b' t' : ℕ} (hg : g < c.g) (hp : p < c.p
 
 end Cols
 
-/-- `OutRows` with only the output rows unsegmented: one output row per output port, each after the input rows and of
-`2 · words = 128 · chunks` bytes. -/
 def OutRows (c : Circuit) : Prop :=
   (∀ j < c.outPorts.size, (c.ports.getD (HmOut.nIn c + j) default).segs = none) ∧ c.outRowPorts = Array.replicate c.outPorts.size 1 ∧
     ∀ j < c.outPorts.size, HmOut.nIn c + j < c.ports.size ∧
@@ -181,7 +164,6 @@ section Out
 variable {c : Circuit} (R : RowRanges c) (hrows : OutRows c)
 include R hrows
 
-/-- **`outPairs`' one copy at output row `j`'s message bit for word `k`, bit `t`**: from `outSrc`. -/
 theorem outCopies_filter {g j k t : ℕ} (hg : g < c.g) (hj : j < c.outPorts.size)
     (hk : k < (c.ports.getD (HmOut.nIn c + j) default).words) (ht : t < 16) :
     (outCopies c).filter (fun e => e.1 = deltaMsgCol c g (HmOut.nIn c + j) (2 * k + t / 8) (t % 8)) =
@@ -216,7 +198,6 @@ theorem outCopies_filter {g j k t : ℕ} (hg : g < c.g) (hj : j < c.outPorts.siz
     obtain ⟨k', hk', t', ht', rfl⟩ := he
     exact fun h => hne ⟨(hdec g' hg' j' hj' k' hk' t' ht' h).1, (hdec g' hg' j' hj' k' hk' t' ht' h).2.1⟩
 
-/-- **`outPairs`' pairs at output row `j`'s message bit for word `k`, bit `t`**: one copy from `outSrc`. -/
 theorem outPairs_count {g j k t : ℕ} (hg : g < c.g) (hj : j < c.outPorts.size)
     (hk : k < (c.ports.getD (HmOut.nIn c + j) default).words) (ht : t < 16) (i : ℕ) :
     (outPairs c).count (deltaMsgCol c g (HmOut.nIn c + j) (2 * k + t / 8) (t % 8), i) =
@@ -259,7 +240,6 @@ theorem out_rows_whole {tags : Tags} {cf : ByteArray} {tables : List (String × 
     omega
 
 
-/-- `OutRowsW` with only the output rows unsegmented (`out_rows_whole`). -/
 def OutRowsW (c : Circuit) : Prop :=
   OutRows c ∧ ∀ j < c.outPorts.size,
     (c.ports.getD (HmOut.nIn c + j) default).bits = 16 * (c.ports.getD (HmOut.nIn c + j) default).words
@@ -280,14 +260,11 @@ theorem outRowsW_of {tags : Tags} {cf : ByteArray} {tables : List (String × Byt
   have h := out_rows_whole hp hc hu hr h64
   ⟨⟨hu, hr, fun j hj => ⟨(h j hj).1, (h j hj).2.1⟩⟩, fun j hj => (h j hj).2.2⟩
 
-/-! ## The flat Δ at an output row's message bit -/
-
 section Twin
 
 variable {tags : Tags} {st : Stmt} (L : Layout st) (F : Aliased.UnitFacts tags st)
 include L F
 
-/-- **`flatPairsAll` at a message bit of a row with no constant message bit before its last block**: none. -/
 theorem flat_count_msgAll (hrw : RowWires st.c) {g p b t : ℕ} (hg : g < st.c.g) (hp : p < st.c.ports.size)
     (hs : (st.c.ports.getD p default).segs = none)
     (hkb : st.c.ports[p]!.chunks ≤ st.c.ports[p]!.bits / 1024) (hb : b < 128 * st.c.ports[p]!.chunks) (ht : t < 8)
@@ -298,7 +275,6 @@ theorem flat_count_msgAll (hrw : RowWires st.c) {g p b t : ℕ} (hg : g < st.c.g
     msg_filterAll R (pin := st.pin) hg hp (by rw [getElem!_eq_getD']; exact hs) hkb hb ht]
   rfl
 
-/-- **The flat Δ's row at such a message bit is a self row**, in `A` and in `B`, for any rows. -/
 theorem flat_selfAll (hda : st.da = (HmRow.delta st.c st.pin).1) {g p b t : ℕ} (hg : g < st.c.g)
     (hp : p < st.c.ports.size) (hs : (st.c.ports.getD p default).segs = none) (hkb : st.c.ports[p]!.chunks ≤ st.c.ports[p]!.bits / 1024)
     (hb : b < 128 * st.c.ports[p]!.chunks) (ht : t < 8) (hx : deltaMsgCol st.c g p b t < 2 ^ st.c.kLog)
@@ -324,8 +300,6 @@ theorem flat_selfAll (hda : st.da = (HmRow.delta st.c st.pin).1) {g p b t : ℕ}
   exact inBit_rows R (Or.inl rfl) hat (shaNet_ofRows R.rowNets) (shaLaid_self hoff) hx hδ j
 
 end Twin
-
-/-! ## The hidden statement and its flat twin, for any rows -/
 
 section Hidden
 
@@ -361,8 +335,6 @@ theorem msg_copyAll {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z
   exact block_of_rows hz o hx fun i =>
     inBit_rows (st := st) R (Or.inl rfl) hat (shaNet_ofRows R.rowNets) (shaLaid_self hoff) hx hδ i
 
-/-- **A satisfying witness of the hidden statement satisfies its flat twin**, for any rows: the rows agree past
-`outPairs`' message bits (`deltaEntry_append_out`), and there the twin's row is a self row (`flat_selfAll`). -/
 theorem sat_flatAll {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : (L.model regs).Satisfies z) : (L0.model regs).Satisfies z := by
   have R : RowRanges st.c := RowRanges.ofL (st := flatTwin st) L0 F0.parse F0.check
@@ -415,8 +387,6 @@ theorem sat_flatAll {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z
     rw [eA, eB]
     exact hz.1 o i
 
-/-- **An output row's message bytes are the output words its template instance computes** (`outBytes`), for any rows, in
-every block of a satisfying witness of the hidden statement whose forced-zero row carries 0. -/
 theorem msg_bytesAll {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
     (hzero : chunkBit (L.model regs) z o (zeroCol st.c) = false) {g j : ℕ} (hg : g < st.c.g)
@@ -490,7 +460,6 @@ theorem outputs_committed_seg' : OutputsCommittedSeg := by
   rw [← msg_bytesAll L L0 F0 hda hrows hz o hzero hg hj, ← hbc, ← bytesAt_bc L R regs z o hg hpl]
   exact (bc_sampledH h hpop hpt hD hlt L regs hregs hz o hg hg2 hpl hr).symm
 
-/-- **`OutputsBindingSeg` from `OutputsCommittedSeg`**. -/
 theorem outputs_binding_seg_of (hC : OutputsCommittedSeg) : OutputsBindingSeg := by
   intro tags cf pf coins coins' tables d d' partition partition' program program' st st' ht hi hs hs' pop hpop hpt D D' hD
     hDp hD' hDp' hupv hu hor h64 L regs hregs L' regs' hregs' z hz z' hz' o o' g g' j hg hg2 hg' hg2' hj hr hr' hidx hne

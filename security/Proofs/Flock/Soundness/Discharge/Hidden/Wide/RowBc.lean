@@ -18,16 +18,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Hm.Bc
 import Proofs.Flock.Soundness.Discharge.Hm.Nets
 
-/-!
-# A row's `b ‖ c` under its own prefix, for `sha512/row/v1` and `sha512/row/v2` rows
-
-`Hm.row_bc_flat` for any rows of the untyped statement (`row_bc_tgt`), at a row of `16 · words` bits whose bytes fill
-its compressions' blocks and end, with their padding, in its `hm96` slot's block (`sha512/row/v1` or `sha512/row/v2`):
-Δ's one copy at each of the row's `cv` input bits and at each constant bit of its `pad` (`inBit_copyAll`, from
-`flatAll_count` and the filters of `Wide.Copies`) gives `port_commit_rowsP` its facts (`row_copies_tgt`,
-`pad_const_tgt`), with the row's own prefix `HmRow.prefixOf`. A row of no compression is hashed by its `hm96` slot
-alone, its `cv` the prefix's midstate (`row_copies_tgt0`, `port_commit_rows0`).
--/
+/-! A row's `b ‖ c` under its own prefix, for `sha512/row/v1` and `sha512/row/v2` rows of the untyped
+statement. -/
 
 @[expose] public section
 
@@ -44,9 +36,6 @@ section Bc
 variable {tags : Tags} {st : Stmt} (L : Layout st) (F : Aliased.UnitFacts tags st)
 include L F
 
-/-- **Δ's pairs at a row net's input bit `x`**, without a typed template and for any rows: `(x, x), (x, src)` for each
-copy `(x, src)` of the rows' constant bits or the rows' wires there; the slot constants, the leaf and cut bits and the
-other wires write nothing there. -/
 theorem flatAll_count (hrw : RowWires st.c) {n s off x : ℕ} (hn : n = st.c.shaNet ∨ n = st.c.hmNet)
     (hat : AtSlot st.c n s off x) {l : Flock.HmNets.Laid} {name : String}
     (hl : Net.ofRows name l.useful l.constPos l.inGroups l.outGroups l.ra l.rb = .ok (st.c.nets.getD n default).2)
@@ -172,10 +161,6 @@ theorem inBit_copyAll (hda : st.da = (HmRow.delta st.c st.pin).1) (hrw : RowWire
   have hx : x < 2 ^ (L.model regs).kLog := hat.lt R.bound (R.range (R.rowNet_lt hn)).1
   exact block_of_rows_ex hz o hx (not_unitIn_of_rowNet L F hn hat) fun j => inBit_rows R hn hat hl hself hx hδ j
 
-/-- **The three chain copies into template instance `g`'s row `p`** of a compression or more, in every block of a
-satisfying witness of the untyped statement: the first compression's `cv` is the row prefix's midstate
-(`HmRow.prefixOf`), each later compression's `cv` the previous one's output, and the `hm96` slot's `cv` the last
-compression's output. -/
 theorem row_copies_tgt (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st.c.upv)
     (hu : ∀ p ∈ st.c.ports.toList, p.segs = none)
     {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
@@ -216,8 +201,6 @@ theorem row_copies_tgt (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < s
     unfold Flat.wireSrc hmWire shaBase shaOut shaSub
     simp only [rowSlots_size hp]
 
-/-- **The `cv` copy into template instance `g`'s row `p` of no compression**, in every block of a satisfying witness of
-the untyped statement: the `hm96` slot's `cv` is the row prefix's midstate. -/
 theorem row_copies_tgt0 (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st.c.upv)
     (hu : ∀ p ∈ st.c.ports.toList, p.segs = none)
     {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
@@ -236,8 +219,6 @@ theorem row_copies_tgt0 (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < 
     (by rw [hmNet_inRows R.rowNets]; omega) (hmLaid_self (by omega)) hf]
   exact chunkBit_constSrc _ _ hpin hzero
 
-/-- **The constant bits of template instance `g`'s row `p`'s `pad`**, in every block of a satisfying witness of the
-untyped statement: wherever `HmRow.constBit` gives the row's last block a constant, Δ's one copy holds it there. -/
 theorem pad_const_tgt (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st.c.upv)
     (hu : ∀ p ∈ st.c.ports.toList, p.segs = none)
     {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
@@ -263,10 +244,6 @@ theorem pad_const_tgt (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st
   · exact hzero
   · exact hpin
 
-/-- **A row's `b ‖ c` under its own prefix**, in every block of a satisfying witness of the untyped statement, for any
-rows: at a row of `16 · words` bits whose bytes fill its compressions' blocks and end, with their padding, in its `hm96`
-slot's block (`sha512/row/v1` or `sha512/row/v2`), the commit string of the row's prefix `HmRow.prefixOf` and the bytes
-`Typed.msgCol` reads, under the salt its `hm96` slot reads. -/
 theorem row_bc_tgt (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st.c.upv)
     {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : SatEx (L.model regs) (UnitIn st.c) z) (o : Fin (2 ^ (L.model regs).nbl)) {g p : ℕ} (hg : g < st.c.g)

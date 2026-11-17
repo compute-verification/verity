@@ -28,15 +28,7 @@ import Proofs.Flock.Soundness.Discharge.Hm.Nets
 public import Proofs.Flock.Soundness.Discharge.Hidden.Binding
 public import Proofs.Flock.Soundness.Discharge.Hidden.Committed
 
-/-!
-# `sha512/row/v1` or `sha512/row/v2` rows (`OutputsCommittedV2`, `OutputsBindingV2`)
-
-`outputs_committed'`'s argument (`Committed.lean`), for any rows: the flat twin's Δ is `flatPairsAll`
-(`delta_flat_all`), whose copies at an output row's message bit are none (`msg_filterAll`: an output row's message has
-no constant bit before its last block), so a satisfying witness of the hidden statement satisfies its flat twin
-(`sat_flatAll`) and holds each output row's message bit's copy (`msg_copyAll`); the row's `b ‖ c` is under its own
-prefix (`row_bc_tgt`).
--/
+/-! `outputs_committed'`'s argument for `sha512/row/v1` or `sha512/row/v2` rows. -/
 
 @[expose] public section
 
@@ -48,8 +40,6 @@ namespace FlockSoundness.Discharge.Hidden
 
 open Hm Compose Flock.DeriveAll Types.Dag
 
-/-- Unsegmented rows, one output row per output port, each after the input rows, of `2 · words = 128 · chunks` bytes
-and `16 · words` bits (`out_rows_whole`). -/
 def OutRowsW (c : Circuit) : Prop :=
   OutRows c ∧ ∀ j < c.outPorts.size,
     (c.ports.getD (HmOut.nIn c + j) default).bits = 16 * (c.ports.getD (HmOut.nIn c + j) default).words
@@ -70,14 +60,11 @@ theorem outRowsW_of {tags : Tags} {cf : ByteArray} {tables : List (String × Byt
   have h := out_rows_whole hp hc hu hr h64
   ⟨⟨hu, hr, fun j hj => ⟨(h j hj).1, (h j hj).2.1⟩⟩, fun j hj => (h j hj).2.2⟩
 
-/-! ## The flat Δ at an output row's message bit -/
-
 section Twin
 
 variable {tags : Tags} {st : Stmt} (L : Layout st) (F : Aliased.UnitFacts tags st)
 include L F
 
-/-- **`flatPairsAll` at a message bit of a row with no constant message bit before its last block**: none. -/
 theorem flat_count_msgAll (hrw : RowWires st.c) (hu : ∀ p ∈ st.c.ports.toList, p.segs = none) {g p b t : ℕ} (hg : g < st.c.g) (hp : p < st.c.ports.size)
     (hkb : st.c.ports[p]!.chunks ≤ st.c.ports[p]!.bits / 1024) (hb : b < 128 * st.c.ports[p]!.chunks) (ht : t < 8)
     (j : ℕ) : (flatPairsAll st.c st.pin).count (deltaMsgCol st.c g p b t, j) = 0 := by
@@ -87,7 +74,6 @@ theorem flat_count_msgAll (hrw : RowWires st.c) (hu : ∀ p ∈ st.c.ports.toLis
     msg_filterAll R hu hg hp hkb hb ht]
   rfl
 
-/-- **The flat Δ's row at such a message bit is a self row**, in `A` and in `B`, for any rows. -/
 theorem flat_selfAll (hda : st.da = (HmRow.delta st.c st.pin).1) (hu : ∀ p ∈ st.c.ports.toList, p.segs = none) {g p b t : ℕ} (hg : g < st.c.g)
     (hp : p < st.c.ports.size) (hkb : st.c.ports[p]!.chunks ≤ st.c.ports[p]!.bits / 1024)
     (hb : b < 128 * st.c.ports[p]!.chunks) (ht : t < 8) (hx : deltaMsgCol st.c g p b t < 2 ^ st.c.kLog)
@@ -113,8 +99,6 @@ theorem flat_selfAll (hda : st.da = (HmRow.delta st.c st.pin).1) (hu : ∀ p ∈
   exact inBit_rows R (Or.inl rfl) hat (shaNet_ofRows R.rowNets) (shaLaid_self hoff) hx hδ j
 
 end Twin
-
-/-! ## The hidden statement and its flat twin, for any rows -/
 
 section Hidden
 
@@ -150,8 +134,6 @@ theorem msg_copyAll {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z
   exact block_of_rows hz o hx fun i =>
     inBit_rows (st := st) R (Or.inl rfl) hat (shaNet_ofRows R.rowNets) (shaLaid_self hoff) hx hδ i
 
-/-- **A satisfying witness of the hidden statement satisfies its flat twin**, for any rows: the rows agree past
-`outPairs`' message bits (`deltaEntry_append_out`), and there the twin's row is a self row (`flat_selfAll`). -/
 theorem sat_flatAll {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : (L.model regs).Satisfies z) : (L0.model regs).Satisfies z := by
   have R : RowRanges st.c := RowRanges.ofL (st := flatTwin st) L0 F0.parse F0.check
@@ -204,8 +186,6 @@ theorem sat_flatAll {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z
     rw [eA, eB]
     exact hz.1 o i
 
-/-- **An output row's message bytes are the output words its template instance computes** (`outBytes`), for any rows, in
-every block of a satisfying witness of the hidden statement whose forced-zero row carries 0. -/
 theorem msg_bytesAll {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
     (hzero : chunkBit (L.model regs) z o (zeroCol st.c) = false) {g j : ℕ} (hg : g < st.c.g)
@@ -278,7 +258,6 @@ theorem outputs_committed_v2' : OutputsCommittedV2 := by
   rw [← msg_bytesAll L L0 F0 hda hrows hz o hzero hg hj, ← hbc, ← bytesAt_bc L R regs z o hg hpl]
   exact (bc_sampledH h hpop hpt hD hlt L regs hregs hz o hg hg2 hpl hr).symm
 
-/-- **`OutputsBindingV2` from `OutputsCommittedV2`**. -/
 theorem outputs_binding_v2_of (hC : OutputsCommittedV2) : OutputsBindingV2 := by
   intro tags cf pf coins coins' tables d d' partition partition' program program' st st' ht hi hs hs' pop hpop hpt D D' hD
     hDp hD' hDp' hupv hu hor h64 L regs hregs L' regs' hregs' z hz z' hz' o o' g g' j hg hg2 hg' hg2' hj hr hr' hidx hne
