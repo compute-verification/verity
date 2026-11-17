@@ -336,6 +336,9 @@ theorem honest_answers (f : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Qry → 
   simp
 
 set_option exponentiation.threshold 20000 in
+theorem honestPassesRing : HonestPassesRing :=
+  ⟨stateBound_lt, honestPre sch, honestOn, fun W => pr_eq_one fun x =>
+    honest_answers _ W _ (sch.enc W x.1 x.2.1).2 105 x.2.2⟩
 
 set_option exponentiation.threshold 20000 in
 theorem honestPassesAccepts : HonestPassesAccepts := by
