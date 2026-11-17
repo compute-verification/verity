@@ -124,6 +124,16 @@ of the corpus's. `verity bench serve_tax` is `run.sh`, here with the flags of it
 research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.sh --model glm53
 ~~~
 
+On Llama 3.2 1B and one H200, whose number is a point of `vllm/serving-cost-glm53` like GLM-5.3's (each point's
+`member` names its model, card and arm over its reference; the id's name is older than its other models):
+
+~~~text
+research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.sh --model llama32-1b --arms 'compiled compiled-again record'
+~~~
+
+The 1B's number is its `chat` and `long` loads' alone: the `prefix` load fills its whole context of 131,072 tokens,
+an engine of another limit than the two loads', so its number waits for no row (`Model.prefix_row`).
+
 - **A load** (`serve_tax.LOADS`) is one of the client's datasets with its flags. The number has two, and a third,
   `prefix`, has the row under it (below). `chat` is the load
   of vLLM's standing serving tests: ShareGPT's first turns, 200 prompts, each decoding its recorded answer's length.
@@ -324,8 +334,8 @@ Under `SAMPLED=1` the client sends `prod-record`, as it sends every arm that kee
 the request (`serve_tax.user_seed`, `sends_seed`): its replay samples the request again under that seed. `prod` is
 sent none, so vLLM samples its requests as it samples any without a seed, and what a seed changes in vLLM's sampling
 is in `prod-record`'s cost over `prod`, a change of ours like the record and the top-k; `prod-seeded` is `prod` sent
-the seeds, the one arm sent them that keeps no record (`Arm.seeds`), which reads that change apart. The seed is the
-client's; a served request need not send one. It is made from the user's name and, under `LIFETIMES`, the lifetime's number: a
+the seeds, the one arm sent them that keeps no record (`Arm.seeds`), which reads that change apart: never stock,
+which a cost is over. The seed is the client's; a served request need not send one. It is made from the user's name and, under `LIFETIMES`, the lifetime's number: a
 pass's users have the same names in every lifetime, and a server samples much the same tokens again under one seed,
 so with the name alone every lifetime of `prod-record` would serve one sample of text where `prod`'s serve a new one
 each. The share of its drafts' tokens a text accepts sets how many steps it takes to serve, so that one sample's
@@ -419,7 +429,7 @@ and refuse a tree without them. `tick-certifier` is two jobs: the node's (`SIDE=
 then the certifier's host's (`serve_tax.py run --side client`), which needs no GPU. A saturated load keeps a connection open for every request queued in the server, so the
 client raises its open-file limit to the hard limit first.
 
-On one GPU, `MODEL_ID` is `moonlight` (the default), `llama8b` or `qwen3-30b`, the last two read from their pinned
+On one GPU, `MODEL_ID` is `moonlight` (the default), `llama8b`, `qwen3-30b` or `llama32-1b`, the last three read from their pinned
 snapshots under `HF_HOME` (`serve_tax.py checkpoint --model-id ID` prints the path).
 
 Under a deployment's traffic, the job serves the replay ladder's plan (`benchmarks/replay_ladder/prod_plan.py`: ShareGPT,

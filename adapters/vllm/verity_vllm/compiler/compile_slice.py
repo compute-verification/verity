@@ -117,21 +117,32 @@ with its fields for ``pub``, ``cin``, ``cout`` and ``cert``'s tail, its circuit 
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
-from functools import lru_cache
+from functools import cache
 from types import SimpleNamespace
-from typing import Sequence
 
 from verity.circuits import boolean as BL
-from verity.circuits.boolean.forms import ONE, ZERO, Circuit, and_reduce, const_bits, mux, or_reduce
+from verity.circuits.boolean import BIT
+from verity.circuits.boolean.forms import (
+    ONE,
+    ZERO,
+    Circuit,
+    and_reduce,
+    const_bits,
+    mux,
+    or_reduce,
+)
+from verity.circuits.boolean.trace import part as _part
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array
-from verity.protocols.resource_accounting.network.verifier import arith_encode as AE, charge_chain as CC
+from verity.protocols.resource_accounting.network.verifier import arith_encode as AE
+from verity.protocols.resource_accounting.network.verifier import charge_chain as CC
+
 from verity_vllm.compiler import cache_step as CST
-from verity_vllm.compiler import replay_chain as RC, replay_step as RS
-from verity.circuits.boolean import BIT
-from verity.circuits.boolean.trace import part as _part
+from verity_vllm.compiler import replay_chain as RC
+from verity_vllm.compiler import replay_step as RS
 
 STATICS = RS.STATICS + ("Q", "D", "P", "K", "CN", "CTW", "CU")
 #: the statics of the slice whose ``srv`` is P / G rows (`CompileSliceRowGroups`), G < P
@@ -215,6 +226,7 @@ def _consts(bits: Sequence[int]) -> list:
 def _by_slot(S, flat: Sequence) -> list[list]:
     """One step's rows packed field by field (`rows_bits`' layout) as R rows (valid, request, kind, start, n)."""
     Z = RS.widths(step_statics(S))
+    out: list[list]
     out, at = [[] for _ in range(S.R)], 0
     for wd in (1, S.IW, 1, Z.LW, Z.TW):
         for p in range(S.R):
@@ -359,7 +371,7 @@ def with_block(st: dict, G: int | None) -> dict:
     st = {k: v for k, v in st.items() if k != "G"}
     G = st["P"] if G is None else G
     block(SimpleNamespace(**st, G=G))
-    return st if G == st["P"] else {**st, "G": G}
+    return st if st["P"] == G else {**st, "G": G}
 
 
 def unit(**st):
@@ -503,6 +515,7 @@ def _rows_ok(S, out_rows: Sequence, served: Sequence[int], maps: Sequence | None
     """``rows``: the active steps' rows are the served ones (`_served`: step u's in ``srv`` row u // G), slot for slot at
     AS = 0, and at AS = 1 at the batch positions the witnessed map gives them (`_mapped`)."""
     if S.AS:
+        assert maps is not None
         out_rows = [_mapped(S, r, [[int(x) for x in maps[u * S.R + b]] for b in range(S.R)])
                     for u, r in enumerate(out_rows)]
         if None in out_rows:
@@ -561,6 +574,7 @@ def scan(S, sl: Slice, window: Sequence[int] | None = None, cert: Sequence[RC.Ar
         win = replace(win, decisions=tuple(window))
     fabricate = fabricate or {}
     cache = _fabricated(S, CST.Cache(), fabricate.get(0, ()))
+    asks: list[int]
     states, fronts, steps, asks, caches, hit_rows = [cur], [], [], [], [cache], []
     for u in range(S.P):
         arr, bits = RC.front(Sc, win, cur)
@@ -592,6 +606,7 @@ def scan(S, sl: Slice, window: Sequence[int] | None = None, cert: Sequence[RC.Ar
         caches.append(cache)
         hit_rows.append(h)
         taken, used = (consume or {}).get(u, (out.taken, out.used))
+        assert out.state is not None
         stepped = _row(Sc, out.state)
         nxt = RC.Row(stepped.running, stepped.waiting, stepped.free, cur.qh + taken, cur.dh + used, cur.steps - 1)
         asks += bits[:used]
@@ -655,6 +670,7 @@ def check(S, rows: dict, code: CC.SliceCharge | None = None) -> dict[str, bool |
     ok, length, carried = code.reference(S, rows, count, dec)
     flags.update(code=bool(ok) and tuple(int(b) for b in rows["cout"]) == tuple(carried),
                  charge=length <= _int(p["c"][0]) if ok else None)
+    out_rows: list[Sequence | None]
     steps_ok, out_rows = True, []
     for u in range(S.P):
         cur, nxt = states[u], states[u + 1]
@@ -670,6 +686,7 @@ def check(S, rows: dict, code: CC.SliceCharge | None = None) -> dict[str, bool |
         if not out.ok:
             flags.update(steps=False, rows=None, cache=None)
             return {f: flags[f] for f in FLAGS}
+        assert out.state is not None
         want = RC.advance(Sc, win, cur, True, _row(Sc, out.state), arr, bits, out.taken, out.used)
         steps_ok &= want is not None and want == nxt
         if S.PC:
@@ -688,7 +705,7 @@ def verdict(flags: dict[str, bool | None]) -> int | None:
     """The verdict word of `check`'s flags; None while one is unspecified."""
     if any(flags[f] is None for f in FLAGS):
         return None
-    return sum(int(flags[f]) << k for k, f in enumerate(FLAGS))
+    return sum(int(flags[f] or False) << k for k, f in enumerate(FLAGS))
 
 
 def pub(S, charge: int, book: dict, code: CC.SliceCharge | None = None) -> list[int]:
@@ -785,7 +802,7 @@ def evaluate(st: dict, cases: Sequence[Case]) -> list[int]:
     return [sum(int(b) << j for j, b in enumerate(o)) for o in out]
 
 
-@lru_cache(maxsize=None)
+@cache
 def _counted(key: tuple) -> dict[str, int]:
     S = SimpleNamespace(**dict(key))
     C = Circuit(cse=True)

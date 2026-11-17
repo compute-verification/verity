@@ -503,7 +503,7 @@ def test_a_server_connection_that_fails_loses_its_release_and_the_tries_stop_at_
 
     tried, stopped = dv.tries(["honest", "tokens", "fail"], args, attempt)
     assert (tried, seen) == (["honest", "tokens"], ["honest", "tokens"])
-    words = ("tokens: STOPPED at a lost release: its network certifier's log names 1 lost on the watermark (2), so "
+    words = ("tokens: STOPPED at a lost release: its network attester's log names 1 lost on the watermark (2), so "
              "the try did not reach its server whole")
     assert stopped == words + "; not tried: fail"
     run = args.scratch / "tokens"
@@ -571,7 +571,7 @@ def test_a_try_with_no_check_is_read_for_a_lost_release_too_and_a_missing_log_st
 
     tried, stopped, ran = tries("no-log", "no log", *WATERMARK)
     assert (tried, ran) == (["honest"], ["honest", "tokens"])
-    assert stopped == (f"tokens: STOPPED: its network certifier ran with the watermark and wrote no log "
+    assert stopped == (f"tokens: STOPPED: its network attester ran with the watermark and wrote no log "
                        f"({dv.RELAY_LOG}), so whether a line named a lost release isn't known; not tried: fail")
 
     # the network attester never ran: nothing was sent, and the classes after it are tried, as without the watermark
@@ -594,7 +594,7 @@ def test_a_watermark_its_server_closed_stops_the_tries_at_that_try_with_the_erro
         return _attempt(run, cls, [1, 0] * 60, watermark=True, cut=4 if cls == "tokens" else None)
 
     tried, stopped = dv.tries(["honest", "tokens", "fail"], args, attempt)
-    words = ("tokens: STOPPED at a watermark error (closed): its network certifier's log says the stream stopped, so "
+    words = ("tokens: STOPPED at a watermark error (closed): its network attester's log says the stream stopped, so "
              "its server did not get the watermark whole")
     assert (tried, seen, stopped) == (["honest", "tokens"], ["honest", "tokens"], words + "; not tried: fail")
     mark = dv.watermark_log(args.scratch / "tokens")
