@@ -19,22 +19,7 @@ import Proofs.Flock.Recursive.ForkInner
 import Proofs.Flock.Recursive.ForkRuns
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Recursion: the inner fork with the last round's message unbound
-
-`ForkInner`'s leaf lemmas with the simulated inner prover's last message free. At the last round it sends a message
-that the recursive prover's own leaf at some last coin decodes and the inner verifier accepts (`refStratL`), not one a
-commitment fixed before the coin. An inner verifier that ignores the last round's coin (`Inner.LastFree`, every
-`schedInner`) accepts that message at every last coin, and a pick that ignores it (`PickLastFree`: `clashPickCL`,
-`clashPickHL`) reads a fork of the simulated prover as one of the recursive prover's, at its leaves' own last coins.
-
-* `relabelL`, `refStratL`, `AtLeafL`: `relabel`, `refStrat` and `AtLeaf` with the last message free.
-* `leafAvg_relabelL_le`, `outcome_contF_refL`, `finds_forkG_refL`: `leafAvg_relabel_at`, `outcome_contF_ref` and
-  `finds_forkG_ref` with the last message free.
-* `InnerAtLeavesL`, `innerAtLeavesL_of_forkOn`: `InnerAtLeaves` with the decoded last message free, from
-  `InnerSoundForkOn` at a verifier and a pick that ignore the last coin, unless the recursive prover has an inner fork.
-* `schedInner_lastFree`, `clashPickCL_lastFree`, `clashPickHL_lastFree`: the three for Flock's inner protocols.
--/
+/-! The inner fork with the last round's message unbound, for an inner verifier and a pick that ignore the last round's coin. -/
 
 @[expose] public section
 
@@ -47,7 +32,6 @@ section Last
 
 variable {M C : Type}
 
-/-- **`u` and `u'` are one transcript but for the last round's coin.** -/
 def LastCoin {N : Type} (u u' : List (N × C)) : Prop :=
   u = u' ∨ ∃ p m ρ ρ', u = p ++ [(m, ρ)] ∧ u' = p ++ [(m, ρ')]
 
@@ -57,16 +41,13 @@ theorem LastCoin.cons {N : Type} {u u' : List (N × C)} (e : N × C) (h : LastCo
   · exact Or.inl rfl
   · exact Or.inr ⟨e :: p, m, ρ, ρ', rfl, rfl⟩
 
-/-- **A pick that ignores the last round's coin** of transcripts of `r` rounds. -/
 def PickLastFree {N : Type} (r : ℕ) (pk : List (N × C) → List (N × C) → StrictCR.Pair) : Prop :=
   ∀ u₁ u₂ u₁' u₂', u₁.length = r → u₂.length = r → LastCoin u₁ u₁' → LastCoin u₂ u₂' → pk u₁ u₂ = pk u₁' u₂'
 
-/-- **An inner verifier that ignores the last round's coin.** -/
 def Inner.LastFree (I : Inner) : Prop :=
   ∀ x (u : List (I.Msg × I.Coin)) m ρ ρ', u.length + 1 = I.r → I.accepts x (u ++ [(m, ρ)]) →
     I.accepts x (u ++ [(m, ρ')])
 
-/-- **`relabel ref t` with `m` as the last round's message.** -/
 def relabelL {N : Type} : (List (M × C) → M → N) → N → List (M × C) → List (N × C)
   | _, _, [] => []
   | _, m, [(_, ρ)] => [(m, ρ)]
@@ -75,8 +56,6 @@ def relabelL {N : Type} : (List (M × C) → M → N) → N → List (M × C) �
 variable {β : Type} [Fintype C] [Nonempty C]
 
 open Classical in
-/-- **The simulated inner prover's last message** at the last node of `s`: a message `m` such that, at some last coin
-`ρ`, `Q` holds of the transcript `[(m, ρ)]` and `V` of the leaf there with it, when there is one. -/
 noncomputable def lastMsg {N δ : Type} (f : List (M × C) → Game β) (ref : List (M × C) → M → N) (Q : δ → Prop)
     (h : List (N × C) → δ) (V : (t : List (M × C)) → Strategy (f t) → List (N × C) → Prop)
     (s : Strategy (rounds M C 1 f)) : N :=
@@ -90,7 +69,6 @@ theorem lastMsg_spec {N δ : Type} (f : List (M × C) → Game β) (ref : List (
   rw [dite_eq_left hm]
   exact ⟨hm.choose, hm.choose_spec.choose_spec⟩
 
-/-- **The simulated inner prover, last message free**: `refStrat`, but at the last round it sends `lastMsg`. -/
 noncomputable def refStratL {N δ : Type} (Q : δ → Prop) : (r : ℕ) → (f : List (M × C) → Game β) →
     (List (M × C) → M → N) → (h : List (N × C) → δ) →
     ((t : List (M × C)) → Strategy (f t) → List (N × C) → Prop) → Strategy (rounds M C r f) →
@@ -101,7 +79,6 @@ noncomputable def refStratL {N δ : Type} (Q : δ → Prop) : (r : ℕ) → (f :
       refStratL Q (r + 1) (fun t => f ((s.1, ρ) :: t)) (fun p c => ref ((s.1, ρ) :: p) c)
         (fun t => h ((ref [] s.1, ρ) :: t)) (fun t s' u => V ((s.1, ρ) :: t) s' ((ref [] s.1, ρ) :: u)) (s.2 ρ)⟩
 
-/-- **`V` at a leaf of `s` that the coins of `u` reach but for the last**, read at `u` with that leaf's last coin. -/
 def AtLeafL {N : Type} : (r : ℕ) → (f : List (M × C) → Game β) →
     ((t : List (M × C)) → Strategy (f t) → List (N × C) → Prop) → Strategy (rounds M C r f) → List (N × C) → Prop
   | 0, _, V, s, u => V [] s u
@@ -111,9 +88,6 @@ def AtLeafL {N : Type} : (r : ℕ) → (f : List (M × C) → Game β) →
   | _ + 1, _, _, _, [] => False
 
 open Classical in
-/-- **The simulation with the last message free**: averaged over the round coins, the indicator that some last message
-makes the relabelled transcript satisfy `Q` and the leaf's `V` is at most the average, against `refStratL`, of the
-indicator that its transcript satisfies `Q` and `AtLeafL`, when `Q` ignores the last coin. -/
 theorem leafAvg_relabelL_le {N δ : Type} (Q : δ → Prop) : ∀ (r : ℕ) (f : List (M × C) → Game β)
     (ref : List (M × C) → M → N) (h : List (N × C) → δ)
     (V : (t : List (M × C)) → Strategy (f t) → List (N × C) → Prop) (s : Strategy (rounds M C r f)),
@@ -140,8 +114,6 @@ theorem leafAvg_relabelL_le {N δ : Type} (Q : δ → Prop) : ∀ (r : ℕ) (f :
           (fun t => h ((ref [] s.1, ρ) :: t)) (fun t s' u => V ((s.1, ρ) :: t) s' ((ref [] s.1, ρ) :: u)) (s.2 ρ)
           fun u m ρ₁ ρ₂ hu hq => hQ ((ref [] s.1, ρ) :: u) m ρ₁ ρ₂ (by simp only [List.length_cons]; omega) hq
 
-/-- **An outcome of `refStratL`'s run that satisfies `G` is one of the recursive prover's but for the last coin**, when
-`G` of a transcript gives `AtLeafL`: the trial at the leaf it names reaches the transcript at that leaf's last coin. -/
 theorem outcome_contF_refL {N δ : Type} (Q G : δ → Prop) : ∀ (r : ℕ) (f : List (M × C) → Game β)
     (ref : List (M × C) → M → N) (h : List (N × C) → δ)
     (V : (t : List (M × C)) → Strategy (f t) → List (N × C) → Prop)
@@ -170,9 +142,6 @@ theorem outcome_contF_refL {N δ : Type} (Q G : δ → Prop) : ∀ (r : ℕ) (f 
       exact ⟨(ref [] s.1, ρ) :: u, (ref [] s.1, ρ) :: u', rfl, (by simp only [List.length_cons]; omega), hc.cons _,
         ρ, ho⟩
 
-/-- **A fork of `refStratL` on transcripts satisfying `G` is a fork of the recursive prover**, when the pick ignores the
-last coin: at the same round and coins but for the last, its two trials reach the two transcripts at their leaves' last
-coins (`outcome_contF_refL`), so `pick` reads the same collision. -/
 theorem finds_forkG_refL {D N δ : Type} (H : List UInt8 → D) (pk : δ → δ → StrictCR.Pair) (Q G : δ → Prop) :
     ∀ (k r : ℕ) (f : List (M × C) → Game β) (ref : List (M × C) → M → N) (h : List (N × C) → δ)
     (V : (t : List (M × C)) → Strategy (f t) → List (N × C) → Prop)
@@ -225,8 +194,6 @@ variable {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type} {
   {outer : Reg → L.Ω → List (Cm × I.Coin) → Game β}
 
 open Classical in
-/-- **`InnerAtLeaves` with the decoded last message free**: the outcome decodes to the relabelled transcript but for the
-last round's message (`relabelL`), and the inner verifier accepts that. -/
 def InnerAtLeavesL (σ : Strategy (recGame L Reg I Cm outer)) (Acc : Reg → L.Ω → List (Cm × I.Coin) → β → Prop)
     (x : Reg → L.Ω → I.Stmt) {W : Type} (dec : ∀ R ω t, Strategy (outer R ω t) → β → W) (wmsg : W → List I.Msg)
     (ref : L.Ω → List (Cm × I.Coin) → Cm → I.Msg) (εin : ℝ≥0∞) : Prop :=
@@ -237,9 +204,6 @@ def InnerAtLeavesL (σ : Strategy (recGame L Reg I Cm outer)) (Acc : Reg → L.�
             (t.map Prod.snd) = relabelL (ref ω) m t ∧ I.accepts (x σ.1 ω) (relabelL (ref ω) m t) then 1 else 0)
     (σ.2 ω) ≤ εin
 
-/-- **The inner protocol's soundness in fork form bounds the inner term with the last message free**, at every choice of
-reference openings, when the inner verifier and the pick ignore the last coin, unless the recursive prover has an inner
-fork: `innerAtLeavesV_of_forkOn` at `refStratL` and `G := AtLeafL`. -/
 theorem innerAtLeavesL_of_forkOn (σ : Strategy (recGame L Reg I Cm outer))
     (Acc : Reg → L.Ω → List (Cm × I.Coin) → β → Prop) (x : Reg → L.Ω → I.Stmt) {W : Type}
     (dec : ∀ R ω t, Strategy (outer R ω t) → β → W) (wmsg : W → List I.Msg) {D : Type} (H : List UInt8 → D)
@@ -309,8 +273,6 @@ theorem schedSteps_lastCoin {t t' : List (List (SMsg T) × ((k : Fin r) → CT k
   · rfl
   · exact schedSteps_last T CT 0 p m ρ ρ' (by simp at hl; omega)
 
-/-- **`schedInner` ignores the last round's coin**: `schedSteps` reads round `j`'s coin only at `j < r`, and the last
-round is `j = r`. -/
 theorem schedInner_lastFree [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)] {α : Type} (Stmt : Type)
     (g : Stmt → Game α) (p : Stmt → α → Prop) (holds : Stmt → Prop) : (schedInner T CT Stmt g p holds).LastFree := by
   rintro x u m ρ ρ' hu ⟨a, ha, hp⟩
@@ -328,7 +290,6 @@ variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K
   {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type)
 
 omit [Fintype K] in
-/-- **`clashPickCL` ignores the last round's coin**: `outCL` reads a transcript only through `schedSteps`. -/
 theorem clashPickCL_lastFree (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (Lf : Merkle.Leaf (List F) Sl D H) (cls : HClass) (regs : List (Region cls.kLog (cls.m - cls.kLog)))
     (sch : Schedule) (M : Hidden cls) : PickLastFree (r + 1) (clashPickCL T CT A H E Lf cls regs sch M) := by
@@ -341,7 +302,6 @@ theorem clashPickCL_lastFree (A : Arith F K) (H : List UInt8 → D) (E : Merkle.
   rw [hout _ _ (schedSteps_lastCoin T CT h₁ c₁), hout _ _ (schedSteps_lastCoin T CT h₂ c₂)]
 
 omit [Fintype K] in
-/-- **`clashPickHL` ignores the last round's coin**: `outHL` reads a transcript only through `schedSteps`. -/
 theorem clashPickHL_lastFree (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (Lf : Merkle.Leaf (List F) Sl D H) (e : ExecHolo) (x : HoloReg F D) :
     PickLastFree (r + 1) (clashPickHL T CT A H E Lf e x) := by

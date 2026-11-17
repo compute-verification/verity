@@ -4,10 +4,7 @@ public import Proofs.Flock.Level3.GF128
 public import Mathlib.RingTheory.AdjoinRoot
 public import Mathlib.Algebra.Field.ZMod
 
-/-!
-Level 3, L3-F: the executable's `F128` is the ring GF(2)[X]/(G). `toAdj` sends an element to its residue class; it is a
-bijection that carries `+` and `*` to the quotient ring's (the field structure, once `G` is irreducible: `GF128Field`).
--/
+/-! The executable's `F128` is the ring GF(2)[X]/(G), through `toAdj`. -/
 
 @[expose] public section
 
@@ -17,7 +14,6 @@ namespace FlockLevel3
 
 instance instFactPrimeOfNatNat_flockLevel3 : Fact (Nat.Prime 2) := ⟨Nat.prime_two⟩
 
-/-- Every polynomial with no coefficient at `k` or above is the polynomial of a number below `2^k`. -/
 theorem natPoly_surj : ∀ (k : ℕ) (r : P), (∀ i, k ≤ i → r.coeff i = 0) → ∃ n, n < 2 ^ k ∧ natPoly n = r := by
   intro k
   induction k with

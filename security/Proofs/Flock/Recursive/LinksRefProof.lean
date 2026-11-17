@@ -48,23 +48,7 @@ import Proofs.Flock.Soundness.Discharge.Hm.Commit
 import Proofs.Flock.Soundness.Discharge.Layout.OutShape
 import Proofs.Flock.VBridge.RecLink
 
-/-!
-# A link part's unit at each instance: the reference step
-
-`LinkRefStaged`: at a staged link part (V\*'s statement `.link UB PB N`), instance `n < N`'s reference link check
-(`linkRefAt`) outputs `(expected R, expected W)`, or two of `refMsgs` collide.
-
-* **The inputs.** The unit's copy `n` (`copyOf`) holds its laid-out rows (`laidRows_of_satisfies` at the net the
-  setup accepted, `RecLinkPart.unitNet`), and its input columns hold the seven ports' words: port `q` of V\*'s rows
-  (`linkRows_eq`) from column `16 Σ_{q' < q} words(q')` (`colsHold_inRow`, `inPort`). Those are the u16 words
-  `inWordsAt` reads, so the reference check accepts them (`linkRef_of_shape`).
-* **The outputs.** V\*'s laid-out `RecLink{UB, PB}` computes `linkOut` at its output columns (`laid_linkUnit`,
-  `linkB_words`, `unit_out`), which are the bits `outRowForms` reads at the `rin` and `rout` rows (`colsHold_linkOut`,
-  `colsHold_outRow`'s argument at `RecLinkPart.outsOk`'s ports).
-* **The rows.** The `rin` (`rout`) slot commits that row (`slotOut_stagedG`) and check 5 holds it to `expected R`
-  (`expected W`, `linkValue_slot`), so the two rows are equal or SHA-512 collides (`linkOut_bind`, `out_or_coll`).
-  Two u16 lists with one byte string are equal (`bytesOf_inj`).
--/
+/-! The reference step (`linkRef_staged`): instance `n`'s reference link check outputs `(expected R, expected W)`, or two of `refMsgs` collide. -/
 
 @[expose] public section
 
@@ -77,8 +61,6 @@ open FlockSoundness.Discharge.Hm (bitL)
 open FlockVBridge (ColsHold)
 
 namespace RefStep
-
-/-! ## Columns and bytes -/
 
 theorem colsHold_split {v : ℕ → Bool} {base : ℕ} {a b : ByteArray} (h : ColsHold v base (a ++ b)) :
     ColsHold v base a ∧ ColsHold v (base + 8 * a.size) b := by
@@ -142,7 +124,6 @@ theorem colsHold_slice {v : ℕ → Bool} {base : ℕ} {B : ByteArray} (h : Cols
     List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD, List.getElem?_take_of_lt (by omega),
     List.getElem?_drop]
 
-/-- **Columns that hold a word list hold each run of its words**, `16` columns a word. -/
 theorem colsHold_sliceW {v : ℕ → Bool} {base : ℕ} {ws : List ℕ} (h : ColsHold v base (RecLinkRef.bytesOf ws))
     (j m : ℕ) (hjm : j + m ≤ ws.length) {b' : ℕ} (hb : base + 16 * j = b') :
     ColsHold v b' (RecLinkRef.bytesOf ((ws.drop j).take m)) := by
@@ -175,15 +156,12 @@ theorem colsHold_eq {v : ℕ → Bool} {base : ℕ} {a b : ByteArray} (ha : Cols
   refine FlockSoundness.Discharge.Hm.eq_of_bitL (by omega) fun t ht => ?_
   rw [← ha t (by omega), hb t (by omega)]
 
-/-- **Two 128-byte strings the same columns hold are equal.** -/
 theorem bytes_of_cols {v : ℕ → Bool} {b1 b2 : ℕ} {l : List UInt8} {b : ByteArray} (hl : ColsHold v b1 ⟨l.toArray⟩)
     (hb : ColsHold v b2 b) (hbb : b1 = b2) (hlen : l.length = 128) (hs : b.size = 128) : l = b.data.toList := by
   subst hbb
   have e := colsHold_eq hl hb (by show l.toArray.size = b.size; rw [List.size_toArray]; omega)
   subst e
   rfl
-
-/-! ## u16 words -/
 
 theorem length_wordsOf (b : ByteArray) : (RecLinkRef.wordsOf b).length = b.size / 2 := by
   simp only [RecLinkRef.wordsOf, List.length_map, List.length_range]
@@ -219,7 +197,6 @@ theorem size_expected {r : ByteArray} (hr : r.size = 64) : (RecLinkRef.expected 
   rw [List.size_toArray, RecLinkRef.expected, List.length_append, length_wordsOf, List.length_replicate, hr]
   rfl
 
-/-- **u16 words are their bytes**: two lists of u16s with one `bytesOf` are equal. -/
 theorem bytesOf_inj : ∀ {x y : List ℕ}, (∀ a ∈ x, a < 65536) → (∀ a ∈ y, a < 65536) →
     RecLinkRef.bytesOf x = RecLinkRef.bytesOf y → x = y
   | [], [], _, _, _ => rfl
@@ -274,9 +251,6 @@ theorem padTo_64 {E : Array ℕ} (h : E.size = 64) : RecCoins.padTo E (Registere
   rw [h]
   simp
 
-/-! ## The reference check and the unit -/
-
-/-- **The reference link check accepts ports of its words, u16s**, at a shape `checkShape` accepts. -/
 theorem linkRef_of_shape {UB PB : ℕ} {trow xr yr raux xw yw waux : List ℕ}
     (hs : RecLinkTree.checkShape UB PB = .ok ()) (h0 : trow.length = 64) (h1 : xr.length = 32)
     (h2 : yr.length = 96) (h3 : raux.length = RecLinkRef.auxWords (UB + PB)) (h4 : xw.length = 32)
@@ -315,7 +289,6 @@ theorem inCol_laid {U : VStar.UnitC} {l : Flock.HmNets.Laid} (hl : U.laid = .ok 
     FlockSoundness.Discharge.Hm.layout_inGroups]
   rfl
 
-/-- **V\*'s link part's row ports**, by index: name, words and bits, the earlier rows' words. -/
 theorem port_facts {ps : Array Port} {L : List (String × ℕ × ℕ)}
     (hr : ps.toList.map (fun q => (q.name, q.words, q.bits)) = L) {k : ℕ} {nm : String} {wd bt : ℕ}
     (hk : L[k]? = some (nm, wd, bt)) (hf : L.findIdx? (·.1 == nm) = some k) :
@@ -335,9 +308,6 @@ theorem port_facts {ps : Array Port} {L : List (String × ℕ × ℕ)}
     simp only [List.map_take, List.map_map]
     rfl
 
-/-- **A copy's columns hold an input port's words**: where the unit reads its `N` input words in order from column 0,
-port `q` (`nm`), after `S` words of earlier ports and `W` words of its own, is the u16 words `inWordsAt` reads, from
-column `16 S`. -/
 theorem inPort {p : Flock.Readable.Parsed} (h1 : p.sts.size = 1) (h0 : 0 < p.sts.size) {c : Circuit}
     (hc0 : p.sts[0].c = c) {tags : Flock.Tags} (P : FlockSoundness.ParseFacts tags c) {N : ℕ}
     (hl : c.leavesIn.getD 0 #[] = (Array.range N).map Int.ofNat) (hcol : (c.unit.inGroups.getD 0 default).col = 0)
@@ -377,10 +347,6 @@ theorem sibs_cols {v : ℕ → Bool} {D : ℕ} {A : List ℕ} {base : ℕ} (h : 
   exact ⟨by rw [size_bytesOf, List.length_take, List.length_drop]; omega,
     colsHold_sliceW h (32 * i) 32 (by omega) (by omega)⟩
 
-/-- **V\*'s laid-out `RecLink{UB, PB}` outputs `linkOut` of its ports' words**: where its rows hold at `v` and its
-input columns hold the words `trow`, `xyr`, `raux`, `xyw`, `waux` (from columns `0`, `1024`, `3072`, `3072 + 16 a`,
-`5120 + 16 a`, `a` the `aux` ports' words), its output columns hold `linkOut`'s two rows of 128 bytes
-(`laid_linkUnit`, `linkB_words`). -/
 theorem unit_out {UB PB : ℕ} {U : VStar.UnitC} (hU : VStar.linkUnit UB PB = .ok U) {l : Flock.HmNets.Laid}
     (hl : U.laid = .ok l) {v : ℕ → Bool}
     (h : FlockSoundness.Discharge.Hm.LaidRows l
@@ -418,9 +384,6 @@ theorem unit_out {UB PB : ℕ} {U : VStar.UnitC} (hU : VStar.linkUnit UB PB = .o
   rw [FlockVBridge.RecLink.linkB_words] at hO hsz
   exact ⟨hO, hsz⟩
 
-/-- **A copy's columns hold its unit's output row `jo`**, `colsHold_outRow` at a link part's output layout
-(`RecLinkPart.outsOk`: output ports `rin` and `rout`, one output port per output row, 64 words each), which names
-them as `OutsLaid` doesn't. -/
 theorem colsHold_linkOut {p : Flock.Readable.Parsed} (h1 : p.sts.size = 1) (h0 : 0 < p.sts.size) {c : Circuit}
     (hc0 : p.sts[0].c = c) {tags : Flock.Tags} (P : FlockSoundness.ParseFacts tags c) (ho : c.outNet = c.unitNet)
     (hop : c.outPorts = #[("rin", 64), ("rout", 64)]) (hlo : c.leavesOut.getD 0 #[] = Array.range 128)
@@ -464,8 +427,6 @@ theorem colsHold_linkOut {p : Flock.Readable.Parsed} (h1 : p.sts.size = 1) (h0 :
     Claims.Recursion.VStar.copyOf_eq hj]
   simp only [Claims.Recursion.VStar.copyIdx, hc0, h1, Nat.mul_one, Nat.add_zero]
 
-/-- **An output slot's row, or a collision among its messages** (`outMsgs`): `linkOut_bind`'s three cases at port
-`nm`'s index and the program `c`'s META names. -/
 theorem out_or_coll {c : Circuit} {w : Claims.Flock.Wit} {n q : ℕ} {nm value prog : String} {E : Array ℕ}
     (hq : portIdx c nm = q) (hp : progOf c = prog)
     (h : rowPfx c q ++ readForms w (DeployedR.outRowForms c q n) =
@@ -485,15 +446,10 @@ theorem out_or_coll {c : Circuit} {w : Claims.Flock.Wit} {n q : ℕ} {nm value p
 
 end RefStep
 
-/-- **A staged link part's unit gives the verifier's rows** (`LinkRefStaged`): instance `n`'s ports, read off copy
-`n`'s input columns, pass the reference check (`linkRef_of_shape`), whose output the unit computes at its output
-columns (`unit_out`), which are the `rin` and `rout` rows (`colsHold_linkOut`); check 5 holds those to `expected R`
-and `expected W`, or two of the slots' messages collide (`out_or_coll`). -/
 theorem linkRef_staged : LinkRefStaged := by
   unfold LinkRefStaged
   intro st s x xO w hS hck r hr ss hss UB PB N hsv c hpc i spec sts hsu h0 own hown hidx hNn hnn rowsR rowsW R W hR hW
     wi wo hrin hrout n hn
-  -- the part's one table: circuit `c`, V*'s `RecLink{UB, PB}` laid out at `l`
   obtain ⟨p, _, _, hx, ht, hpi, _, -, h0p, htab⟩ := stagedTables hS
   have hp : p = { i.base.read with sts } := Option.some.inj (hx.symm.trans (parse_of_setupO hsu))
   have e0 : p.sts[0] = sts[0] := by subst hp; rfl
@@ -504,7 +460,6 @@ theorem linkRef_staged : LinkRefStaged := by
   obtain ⟨-, hnet, hok⟩ := linkCheck_staged hsu h0 hnm
   rw [hsc] at hnet hok
   obtain ⟨l, hlaid, hnl⟩ := RefStep.unitNet_laid hu hnet
-  -- copy `n` holds the unit's laid-out rows
   obtain ⟨L, hz⟩ := layout_of_check_regs hck hx ht hpi h0p
   have hfl : p.sts[0].c.tmpl = none := FlockSoundness.Discharge.Recursion.checkParsed_flat (htab 0 h0p).2.2
   obtain ⟨-, hts⟩ := tablesOf_of_parse hx
@@ -530,7 +485,6 @@ theorem linkRef_staged : LinkRefStaged := by
   have hnetp : Flock.HmNets.netOf (VStar.linkName UB PB) l = .ok p.sts[0].c.unit := by rw [hc0]; exact hnl
   have hLR := Flock.Readable.laidRows_of_satisfies L hfl _ hz hob hgb hupv0 hnetp
   rw [FlockVBridge.OfVStar.inWords_laid hlaid hnetp] at hLR
-  -- the seven row ports; the first five are the unit's input words, in order from column 0
   have hrows7 := hrowsV
   rw [linkRows_eq hu] at hrows7
   obtain ⟨hs0, hq0, hw0, hb0, hx0⟩ :=
@@ -581,12 +535,10 @@ theorem linkRef_staged : LinkRefStaged := by
     (by omega) (base := 3072 + 16 * VStar.auxWords (UB + PB)) (by omega)
   obtain ⟨c4, l4⟩ := RefStep.inPort h1 h0p hc0 P hl hcol hN0 w n hq4 hs4 hP4 hw4 (by rw [hb4])
     (by omega) (base := 5120 + 16 * VStar.auxWords (UB + PB)) (by omega)
-  -- the unit's output columns hold `linkOut`'s two rows
   obtain ⟨hO, hsz1, hsz2⟩ := RefStep.unit_out hu hlaid
     (v := Flock.Readable.copyOf p 0 h0p w (n / c.g) (n % c.g) 0) hLR l0 l1 l2 l3 l4 c0 c1 c2 c3 c4
   obtain ⟨hO1, hO2⟩ := RefStep.colsHold_split hO
   rw [hsz1] at hO2
-  -- which are the `rin` and `rout` rows
   obtain ⟨ls, hls⟩ := P.check
   have C := FlockSoundness.check_facts P.typed hls
   have hU := FlockSoundness.unit_built P C
@@ -632,7 +584,6 @@ theorem linkRef_staged : LinkRefStaged := by
     (jo := 1) (by omega) (q := 6) (by omega)
   have hr0 := RefStep.bytes_of_cols hR0 hO1 (by omega) hL0 hsz1
   have hr1 := RefStep.bytes_of_cols hR1 hO2 (by omega) hL1 hsz2
-  -- the slots commit those rows, and check 5 holds them to `expected R` and `expected W`
   have hout5 := MoreSlots.slotOut_stagedG hS hck hr hss hsv hpc hs5 (by omega) (.inl hn)
   have hout6 := MoreSlots.slotOut_stagedG hS hck hr hss hsv hpc hs6 (by omega) (.inl hn)
   obtain ⟨prog, hprog, hv5⟩ := linkValue_slot hS hck hr hpc hsu h0 hidx hown hrin hq5 hn hNn hnn
@@ -657,7 +608,6 @@ theorem linkRef_staged : LinkRefStaged := by
     (RefStep.expected_u16 R)
   have hlo2 := RefStep.eq_of_wordBytes (hr1.symm.trans hrd6) (RefStep.linkOut_u16 UB PB _ _ _ _ _ _ _).2
     (RefStep.expected_u16 W)
-  -- the reference check accepts the ports and outputs those rows
   refine .inl ?_
   have L1 : ((inWordsAt c w "xyr" n).take 32).length = 32 := by rw [List.length_take, l1] <;> omega
   have L2 : ((inWordsAt c w "xyr" n).drop 32).length = 96 := by rw [List.length_drop, l1] <;> omega

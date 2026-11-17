@@ -44,20 +44,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 import Proofs.Flock.VBridge.RecLink
 
-/-!
-# The link part's rows at each instance
-
-At a staged link part (V\*'s statement `.link UB PB N`, at a statement carrying the table `(T, N)`) the witness checks
-against, each instance `n < N` fixes its rows:
-
-* `rowOpens_staged`: its `trow`, the bytes at the row's input columns (`trowAt`), opens position `n` of the registered
-  table at `T` (`RowOpens`). The `trow` slot is the instance's public row (`slotPub_table`), which the setup opens
-  against the verifier's registered `trow` (`checkPort_at`), whose root, leaves, domain and reads `checkTable` fixed
-  (`trow_table`); and the slot commits the row (`slotIn_stagedG`).
-* `linkValue_slot`, `linkOut_bind`: its `rin` (`rout`) slot reads as check 5's row of `expected R` (`expected W`), over
-  the inner statement's input (output) rows' root (`linkSetup_staged`), so the unit's output row is that row's message,
-  or SHA-512 collides.
--/
+/-! The link part's rows at each instance: `trow` opens the registered table at `T`, and `rin` and `rout` carry check 5's rows or SHA-512 collides. -/
 
 @[expose] public section
 
@@ -72,10 +59,6 @@ theorem bytes_eq_of_toList {a b : ByteArray} (h : a.data.toList = b.data.toList)
   simp only [ByteArray.mk.injEq]
   exact Array.ext' h
 
-/-! ## The link part's ports -/
-
-/-- **V\*'s link part's row ports**: `trow`, `xyr`, `raux`, `xyw`, `waux`, then the outputs `rin`, `rout`
-(`linkUnit_ok`'s input rows and output ports). -/
 theorem linkRows_eq {UB PB : ℕ} {u : VStar.UnitC} (hu : VStar.linkUnit UB PB = .ok u) :
     RecVStar.vstarRows (VStar.linkSub UB PB) u =
       [("trow", 64, 1024), ("xyr", 128, 2048), ("raux", VStar.auxWords (UB + PB), 16 * VStar.auxWords (UB + PB)),
@@ -86,7 +69,6 @@ theorem linkRows_eq {UB PB : ℕ} {u : VStar.UnitC} (hu : VStar.linkUnit UB PB =
   rw [hin, hop]
   rfl
 
-/-- **The link part's `trow` port is a row of `LINK_ROW_WORDS` words**, 1024 bits. -/
 theorem trow_port {c : Circuit} {UB PB : ℕ} {u : VStar.UnitC} (hu : VStar.linkUnit UB PB = .ok u)
     (hrows : c.ports.toList.map (fun q => (q.name, q.words, q.bits)) = RecVStar.vstarRows (VStar.linkSub UB PB) u) :
     ∃ q, c.ports.findIdx? (·.name == "trow") = some q ∧ ∃ hq : q < c.ports.size,
@@ -101,13 +83,6 @@ theorem trow_port {c : Circuit} {UB PB : ℕ} {u : VStar.UnitC} (hu : VStar.link
   · exact Prod.mk.inj (Prod.mk.inj h).2
   all_goals simp at h
 
-/-! ## What the setup checked at the link part -/
-
-/-- **A staged link part's setup**: at a part whose V\* statement is `.link UB PB N`, at a statement carrying the table
-`(T, N)`, the setup's one table passed `checkLinks` at the verifier's registered reads `own` and the inner statement's
-files `f`: `trow` reads the table (`checkTable`), `rin` and `rout` are the verifier's rows of `expected R` and
-`expected W` over the roots of the inner statement's input and output rows, and the table labels its instances in
-order and holds at least the `N` instances. -/
 theorem linkSetup_staged {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {r : XR}
     (hr : readX x = some r) {ss : Array VStar.Stmt} (hss : RecVStar.statements r.shape = .ok ss) {UB PB N : ℕ}
     (hsv : ss[s]? = some (.link UB PB N)) {c : Circuit} (hpc : r.w.parts[s]?.bind partCircuit = some c)
@@ -149,12 +124,8 @@ theorem linkSetup_staged {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st
   have hle := hpopn 0 h0
   exact ⟨h0, own, f, sf, R, W, hown, hfs, hsf, hR, hW, htab, hrin, hrout, hidx, by omega, hnn⟩
 
-/-! ## `trow` opens the table -/
-
-/-- **A link part's `trow` slot at instance `n` is a row of the registered table**: at a staged `.link UB PB N` part
-the witness checks against, at a statement carrying the table `(T, N)`, the verifier's registered `trow` has root `T`,
-`N` leaves, the row schema and the domain the part's program registers (`checkTable_ok`), and the slot at instance
-`n < N` reads as a table row that opens it at position `n` (`checkPort_at`, its reads `n ↦ n`). -/
+/-- The verifier's registered `trow` has root `T`, `N` leaves, the row schema and the program's domain (`checkTable_ok`),
+and the slot at instance `n < N` reads as a table row that opens it at position `n` (`checkPort_at`). -/
 theorem trow_table {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} (hS : StagedPart st s x xO)
     (hck : Claims.Flock.check (deployZkRec Flock.Readable.relation).parse xO w = true) {r : XR} {c : Circuit}
     (hr : readX x = some r) (hpc : r.w.parts[s]?.bind partCircuit = some c) {ss : Array VStar.Stmt}
@@ -217,11 +188,8 @@ theorem trow_table {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} (h
   rw [digest_tables htt] at hsl
   exact ⟨reg, hroot, hleaves, hschema, hdom, _, _, hop, hsl⟩
 
-/-- **A link part's `trow` at instance `n` opens the table at `T`**: at a staged `.link UB PB N` part the witness
-checks against, at a statement carrying the table `(T, N)`, the bytes at instance `n`'s `trow` input columns
-(`trowAt`) open position `n` of the registered table at `T` under the domain its program registers (`RowOpens`): the
-slot commits the row (`slotIn_stagedG`, `trow` being an input of `linkSub`), and its commit string is the table row
-`trow_table` opens. -/
+/-- The bytes at instance `n`'s `trow` input columns open position `n` of the registered table at `T`: the slot commits
+the row (`slotIn_stagedG`), and its commit string is the table row `trow_table` opens. -/
 theorem rowOpens_staged {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} (hS : StagedPart st s x xO)
     (hck : Claims.Flock.check (deployZkRec Flock.Readable.relation).parse xO w = true) {r : XR} {c : Circuit}
     (hr : readX x = some r) (hpc : r.w.parts[s]?.bind partCircuit = some c) {ss : Array VStar.Stmt}
@@ -248,8 +216,6 @@ theorem rowOpens_staged {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wi
   rw [← opens_tablePort hroot hleaves hdm hschema, hb]
   exact hop
 
-/-! ## `rin` and `rout` are check 5's rows -/
-
 /-- **Check 5's row at a link part's output slot**: where the setup's table passed `checkValue` at port `port` over
 `N` copies of the row `E`, the part's port `q` (its `port`)'s hm96 slot at instance `n < N` reads as the commit string
 of `E` under the verifier's salt of instance `n` (`check5_bytes_lt`). -/
@@ -271,9 +237,7 @@ theorem linkValue_slot {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit
   refine ⟨prog, hprog, ?_⟩
   rw [h, getElem!_pos (Array.replicate N E) n hlt, Array.getElem_replicate]
 
-/-- **An output slot check 5 holds to a row carries that row**: where port `q`'s slot at instance `n` commits the
-row at its output columns (`slotOut_stagedG`) and reads as check 5's commit string of `E` under `salt`
-(`linkValue_slot`), the slot's `sha512/row/v1` message is `E`'s, or the two messages' or the two salts' evaluations
+/-- The slot's `sha512/row/v1` message at instance `n` is `E`'s, or the two messages' or the two salts' evaluations
 collide (`commit_bind`). -/
 theorem linkOut_bind {c : Circuit} {q n : ℕ} {w : Claims.Flock.Wit} {E : Array ℕ} {salt : ByteArray}
     (hout : readForms w (hmCommit c q n) = FlockSoundness.Binding.commitString

@@ -1,10 +1,4 @@
-/-
-Level 3, L3-F: the executable's GF(2^256) (`Flock.F256`, `Flock.Field`) is the field GF128[Y]/(Y^2 + Y + x⁻¹): an element
-`c0 + c1·u` is the residue class of `c0 + c1·Y`, and `F256.mul` (three products, `p0 + x⁻¹·p1`, `p2 + p0`) is the quotient
-ring's product. `Y^2 + Y + x⁻¹` is irreducible because the trace of `x⁻¹` is 1 (Artin–Schreier: the trace vanishes on every
-`y^2 + y`), computed by the kernel with the executable's multiplication. The field is transported onto the synonym `GF256`,
-whose `+` and `*` are the executable's.
--/
+/- The executable's GF(2^256) is the field GF128[Y]/(Y^2 + Y + x⁻¹), transported onto the synonym `GF256`. -/
 module
 
 public import Mathlib.Algebra.Polynomial.SpecificDegree
@@ -120,7 +114,7 @@ noncomputable def equivPhi : F256 ≃ AdjoinRoot Q := Equiv.ofBijective phi ⟨p
 
 theorem equivPhi_apply (a : F256) : equivPhi a = phi a := rfl
 
-/-! ### `Y^2 + Y + x⁻¹` is irreducible -/
+/-! `Y^2 + Y + x⁻¹` is irreducible because the trace of `x⁻¹` is 1. -/
 
 instance instCharPGF128OfNatNat : CharP GF128 2 := (CharP.charP_iff_prime_eq_zero Nat.prime_two).mpr (by exact_mod_cast GF128.two_eq_zero)
 
@@ -132,7 +126,6 @@ theorem GF128.frob_of (a : F128) : GF128.of a ^ (2 ^ (127 + 1)) = GF128.of a := 
 
 theorem GF128.frob (z : GF128) : z ^ (2 ^ (127 + 1)) = z := GF128.frob_of z
 
-/-- The trace `GF128 → GF(2)`: `T(z) = Σ_{i < 128} z^(2^i)`. -/
 noncomputable def T (z : GF128) : GF128 := ∑ i ∈ Finset.range (127 + 1), z ^ (2 ^ i)
 
 theorem T_add (a b : GF128) : T (a + b) = T a + T b := by
@@ -150,7 +143,6 @@ theorem T_sq (z : GF128) : T (z ^ 2) = T z := by
 theorem T_zero : T 0 = 0 := by
   simp [T]
 
-/-- `x0 + x1 + … ` over `k` squarings: `acc + Σ_{i < k} z^(2^i)` with the executable's operations. -/
 def traceGo : ℕ → F128 → F128 → F128
   | 0, _, acc => acc
   | k + 1, z, acc => traceGo k (z * z) (acc + z)

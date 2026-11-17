@@ -16,17 +16,7 @@ public import Proofs.Flock.Claims.KS.PlainSimR
 public import Proofs.Flock.Claims.Assembled
 public import Proofs.Flock.Claims.Sampling.Assembled
 
-/-!
-# `KSLinkOn` at every statement, from the statements a run accepts
-
-`KSLinkOn` at the statements `G` admits holds at every statement wherever the composite's verifier accepts only at
-statements `G` admits: elsewhere no run accepts, so `Pr[accept ∧ ¬extract] = 0`, and the bound is nonnegative where the
-tables' errors are (`ksLinkOn_every`). The deployed compiled verifier accepts only dense statements
-(`RecDeploy.run_acc_denseAt`, from `RecDeploy.acc_dense`), so `KSLinkOn` at `RecDeploy.DenseAt` gives
-`Flock.Guarantees.RecursiveKSEveryAtRec` at every compiled record `recBoundAt` builds (`recursiveKSEveryAtRec_of_dense`).
-At the deployment every premise of `RecoversLinkOn` but F7's contract holds, so `RecoversLinkOn` at the dense
-statements and `ContractDense` give `Flock.Guarantees.RecursiveKSEvery` (`recursiveKSEvery_of_recovers`).
--/
+/-! `KSLinkOn` at every statement from the statements a run accepts, since the deployed compiled verifier accepts only dense statements. -/
 
 @[expose] public section
 
@@ -34,8 +24,6 @@ namespace RecDeploy
 
 open FlockDeploy (Coin)
 
-/-- **The deployed compiled verifier accepts only dense statements**: a run accepts only where a step does
-(`stepWith_acc`), which parses `x` at a dense form (`acc_dense`). -/
 theorem run_acc_denseAt (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings)
     (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {Ω : Type} {P : Claims.Prover Ω} {ω : Ω}
     {r : Fin ((deployRec IV ivScope b).V.k x) → Coin}
@@ -54,9 +42,6 @@ section Instance
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
   {Col' T' : Type} [DecidableEq Col']
 
-/-- **`KSLinkOn` at every statement from `KSLinkOn` where runs accept**: where every run the composite's verifier
-accepts is of a statement `G` admits, the sessions' and `DE`'s table errors are nonnegative, `KSLinkOn` at `G` holds
-at every statement: elsewhere no run accepts, so the failure is `0`, at most the bound. -/
 theorem ksLinkOn_every [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
     (DO : Claims.Flock.Deploy Coin Col' T') (Cp : Caps Coin) (G : Msg → Prop) (hK : KSLinkOn H D Bd DO Cp G)
     (hacc : ∀ (x : Msg) (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin ((compDep D Bd DO).V.k x) → Coin),
@@ -103,10 +88,6 @@ end Instance
 
 open FlockDeploy (Coin FinalP)
 
-/-- **`RecursiveKSEveryAtRec` from `KSLinkOn` at the dense statements**, at every compiled record `recBoundAt` builds:
-its verifier accepts only dense statements (`RecDeploy.run_acc_denseAt`) and its sessions' table errors are
-nonnegative (`RecDeploy.tableErrNonneg`), so `ksLinkOn_every` lifts `KSLinkOn` at `RecDeploy.DenseAt` (what
-`RecoversLinkOn` gives from `ContractDense`) to every statement, where `DE`'s table errors are nonnegative. -/
 theorem recursiveKSEveryAtRec_of_dense (b : RecDeploy.Brings) (L : Claims.Recursion.VStarB.LayoutB)
     (rd : Msg → Option FinalP) (final : Msg → Option (List (List (Msg × RecDeploy.Salt)) × Msg)) (wE w : Msg → ℝ)
     (hK : KSLinkOn FlockDeploy.sha512 (RecDeploy.recBoundAt _root_.Flock.Readable.relation b L)
@@ -124,13 +105,6 @@ theorem recursiveKSEveryAtRec_of_dense (b : RecDeploy.Brings) (L : Claims.Recurs
       { b with rd := L.readers } FlockDeploy.sha512 h)
     (RecDeploy.tableErrNonneg _ _ _) hε
 
-/-- **`RecursiveKSEveryAtRec` from `RecoversLinkOn` at the dense statements and F7's contract there**, at every
-compiled record `recBoundAt` builds and every reader whose plain samples are in range (`hIn`): `RecoversLinkOn`'s other
-premises hold at the deployment, namely L1 (`compositionKS`), `KSFlockLin` at `DE`
-(`RecDeploy.ksFlockLin_R`), each outer session's KS (`outerKS_of_flockKS` at `FlockDeploy.KS.zk_KS_outer` and the
-sessions' facts), the sessions' and `DE`'s nonnegative table errors, the record's inner statement, answers that decode
-to their coins (`decCoin`), F8 (`RecDeploy.lastCoinFree_ofFlock_R`), `rowIn` injective (`RecDeploy.binds_deployed`) and
-the deployed decoders listing within the radius (`listWithin_deployPlainTrim`, `listWithin_deployZk`). -/
 theorem recursiveKSEveryAtRec_of_recovers (b : RecDeploy.Brings) (L : Claims.Recursion.VStarB.LayoutB)
     (rd : Msg → Option FinalP) (final : Msg → Option (List (List (Msg × RecDeploy.Salt)) × Msg)) (wE w : Msg → ℝ)
     (hIn : ∀ x, ¬ Claims.Flock.NoAcc FlockDeploy.sha512 (FlockDeploy.VR rd) x → FlockDeploy.KS.PlainRdInR rd x)
@@ -162,10 +136,6 @@ theorem recursiveKSEveryAtRec_of_recovers (b : RecDeploy.Brings) (L : Claims.Rec
       (FlockDeploy.nextR rd) (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation rd).cols wE FlockDeploy.joinR
       RecDeploy.rowInDeployed final w c)).trans (Function.leftInverse_invFun RecDeploy.coin_bytes_injective c)
 
-/-- **`Flock.Guarantees.RecursiveKSEvery` from `RecoversLinkOn` at the dense statements and F7**
-(`ContractDense`), at the deployment's records and values: `recursiveKSEveryAtRec_of_recovers` at the deployed
-reader, whose plain samples are in range (`FlockDeploy.KS.plainRdInR`). `RecoversLinkOn` there is F9a from F6's three
-term comparisons. -/
 theorem recursiveKSEvery_of_recovers
     (hR : ∀ (b : RecDeploy.Brings) (aux : Msg → ℕ → _root_.Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
       (hd : Msg → _root_.Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8),

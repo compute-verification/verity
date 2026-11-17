@@ -2,31 +2,7 @@ module
 
 public import Proofs.Flock.RecGeneric.AtFlock
 
-/-!
-# L2 at Flock: the compiler at today's compiled record, over Flock `--zk`
-
-The compiler statement (`Claims.RecGeneric.CompilerKS`) at today's recursion: Π_out is
-Flock `--zk` at the outer record's deployed decoder (`Claims.SamplingGeneric.Arg.ofFlock DO`, its assemble step
-counted), and the compiler is today's compiled record read session by session (`Compiled.ofRec`, `recCompiler`):
-
-* its verifier, parser and inner statement are the record's, as at `Comp.ofRec`;
-* its rounds before the sessions are the inner session's and the staging rounds (`pre`), and the sessions' statements
-  are the record's V\* statements at those rounds' messages (`stmts`);
-* session `s`'s public shape is its numbers' waits, truncation, rounds and `N₀` (`Deploy.nums`), and its errors'
-  bounds are their `κ` and `γ`, so `κ_O`, `γ_O` at `Compiled.toComp` are `Comp.ofRec`'s;
-* the inner messages, the calls a finder searches and the compiled verifier's own are `Comp.ofRec`'s at the witnesses'
-  second components.
-
-Its `E_O` is `Compiled.EO`: each session's rerun is a fork of the whole compiled run at the session's first round,
-not `Claims.Recursion.EO`'s, so L2 here bounds a different extractor than `RecursiveKSEvery` does, by `Comp.err` at
-`Compiled.toComp` (`KSCompiledOn`). What L2 reads at the instance beside L1's premises: the compiler's contract for
-`E_O` (`Compiled.Sessions`, `SessionsOfRec`), Flock's KS as `Arg.ofFlock`'s (`Claims.SamplingGeneric.flockArgKS`)
-and the compiler's contract at `compile` (`ContractCompiledOn`; at the deployment's dense statements
-`ContractCompiledDense`). The bits read `Compiled.EO`'s expected reruns (`CompiledEORunsExp`), one more per session
-than `Claims.Recursion.EO`'s, since each session's `E^rep` replays the judged run.
-
-Statements only: definitions, no proofs.
--/
+/-! L2 at Flock, today's compiled record as a compiler over Flock `--zk`, whose `E_O` (`Compiled.EO`) is a different extractor than `RecursiveKSEvery` bounds; definitions, no proofs. -/
 
 @[expose] public section
 
@@ -76,14 +52,10 @@ noncomputable abbrev compiledAt (D : RecAt Coin) (Bd : Bound Coin Col T) (DO : C
     (Cp : Caps Coin) : Compiled Coin (Arg.ofFlock DO) :=
   compile (recCompiler D DO) (Proto.ofFlock Bd Bd.deploy.decode Cp) (Server.ofBound Bd)
 
-/-- **The compiler meets its contract for `E_O`** at the inner verifier `IV`: `Compiled.Sessions` at
-`Compiled.ofRec`. -/
 def SessionsOfRec (H : Msg → Msg) (D : RecAt Coin) (DO : Claims.Flock.Deploy Coin Col' T') (IV : Verifier Coin) :
     Prop :=
   (Compiled.ofRec D DO IV).Sessions H
 
-/-- **The compiler's contract at the statements `G` admits**: `Comp.Contract` at `compiledAt`'s composition input, at
-`Open(DE, hm96)` and `DE`'s reading of opened views. -/
 def ContractCompiledOn (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
     (DO : Claims.Flock.Deploy Coin Col' T') (Cp : Caps Coin) (G : Msg → Prop) : Prop :=
   ∀ x, G x → (compiledAt D Bd DO Cp).toComp.Contract H ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans)
@@ -99,11 +71,8 @@ def KSCompiledOn (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T) (DO 
         ((compiledAt D Bd DO Cp).toComp.E (Proto.ofFlock Bd Bd.deploy.decode Cp) (Server.ofBound Bd)) x P ≤
       (compiledAt D Bd DO Cp).toComp.err (Proto.ofFlock Bd Bd.deploy.decode Cp) (Server.ofBound Bd) H P x m M
 
-/-- **`Compiled.EO` reruns the prover at most `1 + Σ_s (1 + m′_s·k_s)` times in expectation** (O2's expected-reruns
-half, at the instance): the judged run, then at each session `E^rep`'s replay of the judged run and its waits over
-forks at the session's first round, as `Claims.Recursion.EO_runs_exp` counts `Claims.Recursion.EO`'s, which has no
-replay per session. Where each session's V\* statement has the session's numbers (`SessionNums`, so its shape's `N₀`
-fixes its `k`) and an accepted run shows each session accepting (`SessionAccepts`). -/
+/-- Each session's `E^rep` replays the judged run, so it counts one rerun more per session than
+`Claims.Recursion.EO_runs_exp` counts `Claims.Recursion.EO`'s. -/
 def CompiledEORunsExp (H : Msg → Msg) (D : RecAt Coin) (DO : Claims.Flock.Deploy Coin Col' T') (IV : Verifier Coin) :
     Prop :=
   SessionNums (D.record IV) DO → SessionAccepts (D.record IV) →
@@ -147,9 +116,6 @@ namespace Claims.RecGeneric
 
 open FlockDeploy (Coin FinalP)
 
-/-- **The compiler's contract at the dense statements, at a compiled record** `D`: `ContractCompiledOn` at SHA-512,
-the deployed relation's bound record at the reader `rd`, the deployed outer record and caps, and `RecDeploy.DenseAt`,
-as `ContractDenseAtRec` is `ContractOn` there. -/
 def ContractCompiledDenseAtRec (D : Claims.Recursion.RecAt Coin) (rd : Msg → Option FinalP)
     (final : Msg → Option (List (List (Msg × RecDeploy.Salt)) × Msg)) (wE w : Msg → ℝ) : Prop :=
   ContractCompiledOn FlockDeploy.sha512 D
@@ -158,8 +124,6 @@ def ContractCompiledDenseAtRec (D : Claims.Recursion.RecAt Coin) (rd : Msg → O
       RecDeploy.rowInDeployed final w)
     (RecDeploy.deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep RecDeploy.DenseAt
 
-/-- **The compiler's contract at the deployment**: `ContractCompiledDenseAtRec` at the deployment's record and values,
-for every other field of the brings and every record the challenger's live-coin part keeps. -/
 def ContractCompiledDense : Prop :=
   ∀ (b : RecDeploy.Brings) (aux : Msg → ℕ → _root_.Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → _root_.Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8),

@@ -6,20 +6,7 @@ public import Proofs.Flock.RecGeneric.AtFlockPlans
 public import Proofs.Flock.Claims.Recursion.KS
 public import Proofs.Flock.Claims.Recursion.LastBindsR
 
-/-!
-# The Flock instance: well formed, its inner and outer extractions (F4, F5, F8)
-
-* **F4**: the element-level Flock is a well-formed inner protocol (`protoWFOfFlock`, from the plans' reads), and
-  `KSFlockLin` is its `Proto.KSAbortLin` (`kSAbortLinOfFlockLin`), its three plans being `B`, `FC` and `F0` at the runs
-  (`kSAbortLinOfFlockLin_of`, from `forkPlanIsBAbort`, `capPlanIsFC` and `conflictPlanIsF0`).
-* **F5**: today's `E_O` at the compiled record is knowledge sound at every statement from each session's
-  (`outerKSOfSessions`): `PrBad_EO_le` sums the sessions' failures, and `Σ_s √(γ_s·k·p) = √((Σ_s √(γ_s·k))²·p)`.
-* **F8**: `Proto.LastCoinFree` at the element-level Flock (`Proto.ofFlock`) is `DE`'s `Bound.LastStepFree`: one
-  statement (`lastCoinFree_ofFlock`). So it holds at every `H` at each bound record whose `DE` steps as the deployed
-  reader (`RecDeploy.lastCoinFree_ofFlock_R`, from `RecDeploy.lastStepFree_of_R`) or the deployed plain verifier
-  (`RecDeploy.lastCoinFree_ofFlock_V`, from `RecDeploy.lastStepFree_of_V`): L1's last-coin hypothesis holds at the
-  deployment with no premise.
--/
+/-! The element-level Flock is a well-formed inner protocol, `E_O` is knowledge sound from each session's, and L1's last-coin hypothesis holds at the deployment with no premise. -/
 
 @[expose] public section
 
@@ -31,9 +18,6 @@ theorem fin3_forall {P : Fin 3 → Prop} (h0 : P 0) (h1 : P 1) (h2 : P 2) : ∀ 
   intro i; fin_cases i
   exacts [h0, h1, h2]
 
-/-- **F4, well formed**: the element-level Flock's answers decode, its `κ` is nonnegative where its tables' errors are,
-its weights and tails are nonnegative, and its plans meet a bad run at most `0`, `2` and `k + 1` times as often as one
-run is bad (`forkPlanReads`, `capPlanReads`, `conflictPlanReads`). -/
 theorem protoWFOfFlock {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
     (Bd : Bound Coin Col T) (decI : List (ℕ × Col) → List T) (Cp : Caps Coin) : ProtoWFOfFlock Bd decI Cp := by
   intro hdec hε
@@ -59,9 +43,6 @@ theorem protoWFOfFlock {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhab
       (fun _ => forkPlanReads Coin Bd.DE.V.k) (fun m => capPlanReads Coin Cp m)
       (fun m => conflictPlanReads Coin Bd.DE.k m)
 
-/-- **F4, the inner protocol's KS**: wherever `B`'s, `FC`'s and `F0`'s plans are `B`, `FC` and `F0` at a protocol's
-runs that may abort (F3), `KSFlockLin` is the element-level Flock's `Proto.KSAbortLin`: its three terms are
-`KSFlockLin`'s, at the loop bounds `m 1` and `m 2`. -/
 theorem kSAbortLinOfFlockLin_of {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
     [Zero Col] (hB : ForkPlanIsBAbort Coin) (hC : CapPlanIsFC Coin) (hF : ConflictPlanIsF0 Coin) (H : Msg → Msg)
     (Bd : Bound Coin Col T) (Cp : Caps Coin) : KSAbortLinOfFlockLin H Bd Cp := by
@@ -81,15 +62,10 @@ theorem kSAbortLinOfFlockLin_of {Coin Col T : Type} [Fintype Coin] [Nonempty Coi
   rw [hB H Bd.DE.V x Ω P A keep, hC H Bd.DE.V Cp x Ω P A keep (m 1), hF H Bd.DE.V Bd.DE.k x Ω P A keep (m 2)]
   first | linarith | exact h.trans (le_of_eq (by ring))
 
-/-- **F4, the inner protocol's KS**: `KSFlockLin` is the element-level Flock's `Proto.KSAbortLin`, its plans being
-`B`, `FC` and `F0` at a protocol's runs that may abort (`forkPlanIsBAbort`, `capPlanIsFC`, `conflictPlanIsF0`). -/
 theorem kSAbortLinOfFlockLin {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
     [Zero Col] (H : Msg → Msg) (Bd : Bound Coin Col T) (Cp : Caps Coin) : KSAbortLinOfFlockLin H Bd Cp :=
   kSAbortLinOfFlockLin_of (forkPlanIsBAbort Coin) (capPlanIsFC Coin) (conflictPlanIsF0 Coin) H Bd Cp
 
-/-- **F5**: each session's `E^rep` failing with probability at most `κ_s + √(γ_s·k(x)·Pr[B])`
-(`Claims.Recursion.OuterKS`) gives `Comp.OuterKSAt` at `Comp.ofRec`, at every decoder that meets the spec and every
-statement. -/
 theorem outerKSOfSessions {Coin Col' T' : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col']
     [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (IV : Verifier Coin) {W : Type} (I : Claims.Recursion.Inner Coin W)
     (DO : Claims.Flock.Deploy Coin Col' T') : OuterKSOfSessions H D IV I DO := by
@@ -105,7 +81,6 @@ theorem outerKSOfSessions {Coin Col' T' : Type} [Fintype Coin] [Nonempty Coin] [
   refine Finset.sum_le_sum fun s _ => (hO decO hdec x Ω P s).trans (le_of_eq ?_)
   rw [Real.sqrt_mul (mul_nonneg (Nums.γ_nonneg _) (Nat.cast_nonneg _))]
 
-/-- **F8 is `Bound.LastStepFree`**: the element-level Flock's last step reads no last coin wherever `DE`'s does. -/
 theorem lastCoinFree_ofFlock {Coin Col T : Type} {H : Msg → Msg} {Bd : Bound Coin Col T} (h : Bd.LastStepFree H)
     (decI : List (ℕ × Col) → List T) (Cp : Caps Coin) : (Proto.ofFlock Bd decI Cp).LastCoinFree H :=
   h
@@ -118,14 +93,11 @@ open Claims (Msg)
 open Claims.Recursion Claims.RecGeneric
 open FlockDeploy (Coin FinalP)
 
-/-- **F8 at the deployed reader**: at every bound record whose `DE` steps as `FlockDeploy.VR rd`, at every `H`. -/
 theorem lastCoinFree_ofFlock_R {Col T : Type} [DecidableEq Col] (H : Msg → Msg) (rd : Msg → Option FinalP)
     (Bd : Bound Coin Col T) (hV : Bd.DE.V = FlockDeploy.VR rd) (decI : List (ℕ × Col) → List T) (Cp : Caps Coin) :
     (Proto.ofFlock Bd decI Cp).LastCoinFree H :=
   lastCoinFree_ofFlock (lastStepFree_of_R H rd Bd hV) decI Cp
 
-/-- **F8 at the deployed plain verifier**: at every bound record whose `DE` steps as `FlockDeploy.V false`, at every
-`H`. -/
 theorem lastCoinFree_ofFlock_V {Col T : Type} [DecidableEq Col] (H : Msg → Msg) (Bd : Bound Coin Col T)
     (hV : Bd.DE.V = FlockDeploy.V false) (decI : List (ℕ × Col) → List T) (Cp : Caps Coin) :
     (Proto.ofFlock Bd decI Cp).LastCoinFree H :=

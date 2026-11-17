@@ -6,26 +6,7 @@ public import Proofs.Flock.RecGeneric.Coupling
 public import Proofs.Flock.RecGeneric.StatementProof
 public import Proofs.Flock.Claims.Recursion.OuterKS
 
-/-!
-# L1 at Flock: `RecoversLinkOn` (F9a)
-
-L1 (`CompositionKS`) at the Flock instance, the composite at the deployed decoders (`compDep`) over
-hm96 (`Server.ofBound`) and the element-level Flock (`Proto.ofFlock`), at the loop bounds `(0, M, R)`, gives `KSLinkOn`
-at every statement where the instance's contract holds (`recoversLinkOn_of`). L1's hypotheses are F4 (`protoWFOfFlock`, `kSAbortLinOfFlockLin`),
-F2 (`bindsOfBound`), F5 (`outerKSOfSessions`, at `κ_O ≥ 0` from the sessions' table errors and `γ_O`, a square), F8
-(`LastCoinFree`, which `RecoversLinkOn` takes) and the contract. `Comp.err` is then `KSLinkOn`'s bound term by term:
-
-* `κ` is `Claims.Recursion.κ` and `γ` is `Claims.Recursion.γ` (`(N_I·Σ_s √(γ_s·k))² = N_I²·γ_O`);
-* `B`'s plan at the reruns as the inner view accepts and as `E_O` gives, `4k_I·Pr + Pr`, is at most `(4k_I + 1)·Pr[B_I]`,
-  and `FC`'s and `F0`'s plans at the reruns are `FCI` and `F0I` (F6: `ForkPlansLeBinnerV`, `CapPlanIsFCI`,
-  `ConflictPlanIsF0I`);
-* `Comp.PrOut` is `0`, since `R_O` holds at every witness list (`Comp.PrOut_eq_zero`);
-* `β = (N_I + Σ_i w_i·d_i)·k_I` at `d = 0, 2, k + 1` is `β₂ = (N_I + 8·W_I + 4·(k_I + 1))·k_I` (`βdev2`), exactly;
-* the gated link's term stays `linkPlan` at `verModel`.
-
-F6's three statements are hypotheses until they are proved; F1 enters only through them. With L1 proved
-(`compositionKS`), `ksLinkOn_of` is `KSLinkOn` from `RecoversLinkOn`'s other premises.
--/
+/-! L1 at Flock gives `KSLinkOn` wherever the instance's contract holds, with the three term comparisons taken as hypotheses (`recoversLinkOn_of`). -/
 
 @[expose] public section
 
@@ -33,8 +14,6 @@ namespace Claims.RecGeneric
 
 open Claims Claims.Recursion
 
-/-- **`β` at the Flock instance is `β₂`**: the terms' reads `Σ_i w_i·d_i` at `d = 0, 2, k + 1` are `8·W_I + 4·(k_I + 1)`,
-so `(N_I + Σ_i w_i·d_i)·k_I = (N_I + 8·W_I + 4·(k_I + 1))·k_I`. -/
 theorem compAt_β_eq_βdev2 {Coin Col T Col' T' : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
     [DecidableEq Col] [DecidableEq Col'] (D : RecAt Coin) (Bd : Bound Coin Col T)
     (decI : List (ℕ × Col) → List T) (DO : Claims.Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T')
@@ -58,7 +37,6 @@ theorem compAt_β_eq_βdev2 {Coin Col T Col' T' : Type} [Fintype Coin] [Nonempty
   push_cast
   ring
 
-/-- **`γ` at the Flock instance is the recursion's**: `N_I²·γ_O = (N_I·Σ_s √(γ_s·k))²`. -/
 theorem compAt_γ_eq {Coin Col T Col' T' : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
     [DecidableEq Col] [DecidableEq Col'] (D : RecAt Coin) (Bd : Bound Coin Col T)
     (decI : List (ℕ × Col) → List T) (DO : Claims.Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T')
@@ -73,10 +51,6 @@ theorem compAt_γ_eq {Coin Col T Col' T' : Type} [Fintype Coin] [Nonempty Coin] 
         Real.sqrt (((D.record Bd.IVStar).nums x s).γ * (D.record Bd.IVStar).V.k x)) ^ 2
   rw [mul_pow]
 
-/-- **F9a, L1 at Flock** (`RecoversLinkOn`), from F6's three term comparisons: L1 at the deployed decoders (`compDep`,
-`Proto.ofFlock` at `DE`'s decoder) and `Server.ofBound` at the loop bounds `(0, M, R)`, its hypotheses from F2, F4, F5
-and the premises, and `Comp.err` at most `KSLinkOn`'s bound term by term (`compAt_γ_eq`, `compAt_β_eq_βdev2`,
-`Comp.PrOut_eq_zero`). -/
 theorem recoversLinkOn_of {Coin Col T Col' T' : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
     [DecidableEq Col] [DecidableEq Col'] [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin)
     (Bd : Bound Coin Col T) (DO : Claims.Flock.Deploy Coin Col' T') (Cp : Caps Coin) (G : Msg → Prop)
@@ -161,8 +135,6 @@ theorem recoversLinkOn_of {Coin Col T Col' T' : Type} [Fintype Coin] [Nonempty C
   have hF1' := mul_le_mul_of_nonneg_left hF1 hk
   linarith
 
-/-- **`KSLinkOn` from L1, proved** (`compositionKS`), and `RecoversLinkOn`'s other premises,
-given F6's three term comparisons. -/
 theorem ksLinkOn_of {Coin Col T Col' T' : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
     [DecidableEq Col] [DecidableEq Col'] [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin)
     (Bd : Bound Coin Col T) (DO : Claims.Flock.Deploy Coin Col' T') (Cp : Caps Coin) (G : Msg → Prop)

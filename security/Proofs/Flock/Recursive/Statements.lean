@@ -18,53 +18,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# The recursive audit's guarantees (trusted)
-
-The recursive audit (`Proofs.Flock.Recursive.Defs`: `recGame`): the developer registers `R` (the hidden circuit's
-commitment among it); the auditor samples `ω`, the hidden circuit's units to prove; in each of the inner protocol's `I.r`
-rounds the developer's ZK server sends the auditor a salted SHA-512 commitment to the round's inner message (Flock run
-with `--zk` off on the workers), and the auditor answers with a live coin; then the developer registers `R₂`, the
-values V*'s sessions read that the rounds do not fix (V*'s running sums `rec-acc`, and its opened rows and their siblings),
-and Flock `--zk --registered` sessions of the public verifier circuits V* (`zs R ω t R₂ j`, `ZkOuter`, one per circuit
-`(Vs j).c`, in a row: `outerV`) prove that openings of those commitments exist on which the inner verifier accepts. Each guarantee is a `def G : Prop` in the
-form of `Pouw.Guarantees`; its proof is `Flock.SecurityProofs.G : Flock.Guarantees.G`
-(`Proofs.Flock.Recursive.Guarantees`).
-
-* `RecursiveSound`, for the auditor, in fork form (not a guarantee: the lock retired it, since its event is
-  possibilistic and nearly empty; the recursion's guarantee is `Flock.Guarantees.RecursiveKS`): either a run of the prover's own strategy finds a SHA-512 collision
-  (between two of V*'s sessions' registrant records, at a round's commitment, or in one of V*'s sessions), or the auditor accepts every one of V*'s sessions on a false
-  hidden statement with probability at most V*'s sessions' statistical errors, plus each round's transfer slack, plus
-  the inner protocol's soundness error. It assumes no hash. Its one new assumption is `Flock.Assumptions.VBridge`.
-* `RecursiveZK`, for the developer: the auditor's whole view, the ZK server's commitments (`zkServerLeaf`) to every inner
-  message and tree top and then its view of the outer session, has a simulator that reads public inputs only, within
-  the commitments' hiding gap at hm96-sha512's pinned key plus the outer session's zero-knowledge gap. A view released
-  cut at a stop of a public family `St` is within `|St|` times the simulator's view cut at a uniform stop, plus the same
-  gaps: the stop leaks at most `log₂ |St|` bits. It assumes nothing of the key or of SHA-512.
-* `RecursiveCircuitPrivate`, for the developer of a hidden circuit: the private circuit is a witness value of the class's
-  universal unit `UniversalUnit_v1{G, N_IN, N_OUT}`, and the auditor's whole view, the private circuit's registration, the
-  ZK server's commitments and V*'s sessions, has a simulator that reads only the class and the owed outputs, within the
-  registration's hiding gap plus `RecursiveZK`'s. `RecursiveCircuitIndist` is its two-circuit form, and
-  `RecursiveCircuitPrivateLeaves` the registration as hm96 leaves of the private circuit's rows, its hiding gap hm96's at
-  the pinned key. They assume nothing of the key or of SHA-512.
-* `RecursiveRanRegistered`, for the auditor, in `RecursiveSound`'s fork form: on its hypotheses and a registration
-  binding at each row of the private circuit, a round or session fork, or a run the prover reaches whose sessions all accept
-  having read a row other than the registered one and whose opening of it collides with the developer's, or the auditor
-  accepts every session while the registered private circuit's hidden statement fails with probability at most
-  `RecursiveSound`'s bound. `RanRegisteredRun` is the one-session form, `PrivateCircuit.RanRegistered` with its
-  `cr/sha-512` hypothesis replaced by the same kind of break.
-* `commitBytes`, `zkServerPairs`, `zkServerCommits`: the ZK server's commit strings and commitments when the inner coins
-  are live, message `i` reading the commit strings before it, which (ii) of `RecursiveAudit` at the ZK server reads
-  (`Proofs.Flock.Recursive.ZkServer`). `RecursiveZK` and the circuit-privacy forms above are the committed-coin case,
-  each message fixed by the auditor's tape before any commitment.
-* `OuterViewZK`, `OuterSessionsZK`: the outer session's zero knowledge that `RecursiveZK` and the circuit-privacy forms
-  take (`_hOuter`), each an obligation on the view and simulator they range over. At V*'s `--zk` sessions run by the
-  honest prover's code, `OuterSessionsZK` follows from V*'s staging (`OuterZK.recursiveZK_of_sessionZK`,
-  `Proofs.Flock.Recursive.OuterSessionZK`).
-
-Flock's definitions and the recursion's model are still in the proofs package, so `Definitions.lean` does not import
-this module: `Proofs.Flock.Recursive` does.
--/
+/-! The recursive audit's guarantees, each a `def G : Prop` whose proof is `Flock.SecurityProofs.G` (`Proofs.Flock.Recursive.Guarantees`) (trusted). -/
 
 @[expose] public section
 
@@ -75,74 +29,23 @@ open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL
 open scoped ENNReal
 
-/-- **The recursive audit is sound.** V*'s sessions are of the circuits `(Vs j).c`, with hidden outputs and `(Vs j).J`
-tables, under their sampling designs `(Vs j).samplingDesign`, each the full sample (`--draw subset:<units>`) on the operating system's bytes (A3,
-`uniform/io-getrandombytes`); at each history `(R, ω, t)` and registration `R₂` of the outer proof, session `j` is
-`zs R ω t R₂ j`, whose fields carry `verity-verify-proof verify --zk --registered`'s setup, the `live-verifier` record custody
-(`ZkOuter.hRec`) and the registrant's record of the registered reads (`ZkOuter.rd`: the hidden circuit's rows, `R₂`'s
-values, and the verifier's own). For every prover `σ` of the recursive audit, given V*'s bridge
-(`Flock.Assumptions.VBridge`) and the inner protocol's soundness at `ε_in`, one of four holds. It needs `VBridge` in
-full, which a protocol whose last round isn't committed (candidate 3 today) doesn't give.
-
-* A registrant fork (`regFinder`): one run of `σ` reaches an outcome at whose history and registration two of V*'s
-  sessions' registrant records clash (`RegColl`: two registered reads whose openings or hm96 leaves are a SHA-512
-  collision), and outputs that collision. V*'s bridge reads off such outcomes (`VBridgeOff`).
-* A round fork (`RoundFork`): for some round `i < r`, sample `ω` and commit string `pos`, round `i`'s fork finder
-  (`forkAt`: two continuations of `σ` after its round-`i` commitment, each running the trial for `pos`) outputs a
-  SHA-512 collision at an outcome it reaches.
-* A session fork (`SessionFork`): at some leaf `σ` reaches, some outcome of V*'s sessions its strategy reaches and some
-  session `j`, a finder of that session run from the strategy `σ` names there (its tables' knowledge finders, its
-  registered-value finders, the run that opens a sampled row's registered leaf, or its link finder: `ZkOuter.Fork`)
-  outputs a SHA-512 collision at an outcome it reaches.
-* $$\Pr[\text{every session of V* accepts} \wedge \neg\,\text{the hidden statement holds}] \le
-    \mathbb E\Big[\sum_j \text{outer bound}_j\Big] + r\cdot\mathbb E\Big[\sum_j \text{stage slack}_j\Big] +
-    \varepsilon_{in},$$
-  the expectations over the sample, the rounds' coins at the prover's leaves (`expAt`) and the sessions (`sumV`), each
-  term at the registration `R₂` the prover sends and the strategy it names for its session. A session's outer bound
-  (`ZkOuter.boundCR`) is its sampling design's miss at one bad unit plus the sampled proof blocks' statistical errors: the tables'
-  (`tableErrZ`: each sampled table's `bound` over `1 − N₀/(ek)`), the link's (`linkErrZC`: `Q_s/(1 − ρ)·(1/(eM) +
-  k/(eR_w))`) and the waits' (`waitErrZC`: `Q_s/(1 − ρ)·k/(eR_w)`); its stage slack (`ZkOuter.slackCR`) is the same
-  without the miss.
-
-Every `∃` in a fork ranges over `σ`'s own runs and what they output, never over arbitrary strings. The bound is exact
-for a prover that never collides on a fork, and says nothing for one that collides on a single pair: no term counts
-SHA-512 evaluations.
-
-**A nearly empty event**: Its event asks that the inner statement have no witness (`¬
-holds`, with `holds` = `∃ z, Satisfies z`). The inner statement pins each row only by its hm96 commit string `b ‖ c`,
-with the salt a free witness wire, so a commitment to a wrong row under a fresh salt also opens to the right row except
-with probability at most `4·hidingGap` (`VacuityProbes.Hm96Opens.opens_to_any_row`, `shift_reachable`, probes
-outside this tree). For any cheater the event is then nearly empty, and the bound bounds it, not a wrong
-computation. The fix is the knowledge form the claims API states recursion in; `EndToEndHidden` avoids this by
-extraction. The knowledge form, `Claims.Recursion.KS`, is at the recursion's level `Claims.Recursion.lam`, which no
-theorem evaluates at the deployment. Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 135.7 at the deployed
-records (`RecDeploy.lamLin2_deployed_ge_dep_tight`), and `KSLin2` at the deployment's dense statements (`KSLin2On` at
-`RecDeploy.DenseAt`) is proved (`Flock.SecurityProofs.RecursiveKS`), Holo statements being candidate 3's own model, and
-`BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). This fork form states no bits.
-
-**Retired from the lock**: its break is possibilistic, so the lock lists no theorem of it; the recursion's
-guarantee is the knowledge form at the deployed reader, `Flock.Guarantees.RecursiveKS` (`Proofs.Flock.Recursive.KSStatement`). -/
+/-- Needs `VBridge` in full, which an uncommitted last round doesn't give; no term counts SHA-512 evaluations.
+Its event (`¬ holds`) is nearly empty: a row is pinned only by its hm96 commit string, the salt a free witness wire,
+so it bounds no wrong computation and states no bits. The lock lists no theorem of it: the recursion's is `RecursiveKS`. -/
 def RecursiveSound : Prop :=
   ∀ {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
-    -- V*'s sampling designs: A3
     (_hA3 : ∀ j, FlockSoundness.Assumptions.UniformRandomBytes (Vs j).samplingDesign.Lb (Vs j).samplingDesign.src)
-    -- V*'s sessions at each history and registration `R₂`
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the count curve's parameters
     {k Rw M : ℕ} (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) {ρ : ℝ} (_hρ : ρ < 1)
     (_hr : ∀ R ω t R₂ j S' R' i,
       rateZ (ZkHidden.planZHJ (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
-    -- the recursive prover
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
-    -- the hidden circuit's statement, the messages V*'s layers hold, the rounds' commit strings, the ZK server's
-    -- commitments and the messages they open to, and V*'s bridge
     (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
     (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
     (cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
     (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → I.Msg)
     (_hbr : Flock.Assumptions.VBridge zs dg N k Rw x wmsg Sk cmt msg)
-    -- the inner protocol
     {εin : ℝ≥0∞} (_hin : InnerSound I εin),
     (regFinder zs dg N σ).Finds H512 ∨ RoundFork zs dg N k Rw σ cmt ∨ SessionFork zs dg N k Rw M σ ∨
       prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
@@ -157,23 +60,17 @@ sample (`--draw subset:<units>`), which samples every unit at every value of the
 (`execOS_subset_full_mem`), so no session's miss reads those bytes. -/
 def RecursiveSoundNoA3 : Prop :=
   ∀ {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
-    -- V*'s sessions at each history and registration `R₂`
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the count curve's parameters
     {k Rw M : ℕ} (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) {ρ : ℝ} (_hρ : ρ < 1)
     (_hr : ∀ R ω t R₂ j S' R' i,
       rateZ (ZkHidden.planZHJ (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
-    -- the recursive prover
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
-    -- the hidden circuit's statement, the messages V*'s layers hold, the rounds' commit strings, the ZK server's
-    -- commitments and the messages they open to, and V*'s bridge
     (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
     (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
     (cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
     (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → I.Msg)
     (_hbr : Flock.Assumptions.VBridge zs dg N k Rw x wmsg Sk cmt msg)
-    -- the inner protocol
     {εin : ℝ≥0∞} (_hin : InnerSound I εin),
     (regFinder zs dg N σ).Finds H512 ∨ RoundFork zs dg N k Rw σ cmt ∨ SessionFork zs dg N k Rw M σ ∨
       prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
@@ -363,11 +260,8 @@ that `K*` is not one of the others is unproved. No premise is taken on the key o
 def RecursiveCircuitPrivate : Prop :=
   ∀ {Out Prog Wit Rr Rv Ωa Ωp Ωo Ωs V : Type} [Fintype Rr] [Nonempty Rr] [Fintype Ωa] [Nonempty Ωa] [Fintype Ωp]
     [Nonempty Ωp] [Fintype Ωo] [Nonempty Ωo] [Fintype Ωs] [Nonempty Ωs]
-    -- the class's registration of a private circuit, hiding up to `ε`
     (reg : Prog → Rr → Rv) {ε : ℝ≥0∞} (_hreg : PrivateCircuit.Hides reg ε)
-    -- the honest witnesses: `P` computes the owed outputs `o` on `w`
     (honest : Out → Prog → Wit → Prop)
-    -- the ZK server's messages, the auditor's view of V*'s sessions, and its simulator within `ε_o`
     (nh : ℕ) (msgs : Prog → Wit → Rr → Ωa → Ωp → Fin nh → ByteArray)
     (view : Prog → Wit → Rr → Ωa → (Fin nh → ByteArray) → Ωp → (Fin nh → ZkView.Salt) → Ωo → V)
     (sim : Out → Rv → Ωa → (Fin nh → ByteArray) → Ωs → V) {εo : ℝ≥0∞}
@@ -427,7 +321,6 @@ that `K*` is not one of the others is unproved. No premise is taken on the key o
 def RecursiveCircuitPrivateLeaves : Prop :=
   ∀ {Out Prog Wit Rv Ωa Ωp Ωo Ωs V : Type} [Fintype Ωa] [Nonempty Ωa] [Fintype Ωp] [Nonempty Ωp] [Fintype Ωo]
     [Nonempty Ωo] [Fintype Ωs] [Nonempty Ωs]
-    -- the registration: the private circuit's rows, and what the auditor sees of their leaves
     (nr : ℕ) (rows : Prog → Fin nr → ByteArray) (pub : (Fin nr → ByteArray) → Rv)
     (honest : Out → Prog → Wit → Prop)
     (nh : ℕ) (msgs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → Fin nh → ByteArray)
@@ -512,10 +405,8 @@ def RecursiveRanRegistered : Prop :=
     (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → I.Msg)
     (_hbr : Flock.Assumptions.VBridge zs dg N k Rw x wmsg Sk cmt msg)
     {εin : ℝ≥0∞} (_hin : InnerSound I εin)
-    -- the registration's commitment at each row position, the registered private circuit, and the developer's openings
     {Root Pos Row Op : Type} (com : Pos → PrivateCircuit.Commit Root Row Op) (_hbind : ∀ i, (com i).Binding)
     (rt : Root) (p : Pos → Row) (op₀ : Pos → Op) (_hreg : ∀ i, (com i).Opens rt (p i) (op₀ i))
-    -- a private circuit's statement at a sample; the rows an accepted run read, and the rows and openings of `rt` it carries
     (stmt : (Pos → Row) → L.Ω → I.Stmt)
     (reads : Reg × L.Ω × List (Cm × I.Coin) × (Reg₂ × VRec Vs Reg' dg N) → Pos → Prop)
     (row : Reg × L.Ω × List (Cm × I.Coin) × (Reg₂ × VRec Vs Reg' dg N) → Pos → Row)
@@ -551,10 +442,8 @@ def RecursiveRanRegisteredNoA3 : Prop :=
     (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → I.Msg)
     (_hbr : Flock.Assumptions.VBridge zs dg N k Rw x wmsg Sk cmt msg)
     {εin : ℝ≥0∞} (_hin : InnerSound I εin)
-    -- the registration's commitment at each row position, the registered private circuit, and the developer's openings
     {Root Pos Row Op : Type} (com : Pos → PrivateCircuit.Commit Root Row Op) (_hbind : ∀ i, (com i).Binding)
     (rt : Root) (p : Pos → Row) (op₀ : Pos → Op) (_hreg : ∀ i, (com i).Opens rt (p i) (op₀ i))
-    -- a private circuit's statement at a sample; the rows an accepted run read, and the rows and openings of `rt` it carries
     (stmt : (Pos → Row) → L.Ω → I.Stmt)
     (reads : Reg × L.Ω × List (Cm × I.Coin) × (Reg₂ × VRec Vs Reg' dg N) → Pos → Prop)
     (row : Reg × L.Ω × List (Cm × I.Coin) × (Reg₂ × VRec Vs Reg' dg N) → Pos → Row)

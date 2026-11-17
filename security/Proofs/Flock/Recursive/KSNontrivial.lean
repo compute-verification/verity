@@ -40,34 +40,7 @@ import Proofs.Flock.Claims.DeployEfficient
 import Proofs.Flock.Claims.Recursion.DeployMargin
 import Proofs.Flock.Claims.Recursion.DeployScope
 
-/-!
-# `RecursiveKS` at the verifier that accepts everything (the Lean check's `nontrivial`)
-
-The Lean check asks of each guarantee that states what an acceptance means a lemma that its conclusion is false at the
-verifier that accepts everything. For `RecursiveKS` that verifier is the compiled recursive verifier of the compiled
-record, `(D.record IV).V`, whose acceptance `PrBad` reads, replaced by one that keeps its rounds and accepts at its first
-round with no SHA-512 call; it computes nothing, so its record holds no call and stages no V\* statement
-(`RecAt.acceptAll`). The parser, the inner view, the numbers, `IVStar`, the bound record, the outer record, the caps and
-the dense statements stay deployed. `RecursiveKSAtAll` is `RecursiveKSAt` there.
-
-* **The nontrivial lemma** (`recursiveKS_nontrivial`): `RecursiveKS`'s `RecursiveKSAtRec` at accept-all is false at
-  every brings, from one named assumption, `RecDeploy.KSFixture`: some bytes the deployed readers read as a dense compiled
-  statement with a V\* session whose inner statement passes `PlainIn`'s checks (`DeployedParses`), with a live-coin
-  record at whose transcript its V\* parts are in scope (`PartsInScope`). The inner statement need not be false. The
-  silent prover is accepted on every run; the accepting record stages no V\* statement, so each session's statement is
-  empty, which the outer Flock's parser refuses (`RecDeploy.zkRec_parse_nil`), and `E*` extracts nothing
-  (`E_none_of_vstar_nil`). So `Pr[accept ∧ ¬extract] = 1`; every finder term is `0`; the tails are below `1/4` each at
-  a large enough `M` and `R`; and `λ₂ ≥ 100` there (`RecDeploy.lamLin2_deployed_ge_dep`) gives `κ < 1/2`
-  (`κ_lt_half_of_lamLin2`). The general form is `not_ksLin2On_acceptAll`, at any compiled record and statement with a
-  V\* session, an outer parser that refuses the empty statement, and `κ < 1/2`.
-* **Why the statement is a named assumption** (`recursiveKSAtAll_of_readX_none`): the bound's right-hand side is at
-  least `κ`, whatever the verifier (`ksLin2On_of_one_le_κ`). At a statement whose bytes don't read
-  (`RecDeploy.readX x = none`), `κ` is the inner Flock's at the empty inner statement, which sets up no table, so
-  `κ ≥ e⁰ = 1` and the bound holds at every verifier there (`ksLin2On_acceptAll_readX_none`). The deployed parser reads
-  a statement only through `jsonOf` (`Lean.Json.Parser.anyCore`, a `partial def`, which the kernel can't unfold), so no
-  statement can be built in Lean that it reads, and the nontrivial lemma assumes only the reading, witnessed by a
-  fixture run.
--/
+/-! `RecursiveKS`'s nontrivial lemma at the verifier that accepts everything, from the named assumption `RecDeploy.KSFixture`, an assumption because no Lean proof can build a statement the deployed parser's `partial def` reads. -/
 
 @[expose] public section
 
@@ -104,8 +77,6 @@ theorem βdev2_nonneg (D : Deploy Coin) {W : Type} (I : Inner Coin W) (Cp : Caps
     0 ≤ βdev2 D I Cp x := by
   unfold βdev2; positivity
 
-/-- **`KSLin2On` holds wherever `κ ≥ 1`**, at every compiled record: `Pr[accept ∧ ¬extract] ≤ 1 ≤ κ`, and every other
-term of the bound is nonnegative. -/
 theorem ksLin2On_of_one_le_κ [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
     (DO : Flock.Deploy Coin Col' T') (Cp : Caps Coin) (G : Msg → Prop)
     (hκ : ∀ decI, decOK Bd.deploy decI → ∀ x, G x → 1 ≤ κ (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) x) :
@@ -131,8 +102,6 @@ theorem ksLin2On_of_one_le_κ [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecA
       (by positivity : (0 : ℝ) ≤ 1 / ((M : ℝ) + 1)))
   linarith
 
-/-- An extractor that returns nothing on every run fails on every run of a verifier that accepts at its first
-round. -/
 theorem prBad_acc {W Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (V : Verifier Coin) (R : Rel W)
     (E : Extractor Coin W V) (x : Msg) (P : Prover Ω) (hv : ∀ as cs, V.next x as cs = .ret .acc) (hk : 0 < V.k x)
     (hE : ∀ ω r₀ c, (E.eval H P x ω r₀ c).1 = none) : PrBad H V R E x P = 1 := by
@@ -146,7 +115,6 @@ theorem eval_bind_fst {R α β : Type} (H : Msg → Msg) (run : R → Transcript
     ((p.bind f).eval H run).1 = ((f (p.eval H run).1).eval H run).1 :=
   (Claims.RP.eval_bind H run p f).1
 
-/-- Waits whose assemble step never assembles return nothing, however their reruns are served. -/
 theorem eval_serve_firstWait_none {R₁ R₂ W' Op : Type} (q : R₁ → RP R₂ Seen) (k : ℕ) (opens : Seen → List Op)
     (assemble : List Op → Option W') (check : W' → Bool) (h : ∀ os, assemble os = none) (H : Msg → Msg)
     (run : R₂ → Transcript) : ∀ rss : List (List R₁),
@@ -159,14 +127,11 @@ theorem eval_serve_firstWait_none {R₁ R₂ W' Op : Type} (q : R₁ → RP R₂
     rw [e, Witness.Recursion.serve_bind, eval_bind_fst]
     exact eval_serve_firstWait_none q k opens assemble check h H run rss
 
-/-- `collect` gives up where its first program does. -/
 theorem eval_collect_none {R α : Type} (H : Msg → Msg) (run : R → Transcript) (p : RP R (Option α))
     (ps : List (RP R (Option α))) (hp : (p.eval H run).1 = none) : ((collect (p :: ps)).eval H run).1 = none := by
   rw [collect, eval_bind_fst, hp]
   rfl
 
-/-- **`E_O` extracts nothing where the record stages no V\* statement**: each session's statement is then empty,
-which the outer Flock's parser refuses, so its first session's waits assemble nothing. -/
 theorem EO_none_of_vstar_nil {W : Type} (H : Msg → Msg) (A : Deploy Coin) (I : Inner Coin W)
     (DO : Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T') (x : Msg)
     (hs : ∀ ps, A.vstar x ps = []) (hS : 0 < A.nS x) (hP : DO.parse [] = none)
@@ -190,8 +155,6 @@ theorem EO_none_of_vstar_nil {W : Type} (H : Msg → Msg) (A : Deploy Coin) (I :
     exact eval_serve_firstWait_none _ _ _ _ _ (fun os => hA _ _ os (hs _)) H run _
   · rfl
 
-/-- **`E*` extracts nothing where the record stages no V\* statement**: `E_O` gives up on the judged sample, so the
-inner view there is rejected (`dec`) and the inner `E^rep` stops. -/
 theorem E_none_of_vstar_nil {W : Type} (H : Msg → Msg) (A : Deploy Coin) (I : Inner Coin W)
     (DO : Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T') (x : Msg)
     (hs : ∀ ps, A.vstar x ps = []) (hS : 0 < A.nS x) (hP : DO.parse [] = none) {Ω : Type} (P : Prover Ω) (ω : Ω)
@@ -201,7 +164,6 @@ theorem E_none_of_vstar_nil {W : Type} (H : Msg → Msg) (A : Deploy Coin) (I : 
   unfold Extractor.eval
   simp only [E, served, erep, serve, outerStage, eval_bind_fst, hO, dec, RP.eval, reduceCtorEq, ↓reduceIte]
 
-/-- A verifier that accepts at its first round calls `H` nowhere, so `B` finds nothing. -/
 theorem prB_acc {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω) (x : Msg)
     (hv : ∀ as cs, V.next x as cs = .ret .acc) : PrB H V P x = 0 := by
   unfold PrB
@@ -213,7 +175,6 @@ theorem prB_acc {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (V : Ve
     cases h
   · rfl
 
-/-- `FCI` finds nothing where the outer witnesses record no call. -/
 theorem prFCI_noCalls (H : Msg → Msg) (D : Deploy Coin)
     (hc : ∀ x (r : Fin (D.V.k x) → Coin) ws, D.callsAt H x r ws = []) {W : Type} (I : Inner Coin W)
     (DO : Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T') (Cp : Caps Coin) {Ω : Type} [Fintype Ω]
@@ -226,11 +187,6 @@ theorem prFCI_noCalls (H : Msg → Msg) (D : Deploy Coin)
     simp only [FCI, hc, List.append_nil, findColl, ite_self, reduceCtorEq] at h
   · rfl
 
-/-- **`KSLin2On` fails at the verifier that accepts everything** at any statement of `G` where the compiled verifier
-takes a round, the statement has a V\* session, the outer Flock's parser refuses the empty statement and `κ < 1/2`:
-the silent prover is accepted on every run, and the record stages no V\* statement, so `E*` extracts nothing
-(`E_none_of_vstar_nil`) and `Pr[accept ∧ ¬extract] = 1`. The accepting verifier and its record call `H` nowhere, so
-every finder term is `0`, and at `M = ⌈4·(4W + β₂)⌉` and `R = 16·(k_I + 1)` each of the two tails is below `1/4`. -/
 theorem not_ksLin2On_acceptAll [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
     (DO : Flock.Deploy Coin Col' T') (Cp : Caps Coin) (G : Msg → Prop) (decI : List (ℕ × Col) → List T)
     (hdI : decOK Bd.deploy decI) (decO : List (ℕ × Col') → List T') (hdO : decOK DO decO) (x : Msg) (hx : G x)
@@ -269,7 +225,6 @@ theorem not_ksLin2On_acceptAll [Zero Col] [Zero Col'] (H : Msg → Msg) (D : Rec
 
 end Bound
 
-/-- **`λ₂ ≥ 100` gives `κ < 1/2`**: `λ₂`'s first term is `log₂(1/κ)`. -/
 theorem κ_lt_half_of_lamLin2 {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {D : Deploy Coin}
     {I : Inner Coin W} {Cp : Caps Coin} {x : Msg} {n v : ℕ} (h : 100 ≤ lamLin2 D I Cp x n v) : κ D I x < 1 / 2 := by
   unfold lamLin2 at h
@@ -298,11 +253,8 @@ theorem parse_of_readX_none {x : Msg} (h : readX x = none) : parse x = none := b
 theorem nS_of_readX_none {x : Msg} (h : readX x = none) : nS x = 0 := by
   simp only [nS, h]
 
-/-- The empty statement sets up no plain table. -/
 theorem tables_nil : FlockDeploy.tables false [] = [] := rfl
 
-/-- **The inner Flock's `κ` at the empty statement is at least one**: it sets up no table, so `E^rep` waits for no
-accepted rerun (`k = 0`) and `e^{-k/8} = 1`. -/
 theorem one_le_κ_nil (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (nextE : Msg → List Msg → List FlockDeploy.Coin → Claims.OC Claims.Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
@@ -325,8 +277,6 @@ theorem one_le_κ_nil (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Reada
   simp only [Nat.cast_zero, mul_zero, zero_div, neg_zero, Real.exp_zero, add_zero, zero_add]
   linarith
 
-/-- **`κ ≥ 1` where the statement's bytes don't read**, at the compiled records with the verifier that accepts
-everything: no V\* part, and the inner statement is the empty one. -/
 theorem one_le_κ_acceptAll_of_readX_none (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List FlockDeploy.Coin → Claims.OC Claims.Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
@@ -348,7 +298,6 @@ theorem one_le_κ_acceptAll_of_readX_none (rel : _root_.Flock.Readable.Parsed �
   rw [Finset.univ_eq_empty, Finset.sum_empty, mul_zero, add_zero, hx]
   exact one_le_κ_nil rel nextE colsE wE join rowIn final w
 
-/-- **`KSLin2` at the verifier that accepts everything holds wherever the statement's bytes don't read.** -/
 theorem ksLin2On_acceptAll_readX_none (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List FlockDeploy.Coin → Claims.OC Claims.Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
@@ -359,8 +308,6 @@ theorem ksLin2On_acceptAll_readX_none (rel relO : _root_.Flock.Readable.Parsed �
   Claims.Recursion.ksLin2On_of_one_le_κ _ _ _ _ _ _ fun decI _ _ hx =>
     one_le_κ_acceptAll_of_readX_none rel b L nextE colsE wE join rowIn final w decI hx
 
-/-- The compiled verifier takes at least one round at every statement: the inner verifier `IVStar` takes `DE`'s, Flock's
-deployed plain verifier's (`V_k_pos_flock`). -/
 theorem recBound_k_pos (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List FlockDeploy.Coin → Claims.OC Claims.Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
@@ -370,7 +317,6 @@ theorem recBound_k_pos (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Read
   have := V_k_pos_flock false (xIOf x)
   omega
 
-/-- **The outer Flock's parser refuses the empty statement** (`insO_nil`). -/
 theorem zkRec_parse_nil (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) :
     (deployZkRec rel).parse [] = none := by
   have h : readOfO [] = none := by
@@ -382,8 +328,6 @@ theorem zkRec_parse_nil (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Rea
   rw [h]
   rfl
 
-/-- **`KSLin2` at the verifier that accepts everything fails** at any statement of `G` with a V\* session where
-`κ < 1/2`, at the deployed decoders (`FlockDeploy.listWithin_plainTrim`, `Claims.GS.listWithin_zkDecodeRD`). -/
 theorem not_ksLin2On_acceptAll (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List FlockDeploy.Coin → Claims.OC Claims.Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
@@ -405,9 +349,6 @@ namespace Flock.Guarantees
 open Claims (Msg Out)
 open FlockDeploy (Coin FinalP)
 
-/-- **`RecursiveKSAt` at the verifier that accepts everything**: the compiled records' verifier keeps its rounds and
-accepts at its first round with no SHA-512 call (`RecAt.acceptAll`); every other record and the dense statements are
-`RecursiveKSAt`'s. -/
 def RecursiveKSAtAll (rd : Msg → Option FinalP)
     (final : Msg → Option (List (List (Msg × RecDeploy.Salt)) × Msg))
     (rest : (r : RecDeploy.XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE w : Msg → ℝ)
@@ -421,10 +362,8 @@ def RecursiveKSAtAll (rd : Msg → Option FinalP)
       RecDeploy.rowInDeployed final w)
     (RecDeploy.deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep RecDeploy.DenseAt
 
-/-- **`RecursiveKSAt` at the verifier that accepts everything holds wherever no statement's bytes read**: every
-statement is then dense, and at each `κ ≥ 1`. The deployed parser reads a statement only through `jsonOf`, whose
-`Lean.Json.Parser.anyCore` is a `partial def` the kernel can't unfold, so no proof exhibits a statement that reads, and
-`¬ RecursiveKSAtAll` is not provable at the deployed parser. -/
+/-- The deployed parser reads a statement only through `jsonOf`, whose `Lean.Json.Parser.anyCore` is a `partial def` the
+kernel can't unfold, so no proof exhibits a statement that reads, and `¬ RecursiveKSAtAll` is not provable there. -/
 theorem recursiveKSAtAll_of_readX_none (hJ : ∀ x, RecDeploy.readX x = none) (rd : Msg → Option FinalP)
     (final : Msg → Option (List (List (Msg × RecDeploy.Salt)) × Msg))
     (rest : (r : RecDeploy.XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE w : Msg → ℝ)
@@ -438,8 +377,6 @@ theorem recursiveKSAtAll_of_readX_none (hJ : ∀ x, RecDeploy.readX x = none) (r
   intro decI hdI decO hdO x _
   exact h decI hdI decO hdO x (hJ x)
 
-/-- **The fixture's statement is dense**: its compiled form, by `DeployedParses`, has no holo inner circuit and no
-RecSparse phase. -/
 theorem denseAt_of_parses {x : Msg} (h : RecDeploy.DeployedParses x) : RecDeploy.DenseAt x := by
   intro s hs
   have h1 := h.1
@@ -448,8 +385,6 @@ theorem denseAt_of_parses {x : Msg} (h : RecDeploy.DeployedParses x) : RecDeploy
   show s.form.holo = false ∧ s.form.sparse = none
   exact ⟨congrArg Prod.fst h2, congrArg Prod.snd h2⟩
 
-/-- **The fixture's inner statement is in the plain scope**: Flock's setup of it passes `PlainIn`'s checks
-(`setupView`). -/
 theorem plainIn_of_parses {x : Msg} (h : RecDeploy.DeployedParses x) :
     ∃ s spec sts, FlockDeploy.PlainIn (RecDeploy.xIOf x) s spec sts := by
   have h3 := h.2.2

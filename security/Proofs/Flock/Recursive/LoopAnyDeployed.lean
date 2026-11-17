@@ -3,16 +3,7 @@ module
 public import Proofs.Flock.Recursive.LoopAny
 public import Proofs.Flock.SessionLoop.TablesSide
 
-/-!
-# `RecursiveZKLoopAnySum` at the deployed tables
-
-`Flock.Guarantees.RecursiveZKLoopAnySumDeployed` is `RecursiveZKLoopAnySum` with the five premises it takes of the
-deployed tables proved there, as `SessionLoopZKDeployed` has them: `TablesSide`'s `tables_dataE`, `complete_dataE`,
-`dummyReg_dataE`, `causal_dataE` and `tapeOK_dataE`. `SwCausalOn (Loop.SwOk Masked.dataE) vs` stays a premise: the
-workers' values `vs` are the statement's, and it holds at the honest ones (`swCausalOn_honestVals_dataE`).
-
-* `Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed`: `RecursiveZKLoopAnySum` at those five theorems.
--/
+/-! `RecursiveZKLoopAnySum` with its premises on the deployed tables proved, `SwCausalOn` at the workers' values staying a premise (`RecursiveZKLoopAnySumDeployed`). -/
 
 @[expose] public section
 

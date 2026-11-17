@@ -22,28 +22,7 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.NonVacuousJ
 import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Recursion: where V*'s statement enters a session (gap 8)
-
-A session of V*'s statement `Q` is a `verity-verify-proof verify --zk --registered` session of the verifier's own inputs `I`,
-as the prover supplies them (`ZkOuterR`). What ties a session to `Q` is the verifier's check that the session is V*'s
-statement of its index (`AcceptsZKV`, `RecVStar.checkStmt`), the one place the recursive audit's proof takes the
-equation:
-
-* `VStmt.Loads Q I`: the inputs load `Q`: their circuit is `Q`'s (`circZ I = Q.c`) and their registered population has
-  `Q`'s `nv` units (`(pubZ I).n = Q.nv`). If V*'s statements fix only their unit, by name, and what the VBridge reads,
-  this definition is what changes.
-* `loads_of_check`, `loads_of_verifiesV`: at V*'s tags and no lookup tables (`parse_zkTags_vstar`), a session whose file
-  parses to `Q`'s circuit and whose population is `Q`'s loads `Q`; a session `AcceptsZKV` accepts as statement `j` under
-  `bind j` has statement `j`'s file and no lookup tables (`vstarFile_of_accepts`), whose parse is in scope
-  (`scope_of_accepts`) and so is `Vs j`'s circuit (`VStarParsesScoped`). The verifier compares the tags by name only; the inputs' tags are the
-  statement their name names (`TagsFound`, an obligation on our code), so they are V*'s (`find?_circuit`).
-* `typable_of_accepts`: a session that accepts and loads `Q` types (`ZkOuterR.Typable`): `Loads` gives its circuit and
-  population, and the record's sample sets table 0 up (`setupZHJ_of_acceptsZKI`, at the record's custody).
-* `prob_sessionsR_untypable`, `prob_recT_le`: where a session of some index never types, the raw sessions' event is
-  empty when every session accepts as V*'s statement of its index; elsewhere the raw recursive audit's event is no
-  likelier than the typed sessions' (`zsOf`) at the transported strategy (`recT`).
--/
+/-! Where V*'s statement enters a session (`VStmt.Loads`): the verifier's check that a session is V*'s statement of its index, with `TagsFound` an obligation on our code. -/
 
 @[expose] public section
 
@@ -54,23 +33,15 @@ open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink 
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
-/-- **The inputs `I` load V*'s statement `Q`**: their circuit is `Q`'s and their registered population has `Q`'s
-units. -/
 def VStmt.Loads (Q : VStmt) (I : Inputs) : Prop :=
   circZ I = Q.c ∧ (pubZ I).n = Q.nv
 
-/-- **`--zk`'s parse at V*'s statement is a constant of the circuit file**: at `--statement` `t₀`, `--zk`'s tags are
-`t₀`'s but for the identity, which `HmRow.parse` does not read (`parse_identity`), whatever the table count. -/
 theorem parse_zkTags_vstar {I : Inputs} {t₀ : Flock.Tags} (hT : I.tags = t₀) (b : ByteArray)
     (tb : List (String × ByteArray)) :
     HmRow.parse (zkTags I) b tb = HmRow.parse (Flock.Zk.tags t₀ (Flock.Zk.maskLogOf I.circuitFile) 1) b tb := by
   subst hT
   simp only [zkTags, Flock.Zk.tags, parse_identity]
 
-/-- **A session of V*'s statement `Q` loads it**, at V*'s tags and no lookup tables, when its circuit file parses at
-the file's constant tags to `Q`'s circuit and its registered population has `Q`'s units, at untemplated tags: the
-session's circuit is the file's parse at `zkTags I` (`ScopeZR.parseHF`, untyped: `Hidden.parse_untyped`), which is that
-constant (`parse_zkTags_vstar`). -/
 theorem loads_of_check {t₀ : Flock.Tags} {Q : VStmt} {Reg' : Type} (x : Q.OuterR Reg') (hck : ScopeZR x.I)
     (hT : x.I.tags = t₀) (hi : t₀.isTmpl = false) (htab : x.I.tables = [])
     (hp : HmRow.parse (Flock.Zk.tags t₀
@@ -81,11 +52,7 @@ theorem loads_of_check {t₀ : Flock.Tags} {Q : VStmt} {Reg' : Type} (x : Q.Oute
   rw [parse_zkTags_vstar hT, htab, hp] at hZ
   exact ⟨(Except.ok.inj hZ).symm, hn⟩
 
-/-- **A session the verifier accepts as V*'s statement `j`, under the family's bindings for it, loads
-`Vs j`**, where its inputs pass the statement check, at V*'s tags: `--rec-part j` makes the session's statement the
-`j`th of the inner shape's, `--rec-bindings` makes its file that statement's under `bind j`, and the verifier refuses
-lookup tables (`vstarFile_of_accepts`); then `loads_of_check` at the obligation. Refusal (5) compares the tags' names
-only (`tags.name != Tags.circuit.name`); the inputs' tags are the statement their name names (`TagsFound`, an
+/-- Refusal (5) compares the tags' names only; the inputs' tags are the statement their name names (`TagsFound`, an
 obligation on our code), and `Tags.circuit`'s name names `Tags.circuit` (`find?_circuit`), so they are V*'s. -/
 theorem loads_of_verifiesV {S : ℕ} {i : RecVStar.Inner} {bind : Fin S → VStar.Bindings} {Vs : Fin S → VStmt}
     (hob : VStarParsesScoped Flock.Tags.circuit i bind Vs) (j : Fin S) {Reg' : Type} (x : (Vs j).OuterR Reg')
@@ -102,9 +69,6 @@ theorem loads_of_verifiesV {S : ℕ} {i : RecVStar.Inner} {bind : Fin S → VSta
   obtain ⟨hc, hnv⟩ := hob j ss s _ _ hss hj hf hZ (scope_of_accepts x t hacc hck)
   exact ⟨hc, hn.trans hnv.symm⟩
 
-/-- **A session the verifier accepts types**, where its inputs pass the statement check at untemplated tags
-and load V*'s statement (`hL`): the record carries the sample (custody), at which table 0 sets up
-(`setupZHJ_of_acceptsZKI`). -/
 theorem typable_of_accepts {Q : VStmt} {Reg' : Type} (x : Q.OuterR Reg')
     (hRec : RecordsLiveZKJ x.I x.dj (fun _ _ => Q.J) x.wr) (ω : Q.samplingDesign.live.Ω) (R : Reg') (o : LiveOutJ Q.J Q.mPts)
     (hacc : AcceptsZKR x.I x.own (x.wr (Q.samplingDesign.live.draw ω) R o)) (hck : ScopeZR x.I) (hL : Q.Loads x.I)
@@ -113,8 +77,6 @@ theorem typable_of_accepts {Q : VStmt} {Reg' : Type} (x : Q.OuterR Reg')
   exact ⟨hck, hi, hL.1, hL.2, _, _, ZkHidden.setupZHJ_of_acceptsZKI x.I x.hTags.1 hck.typed
     (hck.parseHF x.hTags.1 hi) x.dj hacc' (hRec _ R o hacc').1 (x.hDraw ω) ⟨0, nTab_pos _⟩⟩
 
-/-- **A session that never types accepts nowhere** where its inputs pass the statement check, for an event at which it
-accepts, loads V*'s statement and is at untemplated tags: an acceptance would type it (`typable_of_accepts`). -/
 theorem prob_game_untypable {Q : VStmt} {Reg' : Type} (x : Q.OuterR Reg')
     (hRec : RecordsLiveZKJ x.I x.dj (fun _ _ => Q.J) x.wr)
     (hx : ¬ x.Typable) (hck : ScopeZR x.I) {P : Reg' × Finset (Fin Q.nv) × Exec.Transcript → Prop}
@@ -124,11 +86,6 @@ theorem prob_game_untypable {Q : VStmt} {Reg' : Type} (x : Q.OuterR Reg')
     fun ω o' h => hx (typable_of_accepts x hRec ω τ.1 o' (hP _ h).1 hck (hP _ h).2.1 (hP _ h).2.2)).trans
       (prob_false _ _).le) (zero_le ..)
 
-/-- **Where a session of index `j₀` never types, the raw sessions' event is empty**, for an event at which every
-session accepts as V*'s statement of its index and passes the statement check, where every session's inputs carry the
-tags their name names (`TagsFound`): the event is `j₀`'s acceptance, at which `j₀`'s session loads `Vs j₀`
-(`loads_of_verifiesV`), which `prob_game_untypable` empties at each of the prover's names for `j₀`
-(`prob_seqC_exists_le`). -/
 theorem prob_sessionsR_untypable {S : ℕ} {Vs : Fin S → VStmt} {Reg' : Type} {dg : ByteArray → ByteArray} {N : ℕ}
     {i : RecVStar.Inner} {bind : Fin S → VStar.Bindings}
     {rows : Option (Array Flock.Registered.Port)} (hob : VStarParsesScoped Flock.Tags.circuit i bind Vs)
@@ -156,12 +113,6 @@ theorem prob_sessionsR_untypable {S : ℕ} {Vs : Fin S → VStmt} {Reg' : Type} 
   · exact le_antisymm ((prob_mono (q := fun _ => False) (fun b hb => hck ((hp b hb).2 j₀)) _ _).trans
       (prob_false _ _).le) (zero_le ..)
 
-/-- **The raw recursive audit's event is no likelier than the typed one's**, at the transported strategy (`recT`), when
-the event has every session accept as V*'s statement of its index and pass the statement check (`hp`), where every
-session's inputs carry the tags their name names (`hF`), and gives `q` at a whole history where every session types,
-at an outcome whose transcripts the typed sessions write (`hq`): where every session at a registration types, the
-typed sessions are the raw ones (`sessions_zsOf`, `prob_sessT`), every outcome of which they write
-(`leaves_sessions`); where one doesn't, the raw event is empty there (`prob_sessionsR_untypable`). -/
 theorem prob_recT_le {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} {dg : ByteArray → ByteArray} {N : ℕ}
     {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type} {i : RecVStar.Inner} {bind : Fin S → VStar.Bindings}
     {rows : Option (Array Flock.Registered.Port)} (hob : VStarParsesScoped Flock.Tags.circuit i bind Vs)
@@ -191,8 +142,6 @@ theorem prob_recT_le {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} {dg :
       (fun b hb => hp (σ.1, ω, t, (s.1, b)) hb) _]
     exact zero_le ..
 
-/-- **Where every session at a history and registration types, the typed sessions accept and pass the statement check
-where the raw ones do**: each is its build (`zsOf_pos`), with the raw session's inputs and own ports. -/
 theorem verifies_zsOf {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B C D : Type} {dg : ByteArray → ByteArray} {N : ℕ}
     (zr : A → B → C → D → (j : Fin S) → (Vs j).OuterR Reg')
     (hRec : ∀ R ω t R₂ j, RecordsLiveZKJ (zr R ω t R₂ j).I (zr R ω t R₂ j).dj (fun _ _ => (Vs j).J)

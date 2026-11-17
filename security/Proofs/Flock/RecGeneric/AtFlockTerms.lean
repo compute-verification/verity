@@ -2,22 +2,7 @@ module
 
 public import Proofs.Flock.RecGeneric.AtFlockReruns
 
-/-!
-# L1 at Flock: the composite's terms against `KSLin2`'s
-
-`B`'s, `FC`'s and `F0`'s plans at the composite's reruns (`Comp.innerModel`, `Comp.verModel` at `compAt`) against
-`Claims.Recursion`'s finders over `E_O`'s samples:
-
-* `forkPlansLeBinnerV`: `forkPlan` in either model finds a collision at most as often as `BinnerV`, which searches a
-  superset of true evaluations (`sampleCalls`) at the same two samples (`ForkPlansLeBinnerV`);
-* `capPlanIsFCI`: `capPlan` in `innerModel` is `FCI` (`CapPlanIsFCI`);
-* `conflictPlanIsF0I`: `conflictPlan` in `innerModel` is `F0I` (`ConflictPlanIsF0I`).
-
-The last two hold where `Open(DE, S)` at hm96 is the bound record's `IVStar` (`IVStarOfBound`), so that a rerun's inner
-view is its sample's (`innerModel_acc_iff`). A plan's search in any model (`capPlan_search_pick`, `conflictPlan_search_pick`) is
-read off its loops' (`capLoop_exec_pick`, `waitLoop_exec_pick`, `waitsPlan_exec_pick`), and the two finders' coins correspond one to
-one (`binEquiv`, `Fin.consEquiv`, `conflictEquiv`), so each pair of probabilities is of one event, or of a smaller one.
--/
+/-! L1 at Flock: `B`'s, `FC`'s and `F0`'s plans at the composite's reruns against `Claims.Recursion`'s finders over `E_O`'s samples. -/
 
 @[expose] public section
 
@@ -25,15 +10,11 @@ namespace Claims.RecGeneric
 
 open Claims Claims.Recursion
 
-/-! ## The plans' searches in any model -/
-
 section Exec
 
 variable {Coin Ω C : Type} {n : ℕ} (m : RunModel Coin Ω n C) (ω : Ω) (us : ℕ → (Fin n → Coin) × C)
 
 open Classical in
-/-- **The caps' loop searches `u₀` and its first fork that is accepted and queries the cap** (`g`), `u₀` again where
-none is. -/
 theorem capLoop_exec_pick (j : ℕ) (opens : (ℕ → Coin) → Bool) (g : (Fin n → Coin) × C → Prop)
     (hg : ∀ u, g u ↔ m.acc ω (fork (m.cut j) (us 0).1 u.1, u.2) ∧
       opens (m.coins (fork (m.cut j) (us 0).1 u.1, u.2)) = true) :
@@ -66,8 +47,6 @@ theorem capLoop_exec_pick (j : ℕ) (opens : (ℕ → Coin) → Bool) (g : (Fin 
         exact hn
 
 open Classical in
-/-- **`FC`'s plan searches its first run and the caps' loop's pick** where the first run is accepted and queries the cap
-(`c`), and nothing otherwise; `g` is the loop's test and `φ` its fork from the first run. -/
 theorem capPlan_search_pick (Cp : Caps Coin) (M : ℕ) (x : Msg) (q : Fin (Cp.width x)) (u₀ : (Fin n → Coin) × C)
     (hu₀ : us 0 = u₀) (vs : Fin M → (Fin n → Coin) × C) (hvs : ∀ t : Fin M, us (1 + t.val) = vs t) (c : Prop)
     (hc : c ↔ m.acc ω u₀ ∧ Cp.opens x q (m.coins u₀) = true) (g : (Fin n → Coin) × C → Prop)
@@ -93,7 +72,6 @@ theorem capPlan_search_pick (Cp : Caps Coin) (M : ℕ) (x : Msg) (q : Fin (Cp.wi
         List.flatMap_nil]
     · simp only [capPlan, Plan.exec, RunModel.named, decide_eq_true_eq, ha, ↓reduceIte, List.flatMap_nil]
 
-/-- **A wait goes on with its first accepted fresh run**, none where none of its `N` is. -/
 theorem waitLoop_exec_pick (cont : Option RunExp → Plan Coin) : ∀ (N i : ℕ),
     ((waitLoop cont N i).exec m ω us).2.2 =
       ((cont (firstPick (fun e => m.acc ω (m.named us e)) N fun t : Fin N => RunExp.fresh (i + t.val))).exec
@@ -110,7 +88,6 @@ theorem waitLoop_exec_pick (cont : Option RunExp → Plan Coin) : ∀ (N i : ℕ
         Nat.add_zero, htail]
       exact waitLoop_exec_pick cont N (i + 1)
 
-/-- **`w` waits of `R` fresh runs each search what they found**: wait `t` looks at the runs `base + R·t + r`. -/
 theorem waitsPlan_exec_pick (R : ℕ) : ∀ (w base : ℕ) (found : List RunExp),
     ((waitsPlan R w base found).exec m ω us).2.2 =
       found ++ (List.finRange w).flatMap fun t =>
@@ -131,8 +108,6 @@ theorem waitsPlan_exec_pick (R : ℕ) : ∀ (w base : ℕ) (found : List RunExp)
       omega
 
 open Classical in
-/-- **`F0`'s plan searches its first run and each wait's first accepted run** where the first run is accepted (`c`),
-and nothing otherwise; `g` is the waits' test. -/
 theorem conflictPlan_search_pick (k : Msg → ℕ) (R : ℕ) (x : Msg) (z : Fin 1) (u₀ : (Fin n → Coin) × C)
     (hu₀ : us 0 = u₀) (ws : Fin (k x) → Fin R → (Fin n → Coin) × C)
     (hws : ∀ t r, us (1 + R * t.val + r.val) = ws t r) (c : Prop) (hc : c ↔ m.acc ω u₀)
@@ -167,7 +142,6 @@ section Finder
 variable {Coin Ω C : Type} [Fintype Coin] [Nonempty Coin] [Fintype Ω] [Nonempty Ω] [Fintype C] [Nonempty C]
   {n : ℕ}
 
-/-- A run finder's output at its coins: the first collision among the searched runs' evaluations. -/
 theorem RunFinder.finder_out (F : RunFinder Coin) (m : RunModel Coin Ω n C) (x : Msg) (h : 0 < F.sel x)
     (j : Fin (F.sel x)) (ω : Ω) (sl : Fin (F.slots x + 1) → (Fin n → Coin) × C) :
     (F.finder m x h).out (j, ω, sl) =
@@ -176,20 +150,16 @@ theorem RunFinder.finder_out (F : RunFinder Coin) (m : RunModel Coin Ω n C) (x 
 
 end Finder
 
-/-- `FC`'s coins as `capPlan`'s: the cap position, the tape, and the first run before the loop's. -/
 theorem unifMap_cons {J Ω U : Type} [Fintype J] [Fintype Ω] [Fintype U] (M : ℕ) :
     UnifMap (fun s : J × Ω × U × (Fin M → U) =>
       ((s.1, s.2.1, (Fin.cons s.2.2.1 s.2.2.2 : Fin (M + 1) → U)) : J × Ω × (Fin (M + 1) → U))) :=
   UnifMap.equiv ((Equiv.refl J).prodCongr ((Equiv.refl Ω).prodCongr (Fin.consEquiv fun _ : Fin (M + 1) => U)))
 
-/-- The pick of a loop that starts from a run where `p` holds, and picks only runs where `p` holds, is one. -/
 theorem getD_pick {U : Type} {g p : U → Prop} {M : ℕ} {vs : Fin M → U} {u₀ : U} (h₀ : p u₀) (hg : ∀ v, g v → p v) :
     p ((firstPick g M vs).getD u₀) := by
   cases hp : firstPick g M vs with
   | none => exact h₀
   | some v => exact hg v (firstPick_some hp)
-
-/-! ## `B_I` bounds `B`'s plan at the reruns -/
 
 section Fork
 
@@ -198,9 +168,6 @@ variable {Coin W Col' T' : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
   (DO : Claims.Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T') {Ω : Type} [Fintype Ω] [Nonempty Ω]
   (P : Prover Ω) (x : Msg)
 
-/-- **`forkPlan` over samples is at most `BinnerV`**: in a model of `E_O`'s samples that forks at the inner rounds as
-`fork` does and whose evaluations at a sample are among its `sampleCalls`, which are true, `forkPlan` finds a collision at
-most as often as `BinnerV`: both search one sample and its fork at a guessed inner round, `BinnerV` a superset. -/
 theorem forkPlan_PrAt_le (m : RunModel Coin Ω (D.V.k x) ((EO D I DO decO).C x))
     (hcut : ∀ j, j < I.V.k (xI D x) → m.cut j = j)
     (hlog : ∀ ω u e, e ∈ m.log ω u → e ∈ sampleCalls H D I DO decO P x ω u)
@@ -240,9 +207,6 @@ section Instance
 variable {Coin Col T Col' T' : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
   [DecidableEq Col']
 
-/-- **`B`'s plan at the reruns is at most `B_I`** (`ForkPlansLeBinnerV`), in `innerModel` and in `verModel`: both fork
-at the inner rounds as `BinnerV` does, and search evaluations among the samples' `sampleCalls` (`rerunCalls_sub`,
-`verModel_log_sub`), true where `CallsTrue` and `CallsNil` hold (`sampleCalls_true_at`). -/
 theorem forkPlansLeBinnerV (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
     (DO : Claims.Flock.Deploy Coin Col' T') : ForkPlansLeBinnerV H D Bd DO := by
   intro decI decO x hT hN Ω _ _ P
@@ -257,15 +221,12 @@ theorem forkPlansLeBinnerV (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin C
       ((compAt D Bd decI DO decO).verModel ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans) H P x) hcut
       (fun _ _ _ he => verModel_log_sub D Bd.IVStar (Inner.ofFlock Bd.deploy decI) DO decO he) hTd⟩
 
-/-- A sample forked from itself is itself. -/
 theorem capForkI_self (D : Claims.Recursion.Deploy Coin) {W : Type} (I : Claims.Recursion.Inner Coin W)
     (DO : Claims.Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T') (Cp : Caps Coin) (x : Msg)
     (q : Fin (Cp.width (Claims.Recursion.xI D x))) (d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) :
     capForkI D I DO decO Cp x q d d = d :=
   Prod.ext (fork_self _ _) rfl
 
-/-- **`capPlan` and `FCI` find a collision at the same coins**, `FCI`'s first sample and loop being `capPlan`'s first
-run and slots. -/
 theorem capPlan_coll (D : RecAt Coin) (Bd : Bound Coin Col T) (decI : List (ℕ × Col) → List T)
     (DO : Claims.Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T') (Cp : Caps Coin) (H : Msg → Msg)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg) (M : ℕ)
@@ -313,9 +274,6 @@ theorem capPlan_coll (D : RecAt Coin) (Bd : Bound Coin Col T) (decI : List (ℕ 
   · rw [if_neg ho]
     simp [FCI, ho, findColl]
 
-/-- **`FC`'s plan at the reruns is `FCI`** (`CapPlanIsFCI`), where `Open(DE, S)` at hm96 is the bound record's
-`IVStar`: `capPlan`'s coins map one to one onto `FCI`'s (`unifMap_cons`), and at each it finds a collision exactly
-where `FCI` does (`capPlan_coll`). -/
 theorem capPlanIsFCI (D : RecAt Coin) (Bd : Bound Coin Col T) (DO : Claims.Flock.Deploy Coin Col' T')
     (Cp : Caps Coin) (hIV : IVStarOfBound Bd) : CapPlanIsFCI D Bd DO Cp := by
   intro hxI H decI decO x Ω _ _ P M
@@ -334,8 +292,6 @@ theorem coll_iff_of_eq {H : Msg → Msg} {l l' : List (Msg × Msg)} (h : l = l')
     (∃ a b, findColl l = some (a, b) ∧ Collision H a b) ↔ ∃ a b, findColl l' = some (a, b) ∧ Collision H a b := by
   rw [h]
 
-/-- **`conflictPlan` and `F0I` find a collision at the same coins**, `F0I`'s first sample and waits being
-`conflictPlan`'s first run and slots, wait `t`'s run `r` in slot `1 + R·t + r`. -/
 theorem conflictPlan_coll (D : RecAt Coin) (Bd : Bound Coin Col T) (decI : List (ℕ × Col) → List T)
     (DO : Claims.Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T') (H : Msg → Msg)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg) (R : ℕ)
@@ -381,9 +337,6 @@ theorem conflictPlan_coll (D : RecAt Coin) (Bd : Bound Coin Col T) (decI : List 
   · rw [if_neg ha]
     simp [F0I, ha, findColl]
 
-/-- **`F0`'s plan at the reruns is `F0I`** (`ConflictPlanIsF0I`), where `Open(DE, S)` at hm96 is the bound record's
-`IVStar`: `conflictPlan`'s coins map one to one onto `F0I`'s (`conflictEquiv`), and at each it finds a collision
-exactly where `F0I` does (`conflictPlan_coll`). -/
 theorem conflictPlanIsF0I (D : RecAt Coin) (Bd : Bound Coin Col T) (DO : Claims.Flock.Deploy Coin Col' T')
     (hIV : IVStarOfBound Bd) : ConflictPlanIsF0I D Bd DO := by
   intro hxI H decI decO x Ω _ _ P R

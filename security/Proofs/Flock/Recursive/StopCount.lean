@@ -3,41 +3,7 @@ module
 public import ZkServer.Release
 public import Proofs.Flock.Recursive.StopLeak
 
-/-!
-# A recursive session's stops, counted from the ZK server's rules
-
-`StopLeak`'s `prCoin_cut_le` bounds what a view released at a stop leaks by the number of stops, and `RecStops M` counts
-a recursive session's, `1 + Σ_p (M p + 1)`. This file states that the ZK server's rules (`ZkServer.Record`,
-`ZkServer.Release`, run as `ZkServer.Loop` and `rec_live` run them) release a recursive session's view cut at one of
-`RecStops M`: the stop `recStop` that the run reached, read off what reached the auditor.
-
-**The run** (`StopCount.run`) is a list of steps, each one op on the record's events by the code's own function, in any
-order: each op holds `record.lock` while it reads the record and appends to it, and one outer session at a time holds
-`slot.lock` (`holder`). `rec_live` opens a recursive session (`openSession`, its statements and budget checked by
-`partsOk` and `budgetArg`), runs its inner session, statement `0`, and records its `finish` once its `M s 0` messages
-reached the auditor, or its stop at `inner`. An outer session of `s` at `part` that finds the slot taken records `wait`; one that takes it records its slot
-and is admitted or refused (`seat`: `slot`, then `admit`). Nothing of a refused session reaches the auditor; an admitted
-one's messages do, one `relay` at a time, at most statement `j`'s `M s (j + 1)`, before its `Finish` and, once
-`Decision.after` lets its proofs go, after it, from its release time on (`left`). The auditor's verdict comes after its
-last message, and `settle`'s rule makes it the release or the stop; a fault while sending is the stop. A session cut
-before its `Finish` was decided is its stop (`stopAt`); one that ends with nothing recorded (killed, or an op that could
-not read the record) leaves the slot, and the next `slot` records its stop.
-
-The model reads the record as its events: every op reads back the events the ZK server wrote (`Record.read` refuses any
-line that is not `Event.line` of the event it parses to).
-
-* `RecStopsOfRun`: at every run and every recursive session `s`, what reached the auditor of each statement of `s` is
-  `cutAt (recStop …)`'s, nothing of any other statement, and each statement's from the one outer session of it
-  admitted, if any (`adm`: the slot records a holder that ended without its outcome as its stop, so no statement is
-  admitted twice); `s` runs through (`recStop … = none`) unless a statement of it was not released (`unreleasedOf`);
-  and each statement's proofs left at its release time where `s` is scheduled.
-* `recCut`, `recReleased`: the whole view, one part a statement, cut at a stop by a cut of one statement's part
-  (`cutP`, at how many of its messages are kept), and the view the run released, each statement's part cut at what
-  reached the auditor of it. `recReleased … = recCut … (recStop …) …` is `RecStopsOfRun`'s first conjunct read at the
-  view.
-* `recStopAt`, `sent_cutAt_at`, `recReleased_eq_at`: the stop read at a fixed number of statements `n`, so that it ranges
-  over one `RecStops` at every run, as `prCoin_cut_le` counts it, and the view cut at it where `s` has `n` statements.
--/
+/-! A recursive session's stops, counted from the ZK server's rules: every run releases its view cut at one of `RecStops M` (`RecStopsOfRun`). -/
 
 @[expose] public section
 
@@ -79,9 +45,7 @@ inductive Step where
   | openRec (stream : String) (parts : Array String) (budget : Option ℕ) (release : Option Core.ZkServer.Schedule)
   /-- the next message of `s`'s inner session reaches the auditor -/
   | innerSend (s : String)
-  /-- `s`'s inner session finished -/
   | innerFinish (s : String)
-  /-- `s`'s inner session stopped -/
   | innerStop (s why : String)
   /-- an outer session of `s` at `part` finds the slot taken -/
   | wait (s part : String)
@@ -195,14 +159,10 @@ def recStop (M : String → ℕ → ℕ) (σ : St) (s : String) :
   | none => none
   | some q => some ⟨q, ⟨min (σ.sent s q) (M s q), Nat.lt_succ_of_le (Nat.min_le_right _ _)⟩⟩
 
-/-- **The whole view cut at the stop `r`**: statement `p`'s part `v p` cut by `cutP p`, at how many of its messages are
-kept, `cutAt r p`. -/
 def recCut {n : ℕ} (M : Fin n → ℕ) {V : Fin n → Type} (cutP : (p : Fin n) → ℕ → V p → V p)
     (r : Flock.SecurityProofs.RecStops M) (v : (p : Fin n) → V p) : (p : Fin n) → V p :=
   fun p => cutP p (cutAt M r p) (v p)
 
-/-- **The view the run `σ` released of `s`**: statement `p`'s part of the whole view `v` cut by `cutP p` at how many of
-its messages reached the auditor. -/
 def recReleased (σ : St) (s : String) {V : Fin (nOf σ s) → Type} (cutP : (p : Fin (nOf σ s)) → ℕ → V p → V p)
     (v : (p : Fin (nOf σ s)) → V p) : (p : Fin (nOf σ s)) → V p :=
   fun p => cutP p (σ.sent s p) (v p)
@@ -236,7 +196,6 @@ end Flock.Guarantees
 
 namespace Flock.StopCount
 
-/-- **The released view is the whole view cut at the run's stop**, at every cut of one statement's part. -/
 theorem recReleased_eq (h : Flock.Guarantees.RecStopsOfRun) (M : String → ℕ → ℕ) (steps : List Step) (s : String)
     {V : Fin (nOf (run M steps) s) → Type} (cutP : (p : Fin (nOf (run M steps) s)) → ℕ → V p → V p)
     (v : (p : Fin (nOf (run M steps) s)) → V p) :
@@ -250,7 +209,6 @@ theorem recReleased_eq (h : Flock.Guarantees.RecStopsOfRun) (M : String → ℕ 
 def recStopAt (n : ℕ) (M : String → ℕ → ℕ) (σ : St) (s : String) : Flock.SecurityProofs.RecStops (fun p : Fin n => M s p) :=
   if h : nOf σ s = n then h ▸ recStop M σ s else none
 
-/-- Where `s` has `n` statements, what reached the auditor of each is `cutAt`'s at `recStopAt n`. -/
 theorem sent_cutAt_at (h : Flock.Guarantees.RecStopsOfRun) (M : String → ℕ → ℕ) (steps : List Step) (s : String)
     {n : ℕ} (hn : nOf (run M steps) s = n) (p : ℕ) :
     (run M steps).sent s p = cutAt (fun p : Fin n => M s p) (recStopAt n M (run M steps) s) p := by
@@ -261,8 +219,6 @@ theorem sent_cutAt_at (h : Flock.Guarantees.RecStopsOfRun) (M : String → ℕ �
   · rename_i hne
     exact absurd rfl hne
 
-/-- **The released view is the whole view cut at `recStopAt n`**, where `s` has `n` statements: the form
-`prCoin_cut_le` reads, its stop in `RecStops (fun p : Fin n => M s p)` at every run. -/
 theorem recReleased_eq_at (h : Flock.Guarantees.RecStopsOfRun) (M : String → ℕ → ℕ) (steps : List Step) (s : String)
     {n : ℕ} (hn : nOf (run M steps) s = n) {V : Fin n → Type} (cutP : (p : Fin n) → ℕ → V p → V p)
     (v : (p : Fin n) → V p) :

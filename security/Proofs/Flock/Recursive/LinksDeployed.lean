@@ -44,26 +44,7 @@ import Proofs.Flock.Recursive.LinksOuter
 import Proofs.Flock.Recursive.LinksRows
 import Proofs.Flock.VBridge.RecLink
 
-/-!
-# The links bind at the deployment
-
-`LinksBindDeployed` asks, on an accepted run whose extracted witness is in `R` and fails the link clause (`LinksHold`
-at the rows `tableRows` reads off `E_O`'s witnesses at the judged sample), for two colliding inputs of the link finder.
-This file names those inputs and proves the binding, with the link part's reference step `LinkRefStaged`
-(`linkRef_staged`):
-
-* `linkMsgs`: at the link part's circuit and witness, at each instance `n < N`, the reference step's strings
-  (`refMsgs`) and the inner half's (`innerMsgs`) at the instance's port words; `linkIns` reads them off the judged
-  sample's witnesses, the first view `drawsOf` serves.
-* `linksHold_or_coll`: where every part is staged and its witness checks against its V\* statement, a witness of the
-  inner relation satisfies the link clause at `tableRows`, or two of `linkMsgs` collide. Row `n` opens the table
-  (`rowOpens_staged`); the setup's `rin` and `rout` are check 5's rows of the roots of the inner statement's rows
-  (`linkSetup_staged`, the files the session sets up from being the statement's, `InnerAt.src_staged`); the reference
-  step gives the instance's unit those roots (`linkRef_staged`), and the inner half the row (`inner_link`).
-* `linkBinds_rec`, `linksBindDeployed`: the accepted run's V\* statements are the staged ones (`runVstar_staged`,
-  `stagedAll_run`) and `E_O`'s witnesses check against them (`eoGives_outerHolds`), at every compiled record
-  `deployRec` whose inner relation is the deployed one's; `recursiveKSLink_links` is `RecursiveKSLinkAt` there.
--/
+/-! The links bind at the deployment (`linksBindDeployed`): an accepted run whose extracted witness is in `R` and fails the link clause gives two colliding inputs of the link finder. -/
 
 @[expose] public section
 
@@ -73,19 +54,13 @@ open Flock
 open Claims (Msg)
 open Claims.Recursion.VStarB
 
-/-! ## What the link finder reads -/
-
-/-- The link part's bounds `UB` and `PB`, at V\*'s statement last but one (`linkAt`'s). -/
 def linkBounds (r : XR) : Option (ℕ × ℕ) :=
   (RecVStar.statements r.shape).toOption.bind fun ss =>
     match ss[ss.size - 2]? with
     | some (VStar.Stmt.link UB PB _) => some (UB, PB)
     | _ => none
 
-/-- **What the link finder reads at instance `n`** of the link part (circuit `c`, witness `wO`), at the inner statement
-`p` and its files' statement `st'`, the inner witness `w` and the roots `R`, `W`: the reference step's strings
-(`refMsgs`) and the inner half's (`innerMsgs`), at the instance's port words (`inWordsAt`, `xyr` and `xyw` split as
-`linkRefAt` splits them). -/
+/-- The reference step's strings and the inner half's at instance `n`'s port words, split as `linkRefAt` splits them. -/
 def instMsgs (p : Readable.Parsed) (w : Claims.Flock.Wit) (UB PB : ℕ) (st' : Stmt) (c : Circuit)
     (wO : Claims.Flock.Wit) (R W : ByteArray) (n : ℕ) : List Msg :=
   refMsgs c wO n R W ++
@@ -93,9 +68,6 @@ def instMsgs (p : Readable.Parsed) (w : Claims.Flock.Wit) (UB PB : ℕ) (st' : S
       ((inWordsAt c wO "xyr" n).drop 32) (inWordsAt c wO "raux" n) ((inWordsAt c wO "xyw" n).take 32)
       ((inWordsAt c wO "xyw" n).drop 32) (inWordsAt c wO "waux" n)).map (·.data.toList)
 
-/-- **What the link finder reads at a statement**: where it names the link part (`linkCircuit`, `linkBounds`), its inner
-statement parses (`innerParsed`) and its files set it up (`RecScope.innerStmt`), `instMsgs` at each of the part's `N`
-instances, at the part's witness among `ws` and the roots of the files' statement's rows; none elsewhere. -/
 def linkMsgs (x : Msg) (ws : List Claims.Flock.Wit) (w : Claims.Flock.Wit) : List Msg :=
   match readX x with
   | none => []
@@ -107,7 +79,6 @@ def linkMsgs (x : Msg) (ws : List Claims.Flock.Wit) (w : Claims.Flock.Wit) : Lis
       (List.range N).flatMap (instMsgs p w UB PB st' c (ws.getD s ⟨[]⟩) R W)
     | _, _, _, _ => []
 
-/-- **The link finder's inputs**: `linkMsgs` at the outer witnesses of the first view, the judged sample's (`drawsOf`). -/
 def linkIns (_H : Msg → Msg) (x : Msg)
     (views : List ((ℕ → FlockDeploy.Coin) × List (Msg × Claims.Out) × List Claims.Flock.Wit)) (w : Claims.Flock.Wit)
     (_rs : List (List UInt8)) : List Msg :=
@@ -124,10 +95,6 @@ theorem linkMsgs_eq {x : Msg} {r : XR} (hr : readX x = some r) {s N : ℕ} {c : 
     linkMsgs x ws w = (List.range N).flatMap (instMsgs p w UB PB st' c (ws.getD s ⟨[]⟩) R W) := by
   simp only [linkMsgs, hr, hc, hb, hp, hst, hR, hW, Except.toOption, Option.getD_some]
 
-/-! ## The `trow` port's words are its row's bytes -/
-
-/-- **Instance `n`'s `trow` words are the bytes of its row**: the `trow` port is 1024 bits, so its row is 128 bytes
-and reads back from its u16 words (`bytesOf_wordsOf`). -/
 theorem trow_words {c : Circuit} {q : ℕ} (hq : c.ports.findIdx? (·.name == "trow") = some q)
     (hqs : q < c.ports.size) (hb : c.ports[q].bits = 1024) (w : Claims.Flock.Wit) (n : ℕ) :
     RecLinkRef.bytesOf (inWordsAt c w "trow" n) = ⟨(trowAt c w n).toArray⟩ := by
@@ -152,12 +119,6 @@ theorem trow_words {c : Circuit} {q : ℕ} (hq : c.ports.findIdx? (·.name == "t
   rw [List.size_toArray]
   exact hev
 
-/-! ## The link clause, or a collision -/
-
-/-- **The link clause holds at the staged parts' witnesses, or two of `linkMsgs` collide**: where each of the
-statement's parts is staged and its witness among `ws` checks against its V\* statement, a witness `w` of the inner
-relation at the statement's inner statement satisfies `LinksHold` at the rows `tableRows` reads off `ws`, or two of
-`linkMsgs x ws w` are distinct with one SHA-512. -/
 theorem linksHold_or_coll {st : Stage} {x : Msg} {ws : List Claims.Flock.Wit}
     (hS : ∀ s < nS x, ∃ xO, StagedPart st s x xO ∧
       Claims.Flock.check (deployZkRec Readable.relation).parse xO (ws.getD s ⟨[]⟩) = true)
@@ -171,7 +132,6 @@ theorem linksHold_or_coll {st : Stage} {x : Msg} {ws : List Claims.Flock.Wit}
   intro r hr T N hl
   obtain ⟨r', p, f, spec', st', st0, hr', hp, hP, hpc, hh, hRS, hst0, hfs, hstm, e1, e2, e3⟩ := inner_of_R hx hR
   obtain rfl : r = r' := Option.some.inj (hr.symm.trans hr')
-  -- the link part, V*'s statement last but one, is staged
   obtain ⟨_, _, hpos⟩ := capAt_readX hr
   obtain ⟨xO0, hS0, -⟩ := hS 0 hpos
   obtain ⟨ss, UB, PB, hss, hat, hla⟩ := linkAt_staged hS0 hr hl
@@ -220,7 +180,6 @@ theorem linksHold_or_coll {st : Stage} {x : Msg} {ws : List Claims.Flock.Wit}
   have hlm := linkMsgs_eq hr hlc hlb hp hinS hRr hWr ws w
   have hrows : tableRows x ws = (List.range N).map (trowAt c (ws.getD (ss.size - 2) ⟨[]⟩)) := by
     simp only [tableRows, hr, hlc]
-  -- each instance's row holds at the inner witness
   have key : ∀ n < N, LinkHolds p w (trowAt c (ws.getD (ss.size - 2) ⟨[]⟩) n) := by
     intro n hn
     have hmem : ∀ m ∈ instMsgs p w UB PB st' c (ws.getD (ss.size - 2) ⟨[]⟩) R W n, m ∈ linkMsgs x ws w :=
@@ -259,12 +218,6 @@ theorem linksHold_or_coll {st : Stage} {x : Msg} {ws : List Claims.Flock.Wit}
     obtain ⟨n, hn, rfl⟩ := List.mem_map.1 hrow
     exact key n (List.mem_range.1 hn)
 
-/-! ## At the compiled record -/
-
-/-- **The links bind at every compiled record `deployRec`** whose inner relation is the deployed one's: on an accepted
-run where the linked extractor recovers a witness in `R` whose link clause fails, `E_O` gave witnesses at the judged
-sample (`EO_judged_of_E`), each checking against the V\* statement staged there (`eoGives_outerHolds`,
-`runVstar_staged`, `stagedAll_run`), so two of the link finder's inputs collide (`linksHold_or_coll`). -/
 theorem linkBinds_rec {I : Claims.Recursion.Inner FlockDeploy.Coin Claims.Flock.Wit}
     (hIR : ∀ y w, I.R y w → Claims.Flock.R (FlockDeploy.parse false Readable.relation) y w) (ivScope : Msg → Bool)
     (b : Brings) (decO : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.ZkTrace) (x : Msg) :
@@ -299,8 +252,6 @@ theorem linkBinds_rec {I : Claims.Recursion.Inner FlockDeploy.Coin Claims.Flock.
         hws, Option.getD_some, linkIns] <;>
       assumption
 
-/-- **The links bind at the deployment** (`LinksBindDeployed`): `linkBinds_rec` at the deployed compiled record
-(`recBound`, `deployRec` at `IVStar`) and bound record, whose inner relation is the deployed plain one's. -/
 theorem linksBindDeployed : _root_.Flock.Guarantees.LinksBindDeployed LinksHold tableRows linkIns := by
   intro b aux nOf hd recRest decI _ decO _ x _
   exact linkBinds_rec (I := Claims.Recursion.Inner.ofFlock (bdDeployed Readable.relation
@@ -308,8 +259,6 @@ theorem linksBindDeployed : _root_.Flock.Guarantees.LinksBindDeployed LinksHold 
     DeployedR.wER FlockDeploy.joinR rowInDeployed DeployedR.finalR DeployedR.wR).deploy decI)
     (fun _ _ h => h) _ _ decO x
 
-/-- **Knowledge soundness at the linked relation at the deployment** (`RecursiveKSLinkAt`): `recursiveKSLink_of` at the
-link clause `LinksHold`, the rows `tableRows` and the finder's inputs `linkIns`. -/
 theorem recursiveKSLink_links (b : Brings) (aux : Msg → ℕ → _root_.Flock.RecRecord.Round)
     (nOf : Msg → ℕ → ℕ) (hd : Msg → _root_.Flock.RecRecord.Record)
     (recRest : Msg → List (Msg × Claims.Out) → List UInt8) :

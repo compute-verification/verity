@@ -1,9 +1,4 @@
-/-
-`Arith.Correct.nodes` (§9): the skip nodes `S = φ8(0…63)` and the output coset `Λ = φ8(64…127)` are 128 distinct points.
-`lagS`, `lagΛ` (the executable's `lagrange`) are the Lagrange weights on each, and `combW` (`combWeights`) evaluates a
-polynomial of degree below 128 that vanishes on `S` from its values on `Λ`. φ8 is additive, so each node set is a
-subspace or a coset, and the barycentric denominator `Π_{j ≠ i} (x_i − x_j)` is the executable's `den`.
--/
+/- The skip nodes `S`, the output coset `Λ` and their Lagrange weights (`Arith.Correct.nodes`). -/
 module
 
 public import Proofs.Flock.Level3.ArithFacts
@@ -17,7 +12,7 @@ set_option maxRecDepth 20000
 
 namespace FlockLevel3
 
-/-! ### φ8 is additive and vanishes only at 0 -/
+/-! φ8 is additive and vanishes only at 0. -/
 
 theorem of_add (a b : F128) : GF128.of (a + b) = GF128.of a + GF128.of b := (GF128.add_eq a b).symm
 theorem of_mul (a b : F128) : GF128.of (a * b) = GF128.of a * GF128.of b := (GF128.mul_eq a b).symm
@@ -73,8 +68,6 @@ theorem phi8_injOn (a b : ℕ) (ha : a < 256) (hb : b < 256) (h : GF128.of (phi8
   apply phi8_ne_zero _ (Nat.xor_lt_two_pow (n := 8) ha hb) hx
   rw [phi8_xor a b ha hb, h, CharTwo.add_self_eq_zero]
 
-/-! ### The node maps -/
-
 noncomputable def nodeS (s : Fin 64) : GF128 := GF128.of (phi8 s.val)
 noncomputable def nodeΛ (i : Fin 64) : GF128 := GF128.of (phi8 (64 + i.val))
 
@@ -86,8 +79,6 @@ theorem nodeΛ_injective : Function.Injective nodeΛ :=
 
 theorem nodeS_ne_nodeΛ (s i : Fin 64) : nodeS s ≠ nodeΛ i :=
   fun h => by have := phi8_injOn _ _ (by omega) (by omega) h; omega
-
-/-! ### Translation: `Π_{j ≠ i} (x_i + x_j)` is `den d` -/
 
 theorem of_foldl_mul (f : ℕ → F128) (l : List ℕ) (acc : F128) :
     GF128.of (l.foldl (fun a i => a * f i) acc) = GF128.of acc * (l.map fun i => GF128.of (f i)).prod := by
@@ -106,8 +97,6 @@ theorem xor_xor_cancel (k j : ℕ) : k ^^^ (k ^^^ j) = j := by rw [← Nat.xor_a
 theorem pow_le_256 (d : ℕ) (hd : d ≤ 7) (x : ℕ) (hx : x < 2 ^ d) : x < 256 :=
   lt_of_lt_of_le hx (le_trans (Nat.pow_le_pow_right (by norm_num) hd) (by norm_num))
 
-/-- **Translation.** For `k < 2^d`, `Π_{j < 2^d, j ≠ k} (φ8(k) + φ8(j)) = den d`: the differences of a subspace's points
-to one of them are the subspace's nonzero points. -/
 theorem prod_translate (d : ℕ) (hd : d ≤ 7) (k : ℕ) (hk : k < 2 ^ d) :
     ∏ j ∈ (Finset.range (2 ^ d)).erase k, (GF128.of (phi8 k) + GF128.of (phi8 j)) = GF128.of (den d) := by
   have h1 : ∏ j ∈ (Finset.range (2 ^ d)).erase k, (GF128.of (phi8 k) + GF128.of (phi8 j)) =
@@ -140,7 +129,6 @@ theorem add_64 : ∀ i : Fin 64, 64 + i.val = 64 ^^^ i.val := by decide +kernel
 theorem phi8_coset (i : ℕ) (hi : i < 64) : GF128.of (phi8 (64 + i)) = GF128.of (phi8 64) + GF128.of (phi8 i) := by
   rw [add_64 ⟨i, hi⟩, phi8_xor 64 i (by norm_num) (by omega)]
 
-/-- The coset's differences are the subspace's: `Π_{j < 64, j ≠ k} (λ_k + λ_j) = den 6`. -/
 theorem prod_translate_coset (k : ℕ) (hk : k < 64) :
     ∏ j ∈ (Finset.range 64).erase k, (GF128.of (phi8 (64 + k)) + GF128.of (phi8 (64 + j))) = GF128.of (den 6) := by
   rw [← prod_translate 6 (by norm_num) k (by norm_num; exact hk)]
@@ -149,8 +137,6 @@ theorem prod_translate_coset (k : ℕ) (hk : k < 64) :
   rw [phi8_coset k hk, phi8_coset j hj']
   have h2 := CharTwo.add_self_eq_zero (GF128.of (phi8 64))
   linear_combination h2
-
-/-! ### The executable's weights are the Lagrange basis at `ζ` -/
 
 theorem of_inv (a : F128) : GF128.of a.inv = (GF128.of a)⁻¹ := (GF128.inv_eq a).symm
 
@@ -167,7 +153,6 @@ theorem of_foldl_node (f : ℕ → F128) (n : ℕ) (z : F128) :
 
 variable (f : ℕ → F128) (n d : ℕ)
 
-/-- The node values. -/
 noncomputable def nv (j : ℕ) : GF128 := GF128.of (f j)
 
 theorem lagrange_weight (hinj : ∀ a < n, ∀ b < n, GF128.of (f a) = GF128.of (f b) → a = b)
@@ -225,8 +210,6 @@ theorem lagrange_interp (hinj : ∀ a < n, ∀ b < n, GF128.of (f a) = GF128.of 
   refine Finset.sum_congr rfl fun i hi => ?_
   rw [eval_mul, eval_C, lagrange_weight f n d hinj htr ζ.val i (Finset.mem_range.mp hi), mul_comm]; rfl
 
-/-! ### `S` and `Λ` -/
-
 theorem phi8_inj (a b : ℕ) (ha : a < 128) (hb : b < 128) (h : GF128.of (phi8 a) = GF128.of (phi8 b)) : a = b :=
   phi8_injOn a b (by omega) (by omega) h
 
@@ -249,8 +232,6 @@ theorem lagΛ_interp (p : GF128[X]) (hp : p.natDegree < 64) (ζ : GF128) :
     (fun k hk => prod_translate_coset k hk) p hp ζ]
   exact Fin.sum_univ_eq_sum_range (fun i => GF128.of ((lagrange ((Array.range 64).map fun i => phi8 (64 + i))
     (den 6).inv ζ.val)[i]!) * p.eval (nv (fun i => phi8 (64 + i)) i)) 64
-
-/-! ### `Pcomb`'s weights -/
 
 /-- The weights of `Pcomb(ζ)`, the executable's `combWeights`. -/
 noncomputable def combW (ζ : GF128) (i : Fin 64) : GF128 := GF128.of ((combWeights ζ.val)[i.val]!)
@@ -329,7 +310,6 @@ theorem combW_interp (p : GF128[X]) (hp : p.natDegree < 128) (hS : ∀ s, p.eval
       simp only [v, nv, CharTwo.sub_eq_add, of_add, hζ']
       ring
 
-/-- **`Arith.Correct.nodes`**, in the field's shape. -/
 theorem nodes : ∃ nS nΛ : Fin 64 → GF128, Function.Injective nS ∧ Function.Injective nΛ ∧ (∀ s i, nS s ≠ nΛ i) ∧
     (∀ p : GF128[X], p.natDegree < 64 → ∀ ζ, ∑ s, lagS ζ s * p.eval (nS s) = p.eval ζ) ∧
     (∀ p : GF128[X], p.natDegree < 64 → ∀ ζ, ∑ i, lagΛ ζ i * p.eval (nΛ i) = p.eval ζ) ∧

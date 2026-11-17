@@ -18,27 +18,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Recursion: forks, the runs of the prover's own strategy that find a SHA-512 collision
-
-`Finder.CR H F q` (`cr/sha-512` at one finder) bounds a finder's success by `q²/2^513`. The recursive theorem's fork
-form reads what the finder's runs did instead: some outcome its strategy reaches outputs two different strings `H` maps
-to one digest, or none does and its success is `0`. Every `∃` ranges over what the runs output, never over arbitrary
-strings.
-
-* `Game.Outcome g s a` (`Defs`): `s` plays `g` to `a` at some coins; an event no reached outcome has has probability `0`
-  (`Game.prob_eq_zero_of_outcome`);
-* `FindsColl H g s out` (`Defs`): some outcome `s` reaches outputs, by `out`, a collision of `H`; `Finder.Finds` at a
-  finder;
-* a finder that finds nothing satisfies `SHA512CRStrict` at every budget (`Finder.cr_of_not_finds`), and
-  `SHA512CRExpected` at any nonnegative cost (`crExpected_of_not_finds`);
-* `SessForkZ`, `TableForkZ`, `RegForkZC`, `LinkForkZC`: a fork of a `--zk` session's knowledge, registered-value and link
-  finders; with none, their `cr/sha-512` at budget `0` (`sessCRZ_of_not_fork`, `regCRZC_of_not_fork`) and their
-  `ecr/sha-512` at cost `0` (`linkCRZC_of_not_fork`);
-* `tableErrZ`, `linkErrZC`, `waitErrZC`: the statistical terms the session's bounds keep at budget `0`
-  (`ksAvgStrictZ_zero`, `linkBoundZC_zero`, `regTermZC_zero`);
-* `ExAt`: a property at some leaf the recursive prover reaches; with none, its negation at every leaf (`allAt_of_not_exAt`).
--/
+/-! Forks, runs of the prover's own strategy whose outputs (never arbitrary strings) are a SHA-512 collision, and the bounds that hold where there is none. -/
 
 @[expose] public section
 
@@ -46,7 +26,6 @@ namespace FlockSoundness.Game
 
 variable {α : Type}
 
-/-- **An event that no outcome the strategy reaches has is never seen.** -/
 theorem prob_eq_zero_of_outcome {p : α → Prop} :
     ∀ (g : Game α) (s : Strategy g), (∀ a, Outcome g s a → ¬ p a) → prob p g s = 0
   | .ret b, _, h => by simp [prob, h b rfl]
@@ -68,14 +47,12 @@ theorem prob_coll_eq_zero {g : Game β} {s : Strategy g} {out : β → Pair} (h 
     prob (fun b => ∃ x y, out b = some (x, y) ∧ x ≠ y ∧ H x = H y) g s = 0 :=
   Game.prob_eq_zero_of_outcome g s fun b hb hc => h ⟨b, hb, hc⟩
 
-/-- **A finder that finds nothing satisfies `SHA512CRStrict` at every budget.** -/
 theorem Finder.cr_of_not_finds {Fd : Finder Pair} (h : ¬ Fd.Finds H) (q : ℝ) : Fd.CR H q := by
   unfold Finder.CR Assumptions.SHA512CRStrict
   intro _
   rw [prob_coll_eq_zero h, ENNReal.toReal_zero]
   positivity
 
-/-- **A run that finds nothing satisfies `SHA512CRExpected`** at any nonnegative cost. -/
 theorem crExpected_of_not_finds {g : Game β} {s : Strategy g} {out : β → Pair} {cost : β → ℝ}
     (h : ¬ FindsColl H g s out) (hc : ∀ b, 0 ≤ cost b) : Assumptions.SHA512CRExpected H g s out cost := by
   unfold Assumptions.SHA512CRExpected
@@ -278,7 +255,6 @@ theorem expAt_mono_all {σ : Strategy (recGame L Reg I Cm outer)}
     (h : AllAt σ fun ω t s => F ω t s ≤ G ω t s) : expAt σ F ≤ expAt σ G :=
   avg_mono fun ω => leafAvg_mono_all (h ω)
 
-/-- **An expectation is at most another when it is at every outcome the strategy reaches.** -/
 theorem exG_mono_outcome {α : Type} {F G : α → ℝ≥0∞} :
     ∀ (g : Game α) (s : Strategy g), (∀ a, Game.Outcome g s a → F a ≤ G a) → exG F g s ≤ exG G g s
   | .ret a, _, h => h a rfl

@@ -21,40 +21,7 @@ import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.ZK.Hiding
 import Proofs.Flock.Soundness.ZK.Session
 
-/-!
-# Recursion: V*'s outer sessions are zero knowledge, (ii)'s `_hOuter`
-
-(ii) of `RecursiveAudit` takes V*'s sessions' zero knowledge as `_hOuter`: a simulator reading the owed outputs, the
-registration's view, the auditor's tape and the ZK server's commitments, within `ε_o` of the auditor's view of V*'s
-sessions at every honest context. Here that view, its simulator and `ε_o`, at V*'s outer sessions as
-`Proofs.Flock.Recursive.Sessions` defines them (`Sessions`: the prover registers `R₂`, `n₂` hm96 commit strings under
-fresh salts, and runs `S` sessions, each one `--zk` table at the coin vector the auditor's tape fixes, Goldreich–Kahan's
-committed coins, which read the tape and what was public before the session).
-
-* `honestOut_eq`: under the abort interface (`SelfCheckSilent`: at a table that passes `CoinedOK`, coins the prover
-  doesn't refuse and a valid witness whose registered values are the public ones, the code sends its view), the
-  honest prover is `outExe`.
-* `selfCheckSilent_exe`: the prover's code (`proverExe`) meets the abort interface whatever a stopped run sends
-  (`Table.not_stops` at `CoinedOK`'s inner relation, `OuterAbort`).
-* `table_close`: one table at its coins, in fixed randomness types (`coin_close_le`, which covers refused coins with
-  `Table.table_abort_hm96`).
-* `Sessions.close`: the auditor's view of `R₂` and the sessions (`view`) and the simulator's (`sim`: ideal commit
-  strings for `R₂`, `simAll` at each table) are within `errAt δ = Σ_j 2·|LeafPos z_j|·δ + n₂·δ` at any hm96 hiding
-  bound `δ`. The sessions one by one at each of `R₂`'s salts (`ZK.prCoin_pi_close`), then `R₂`'s commit strings to
-  ideal ones (`ZK.ideal_leaves_swap`); the sessions read `R₂`'s salts only through their witnesses, which the
-  simulator doesn't read, so the second step follows the first.
-* `tablesOK_of_sessions`: V*'s tables pass `CoinedOK` where each is `coinedOf` at a table of `verify --zk`'s
-  hidden-output session of the session's data at a sample, where it sets that table up (`coinedOf_setup_of`; every such
-  setup avoids the mask slot, `FailClosed.SampleSetupZHJ.avoidsMask`).
-* `vstar_outer_zk`: `_hOuter` at `Sessions.view` and `Sessions.sim`, with `ε_o = errAt δ`, at the ZK server's
-  commitments under live inner coins (`zkServerCommits`); `Flock.SecurityProofs.RecursiveZkServerPrivate`
-  (`Proofs.Flock.Recursive.ZkServerZK`) takes it at `proverExe` and the pinned key's hiding gap, with no hypothesis on
-  the abort.
-
-Left to the instance at V*'s staging: that each session's table is `coinedOf` at a table of its data and sample (with a
-`ZkHidden.SampleSetupZHJ` there), its sizes fixed by V*'s statement (`hz`, `hR`, `hS`), and the honest witnesses
-(`Honest`, which (ii)'s `honest` carries).
--/
+/-! V*'s outer sessions are zero knowledge (`vstar_outer_zk`), leaving to V*'s staging that each session's table is `coinedOf` at its data and sample, its sizes and the honest witnesses. -/
 
 @[expose] public section
 
@@ -66,7 +33,6 @@ open scoped ENNReal
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
-/-- **Under the abort interface, the honest prover is `outExe`.** -/
 theorem honestOut_eq {prover : TableProver} (hP : SelfCheckSilent prover) {C : CoinedSetup}
     (hC : CoinedOK execArith (Refine.fOf Flock.Zk.PAD_C) C) (c : CoinsZK C.Rest) {w : Witness C.S.m}
     (hv : C.Valid w) (hreg : ∀ c', (C.T c').tab.sReg w = (C.T c').tab.pubReg) (p : RandAt C c) :
@@ -76,9 +42,6 @@ theorem honestOut_eq {prover : TableProver} (hP : SelfCheckSilent prover) {C : C
   · exact hP C c w hC hA hv hreg p
   · rfl
 
-/-- **The prover's code meets the abort interface**, whatever a stopped run sends: at coins it doesn't refuse,
-`CoinedOK`'s inner relation holds at a valid witness with public registered values, so the self-check never stops
-(`Table.not_stops`). -/
 theorem selfCheckSilent_exe
     (stopped : ∀ (C : CoinedSetup) (c : CoinsZK C.Rest), Witness C.S.m → RandAt C c → (C.T c).tab.Cut) :
     SelfCheckSilent (proverExe stopped) := by
@@ -88,10 +51,6 @@ theorem selfCheckSilent_exe
   unfold proverExe
   exact ite_eq_right ((C.T c).tab.not_stops (hinner w hv (hreg c)) p.1)
 
-/-- **One table at its coins, in fixed randomness types** (`coin_close_le`): at any coin vector, through any encoding
-`enc` of the table's output and any equivalences `eR`, `eS` of `Fin NR` and `Fin NS` with the prover's and the
-simulator's randomness, the honest output and the simulator's are within `2·|LeafPos z|·δ`, at any hm96 hiding bound
-`δ`. -/
 theorem table_close (C : CoinedSetup) (hC : CoinedOK execArith (Refine.fOf Flock.Zk.PAD_C) C)
     {δ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ)
     (w w0 : Witness C.S.m) (hv : C.Valid w)
@@ -113,8 +72,6 @@ theorem table_close (C : CoinedSetup) (hC : CoinedOK execArith (Refine.fOf Flock
         congrArg (· + 2 * (Fintype.card (ZkView.LeafPos C.z) : ℝ≥0∞) * δ)
           (ZK.prCoin_congr_equiv eS (fun p : SimAt C c => E (enc c (simAll C c w0 p.1 p.2)))).symm
 
-/-! ## V*'s sessions -/
-
 namespace Sessions
 
 variable {Ctx Pub : Type} (V : Sessions Ctx Pub)
@@ -131,8 +88,6 @@ theorem ns_pos (j : Fin V.S) (pc : Pub) (l : Fin V.n₂ → ZkView.Bits × ByteA
     ⟨((ZkHidden.simRand_nonempty ((V.C j pc l).T (V.coin j pc l)).tab).some, fun _ => 0)⟩
   exact Fintype.card_pos
 
-/-- **One session at the honest context and `R₂`'s salts** (`table_close` at its table and coins, the honest prover
-`outExe` by the abort interface), at any hm96 hiding bound `δ`. -/
 theorem session_close (hOK : V.TablesOK)
     {δ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ)
     {prover : TableProver} (hP : SelfCheckSilent prover) (x : Ctx) (hx : V.Honest x)
@@ -151,10 +106,6 @@ theorem session_close (hOK : V.TablesOK)
         (hx j y₂).1 (hx j y₂).2
         (V.eR j (V.pubOf x) (commitStrs (V.m₂ x) y₂) ρ))))) h
 
-/-- **V*'s sessions are zero knowledge at an honest context**: the auditor's view of `R₂` and the sessions and the
-simulator's are within `errAt δ`, at any hm96 hiding bound `δ`. At each of `R₂`'s salts the sessions go to their
-simulators one by one (`ZK.prCoin_pi_close`, `session_close`); then nothing reads `R₂`'s salts but its commit strings,
-which go to ideal ones (`ZK.ideal_leaves_swap`). -/
 theorem close (hOK : V.TablesOK)
     {δ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ) {prover : TableProver}
     (hP : SelfCheckSilent prover) (x : Ctx) (hx : V.Honest x) (E : V.View → Prop) :
@@ -203,11 +154,6 @@ theorem close (hOK : V.TablesOK)
 
 end Sessions
 
-/-! ## V*'s tables, and (ii) -/
-
-/-- **V*'s session tables pass `CoinedOK`** where each is `coinedOf` at a table of `verify --zk`'s hidden-output session
-of the session's data at a sample, where `verify --zk` sets that table up (`coinedOf_setup_of`); every such setup is a
-`MaskSetup` (`ZkHidden.maskSetup_of_setupHidden`) and avoids the mask slot (`FailClosed.SampleSetupZHJ.avoidsMask`). -/
 theorem tablesOK_of_sessions {Ctx Pub : Type} (V : Sessions Ctx Pub) (P : LigProver) (Vs : Fin V.S → VStmt)
     {Reg' : Type} (D : Pub → (Fin V.n₂ → ZkView.Bits × ByteArray) → (j : Fin V.S) → (Vs j).OuterD Reg')
     (draw : (j : Fin V.S) → Pub → (Fin V.n₂ → ZkView.Bits × ByteArray) → Finset (Fin (Vs j).nv))
@@ -226,11 +172,7 @@ theorem tablesOK_of_sessions {Ctx Pub : Type} (V : Sessions Ctx Pub) (P : LigPro
       ((FlockSoundness.Discharge.ZkExec.zkTags_typed _).trans (D pc l j).ht)) (y j pc l).x.h)
     (FailClosed.SampleSetupZHJ.avoidsMask (y j pc l))).2.2.2.2.2
 
-/-- **V*'s sessions give (ii) its `_hOuter`**, with `ε_o = errAt δ` at any hm96 hiding bound `δ`: the view
-`Sessions.view` at the honest context, the simulator `Sessions.sim` at the public context `pubS` reads (the owed
-outputs, the registration's view, the auditor's tape and the ZK server's commitments), which is the honest context's
-(`hpub`). The honest witnesses (`hH`) and `hpub` are needed only at the ZK server's own commitments (`hctxAt`,
-`zkServerCommits`: the inner coins live). -/
+/-- The honest witnesses (`hH`) and `hpub` are needed only at the ZK server's own commitments (`zkServerCommits`). -/
 theorem vstar_outer_zk {Out Prog Wit Rv Ωa Ωp Pub : Type} {nr nh : ℕ} (rows : Prog → Fin nr → ByteArray)
     (pub : (Fin nr → ByteArray) → Rv) (honest : Out → Prog → Wit → Prop)
     (msgs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray)

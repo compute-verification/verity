@@ -4,29 +4,13 @@ public import Proofs.Flock.RecGeneric.AtFlock
 public import Proofs.Flock.RecGeneric.AtFlockPlans
 public import Proofs.Flock.RecGeneric.BadDev
 
-/-!
-# L1 at Flock: the composite's reruns are `Claims.Recursion`'s samples
-
-At today's compiled record (`Comp.ofRec D IV I DO decO`, whose reruns `Comp.innerModel IV` and `Comp.verModel IV`
-read) each definition of a rerun's view agrees with its counterpart over `Claims.Recursion`'s samples:
-
-* the inner view `E_O`'s witnesses give is the record's (`dec_ofRec`, from `RecAt.runs`), so a rerun is accepted in
-  `innerModel` exactly where `accAtI` holds (`innerModel_acc_iff`);
-* an accepted rerun has witnesses (`wits_of_acc`), and its searched evaluations are `Deploy.callsAt` at `sampleWits`
-  (`innerModel_log_of_acc`); at every rerun `innerModel`'s and `verModel`'s are among the sample's `sampleCalls`
-  (`rerunCalls_sub`, `verModel_log_sub`), which are true where the calls at given witnesses and those of no witnesses
-  are (`sampleCalls_true_at`);
-* a run finder's coins map uniformly onto `BinCoins` (`binEquiv`) and `ConflictCoinsI` (`conflictEquiv`), and onto
-  `CapCoinsI` by `Fin.consEquiv`, the fresh runs read through `slotRuns` (`slotRuns_le`).
--/
+/-! L1 at Flock: each definition of a rerun's view at today's compiled record agrees with its counterpart over `Claims.Recursion`'s samples. -/
 
 @[expose] public section
 
 namespace Claims.RecGeneric
 
 open Claims Claims.Recursion
-
-/-! ## Forks, loops and slots -/
 
 section Pick
 
@@ -40,7 +24,6 @@ theorem firstPick_some {g : U → Prop} : ∀ {M : ℕ} {us : Fin M → U} {v : 
     · exact Option.some.inj h ▸ hg
     · exact firstPick_some h
 
-/-- **A loop read through `f`** picks the image of its pick, where `g` is `g'` read through `f`. -/
 theorem firstPick_map {U' : Type} (f : U → U') (g : U → Prop) (g' : U' → Prop) (h : ∀ u, g u ↔ g' (f u)) :
     ∀ (M : ℕ) (us : Fin M → U), (firstPick g M us).map f = firstPick g' M (fun i => f (us i))
   | 0, _ => rfl
@@ -51,7 +34,6 @@ theorem firstPick_map {U' : Type} (f : U → U') (g : U → Prop) (g' : U' → P
       simp only [firstPick, hg, hg', ↓reduceIte]
       exact firstPick_map f g g' h M (Fin.tail us)
 
-/-- Two maps that agree where `g` holds agree on the loop's pick. -/
 theorem firstPick_map_congr {β : Type} {g : U → Prop} {f f' : U → β} (h : ∀ u, g u → f u = f' u) (M : ℕ)
     (us : Fin M → U) : (firstPick g M us).map f = (firstPick g M us).map f' := by
   rcases hp : firstPick g M us with _ | v
@@ -85,16 +67,12 @@ theorem slotRuns_cons_one_add {s : ℕ} (u : (Fin n → Coin) × C) (vs : Fin s 
 
 end Slots
 
-/-! ## A rerun's view at the compiled record -/
-
 section Bridge
 
 variable {Coin W Col' T' : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col']
   (D : RecAt Coin) (IV : Verifier Coin) (I : Claims.Recursion.Inner Coin W) (DO : Claims.Flock.Deploy Coin Col' T')
   (decO : List (ℕ × Col') → List T') {H : Msg → Msg} {Ω : Type} {P : Prover Ω} {x : Msg}
 
-/-- **The inner view `E_O`'s output gives is the record's** (`RecAt.runs`), where the record's inner statement is the
-compiled one's. -/
 theorem dec_ofRec (hxI : D.xI x = Claims.Recursion.xI (D.record IV) x) (r : Fin ((D.record IV).V.k x) → Coin) :
     ∀ o, (Comp.ofRec D IV I DO decO).dec IV H x r o = Claims.Recursion.dec H (D.record IV) x r o
   | none => rfl
@@ -103,7 +81,6 @@ theorem dec_ofRec (hxI : D.xI x = Claims.Recursion.xI (D.record IV) x) (r : Fin 
       (D.record IV).innerView H x r ws
     rw [D.runs IV H x r ws, hxI]
 
-/-- **A rerun is accepted in `innerModel` exactly where its sample's inner view accepts** (`accAtI`). -/
 theorem innerModel_acc_iff (hxI : D.xI x = Claims.Recursion.xI (D.record IV) x) (ω : Ω)
     (u : (Fin ((D.record IV).V.k x) → Coin) × (EO (D.record IV) I DO decO).C x) :
     ((Comp.ofRec D IV I DO decO).innerModel IV H P x).acc ω u ↔ accAtI H (D.record IV) I DO decO P x ω u := by
@@ -111,7 +88,6 @@ theorem innerModel_acc_iff (hxI : D.xI x = Claims.Recursion.xI (D.record IV) x) 
   rw [dec_ofRec D IV I DO decO hxI]
   exact Iff.rfl
 
-/-- An accepted rerun has witnesses: the inner view of none rejects. -/
 theorem wits_of_acc {ω : Ω} {u : (Fin ((D.record IV).V.k x) → Coin) × (EO (D.record IV) I DO decO).C x}
     (h : ((Comp.ofRec D IV I DO decO).innerModel IV H P x).acc ω u) :
     ∃ ws, (Comp.ofRec D IV I DO decO).wits H P x ω u = some ws := by
@@ -128,7 +104,6 @@ theorem sampleWits_of_wits {ω : Ω} {u : (Fin ((D.record IV).V.k x) → Coin) �
   unfold sampleWits
   rw [h', Option.getD_some]
 
-/-- **An accepted rerun searches its sample's recorded and inner calls** (`Deploy.callsAt` at `sampleWits`). -/
 theorem innerModel_log_of_acc {ω : Ω}
     {u : (Fin ((D.record IV).V.k x) → Coin) × (EO (D.record IV) I DO decO).C x}
     (h : ((Comp.ofRec D IV I DO decO).innerModel IV H P x).acc ω u) :
@@ -138,7 +113,6 @@ theorem innerModel_log_of_acc {ω : Ω}
   rw [sampleWits_of_wits D IV I DO decO hw]
   exact Comp.rerunCalls_some hw
 
-/-- **A rerun's searched evaluations are among its sample's** (`sampleCalls`). -/
 theorem rerunCalls_sub {ω : Ω} {u : (Fin ((D.record IV).V.k x) → Coin) × (EO (D.record IV) I DO decO).C x}
     {e : Msg × Msg} (he : e ∈ (Comp.ofRec D IV I DO decO).rerunCalls H P x ω u) :
     e ∈ sampleCalls H (D.record IV) I DO decO P x ω u := by
@@ -151,8 +125,6 @@ theorem rerunCalls_sub {ω : Ω} {u : (Fin ((D.record IV).V.k x) → Coin) × (E
     rw [sampleWits_of_wits D IV I DO decO hw]
     exact List.mem_append_left _ he
 
-/-- **`verModel`'s evaluations at a rerun are among its sample's**: the searched ones, then the compiled verifier's own
-at the run's staged statements, which are `sampleCalls`' second half. -/
 theorem verModel_log_sub {ω : Ω} {u : (Fin ((D.record IV).V.k x) → Coin) × (EO (D.record IV) I DO decO).C x}
     {e : Msg × Msg} (he : e ∈ ((Comp.ofRec D IV I DO decO).verModel IV H P x).log ω u) :
     e ∈ sampleCalls H (D.record IV) I DO decO P x ω u := by
@@ -161,9 +133,6 @@ theorem verModel_log_sub {ω : Ω} {u : (Fin ((D.record IV).V.k x) → Coin) × 
   · unfold sampleCalls
     exact List.mem_append_right _ he
 
-/-- **A sample's evaluations are true** at a statement where those the compiled record's witnesses record are
-(`CallsTrue` at `x`) and those of no witnesses are: `E_O` gives witnesses only on accepted runs (`EO_some_acc`), and
-every other evaluation is `(u, H u)`. -/
 theorem sampleCalls_true_at (hT : (Comp.ofRec D IV I DO decO).CallsTrue H x)
     (hN : ∀ e ∈ (D.record IV).calls x [], H e.1 = e.2) (ω : Ω)
     (d : (Fin ((D.record IV).V.k x) → Coin) × (EO (D.record IV) I DO decO).C x) :
@@ -193,9 +162,6 @@ theorem sampleCalls_true_at (hT : (Comp.ofRec D IV I DO decO).CallsTrue H x)
 
 end Bridge
 
-/-! ## Run finders' coins as the samples' -/
-
-/-- **`B_I`'s coins as `forkPlan`'s**: the round, the tape, and the two runs, each its compiled coins and `E_O`'s. -/
 def binEquiv (J Ω A B : Type) : J × Ω × A × A × B × B ≃ J × Ω × (Fin (1 + 1) → A × B) where
   toFun s := (s.1, s.2.1, ![(s.2.2.1, s.2.2.2.2.1), (s.2.2.2.1, s.2.2.2.2.2)])
   invFun t := (t.1, t.2.1, (t.2.2 0).1, (t.2.2 1).1, (t.2.2 0).2, (t.2.2 1).2)
@@ -204,8 +170,6 @@ def binEquiv (J Ω A B : Type) : J × Ω × A × A × B × B ≃ J × Ω × (Fin
     refine Prod.ext rfl (Prod.ext rfl (funext fun i => ?_))
     fin_cases i <;> rfl
 
-/-- **`F0I`'s coins as `conflictPlan`'s**: the selector's one value, the tape, the first run, then the waits' runs, run
-`r` of wait `t` in slot `1 + R·t + r`. -/
 def conflictEquiv (Ω U : Type) (k R : ℕ) : Ω × U × (Fin k → Fin R → U) ≃ Fin 1 × Ω × (Fin (k * R + 1) → U) :=
   (Equiv.prodCongr (Equiv.refl Ω) ((Equiv.prodCongr (Equiv.refl U)
     ((Equiv.curry (Fin k) (Fin R) U).symm.trans (Equiv.arrowCongr finProdFinEquiv (Equiv.refl U)))).trans
@@ -223,7 +187,6 @@ theorem wait_slot_le {k R : ℕ} (t : Fin k) (r : Fin R) : 1 + R * t.val + r.val
   rw [Nat.mul_comm k R]
   omega
 
-/-- The slot of run `r` of wait `t` holds that run. -/
 theorem slotRuns_wait {Coin C : Type} {n k R : ℕ} (u : (Fin n → Coin) × C)
     (ws : Fin k → Fin R → (Fin n → Coin) × C) (t : Fin k) (r : Fin R) :
     slotRuns (Fin.cons u fun p => ws (finProdFinEquiv.symm p).1 (finProdFinEquiv.symm p).2 :

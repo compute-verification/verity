@@ -3,26 +3,7 @@ module
 public import Proofs.Flock.RecGeneric.Toy
 public import Proofs.Flock.RecGeneric.Plurality
 
-/-!
-# The toy meets L2's hypotheses (`EchoHolds`)
-
-`echoHolds` proves `EchoHolds`: at every oracle, inner protocol, server and statement, the echo argument and the echo
-compiler at `Open(Π, S)` meet L2's hypotheses on them.
-
-* `echoArg` is knowledge sound at `κ = 1/|Coin|`, `γ = 0` (`echoArg_KS`): the prover's one message reads no coin, so
-  where it is the statement the fresh rerun accepts it and `E^rep` gives it (`echoArg_ext_eval`); an accepted run whose
-  message is not the statement was accepted on its coin, which is `default` with probability `1/|Coin|`
-  (`Pr_coinAt`).
-* The compiler's contract for `E_O` (`echo_sessions`): each session's bounds are `echoArg`'s errors; session `s` is
-  round `k+3+s` of `echoCV`; a fork there shows
-  the prover's message after the run's earlier ones, answered as `echoV` answers it at the staged statement
-  (`echo_fork`, from `run_fork_get`), and a refused session round ends the fork's run refused (`echo_runs`).
-* The composition's contract (`echo_contract`): `E_O`'s witnesses are paired with the staged statements
-  (`Compiled.EO_fst`), so under the outer relation the inner messages they give are the run's first `k` messages
-  (`echo_wits`). Two accepted reruns forked at an inner round `j` show one round-`j` message, so `ForksBind` holds
-  with no collision (`echo_forks`), and an accepted run's last round is the inner view's replay (`echo_accepts`, by
-  `replayOC_congr`).
--/
+/-! Proof that the toy meets L2's hypotheses (`echoHolds`). -/
 
 @[expose] public section
 
@@ -30,8 +11,6 @@ namespace Claims.RecGeneric
 
 open Claims Claims.Recursion
 open Claims.SamplingGeneric (Arg)
-
-/-! ## Lists and coins -/
 
 theorem getD_take_of_lt {β : Type} (l : List β) (d : β) {i n : ℕ} (hi : i < n) :
     (l.take n).getD i d = l.getD i d := by
@@ -54,7 +33,6 @@ theorem forall₂_map_fst {α β γ : Type} {R : α → β × γ → Prop} {g : 
   | nil => rfl
   | cons h _ ih => simp [hR _ _ h, ih]
 
-/-- `Pr[the coin at i is c] = 1/|Coin|`, beside a tape and an extractor's coins. -/
 theorem Pr_coinAt {Ω Coin E : Type} [Fintype Ω] [Nonempty Ω] [Fintype Coin] [Nonempty Coin] [DecidableEq Coin]
     [Fintype E] [Nonempty E] {n : ℕ} (i : Fin n) (c : Coin) :
     Pr (fun s : Ω × (Fin n → Coin) × E => s.2.1 i = c) = 1 / Fintype.card Coin := by
@@ -62,9 +40,6 @@ theorem Pr_coinAt {Ω Coin E : Type} [Fintype Ω] [Nonempty Ω] [Fintype Coin] [
     Claims.Bridge.Pr_coord i (fun y : Coin => y = c), Pr_eq_sum (fun y : Coin => y = c)]
   simp
 
-/-! ## Runs -/
-
-/-- **Two replays that agree up to round `j`, on coins that agree before it, show one message at `j`.** -/
 theorem run_replay_fst_eq {Coin : Type} [Inhabited Coin] (H : Msg → Msg) (V : Verifier Coin) (x : Msg)
     (ms ms' : List Msg) (c c' : Fin (V.k x) → Coin) (j : ℕ) (hm : ∀ i ≤ j, ms.getD i [] = ms'.getD i [])
     (hc : ∀ i < j, coinSeq c i = coinSeq c' i) :
@@ -79,8 +54,6 @@ theorem run_replay_fst_eq {Coin : Type} [Inhabited Coin] (H : Msg → Msg) (V : 
         (fun i hi => (hc i hi).symm) h')
     rw [List.getD_eq_default _ _ (by simpa using hj), List.getD_eq_default _ _ (by simpa using hj')]
 
-/-- **A fork at round `j` of a run that reaches it**: its message at `j` is the prover's after the run's first `j`
-messages, answered by the verifier at the fork's coins. -/
 theorem run_fork_get {Coin : Type} [Inhabited Coin] (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (V : Verifier Coin)
     (x : Msg) (ω : Ω) (j : ℕ) (r d : Fin (V.k x) → Coin) (hj : j < (run H P V x ω r).msgs.length) :
     (run H P V x ω (fork j r d)).msgs[j]? = some
@@ -108,8 +81,6 @@ theorem run_fork_get {Coin : Type} [Inhabited Coin] (H : Msg → Msg) {Ω : Type
     ⟨[], [], [], .rej⟩).msgs[j]? = _
   simpa [Nat.min_eq_left hj.le] using hget
 
-/-! ## The outer extraction -/
-
 theorem Compiled.sessionProg_fst {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
     (L : Compiled Coin A) (H : Msg → Msg) (x : Msg) (r₀ : Fin (L.V.k x) → Coin) (s : Fin (L.nS x)) (xO : Msg)
     (c : A.EC (L.sh x s)) (run₂ : (Fin (L.V.k x) → Coin) → Transcript) {a : Msg × A.W}
@@ -121,7 +92,6 @@ theorem Compiled.sessionProg_fst {Coin : Type} [Fintype Coin] [Nonempty Coin] [I
     rfl
   · simp [RP.eval] at h
 
-/-- **`E_O` gives witnesses only on accepted runs, paired with the staged statements**, in order. -/
 theorem Compiled.EO_fst {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
     (L : Compiled Coin A) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (r : Fin (L.V.k x) → Coin)
     (c : L.EO.C x) {w : List (Msg × A.W)} (h : (L.EO.eval H P x ω r c).1 = some w) :
@@ -136,10 +106,6 @@ theorem Compiled.EO_fst {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited 
   exact forall₂_map_fst (fun s _ ha => L.sessionProg_fst H x r s _ (c s) _ ha)
     (List.forall₂_map_left_iff.1 (collect_some H _ _ w h))
 
-/-! ## The echo argument -/
-
-/-- **`echoV`'s run**: one round, the prover's first message, accepted where it is the statement or the coin is
-`default`. -/
 theorem run_echoV {Coin : Type} [Fintype Coin] [Inhabited Coin] [DecidableEq Coin] (H : Msg → Msg) {Ω : Type}
     (P : Prover Ω) (x : Msg) (ω : Ω) (c : Fin ((echoArg Coin).V.k x) → Coin) :
     (run H P (echoArg Coin).V x ω c).seen =
@@ -154,8 +120,6 @@ theorem run_echoV {Coin : Type} [Fintype Coin] [Inhabited Coin] [DecidableEq Coi
   · simp
     exact (ite_eq_right h).symm
 
-/-- **`echoArg`'s extractor where every run shows the statement accepted**: the judged run and the fresh rerun accept,
-and the candidate is the rerun's message, the statement. -/
 theorem echoArg_ext_eval {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Coin]
     (H : Msg → Msg) (x : Msg) (r : Fin ((echoArg Coin).V.k x) → Coin) (c : (echoArg Coin).EC ((echoArg Coin).shape x))
     (rn : (Fin ((echoArg Coin).V.k x) → Coin) → Transcript) (hrn : ∀ r', (rn r').seen = ⟨[(x, .acc)], .acc⟩) :
@@ -165,9 +129,6 @@ theorem echoArg_ext_eval {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited
   erw [hrn]
   rfl
 
-/-- **`echoArg` is knowledge sound** at `κ = 1/|Coin|`, `γ = 0`: the prover's message reads no coin, so where it is
-the statement the rerun accepts it and the extractor gives it (`echoArg_ext_eval`); where it is not, the judged run
-accepted on its coin. -/
 theorem echoArg_KS {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Coin]
     (H : Msg → Msg) : (echoArg Coin).KS H := by
   intro x Ω _ _ P
@@ -192,10 +153,6 @@ theorem echoArg_KS {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
     simp [hout, hne, hc] at hacc
   rwa [coinSeq, dite_eq_left h0] at hc
 
-/-! ## The echo compiler's verifier -/
-
-/-- At a session round, `echoCV` answers `.msg []` where the message is the inner round's or the coin is
-`default`, and refuses otherwise. -/
 theorem echoCV_next_session {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Coin]
     (H : Msg → Msg) (IV : Verifier Coin) (x : Msg) (bs : List Msg) (cs : List Coin)
     (h0 : IV.k x ≠ 0) (h1 : IV.k x + 3 < bs.length) (h2 : bs.length ≤ 2 * IV.k x + 3) :
@@ -207,7 +164,6 @@ theorem echoCV_next_session {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabi
   simp only [Compiled.echo, echoCV, h0, e1, e2, h2, ↓reduceIte]
   rfl
 
-/-- `echoCV` accepts only at its last round, where the inner verifier's replay accepts. -/
 theorem echoCV_next_acc {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Coin]
     (H : Msg → Msg) (IV : Verifier Coin) (x : Msg) (as : List Msg) (cs : List Coin)
     (h : (((Compiled.echo IV).V.next x as cs).eval H).1 = .acc) :
@@ -230,8 +186,6 @@ theorem echoCV_next_acc {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited 
   rw [ite_eq_right hv] at h
   cases h
 
-/-- **An accepted run of `echoCV`** takes all `2k + 4` rounds, `k > 0`, and the inner verifier's replay of its first
-`k` messages at its first `k` coins accepts. -/
 theorem echoCV_acc {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Coin]
     (H : Msg → Msg) (IV : Verifier Coin) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (r : Fin ((Compiled.echo IV).V.k x) → Coin) (h : (run H P (Compiled.echo IV).V x ω r).out = .acc) :
@@ -248,7 +202,6 @@ theorem echoCV_acc {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
   rw [e] at hv
   exact ⟨Nat.pos_of_ne_zero h0, e, hv⟩
 
-/-- `replayOC` reads its messages and coins only below its rounds. -/
 theorem replayOC_congr {Coin : Type} [Inhabited Coin] (IV : Verifier Coin) (xI : Msg) (as as' : List Msg)
     (cs cs' : ℕ → Coin) :
     ∀ (n : ℕ) (sent : List Msg) (ms : List (Msg × Out)),
@@ -272,9 +225,6 @@ theorem off_echo {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [
     (IV : Verifier Coin) (x : Msg) (s : ℕ) : (Compiled.echo IV).off x s = IV.k x + 3 + s := by
   simp [Compiled.off, Compiled.echo, echoArg]
 
-/-- **A fork of an accepted run at session `s`'s round** `o = k + 3 + s` shows there the prover's message after the
-run's first `o` messages, answered `.msg []` where it is the run's round-`s` message or the fork's coin at `o` is
-`default` and refused otherwise; a refusal there ends the fork's run refused. -/
 theorem echo_fork {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Coin]
     (H : Msg → Msg) (IV : Verifier Coin) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (r d : Fin ((Compiled.echo IV).V.k x) → Coin) (hacc : (run H P (Compiled.echo IV).V x ω r).out = .acc)
@@ -307,7 +257,6 @@ theorem echo_fork {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] 
   exact RecDeploy.stepWith_rej_out H P x ω _ ((Compiled.echo IV).V.k x) o [] [] ⟨[], [], [], .rej⟩ a
     (by simp only [List.length_nil, Nat.zero_add]; exact hr')
 
-/-- **The echo compiler runs session `s` as `echoV`** at its staged statement. -/
 theorem echo_runs {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Coin]
     (H : Msg → Msg) (IV : Verifier Coin) : (Compiled.echo IV).Runs H := by
   intro x s _ P ω r d hacc
@@ -346,7 +295,6 @@ theorem echo_runs {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] 
   · rw [ite_eq_right hcond] at hF ⊢
     simp [Compiled.echo, Transcript.seen, hF, hrej (by rw [hF])]
 
-/-- **The echo compiler meets the outer sessions' contract.** -/
 theorem echo_sessions {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Coin]
     (IV : Verifier Coin) (H : Msg → Msg) : (Compiled.echo IV).Sessions H where
   stages x ms := by
@@ -362,7 +310,6 @@ theorem echo_sessions {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Co
   accepts _ _ _ _ hv := by simp [Compiled.echo, hv]
   runs := echo_runs H IV
 
-/-- **Under the outer relation, the inner messages `E_O`'s witnesses give are the run's first `k` messages.** -/
 theorem echo_wits {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Coin]
     (H : Msg → Msg) (IV : Verifier Coin) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (r : Fin ((Compiled.echo IV).V.k x) → Coin) (c : (Compiled.echo IV).EO.C x)
@@ -379,7 +326,6 @@ theorem echo_wits {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] 
       getD_take_of_lt _ _ hi]
   exact key w hR (Compiled.EO_fst (Compiled.echo IV) H P x ω r c h).2
 
-/-- **Forks at an inner round show one message there**: so `ForksBind` holds with no collision. -/
 theorem echo_forks {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Coin]
     (H : Msg → Msg) (IV : Verifier Coin) {β : Type} (rd : Seen → β) (x : Msg) :
     (Compiled.echo IV).toComp.ForksBind H IV rd x := by
@@ -403,7 +349,6 @@ theorem echo_forks {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
     rw [h1, h2, RecDeploy.coinSeq_fork_lt j r r' hi]
   exact run_replay_fst_eq H IV x _ _ _ _ j hm hc
 
-/-- **The inner view of witnesses in the outer relation accepts**: it is the replay `echoCV`'s last round ran. -/
 theorem echo_accepts {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Coin]
     (H : Msg → Msg) (IV : Verifier Coin) (x : Msg) :
     (Compiled.echo IV).toComp.InnerAcceptsColl H IV x := by
@@ -422,7 +367,6 @@ theorem echo_accepts {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coi
   rw [hc] at e
   exact (congrArg Seen.out e).symm.trans hv
 
-/-- **The echo compiler meets the composition's contract** at every statement. -/
 theorem echo_contract {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Coin]
     (H : Msg → Msg) (IV : Verifier Coin) {β : Type} (rd : Seen → β) (x : Msg) :
     (Compiled.echo IV).toComp.Contract H IV rd x where
@@ -437,7 +381,6 @@ theorem echo_contract {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Co
   forks _ := echo_forks H IV rd x
   accepts _ := echo_accepts H IV x
 
-/-- **T1: the toy meets L2's hypotheses together.** -/
 theorem echoHolds : EchoHolds := by
   intro Coin W _ _ _ _ H I S
   exact ⟨echoArg_KS H, echo_sessions (S.IVStar I.V I.ans) H, fun x => echo_contract H (S.IVStar I.V I.ans) _ x⟩

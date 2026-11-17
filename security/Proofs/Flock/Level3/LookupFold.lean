@@ -1,9 +1,4 @@
-/-
-Level 3, L3-A: the lookup slots' B side (`Lookup.foldB`, `Flock.Circuit`). Product row `(j, h)` has a B-side 1 in the
-column of low minterm `l` exactly when bit `j` of table word `h·2^lo + l` is set; `foldB` adds `Bᵀe` for these rows,
-with a subset-sum table per byte of the word. `foldB_get`: entry `loTop + l` gains `Σ_h Σ_{j : bit j of word(h, l)} e(j, h)`,
-and no other entry changes.
--/
+/- The lookup slots' B side: `Lookup.foldB` adds `Bᵀe` over the product rows (`foldB_get`). -/
 module
 
 public import Flock.Lookup
@@ -21,16 +16,14 @@ set_option maxRecDepth 20000
 
 namespace FlockLevel3
 
-/-! ### Subset sums of a byte -/
+/-! The subset sums of a byte, of a word's four bytes, and the fold's loops over them. -/
 
-/-- `x` without its lowest set bit, and that bit (checked for every nonzero byte). -/
 theorem lowbit_facts : ∀ x : Fin 256, x.val ≠ 0 →
     x.val ^^^ (x.val &&& (256 - x.val)) < x.val ∧ Nat.log2 (x.val &&& (256 - x.val)) < 8 ∧
     x.val.testBit (Nat.log2 (x.val &&& (256 - x.val))) = true ∧
     ∀ i : Fin 8, (x.val ^^^ (x.val &&& (256 - x.val))).testBit i =
       (x.val.testBit i && decide (i.val ≠ Nat.log2 (x.val &&& (256 - x.val)))) := by decide +kernel
 
-/-- `Σ_{i < 8, bit i of y} f(i)`. -/
 noncomputable def byteSum (f : ℕ → F128) (y : ℕ) : GF128 :=
   ∑ i ∈ Finset.range 8, if y.testBit i then GF128.of (f i) else 0
 
@@ -80,14 +73,11 @@ theorem subsetTab_get (f : ℕ → F128) (y : ℕ) (hy : y < 256) : GF128.of (su
   subst this
   rw [getElem!_pos _ 0 (by simp), Array.getElem_replicate, byteSum_zero]; exact GF128.zero_eq.symm
 
-/-! ### The four bytes of a word -/
-
 theorem sum_4x8 {M : Type} [AddCommMonoid M] (g : ℕ → M) :
     ∑ k ∈ Finset.range 4, ∑ i ∈ Finset.range 8, g (8 * k + i) = ∑ j ∈ Finset.range 32, g j := by
   simp only [Finset.sum_range_succ, Finset.sum_range_zero, zero_add]
   abel
 
-/-- `Σ_{j < 32, bit j of w} f(j)`. -/
 noncomputable def wordSum (f : ℕ → F128) (w : ℕ) : GF128 :=
   ∑ j ∈ Finset.range 32, if w.testBit j then GF128.of (f j) else 0
 
@@ -101,11 +91,8 @@ theorem word_split (f : ℕ → F128) (w : ℕ) :
   refine Finset.sum_congr rfl fun k _ => Finset.sum_congr rfl fun i hi => ?_
   rw [byte_bits _ _ _ (Finset.mem_range.mp hi)]
 
-/-! ### The loops -/
-
 theorem wordSum_zero (f : ℕ → F128) : wordSum f 0 = 0 := by simp [wordSum]
 
-/-- The subset-sum tables of high minterm `h`. -/
 def tabsOf (lk : LookupTable) (nh : ℕ) (e : Array F128) (h : ℕ) : Array (Array F128) :=
   (Array.range 4).map fun k => subsetTab fun i => ej lk nh e h (8 * k + i)
 
@@ -113,7 +100,6 @@ theorem tabsOf_get (lk : LookupTable) (nh : ℕ) (e : Array F128) (h k : ℕ) (h
     (tabsOf lk nh e h)[k]! = subsetTab fun i => ej lk nh e h (8 * k + i) := by
   rw [tabsOf, getElem!_pos _ k (by simpa using hk)]; simp
 
-/-- The value `v` the executable adds at low minterm `l`: the word's subset sum. -/
 theorem v_eq (lk : LookupTable) (nh : ℕ) (e : Array F128) (h w : ℕ) :
     GF128.of (((tabsOf lk nh e h)[0]!)[w % 256]! + ((tabsOf lk nh e h)[1]!)[(w >>> 8) % 256]! +
       ((tabsOf lk nh e h)[2]!)[(w >>> 16) % 256]! + ((tabsOf lk nh e h)[3]!)[(w >>> 24) % 256]!) =
@@ -175,7 +161,6 @@ theorem foldBHigh_get (lk : LookupTable) (nh nlo wmask : ℕ) (e : Array F128) :
     simp only [show ∀ t, h + 1 + t = h + (t + 1) from fun t => by omega, add_zero, zero_add]
     ring
 
-/-- **The lookup fold.** Entry `c` gains `Σ_{h < nh} Σ_{l < nlo, loTop + l = c} Σ_{j : bit j of word(h, l)} e(j, h)`. -/
 theorem foldB_get (lk : LookupTable) (e acc0 : Array F128) (c : ℕ) (hc : c < acc0.size) :
     GF128.of (foldB lk e acc0)[c]! = GF128.of acc0[c]! +
       ∑ h ∈ Finset.range (2 ^ (lk.n - lk.lo)), ∑ l ∈ Finset.range (2 ^ lk.lo),

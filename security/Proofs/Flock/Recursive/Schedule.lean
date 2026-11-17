@@ -6,22 +6,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.ExecSample
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Recursion: an inner protocol on a fixed schedule
-
-`Inner` has `r` uniform rounds, each a message and then a live coin. A verifier written as a `Game`, whose shape may
-depend on the prover's messages (it may stop early, or let the prover choose which of two interleaved runs moves next),
-becomes an inner protocol once a fixed schedule says what each round carries: round `k < r` sends a list of messages,
-each of one of the types `T i`, and then flips a coin of type `CT k`; round `r` sends the last messages.
-
-* `schedInner`: that protocol, with `r + 1` rounds. Each round's coin is the whole product `∀ k, CT k`, of which round
-  `k < r` reads coordinate `k` and round `r` reads none (a game that ends with a message, as Flock's table ends with
-  the openings, needs a round after its last coin); the verifier plays the game with round `0`'s messages, round `0`'s
-  coin, round `1`'s messages, and so on (`Game.PlaysT`), and accepts when the game ends in an accepted outcome. A round whose messages have the wrong types, or
-  too many, or whose coin's type is not the one the game samples there, makes the run fail.
-* `sched_sound`: the schedule's verifier is as sound as the game. Against every prover it accepts with probability at
-  most the game's `value`, the best any prover achieves when the game flips its own coins.
--/
+/-! An inner protocol on a fixed schedule (`schedInner`), as sound as the game it plays (`sched_sound`). -/
 
 @[expose] public section
 
@@ -30,7 +15,6 @@ namespace FlockSoundness.Discharge.Recursion
 open Game Audit.SampleExec
 open scoped ENNReal
 
-/-- Averaging a function of one coordinate over a product of uniform coordinates averages it over that coordinate. -/
 theorem avg_coord {ι : Type} [Fintype ι] [DecidableEq ι] {Ω : ι → Type} [∀ i, Fintype (Ω i)] [∀ i, Nonempty (Ω i)]
     (i : ι) (G : Ω i → ℝ≥0∞) : avg (fun ω : ∀ j, Ω j => G (ω i)) = avg G := by
   calc avg (fun ω : ∀ j, Ω j => G (ω i))
@@ -71,9 +55,6 @@ def schedInner {α : Type} (Stmt : Type) (g : Stmt → Game α) (p : Stmt → α
 variable {α β : Type}
 
 open Classical in
-/-- One round, by induction on the game: averaged over the round's coin, the run that takes the round's messages `ms`,
-then its coin, then the later rounds, ends accepted no more often than the game's value, given that bound for the later
-rounds (`ih`). -/
 theorem avg_round_le (p : α → Prop) {n j : ℕ} (hj : j < r)
     (ih : ∀ (f : List (List (SMsg T) × ((k : Fin r) → CT k)) → Game β)
       (s : Strategy (rounds (List (SMsg T)) ((k : Fin r) → CT k) n f)) (g : Game α),
@@ -161,7 +142,6 @@ theorem avg_round_le (p : α → Prop) {n j : ℕ} (hj : j < r)
             exact hC (Sigma.mk.inj_iff.1 (Sum.inr.inj hx)).1
 
 open Classical in
-/-- A run on messages alone ends accepted no more often than the game's value. -/
 theorem plays_msgs_le (p : α → Prop) : ∀ (g : Game α) (ms : List (SMsg T)),
     (if ∃ a, PlaysT g (ms.map (fun e => Sum.inl ⟨T e.1, e.2⟩)) a ∧ p a then (1 : ℝ≥0∞) else 0) ≤ value p g
   | g, [] => by
@@ -193,8 +173,6 @@ theorem plays_msgs_le (p : α → Prop) : ∀ (g : Game α) (ms : List (SMsg T))
       · exact zero_le
 
 open Classical in
-/-- **The schedule's rounds from round `j` on**, `n` of them with `j + n = r + 1`: the run on their steps ends accepted
-no more often than the game's value. -/
 theorem leafAvg_plays_le (p : α → Prop) : ∀ (n j : ℕ), j + n = r + 1 →
     ∀ (f : List (List (SMsg T) × ((k : Fin r) → CT k)) → Game β)
       (s : Strategy (rounds (List (SMsg T)) ((k : Fin r) → CT k) n f)) (g : Game α),
@@ -223,8 +201,6 @@ theorem leafAvg_plays_le (p : α → Prop) : ∀ (n j : ℕ), j + n = r + 1 →
       funext t _
       simp only [schedSteps, hj, ↓reduceDIte, List.singleton_append]
 
-/-- **The schedule is as sound as the game.** If on every false statement the game's value is at most `ε`, the inner
-protocol on the schedule is `ε`-sound. -/
 theorem sched_sound {Stmt : Type} (g : Stmt → Game α) (p : Stmt → α → Prop) (holds : Stmt → Prop) {ε : ℝ≥0∞}
     (h : ∀ x, ¬ holds x → value (p x) (g x) ≤ ε) : InnerSound (schedInner T CT Stmt g p holds) ε := by
   intro x hx s

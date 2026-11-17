@@ -3,25 +3,7 @@ module
 public import Proofs.Flock.RecGeneric.ZKSessions
 public import Proofs.Flock.RecGeneric.ZKCost
 
-/-!
-# Z1-S's proof
-
-The composed run of the `m` sessions from session `i`, against `V*` after the prover messages `pre` (`Sessions.lrun`), is
-session `i`'s run at its statement against `V*` after `pre` (`Sessions.sRun`), then, where that goes on, the rest's after
-its messages (`lrun_succ`). The composed outcome reads session `i`'s outcome off its run and the rest's off theirs
-(`outs_cont`), and the composed simulator is session `i`'s simulator given its outcome, then the rest's where its run goes
-on (`csim_succ`).
-
-The hybrid (`hybrid`) is an induction on the number of sessions left. At each tape of session `i` whose real run shows
-its outcome and goes on, the rest's real runs are bounded by the rest's simulator plus the rest's error (the induction).
-Averaged over session `i`'s tape at each of the rest's simulator coins, session `i`'s zero knowledge, against `V*` after
-the messages so far, swaps its real run for its simulator's at its error. The errors add exactly (`Sessions.errAt`).
-
-`Flock.SecurityProofs.GenericSessionsZK` is Z1-S and `Flock.SecurityProofs.GenericSessionsZKCost` Z1-S-cost; Z1 and
-Z1-cost at a release whose outer phase is the sessions follow (`Flock.SecurityProofs.GenericRecursiveSessionsZK`,
-`Flock.SecurityProofs.GenericRecursiveSessionsZKCost`). Z1-L (`Flock.SecurityProofs.GenericSessionsOfZKOut`) is exact:
-uniform tapes for every statement in `Xs x`, read at one statement, are a uniform tape of that statement (`Pr_pi_eval`).
--/
+/-! Proofs of the sessions' zero knowledge (`GenericSessionsZK`, `GenericSessionsOfZKOut`) and their costs, by a hybrid over the sessions in turn. -/
 
 @[expose] public section
 
@@ -47,7 +29,6 @@ theorem Pr_pi_eval {ι : Type} [Fintype ι] [DecidableEq ι] {β : ι → Type} 
     [∀ i, Nonempty (β i)] (i : ι) (p : β i → Prop) : Pr (fun c : (j : ι) → β j => p (c i)) = Pr p :=
   (ZKMal.Pr_equiv (Equiv.piSplitAt i β) fun s => p s.1).trans (Pr_fst p)
 
-/-- `V*`'s answers at `x_O` after the prover messages `pre`. -/
 def askAfter (H : Msg → Msg) {Θ : Type} (Vs : VStar Θ) (xO : Msg) (θ : Θ) (pre : List Msg) : List Msg → Out :=
   fun as => ((Vs.next xO (pre ++ as) θ).eval H).1
 
@@ -55,15 +36,10 @@ namespace Sessions
 
 variable {S : ZkSess} (L : Sessions S)
 
-/-! ## Runs -/
-
-/-- Session `i`'s run at its statement, its witness and its tape `t`, against `V*` after the prover messages `pre`. -/
 def sRun (H : Msg → Msg) (x xO : Msg) (wo : ℕ → S.WS) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (pre : List Msg) (i : ℕ)
     (t : S.NS x × S.ΩS x) : List (Msg × Out) :=
   (runStar H (S.PS (wo i) x) (vUnder Vs xO pre (S.kS (L.xs x xO i))) (L.xs x xO i) t θ).msgs
 
-/-- The composed run of the `m` sessions from session `i` on their tapes `t`, against `V*` after the prover messages
-`pre`. -/
 def lrun (H : Msg → Msg) (x xO : Msg) (wo : ℕ → S.WS) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (pre : List Msg) (m i : ℕ)
     (t : S.tapes x m) : List (Msg × Out) :=
   Claims.interact (askAfter H Vs xO θ pre) (fun h => ((L.cnext x xO wo m i h t).eval H).1) (L.rounds x xO m i) []
@@ -77,7 +53,6 @@ theorem sRun_length (H : Msg → Msg) (x xO : Msg) (wo : ℕ → S.WS) {Θ : Typ
 theorem lrun_zero (H : Msg → Msg) (x xO : Msg) (wo : ℕ → S.WS) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (pre : List Msg)
     (i : ℕ) (t : S.tapes x 0) : L.lrun H x xO wo Vs θ pre 0 i t = [] := rfl
 
-/-- **The composed run is session `i`'s, then the rest's** after its messages where it goes on. -/
 theorem lrun_succ (H : Msg → Msg) (x xO : Msg) (wo : ℕ → S.WS) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (pre : List Msg)
     (m i : ℕ) (tA : S.NS x × S.ΩS x) (tB : S.tapes x m) :
     L.lrun H x xO wo Vs θ pre (m + 1) i (tA, tB) =
@@ -110,7 +85,6 @@ theorem lrun_succ (H : Msg → Msg) (x xO : Msg) (wo : ℕ → S.WS) {Θ : Type}
       simp only [cnext, ite_eq_right hn, List.drop_left' hl]
   · rw [ite_eq_right hg, ite_eq_right hg]
 
-/-- **The composed outcome after session `i`'s run**: session `i`'s outcome, then the rest's where its run goes on. -/
 theorem outs_cont (x xO : Msg) (m i : ℕ) (τA τB : List (Msg × Out)) (hA : τA.length ≤ S.kS (L.xs x xO i)) :
     L.outs x xO (m + 1) i (ZKMal.cont (S.kS (L.xs x xO i)) τA τB) =
       some (S.outS (L.xs x xO i) τA) ::
@@ -121,8 +95,6 @@ theorem outs_cont (x xO : Msg) (m i : ℕ) (τA τB : List (Msg × Out)) (hA : �
     rw [ite_eq_left hg, outs, List.take_left' hl, List.drop_left' hl, ite_eq_left hg]
   · rw [ite_eq_right hg, outs, List.take_of_length_le hA, ite_eq_right hg, ite_eq_right hg]
 
-/-- **The composed simulator from session `i`**: session `i`'s simulator given its outcome, against `V*` after the
-messages so far, then the rest's where its run goes on. -/
 theorem csim_succ (H : Msg → Msg) (x xO : Msg) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (m i : ℕ) (a : S.StS)
     (os : List (Option S.StS)) (ms : List (Msg × Out)) (c : S.coins x (m + 1)) :
     (SP.eval H (fun as => ((Vs.next xO as θ).eval H).1) (L.csim x xO (m + 1) i (some a :: os) ms c)).1 =
@@ -141,10 +113,6 @@ theorem csim_succ (H : Msg → Msg) (x xO : Msg) {Θ : Type} (Vs : VStar Θ) (θ
   · rw [ite_eq_right hg]
     exact congrArg (fun p => (SP.eval H (fun as => ((Vs.next xO as θ).eval H).1) p).1) (ite_eq_right hg)
 
-/-! ## The hybrid -/
-
-/-- **The real event after session `i`'s run**: session `i`'s outcome is `a`, and where its run goes on, the rest's
-outcomes and the event after it, and otherwise none of the rest and the event at it. -/
 theorem ev_succ (H : Msg → Msg) (x xO : Msg) (wo : ℕ → S.WS) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (m i : ℕ)
     (ms : List (Msg × Out)) (a : S.StS) (os : List (Option S.StS)) (Ev : List (Msg × Out) → Prop)
     (tA : S.NS x × S.ΩS x) (tB : S.tapes x m) :
@@ -167,8 +135,6 @@ theorem ev_succ (H : Msg → Msg) (x xO : Msg) (wo : ℕ → S.WS) {Θ : Type} (
     exact and_assoc
 
 open Classical in
-/-- **The hybrid over the sessions in turn**: the `m` sessions from session `i`, after the transcript `ms`, against `V*`
-after its messages, are zero knowledge per outcome within `errAt`, on witnesses in `RS x` at those sessions. -/
 theorem hybrid (H : Msg → Msg) (εS : (x : Msg) → Msg → S.WS → (Θ : Type) → VStar Θ → Θ → S.StS → ℝ) (hS : S.ZK H εS)
     (x xO : Msg) (wo : ℕ → S.WS) {Θ : Type} (Vs : VStar Θ) (θ : Θ) :
     ∀ (m i : ℕ) (ms : List (Msg × Out)) (os : List (Option S.StS)) (Ev : List (Msg × Out) → Prop),
@@ -300,7 +266,6 @@ theorem hybrid (H : Msg → Msg) (εS : (x : Msg) → Msg → S.WS → (Θ : Typ
               εS x (L.xs x xO i) (wo i) Θ Vi θ a + Ex errT := add_le_add (add_le_add h3 le_rfl) le_rfl
         _ = _ := by rw [herr, add_assoc]
 
-/-- **Z1-S-cost's induction**: the `m` sessions' simulator makes at most `m` times the session simulator's calls. -/
 theorem csim_cost (H : Msg → Msg) (cS : Msg → ℕ)
     (hc : ∀ x xs o (c : S.CS x) ask, ((S.progS x xs o c).eval H ask).2 ≤ cS x) (x xO : Msg)
     (ask : List Msg → Out) :
@@ -332,8 +297,6 @@ end Sessions
 end Claims.RecGeneric
 
 open Claims Claims.RecGeneric in
-/-- **Z1-S** (`Flock.Guarantees.GenericSessionsZK`): the hybrid over all the sessions, from the first, after no
-messages. -/
 theorem Flock.SecurityProofs.GenericSessionsZK : Flock.Guarantees.GenericSessionsZK := by
   intro H S L εS hS hSh x xO wo hR Θ Vs θ hk o Ev
   have hmsgs : ∀ ω : S.tapes x (L.n x) × Unit,
@@ -351,29 +314,22 @@ theorem Flock.SecurityProofs.GenericSessionsZK : Flock.Guarantees.GenericSession
   exact Iff.rfl
 
 open Claims Claims.RecGeneric in
-/-- **Z1-S-cost** (`Flock.Guarantees.GenericSessionsZKCost`). -/
 theorem Flock.SecurityProofs.GenericSessionsZKCost : Flock.Guarantees.GenericSessionsZKCost :=
   fun H _ L cS hc x xO o c ask => L.csim_cost H cS hc x xO ask (L.n x) 0 o [] c
 
 open Claims Claims.RecGeneric in
-/-- **Z1 at an outer phase of sessions** (`Flock.Guarantees.GenericRecursiveSessionsZK`): Z1 at the release, its outer
-phase's zero knowledge from Z1-S. -/
 theorem Flock.SecurityProofs.GenericRecursiveSessionsZK : Flock.Guarantees.GenericRecursiveSessionsZK :=
   fun H _ Lv S L F εS δ hHide hS hSh =>
     Flock.SecurityProofs.GenericRecursiveZK H Lv (ZkRelease.ofSessions F L) (L.err H εS) δ hHide
       (Flock.SecurityProofs.GenericSessionsZK H S L εS hS hSh)
 
 open Claims Claims.RecGeneric in
-/-- **Z1-cost at an outer phase of sessions** (`Flock.Guarantees.GenericRecursiveSessionsZKCost`): Z1-cost at the
-release, its outer simulator's calls from Z1-S-cost. -/
 theorem Flock.SecurityProofs.GenericRecursiveSessionsZKCost : Flock.Guarantees.GenericRecursiveSessionsZKCost :=
   fun H _ Lv S L F cF cS hF hc =>
     Flock.SecurityProofs.GenericRecursiveZKCost H Lv (ZkRelease.ofSessions F L) cF (fun x => L.n x * cS x) hF
       (Flock.SecurityProofs.GenericSessionsZKCost H S L cS hc)
 
 open Claims Claims.RecGeneric in
-/-- **Z1-L** (`Flock.Guarantees.GenericSessionsOfZKOut`): at a session statement in `Xs x`, the session simulator's
-outcome on the tapes of every statement in `Xs x` is the system's on that statement's tape (`Pr_pi_eval`). -/
 theorem Flock.SecurityProofs.GenericSessionsOfZKOut : Flock.Guarantees.GenericSessionsOfZKOut := by
   intro H W R k N Ω _ _ _ _ P St out S Xs ε hZ x xs w hw Θ Vs θ hk o Ev
   obtain ⟨hx, hR⟩ := hw
@@ -384,7 +340,6 @@ theorem Flock.SecurityProofs.GenericSessionsOfZKOut : Flock.Guarantees.GenericSe
   simp only [Simulator.out, SimOut.given, ZkSess.simAt, ZkSess.ofZKOut, dite_eq_left hx]
 
 open Claims Claims.RecGeneric in
-/-- **Z1-L-cost** (`Flock.Guarantees.GenericSessionsOfZKOutCost`). -/
 theorem Flock.SecurityProofs.GenericSessionsOfZKOutCost : Flock.Guarantees.GenericSessionsOfZKOutCost := by
   intro H W R k N Ω _ _ _ _ P St out S Xs cS hc x xs o c ask
   by_cases hx : xs ∈ Xs x

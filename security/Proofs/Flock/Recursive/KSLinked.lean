@@ -34,17 +34,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.HresAsm
 
-/-!
-# The recursive verifier's knowledge soundness at the linked relation
-
-`RecursiveKSLinkAt` is `RecursiveKSAt` with the linked relation `R_L` (the deployed relation, and every listed link's
-reader row equal to its writer row), the extractor that also reads the link table's rows off its judged sample, and one
-more term, the link finder's `Pr[B_L]`. `recursiveKSLink_of` proves it at the deployed values from `RecursiveKS`, the
-deployed chain at `R` (`RecDeploy.ResLower.recursiveKS_deployed`), and the links' binding at the deployment
-(`LinksBindDeployed`: on an accepted run whose extracted witness is in `R` and fails the link clause, two of the inputs
-the link finder reads collide), by the union bound `Claims.Recursion.ksLin2LinkOn_of`. `recursiveKSLink_nontrivial` is
-its conclusion's nontrivial lemma, at any link clause, from `RecDeploy.KSFixture`, as `recursiveKS_nontrivial`'s.
--/
+/-! The recursive verifier's knowledge soundness at the linked relation (`RecursiveKSLinkAt`), from `RecursiveKS` and the links' binding. -/
 
 @[expose] public section
 
@@ -53,8 +43,6 @@ namespace Flock.Guarantees
 open Claims (Msg Out)
 open FlockDeploy (Coin FinalP)
 
-/-- **The links bind at the deployment**: at every brings, live-coin record, pair of decoders meeting the
-list-decoding spec and dense statement, `LinkBindsAt` at the deployed record, bound and outer Flock. -/
 def LinksBindDeployed {Tb : Type} (Q : Msg → Claims.Flock.Wit → Tb → Prop) (rows : Msg → List Claims.Flock.Wit → Tb)
     (ins : (Msg → Msg) → Msg → List ((ℕ → Coin) × List (Msg × Out) × List Claims.Flock.Wit) → Claims.Flock.Wit → Tb →
       List Msg) : Prop :=
@@ -79,9 +67,6 @@ def LinksBindDeployed {Tb : Type} (Q : Msg → Claims.Flock.Wit → Tb → Prop)
           RecDeploy.DeployedR.wR).deploy decI)
       (RecDeploy.deployZkRec _root_.Flock.Readable.relation) decO Q rows ins x
 
-/-- **Knowledge soundness at the linked relation, from `RecursiveKS` and the links' binding**: `RecursiveKS` (the
-deployed chain at `R`, reused as it stands) and `LinksBindDeployed` give `RecursiveKSLinkAt` at the deployed values,
-by the union bound (`Claims.Recursion.ksLin2LinkOn_of`). -/
 theorem recursiveKSLink_of {Tb : Type} {Q : Msg → Claims.Flock.Wit → Tb → Prop} {rows : Msg → List Claims.Flock.Wit → Tb}
     {ins : (Msg → Msg) → Msg → List ((ℕ → Coin) × List (Msg × Out) × List Claims.Flock.Wit) → Claims.Flock.Wit → Tb →
       List Msg}
@@ -94,11 +79,6 @@ theorem recursiveKSLink_of {Tb : Type} {Q : Msg → Claims.Flock.Wit → Tb → 
     Claims.Recursion.ksLin2LinkOn_of (RecDeploy.ResLower.recursiveKS_deployed b aux nOf hd recRest)
       (hL b aux nOf hd recRest)
 
-/-- **`RecursiveKSLinkAt`'s nontrivial lemma**, at any link clause, table reader and finder inputs: its conclusion,
-`RecursiveKSLinkAtRec` at the deployed values, is false at the verifier that accepts everything, at every brings, from
-`RecDeploy.KSFixture`. At the fixture's statement `E*` extracts nothing (the accepting record stages no V\* statement),
-so the link finder finds nothing (`Claims.Recursion.prBL_of_E_none`), `KSLin2On` holds there
-(`Claims.Recursion.ksLin2On_of_linkOn`), and that is false as `recursiveKS_nontrivial` shows. -/
 theorem recursiveKSLink_nontrivial {Tb : Type} (Q : Msg → Claims.Flock.Wit → Tb → Prop)
     (rows : Msg → List Claims.Flock.Wit → Tb)
     (ins : (Msg → Msg) → Msg → List ((ℕ → Coin) × List (Msg × Out) × List Claims.Flock.Wit) → Claims.Flock.Wit → Tb →

@@ -17,26 +17,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
-/-!
-# Recursion: V*'s outer sessions as (ii) sees them
-
-The definitions (ii) of `RecursiveAudit` reads of V*'s outer sessions, below the property so that it can state (ii) at
-them (`Proofs.Flock.Recursive.ZkServer`); their zero knowledge is `Proofs.Flock.Recursive.OuterZK`'s.
-
-* `TableProver`, `honestOut`, `SelfCheckSilent`: the honest prover at one table. Where it refuses the coins
-  (`CoinedSetup.Admits`) it sends the prefix `Table.abort` cuts; elsewhere its code, self-check included.
-  `SelfCheckSilent` is the abort interface `Recursive/OuterAbort.lean` meets.
-* `proverExe`: the prover's code, which sends what a stopped run sends (`Stopped`) when its self-check stops
-  (`Table.Stops`) and its view otherwise.
-* `commitStrs`, `idealStrs`: hm96 commit strings as their two halves, and ideal ones.
-* `Sessions`: V*'s outer sessions. The prover registers `R₂`, `n₂` hm96 commit strings under fresh salts
-  (`commitStrs`), and runs `S` sessions, each one `--zk` table `C j pc l` at the public context `pc` and `R₂`'s
-  commit strings `l`, at the coin vector the auditor's tape fixes (`coin`), on the honest witness `wit`. Its view
-  (`view`), its simulator (`sim`), the honest witnesses (`Honest`), every table passing `CoinedOK` (`TablesOK`) and
-  its error (`err`, and `errAt` at an hm96 hiding bound `δ`).
-* `HCtx`, `hctxAt`: what the honest prover holds in (ii), at the ZK server's commitments (`zkServerCommits`: the inner
-  coins live, each message reading the commit strings before it).
--/
+/-! V*'s outer sessions on the honest witness as (ii) of `RecursiveAudit` reads them, below the property so that it can state (ii) at them. -/
 
 @[expose] public section
 
@@ -57,8 +38,6 @@ abbrev SimAt (C : CoinedSetup) (c : CoinsZK C.Rest) : Type := (C.T c).tab.SimRan
 /-- What a table's prover outputs at coin vector `c`: its view, or the cut it stops at. -/
 abbrev OutAt (C : CoinedSetup) (c : CoinsZK C.Rest) : Type := (C.T c).tab.View ⊕ (C.T c).tab.Cut
 
-/-! ## The honest prover at one table, and the abort interface -/
-
 /-- **The honest prover's code at one table**: what it sends at a table, a coin vector, a witness and its randomness. -/
 abbrev TableProver : Type 1 :=
   ∀ (C : CoinedSetup) (c : CoinsZK C.Rest), Witness C.S.m → RandAt C c → OutAt C c
@@ -70,9 +49,6 @@ noncomputable def honestOut (prover : TableProver) (C : CoinedSetup) (c : CoinsZ
     (p : RandAt C c) : OutAt C c :=
   if C.Admits c then prover C c w p else Sum.inr ((C.T c).tab.abort (sentAt C c) ((C.T c).viewExe w p.1 p.2))
 
-/-- **The abort interface**: at a table that passes `CoinedOK`, a coin vector the prover doesn't refuse and a valid
-witness whose registered values are the public ones, the prover's code, self-check included, sends its view
-(`Recursive/OuterAbort.lean`: the self-check never stops it there). -/
 def SelfCheckSilent (prover : TableProver) : Prop :=
   ∀ (C : CoinedSetup) (c : CoinsZK C.Rest) (w : Witness C.S.m), CoinedOK execArith (Refine.fOf Flock.Zk.PAD_C) C →
     C.Admits c → C.Valid w → (∀ c', (C.T c').tab.sReg w = (C.T c').tab.pubReg) →
@@ -88,8 +64,6 @@ run sends (`stopped`, any function of the table, the coins, the witness and the 
 (`Table.Stops`), else its view. -/
 noncomputable def proverExe (stopped : Stopped) : TableProver := fun C c w p =>
   if (C.T c).tab.Stops w p.1 then Sum.inr (stopped C c w p) else Sum.inl ((C.T c).viewExe w p.1 p.2)
-
-/-! ## V*'s sessions -/
 
 /-- The commit strings of `m` under the salts `y`: hm96's `(SHA-512(m) ⊕ M·y, c(y))`, a ZK server leaf's two halves. -/
 def commitStrs {n : ℕ} (m : Fin n → ByteArray) (y : Fin n → ZkView.Salt) : Fin n → ZkView.Bits × ByteArray :=
@@ -189,14 +163,11 @@ def Honest (x : Ctx) : Prop :=
     ∀ c, ((V.C j (V.pubOf x) (commitStrs (V.m₂ x) y₂)).T c).tab.sReg (V.wit j x y₂) =
       ((V.C j (V.pubOf x) (commitStrs (V.m₂ x) y₂)).T c).tab.pubReg
 
-/-- **Every session's table passes `CoinedOK`.** -/
 def TablesOK : Prop := ∀ j pc l, CoinedOK execArith (Refine.fOf Flock.Zk.PAD_C) (V.C j pc l)
 
-/-- The sessions' error, `Σ_j 2·|LeafPos z_j|·2^-193`. -/
 noncomputable def errS : ℝ≥0∞ :=
   ∑ j, 2 * (Fintype.card (ZkView.LeafPos (V.z j)) : ℝ≥0∞) * (2 : ℝ≥0∞) ^ (-193 : ℤ)
 
-/-- **V*'s sessions' `ε_o`**: the sessions' error and `R₂`'s, `n₂·2^-193`. -/
 noncomputable def err : ℝ≥0∞ := V.errS + V.n₂ * (2 : ℝ≥0∞) ^ (-193 : ℤ)
 
 /-- The sessions' error at an hm96 hiding bound `δ`, `Σ_j 2·|LeafPos z_j|·δ`. -/
@@ -208,8 +179,6 @@ noncomputable def errSAt (δ : ℝ≥0∞) : ℝ≥0∞ :=
 noncomputable def errAt (δ : ℝ≥0∞) : ℝ≥0∞ := V.errSAt δ + V.n₂ * δ
 
 end Sessions
-
-/-! ## The honest context -/
 
 /-- What the honest prover holds in (ii): the private circuit, the witness, the registration's salts, the auditor's
 tape, the ZK server's commitments, the inner prover's randomness and the ZK server's salts. -/

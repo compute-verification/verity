@@ -4,20 +4,7 @@ public import Proofs.Flock.Recursive.Defs
 public import Proofs.Flock.Soundness.Refine.LiveSim
 import Mathlib.Combinatorics.Matroid.Init
 
-/-!
-# Recursion: a fork at round 0 is any two runs
-
-A strategy of `Inner.game` fixes its round-0 message, so the fork at round 0 (`forkG` at `k = 0`) continues it twice from
-the root: any two transcripts the strategy reaches. `Inner.fork_of_outcomes` reads that as an `Inner.Fork`, which is how
-the compile lemma turns a clash of two runs into a fork.
-
-* `Game.Outcome.bind_of`, `Game.Outcome.map_of`: the outcomes of a sequenced game.
-* `Game.PlaysT.det`, `Game.PlaysT.ne_nil_of_send`: a run on one tape ends at one outcome, and a game that starts with a
-  message takes at least one step.
-* `outcome_contF`, `outcome_rounds_length`: an outcome of `r` rounds is a transcript of length `r`, and an outcome of the
-  rest of the run from the root.
-* `Inner.fork_of_outcomes`: two outcomes of `s` that `pick` reads as a collision are a fork of `s`.
--/
+/-! A fork at round 0 is any two runs of the strategy (`Inner.fork_of_outcomes`). -/
 
 @[expose] public section
 
@@ -37,14 +24,12 @@ theorem Outcome.map_of (f : α → β) (g : Game α) (s : Strategy g) {a : α} (
     Outcome (g.map f) (Strategy.map f g s) (f a) :=
   Outcome.bind_of g (fun a => .ret (f a)) s (fun _ => PUnit.unit) ha (show f a = f a from rfl)
 
-/-- **A run on one tape ends at one outcome.** -/
 theorem PlaysT.det {g : Game α} {ts : List Step} {a b : α} (ha : PlaysT g ts a) (hb : PlaysT g ts b) : a = b := by
   induction ha generalizing b with
   | ret _ => exact hb.ret_inv.2.symm
   | send _ _ ih => exact ih hb.send_msg
   | coin _ _ ih => exact ih hb.coin_val
 
-/-- A game that starts by receiving a message takes at least one step. -/
 theorem PlaysT.ne_nil_of_send {M : Type} {k : M → Game α} {ts : List Step} {a : α} (h : PlaysT (.send M k) ts a) :
     ts ≠ [] := by
   rintro rfl
@@ -60,8 +45,6 @@ section Fork
 
 variable {M C : Type} [Fintype C] [Nonempty C]
 
-/-- **The rest of the run from a node reaches what the rounds reach**: an outcome of `r` rounds ending in the
-transcript `h t` is an outcome of `contF` from the same node, its trial the leaf's transcript. -/
 theorem outcome_contF : ∀ (r : ℕ) (h : List (M × C) → List (M × C))
     (s : Strategy (rounds M C r fun t => .ret (h t))) {b : List (M × C)},
     Outcome (rounds M C r fun t => .ret (h t)) s b →
@@ -72,7 +55,6 @@ theorem outcome_contF : ∀ (r : ℕ) (h : List (M × C) → List (M × C))
       obtain ⟨ρ, hρ⟩ := hb
       exact ⟨ρ, outcome_contF r (fun t => h ((s.1, ρ) :: t)) (s.2 ρ) hρ⟩
 
-/-- **An outcome of `r` rounds is a transcript of length `r`**, read by the leaf's `h`. -/
 theorem outcome_rounds_length : ∀ (r : ℕ) (h : List (M × C) → List (M × C))
     (s : Strategy (rounds M C r fun t => .ret (h t))) {b : List (M × C)},
     Outcome (rounds M C r fun t => .ret (h t)) s b → ∃ t : List (M × C), t.length = r ∧ h t = b
@@ -82,7 +64,6 @@ theorem outcome_rounds_length : ∀ (r : ℕ) (h : List (M × C) → List (M × 
       obtain ⟨t, ht, rfl⟩ := outcome_rounds_length r (fun t => h ((s.1, ρ) :: t)) (s.2 ρ) hρ
       exact ⟨(s.1, ρ) :: t, by simp [ht], rfl⟩
 
-/-- **The fork at round 0 finds what two runs find**: two outcomes of `s` that `pick` reads as a collision. -/
 theorem forkG_zero_finds {D : Type} (H : List UInt8 → D) (pick : List (M × C) → List (M × C) → StrictCR.Pair)
     (r : ℕ) (s : Strategy (rounds M C (r + 1) .ret)) {t t' : List (M × C)}
     (ht : Outcome (rounds M C (r + 1) .ret) s t) (ht' : Outcome (rounds M C (r + 1) .ret) s t')
@@ -96,14 +77,11 @@ theorem forkG_zero_finds {D : Type} (H : List UInt8 → D) (pick : List (M × C)
 
 end Fork
 
-/-- **A transcript an inner prover reaches has `I.r` rounds.** -/
 theorem Inner.length_of_outcome (I : Inner) (s : Strategy I.game) {t : List (I.Msg × I.Coin)}
     (ht : Outcome I.game s t) : t.length = I.r := by
   obtain ⟨t', h, rfl⟩ := outcome_rounds_length I.r (fun t => t) s ht
   exact h
 
-/-- **Two runs are a fork.** Two transcripts `s` reaches, which `pick` reads as a collision of `H`, are a fork of `s` at
-round 0: `s` fixes its round-0 message, and the fork continues it twice from the root. -/
 theorem Inner.fork_of_outcomes {D : Type} (H : List UInt8 → D) (I : Inner) (hr : 0 < I.r)
     (pick : List (I.Msg × I.Coin) → List (I.Msg × I.Coin) → StrictCR.Pair) (s : Strategy I.game)
     {t t' : List (I.Msg × I.Coin)} (ht : Outcome I.game s t) (ht' : Outcome I.game s t')

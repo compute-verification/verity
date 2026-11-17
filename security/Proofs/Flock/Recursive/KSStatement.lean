@@ -35,22 +35,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
-/-!
-# The recursive verifier's knowledge soundness at the deployed reader (trusted)
-
-`RecursiveKSAt` is `KSLin2On` at SHA-512 at the deployed relation (`Flock.Readable.relation`), at the bound record
-whose steps are the deployed recursive verifier's (`FlockDeploy.nextR rd`) and whose columns are the ones it opens,
-trimmed (`FlockDeploy.deployPlainTrimR`), at V\*'s layout of record `DeployedR.layR rest` (every hm96 call the
-deployed circuit performs, recorded), the challenger's live-coin part's record
-(`recTr aux nOf hd recRest`), the deployed caps (`FlockDeploy.KS.CpDep`) and the dense statements (`DenseAt`).
-
-It is stated at the deployment's parameters (the reader `rd`, V\*'s last message's reader `final`, the last part's
-pieces `rest`, the weights `wE` and `w`, the brings `b` and the record's `aux`, `nOf`, `hd` and `recRest`) so that the
-guarantee `RecursiveKS` is this at the deployed values: the reader `DeployedR.rdR`, V\*'s last message's reader
-`DeployedR.finalR`, the last part's pieces `OpenRows.elemR`, the weights `DeployedR.wER` and `DeployedR.wR` and
-the brings' setup `deployedB` (the compiled verifier's own evaluations), for every other field of the brings and every
-record the challenger's live-coin part keeps (`aux`, `nOf`, `hd`, `recRest`).
--/
+/-! The recursive verifier's knowledge soundness at the deployed reader (`RecursiveKSAt`), stated at the deployment's parameters so that `RecursiveKS` is it at the deployed values (trusted). -/
 
 @[expose] public section
 
@@ -94,10 +79,6 @@ def RecursiveKS : Prop :=
     RecursiveKSAt RecDeploy.DeployedR.rdR RecDeploy.DeployedR.finalR RecDeploy.OpenRows.elemR RecDeploy.DeployedR.wER
       RecDeploy.DeployedR.wR (RecDeploy.deployedB b) aux nOf hd recRest
 
-/-- **Knowledge soundness of the recursive verifier at the linked relation, at a compiled record** `D`: `RecursiveKSAtRec`
-with the linked relation (`Claims.Recursion.RL`: the deployed relation, and the link clause `Q` at the inner witness and
-the link table's rows), the extractor that reads the table's rows off its judged sample's outer witnesses (`rows`), and
-one more term, the link finder's `Pr[B_L]` over the inputs `ins` reads (`Claims.Recursion.KSLin2LinkOn`). -/
 def RecursiveKSLinkAtRec {Tb : Type} (D : Claims.Recursion.RecAt Coin) (rd : Msg → Option FinalP)
     (final : Msg → Option (List (List (Msg × RecDeploy.Salt)) × Msg)) (wE w : Msg → ℝ)
     (Q : Msg → Claims.Flock.Wit → Tb → Prop) (rows : Msg → List Claims.Flock.Wit → Tb)
@@ -109,8 +90,6 @@ def RecursiveKSLinkAtRec {Tb : Type} (D : Claims.Recursion.RecAt Coin) (rd : Msg
       RecDeploy.rowInDeployed final w)
     (RecDeploy.deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep RecDeploy.DenseAt Q rows ins
 
-/-- **Knowledge soundness of the recursive verifier at the linked relation**, at the deployment's parameters
-(`RecursiveKSLinkAtRec` at the deployment's compiled record, as `RecursiveKSAt`). -/
 def RecursiveKSLinkAt {Tb : Type} (rd : Msg → Option FinalP)
     (final : Msg → Option (List (List (Msg × RecDeploy.Salt)) × Msg))
     (rest : (r : RecDeploy.XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE w : Msg → ℝ)

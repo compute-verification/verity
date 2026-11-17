@@ -2,24 +2,7 @@ module
 
 public import Proofs.Flock.RecGeneric.PlansProof
 
-/-!
-# Flock's plans at its own runs are its finders (F3)
-
-At the inner protocol's runs as they may abort (`runModel`), each of Flock's three plans finds a collision exactly as
-often as the finder it stands for:
-
-* `forkPlan` is `B` (`forkPlanIsBAbort`, `ForkPlanIsBAbort`): it searches its first run and that run's fork at the
-  guessed round;
-* `capPlan` is `FC` (`capPlanIsFC`, `CapPlanIsFC`): where its first run is accepted and opens the cap position, it
-  searches that run and the caps' loop's first fork that is accepted and opens it, or the run twice where none is
-  (`capPlan_search`);
-* `conflictPlan` is `F0` (`conflictPlanIsF0`, `ConflictPlanIsF0`): where its first run is accepted, it searches that run
-  and each wait's first accepted run (`conflictPlan_search`), wait `t`'s run `i` being the plan's fresh run
-  `1 + t·R + i` (`waitsEquiv`, `waitsEquiv_cons`).
-
-Each equality is a bijection of coins (`bCoinsEquiv`, `capCoinsEquiv`, `conflictCoinsEquiv`), which keeps them uniform,
-under which the plan's searched calls are the finder's, coin by coin.
--/
+/-! Flock's three plans at its own runs find a collision exactly as often as the finders they stand for. -/
 
 @[expose] public section
 
@@ -31,7 +14,6 @@ section Searches
 
 variable {Coin Ω C : Type} {n : ℕ}
 
-/-- A fork of a run with itself is the run. -/
 theorem fork_self {k : ℕ} (j : ℕ) (r : Fin k → Coin) : fork j r r = r :=
   funext fun i => by simp only [fork, ite_self]
 
@@ -53,8 +35,6 @@ theorem slotRuns_two_zero (us : Fin (1 + 1) → (Fin n → Coin) × C) : slotRun
 theorem slotRuns_two_one (us : Fin (1 + 1) → (Fin n → Coin) × C) : slotRuns us 1 = us 1 :=
   congrArg us (Fin.ext (by simp))
 
-/-- **The caps' loop searches its first run and the first fork that is accepted and opens**, `firstPick`'s, or its
-first run twice where none is. -/
 theorem capLoop_exec (m : RunModel Coin Ω n C) (ω : Ω) (us : ℕ → (Fin n → Coin) × C) (j : ℕ)
     (op : (ℕ → Coin) → Bool) (u₀ : (Fin n → Coin) × C) (hu₀ : us 0 = u₀) :
     ∀ (N i : ℕ) (vs : Fin N → (Fin n → Coin) × C), (∀ t : Fin N, us (i + t.val) = vs t) →
@@ -85,7 +65,6 @@ theorem capLoop_exec (m : RunModel Coin Ω n C) (ω : Ω) (us : ℕ → (Fin n �
       · simp only [firstPick, ha, false_and, ↓reduceIte]
         exact hn'
 
-/-- **A wait goes on with its first accepted run**, `firstPick`'s, or with none. -/
 theorem waitLoop_exec (m : RunModel Coin Ω n C) (ω : Ω) (us : ℕ → (Fin n → Coin) × C)
     (cont : Option RunExp → Plan Coin) :
     ∀ (N i : ℕ) (vs : Fin N → (Fin n → Coin) × C), (∀ t : Fin N, us (i + t.val) = vs t) →
@@ -108,7 +87,6 @@ theorem waitLoop_exec (m : RunModel Coin Ω n C) (ω : Ω) (us : ℕ → (Fin n 
       · simp only [firstPick, ha, ↓reduceIte]
         exact hn
 
-/-- **`w` waits search what they found and each wait's first accepted run.** -/
 theorem waitsPlan_exec (m : RunModel Coin Ω n C) (ω : Ω) (us : ℕ → (Fin n → Coin) × C) (R : ℕ) :
     ∀ (w base : ℕ) (found : List RunExp) (ws : Fin w → Fin R → (Fin n → Coin) × C),
       (∀ (t : Fin w) (i : Fin R), us (base + t.val * R + i.val) = ws t i) →
@@ -131,7 +109,6 @@ theorem waitsPlan_exec (m : RunModel Coin Ω n C) (ω : Ω) (us : ℕ → (Fin n
       List.append_assoc]
 
 open Classical in
-/-- **`FC`'s plan searches its first run and the caps' loop's**, where its first run is accepted and opens `q`. -/
 theorem capPlan_search (Cp : Caps Coin) (M : ℕ) (x : Msg) (q : Fin (Cp.width x)) (m : RunModel Coin Ω n C) (ω : Ω)
     (u₀ : (Fin n → Coin) × C) (us : Fin M → (Fin n → Coin) × C) :
     ((((capPlan Cp M).plan x q).exec m ω (slotRuns (Fin.cons u₀ us : Fin (M + 1) → (Fin n → Coin) × C))).2.2.flatMap
@@ -164,7 +141,6 @@ theorem capPlan_search (Cp : Caps Coin) (M : ℕ) (x : Msg) (q : Fin (Cp.width x
     rw [hexec, if_neg (fun h => ha h.1), List.flatMap_nil]
 
 open Classical in
-/-- **`F0`'s plan searches its first run and each wait's first accepted run**, where its first run is accepted. -/
 theorem conflictPlan_search (k : Msg → ℕ) (R : ℕ) (x : Msg) (j : Fin 1) (m : RunModel Coin Ω n C) (ω : Ω)
     (u₀ : (Fin n → Coin) × C) (W : Fin (k x * R) → (Fin n → Coin) × C)
     (ws : Fin (k x) → Fin R → (Fin n → Coin) × C)
@@ -190,7 +166,6 @@ theorem conflictPlan_search (k : Msg → ℕ) (R : ℕ) (x : Msg) (j : Fin 1) (m
       simp only [conflictPlan, Plan.exec, RunModel.named, hU0, decide_eq_true_eq, ha, ↓reduceIte]
     rw [hexec, if_neg ha, List.flatMap_nil]
 
-/-- **`B`'s plan searches its first run and the fork at its round.** -/
 theorem forkPlan_search (k : Msg → ℕ) (x : Msg) (j : Fin (k x)) (m : RunModel Coin Ω n C) (ω : Ω)
     (us : Fin (1 + 1) → (Fin n → Coin) × C) :
     ((((forkPlan (Coin := Coin) k).plan x j).exec m ω (slotRuns us)).2.2.flatMap fun e =>
@@ -202,13 +177,9 @@ theorem forkPlan_search (k : Msg → ℕ) (x : Msg) (j : Fin (k x)) (m : RunMode
 
 end Searches
 
-/-! ## The coin maps -/
-
-/-- `F0`'s waits as the plan's slots: wait `t`'s run `i` is slot `t·R + i` (`finProdFinEquiv`, curried). -/
 def waitsEquiv (K R : ℕ) (U : Type) : (Fin K → Fin R → U) ≃ (Fin (K * R) → U) :=
   (Equiv.curry (Fin K) (Fin R) U).symm.trans (Equiv.arrowCongr finProdFinEquiv (Equiv.refl U))
 
-/-- Wait `t`'s run `i` is the plan's fresh run `1 + t·R + i`. -/
 theorem waitsEquiv_cons {K R : ℕ} {Coin C : Type} {n : ℕ} (u₀ : (Fin n → Coin) × C)
     (w : Fin K → Fin R → (Fin n → Coin) × C) (t : Fin K) (i : Fin R) :
     slotRuns (Fin.cons u₀ (waitsEquiv K R _ w) : Fin (K * R + 1) → (Fin n → Coin) × C) (1 + t.val * R + i.val) =
@@ -219,12 +190,10 @@ theorem waitsEquiv_cons {K R : ℕ} {Coin C : Type} {n : ℕ} (u₀ : (Fin n →
   rw [show (⟨t.val * R + i.val, hlt⟩ : Fin (K * R)) = finProdFinEquiv (t, i) from
     Fin.ext (show t.val * R + i.val = i.val + R * t.val by ring), Equiv.symm_apply_apply]
 
-/-- `F0`'s coins as the plan's: the selector is `Fin 1`'s one value, and the first run and the waits are the slots. -/
 def conflictCoinsEquiv (Ω U : Type) (K R : ℕ) : Ω × U × (Fin K → Fin R → U) ≃ Fin 1 × Ω × (Fin (K * R + 1) → U) :=
   ((Equiv.refl Ω).prodCongr (((Equiv.refl U).prodCongr (waitsEquiv K R U)).trans (Fin.consEquiv fun _ => U))).trans
     (Equiv.uniqueProd _ (Fin 1)).symm
 
-/-- `B`'s coins as the plan's: the round, the tape and the two runs, each with its abort coins. -/
 def bCoinsEquiv (Ω Coin A : Type) (k : ℕ) :
     (Fin k × Ω × (Fin k → Coin) × (Fin k → Coin)) × A × A ≃ Fin k × Ω × (Fin (1 + 1) → (Fin k → Coin) × A) where
   toFun s := (s.1.1, s.1.2.1, ![(s.1.2.2.1, s.2.1), (s.1.2.2.2, s.2.2)])
@@ -232,13 +201,9 @@ def bCoinsEquiv (Ω Coin A : Type) (k : ℕ) :
   left_inv _ := rfl
   right_inv t := Prod.ext rfl (Prod.ext rfl (funext fun i => by fin_cases i <;> rfl))
 
-/-- `FC`'s coins as the plan's: the first run is the first slot. -/
 def capCoinsEquiv (W : ℕ) (Ω U : Type) (M : ℕ) : Fin W × Ω × U × (Fin M → U) ≃ Fin W × Ω × (Fin (M + 1) → U) :=
   (Equiv.refl _).prodCongr ((Equiv.refl Ω).prodCongr (Fin.consEquiv fun _ => U))
 
-/-! ## The plans are the finders -/
-
-/-- **`B`'s plan at a protocol's runs that may abort is `B` there.** -/
 theorem forkPlanIsBAbort (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] : ForkPlanIsBAbort Coin := by
   intro H V x Ω _ _ P A _ _ keep
   unfold RunFinder.PrAt PrBAbort
@@ -252,7 +217,6 @@ theorem forkPlanIsBAbort (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited
   · rfl
 
 open Classical in
-/-- **`FC`'s plan at a protocol's runs that may abort is `FC` there.** -/
 theorem capPlanIsFC (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] : CapPlanIsFC Coin := by
   intro H V Cp x Ω _ _ P A _ _ keep M
   unfold RunFinder.PrAt PrFC
@@ -289,7 +253,6 @@ theorem capPlanIsFC (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin
   · rfl
 
 open Classical in
-/-- **`F0`'s plan at a protocol's runs that may abort is `F0` there.** -/
 theorem conflictPlanIsF0 (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] : ConflictPlanIsF0 Coin := by
   intro H V k x Ω _ _ P A _ _ keep R
   unfold RunFinder.PrAt PrF0

@@ -29,44 +29,7 @@ import Proofs.Flock.VBridge.Sparse.Unit
 import Proofs.Flock.Verifier.HmNets
 import Std.Data.String.ToNat
 
-/-!
-# The sparse phase's `h` from the rep's, across two units' reads of one registered row
-
-The RecSparse unit reads its `h` port under `rec-c{hr}` at row `i` (`RecVStar.ownPorts (.sparse _ hr)`, which
-`checkOwn` enforces), and rep `i`'s algebra unit reads the same registration's row `i` as its `m<hr>` port. Two
-sessions' registered reads at one root and position are one row's bytes or a SHA-512 collision between the two
-registrant records (`registrants_eq_or_collides`), and that collision is `RegColl`'s (`ReadsX.Clash`), which `Accepted`
-excludes and `regFinder` prices once per audit: no new event, no guarantee record moved.
-
-* `regRows_eq_or_clash`, `regVal_bit_eq`: at any sessions, two registered reads at one registration and position hold
-  one row's bytes or two records clash (both preimages kept, `registrants_eq_or_collides_site`: the sparse unit's `h`
-  and the algebra unit's `m<hr>` differ by name); with no clash and both rows unsegmented, one row's bits.
-* `rep_of_unit_h`, `rep_h_of_unit`: a rep unit plays `holoRepC` to an output whose `h` is the unit's `hOfW` (what
-  `holoRep_refines` gives and `rep_of_unit` drops), so the tied run's rep `i` has that `h`.
-* `HPortReads` (named): the cross-unit read, at one copy of the RecSparse unit and the values `x` of rep `i`'s `h`.
-* `h_of_reads`: at no clash, a sparse copy at w (`SparseCopyAt`), and `HPortReads` at `hOfW` of some rep unit of rep
-  `i`'s steps, w's first 64 elements are the tied rep's `h`.
-* `SrcHReads` (named, family form), `SrcHTie`, `srcHTie_of`: the same at every accepted outer proof, at the copy of
-  rep `i`'s unit (`un = i`, the row it reads); `SrcHTie` is `SparseRepTie`'s `h` half at `tiedSrc stp`.
-* `site_reads_of_portDiff`, `regChecks_of_checkStmt`, `rowPort_of_checkRows`, `own_of_checkOwn`: `checkRows` pins a
-  part's row port's entry to `--rec-rows`' entry of its name, registration and reads, and `checkOwn` a message-round
-  port's entry to its value and reads (`mIndex_m`: `m<hr>` is round `hr`'s).
-* `ReadsOwnAt`, `readsOwnAt_of`: a registered read is the reads file's entry of its name at the unit's own row, from
-  `readsOwn_of_hown` and the label check at reached, checked outcomes (`ReachedChecked`: `accRead_at_unit`'s
-  premises at every session). `reachedChecked_of` discharges it: an accepted record is a session-game outcome
-  (`Accepted`'s tie), so each session's record is reached and written, and `ChecksC3Reached` (named, `ChecksReached`'s
-  form at `ChecksC3`) transfers the checks to it along the record's sample (`checksC3_of_recordSample`).
-* `hSite_of_checked`: the two reads' registration and position: both entries read `rec-c<hr>` at both reps' rows
-  (`checkOwn`), `--rec-rows` registers it (`checkRows` at the part's `m<hr>`), and `checkShared` holds both to its
-  first entry of that value (`site_of_checkShared`).
-* `readsUnsegC3`: no read is of a segmented row (`VStmt.hscope`'s `v1Ports`).
-* `hKey_of_check`: at a copy of a unit `RecSparse.check` accepted, the key of `h`'s element `l`, bit `e` is bit
-  `128 l + e` of the port named `h` (`rowsOk`'s row 0, `leavesOk`, `srcKey_inOrder`).
-* `srcHReads_of`: `SrcHReads` from those, the columns of the RecSparse circuit's `h` (`HCols`, an obligation no theorem
-  discharges) and the algebra unit's row of rep
-  `i`'s `h` (`HAlgRows`, which `FlockC3.Reps.hAlgRows_of_res` proves at a holo shape from the verifier's checks and
-  the algebra parts' `ResZeroAtLH`).
--/
+/-! The sparse phase's `h` from the rep's, across two units' reads of one registered row, with `HCols` an obligation no theorem discharges. -/
 
 @[expose] public section
 
@@ -78,9 +41,6 @@ open FlockSoundness.Discharge.HiddenExec (encPortH)
 
 variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' : Type}
 
-/-- **Two registered reads at one registration and position hold one row's bytes, or two records clash**: the two
-rows' bytes at their ports' encodings are one, or the two records' openings or hm96 leaves collide there, `RegColl`'s
-event at these sessions. -/
 theorem regRows_eq_or_clash (zs : (j : Fin S) → (Vs j).Outer Reg') {s s' : Fin S} {u : Fin (Vs s).nv}
     {u' : Fin (Vs s').nv} {q : Fin (Vs s).c.ports.size} {q' : Fin (Vs s').c.ports.size}
     (hr : (zs s).rd.isRead (.inl (u, q))) (hr' : (zs s').rd.isRead (.inl (u', q')))
@@ -95,8 +55,6 @@ theorem regRows_eq_or_clash (zs : (j : Fin S) → (Vs j).Outer Reg') {s s' : Fin
   · exact Or.inr ⟨s, s', .inl (u, q), .inl (u', q'), hr, hr', Or.inl hc⟩
   · exact Or.inr ⟨s, s', .inl (u, q), .inl (u', q'), hr, hr', Or.inr hc⟩
 
-/-- **Two registered reads at one registration and position carry one row's bits** where no two records clash (`Accepted`'s
-`¬ RegColl`) and neither row is segmented (`bits_of_encPortH`). -/
 theorem regVal_bit_eq (zs : (j : Fin S) → (Vs j).Outer Reg') (hnc : ¬ ∃ j j', (zs j).rd.Clash (zs j').rd)
     {s s' : Fin S} {u : Fin (Vs s).nv} {u' : Fin (Vs s').nv} {q : Fin (Vs s).c.ports.size}
     {q' : Fin (Vs s').c.ports.size} (hr : (zs s).rd.isRead (.inl (u, q))) (hr' : (zs s').rd.isRead (.inl (u', q')))
@@ -127,8 +85,6 @@ open FlockSoundness.Model (holoRepC extraClaims)
 open FlockSoundness.Discharge.Recursion (ExecHolo)
 open FlockC3.Compose (C3Run)
 
-/-- **A rep unit plays `holoRepC` to an output whose `h` is the unit's `hOfW`** (`rep_of_unit`, keeping
-`holoRep_refines`' `lc.h`). -/
 theorem rep_of_unit_h {S : Model.Statement} {sch₀ : FlockSoundness.Accounting.Schedule}
     {extra : List (Model.Claim 𝔽 S.m)} {cap₀ : Model.Cap Dig} {os : Model.Opens 𝔽 Dig} {r : ℕ} {ts : List Game.Step}
     (hm : 13 ≤ S.m) (U : RepUnit S sch₀ extra cap₀ os r ts) :
@@ -154,8 +110,6 @@ theorem rep_of_unit_h {S : Model.Statement} {sch₀ : FlockSoundness.Accounting.
   exact ⟨zc, lc, pend, playsT_of_spine (holoRepC_spine (D := Dig) execArith r S sch₀ hm extra) hpl U.kinds U.msgs
     U.coinSteps, hh⟩
 
-/-- **The tied run's rep `i` has the `h` of any rep unit of its steps**: `tieReps` sets rep `i` to its play's output
-(`playOut_eq`), whose `h` is the unit's `hOfW` (`rep_of_unit_h`). -/
 theorem rep_h_of_unit {e : ExecHolo} {u : C3Run e} {i : Fin 2}
     (U : RepUnit (e.cls.pubStatement e.regs) e.sch
       (extraClaims (e.cls.pubStatement e.regs) e.cls.ptLocal e.cls.mPts u.pts) u.cap₀ u.os.1 i (u.ts i))
@@ -192,7 +146,6 @@ local instance lawfulBEqByteArrayH : LawfulBEq ByteArray where
 
 section checks
 
-/-- **Two ports `portDiff?` finds no field of have one registration and one set of reads.** -/
 theorem site_reads_of_portDiff {a b : Flock.Registered.Port} (h : Flock.RecVStar.portDiff? a b = none) :
     FlockVBridge.Family.site a = FlockVBridge.Family.site b ∧ a.reads = b.reads := by
   have e1 : a.value = b.value := Classical.byContradiction fun hne => by
@@ -213,8 +166,6 @@ theorem site_reads_of_portDiff {a b : Flock.Registered.Port} (h : Flock.RecVStar
     simp [Flock.RecVStar.portDiff?, e1, e2, e3, e4, e5, e6, e7, hne] at h
   exact ⟨by simp only [FlockVBridge.Family.site, e1, e2, e3, e4, e5, e6, e7], e8⟩
 
-/-- **`checkStmt` ran `checkOwn`, `checkRows` and `checkShared` on V*'s statement `j`** at the verifier's own reads
-(`regs_of_checkStmt`'s walk). -/
 theorem regChecks_of_checkStmt {i : Flock.RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
     {st : Flock.Stmt} {circuitB : ByteArray} {partition : Option Lean.Json} {program : Option ByteArray}
     {own : Array Flock.Registered.Port} {j : ℕ} {f : VStar.Bindings} {rows : Option (Array Flock.Registered.Port)}
@@ -245,7 +196,6 @@ theorem regChecks_of_checkStmt {i : Flock.RecVStar.Inner} {tags : Flock.Tags} {t
         exact ⟨ss, s, hss, hj, hown, hrw, h⟩
       · cases h
 
-/-- `m<n>`'s `mIndex` is `n`. -/
 theorem mIndex_m (n : ℕ) : Flock.RecVStar.mIndex s!"m{n}" = some n := by
   have hm : (s!"m{n}").toList = 'm' :: (Nat.repr n).toList := by
     rw [String.toList_append]; rfl
@@ -257,7 +207,6 @@ theorem mIndex_m (n : ℕ) : Flock.RecVStar.mIndex s!"m{n}" = some n := by
   unfold Flock.RecVStar.mIndex
   rw [ite_eq_left hs, hd, Nat.toNat?_repr]
 
-/-- A row port of a statement is a part's (`rowPorts` of any other statement is empty), one of its `S.ports`. -/
 theorem inner_of_rowPorts {s : VStar.Stmt} {nm : String} (h : nm ∈ Flock.RecVStar.rowPorts s) :
     ∃ j name p x, s = .inner j name p ∧ (nm, x) ∈ p.S.ports := by
   cases s <;> simp only [Flock.RecVStar.rowPorts, List.not_mem_nil] at h
@@ -265,19 +214,16 @@ theorem inner_of_rowPorts {s : VStar.Stmt} {nm : String} (h : nm ∈ Flock.RecVS
   obtain ⟨⟨a, x⟩, hx, rfl⟩ := List.mem_map.1 h
   exact ⟨j, name, p, x, rfl, hx⟩
 
-/-- **A part's row port `m<hr>` is a message-round port under `rec-c<hr>` at both reps' rows** (`ownPorts`). -/
 theorem mem_ownPorts_inner {j : ℕ} {name : String} {p : VStar.Part} {hr x : ℕ} (hx : (s!"m{hr}", x) ∈ p.S.ports) :
     (s!"m{hr}", s!"rec-c{hr}", #[some 0, some 1]) ∈ Flock.RecVStar.ownPorts (.inner j name p) := by
   unfold Flock.RecVStar.ownPorts
   exact List.mem_filterMap.2 ⟨_, hx, by dsimp only; rw [mIndex_m]; rfl⟩
 
-/-- **RecSparse's `h` is a message-round port under `rec-c<hr>` at both reps' rows** (`ownPorts`). -/
 theorem mem_ownPorts_sparse {sh : Flock.RecSparse.Shape} {hr : ℕ} :
     ("h", s!"rec-c{hr}", #[some 0, some 1]) ∈ Flock.RecVStar.ownPorts (.sparse sh hr) := by
   unfold Flock.RecVStar.ownPorts
   exact List.mem_cons_self ..
 
-/-- **`checkOwn` pins the reads file's entry of a message-round port's name**, the file naming each port once. -/
 theorem own_of_checkOwn {s : VStar.Stmt} {own : Array Flock.Registered.Port} (h : Flock.RecVStar.checkOwn s own = .ok ())
     {nm v : String} {rd : Array (Option ℕ)} (hq : (nm, v, rd) ∈ Flock.RecVStar.ownPorts s) {p : Flock.Registered.Port}
     (hp : p ∈ own) (hn : p.name = nm) (hnd : ∀ p ∈ own, ∀ p' ∈ own, p.name = p'.name → p = p') :
@@ -288,8 +234,6 @@ theorem own_of_checkOwn {s : VStar.Stmt} {own : Array Flock.Registered.Port} (h 
   obtain rfl := hnd p' (Array.mem_toList_iff.1 (List.mem_filter.1 hp').1) p hp (hn'.trans hn.symm)
   exact ⟨hv, hrd⟩
 
-/-- **`checkRows`' loop**: each of the statement's row ports has a first entry in the reads file and one in
-`--rec-rows`, and `portDiff?` finds no field (reads included) in which they differ. -/
 theorem rowPort_of_checkRows {s : VStar.Stmt} {own : Array Flock.Registered.Port}
     {rows : Option (Array Flock.Registered.Port)} (h : Flock.RecVStar.checkRows s own rows = .ok ()) {nm : String}
     (hnm : nm ∈ Flock.RecVStar.rowPorts s) :
@@ -338,7 +282,6 @@ theorem rowPort_of_checkRows {s : VStar.Stmt} {own : Array Flock.Registered.Port
           · cases hr
         · cases hr
 
-/-- **A V* circuit's rows are unsegmented** (`scopeOk`'s `v1Ports`). -/
 theorem segs_of_scopeOk {c : Flock.Circuit} (h : Layout.scopeOk c = true) (q : Fin c.ports.size) :
     c.ports[q.val]!.segs = none := by
   unfold Layout.scopeOk Layout.v1Ports Layout.v1Rows at h
@@ -353,12 +296,6 @@ section point
 
 variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' : Type}
 
-/-- Obligation: the cross-unit read, at copy `j` of unit `un` of session `s` (a RecSparse copy) and the values `x` of
-rep `i`'s `h`. Each column of `h`'s element `l`, bit `e` (message column `128 l + e`, `mp`'s first port) is an input
-column a row reads (W's `SparseCols`), and where its key is bit `b` of a registered row `q` of the copy's unit, that row
-is unsegmented and some session `s'`'s unit `u'` reads a registered row `q'` holding bit `b`, unsegmented, at the same
-registration (`site`: the two ports differ by name, `h` and `m<hr>`) and position, whose registrant bit `b` is bit `e`
-of `x l`. `srcHReads_of` gives it from the verifier's checks and three named pieces. -/
 def HPortReads (zs : (j : Fin S) → (Vs j).Outer Reg') (mp : List (String × ℕ)) (s : Fin S) (un : Fin (Vs s).nv)
     (j : ℕ) (x : Fin 64 → Flock.F128) : Prop :=
   (∀ (l : Fin 64) (e : ℕ), e < 128 → ReadCol (FlockSoundness.Rows.ofNet (Vs s).hU) (rowCol mp 0 (128 * l.val + e))) ∧
@@ -381,9 +318,6 @@ column a row reads. No theorem proves it. -/
 def HCols (V : VStmt) (mp : List (String × ℕ)) : Prop :=
   ∀ (l : Fin 64) (e : ℕ), e < 128 → ReadCol (FlockSoundness.Rows.ofNet V.hU) (rowCol mp 0 (128 * l.val + e))
 
-/-- **The RecSparse circuit's `h` keys, from the verifier's check** (`srcKey_inOrder`): at a unit `RecSparse.check`
-accepted, row 0 is `h` at 512 words (`rowsOk`) and copy `j` reads the rows' words in order (`leavesOk`), so where the
-key of `h`'s element `l`, bit `e` at copy `j` is bit `b` of row `q`, `q` is `h` and `b` is `128 l + e`. -/
 theorem hKey_of_check {V : VStmt} (hck : Flock.RecSparse.check V.c = .ok ()) {sh : Flock.RecSparse.Shape}
     (hp : Flock.RecSparse.params V.c.unit.name = some sh) {j : ℕ} (hj : j < V.c.upv) (l : Fin 64) {e : ℕ}
     (he : e < 128) (q : Fin V.c.ports.size) (b : ℕ)
@@ -427,7 +361,6 @@ theorem hKey_of_check {V : VStmt} (hck : Flock.RecSparse.check V.c = .ok ()) {sh
   subst hq0
   exact ⟨hname, by omega⟩
 
-/-- `h`'s 64 elements are the first port's: their bits are below the message ports' total. -/
 theorem h_lt_ports (sh : Flock.RecSparse.Shape) {l e : ℕ} (hl : l < 64) (he : e < 128) :
     128 * l + e < 128 * ((Flock.RecSparse.messagePorts sh).map (·.2)).sum := by
   have h64 : 64 ≤ ((Flock.RecSparse.messagePorts sh).map (·.2)).sum := by
@@ -435,9 +368,6 @@ theorem h_lt_ports (sh : Flock.RecSparse.Shape) {l e : ℕ} (hl : l < 64) (he : 
     exact Nat.le_add_right_of_le (le_of_eq rfl)
   omega
 
-/-- **w's element `l` is `x l`** at a RecSparse copy at w (`SparseCopyAt`'s registered message bits), under the
-cross-unit read (`HPortReads`) and no clash: the copy's `h` row and the algebra unit's row are one row's bits
-(`regVal_bit_eq`). -/
 theorem w_eq_of_reads {zs : (j : Fin S) → (Vs j).Outer Reg'} {Lb : (j : Fin S) → (Vs j).Bits} {e : ExecHolo}
     {w : Array Flock.F128} {c : FlockVBridge.Sparse.SCoins} {s : Fin S} {un : Fin (Vs s).nv} {j : ℕ}
     {hj : j < (Vs s).c.upv} {x : Fin 64 → Flock.F128} (hnc : ¬ ∃ j j', (zs j).rd.Clash (zs j').rd)
@@ -452,8 +382,6 @@ theorem w_eq_of_reads {zs : (j : Fin S) → (Vs j).Outer Reg'} {Lb : (j : Fin S)
   refine ((wbit_elem (fun k => w[k]!) l.val ht).symm.trans ?_)
   exact hval.symm
 
-/-- **w's first 64 elements are the tied rep's `h`** (`w_eq_of_reads` at the values of some rep unit of rep `i`'s
-steps, `rep_h_of_unit`). -/
 theorem h_of_reads {zs : (j : Fin S) → (Vs j).Outer Reg'} {Lb : (j : Fin S) → (Vs j).Bits} {e : ExecHolo}
     {u : C3Run e} {i : Fin 2} {w : Array Flock.F128} {c : FlockVBridge.Sparse.SCoins} {s : Fin S}
     {un : Fin (Vs s).nv} {j : ℕ} {hj : j < (Vs s).c.upv} (hnc : ¬ ∃ j j', (zs j).rd.Clash (zs j').rd)
@@ -474,10 +402,6 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
-/-- Obligation: `HPortReads` at every accepted outer proof, every rep `i`, every RecSparse copy at rep `i`'s words
-`w` (`SparseCopyAt`, which `SparseSessionAt` gives) at rep `i`'s unit (`un = i`: unit `un` reads row `un`, rep `un`'s
-`h`), and some rep unit of rep `i`'s steps in `stp` (`RepTie`, with `U.d` the rep's decode, as `RepUnitOfAlg` gives
-it). `srcHReads_of` discharges it. -/
 def SrcHReads (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp))
@@ -494,8 +418,6 @@ def SrcHReads (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j :
           HPortReads (zs R ω t R₂) (Flock.RecSparse.messagePorts (FlockC3.Sparse.unitShape (holoAt st hp))) s un j
             fun l => (hOfW U.sh U.d.w)[l.val]!
 
-/-- **`SparseRepTie`'s `h` half at the tied source**: at every accepted outer proof, where some RecSparse copy at rep
-`i`'s unit holds rep `i`'s phase at `w` (`SparseCopyAt`), w's first 64 elements are rep `i`'s `h` in `tiedSrc stp`. -/
 def SrcHTie (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp))
@@ -507,7 +429,6 @@ def SrcHTie (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : F
       ∀ l : Fin 64, fOf (w R ω t (layers zs dg N k Rw R ω t R₂ τ) i)[l.val]! =
         ((tiedSrc stp R ω t (layers zs dg N k Rw R ω t R₂ τ)).rep i).2.h l
 
-/-- **`SrcHTie` from the cross-unit reads** (`h_of_reads` at `Accepted`'s `¬ RegColl`). -/
 theorem srcHTie_of {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     {stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
@@ -517,8 +438,8 @@ theorem srcHTie_of {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ →
   obtain ⟨U, hU⟩ := h R ω t R₂ τ o hA i
   exact h_of_reads (u := stp R ω t (layers zs dg N k Rw R ω t R₂ τ)) hA.2.1 hcp U (hU s un j hj c hcp hun)
 
-/-- **`SrcHTie` at a copy of `SparseSessionAt`'s form at rep `i`'s unit**: the form `SparseRepTie`'s `h` conjunct
-takes, where `SparseSessionAt`'s copy is at unit `i` (which it does not yet state). -/
+/-- The form `SparseRepTie`'s `h` conjunct takes, where `SparseSessionAt`'s copy is at unit `i`, which `SparseSessionAt`
+does not state. -/
 theorem h_of_sessionAt {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     {stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
@@ -535,8 +456,6 @@ theorem h_of_sessionAt {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂
   obtain ⟨s, un, j, hj, hun, hcp⟩ := hs
   exact h R ω t R₂ τ o hA i s un j hj c hcp hun
 
-/-- **A sparse session and its tied `h`, in the form `SparseRepTie` consumes**: a conjunction that supplies
-`h_of_sessionAt`'s copy, including its `un.val = i.val` pin. -/
 theorem session_h_of_sessionAt
     {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}
@@ -566,8 +485,6 @@ variable {nT : ℕ} {T : Fin nT → Type} {st : Flock.Stmt} {hp : HoloParams} {C
 
 local notation "ℐ" => holoInnerAt T (Flock.Guarantees.holoCTs st hp) st hp
 
-/-- **The run's link points are the history's first coin under `holoMap`**. This is the source-side half of
-`RecordPoints`; custody turns any successful decode of the same record into the other half. -/
 def PointsFromHistory (ish : Flock.RecVStar.Inner) (tbl : String) (bc : Cm → String → Nat → List UInt8)
     (t : List (Cm × (ℐ).Coin)) (u : C3Run (holoAt st hp)) : Prop :=
   ∀ e, t[0]? = some e →
@@ -585,19 +502,12 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
-/-- Obligation (`accRead_at_unit`'s premises, at every session): each accepted outcome is one its session's game
-reaches (`Reached`) and passes candidate 3's checks at its own transcript (`ChecksC3`, which the event's `ChecksVR`
-states there). -/
 def ReachedChecked (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ) : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ j : Fin (vstarCount F.ish),
     Reached (F.zs R ω t R₂ j) (o j) ∧ ∃ (ish : Flock.RecVStar.Inner) (cs : Option Flock.RecVStar.InnerCommits)
       (coins : Option Flock.RecCoins.Source) (f : VStar.Bindings) (rows' : Option (Array Flock.Registered.Port)),
       Flock.Guarantees.ChecksC3 ish cs coins j f rows' (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own (o j).2.2
 
-/-- Obligation (`ChecksReached`'s form, at candidate 3's checks): where session `j` accepts a transcript it writes,
-some transcript it writes and accepts passes the verifier's candidate-3 checks of that session (`ChecksC3` at the
-family's shape, commits, coins and bindings). The checked family's written re-gate discharges it, as it discharges
-`ChecksReached`. -/
 def ChecksC3Reached (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂)
     (cs : List (Cm × (ℐ).Coin) → Option Flock.RecVStar.InnerCommits)
     (coins : List (Cm × (ℐ).Coin) → Option Flock.RecCoins.Source)
@@ -608,11 +518,6 @@ def ChecksC3Reached (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂)
       Flock.Guarantees.ChecksC3 F.ish (cs t) (coins t) j (F.bind j) rows (F.zs R ω t R₂ j).I
         (F.zs R ω t R₂ j).own tr'
 
-/-- **`ReachedChecked` from `ChecksC3Reached`**: an accepted record is a session-game outcome (`Accepted`'s outcome
-tie), so each session's record is one its game reaches (`Reached`, `ZkOuter.outcome_writes`) — a transcript the
-session writes and accepts. `ChecksC3Reached` then checks some written, accepted transcript; under V*'s full sample
-every written record carries one sample (`execOS_subset_full_mem`, through the record's custody `hRec`), so the checks
-transfer to the outcome's own transcript (`checksC3_of_recordSample`). -/
 theorem reachedChecked_of {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     {cs : List (Cm × (ℐ).Coin) → Option Flock.RecVStar.InnerCommits}
     {coins : List (Cm × (ℐ).Coin) → Option Flock.RecCoins.Source}
@@ -636,7 +541,6 @@ theorem reachedChecked_of {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {dg 
     Flock.Guarantees.checksC3_of_recordSample hc3 ?_⟩
   rw [hwr, hd₁, hd₂, huniv]
 
-/-- **A registered read's port is the reads file's entry of its name, read at the unit's own row.** -/
 def ReadsOwnAt (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ) : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ j (u : Fin (F.Vs j).nv)
     (q : Fin (F.Vs j).c.ports.size), (F.zs R ω t R₂ j).rd.isRead (.inl (u, q)) →
@@ -645,8 +549,6 @@ def ReadsOwnAt (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : ByteArray
       ((F.zs R ω t R₂ j).rd.port (.inl (u, q))).reads[u.val]? =
         some (some ((F.zs R ω t R₂ j).rd.readAt (.inl (u, q))))
 
-/-- **`ReadsOwnAt` from `ReachedChecked`**: `readsOwn_of_hown` puts the read at the unit's label, which the label check
-makes the unit (`label_of_checked`), as `accRead_at_unit` does at a level's `acc`. -/
 theorem readsOwnAt_of {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     (hrc : ReachedChecked F dg N k Rw) : ReadsOwnAt F dg N k Rw := by
   intro R ω t R₂ τ o h j u q hr
@@ -656,22 +558,16 @@ theorem readsOwnAt_of {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {dg : By
   rw [FlockC3.PubRows.label_of_checked (F.zs R ω t R₂ j) (h.1 j).1 ⟨spec, sts, hst, hlb⟩ hd hD hdp hidx hu] at hpos
   exact ⟨hmem, hname, hpos⟩
 
-/-- `ReadsUnsegmented`'s, at candidate 3's family: no registered read is of a segmented row. -/
 def ReadsUnsegC3 (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ) : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ j (u : Fin (F.Vs j).nv)
     (q : Fin (F.Vs j).c.ports.size), (F.zs R ω t R₂ j).rd.isRead (.inl (u, q)) → (F.Vs j).c.ports[q.val]!.segs = none
 
-/-- **`ReadsUnsegC3` holds**: every V* circuit's rows are unsegmented (`VStmt.hscope`, `segs_of_scopeOk`), read or not. -/
 theorem readsUnsegC3 (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ) :
     ReadsUnsegC3 F dg N k Rw :=
   fun _ _ _ _ _ _ _ j _ q _ => segs_of_scopeOk (F.Vs j).hscope q
 
-/-- Obligation (the rep's decode of `h` at its algebra unit): at every accepted outer proof and rep `i`, some rep unit
-`U` of rep `i`'s steps is such that where a RecSparse copy at unit `i` holds rep `i`'s phase, its session is
-`.sparse _ hr` and some part's session reads, at unit `i`, the row port `m<hr>` (a row port of its statement, which
-`checkRows` pins), whose bit `128 l + e` is bit `e` of `hOfW U.sh U.d.w`'s element `l` (`hOfW_valOf` at `.h l`,
-`RepMaps`' columns of `U.d.w`, with `U.d` from `RepUnitOfAlg`). `FlockC3.Reps.hAlgRows_of_res` proves it at a holo
-inner shape from the verifier's checks and each algebra part's `ResZeroAtLH` at the decoder's rep. -/
+/-- Obligation: `FlockC3.Reps.hAlgRows_of_res` proves it at a holo inner shape from the verifier's checks and each
+algebra part's `ResZeroAtLH`. -/
 def HAlgRows (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin (vstarCount F.ish)) → (F.Vs j).Bits) → C3Run (holoAt st hp))
     (w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin (vstarCount F.ish)) → (F.Vs j).Bits) → Fin 2 →
@@ -696,10 +592,6 @@ def HAlgRows (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : ByteArray �
                     ⟨128 * l.val + e, lt_of_lt_of_le hb ((Finset.le_sup (Finset.mem_univ q')).trans (Nat.le_succ _))⟩ =
                   bitOf ((hOfW U.sh U.d.w)[l.val]!) e
 
-/-- **The sparse unit's `h` and the algebra unit's `m<hr>` reads have one registration and position**: `checkOwn` puts
-both reads' entries (`ReadsOwnAt`, the reads file's names unique) under `rec-c<hr>` at both reps' rows, `checkRows`
-registers `rec-c<hr>` in `--rec-rows` (the part's `m<hr>` entry), and `checkShared` holds each to `--rec-rows`' first
-entry of that value in every field but reads (`site_of_checkShared`), so units of one index read one row. -/
 theorem hSite_of_checked {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows : Option (Array Flock.Registered.Port)}
     {wr : List (Cm × (ℐ).Coin) → Lean.Json × String} {reg : Lean.Json} (hchk : ChecksAccepted F rows wr reg)
     {dg : ByteArray → ByteArray} {N k Rw : ℕ} (hro : ReadsOwnAt F dg N k Rw)
@@ -749,10 +641,6 @@ theorem hSite_of_checked {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows
   rw [hrb, ← hu] at hpos'
   exact Option.some.inj (Option.some.inj (hpos.symm.trans hpos'))
 
-/-- **`SrcHReads` from the verifier's checks** (`hSite_of_checked`, `readsUnsegC3`) and the pieces: the reads at the
-units' own rows (`ReadsOwnAt`, from `ReachedChecked` by `readsOwnAt_of`), the RecSparse circuit's `h` keys (`HCols`,
-a hypothesis; its keys `hKey_of_check`) and the algebra unit's row of rep `i`'s `h` (`HAlgRows`,
-`hAlgRows_of_res`). -/
 theorem srcHReads_of {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows : Option (Array Flock.Registered.Port)}
     {wr : List (Cm × (ℐ).Coin) → Lean.Json × String} {reg : Lean.Json} (hchk : ChecksAccepted F rows wr reg)
     {dg : ByteArray → ByteArray} {N k Rw : ℕ} (hro : ReadsOwnAt F dg N k Rw)

@@ -37,18 +37,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.MoreSlotsAll
 
-/-!
-# `RecursiveKSAt` from `DecompBV`
-
-`recursiveKSAt_ofV` is `recursiveKSAt_of` with `DecompBP` replaced by `DecompBV` at `PartAcceptsV`: each part's check
-read at the run's V\* statement for it, and the collision outcome over the recorded calls and the compiled verifier's
-own evaluations at the run's V\* statements (`setupCalls`), which list the registered reads' leaves and climbs wherever
-the brings do (`RecDeploy.RegSetup`, `RecDeploy.regListed_recBound`). `DecompBP` gives `DecompBV`
-(`decompBV_of_decompBP`), so this asks no more; a lowering under `JointV` may read two parts' commit strings as one
-through the setup's openings (`RecDeploy.bc_eq_of_setup`). The extra calls `layR` records are true at the outer
-relation (`moreSlotsTrue_deployed`), as in `recursiveKSAt_of`. `recursiveKSAt_ofVD` is the same with each part's check
-read at its decision (`ResLower.showsDec`), which the run supplies (`RecDeploy.stagedB_deployRec_dec`).
--/
+/-! `RecursiveKSAt` from `DecompBV` (`recursiveKSAt_ofV`), which `DecompBP` gives, so it asks no more. -/
 
 @[expose] public section
 
@@ -87,9 +76,6 @@ theorem recursiveKSAt_ofV (rd : Msg → Option FinalP)
   RecDeploy.ksLin2_deployedR_layRV rd b aux nOf hd recRest rest wE FlockDeploy.joinR final w hIn
     (RecDeploy.MoreSlots.moreSlotsTrue_deployed _) hD
 
-/-- **`recursiveKSAt_ofV` at each part's decision**: `DecompBVS` at `PartAcceptsV` over `ResLower.showsDec`, where the
-parts' statements are staged at one prefix of messages (`ResLower.XsStaged`, which an accepted run's are), through
-`RecDeploy.ksLin2_deployedR_layRVD`. -/
 theorem recursiveKSAt_ofVD (rd : Msg → Option FinalP)
     (final : Msg → Option (List (List (Msg × RecDeploy.Salt)) × Msg))
     (rest : (r : RecDeploy.XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE w : Msg → ℝ)
