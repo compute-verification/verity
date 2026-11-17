@@ -299,7 +299,7 @@ AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-chec
               "verity/protocols/proofs/spot/verifier", "verity/protocols/proofs/spot/verifier/challenger", "verity/protocols/proofs/spot/prover",
               "verity/protocols/resource_accounting/network/verifier", "verity-pouw-benchmarks",
               "verity/protocols/resource_accounting/network/prover",
-              "verity/circuits/requirement", "benchmarks/remote_session", "benchmarks/one_stage", "benchmarks/one_stage",
+              "verity/circuits/requirement", "benchmarks/remote_session", "benchmarks/one_stage",
               "verity-network-e2e",
               "verity/protocols/resource_accounting/memory/poub/attester/live_verifier", "verity-network-traces", "verity-vllm", "benchmarks/verifier_cost",
               "benchmarks/inference_only")
