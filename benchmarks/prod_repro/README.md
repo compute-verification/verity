@@ -24,11 +24,20 @@ verity bench prod_repro --report OUT --load NAME [--replay PASS] [--stock ARM] [
 verity bench prod_repro --replay-of OUT --load NAME --replay PASS [--model ...] [--ours ARM]
 ~~~
 
+On Llama 3.2 1B and one H200, the job that writes its cost and its replay match:
+
+~~~text
+research run --on NODE --source . --cwd source -- bash benchmarks/prod_repro/run.sh --client vllm-bench --model llama32-1b \
+  --again none --load agentic=4 --pass-prompts agentic=4 --lifetimes 4 --leave-out 1 --reps 2 --replay agentic@4
+~~~
+
 - **The arms.** A job serves stock, stock a second time and ours, each a server lifetime of its own. For a model
   whose recipe the benchmark holds (GLM-5.3, `--model glm53`) they are the arms at the recipe's settings: `prod`,
   stock vLLM as its recipe starts it on these cards; `prod-again`; and `prod-record`, which adds the scheduler's step
   trace and keeps each request's prompt ids and served ids. For any other model the benchmark refuses those arms, and
-  the job serves `compiled`, `compiled-again` and `record`, at the benchmark's own settings. `--again none` serves
+  the job serves `compiled`, `compiled-again` and `record`, at the benchmark's own settings, with `record-ids` in
+  place of `record` for a model with ids (Llama 3.2 1B, `--model llama32-1b`): it keeps each request's ids, which a
+  replay under vLLM's client reads. `--again none` serves
   stock once: the cost then has no noise floor. `--stock none` serves ours alone, a first start of it and its replay:
   there is then no cost, and under vLLM's client the benchmark's own cost step ends the runner with 1 for want of a
   stock arm, which the job takes as no failure where ours served its load.
@@ -56,6 +65,15 @@ verity bench prod_repro --replay-of OUT --load NAME --replay PASS [--model ...] 
   out of every figure. A sessions load's cost has an interval, and so a verdict, only over two lifetimes an arm or
   more. The replay re-runs the named pass of ours's first lifetime, and the report says which lifetime its window
   is of.
+- **The method a serving cost is measured by.** Four arms, `prod`, `prod-again`, `prod-seeded` and `prod-record`,
+  each served in nine server lifetimes in that alternating order, each lifetime opening with a 20-second warm-up pass
+  that no figure counts (the benchmark's `WARM_S`) and then two counted passes (`--reps 2 --lifetimes 9 --leave-out
+  0`). The cost is the mean of the nine lifetime pairs' costs with its Student's t 95% interval over them, t at the
+  pairs less one, and stock against stock, `prod-again` over `prod` taken the same way, is the noise floor printed
+  beside it and never subtracted. Two of the method's rules are not yet the report's own: the job's first lifetime
+  pair, its servers started cold, is left out of the figure, and a figure from a node any card of which slowed down
+  in a counted pass is named as on a throttled node, with no verdict; the report counts every pair and reads no
+  card's clock.
 - **The context limit** is `--max-model-len`'s, for every arm. Where the job names none it is the benchmark's for
   each arm: at the recipe's settings the recipe's for the cards (262,144 tokens for GLM-5.3). `limits.json` says what
   is known of leaving the limit to vLLM (`--max-model-len auto`), with the run that showed it, and the report's first
@@ -86,7 +104,11 @@ benchmark's own measurement (a sessions load, a value, the same work on both sid
 two arms are at the same settings. Of `prod-record` it holds two more: `vllm/prod-replay-match-glm53`, the percent of
 the replayed window's served tokens the replay gave back before a request's first difference, where the replay's
 record agrees with what it kept; and `vllm/prod-advice-bits-glm53`, the advice line's bits charged a request, where
-that line is measured. Otherwise the result holds no entry under an id.
+that line is measured. For Llama 3.2 1B (`record-ids` over `compiled`) the cost, the replay match and the advice are
+points of the same three ids, older than their other models. Each point names
+its `model` (the checkpoint, `repo@revision`), its `hardware` (the cards it was served on) and its `member`, the model,
+the card and the arm (the cost's over its stock), which tells its line from the id's other models' and arms'.
+Otherwise the result holds no entry under an id.
 
 The job fails where an arm or the replay fails, where a replay was asked for and its tokens were not compared, and
 where a replayed token or step differs from the served one. One kind of served step is no difference, and the report
@@ -197,8 +219,9 @@ replay that differs, the first token that does and the first step.
   Program calling the accept test's Definition (`SampledAccept_v1`), which none does yet; how the pass's sampled
   requests were seeded, from each one's own arrival (what a sampled request with no seed there was sampled with is in
   no record: its tokens cannot be replayed); and the pass. The loader's own
-  replay of the scheduler must reproduce every step of the pass: where it does not, or the serve has no draft, the
-  line is not measured and says the loader's reason.
+  replay of the scheduler must reproduce every step of the pass: where it does not, the line is not measured and
+  says the loader's reason. A serve with no draft keeps no draft, so its kept count is 0 bits and its advice is the
+  arrivals'.
 
 A line says `not measured` with its reason where the job's files don't hold it or can't be read; the last line counts
 the measured ones and names the arms that were not served whole.
@@ -206,18 +229,18 @@ the measured ones and names the arms that were not served whole.
 ## What is not yet true
 
 - **The advice line's serve is not under the network attester.** No arm of this command is served under the
-  certifier's record or the certified tick, so the arrivals are charged at what they would cost without the tick. The
+  network attester's record or the certified tick, so the arrivals are charged at what they would cost without the tick. The
   kept count is charged at its code's bits: the accept test has a Definition, and no block of a served Program calls
-  it, so nothing derives the count yet. A serve with
-  no draft (every model but GLM-5.3 here) has no line: the loader's table of a draft's advice is the one read.
+  it, so nothing derives the count yet.
 - **The recipe's settings are GLM-5.3's alone.** For every other model the arms are the benchmark's own: speculative
   decoding off and a context limit of 4,096 tokens unless `--max-model-len` is given.
 - **The context limit is not the model's own.** At the recipe's settings it is the recipe's number for the cards,
   given outright: with the limit left to it and the recipe's other flags as they are, vLLM at the benchmark's pin does
   not start this model on them (`limits.json`). The report prints the limit beside the model's own.
-- **`prod` is not the recipe's line whole.** It is behind vLLM's Python front end, with the engine's seed set, and
-  its requests are token ids sent to the completions endpoint (`benchmarks/serve_tax/README.md` lists each
-  departure). Every engine, stock too, starts with Python's hash seed and Inductor's block choice pinned.
+- **`prod` is not the recipe's line whole.** It is behind vLLM's Python front end (serve_tax's `run.sh`:
+  `PUBLISHED_FRONTEND=rust` serves the recipe's Rust one on a build that has it), with the engine's seed set
+  (`serve_tax.BASE_ARGS`), and its requests are token ids sent to the completions endpoint. Every engine, stock too,
+  starts with Python's hash seed and Inductor's block choice pinned.
 - **No circuit is compiled.** Nothing here compiles the settings' circuit ahead of serving or checks a served
   request against it.
 - **The replayed window is not sampled by an audit.** It is every request of one rep, named by the command.

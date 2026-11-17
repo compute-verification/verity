@@ -1231,6 +1231,10 @@ def test_a_cost_over_its_target_says_so_in_the_validation_whose_status_stays_the
     assert P.against_target({}, {"measured": False})["target"] == {"value": None, "target": P.TARGET, "verdict": P.NOT_SHOWN}
 
 
+#: GLM-5.3's checkpoint as a report names it (``model``)
+GLM = f"{S.MODELS['glm53'].repo}@{S.MODELS['glm53'].revision}"
+
+
 def declared(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, c: dict, stock: str = "prod", ours: str = "prod-record") -> list[dict]:
     """The measurements of the run's result.json once the report of a job with the cost line ``c`` is declared in it,
     where the benchmark's cost step wrote its own and an earlier report one under the metric's id."""
@@ -1242,8 +1246,9 @@ def declared(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, c: dict, stock: st
         "measurements": [{"name": S.AGENTIC, "value": 0.5}, {"name": "vllm/prod-serving-cost-glm53", "value": 9.0},
                          {"name": "vllm/prod-replay-match-glm53", "value": 9.0},
                          {"name": "vllm/prod-advice-bits-glm53", "value": 9.0}]}))
+    monkeypatch.setattr(S, "card", lambda: "NVIDIA H200")
     r = {"cost": c, "tokens": P.not_measured("no replay ran"), "load": S.AGENTIC, "commit": "c" * 40, "run": "r-1",
-         "arms": {"stock": stock, "again": None, "ours": ours}}
+         "arms": {"stock": stock, "again": None, "ours": ours}, "model": GLM}
     assert P.declare(tmp_path / "out", r, tmp_path / "out" / "replay-compiled") == tmp_path / "result.json"
     return json.loads((tmp_path / "result.json").read_text())["measurements"]
 
@@ -1261,7 +1266,10 @@ def test_under_research_run_glm53s_cost_at_the_recipes_settings_is_its_metric_wh
     assert got == [theirs, {
         "name": "vllm/prod-serving-cost-glm53", "value": own["value"], "unit": "percent of stock's serving time",
         "mark": "measured", "better": "lower", "target": 1.0, "ci95": own["ci95"], "verdict": "under", "load": S.AGENTIC, "stock": "prod",
-        "ours": "prod-record", "lifetimes": 3, "commit": "c" * 40, "run": "r-1",
+        "ours": "prod-record", "lifetimes": 3, "counted_passes": 6, "left_out": None, "interval": P.INTERVAL,
+        "noise_floor": {"arm": "prod", "over": "lifetimes", "value": -0.5, "ci95": None, "pairs": 1},
+        "commit": "c" * 40, "run": "r-1", "model": GLM, "hardware": "8 × NVIDIA H200",
+        "member": "glm-5.3-h200-prod-record-over-prod",
         "inputs": [f"measured: prod-record's serving time over prod's on the {S.AGENTIC} load, the mean over 3 server "
                    "lifetimes an arm (serving time, one node, one load at 4 users, unsaturated)"]}]
     # the first input opens with the entry's mark, which the Metrics tab shows beside the value
@@ -1344,7 +1352,7 @@ def test_under_research_run_glm53s_replay_match_and_advice_are_its_metrics_where
     assert (t["tokens_served"], t["tokens_before_first_difference"], t["tokens_given_back"], t["tokens_differing"]) == \
         (4, 2, 3, 2)
     assert r["cost"]["measured"] and not r["cost"]["stands"]
-    on = {"load": LOAD, "ours": "prod-record", "commit": "c" * 40, "run": "r-1", "rep": 1}
+    on = {"load": LOAD, "ours": "prod-record", "commit": "c" * 40, "run": "r-1", "model": "repo@rev", "hardware": None, "rep": 1}
     assert got == [
         {"name": "vllm/prod-replay-match-glm53", "value": 50.0, "unit": "percent of served tokens", "mark": "measured",
          "better": "higher", "target": 100.0, "tokens_served": 4, "tokens_before_first_difference": 2, "requests": 2,
@@ -1412,6 +1420,37 @@ def test_the_arms_are_the_published_settings_arms_for_a_model_whose_recipe_the_b
     assert P.default_arms("glm53", tmp_path, ("compiled", "record")) == P.TODAY
     assert P.default_arms("moonlight", tmp_path) == P.PROD
     assert P.main(["arms", "--out", str(tmp_path)]) == 0 and capsys.readouterr().out == "prod prod-again prod-record\n"
+
+
+def test_llama32_1bs_arms_keep_each_requests_ids_and_its_cost_is_a_point_of_glm53s_metric(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Llama 3.2 1B has no recipe: its default arms are `KEPT`, whose ours keeps each request's ids, which a replay under
+    vLLM's client reads. Its cost of `record-ids` over `compiled`, its replay match and its advice are points of
+    GLM-5.3's ids, and the cost of no other arms is; each point's member names the model, the card and the arm, the
+    cost's over its reference, so that the two models' points are two lines of one metric."""
+    assert P.default_arms("llama32-1b") == P.KEPT and not S.MODELS["llama32-1b"].published
+    assert all(a in S.ARMS for a in P.KEPT) and "ids" in S.ARMS[P.KEPT[2]].plugin
+    (tmp_path / "out" / "record-ids.1").mkdir(parents=True)
+    assert P.default_arms("llama32-1b", tmp_path / "out") == P.KEPT
+    assert (P.METRICS["llama32-1b"], P.MATCH["llama32-1b"], P.ADVICE["llama32-1b"]) == (
+        P.METRICS["glm53"], P.MATCH["glm53"], P.ADVICE["glm53"])
+
+    def cost(stock: str, ours: str) -> dict:
+        arms = S.lifetimes([a | {"model_id": "llama32-1b"} for a in
+                            lifetimes_of(stock, [[2.0, 2.0], [2.01, 2.01], [1.99, 1.99]])
+                            + lifetimes_of(ours, [[1.99, 1.99], [1.998, 1.998], [1.981, 1.981]])])
+        return P.cost(tmp_path, {a["arm"]: a for a in arms}, stock, ours, None, S.AGENTIC, 1.0)
+
+    assert cost("compiled", "record-ids")["metric"] == "vllm/prod-serving-cost-glm53"
+    assert cost("compiled", "record")["metric"] is None
+    monkeypatch.setattr(S, "card", lambda: "NVIDIA H200")
+    one, glm = S.MODELS["llama32-1b"], S.MODELS["glm53"]
+    assert (S.member(one, "record-ids", "compiled"), S.member(one, "record-ids")) == (
+        "llama-3.2-1b-h200-record-ids-over-compiled", "llama-3.2-1b-h200-record-ids")
+    assert (S.member(glm, "prod-record", "prod"), S.member(glm, "prod-record")) == (
+        "glm-5.3-h200-prod-record-over-prod", "glm-5.3-h200-prod-record")
+    assert (P.member({"members": {"cost": "c", "arm": "a"}}, "arm"), P.member({"members": None}, "cost")) == (
+        {"member": "a"}, {})
 
 
 # --------------------------------------------------------------------------------------------------------- the runner

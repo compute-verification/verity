@@ -383,9 +383,9 @@ Run as `benchmarks/prove/run.py layers` (`LAYER_METRICS`), as `benchmarks/one_st
 Under each id it writes three measurements, in this order:
 
 1. the Flock layer, member `flock`;
-2. the zero-knowledge layer, member `zero knowledge`;
-3. the sampling layer last, with no member. That is the metric's own reading, Flock with zero knowledge at the
-   sampling plan, the system as served, and the one the metric's title, unit and axis are for.
+2. the zero-knowledge layer, member `flock-zero-knowledge`;
+3. the sampling layer last, member `sampling`: Flock with zero knowledge at the sampling plan, the system as served,
+   and the one the metric's title, unit and axis are for.
 
 prove_path and a5 both give these figures by dividing a member's session timing by its proof blocks sampled
 (`draw_counts`), as prove_path's own `per_unit` does. A member whose timing has no count of sampled proof blocks (one
@@ -403,7 +403,7 @@ tree's Lean toolchain, through `elan`) from the tree themselves. Each writes its
 `$RESEARCH_RUN_DIR/out` (a5's `./out` outside a run, recursion's `/tmp/rec-bench-PID/out`); give that directory to the
 printer's flag. Each from the tree's root:
 
-1. **The Flock, zero-knowledge and sampling layers**, on one H200 with at least 96 GB of host memory available and 25 GB
+1. **The Flock, zero-knowledge and sampling layers**, on one H200 with at least 96 GB of host memory available and 96 GB
    of disk free under `WORK` (`benchmarks/one_stage/README.md`'s "The three benchmarks of the proof-layers table"):
    `A5_CARD=0 A5_CORES=40-59 WORK=/workspace/a5-layers GPU_LEASE_WHO=$USER bash benchmarks/one_stage/proof_layers.sh`.
    It prints the three; give `./out`'s `out-flock`, `out-zk` and `out-sampling` to `--flock`, `--zk` and `--sampling`.
