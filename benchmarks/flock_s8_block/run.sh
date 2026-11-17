@@ -244,7 +244,7 @@ python3 - $O "$STATEMENTS" "$CPU_STATEMENTS" $ROWS <<'EOF' || LEAN_BAD=10
 import json, sys
 from pathlib import Path
 out = Path(sys.argv[1])
-sys.path.insert(0, "benchmarks/harness")
+sys.path[:0] = ["benchmarks/harness", "tools/config"]
 from verity_bench import kit
 res = kit.writer(out)
 card = res.stamp["card"]
