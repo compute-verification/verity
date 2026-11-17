@@ -23,16 +23,16 @@ public import InferenceOnlyVerifier.DefinitionDigest
 /-!
 # The inference-only policy's check
 
-`InferenceOnlyVerifier.Theta.check` (the `inference-only-verifier` exe) is the verifier's check that a declared division of a declaration into
+`InferenceOnlyCheck.Theta.check` (the `inference-only-check` exe) is the verifier's check that a declared division of a declaration into
 inference blocks meets `InferenceOnly.CompliesRate Γ α` (`security/Definitions/InferenceOnly.lean`), for inference blocks aligned to the root's Calls, at
-the cost of the descriptor: `InferenceOnlyVerifier.Desc.check`, one summary per Definition, never a walk over the unrolled circuit
+the cost of the descriptor: `InferenceOnlyCheck.Desc.check`, one summary per Definition, never a walk over the unrolled circuit
 (AGENTS.md "Design rules"), then each θ entry's provenance, registered public data that the first record of the
 deployment's registration log registers and never an earlier run's output, against the service's log
-(`InferenceOnlyVerifier.Theta`; `InferenceOnlyVerifier.ThetaDifftest` holds it to the Python reference).
-`InferenceOnlyVerifier.check` is the same check gate by gate, with the input format and its mapping to the definition's circuit in
-`InferenceOnlyVerifier.Check`'s docstring, kept as the reference: `InferenceOnlyVerifier.Difftest` holds it to the Python reference, and
-`InferenceOnlyVerifier.DescDifftest` holds `InferenceOnlyVerifier.Desc` to it and to the Python reference, `InferenceOnlyVerifier.DescLiveness` to it on
-Program shapes past anything `InferenceOnlyVerifier.Desc` walks one by one, and `InferenceOnlyVerifier.DescFuzz` decides on generated Programs the
+(`InferenceOnlyCheck.Theta`; `InferenceOnlyCheck.ThetaDifftest` holds it to the Python reference).
+`InferenceOnlyCheck.check` is the same check gate by gate, with the input format and its mapping to the definition's circuit in
+`InferenceOnlyCheck.Check`'s docstring, kept as the reference: `InferenceOnlyCheck.Difftest` holds it to the Python reference, and
+`InferenceOnlyCheck.DescDifftest` holds `InferenceOnlyCheck.Desc` to it and to the Python reference, `InferenceOnlyCheck.DescLiveness` to it on
+Program shapes past anything `InferenceOnlyCheck.Desc` walks one by one, and `InferenceOnlyCheck.DescFuzz` decides on generated Programs the
 statements their agreement rests on, and the agreement itself. Code: it reads the Program with Flock's
 decoder (`Flock.Program`) and imports nothing else but Lean core. It stays experimental until its agreement with the
 definition is proved.
@@ -57,21 +57,21 @@ reads. `RecordCount` is a library: no protocol or verdict reads it.
 with each template's rows of one unit read from its circuit file, a blob named by its SHA-512 in the params, by the
 reader SPOT's one-stage check reads a file with (`Spot.OneStageZk`, `Spot.FilePart`). No system lists it.
 
-`InferenceOnlyVerifier.Protocol` is the policy's check as a core protocol, `verity/inference-only/v0` (the `inference-only` exe):
+`InferenceOnlyCheck.Protocol` is the policy's check as a core protocol, `verity/inference-only/v0` (the `inference-only` exe):
 the inference-only policy's subprotocol of onsite and remote, on the core interface (`CoreProtocol`).
 
 Flock's decoder doesn't check that a reference reads a leaf at the width it was committed with, which the
 Python codec refuses as it decodes (`E_REINTERPRET`), so every Program the check reads goes through
-`InferenceOnlyVerifier.decodeProgram`, which refuses one that doesn't, with a message.
+`InferenceOnlyCheck.decodeProgram`, which refuses one that doesn't, with a message.
 
-`InferenceOnlyVerifier.Count.check` (`inference-only-verifier --count`) is the count of `(c, k)`-inference blocks: that a Boolean declaration's
+`InferenceOnlyCheck.Count.check` (`inference-only-check --count`) is the count of `(c, k)`-inference blocks: that a Boolean declaration's
 computed gates divide into at most `n` proof blocks of a `(c, k)`-partition (`InferenceOnly.CompliesAtMost`), the blocks the
 activations of the block Definitions the declaration names, with each block Definition's Boolean gates from the gate
-table and its fresh bits from `InferenceOnlyVerifier.Desc`'s summaries. It publishes only the judgment against `n`, `{complies}`;
-the whole verdict, with the counts, is `InferenceOnlyVerifier.Count.checkDetail`, for the private record. `InferenceOnlyVerifier.CountDifftest`
+table and its fresh bits from `InferenceOnlyCheck.Desc`'s summaries. It publishes only the judgment against `n`, `{complies}`;
+the whole verdict, with the counts, is `InferenceOnlyCheck.Count.checkDetail`, for the private record. `InferenceOnlyCheck.CountDifftest`
 holds both to the Python reference.
 
-`InferenceOnlyVerifier.DefinitionDigest` holds a Definition's digests, read off its Program's descriptor with no decode: the circuit
+`InferenceOnlyCheck.DefinitionDigest` holds a Definition's digests, read off its Program's descriptor with no decode: the circuit
 format's own (`definitionDigest`), over the Definition's body, and the closure digest (`closureDigest`), over its body
 and every body it reaches, which a check that takes a Definition by digest pins. It reads none of the modules above;
 the period check takes its slot entries' Definitions by it.

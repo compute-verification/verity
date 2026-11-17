@@ -1,9 +1,9 @@
 import InferenceOnlyVerifier
 
 /-!
-`inference-only-phases INSTANCE [TOP [BIG]]`: `InferenceOnlyVerifier.Desc.evaluate`'s steps on one `inference-only-verifier --policy` instance, each timed, one
+`inference-only-phases INSTANCE [TOP [BIG]]`: `InferenceOnlyCheck.Desc.evaluate`'s steps on one `inference-only-check --policy` instance, each timed, one
 `PHASE {json}` line per step on stdout (milliseconds, resident and peak RSS in MB): the file's read, the instance's JSON
-parse, `InferenceOnlyVerifier.parse`, three of the decoder's parts on their own (the program text's JSON parse, `Flock.canon` of it and
+parse, `InferenceOnlyCheck.parse`, three of the decoder's parts on their own (the program text's JSON parse, `Flock.canon` of it and
 SHA-512 of that, each a step `Flock.Program.decode` takes, on the whole descriptor), Flock's decoder
 (`Flock.Program.decode`, which parses the program's text again, hashes it and refuses a reference that reads a leaf at
 another width), `Prog.orderViolation`, the layout checks, `walkable`, `analyze` split into each reached
@@ -11,7 +11,7 @@ Definition's summary (`summarize`, callees first, the `TOP` slowest named with t
 the `TOP` with the most return pieces; one of at least `BIG` body nodes, 2^17 unless given, step by step, with its
 return's pieces before and after `coalesce`: `summarizeTimed`) and the
 root's reads (`nodeReads`), and the verdict (θ, the owners, `intoOf`, `freshWidth`). The last line is the verdict, which
-`inference_only_cost.sh` holds to `inference-only-verifier --policy`'s. A measurement, not a verifier: it runs what `InferenceOnlyVerifier.Desc.evaluate`
+`inference_only_cost.sh` holds to `inference-only-check --policy`'s. A measurement, not a verifier: it runs what `InferenceOnlyCheck.Desc.evaluate`
 runs, in its order.
 -/
 

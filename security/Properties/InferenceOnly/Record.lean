@@ -60,12 +60,12 @@ counts more bits as fresh.
 **The rate rule** (`Complies`): where the check accepts, the instance's fields are the ones it judged by, the record
 lays out a circuit, and every circuit it lays out meets the policy block by block at the instance's `Γ` and `α`, so
 it complies (`InferenceOnly.CompliesRate`). It follows from four statements about the check, `Owns`, `LaidOut`, `Counts` and
-`Rates`: that it does is the guarantee `InferenceOnlyVerifier.Guarantees.ServedComplies` (`Proofs.Properties.InferenceOnly.Record`).
+`Rates`: that it does is the guarantee `InferenceOnlyCheck.Guarantees.ServedComplies` (`Proofs.Properties.InferenceOnly.Record`).
 
 **Provenance** (`Provenance`): the run's own record names this Program and this record by their SHA-512s, and every
 row the check holds is a registered read or a table read of a parameter that the log's first record registers under
 the root the run commits it under, or a port of an opening whose reader is pinned (`Good`). A pin is a Definition's
-closure digest (`InferenceOnlyVerifier.DefinitionDigest.closureDigest`) that the instance lists (`Carries`). A pinned reader's
+closure digest (`InferenceOnlyCheck.DefinitionDigest.closureDigest`) that the instance lists (`Carries`). A pinned reader's
 roles, which of its ports are the key, the root, the domain id, the opened rows and the verdict, are the check's
 layout of its Definition (`Form.layout`), never the record's word, so that an opening's key is never a row it
 registers.
@@ -254,7 +254,7 @@ inductive Lands (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot
   | wire (o g a : ℕ) : Feeds P rs W S g o → Lands P rs W S g a → Lands P rs W S o a
 
 /-- `D` is the wired circuit: its gates are the Program's gates no wire covers, gate `x` the Program's `at_ x`, with
-that gate's width and kind, reading where its operands land. As in `InferenceOnlyVerifier.Properties.LaysOut`, operations and
+that gate's width and kind, reading where its operands land. As in `InferenceOnlyCheck.Properties.LaysOut`, operations and
 outputs are free. -/
 def LaysOut (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) (D : Verity.Circuit)
     (at_ : Fin D.N → ℕ) : Prop :=

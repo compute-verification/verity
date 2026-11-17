@@ -13,7 +13,7 @@ lists the policy under.
 
 Two protocols, each a core protocol of its executable (``EXE check PARAMS COMMITMENT EVIDENCE [BLOB...]``):
 
-* `ID`, ``verity/inference-only/v0`` (`MANIFEST`, executable ``inference-only``, `InferenceOnlyVerifier.Protocol`): the check on
+* `ID`, ``verity/inference-only/v0`` (`MANIFEST`, executable ``inference-only``, `InferenceOnlyCheck.Protocol`): the check on
   a Program that holds every weight it reads and every wire between its units, counted in the Program's gates. Its
   params are ``alpha``, ``gamma``, ``log``, ``parameters`` and ``program``. The composites list it.
 * `ROWS_ID`, ``verity/inference-only/rows/v1`` (`ROWS_MANIFEST`, executable ``inference-only-rows``,

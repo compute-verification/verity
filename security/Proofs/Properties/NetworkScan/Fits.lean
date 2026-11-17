@@ -47,14 +47,14 @@ import Std.Tactic.BVDecide.Normalize.Bool
 # The scan's layout fits its Program: where its egress and ingress gates resolve
 
 What `NetworkCheck.Period.scanOf`'s description checks give `Properties.NetworkScan.ScanFits`, on a Program Flock's
-decoder returns (`BodiesOk.decode_spec`: every Definition `DefOk`), laid out and walked as `InferenceOnlyVerifier.Desc.walkable`
+decoder returns (`BodiesOk.decode_spec`: every Definition `DefOk`), laid out and walked as `InferenceOnlyCheck.Desc.walkable`
 checks.
 
 * Down from a node whose outputs its activation computes (`Own`: no scan, a primitive's or an `ownReturns`
   composite's), resolution never goes up through a parameter, so it ends at a gate within the node's gates, within the
   walk's fuel (`resolve_own`).
 * A gate within a root node that calls a composite is located below the root, where no input node is
-  (`InferenceOnlyVerifier.Desc.inputsAtRoot`), so it is no input (`gate_not_input`); a gate within a root input node is located there
+  (`InferenceOnlyCheck.Desc.inputsAtRoot`), so it is no input (`gate_not_input`); a gate within a root input node is located there
   (`gate_at_input`).
 * A template member's parameter whose argument is one input node's leaves resolves, one step up and one down, to a gate
   of that input node (`resolve_param_input`).
@@ -118,7 +118,7 @@ theorem names_sub (q : Part) (x : Bool × ℕ) (h : x ∈ BodiesOk.partNames q) 
     · simp at h
   | explicit it => exact h
 
-/-- What `InferenceOnlyVerifier.Desc.inputsAtRoot` says: no node calls the root, and only the root's are input nodes. -/
+/-- What `InferenceOnlyCheck.Desc.inputsAtRoot` says: no node calls the root, and only the root's are input nodes. -/
 theorem inputsAtRoot_spec (P : Prog) (h : InferenceOnlyVerifier.Desc.inputsAtRoot P = true) :
     ∀ d < P.defs.size, ∀ n ∈ (P.defs[d]!).body.nodes, n.fn ≠ P.root ∧
       (d = P.root ∨ InferenceOnlyVerifier.Desc.isInputNode P n = false) := by
@@ -190,7 +190,7 @@ variable (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = f
 include hroot hL
 
 /-- **A gate of a root node calling a composite is no input**: `Prog.gate`'s walk goes into the node's member, below
-the root, where only primitives that are no input are (`InferenceOnlyVerifier.Desc.inputsAtRoot`). -/
+the root, where only primitives that are no input are (`InferenceOnlyCheck.Desc.inputsAtRoot`). -/
 theorem gate_not_input (hin : InferenceOnlyVerifier.Desc.inputsAtRoot P = true) {k g p : ℕ} {ops : Array ℕ} {sc : Scope}
     (hk : k < (P.defs[P.root]!).body.nodes.size)
     (hkc : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false)
