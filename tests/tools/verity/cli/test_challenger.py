@@ -3,6 +3,7 @@ each under a key made for the run, write SPOT's and Pearl+'s bindings, which SPO
 stopped when the run ends. Its hosts and Pearl+'s gate are stand-ins written by each test."""
 from __future__ import annotations
 
+import ast
 import json
 import subprocess
 import sys
@@ -64,8 +65,17 @@ def stand_ins(tmp_path, monkeypatch):
     return state, calls, gate
 
 
-def test_the_challenger_is_the_party_the_table_starts_first_and_writes_spots_and_pearl_plus_bindings():
-    assert set(T.STARTS) == {T.CHALLENGER}
+def test_every_party_the_table_starts_first_is_registered_into_the_one_starts_table():
+    """A second `STARTS = ...` merges without a conflict and drops every party registered before it."""
+    assert set(T.STARTS) == {T.CHALLENGER, T.NETWORK_ATTESTER}
+    module = ast.parse(Path(T.__file__).read_text())
+    assigned = [n.lineno for n in module.body if isinstance(n, (ast.Assign, ast.AnnAssign))
+                for t in (n.targets if isinstance(n, ast.Assign) else [n.target]) if isinstance(t, ast.Name)
+                and t.id == "STARTS"]
+    assert len(assigned) == 1, f"served_table.py assigns STARTS at lines {assigned}: register with STARTS[PARTY] = ..."
+
+
+def test_the_challenger_writes_spots_and_pearl_plus_bindings():
     assert {c: list(k) for c, k in T.STARTS[T.CHALLENGER].writes.items()} == {
         "sampled-proofs": ["loopback", "main-file"], "pearl-plus": ["gate", "peer", "lane", "key-sha512", "main-file"]}
     assert (ROOT / T.PEARLPLUS_GATE).is_file()
