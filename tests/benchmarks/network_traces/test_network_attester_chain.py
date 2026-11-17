@@ -430,15 +430,15 @@ def test_the_network_attester_path_requires_every_step_on_one_network_attester_r
 
     proxy = WC.PROXY
     refused("n2", lambda d: {k: v for k, v in d.items() if k != "warden_run"} | {"run": str(certifier_run)},
-            f"N2's summary names no network certifier run: {proxy}")
-    refused("tie", lambda d: d | {"warden_run": "11" * 32}, "the tie's summary is on network certifier run " + "11" * 32)
+            f"N2's summary names no network attester run: {proxy}")
+    refused("tie", lambda d: d | {"warden_run": "11" * 32}, "the tie's summary is on network attester run " + "11" * 32)
     refused("tie", lambda d: d | {"tie": {"honest": [True, True], "forged": [True, True]}}, "forged's refused")
-    refused("scan", lambda d: d | {"warden_run": None}, "the scan's summary names no network certifier run")
+    refused("scan", lambda d: d | {"warden_run": None}, "the scan's summary names no network attester run")
     refused("endpoint", lambda d: d | {"io": {"accepted": False, "violations": [[3, "x"]]}}, "read whole off its cells")
     refused("endpoint", lambda d: {k: v for k, v in d.items() if k != "warden_run"},
-            f"the endpoint's report names no network certifier run: {proxy}")
+            f"the endpoint's report names no network attester run: {proxy}")
     refused("certs", lambda d: {k: v for k, v in d.items() if k != "warden_run"},
-            f"the certificates step's input names no network certifier run: {proxy}")
+            f"the certificates step's input names no network attester run: {proxy}")
     steps.endpoint = steps.tie = None
     r = cr.report(steps)
     assert r["verdict"] == "refused" and r["steps"]["endpoint"]["verdict"] == "not run"

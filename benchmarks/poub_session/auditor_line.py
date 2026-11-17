@@ -224,7 +224,7 @@ GROUNDED = {LOCKDOWN: (
     "interval; it assumes what the security group doesn't close: the provider's resolver, flows opened before it was "
     "applied, and the provider's own paths (metadata, management plane, a cluster's fabric, a shared filesystem). "
     "LineHeld no longer takes it: its Accounting.Remote.Held.Assumptions.Covered (certifier-coverage) is what it "
-    "became, with the certifiers in its place")}
+    "became, with the network attesters in its place")}
 """What grounds `NoOutsideCompute` for a session (`lockdown_check`), each with what it says: a line whose sessions are
 all grounded is conditional on it in its place."""
 
