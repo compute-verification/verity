@@ -58,7 +58,7 @@ def cases(tmp_path_factory):
         "another salt": (replace(e0, salt=i0.salt), "opening"),
         "another path": (replace(e0, path=e0.path[::-1]), "opening"),
         "another signed digest": (replace(e0, signed=i0.signed), "signed"),
-        "another certifier salt": (replace(e0, salt_c=i0.salt_c), "signed"),
+        "another attester salt": (replace(e0, salt_c=i0.salt_c), "signed"),
         "a certificate that signs the unsalted record digest": (replace(e0, signed=tagged_sha512(RECORD_TAG, e0.head)),
                                                                 "signed"),
         "an unset deadline bit": (edited(0, deadline=False), None),
