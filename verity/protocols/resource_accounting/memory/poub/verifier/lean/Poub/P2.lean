@@ -21,9 +21,9 @@ y_(i,p)       SHA512(Z(SKETCH_RECEIPT_DOMAIN ‖ frame(seed_i)) ‖ u64be g ‖ 
 
 An opening is checked as `p2.check` checks it (`checkOpening`), its failures `audit.FAILURES`' names: `malformed`,
 `receipt-path` (the receipt leaf on the pass's root, as a registered block's), `payload-path` (each of the unit's four
-blocks on the registration's vk root, by PoUS's own leaf and RFC 9162 path check, `PousVerifier.Merkle.packageLeaf` and
+blocks on the registration's vk root, by PoUS's own leaf and RFC 9162 path check, `PousCheck.Merkle.packageLeaf` and
 `verifyPath`) and `receipt` (y recomputed from the four blocks). Nothing here decodes a block: vk's leaves are of the
-`C*` the verifier decoded to the committed W at PoUS's setup (`PousVerifier.P2` is P2's decode).
+`C*` the verifier decoded to the committed W at PoUS's setup (`PousCheck.P2` is P2's decode).
 -/
 
 @[expose] public section

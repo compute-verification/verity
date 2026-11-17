@@ -14,7 +14,7 @@ meta import PousVerifier.Run
 /-!
 # A PoUS run as a core protocol
 
-`PousVerifier.Run.checkAt` behind the core interface (`Core.Protocol`), PoUS's component of onsite Verity
+`PousCheck.Run.checkAt` behind the core interface (`Core.Protocol`), PoUS's component of onsite Verity
 (`verity/protocols/compose/verifier/onsite`), each byte string canonical JSON:
 
 * params `{"point": {"k", "limit_ns", "params": {"blocks_per_segment", "c0", "segments", "w"}}, "session_id": hex,
