@@ -1,6 +1,7 @@
 # Sourced by run_point.sh (a spec's `setup`): the bandwidth arms' GPU libraries (benchmarks/vllm_encoded/bench_arm.py),
-# built from this source tree: the encoded stack at its default field (1024, masked, FOLD6, 32 query heads) and the
-# top-up, and the VERITY_VLLM_BENCH_*_LIB names the arms read exported.
+# built from this source tree for ARCH (90a or 120a; unset, the leased card's name tells it): the encoded stack at its
+# default field (1024, masked, FOLD6, 32 query heads) and the top-up, and the VERITY_VLLM_BENCH_*_LIB names the arms
+# read exported.
 #
 # wt.cu takes nvcc about 9 minutes, so a build is kept on the node in $VERITY_BENCH_LIB_CACHE/KEY (default
 # /workspace/research/cache/verity-bench-libs), KEY the hash of nvcc's version, the flags and every file each build reads
@@ -16,7 +17,16 @@ if ! { mkdir -p "$VE_CACHE" 2> /dev/null && [ -w "$VE_CACHE" ]; }; then
   echo "setup: $VE_CACHE is not writable here; building in the run directory" >&2
   VE_CACHE=$VE_RUN/setup-build
 fi
-VE_FLAGS=(-O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
+VE_ARCH=${ARCH:-}
+if [ -z "$VE_ARCH" ]; then
+  VE_CARD=${GPU_LEASE_UUID:-${CUDA_VISIBLE_DEVICES:-0}}
+  case $(nvidia-smi --query-gpu=name --format=csv,noheader -i "$VE_CARD" 2> /dev/null) in
+    *H200* | *H100*) VE_ARCH=90a ;;
+    *"RTX PRO 6000"*) VE_ARCH=120a ;;
+    *) echo "setup: ARCH (90a, 120a) is not given and the card's name does not tell it" >&2; exit 3 ;;
+  esac
+fi
+VE_FLAGS=(-O3 -gencode "arch=compute_$VE_ARCH,code=sm_$VE_ARCH" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
 VE_FIELD=1024
 VE_ORDER=(wt reader paged topup)
 declare -A VE_BUILDS=(
@@ -29,7 +39,7 @@ mkdir -p "$VE_CACHE" "$VE_RUN/setup" "$VE_RUN/out/setup"
 VE_RECIPE=$(nvcc --version; echo "flags: ${VE_FLAGS[*]}"; for lib in "${VE_ORDER[@]}"; do echo "$lib: ${VE_BUILDS[$lib]}"; done)
 VE_SOURCES=$(for lib in "${VE_ORDER[@]}"; do
   # shellcheck disable=SC2086
-  nvcc -MM -gencode arch=compute_120a,code=sm_120a -std=c++17 ${VE_BUILDS[$lib]}
+  nvcc -MM -gencode "arch=compute_$VE_ARCH,code=sm_$VE_ARCH" -std=c++17 ${VE_BUILDS[$lib]}
 done | sed 's/^[^:]*://; s/\\$//' | tr ' ' '\n' | sed '/^$/d' | sort -u)
 VE_KEY=$({ echo "$VE_RECIPE"; echo "$VE_SOURCES" | xargs sha256sum; } | sha256sum | cut -c1-32)
 VE_LIBS=$VE_CACHE/$VE_KEY
