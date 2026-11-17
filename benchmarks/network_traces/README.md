@@ -36,7 +36,7 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   proof blocks with Flock `prove --zk` behind the Lean ZK server and holds them by the Lean
   `verity-verify-proof verify --zk`: `n2_zk.py` (N2's registered proof block, N2's verdict of record), `n2_tie_zk.py`
   (the ingress tie), `scan_zk.py` (the step-indexed scan) and `scan_period.py` (the
-  scan's answers held by `NetworkCheck.Period`). `leak_scan.py`, in
+  scan's answers held by `NetworkVerifier.Period`). `leak_scan.py`, in
   `prover/` too, is the scan of what the verifier received that every one of them runs.
 - **The chain's run of record.** `chain_record.py` (`chain_record.sh`, below), with
   `prover/window_chain.py` (a served endpoint's Commit periods as one I1 v0 advice), `leak_guard.py` (the record's leak
@@ -88,8 +88,8 @@ its own function, `wipe_monitoring.counted` (`verity/protocols/resource_accounti
 `session` runs the gate's scan rehearsal (`warden-rehearse --scan --prompts`) against the endpoint on the peer's loopback, by default
 the H200 peer's `serve-openai` on :18782, inside the scan's class: prompts of 256 ids from a fresh secret seed (prompts
 of the class's 1,024 reach the relay late), each answered greedily with at most 64 ids, ending at the base model's EOS
-id 128001. It runs at a given UTC time when asked. The endpoint is started by hand (serve-openai directly with
-`adapters/vllm/tools/served_run/serve.sh`'s serve-openai line, not serve.sh), sealed without the attention interiors, with bounded
+id 128001. It runs at a given UTC time when asked. The endpoint is started by hand (serve-openai directly, with the
+flags `served_session.py`'s `HAND_START` lists), sealed without the attention interiors, with bounded
 staging at its default, which that exclusion needs. Its `requests.jsonl` and `advice_trace.jsonl` hold request values
 (prompt and streamed ids; prompt lengths, sampling, rows and emitted ids) and stay on the served node, so the chain's
 endpoint step runs there: `io` writes the kept network attester run's certified I/O to a 0600 file in the kept fetch's

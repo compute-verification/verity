@@ -2,7 +2,8 @@
 one shared library per leaf-kernel __launch_bounds__ form) over one window of rows (the leaves and the window's whole tree), alone and
 beside a busy stream (bf16 GEMM loops, a square one and decode's skinny one, a device copy loop; at default and at the highest stream
 priority, and in launches capped at a number of CTAs), and commit_gpu's raw SHA-512 compression rate on the same device.  Each form's
-root of a small padded domain is checked against step_rows before it is timed.  Measurement only; JSON to $OUT/rows_floor.json.
+root of a small padded domain is checked against step_rows before it is timed.  Measurement only; JSON to $OUT/rows_floor.json,
+and the served form's rate alone at each row size (`metrics.toml`) into the run's result.
 
     bash benchmarks/served_commit/rows_floor.sh     (ROWS: row bytes, default 256 1024 4096; WINDOW_MB, default 256; REPS, default 9;
                                                      MINB: the leaf kernel's min CTAs per SM, default 1 2 3;
@@ -34,6 +35,9 @@ SRC = ROOT / "adapters/vllm/verity_vllm/commit/committer/native_rows.cu"
 KERNELS = ROW_COMMIT.parent
 COMMIT_GPU = ROOT / "verity/commitments/cuda/commit_gpu/commit_gpu.cu"
 c_p, c_u64 = ctypes.c_void_p, ctypes.c_uint64
+RATE = "circuits/commitment-hash-rate"
+#: native_rows.cu's VERITY_ROWS_MIN_BLOCKS default, the form the worker builds
+SERVED_FORM = "minb2"
 
 
 def nvcc(args: list[str]) -> tuple[int, str]:
@@ -212,6 +216,21 @@ def main() -> None:
             form["sizes"][rb] = entry = size_floor(R, rb, data, reps, (hs, hs_hi, bs), busy, busy_ms, caps, beside_rows)
             print(f"minb{minb} rows {rb}", json.dumps(entry), flush=True)
     (out_dir / "rows_floor.json").write_text(json.dumps(res, indent=1))
+    record(res, out_dir)
+
+
+def record(res: dict, out_dir: Path) -> None:
+    from verity_bench import kit
+    w = kit.writer(out_dir)
+    card = "-".join(res["device"].lower().split()).removeprefix("nvidia-")
+    sizes = (res["forms"].get(SERVED_FORM) or {}).get("sizes") or {}
+    for rb in sorted(sizes, key=lambda rb: (int(rb) == step_rows.ROW_BYTES, int(rb))):
+        e = sizes[rb]
+        if not e.get("matches_step_rows") or e.get("gb_per_s") is None:
+            continue
+        fields = {"card": card, "row_bytes": int(rb), "window_bytes": res["window_bytes"], "form": SERVED_FORM}
+        m = w.measurement(RATE, e["gb_per_s"], "GB/s", mark="measured", member=f"{card}-{rb}", extra=fields)
+        print(json.dumps({k: m[k] for k in ("name", "value", "unit", "member", *fields)}), flush=True)
 
 
 def size_floor(R: Rows, rb: int, data: torch.Tensor, reps: int, streams: tuple, busy: dict, busy_ms: dict,

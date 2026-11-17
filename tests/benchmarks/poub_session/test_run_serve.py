@@ -503,6 +503,14 @@ def test_a_served_line_declares_its_cores_to_a_lease_program_that_takes_them(nod
     assert [x["cpus"] for x in node.provers() if x["what"] != "row build"] == [cores()[1], every]
 
 
+def test_help_prints_the_header_and_starts_nothing(tmp_path):
+    for flag in ("--help", "-h"):
+        p = subprocess.run([BASH, str(RUN), flag], cwd=tmp_path, env={"PATH": MACHINE_PATH}, capture_output=True, text=True)
+        assert p.returncode == 0 and p.stderr == "", said(p)
+        assert p.stdout.startswith("PoUB sessions (cwd = the source tree)") and "ROLE=both" in p.stdout
+        assert p.stdout.rstrip().endswith("start the verifier then.") and not list(tmp_path.iterdir())
+
+
 # ------------------------------------------------------------------------------- run.sh: refused before the lease
 
 def refused(node: Node, p: subprocess.CompletedProcess, why: str) -> None:

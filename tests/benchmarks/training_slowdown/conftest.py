@@ -98,3 +98,12 @@ def calculators_count(c: float, k: float, work: dict) -> float:
     b = calculator._min_cut().bound(c, k, None, N=work["N"], O=work["O"], size=work["C_gates"],
                                     beta_w=work["beta_w"], beta_x=work["beta_x"], b=work["b_y"], F=work["F"])
     return b.blocks * c / work["C_gates"]
+
+
+@pytest.fixture(autouse=True)
+def _no_run_result(monkeypatch):
+    """No test writes into a research run's result: under `research run` a test inherits `RESEARCH_RUN_DIR` and `OUT`,
+    where the kit writes the run's measurements whatever directory its caller names, so each test starts with both
+    unset, and a test that writes as a run sets its own (`tests/test_tests_write_no_measurement.py`)."""
+    for name in ("RESEARCH_RUN_DIR", "OUT"):
+        monkeypatch.delenv(name, raising=False)

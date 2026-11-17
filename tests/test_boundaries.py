@@ -82,7 +82,7 @@ INTEGRATION_SITES = _integration_sites()
 #: repository's own directories.
 FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_numerical", "verity_flock", "verity_torch", "verity_cli", "verity_difftest",
                       "circuit_check", "research", "cluster", "sp1", "vllm", "torch", "jax", "onnx", "archive", "backends",
-                      "benchmarks", "examples", "frontends", "infra", "integrations", "tools", "veritor", "adapters", "demos")
+                      "benchmarks", "examples", "frontends", "infra", "integrations", "tools", "veritor", "adapters", "applications")
 #: ``verity``'s third-party dependencies (the root's ``pyproject.toml``); anything else it imports is the stdlib or
 #: ``verity``.
 DEPENDENCIES = {"numpy"}
@@ -132,8 +132,8 @@ SPOT_NOT_CERTIFIER = ("SPOT[Flock] never imports the network certifier, which co
 #: the bytes, hashes and parsing below them requires a base package (``BASE_LEAN``) instead.
 FLOCK_VERIFIER = "flock_verifier"
 REQUIRES_FLOCK_VERIFIER = {
-    "core_zk_server", "core_memory_challenger", "core_onsite", "core_remote", "core_sigma", "core_spot", "core_vstar",
-    "core_vstar_recursive", "network_check", "pous_check", "pouw_commit", "poub", "security_proofs",
+    "core_zk_server", "core_memory_attester", "core_onsite", "core_remote", "core_sigma", "core_spot", "core_vstar",
+    "core_vstar_recursive", "network_verifier", "pous_verifier", "pouw_commit", "poub", "security_proofs",
     "security_properties",
 }
 #: The base packages below Flock's verifier, each with every package it may require: nothing above it.
@@ -183,19 +183,11 @@ TEST_ONLY = {
                          "of `check` on advice past the builder's scope, as a prover may send it"),
 }
 
-#: Modules that only a prover's or developer's build turns on, which nothing under ``verity/`` outside their own package
-#: names (an import, an attribute or a string), each with the module and why a verifier must not read it.
-PROVER_ONLY = {
-    "trace_cache": ("verity/circuits/ops/boolean/trace_cache.py",
-                    "traced circuits reused across a prover's builds: a verifier reading them would take a stale or tampered "
-                    "entry for a Definition's gates"),
-}
-
 #: The runtime, its package and each module in it: what runs parties over channels and what starts a side as another
 #: process (the layout's ``verity/runtime/``, ``tests/tree.toml``).
 RUNTIME = ("verity.runtime", *sorted(f"verity.runtime.{p.stem}" for p in (ROOT / "verity" / "runtime").glob("*.py")
                                      if p.stem != "__init__"))
-#: The trees whose files import no module of the runtime: only what starts a run does (a demo, a benchmark, the `verity`
+#: The trees whose files import no module of the runtime: only what starts a run does (an application, a benchmark, the `verity`
 #: command), and it hands a protocol's file the stream, the side or the driver it needs.
 RUNTIME_FREE = ("verity/protocols/", "adapters/")
 #: Files of ``RUNTIME_FREE``, outside its tests, that import the runtime all the same, each with its owner and what it
@@ -1005,7 +997,7 @@ def test_a_runtime_import_is_found() -> None:
                                         "from verity.party import Party\n"),
         "verity/protocols/x/c.py": "import verity.runtime\nfrom verity import runtime\n",
         "verity/protocols/x/tests/test_a.py": f"from {module} import run\n",
-        "demos/d/run.py": f"from {package} import {name}\n",
+        "applications/d/run.py": f"from {package} import {name}\n",
     }
     assert _runtime_importers(texts) == {
         "adapters/y/z.py": [f"1: {RUNTIME[-1]}"],
@@ -1066,27 +1058,6 @@ def test_a_use_past_a_guard_is_found() -> None:
     assert _is_test("verity/circuits/tests/test_partition_v2.py") and not _is_test("verity/circuits/partition_v2.py")
 
 
-def test_only_its_own_package_names_a_prover_only_module() -> None:
-    """No Python file under ``verity/`` (tests and distributions of its own included) names a module of ``PROVER_ONLY``
-    from outside the directory one level below its row of the listing (``_below``: its package, with its tests), and each
-    still exists.  So
-    no verifier and no device names one, and neither does anything they load."""
-    steps = _listing().steps
-    homes = {name: _below(f, steps) for name, (f, _why) in PROVER_ONLY.items()}
-    word = re.compile(r"\b(?:" + "|".join(map(re.escape, sorted(PROVER_ONLY))) + r")\b")
-    offenders = []
-    for path, rel in _with_tests(["verity"]):
-        if not word.search(text := path.read_text(encoding="utf-8")):
-            continue
-        hits = _uses(ast.parse(text, filename=rel), set(PROVER_ONLY))
-        hits += [(part, line) for name, line, _ in _imports(path) for part in set(name.split(".")) & set(PROVER_ONLY)]
-        offenders += [f"{path.relative_to(ROOT).as_posix()}:{line}: {name}" for name, line in hits if _below(rel, steps) != homes[name]]
-    assert not offenders, ("only its own package names a prover-only module (PROVER_ONLY), so that no verifier reads "
-                           "one:\n" + "\n".join(offenders))
-    missing = [f for f, _why in PROVER_ONLY.values() if not (ROOT / f).is_file()]
-    assert not missing, f"PROVER_ONLY entries whose module is gone; remove them: {missing}"
-
-
 def _docstrings(tree: ast.AST) -> set[int]:
     out = set()
     for node in ast.walk(tree):
@@ -1111,6 +1082,42 @@ def test_core_never_reads_the_census() -> None:
         offenders += [f"{path.relative_to(SRC)}:{n.lineno}" for n in ast.walk(tree)
                       if isinstance(n, ast.Constant) and isinstance(n.value, str) and id(n) not in docs and CENSUS_PATH.search(n.value)]
     assert not offenders, offenders
+
+
+WORLD_DIRS = ("hardware", "calibration")
+WORLD_PATH = re.compile(r"(?<![\w.\-])(hardware|calibration)[/\\]")
+#: The files of ``verity`` that still name a path to ``hardware/`` or ``calibration/``, each with why.  It only shrinks.
+WORLD_PATHS_ALLOWED: dict[str, str] = {}
+
+
+def _world_paths(tree: ast.AST) -> list[int]:
+    docs = _docstrings(tree)
+    named = {id(side) for n in ast.walk(tree) if isinstance(n, ast.BinOp) and isinstance(n.op, ast.Div)
+             for side in (n.left, n.right) if isinstance(side, ast.Constant) and side.value in WORLD_DIRS}
+    return sorted(n.lineno for n in ast.walk(tree) if isinstance(n, ast.Constant) and isinstance(n.value, str)
+                  and id(n) not in docs and (id(n) in named or WORLD_PATH.search(n.value)))
+
+
+def test_verity_names_no_path_to_the_hardware_or_calibration() -> None:
+    """The protocols read nothing about the world: a card, a node file or a calibrated figure reaches ``verity`` as a
+    parameter its caller passes, so no string in its code (docstrings aside) is a path to ``hardware/`` or
+    ``calibration/``, written whole or joined with ``/``."""
+    found = {}
+    for path in _held_sources():
+        lines = _world_paths(ast.parse(path.read_text(encoding="utf-8"), filename=str(path)))
+        if lines:
+            found[path.relative_to(SRC).as_posix()] = lines
+    offenders = [f"verity/{f}:{n}" for f, lines in found.items() if f not in WORLD_PATHS_ALLOWED for n in lines]
+    assert not offenders, ("verity names a path to hardware/ or calibration/; take the figure, or the directory, as a "
+                           "parameter its caller passes:\n" + "\n".join(offenders))
+    stale = sorted(set(WORLD_PATHS_ALLOWED) - set(found))
+    assert not stale, f"WORLD_PATHS_ALLOWED entries that name no such path any more; remove them: {stale}"
+
+
+def test_a_path_to_the_hardware_is_found() -> None:
+    src = ('A = ROOT / "hardware" / "cards"\nB = "calibration/hardware/nodes"\nC = Path("x") / "calibration"\n'
+           'D = {"hardware": 1, "calibration": 2}\nE = "verity/hardware.json"\n')
+    assert _world_paths(ast.parse(src)) == [1, 2, 3]
 
 
 #: The listing: the tree's directories, bottom first; the directories under ``verity/`` that are distributions of their own;
@@ -1762,8 +1769,8 @@ ORDER_TREE = {
     "verity/protocols/proofs/spot/lean/lakefile.toml": 'name = "spot"\n[[lean_lib]]\nname = "Spot"\n',
     "verity/protocols/proofs/spot/lean/Spot/X.lean": "",
     BY_PATH: ("import sys\nfrom pathlib import Path\n"
-              f"sys.path.insert(0, str(Path(__file__).resolve().parents[{BY_PATH.count('/')}] / 'demos' / 'e2e'))\nimport prof\n"),
-    "demos/e2e/prof.py": "",
+              f"sys.path.insert(0, str(Path(__file__).resolve().parents[{BY_PATH.count('/')}] / 'applications' / 'e2e'))\nimport prof\n"),
+    "applications/e2e/prof.py": "",
     "tools/lazy.py": "def f():\n    from benchmarks.probe import run\n",
     "benchmarks/probe/run.py": "import tools.lazy\n",
     "benchmarks/probe/tests/test_run.py": "import infra.cluster.usage\n",
@@ -1823,7 +1830,7 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
         ("verity/commitments/periods", "verity/protocols/proofs/flock"): ["verity/commitments/periods/package_above.py"],
         ("verity/protocols/proofs/flock/verifier", "verity/protocols/proofs/spot"): ["verity/protocols/proofs/flock/verifier/Flock/V.lean", "verity/protocols/proofs/flock/verifier/lakefile.toml"],
         ("verity/protocols/proofs/flock", "verity/protocols/resource_accounting/compute/pouw"): ["verity/protocols/proofs/flock/prover/stage.py"],
-        ("verity/protocols/proofs/spot", "demos"): ["verity/protocols/proofs/spot/by_path.py"],
+        ("verity/protocols/proofs/spot", "applications"): ["verity/protocols/proofs/spot/by_path.py"],
         ("tools", "benchmarks"): ["tools/lazy.py"],
         ("tools", "infra"): ["tools/tests/test_console.py"],
         ("benchmarks", "infra"): ["benchmarks/probe/tests/test_run.py"],
@@ -1859,7 +1866,7 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
                                   device, prover, verifier, "verity/protocols/proofs/spot"]), list(found)
     assert [sorted(x) for x in found["verity/circuits"]] == [["verity/runtime"], [], []], found["verity/circuits"]
     assert [sorted(x) for x in found["verity/runtime"]] == [["verity/circuits"], [], []], found["verity/runtime"]
-    assert [sorted(x) for x in found["verity/protocols/proofs/spot"]] == [["demos/e2e"], [], []], found["verity/protocols/proofs/spot"]
+    assert [sorted(x) for x in found["verity/protocols/proofs/spot"]] == [["applications/e2e"], [], []], found["verity/protocols/proofs/spot"]
     assert [sorted(x) for x in found[prover]] == [[verifier], [], []], found[prover]
     direct, reach, loaders = found[verifier]
     assert sorted(direct) == ["verity/circuits", "verity/commitments/crypto", prover], direct
@@ -1912,8 +1919,8 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
     with pytest.raises(AssertionError, match=f"gains no load.*\n\\s*{verifier} reaches verity/runtime: {verifier}/check.py -> "):
         _hold_places(loads, files, without(verifier, reaches="verity/runtime"))
     aside = Load("verity/circuits/in_function.py", "verity/protocols/proofs/spot/by_path.py", 3, "python import", "verity.protocols.proofs.spot.by_path")
-    with pytest.raises(AssertionError, match=f"gains no load(.|\n)*{verifier} reaches demos/e2e: {verifier} -> verity/circuits -> "
-                                             f"verity/protocols/proofs/spot -> demos/e2e\n\\s*{verifier} reaches verity/protocols/proofs/spot: "):
+    with pytest.raises(AssertionError, match=f"gains no load(.|\n)*{verifier} reaches applications/e2e: {verifier} -> verity/circuits -> "
+                                             f"verity/protocols/proofs/spot -> applications/e2e\n\\s*{verifier} reaches verity/protocols/proofs/spot: "):
         _hold_places((*loads, aside), files, also("verity/circuits", loads="verity/protocols/proofs/spot"))
     with pytest.raises(AssertionError, match=f"only shrinks.*\n\\s*{device} is loaded by {prover}/tests/test_build.py:1: "):
         _hold_places(loads, files, without(device, loaded_by=f"{prover}/tests/test_build.py"))

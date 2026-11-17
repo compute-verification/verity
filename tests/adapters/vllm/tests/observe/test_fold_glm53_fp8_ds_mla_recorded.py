@@ -18,8 +18,6 @@ d9105ea80, eager): the 256-row prefill and one decode row at position 256.  Its 
 """
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import collections
 import dataclasses
 import difflib

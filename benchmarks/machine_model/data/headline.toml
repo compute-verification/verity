@@ -48,17 +48,3 @@ conditions = ["the fold credited is the one the checks read, plain LI-CP-W redux
               "LI-CP-W's receipt luck 0 needs every absorbed word pinned (PIN, decision 97)"]
 sheet = { vector = "DS-100", conditions = ["FOLD-OPT on DS-100 for li's XOR x ⊕ y ⊕ k (two words and a key, one LOP3): no program of 1 or 2 instructions on DS-100's modelled IMAD/FP menu (IMAD, IMAD.HI, IDP.4A, IDP.2A and FFMA2; IMAD.WIDE, HFMA2 and the ALU class outside it) computes it bit-exactly for any k, a checked fact within that menu, not a proof over the B200 (FOLD-XOR k = 1; k = 2, all 1,456 two-instruction sequences unsat), so it takes at least 3; the cheapest known is 78 IMAD-pipe instructions (33 IMAD, 45 IMAD.HI; bit-exact on the CPU and the B200). At the Lean bound's π* (DS_issue ⅔ + DS_alu ⅓) a LOP3 costs 4/3 and an IMAD or FFMA ⅔, so FOLD-OPT there asks only that no 1-instruction program exists; with the whole certificate at DS_issue alone, li's XOR at its instruction count, which needs no pipe premise, the Lean bound is 0.9998%"] }
 measured = { vector = "DC-100-ri" }
-
-[family.sm_89]
-gpu = "L40S"
-design = "dither-2s-l16"
-conditions = []
-sheet = { vector = "DS-89" }
-measured = { vector = "ADA-89" }
-
-[family.sm_80]
-gpu = "A100"
-design = "dither-2s-l16"
-conditions = ["no uniform route in Π: sm_80's uniform datapath is unmeasured"]
-sheet = { vector = "DS-80" }
-measured = { vector = "AMPERE-80" }

@@ -60,8 +60,6 @@ the replay's row kernels for those two Definitions.
 """
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 import argparse
 import glob
 import hashlib
