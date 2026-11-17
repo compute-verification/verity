@@ -61,7 +61,9 @@ Only the lowest candidate's verdict is read whole: one above it is checked on a 
 once the candidates below it are on `main`, in the tick that advances to the one below it too: a tick advances through the
 passed candidates at the chain's bottom in order, one `Advance` and drop each, up to the first that hasn't passed.  Its fail
 counts at once, as the lowest's would, once its base's word on each of its own failures is known (`Failed.base_tests`), or,
-for a failure whose inputs meet its own members and none below it, `main`'s (`Failed.main_tests`, `_said`); until then it waits, since its base may yet fail the same.  The lowest fail
+for a failure whose inputs meet its own members and none below it, `main`'s (`Failed.main_tests`, `_said`).  Until then it
+is built again at once on its base without its suspects, who wait for its base's check: when that passes they are
+bisected as a fail's suspects, and when it fails, its failure being its base's, they go back in (`_unsaid`).  The lowest fail
 on the chain is the one read, and nothing is built on a candidate that failed.  A fail is read as soon as a gating task has
 failed, while others still run (not `Verdict.ended`), unless each of its failures is inherited.  Bisecting keeps no state of
 its own: a suspect's limit (half the suspects of the newest failed or infra-split outcome it was in) bounds the batches it
@@ -200,11 +202,13 @@ class Outcome:
     members: tuple[int, ...]
     heads: tuple[str, ...]
     state: str                     # pass | fail | infra: a lone member whose check kept erring, set aside behind the rest |
-                                   # infra-split (`INFRA_SPLIT`): a candidate whose check kept erring, split on its suspects
+                                   # infra-split (`INFRA_SPLIT`): a candidate whose check kept erring, split on its suspects |
+                                   # unsaid (`UNSAID`): a fail above the lowest decided before its base's word (`_unsaid`)
     suspects: tuple[int, ...] = () # fail: the members its own failures (or, with `tree_ejects`, the infra errors that follow
                                    # its tree) suspect; infra-split: those its infra errors suspect
     base: str | None = None        # the candidate's base: of a fail, and of a pass with inherited failures
     inherited: tuple[Failed, ...] = ()  # its inherited failures, which its base fails too
+    sha: str | None = None         # the candidate, as its drop names it
 
 
 @dataclass(frozen=True)
@@ -366,6 +370,8 @@ class Leave:
 #: the prefix of a task's test for each file it read outside its declared inputs, a fault graph2 names by file
 UNDECLARED = "undeclared:"
 ON_MAIN = "on main"
+#: the state of the outcome of a fail above the lowest decided before its base's word (`_unsaid`)
+UNSAID = "unsaid"
 #: the start of a `Build.name`: the base a later Build of the tick names for what that one built
 BUILT = "built:"
 BASE_FAILED = "its base failed"
@@ -385,7 +391,7 @@ def decide(s: Snapshot) -> list[Action]:
     lowest candidate's verdict calls for (a pass advances `main` through it and each passed candidate above it in turn, up to
     the first that hasn't passed), what the lowest fail above it calls for (as the lowest's fail would, once its base's
     word on each of its own failures is known, or `main`'s where only its own members meet the failure: `_said`; until then
-    nothing, and nothing is built above it), what each staged batch's records run calls for, the rebuilds of what a red or a
+    its drop, built again without its suspects, `_unsaid`), what each staged batch's records run calls for, the rebuilds of what a red or a
     leave dropped (`_restack`), then the tick's builds on the chain's top: a Lean batch while none is staged (`_next`), and
     as many batches of PRs with no Lean change as the chain has room for under `depth`, up to `fill` with the Lean batch
     built on it, each on the one built before it (`Build.name`), each holding only PRs that land on the quick tier
@@ -487,12 +493,15 @@ def _decide(s: Snapshot, leaves: list[Leave] | None) -> list[Action]:
             if s.now - c1.enqueued > 2 * s.pending_s:
                 acts.append(Ring(c1.sha, f"{c1.sha[:12]}'s check is still pending {2 * s.pending_s / 3600:g} h after its first "
                                          f"enqueue, {c1.tries} times enqueued"))
-    held = False
     for k, c in enumerate(chain):
         if c is c1 or _reading(c.verdict) != FAIL or not c.verdict.failed:
             continue
         under = [built[m] for d in whole[:whole.index(c)] for m in d.members if m in built]
-        if held := (said := _said(c, under, built)) is None:
+        if (said := _said(c, under, built)) is None:
+            acts.append(drop := _unsaid(c, built))
+            acts += [Drop(d.sha, BASE_DROPPED) for d in chain[k + 1:]]
+            out |= set(drop.outcome.suspects)
+            chain, rest = chain[:k], [*chain[k:], *rest]
             break
         if _reading(said.verdict) != FAIL:
             continue
@@ -517,8 +526,6 @@ def _decide(s: Snapshot, leaves: list[Leave] | None) -> list[Action]:
     n = len(acts)
     kept += _restack(s, ready, chain, rest, landed | ejected | out, main, acts, kept, hold)
     settled = landed | ejected
-    if held:
-        return _leaving(s, leaves, acts, chain, kept, settled, CHAIN_WAITS)
     base, after, moves = chain[-1].sha if chain else main, None, hold | _moves(chain, built)
     if passed and len(chain) < s.depth and len(acts) == n and all(
             _crossing(r if (r := ready.get(m)) is not None and r.head == h else None, moves)
@@ -596,9 +603,6 @@ def _pool(ready: dict[int, Ready], busy: set[int], staged: bool) -> list[Ready]:
                    and not (staged and (r.lean or r.lean_input))), key=lambda r: (r.rank, r.number))
 
 
-#: what stops every build of a tick, as a `Leave`'s (cause, why)
-CHAIN_WAITS = ("chain waits", "a failed candidate above the lowest waits for its base's word on its failures: nothing is built "
-                              "above it")
 #: why a ready PR that doesn't cross a move (`_crossing`) waits, as a `Leave`'s (cause, why)
 ADVANCED_TO_MOVE = ("move on chain", "the tick moved `main` to a candidate holding a move it doesn't cross: it waits for the "
                                      "next tick to read it on the moved `main`")
@@ -653,6 +657,9 @@ def _left(s: Snapshot, r: Ready, newest: dict[int, Outcome], ready: dict[int, Re
     aside = ("set aside", "set aside after its check kept erring: it goes behind the PRs waiting")
     if r.conflict:
         return "conflict", "it doesn't merge onto `main`: no batch takes it until its head changes"
+    if o is not None and _unsaid_holds(o, r.number):
+        return "base's word", (f"a fail above the lowest suspects it: it waits for {o.base[:12]}'s check, which says whose "
+                               "failure it was")
     if r.move and t.scripts:
         return "move", "a candidate on main's chain changes `tools/move/`'s scripts: no move is built on it"
     if not _crossing(r, t.moves):
@@ -913,8 +920,14 @@ def _passed(c: Candidate) -> Outcome:
 
 
 def _outcomes(s: Snapshot, acts: list[Action]) -> list[Outcome]:
-    """The snapshot's history and the outcomes ``acts`` records, oldest first."""
-    return [*s.history, *(a.outcome for a in acts if isinstance(a, Drop) and a.outcome is not None)]
+    """The snapshot's history and the outcomes ``acts`` records, oldest first, each `UNSAID` one as its base's word has it
+    once its base left main's chain: a fail when it passed, so its suspects are bisected as a fail's, and none when it left
+    otherwise, so they go back in as before."""
+    out = [*s.history, *(replace(a.outcome, sha=a.sha) for a in acts if isinstance(a, Drop) and a.outcome is not None)]
+    live = {c.sha for c in s.candidates} - {a.sha for a in acts if isinstance(a, Drop)}
+    passed = {o.sha for o in out if o.state == PASS}
+    return [replace(o, state=FAIL) if o.state == UNSAID and o.base in passed else o for o in out
+            if o.state != UNSAID or o.base in live | passed]
 
 
 def _red(c: Candidate, outcomes: list[Outcome]) -> list[Red]:
@@ -1033,6 +1046,22 @@ def culprit(failed: Iterable[Failed], files: dict[int, frozenset[str]]) -> tuple
     return hit[0], f"#{hit[0]}'s change meets what {', '.join(f.task for f in failed)} read, and no other's landed since"
 
 
+def _unsaid(c: Candidate, built: dict[int, Ready]) -> Drop:
+    """The drop of ``c``, a failed candidate above the lowest whose base hasn't said whose its failures are (`_said`): it is
+    built again at once without its suspects, the members its unsaid failures' inputs meet (every member when they meet
+    none), which wait out of every batch while its base is on main's chain (`UNSAID`, `_outcomes`)."""
+    unsaid = [f for f in c.verdict.failed if not _inherited(f) and f.base_tests is None]
+    suspects = tuple(m for m in c.members if any(meets(_files(built, m), f.inputs) for f in unsaid)) or c.members
+    return Drop(c.sha, f"failed {', '.join(f.task for f in unsaid)} before {c.base[:12]}'s check said whose failure it is: "
+                       f"built again without {', '.join(f'#{m}' for m in suspects)}, who wait for that check",
+                Outcome(c.members, c.heads, UNSAID, suspects, c.base))
+
+
+def _unsaid_holds(o: Outcome, m: int) -> bool:
+    """Whether ``o``, the newest outcome holding ``m``, keeps it out of every batch: it is an `UNSAID` one suspecting it."""
+    return o.state == UNSAID and m in o.suspects
+
+
 def _said(c: Candidate, under: list[Ready], built: dict[int, Ready]) -> Candidate | None:
     """``c``, a failed candidate above the lowest, with its base's word on each of its own failures, or None while one has
     none, so it waits for its base's check.  Where that check hasn't said (`Failed.base_tests`), `main`'s word stands for it
@@ -1107,11 +1136,13 @@ def _told(c: Candidate, outcomes: list[Outcome]) -> bool:
 def _waiting(s: Snapshot, ready: dict[int, Ready], chain: list[Candidate], landed: set[int], outcomes: list[Outcome],
              staged: list[Candidate]) -> bool:
     """Whether another PR waits behind the lowest candidate: in a candidate above it, in a staged batch whose records run
-    passed, or in a batch `main` alone would get, a Lean one or one of PRs with no Lean change."""
+    passed, in a batch `main` alone would get, a Lean one or one of PRs with no Lean change, or suspected by a fail above
+    before its base's word (`_unsaid`)."""
     if len(chain) > 1 or any(c.records is not None and c.records.state == PASS for c in staged):
         return True
     pool = _pool(ready, landed | {m for c in (chain[0], *staged) for m in c.members}, bool(staged))
-    return bool(_next(s, pool, outcomes, [], ready)[0] or _batch(pool, outcomes, s.batch, 0, s.wide))
+    return bool(_next(s, pool, outcomes, [], ready)[0] or _batch(pool, outcomes, s.batch, 0, s.wide)) or any(
+        _unsaid_holds(o, m) for m, o in _newest(outcomes, {r.number: r.head for r in pool}).items())
 
 
 def _tree_why(c: Candidate) -> str:
@@ -1185,7 +1216,7 @@ def _moves_last(members: tuple[int, ...], ready: dict[int, Ready]) -> tuple[int,
 
 def _takes(r: Ready, newest: dict[int, Outcome]) -> bool:
     """Whether a batch may take ``r`` as any other PR: no pass or infra outcome holds it at its head (``newest``, `_newest`)."""
-    return (o := newest.get(r.number)) is None or o.state not in (PASS, INFRA)
+    return (o := newest.get(r.number)) is None or o.state not in (PASS, INFRA) and not _unsaid_holds(o, r.number)
 
 
 def _batch(pool: list[Ready], outcomes: list[Outcome], size: int, lean: int, wide: frozenset[int],
@@ -1194,8 +1225,10 @@ def _batch(pool: list[Ready], outcomes: list[Outcome], size: int, lean: int, wid
     most ``lean`` Lean PRs, a wide one (`_wide`) only as its first Lean PR, which fills that limit, and only PRs of ``plain``
     or none, as its first is.  A suspect's limit is
     half the suspects of the newest outcome holding it at its head (a fail or an infra split, `INFRA_SPLIT`), at least 1; a
-    PR set aside (`infra`) comes after every other, alone, the longest set aside first."""
+    PR set aside (`infra`) comes after every other, alone, the longest set aside first, and none while a fail above suspects
+    a PR of ``pool`` before its base's word (`_unsaid`): built below it, one that keeps erring would hold that word off."""
     newest = _newest(outcomes, {r.number: r.head for r in pool})
+    unsaid = any(_unsaid_holds(o, m) for m, o in newest.items())
     at = {id(o): i for i, o in enumerate(outcomes)}
     batch: list[int] = []
     limit, leans = size, 0
@@ -1203,10 +1236,10 @@ def _batch(pool: list[Ready], outcomes: list[Outcome], size: int, lean: int, wid
         if len(batch) >= limit:
             break
         o, w = newest.get(r.number), _wide(r, wide)
-        if (o is not None and o.state == PASS) or (r.lean and (leans >= lean or w and leans > 0)) or (
+        if (o is not None and (o.state == PASS or _unsaid_holds(o, r.number))) or (r.lean and (leans >= lean or w and leans > 0)) or (
                 batch and (r.number in plain) != (batch[0] in plain)):
             continue
-        if o is not None and o.state == INFRA and batch:
+        if o is not None and o.state == INFRA and (batch or unsaid):
             break
         allowed = (max(1, len(o.suspects) // 2) if o is not None and o.state in (FAIL, INFRA_SPLIT) and r.number in o.suspects else
                1 if o is not None and o.state == INFRA else size)

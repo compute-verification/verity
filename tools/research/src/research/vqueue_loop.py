@@ -571,7 +571,8 @@ class Past:
     def history(self, on: Callable[[str], bool] | None = None) -> tuple[Outcome, ...]:
         """The drops' outcomes; with ``on``, a pass only of a candidate ``on`` holds (a shadow's `main` left behind)."""
         return tuple(Outcome(tuple(o.get("members") or ()), tuple(o.get("heads") or ()), o["state"], tuple(o.get("suspects") or ()),
-                             o.get("base"), tuple(_as_failed(f) for f in o.get("inherited") or () if isinstance(f, dict)))
+                             o.get("base"), tuple(_as_failed(f) for f in o.get("inherited") or () if isinstance(f, dict)),
+                             r.get("sha"))
                      for r in self.of("drop") if isinstance(o := r.get("outcome"), dict) and o.get("state")
                      and (on is None or o["state"] != PASS or on(r.get("sha") or "")))
 
