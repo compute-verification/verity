@@ -1,3 +1,0 @@
-[2026-11-17T16:05Z] 24dfab55de49
-From the lead, 8:07 AM PST: #10818 is on main alone (44d81bed2f96, 8:04 AM); memory-accounting #10691, #10702, #10726 are still open. The queue now says all four of ours conflict with main in served_table.py. Do the real crossing NOW for #10663 and #10672 (they conflict only with #10818): push, run the suites on a node, send me the heads by inbox so I mark them without waiting for your return. Hold #10698 and #10730 (one crossing, one delta read) until the three of memory-accounting are on main, unless they have not landed by 10:30 AM PST: then cross those two over main as it is and say so. Your step-1 resolutions are accepted, gate_coins_on included.
-
