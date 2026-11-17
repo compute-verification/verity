@@ -446,8 +446,8 @@ def test_an_evicted_chunk_converts_what_it_recorded_and_exits_143(tmp_path: Path
     meta = json.loads((tmp_path / "meta.json").read_text())
     summary = json.loads((tmp_path / "summary.json").read_text())
     (m,) = json.loads((tmp_path / "result.json").read_text())["measurements"]
-    assert (m["name"], m["unit"], m["mark"], m["model"], m["card"]) == (rec.METRIC, "ms", "measured",
-                                                                       "unsloth/Llama-3.2-1B", "fake")
+    assert (m["name"], m["unit"], m["mark"], m["model"], m["mode"], m["card"]) == (
+        rec.METRIC, "ms", "measured", "unsloth/Llama-3.2-1B", "bi-eager", "fake")
     assert rc == (143 if evict else 0) and meta["ended"]["evicted"] is bool(evict)
     if evict == "at startup":
         assert "t0_mono" not in meta and summary["error"] == "the job ended before t0"

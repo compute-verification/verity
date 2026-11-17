@@ -96,8 +96,8 @@ FREEZE_MS, MAX_OTHERS_BUSY, MAX_AFFINITY_BUSY, MAX_COTENANT_BUSY, TAIL_MS = 1000
 FREEZE_REST_MS = 5000.0  # a longer stall drops the rest of its chunk (`convert` in the module docstring)
 CPU_RULES, FREEZE_SCOPES = ("cotenants", "total"), ("window", "chunk")
 STALL_S = 120  # an offline engine step or finalize this long is hung: every thread's stack goes to stderr and the job exits
-#: the one number a run records: the p99.9 of the time between a request's consecutive streamed chunks over the kept
-#: windows (`summary.json`'s ``inter_chunk_ms``), the spread the network attester's release schedule must absorb
+#: the one number a run records: the p99.9 of the time between consecutive streamed chunks of one response, over every
+#: request sent in the recording's windows that completed, dropped windows included (`summary.json`'s ``inter_chunk_ms``)
 METRIC = "network-accounting/streamed-gap-p99.9"
 
 clock = time.monotonic
@@ -828,14 +828,14 @@ def convert(out: Path, **rules) -> dict:
 
 
 def record_metric(out: Path, summary: dict, meta: dict) -> dict:
-    """`METRIC` of `summary`, in ms, written with the model and the traced card as the measurement's fields and printed
-    as one line; with no value where no kept window holds a request's two chunks."""
+    """`METRIC` of `summary`, in ms, written with the model, the mode and the traced card as the measurement's fields
+    and printed as one line; with no value where no completed request streamed two chunks."""
     from verity_bench import kit
 
     gap = (summary.get("inter_chunk_ms") or {}).get("p99.9")
-    why = None if gap is not None else summary.get("error") or "no kept window holds two chunks of one request"
+    why = None if gap is not None else summary.get("error") or "no completed request streamed two chunks"
     m = kit.writer(out).measurement(METRIC, gap, "ms", why=why, mark="measured",
-                                    extra={"model": meta["model"], "card": meta["gpu"]["name"]})
+                                    extra={"model": meta["model"], "mode": meta["mode"], "card": meta["gpu"]["name"]})
     print(f"{METRIC}: {gap} ms" if gap is not None else f"{METRIC}: no number: {why}", flush=True)
     return m
 

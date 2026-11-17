@@ -4,10 +4,10 @@
 # one GPU of the node for MINUTES (55) plus the lease's margin; a node with no pinned-vLLM venv bootstraps one first
 [[metric]]
 id = "network-accounting/streamed-gap-p99.9"
-title = "Tail gap between streamed tokens"
+title = "Tail gap in a workload's streaming"
 owner = "network-accounting"
 unit = "ms"
-axis = "The 99.9th percentile of the time between consecutive streamed chunks of one request, over the kept windows of one recording of vLLM serving the benchmark's mix on one GPU."
+axis = "The 99.9th percentile of the time between consecutive streamed pieces of one response, over every response that completed in one recording of a workload on one card: the longest gaps, which the network attester's release schedule must absorb without the response's timing telling anything."
 better = "lower"
 command = "research run --on NODE --gpu-host --project verity --source . --cwd source --timeout 90m -- bash benchmarks/network_traces/run.sh"
 every = "7d"
