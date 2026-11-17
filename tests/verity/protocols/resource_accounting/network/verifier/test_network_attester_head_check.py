@@ -29,7 +29,7 @@ def _profiled(lw, opening, honest):
 def cases(tmp_path_factory):
     """Head checks of the service's execution phases with a profile, each end's row its honest head's counts, by name:
     (instance, the part that refuses it or None). The honest heads of both ends in each window, and heads each wrong in
-    one input; an edited head is committed under its own root and its certificate's signed digest is its own, so only
+    one input; an edited head is committed under its own root and its attestation's signed digest is its own, so only
     the edit can refuse it."""
     run = Run(tmp_path_factory.mktemp("heads"))
     lw, honest = run.lw, [run.honest(w) for w in range(3)]
@@ -116,7 +116,7 @@ def test_the_head_check_is_its_reference(cases, bare):
     """The whole Definition on every case, with and without a profile, against its reference, and its ANDs by part at the
     deployed T = 600. What the parts' tests can't reach is the opening's wiring: the head's bytes into its row digest,
     its salt into hm96's leaf, and the leaf's position (direction, 1) in N2's tree; and the signed digest's: the head's
-    bytes into its record digest, and that digest and the attester's salt into the digest the certificate signs.
+    bytes into its record digest, and that digest and the attester's salt into the digest the attestation signs.
     Building and compiling the commitment gadgets' Boolean bodies takes about 75 s, once."""
     insts = [i for i, _ in cases.values()]
     assert HC.evaluate(*insts) == [int(HC.reference(i)) for i in insts]
