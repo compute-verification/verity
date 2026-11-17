@@ -5,38 +5,7 @@ public import Proofs.Flock.Claims.KS.RepDistZ
 public import Proofs.Flock.Claims.KS.SlotPost
 public import Proofs.Flock.Claims.KS.ZkFork
 
-/-!
-# The masked simulated fork's alignment at the caps, from the slot's coin count
-
-`ZkAlignQ` compares the fork at rep `r`'s level-`ℓ + 1` table node against the simulated strategy after `Commit`
-(`advRSZ`: `Lock.forkE` at the session's lockstep against the primed prover `pushStrat`) with the fork after `t` coins
-of `ForkEvZ`. As at plain (`PlainAlign`), by `Lock.forkE_le_forkC` the comparison is the alignment alone, since the
-session's leaves record the cap of the entry they hold:
-
-* `opRZ_mem`, `capAtZ_of_sessRelZ`, `sessForkZ_le`: an outcome the session's leaf relation relates to an index holding
-  rep `r`'s level-`ℓ + 1` entry with cap `d`, and which opens a position at `d` there, records `d` as that rep's
-  level-`ℓ + 1` cap (`RecStruct`), so at that entry the session's fork event at the slot is `ForkEvZ`'s. `advRSZ`'s
-  event reads the openings only on runs accepting every table up to the session's (`opRAccZ`, `AccUpTo`), so it is
-  at most that (`ind_conflictAcc_le`), and below a rejected table it is `0`;
-* `forkC_push`, `forkC_pushStrat`: the primed prover, sending the constant cap at every digest, forks as the compiled
-  one after any number of coins;
-* `SlotRSZ`, `advRSZ_le_forkC`: where the primed prover reaches the slot's node after `t` coins (`Lock.SlotAt` at
-  `advRSZ`'s lockstep), `advRSZ` is at most the fork after `t` coins of `ForkEvZ`;
-* `ind_conflictAcc_dead`, `slotRSZ_of_first`: `advRSZ`'s event is `0` past a rejected table, so where at every link
-  point the primed prover plays the tables in front to their ends first after `n` coins (`Lock.PreFirst`) and then
-  meets the slot after `j` coins in the session's table beside the ones after it, `SlotRSZ` holds after `n + j + 1`;
-  `slotRSZ_of_lead`: and that last count holds where the primed prover then plays the session's table first
-  (`Lock.Leads`), meeting the slot after `j` coins there at every table choice, or rejecting (`Lock.SlotAtD`);
-* `slotAtD_lockAfterZ`, `slotRSZ_of_sched`: the session's table meets rep `r`'s cap after a distance `c` of that rep
-  (`dist_lockRepZ`'s `maskedSlotDist`, or any other), past rep 0's `n₀` coins if `r = 1`, where its strategy plays
-  rep 0 first (`Lock.Lead`), so `SlotRSZ` holds after `n + (r · n₀ + c) + 1` coins from the schedule alone: the
-  tables in front first, then the session's table, in it rep 0 first. At the masked simulator these premises hold
-  at one table only: it sends every table's final messages and openings after the last live message (`simEndJ`), so
-  no table ends before the next one moves;
-* `ZkSlotAlign`, `zkForkAlign_of_slot`, `zk_KS_of_slot`: so `ZkForkAlign`, and masked KS from the caps' clash, `τ`'s
-  fork bound and the pads' premises, hold where the primed simulated strategy reaches each cap's slot after
-  `zkRd j i` coins.
--/
+/-! The masked simulated fork's alignment at the caps, from the slot's coin count. -/
 
 @[expose] public section
 
@@ -46,8 +15,6 @@ open Game Model Accounting ZkSession
 
 variable {D : Type}
 
-/-- **The primed prover forks as the compiled one**: along a Lock whose leaves relate equal outputs while every cap is
-pushed, the prover sending the constant cap at every digest has the compiled prover's fork after any `t` coins. -/
 theorem forkC_push {α I : Type} {get : I → ℕ → Option (Cap D × D)} (F : α → α → ℝ) :
     ∀ (t : ℕ) {i : I} {g g' : Game α} (L : Lock (Cap D) D get (fun i a b => Pushed get i → a = b) i g g')
       (σ' : Strategy g'), Pushed get i → forkC F t g' σ' = forkC F t g (Lock.oracleStrat pushC L σ')
@@ -82,7 +49,6 @@ variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K
   {Sl : Type}
 
 omit [Fintype K] in
-/-- **The primed prover forks as the compiled one inside any session.** -/
 theorem forkC_pushStrat [Inhabited D] (A : Arith F K) (Hs : Hashes F D Sl) (T : TabZK F mPts) (cap₀ : Cap D)
     (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutZC F D Sl)))
     (Φ : List (OutZC F D Sl) → List (OutZC F D Sl) → ℝ) (t : ℕ)
@@ -108,7 +74,6 @@ variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [In
 
 omit [Inhabited D] [Inhabited Sl] in
 open Classical in
-/-- **An opened position at a rep's cap is one of its openings there.** -/
 theorem opRZ_mem {H : List UInt8 → D} {E : Merkle.Enc (List 𝔽) D} {Lf : Merkle.Leaf (List 𝔽) Sl D H}
     {sch : FlockSoundness.Accounting.Schedule} {r ℓ : ℕ} {cap : Model.Cap D} {out : OutZC 𝔽 D Sl}
     {p : Fin (2 ^ (lvOf sch ℓ).logLen)} (h : (opRZ H E Lf sch r ℓ cap out p).isSome) :
@@ -121,10 +86,6 @@ theorem opRZ_mem {H : List UInt8 → D} {E : Merkle.Enc (List 𝔽) D} {Lf : Mer
   exact ⟨x, hmem.1, hmem.2.1⟩
 
 omit [Fintype K] [DecidableEq K] in
-/-- **A leaf records the cap of the entry it holds** where it opens a position at it: an outcome the session's leaf
-relation relates to an index holding rep `r`'s level-`ℓ + 1` entry `(t, d)`, opening a position at `d` at that level,
-has `d` as rep `r`'s recorded level-`ℓ + 1` cap, since the opening is a request at level `ℓ + 1`, which `RecStruct`
-pairs with the entry's cap. -/
 theorem capAtZ_of_sessRelZ {A : Model.Arith 𝔽 K} {Hs : Hashes 𝔽 D Sl} {T : TabZK 𝔽 mPts} {C₀ : Model.Oracle 𝔽}
     {cap₀ : Model.Cap D} {n : ℕ} {i : IZ 𝔽 D × IZ 𝔽 D} {a b : List (OutZC 𝔽 D Sl)} {r : Fin 2} {ℓ : ℕ}
     {t : Model.Oracle 𝔽} {d : Model.Cap D} (hR : SessRelZ A Hs T C₀ cap₀ n i a b)
@@ -197,9 +158,6 @@ theorem capAtZ_of_sessRelZ {A : Model.Arith 𝔽 K} {Hs : Hashes 𝔽 D Sl} {T :
     exact key _ _ hs₁ hmem hi
 
 omit [Fintype K] [DecidableEq K] in
-/-- **At the slot's entry the session's fork event is `ForkEvZ`**: two outcomes the session relates to indices holding
-rep `r`'s level-`ℓ + 1` entry `(t, d)` and opening a position at `d` there to different rows record `d` as that cap in
-both. -/
 theorem sessForkZ_le (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 mPts) (C₀ : Model.Oracle 𝔽)
     (cap₀ : Model.Cap D) (n : ℕ) (r : Fin 2) (ℓ : ℕ) (t : Model.Oracle 𝔽) (d : Model.Cap D)
     (i₁ : IZ 𝔽 D × IZ 𝔽 D) (a₁ b₁ : List (OutZC 𝔽 D Sl)) (i₂ : IZ 𝔽 D × IZ 𝔽 D) (a₂ b₂ : List (OutZC 𝔽 D Sl))
@@ -213,8 +171,6 @@ theorem sessForkZ_le (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : TabZK
   ind_le_indZ fun ⟨p, hs₁, hs₂, hne⟩ =>
     ⟨d, capAtZ_of_sessRelZ h₁ hg₁ hs₁, capAtZ_of_sessRelZ h₂ hg₂ hs₂, p, hs₁, hs₂, hne⟩
 
-/-- **The primed prover reaches rep `r`'s level-`ℓ + 1` table node after `t` coins** in the session after `Commit`:
-`Lock.SlotAt` at `advRSZ`'s chooser, slot, fork event and lockstep. -/
 def SlotRSZ (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 mPts)
     (pre post : List ((Fin 2 → Fin mPts → 𝔽) → Game (OutZC 𝔽 D Sl))) (cap₀ : Model.Cap D) (r ℓ t : ℕ)
     (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) : Prop :=
@@ -223,8 +179,6 @@ def SlotRSZ (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 mPt
       (opRAccZ Hs.H Hs.E Hs.Lf T.sch pre.length r (ℓ + 1) d) x p) (b, b'))
     t (lockSessZ A Hs T pre post default cap₀) (pushStrat A Hs T cap₀ pre post σ)
 
-/-- **`Adv_{r,ℓ+1}` in the session is at most the fork after `t` coins of `ForkEvZ`** where the primed prover reaches
-rep `r`'s level-`ℓ + 1` table node after `t` coins. -/
 theorem advRSZ_le_forkC (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 mPts)
     (pre post : List ((Fin 2 → Fin mPts → 𝔽) → Game (OutZC 𝔽 D Sl))) (cap₀ : Model.Cap D) (r : Fin 2) (ℓ t : ℕ)
     (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) (h : SlotRSZ A Hs T pre post cap₀ r.val ℓ t σ) :
@@ -237,7 +191,6 @@ theorem advRSZ_le_forkC (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : Ta
         (sessForkZ_le A Hs T default cap₀ pre.length r ℓ t d i₁ a₁ b₁ i₂ a₂ b₂ h₁ h₂ hg₁ hg₂)) h).trans
     (le_of_eq (forkC_pushStrat A Hs T cap₀ pre post _ t σ))
 
-/-- **The filtered conflict is `0` at a run rejecting a table up to `n`.** -/
 theorem ind_conflictAcc_dead (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D H)
     (sch : FlockSoundness.Accounting.Schedule) (n r ℓ : ℕ) (d : Model.Cap D) {b b' : List (OutZC 𝔽 D Sl)}
     (h : ¬ AccUpTo n b ∨ ¬ AccUpTo n b') :
@@ -251,11 +204,6 @@ theorem ind_conflictAcc_dead (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) 
     · exact absurd (acc_of_opRAccZ H E Lf sch n r ℓ d h₂) h
   · rfl
 
-/-- **The slot past the tables in front**: where at every link point the primed prover plays the tables in front of
-table `pre.length` to their ends first, in order, after `n` coins, its dead runs rejecting a table up to `pre.length`
-(`Lock.PreFirst`), and then meets the slot after `j` coins in that table's lockstep beside the tables after it, at
-every chooser and every fork event that is `0` past such a rejection, it meets the slot after `n + j + 1` coins in the
-session (`SlotRSZ`): the link coin, the tables in front, then `j` (`Lock.SlotAt.batchLock_first`). -/
 theorem slotRSZ_of_first (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 mPts)
     (pre post : List ((Fin 2 → Fin mPts → 𝔽) → Game (OutZC 𝔽 D Sl))) (cap₀ : Model.Cap D) (r ℓ n j : ℕ)
     (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀)))
@@ -282,9 +230,6 @@ theorem slotRSZ_of_first (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : T
       (fun e b b' hb _ => ind_conflictAcc_dead Hs.H Hs.E Hs.Lf T.sch pre.length r (ℓ + 1) e (b := b) (b' := b')
         (.inl hb)) (hF pts) (hQ pts)
 
-/-- **The slot from the session's table alone**: `slotRSZ_of_first` where, past the tables in front, the primed prover
-plays the session's table first, as a strategy of that table does (`Lock.Leads`), which meets the slot after `j` coins
-at every table choice there, or rejects a table up to the session's (`Lock.SlotAtD`, `Lock.SlotAtD.batchLock_nil`). -/
 theorem slotRSZ_of_lead (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 mPts)
     (pre post : List ((Fin 2 → Fin mPts → 𝔽) → Game (OutZC 𝔽 D Sl))) (cap₀ : Model.Cap D) (r ℓ n j : ℕ)
     (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀)))
@@ -309,10 +254,6 @@ theorem slotRSZ_of_lead (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : Ta
     exact Lock.SlotAtD.batchLock_nil (fun e x x' r r' hx hx' => hΦ' e _ _ (hx r) (hx' r')) dfltOutZC _ _ σ₁ σ'
       hS hD
 
-/-- **The session's table meets rep `r`'s level-`ℓ + 1` cap after a distance `c` of that rep, past rep 0's `n` coins
-if `r = 1`, at every table choice**, where its strategy plays rep 0 first, which ends after `n` coins, or reaches only
-`Dead` outcomes (`Lock.Lead`, `Lock.SlotAtD.lead_fst`, `Lock.SlotAtD.lead_snd`); `dist_lockRepZ` gives `c` as
-`maskedSlotDist`. -/
 theorem slotAtD_lockAfterZ (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 mPts) (C₀ : Model.Oracle 𝔽)
     (cap₀ : Model.Cap D) (pts : Fin 2 → Fin mPts → 𝔽) (r : ℕ) (hr : r < 2) (ℓ n c : ℕ) (Dead : OutZC 𝔽 D Sl → Prop)
     (hD : Lock.Dist (slotOf r (ℓ + 1) + 4) c (lockRepZ A Hs T r hr C₀ (Model.extraClaims T.S T.ptLocal mPts pts)))
@@ -335,10 +276,8 @@ theorem slotAtD_lockAfterZ (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T :
     exact Lock.SlotAtD.lead_snd disjoint_getZ (fun _ _ _ _ => .send _ fun _ => .ret _) hS _ _
       (Lock.noSlot_of_get_none (fun i => by simp [getZ, getRep, slotOf]) _) hD
 
-/-- **The slot from the schedule**: `SlotRSZ` after `n + (r · n₀ + c) + 1` coins, `c` a distance of rep `r`'s cap,
-where at every link point the primed prover plays the tables in front to their ends first, after `n` coins
-(`Lock.PreFirst`), then the session's table first (`Lock.Leads`), and in it rep 0 first, which ends after `n₀` coins
-(`Lock.Lead`), short of runs rejecting a table up to the session's (`slotRSZ_of_lead`, `slotAtD_lockAfterZ`). -/
+/-- At the masked simulator these premises hold at one table only: it sends every table's final messages and openings
+after the last live message (`simEndJ`). -/
 theorem slotRSZ_of_sched (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 mPts)
     (pre post : List ((Fin 2 → Fin mPts → 𝔽) → Game (OutZC 𝔽 D Sl))) (cap₀ : Model.Cap D) (r : ℕ) (hr : r < 2)
     (ℓ n n₀ c : ℕ)
@@ -368,11 +307,6 @@ theorem slotRSZ_of_sched (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : T
 
 end Session
 
-/-! ## At the masked simulator -/
-
-/-- **The simulated fork reaches each cap's slot after its masked fork round**: at every masked statement in scope
-that sets up at a sample, every prover and tape, every table `j` and table of columns, the primed prover at the simulated
-strategy after `Commit` (`zkSimAt`) reaches rep `r`'s level-`ℓ + 1` table node after `zkRd j i` coins (`SlotRSZ`). -/
 def ZkSlotAlign (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf true x = some (ins, spec, sts))
@@ -391,9 +325,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The simulated fork reaches each cap's slot after its masked fork round**: at every masked statement in scope
-that sets up at a sample, every prover and tape, every table `j` and table of columns, the primed prover at the simulated
-strategy after `Commit` (`zkSimAt`) reaches rep `r`'s level-`ℓ + 1` table node after `zkRd j i` coins (`SlotRSZ`). -/
 def ZkSlotAlign (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf true x = some (ins, spec, sts))
@@ -413,8 +344,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The alignment from the slot's coin count**: `ZkForkAlign` from `ZkSlotAlign` by `advRSZ_le_forkC`, table `j`'s
-position in the session being `j` (`take_gamesZC_length`). -/
 theorem zkForkAlign_of_slot {x : Claims.Msg} (h : ZkSlotAlign x) : ZkForkAlign x := by
   intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C r ℓ u
   have ha := advRSZ_le_forkC execArith ZkExec.hs512 (zkTabs h0 L hz hk hlay j) _ _ _ r ℓ.val _ _
@@ -424,8 +353,6 @@ theorem zkForkAlign_of_slot {x : Claims.Msg} (h : ZkSlotAlign x) : ZkForkAlign x
 
 end Gen
 
-/-- **The alignment from the slot's coin count**: `ZkForkAlign` from `ZkSlotAlign` by `advRSZ_le_forkC`, table `j`'s
-position in the session being `j` (`take_gamesZC_length`). -/
 theorem zkForkAlign_of_slot {x : Claims.Msg} (h : ZkSlotAlign x) : ZkForkAlign x :=
   Gen.zkForkAlign_of_slot (S := S₀) (x := x) (h := h)
 
@@ -433,8 +360,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The deployed masked verifier: KS, from the caps' slot alignment and clash, `τ`'s fork bound, and the pads'
-premises**, at SHA-512 at the trimmed record at the deployed relation: `zk_KS_of_align` at `zkForkAlign_of_slot`. -/
 theorem zk_KS_of_slot (ha : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSlotAlign x)
     (hc : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkForkClash x)
     (ht : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimForkLeOn x fun _ i => IsTauZ i)
@@ -445,8 +370,6 @@ theorem zk_KS_of_slot (ha : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → Z
 
 end Gen
 
-/-- **The deployed masked verifier: KS, from the caps' slot alignment and clash, `τ`'s fork bound, and the pads'
-premises**, at SHA-512 at the trimmed record at the deployed relation: `zk_KS_of_align` at `zkForkAlign_of_slot`. -/
 theorem zk_KS_of_slot (ha : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSlotAlign x)
     (hc : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkForkClash x)
     (ht : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkSimForkLeOn x fun _ i => IsTauZ i)

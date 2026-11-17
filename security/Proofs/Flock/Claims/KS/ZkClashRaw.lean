@@ -37,17 +37,7 @@ import Proofs.Flock.Claims.KS.ConflictRun
 import Proofs.Flock.Claims.KS.Width
 import Proofs.Flock.Claims.ZkQueryRound
 
-/-!
-# A masked self-clash from two raw columns
-
-`PlainRawClashRun` at `--zk`, at every table. Table `j`'s reps' columns before `distinctBelow` keeps one per position
-(`zkRawColsJ`, holding every column the reader opens: `mem_zkRawColsJ`) are each the witness lanes of an opened row
-whose level-0 opening against table `j`'s `root_B` passed, every SHA-512 input of it in the run's own log
-(`zk_openingJ_raw`, `zk_openingJ` before `distinctBelow`), so two of them at one position that differ collide in that
-log (`zk_selfClash_tiedJ`). So the self-clash clause of `ZkSimWJ` (`ZkClashRun`) follows from a live self-clash giving
-an accepting run whose reps open two different columns at one position of some table, or a collision
-(`ZkRawClashRun`, `zkClashRun_of_raw`).
--/
+/-! A masked self-clash from two raw columns. -/
 
 @[expose] public section
 
@@ -60,8 +50,6 @@ section Raw
 open Flock
 open FlockSoundness.Refine (ebind_ok entries_eq_of_flat flat_data merkleCheck_cap)
 
-/-- **The columns table `j`'s reps open in a masked record**, every one, before `distinctBelow` keeps one per
-position. -/
 def zkRawColsJ (s : Claims.Seen) (j : ℕ) : List (ℕ × List 𝔽) :=
   match runOf true s j with
   | some r => r.reps.flatMap fun y => Claims.Flock.zkRepColsOf r.shape y.1 y.2
@@ -72,8 +60,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The columns table `j`'s reps open in a masked record**, every one, before `distinctBelow` keeps one per
-position. -/
 def zkRawColsJ (s : Claims.Seen) (j : ℕ) : List (ℕ × List 𝔽) :=
   match runOf true s j with
   | some r => r.reps.flatMap fun y => Claims.Flock.zkRepColsOf r.shape y.1 y.2
@@ -94,8 +80,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **An accepted masked run's reps open a column of table `j` only as a Merkle opening** of table `j`'s level 0 in
-its own log: `zk_openingJ` at every column a rep opens. -/
 theorem zk_openingJ_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {r : Fin ((V true).k x) → Coin}
     {j q : ℕ} {u : List 𝔽} (h : (Claims.run sha512 P (V true) x ω r).out = .acc)
     (hu : (q, u) ∈ zkRawColsJ (Claims.run sha512 P (V true) x ω r).seen j) :
@@ -202,8 +186,6 @@ theorem zk_openingJ_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω 
 
 end Gen
 
-/-- **An accepted masked run's reps open a column of table `j` only as a Merkle opening** of table `j`'s level 0 in
-its own log: `zk_openingJ` at every column a rep opens. -/
 theorem zk_openingJ_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {r : Fin ((V true).k x) → Coin}
     {j q : ℕ} {u : List 𝔽} (h : (Claims.run sha512 P (V true) x ω r).out = .acc)
     (hu : (q, u) ∈ zkRawColsJ (Claims.run sha512 P (V true) x ω r).seen j) :
@@ -222,8 +204,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **A self-clash among an accepted masked run's columns collides in its own log**: two columns table `j`'s reps
-open at one position that differ give a collision among the run's verifier calls, at SHA-512. -/
 theorem zk_selfClash_tiedJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((V true).k x) → Coin} {j q : ℕ} {u v : List 𝔽} (h : (Claims.run sha512 P (V true) x ω r).out = .acc)
     (hu : (q, u) ∈ zkRawColsJ (Claims.run sha512 P (V true) x ω r).seen j)
@@ -243,8 +223,6 @@ theorem zk_selfClash_tiedJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {
 
 end Gen
 
-/-- **A self-clash among an accepted masked run's columns collides in its own log**: two columns table `j`'s reps
-open at one position that differ give a collision among the run's verifier calls, at SHA-512. -/
 theorem zk_selfClash_tiedJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((V true).k x) → Coin} {j q : ℕ} {u v : List 𝔽} (h : (Claims.run sha512 P (V true) x ω r).out = .acc)
     (hu : (q, u) ∈ zkRawColsJ (Claims.run sha512 P (V true) x ω r).seen j)
@@ -262,9 +240,6 @@ open FlockSoundness.Discharge
 open FlockSoundness.Discharge.Tables (LiveOutJ liveSession DecodesTable)
 open Claims.Bridge.Live
 
-/-- **A live event at `P'`'s outcome gives an accepting masked run of `P` whose reps open two different columns at
-one position of some table, or a collision**: `ZkClashRun` with a self-clash at level 0 asked without the hashes
-(`zkRawColsJ`). -/
 def ZkRawClashRun {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (mPts : ℕ) (J N : Claims.Msg → ℕ)
     (dg : ByteArray → ByteArray) (w : (x : Claims.Msg) → Wire 65536 (J x) mPts) {τ : Type}
     (P' : Claims.Prover (Ω × τ)) (Φ : τ × (Fin (N x + 2) → LCoin 65536) → Fin ((V true).k x) → Coin)
@@ -281,9 +256,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **A live event at `P'`'s outcome gives an accepting masked run of `P` whose reps open two different columns at
-one position of some table, or a collision**: `ZkClashRun` with a self-clash at level 0 asked without the hashes
-(`zkRawColsJ`). -/
 def ZkRawClashRun {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (mPts : ℕ) (J N : Claims.Msg → ℕ)
     (dg : ByteArray → ByteArray) (w : (x : Claims.Msg) → Wire 65536 (J x) mPts) {τ : Type}
     (P' : Claims.Prover (Ω × τ)) (Φ : τ × (Fin (N x + 2) → LCoin 65536) → Fin ((V true).k x) → Coin)
@@ -301,8 +273,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The clash gives the collision**: two different columns of an accepting masked run at one position of one table
-collide in its log (`zk_selfClash_tiedJ`), so `ZkRawClashRun` gives `ZkClashRun`. -/
 theorem zkClashRun_of_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {mPts : ℕ}
     {J N : Claims.Msg → ℕ} {dg : ByteArray → ByteArray} {w : (x : Claims.Msg) → Wire 65536 (J x) mPts} {τ : Type}
     {P' : Claims.Prover (Ω × τ)} {Φ : τ × (Fin (N x + 2) → LCoin 65536) → Fin ((V true).k x) → Coin}
@@ -314,8 +284,6 @@ theorem zkClashRun_of_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {�
 
 end Gen
 
-/-- **The clash gives the collision**: two different columns of an accepting masked run at one position of one table
-collide in its log (`zk_selfClash_tiedJ`), so `ZkRawClashRun` gives `ZkClashRun`. -/
 theorem zkClashRun_of_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {mPts : ℕ}
     {J N : Claims.Msg → ℕ} {dg : ByteArray → ByteArray} {w : (x : Claims.Msg) → Wire 65536 (J x) mPts} {τ : Type}
     {P' : Claims.Prover (Ω × τ)} {Φ : τ × (Fin (N x + 2) → LCoin 65536) → Fin ((V true).k x) → Coin}

@@ -37,31 +37,12 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Soundness.Game
 
-/-!
-# Every masked table's bound off the table on a witness lane
-
-`zk_le_sessionsJ` reads the sessions' acceptance with no level-0 opening off `C` on any lane (`Off₀Z`), which a table of
-`Flock.KS`'s masked columns, fixing only the witness lanes, does not decide. Here it reads no opening off `C` on a
-witness lane (`OffW₀Z`), through `session_sound_of_table_accZ_w`, whose level-0 term `√(2^{d₀}·2Q₀·Adv₀)` is one more
-fork event per table. Each fork term's mean `Adv` is bounded by its fork event's probability and the fork bound's slack
-at its round (`Claims.Flock.forkSlack`): at one tape and table, the deployed runs accept with no column of table `j`
-off `C` with probability at most table `j`'s own error (`tableErr`) and the slack's escapes, the tables' with level
-0's and the slack's merged by round (`Claims.Flock.slackEscW`, through `mean_epsSZ_le_rawJ` and
-`Claims.Flock.slackEscW_term`) (`zk_le_sessionsJW`). With the escapes counted per round on accepted first runs, at an
-error for each table (`TableBoundEachAccAtR`) or at `ε_table`, the tables' errors summed (`TableBoundJAccAtR`, which
-`TableBoundEachAccAtR` at errors within `ε_table` gives, and `TableBoundJAccAt`: `TableBoundJAccAt.tableBoundJAccAtR`),
-the masked sessions after `Commit` that bound every table at that verdict, whose events are on accepted runs, whose
-tables' level-0 events alone are at round `0` and whose slack fits the room (`Claims.Flock.SlackFitW`) (`ZkSessWJ`)
-give every masked table's bound at its own error (`zk_tableBoundEachAccAtR_of_sessionsW`, the weight from
-`slackEscW_fitsForkR_zk`), so at `ε_table` (`zk_tableBoundJAccAtR_of_sessionsW`).
--/
+/-! Every masked table's bound off the table on a witness lane. -/
 
 @[expose] public section
 
 namespace Claims.Flock
 
-/-- **The old masked fork and self-clash terms are at most their roots at bounds `b`**: `oldEscZ_term` with each fork
-term's `Adv` (a level's, a pads root's, `τ`'s) at most its bound and the self-clash probability at most `b₁`. -/
 theorem oldEscZ_terms_le (sch : FlockSoundness.Accounting.Schedule) (Np : ℕ) (adv : ℕ → ℕ → ℝ) (advP advT : ℕ → ℝ)
     (sc : ℝ) (b : IZ sch.levels.length → ℝ) (b₁ : ℝ) (hadv : ∀ r ℓ, adv r.val (ℓ.val + 1) ≤ b (.inl (r, ℓ)))
     (hP : ∀ r : Fin 2, advP r.val ≤ b (.inr (.inl r))) (hT : ∀ r : Fin 2, advT r.val ≤ b (.inr (.inr r)))
@@ -81,14 +62,10 @@ theorem oldEscZ_terms_le (sch : FlockSoundness.Accounting.Schedule) (Np : ℕ) (
   · exact Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left (hP r) (cZ_nonneg sch Np (.inr (.inl r))))
   · exact Real.sqrt_le_sqrt ((hT r).trans_eq (one_mul _).symm)
 
-/-! ## Every table's bound, the escapes counted per round -/
-
 section At
 
 variable {Coin Col T : Type} [Fintype Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
 
-/-- **`TableBoundJAccAt` with the escapes counted per round** (`Escapes.FitsForkR`), on accepted first runs
-(`Escapes.OnAcc₁`). -/
 def TableBoundJAccAtR (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ) (Ok : Msg → ℕ → Col → Prop)
     (x : Msg) : Prop :=
   ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω), ∃ e : Escapes H D.V P x, e.OnAcc₁ ∧
@@ -105,8 +82,6 @@ theorem TableBoundJAccAt.tableBoundJAccAtR {H : Msg → Msg} {D : Deploy Coin Co
   obtain ⟨e, ha, hf, hb⟩ := h Ω P
   exact ⟨e, ha.onAcc₁, hf.fitsForkR (Nat.cast_nonneg _) hk, hb⟩
 
-/-- **`TableBoundJAccAtR` at an error for each table**: the bound at table `j` reads `ε j` where `TableBoundJAccAtR`
-reads `ε_table`, the tables' errors summed. -/
 def TableBoundEachAccAtR (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ) (Ok : Msg → ℕ → Col → Prop)
     (ε : ℕ → ℝ) (x : Msg) : Prop :=
   ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω), ∃ e : Escapes H D.V P x, e.OnAcc₁ ∧
@@ -116,7 +91,6 @@ def TableBoundEachAccAtR (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → 
         Pr fun r : Fin (D.V.k x) → Coin => (run H P D.V x ω r).out = .acc ∧
           ∃ (p : Fin (N x j)) (u : Col), lookCol (D.cols (run H P D.V x ω r).seen j) p.val = some u ∧ u ≠ C p
 
-/-- **`TableBoundEachAccAtR` at larger errors**, with the same escapes. -/
 theorem TableBoundEachAccAtR.mono {H : Msg → Msg} {D : Deploy Coin Col T} {N : Msg → ℕ → ℕ}
     {Ok : Msg → ℕ → Col → Prop} {ε ε' : ℕ → ℝ} {x : Msg} (h : TableBoundEachAccAtR H D N Ok ε x)
     (hε : ∀ j < nTab D x, ε j ≤ ε' j) : TableBoundEachAccAtR H D N Ok ε' x := by
@@ -125,7 +99,6 @@ theorem TableBoundEachAccAtR.mono {H : Msg → Msg} {D : Deploy Coin Col T} {N :
   exact ⟨e, ha, hf, fun ω j hj C hC hg =>
     (hb ω j hj C hC hg).trans (add_le_add (add_le_add (hε j hj) le_rfl) le_rfl)⟩
 
-/-- **`TableBoundJAccAtR` from the bound at each table's error**, where each is at most `ε_table`. -/
 theorem TableBoundEachAccAtR.tableBoundJAccAtR {H : Msg → Msg} {D : Deploy Coin Col T} {N : Msg → ℕ → ℕ}
     {Ok : Msg → ℕ → Col → Prop} {ε : ℕ → ℝ} {x : Msg} (h : TableBoundEachAccAtR H D N Ok ε x)
     (hε : ∀ j < nTab D x, ε j ≤ D.εtable x) : TableBoundJAccAtR H D N Ok x :=
@@ -141,9 +114,6 @@ open Flock FlockSoundness FlockSoundness.Game FlockSoundness.Discharge.ZkLink Fl
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **The masked session's `ε_c⁻`, averaged over a mixture of strategies, at a table, at bounds `b`**: at most the
-table's own error (`tableErr`) and the old masked terms' roots at bounds of the fork terms' mean `Adv`s and the mean
-self-clash (`mean_epsSZ_leJ` at `Claims.Flock.oldEscZ_terms_le`). -/
 theorem mean_epsSZ_le_rawJ {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
     (hF : Fintype.card F = 2 ^ 128) {D Sl : Type} [Inhabited D] [Inhabited Sl] (A : Model.Arith F K)
     (Hs : Hashes F D Sl) {mPts : ℕ} (T : TabZK F mPts) (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutZC F D Sl)))
@@ -184,15 +154,6 @@ namespace Gen
 variable [S : ZkSetup]
 
 open Classical in
-/-- **The masked bound at one tape and table, off the table on a witness lane, at the fork bound's slack**:
-`zk_le_sessionsJ` where the mixture `σ` bounds the deployed runs accepting with no column of table `j` off `C` by its
-acceptance at table `j` and every table before it (`AccUpTo`) with no level-0 opening off `C` on a witness lane unless
-it self-clashes, each fork term's mean `Adv` at
-table `j` (level 0's `Adv₀` among them) is at most its fork event's probability and the slack of the fork at its round
-(`Claims.Flock.forkSlack`), and the mean self-clash at most the one-run event's. Each session's acceptance there is at
-most its `ε_c⁻` and level-0 term (`session_sound_of_table_accZ_w`), whose mean is at most table `j`'s error
-(`tableErr`), its old roots at those bounds (`mean_epsSZ_le_rawJ`) and level 0's, at most the slack's escapes' term
-(`Claims.Flock.slackEscW_term`). -/
 theorem zk_le_sessionsJW {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
     (A : Model.Arith 𝔽 K) (hA : A.Correct) (Hs : Hashes 𝔽 D Sl) {x : Claims.Msg} {spec : SessionSpec}
     (st : ℕ → Stmt) (T : ℕ → TabZK 𝔽 spec.mPts)
@@ -337,15 +298,6 @@ theorem zk_le_sessionsJW {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [
 end Gen
 
 open Classical in
-/-- **The masked bound at one tape and table, off the table on a witness lane, at the fork bound's slack**:
-`zk_le_sessionsJ` where the mixture `σ` bounds the deployed runs accepting with no column of table `j` off `C` by its
-acceptance at table `j` and every table before it (`AccUpTo`) with no level-0 opening off `C` on a witness lane unless
-it self-clashes, each fork term's mean `Adv` at
-table `j` (level 0's `Adv₀` among them) is at most its fork event's probability and the slack of the fork at its round
-(`Claims.Flock.forkSlack`), and the mean self-clash at most the one-run event's. Each session's acceptance there is at
-most its `ε_c⁻` and level-0 term (`session_sound_of_table_accZ_w`), whose mean is at most table `j`'s error
-(`tableErr`), its old roots at those bounds (`mean_epsSZ_le_rawJ`) and level 0's, at most the slack's escapes' term
-(`Claims.Flock.slackEscW_term`). -/
 theorem zk_le_sessionsJW {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
     (A : Model.Arith 𝔽 K) (hA : A.Correct) (Hs : Hashes 𝔽 D Sl) {x : Claims.Msg} {spec : SessionSpec}
     (st : ℕ → Stmt) (T : ℕ → TabZK 𝔽 spec.mPts)
@@ -410,12 +362,6 @@ theorem zk_le_sessionsJW {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [
     (pre := pre) (post := post) (cap₀ := cap₀) (σ := σ) (hacc := hacc) (hadv := hadv) (hP := hP) (hTau := hTau)
     (h₀ := h₀) (hsc := hsc)
 
-/-- **The masked tables' sessions after `Commit`, off the table on a witness lane, with events on accepted runs**:
-`ZkSessJ` with level 0's fork event at each table (`IZW`), every event on accepted deployed runs, and the mixture
-bounding the deployed runs by its acceptance up to table `j` with no level-0 opening off `C` on a witness lane unless
-it self-clashes. Each fork term's mean `Adv` is at most its fork event's probability and the slack of the fork at its
-round (`Claims.Flock.forkSlack` at `δ ≥ 0`), only level 0's event of a table is at round `0`, and the slack fits the
-masked weight's room (`Claims.Flock.SlackFitW`). -/
 def ZkSessWJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
     (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (Ok : Claims.Msg → ℕ → List 𝔽 → Prop) (x : Claims.Msg) {mPts : ℕ}
     (T : ℕ → TabZK 𝔽 mPts) : Prop :=
@@ -471,12 +417,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The masked tables' sessions after `Commit`, off the table on a witness lane, with events on accepted runs**:
-`ZkSessJ` with level 0's fork event at each table (`IZW`), every event on accepted deployed runs, and the mixture
-bounding the deployed runs by its acceptance up to table `j` with no level-0 opening off `C` on a witness lane unless
-it self-clashes. Each fork term's mean `Adv` is at most its fork event's probability and the slack of the fork at its
-round (`Claims.Flock.forkSlack` at `δ ≥ 0`), only level 0's event of a table is at round `0`, and the slack fits the
-masked weight's room (`Claims.Flock.SlackFitW`). -/
 def ZkSessWJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
     (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (Ok : Claims.Msg → ℕ → List 𝔽 → Prop) (x : Claims.Msg) {mPts : ℕ}
     (T : ℕ → TabZK 𝔽 mPts) : Prop :=
@@ -528,13 +468,6 @@ def ZkSessWJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D]
             (sessAtZ pre post (tabAfterZC A Hs (T j) cap₀)) (σ t)) / Fintype.card τ ≤
             Claims.Pr fun s : Fin ((V true).k x) → Coin => ev₁ j ω s
 
-/-- **Every masked table's bound at a statement, at each table's own error, off the table on a witness lane, the
-escapes counted per round**: where table `j` of the setup is `st j` and `T j` is Flock ZK's padded table there, when
-the masked sessions bound every table at that verdict with events on accepted runs (`ZkSessWJ`) and no table `Ok`
-allows that does not extract table `j` is committed to `T j`. The escapes are the tables' with level 0's and the
-slack's merged by round (`Claims.Flock.slackEscW`), on accepted first runs (`Claims.Flock.slackEscW_onAcc₁`), fitting
-the deployed weight per round (`slackEscW_fitsForkR_zk`), and at each tape and table the bound is `zk_le_sessionsJW`,
-at table `j`'s error. -/
 theorem zk_tableBoundEachAccAtR_of_sessionsW {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D]
     [Inhabited Sl] (A : Model.Arith 𝔽 K) (hA : A.Correct) (Hs : Hashes 𝔽 D Sl)
     (rel : Readable.Parsed → Readable.Relation) (Ok : Claims.Msg → ℕ → List 𝔽 → Prop) {x : Claims.Msg}
@@ -565,13 +498,6 @@ theorem zk_tableBoundEachAccAtR_of_sessionsW {K D Sl : Type} [Field K] [Fintype 
   exact zk_le_sessionsJW A hA Hs st T hT P rd hrd ev ev₁ tied tied₁ δ hδ ω hj C (hnc j hj C hok hg) pre post
     cap₀ σ hacc' hadv hP hTau h₀ hsc
 
-/-- **Every masked table's bound at a statement, off the table on a witness lane, the escapes counted per round**:
-where table `j` of the setup is `st j` and `T j` is Flock ZK's padded table there, when the masked sessions bound
-every table at that verdict with events on accepted runs (`ZkSessWJ`) and no table `Ok` allows that does not extract
-table `j` is committed to `T j`. The escapes are the tables' with level 0's and the slack's merged by round
-(`Claims.Flock.slackEscW`), on accepted first runs (`Claims.Flock.slackEscW_onAcc₁`), fitting the deployed weight per
-round (`slackEscW_fitsForkR_zk`), from the bound at each table's own error
-(`zk_tableBoundEachAccAtR_of_sessionsW`), each at most `ε_table` (`tableErr_le_εtable`). -/
 theorem zk_tableBoundJAccAtR_of_sessionsW {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D]
     [Inhabited Sl] (A : Model.Arith 𝔽 K) (hA : A.Correct) (Hs : Hashes 𝔽 D Sl)
     (rel : Readable.Parsed → Readable.Relation) (Ok : Claims.Msg → ℕ → List 𝔽 → Prop) {x : Claims.Msg}
@@ -592,12 +518,6 @@ theorem zk_tableBoundJAccAtR_of_sessionsW {K D Sl : Type} [Field K] [Fintype K] 
 
 end Gen
 
-/-- **Every masked table's bound at a statement, off the table on a witness lane, the escapes counted per round**:
-where table `j` of the setup is `st j` and `T j` is Flock ZK's padded table there, when the masked sessions bound
-every table at that verdict with events on accepted runs (`ZkSessWJ`) and no table `Ok` allows that does not extract
-table `j` is committed to `T j`. The escapes are the tables' with level 0's and the slack's merged by round
-(`Claims.Flock.slackEscW`), on accepted first runs (`Claims.Flock.slackEscW_onAcc₁`), fitting the deployed weight per
-round (`slackEscW_fitsForkR_zk`), and at each tape and table the bound is `zk_le_sessionsJW`. -/
 theorem zk_tableBoundJAccAtR_of_sessionsW {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D]
     [Inhabited Sl] (A : Model.Arith 𝔽 K) (hA : A.Correct) (Hs : Hashes 𝔽 D Sl)
     (rel : Readable.Parsed → Readable.Relation) (Ok : Claims.Msg → ℕ → List 𝔽 → Prop) {x : Claims.Msg}

@@ -43,22 +43,7 @@ import Proofs.Flock.Claims.DeployRoundsZk
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 import Std.Tactic.BVDecide.Normalize.Prop
 
-/-!
-# The pads openings an accepted masked rep logs
-
-`Zk.verifyInnerWith` opens each of its `Q` queried pads columns as an `hm96-sha512/v1` opening of the row `[a, b]`
-against the inner proof's root: the pair hashed, its leaf under the query's salt, then the climb at the query's
-position `w.lo mod innerN`, `w` the query's coin.
-
-* `verifyInner_logs`: run with `hashesIn L`, the inner proof reads four rounds, and at each query its path has the
-  tree's depth, its climb reaches the root, and every SHA-512 input of the opening is in `L` (`opensIns` at the row
-  `[a, b]`, whose encoding is the pair's, `rowBytes_pair`).
-* `tiedColl_of_climbs`: two `hm96-sha512/v1` climbs from different rows to one top, along paths of one length of
-  digest-width siblings, collide among their inputs; `tiedColl_of_opens` without the cap and the salt's width.
-* `tiedColl_of_verifyInner`: so two queries of one accepted inner proof at one position, with different pairs, collide
-  in `L`.
-* `zkVerifyRepWith_inner`: an accepted masked rep ran its inner proof on its stream's rounds, ending at the last one.
--/
+/-! The pads openings an accepted masked rep logs. -/
 
 @[expose] public section
 
@@ -69,7 +54,6 @@ open FlockSoundness.Discharge.ZkExec (innerN layZ shapeZK)
 
 attribute [local irreducible] Sha512.hash
 
-/-- A loop whose every step yields and keeps the transcript ran each step from the transcript it started at. -/
 theorem forIn_each {γ : Type} (body : γ → PUnit → TM (ForInStep PUnit))
     (hbody : ∀ x s t b t', body x s t = .ok (b, t') → b = ForInStep.yield PUnit.unit ∧ t' = t) :
     ∀ (l : List γ) (t t' : Transcript) (out : PUnit), forIn l PUnit.unit body t = .ok (out, t') →
@@ -102,10 +86,6 @@ theorem qs_get (a : Array F128) (n k : ℕ) : (a.map fun w => w.lo.toNat % n)[k]
     show (0 : ℕ) = (0 : UInt64).toNat % n
     simp
 
-/-- **The inner proof's openings, logged**: when `Zk.verifyInnerWith` accepts with SHA-512 answered only within `L`,
-it read four rounds, and at each query `k` (its position the coin `w` of the fourth round, at `w.lo mod innerN`) the
-path has the tree's depth, the climb from the leaf of `[a, b]` under the query's salt reaches the root, and every
-SHA-512 input of that opening is in `L`. -/
 theorem verifyInner_logs {L : List Claims.Msg} {lay : Zk.PadLayout} {pr : Zk.InnerProof} {finalC : F128}
     {cons : Array (String × Zk.Lin)} {t t' : Transcript}
     (h : Zk.verifyInnerWith (hashesIn L) lay pr finalC cons t = .ok ((), t')) :
@@ -180,8 +160,6 @@ theorem verifyInner_logs {L : List Claims.Msg} {lay : Zk.PadLayout} {pr : Zk.Inn
     · exact hlm
   · exact hcm y hy
 
-/-- `opens_binding` from the climbs' equality alone: two climbs from different rows to one top, along paths of one
-length of digest-width siblings, give a colliding pair. -/
 theorem climbs_binding (ms : MerkleScheme) (hs : ms.Sized) (pos : ℕ) (r1 r2 : Array F128) (y1 y2 : ByteArray)
     (s1 s2 : List ByteArray) (hw1 : ∀ x ∈ s1, x.size = ms.digestLen) (hw2 : ∀ x ∈ s2, x.size = ms.digestLen)
     (hlen : s1.length = s2.length) (heq : climb ms (ms.leaf r1 y1) pos s1 = climb ms (ms.leaf r2 y2) pos s2)
@@ -192,8 +170,6 @@ theorem climbs_binding (ms : MerkleScheme) (hs : ms.Sized) (pos : ℕ) (r1 r2 : 
   · simp only [opensPair, hl, ↓reduceIte]
     exact climb_binding ms hs s1 s2 _ _ pos hlen hw1 hw2 (hs.2 _ _) (hs.2 _ _) hl heq
 
-/-- **Two climbs from different rows to one top collide in the joined logs**: `tiedColl_of_opens` from the climbs'
-equality alone, along paths of one length of digest-width siblings. -/
 theorem tiedColl_of_climbs {pos : ℕ} {r1 r2 : Array F128} {y1 y2 : ByteArray} {s1 s2 : List ByteArray}
     {l : List (Claims.Msg × Claims.Msg)} (hw1 : ∀ x ∈ s1, x.size = MerkleScheme.hm96Sha512.digestLen)
     (hw2 : ∀ x ∈ s2, x.size = MerkleScheme.hm96Sha512.digestLen) (hlen : s1.length = s2.length)
@@ -210,8 +186,6 @@ theorem tiedColl_of_climbs {pos : ℕ} {r1 r2 : Array F128} {y1 y2 : ByteArray} 
     Claims.toMsg (Sha512.hash (Claims.ofMsg (Claims.toMsg _)))
   rw [Claims.ofMsg_toMsg, Claims.ofMsg_toMsg, heq']
 
-/-- **Two queries of an accepted inner proof at one position, with different pairs, collide in its log**: both
-openings climb to the inner proof's root along paths of the tree's depth (`verifyInner_logs`). -/
 theorem tiedColl_of_verifyInner {L : List (Claims.Msg × Claims.Msg)} {lay : Zk.PadLayout} {pr : Zk.InnerProof}
     {finalC : F128} {cons : Array (String × Zk.Lin)} {t t' : Transcript}
     (h : Zk.verifyInnerWith (hashesIn (L.map Prod.fst)) lay pr finalC cons t = .ok ((), t'))
@@ -231,10 +205,6 @@ theorem tiedColl_of_verifyInner {L : List (Claims.Msg × Claims.Msg)} {lay : Zk.
   exact Prod.ext (by simpa using congrArg (fun r : Array F128 => r[0]!) e)
     (by simpa using congrArg (fun r : Array F128 => r[1]!) e)
 
-/-- **An accepted masked rep ran its inner proof on its stream's rounds, ending at the last one**: when
-`Zk.verifyRepWith hs` accepts rep `r` of table `i`, its stream's decoded proof's inner proof passed
-`Zk.verifyInnerWith hs` at the pads layout `layZ`, from a transcript on the stream's rounds four rounds before their
-end. -/
 theorem zkVerifyRepWith_inner (hs : Hashes Flock.V) {spec : SessionSpec} {st : Setup} {sch : Schedule} {tPad : ℕ}
     {sess : RunRecord} {i r : ℕ} {bytes c : ByteArray} (hsch : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad))
     (h : Zk.verifyRepWith hs spec st sch tPad sess i r bytes = .ok c) :

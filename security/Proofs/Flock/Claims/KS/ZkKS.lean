@@ -42,27 +42,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.ZkLink.M1
 import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
 
-/-!
-# The deployed masked verifier's KS from the live sessions' bound at one table
-
-`PlainKS` at `--zk`. `zk_KS_of_live`: `Flock.KS` at SHA-512 at the trimmed record `deployZkTrim` at the deployed
-relation, from two premises:
-
-* `ZkOne`: every statement some run accepts parses with one table (`zk_KS_of_table`'s `hone`). The masked scope admits
-  several tables (`InScope`'s `tables ≤ if zk then zkTableCap else 1`), so this holds of a masked deployment only
-  where no run accepts a statement of several;
-* `ZkLive x` at every statement some run accepts: at Flock ZK's padded table there (`zkTab`), every prover has
-  escapes at injective fork rounds and, at each tape and each table of full-width columns, live strategies whose verdict
-  bounds the deployed runs accepting on the table, a decoder right for that verdict, and escapes' events bounding their
-  `Adv`s and self-clash (`ZkLiveAt` at `hs512`, the hypothesis `zk_tableBoundθAt_of_live` reads).
-
-Everything else is proved here at a statement some run accepts with one table, which parses in scope and sets up:
-table 0's layout and link layout (`zk_table0`), `Zk.schedule`'s schedule and `t_pad` at its `m` (`zk_schedule_ok`), the
-padded table `zkTab` at them with the executable's padding constant, pads layout and inner code (`SampleSetupZK.tabAt`'s
-fields, without a sample), that `zkTab` is at Flock ZK's parameters (`zkTab_m1`), and that a table that does not extract
-is not committed to it (`zk_not_committed`, `zkTab_committed`). `zk_tableBoundθ_live` is the bound at full-width
-columns, the form the trimmed record reads (`zk_KS_trim`).
--/
+/-! The deployed masked verifier's KS from the live sessions' bound at one table. -/
 
 @[expose] public section
 
@@ -76,7 +56,6 @@ local notation "𝔽" => FlockLevel3.GF128
 
 variable {wideLeaf : Bool}
 
-/-- **`Zk.schedule` accepts every `m` from 25 to 35** at either statement version, at `zkSched`. -/
 theorem zk_schedule_ok {m : ℕ} (h25 : 25 ≤ m) (h35 : m ≤ 35) :
     Zk.schedule wideLeaf m = .ok (Claims.Flock.zkSched wideLeaf m) := by
   have h := (Claims.Flock.zkShape_table (Claims.Flock.ZkIdx.of wideLeaf m)).1
@@ -91,7 +70,6 @@ theorem zkSched_of {m : ℕ} {sch : Flock.Schedule} {tPad : ℕ} (hz : Zk.schedu
   unfold Claims.Flock.zkSched
   rw [hz]
 
-/-- `codeAt`'s points at `N` columns, distinct below `2^64` (`SampleSetupZK.innerDom`). -/
 def innerDomOf (N : ℕ) (hN : N < 2 ^ 64) : Fin N ↪ 𝔽 :=
   ⟨fun j => innerPt j.val, fun a b h => by
     have hlt : ∀ j : Fin N, j.val + 1 < 2 ^ 64 := fun j => by
@@ -102,7 +80,6 @@ def innerDomOf (N : ℕ) (hN : N < 2 ^ 64) : Fin N ↪ 𝔽 :=
     simp only [Nat.toUInt64_eq, UInt64.toNat_ofNat', Nat.mod_eq_of_lt (hlt a), Nat.mod_eq_of_lt (hlt b)] at this
     exact Fin.ext (by omega)⟩
 
-/-- The inner code's length at a statement `Zk.schedule` accepts, of `k_log ≤ 27`: a power of two, at most `2^13`. -/
 theorem innerN_pow_zk {st : Stmt} {sch : Flock.Schedule} {tPad : ℕ} (hz : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad))
     (hk : st.c.kLog ≤ 27) : ∃ b, Discharge.ZkExec.innerN (layOf st sch) = 2 ^ b ∧ b ≤ 13 := by
   obtain ⟨hshape, hmsch, -⟩ := schedule_zk hz
@@ -125,11 +102,6 @@ theorem innerN_dvd_zk {st : Stmt} {sch : Flock.Schedule} {tPad : ℕ} (hz : Zk.s
   rw [hb]
   exact Nat.pow_dvd_pow 2 (by omega)
 
-/-- **Flock ZK's padded table at a statement**, the fields of `SampleSetupZK.tabAt` at layout `L`'s model statement
-at its regions: `Zk.schedule`'s schedule and `t_pad` at its `m`, the padding constant `PAD_C`, two extra lanes, link
-layout `PT_LOCAL`, the pads at `PadLayout.new m kLog k0`'s positions, and the inner code `verifyInner` reads (`innerN`
-columns, column `j` at `j + 1`, `K_PAD` padding symbols, `Q` queries at `w.lo mod innerN`, the unique-decoding
-radius). -/
 noncomputable def zkTab {st : Stmt} (L : Layout st) {sch : Flock.Schedule} {tPad : ℕ}
     (hz : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)) (hk : st.c.kLog ≤ 27) {mPts : ℕ}
     (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL mPts) : TabZK 𝔽 mPts where
@@ -164,8 +136,6 @@ noncomputable def zkTab {st : Stmt} (L : Layout st) {sch : Flock.Schedule} {tPad
   hL := innerN_ge _
   hδ := le_rfl
 
-/-- **`zkTab` is at Flock ZK's parameters**: `m1Schedule` and `m1Pad` at `m`, two extra lanes, the shape `acct`,
-at most `2^13` inner columns, 168 queries, a radius of at least `7/16`, and the deployed pads domain. -/
 theorem zkTab_m1 {st : Stmt} (L : Layout st) {sch : Flock.Schedule} {tPad : ℕ}
     (hz : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)) (hk : st.c.kLog ≤ 27) (spec : SessionSpec)
     (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts) :
@@ -188,8 +158,6 @@ theorem zkTab_m1 {st : Stmt} (L : Layout st) {sch : Flock.Schedule} {tPad : ℕ}
   · rw [zkSched_of hz]
     exact le_rfl
 
-/-- **`zkTab` commits to what `zk_not_committed` speaks of**: table 0's model statement, `zkSched`'s schedule and
-padding, and `PAD_C`. -/
 theorem zkTab_committed {st : Stmt} (L : Layout st) {sch : Flock.Schedule} {tPad : ℕ}
     (hz : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)) (hk : st.c.kLog ≤ 27) {mPts : ℕ}
     (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL mPts) (C : Model.Oracle 𝔽) :
@@ -199,9 +167,6 @@ theorem zkTab_committed {st : Stmt} (L : Layout st) {sch : Flock.Schedule} {tPad
   rw [zkSched_of hz]
   rfl
 
-/-- **The live sessions' bound at a masked statement**: `ZkLiveAt` at the deployed hashes (`hs512`) and tables of
-full-width columns, at `zkTab`, wherever the setup has the one table `st`, at its every layout, link layout at
-`PT_LOCAL`, and `Zk.schedule`'s schedule. -/
 def ZkLive (x : Claims.Msg) : Prop :=
   ∀ (spec : SessionSpec) (st : Stmt) (_ : tables true x = [(spec, st)]) (L : Layout st) (sch : Flock.Schedule)
     (tPad : ℕ) (hz : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)) (hk : st.c.kLog ≤ 27)
@@ -212,7 +177,6 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- The readable statement's `k_log` is table 0's. -/
 theorem parse_kLog {zk : Bool} {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse zk Readable.relation x = some s)
     {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf zk x = some (ins, spec, sts))
     (h0 : 0 < sts.size) : s.kLog = sts[0].c.kLog := by
@@ -223,14 +187,12 @@ theorem parse_kLog {zk : Bool} {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : pa
 
 end Gen
 
-/-- The readable statement's `k_log` is table 0's. -/
 theorem parse_kLog {zk : Bool} {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse zk Readable.relation x = some s)
     {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf zk x = some (ins, spec, sts))
     (h0 : 0 < sts.size) : s.kLog = sts[0].c.kLog :=
   Gen.parse_kLog (S := S₀) (zk := zk) (x := x) (s := s) (hs := hs) (ins := ins) (spec := spec) (sts := sts)
     (hset := hset) (h0 := h0)
 
-/-- **Table 0 of a masked statement in scope**: its layout and its link layout at `PT_LOCAL` (`plain_table0`). -/
 theorem zk_table0 {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size) :
@@ -252,8 +214,6 @@ theorem zk_table0 {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Read
   have h2 := hr.hm
   omega
 
-/-- **The masked table bound at a statement in scope of one table, from the live sessions' bound**: at tables of
-full-width columns, where the statement parses in scope and sets up one table. -/
 theorem zk_tableBoundθAt_live {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h1 : sts.size = 1)
@@ -275,15 +235,13 @@ theorem zk_tableBoundθAt_live {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (fun C hw hg hc => zk_not_committed hs hin hset h1 L C hw hg ((zkTab_committed L hz hk hlay _).1 hc))
     (hl spec _ ht L sch tPad hz hk hlay)
 
-/-- **One table at every statement some masked run accepts** (`zk_KS_of_table`'s `hone`). The masked scope admits
-several tables (`InScope`'s `tables ≤ if zk then zkTableCap else 1`), so this is a premise on which statements a run
-accepts, which a deployment that serves statements of several tables does not meet. -/
+/-- The masked scope admits several tables (`InScope`'s `tables ≤ if zk then zkTableCap else 1`), so this is a
+premise on which statements a run accepts, which a deployment that serves statements of several tables does not
+meet. -/
 def ZkOne : Prop :=
   ∀ x, (∃ s, (deployZk Readable.relation).parse x = some s ∧ s.tables = 1) ∨
     Claims.Flock.NoAcc sha512 (deployZk Readable.relation).V x
 
-/-- **The masked table bound at full-width columns, from the live sessions' bound** at the statements some run
-accepts, each of one table. -/
 theorem zk_tableBoundθ_live (hone : ZkOne) (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkLive x) :
     Claims.Flock.TableBoundθ sha512 (deployZk Readable.relation) (wordLen true) (wide true) :=
   zk_tableBoundθ_of_acc Readable.relation (wide true) fun x s _ _ _ hno hs hin hset => by
@@ -296,8 +254,6 @@ theorem zk_tableBoundθ_live (hone : ZkOne) (hl : ∀ x, ¬ Claims.Flock.NoAcc s
     obtain ⟨hpst, -, -⟩ := parseBytes_setup hp hset
     exact zk_tableBoundθAt_live hs hin hset (by rw [← hpst, hsz, h1]) (hl x hno)
 
-/-- **The deployed masked verifier: KS**, at SHA-512 at the trimmed record at the deployed relation, from one table at
-every statement some run accepts and the live sessions' bound there. -/
 theorem zk_KS_of_live (hone : ZkOne) (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkLive x) :
     Claims.Flock.KS sha512 (deployZkTrim Readable.relation) :=
   zk_KS_trim Readable.relation hone (zk_tableBoundθ_live hone hl)

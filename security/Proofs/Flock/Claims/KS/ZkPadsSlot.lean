@@ -38,23 +38,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.KS.ZkLiveSched
 import Proofs.Flock.Soundness.Game
 
-/-!
-# The masked simulated fork's alignment at the pads
-
-`ZkPadsAlign` compares the fork at rep `r`'s pads node against the simulated strategy after `Commit` (`advPadsSZ`) with
-the fork after `zkRd j i` coins of `PadsForkEvZ`. The pads root is a rep's first table node (`lockRepZ`), so it is
-`0` coins into the rep, and its fork round `zkB2` is the tables in front's coins and rep 0's if `r = 1`: the caps'
-schedule (`ZkBatch`, `ZkBatchSim`) at distance `0`.
-
-* `dist_lockRepZ_pads`, `slotAtD_lockAfterZ_pads`: the session's table meets rep `r`'s pads after rep 0's `n` coins
-  if `r = 1`, where its strategy plays rep 0 first;
-* `SlotPadsZ`, `advPadsSZ_le_forkC`: where the primed prover reaches the pads node after `t` coins, `advPadsSZ` is at
-  most the fork after `t` coins of `PadsForkEvZ`, whose cap is any;
-* `ind_conflictPads_nul`, `slotPadsZ_of_batch`: a run whose session table opens nothing opens no pads position, so
-  `SchedZ` at `r · n₀` gives the slot after `n + r · n₀ + 1` coins;
-* `zkPadsAlign`: `ZkPadsAlign` holds at every message, the simulated strategy following `SchedC` there
-  (`schedC_simAtJZ`), so the pads fork bound holds outright (`zkSimForkLePads`).
--/
+/-! The masked simulated fork's alignment at the pads. -/
 
 @[expose] public section
 
@@ -71,15 +55,11 @@ section Session
 variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl] {mPts : ℕ}
 
 omit [Inhabited D] [Inhabited Sl] in
-/-- **A rep's pads root is its first table node.** -/
 theorem dist_lockRepZ_pads (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 mPts) (r : ℕ) (hr : r < 2)
     (C₀ : Model.Oracle 𝔽) (extra : List (Model.Claim 𝔽 T.S.m)) : Lock.Dist r 0 (lockRepZ A Hs T r hr C₀ extra) := by
   unfold lockRepZ
   exact .here
 
-/-- **The session's table meets rep `r`'s pads past rep 0's `n` coins if `r = 1`, at every table choice**, where its
-strategy plays rep 0 first, which ends after `n` coins, or reaches only `Dead` outcomes (`Lock.SlotAtD.lead_fst`,
-`Lock.SlotAtD.lead_snd`). -/
 theorem slotAtD_lockAfterZ_pads (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 mPts) (C₀ : Model.Oracle 𝔽)
     (cap₀ : Model.Cap D) (pts : Fin 2 → Fin mPts → 𝔽) (r : ℕ) (hr : r < 2) (n : ℕ) (Dead : OutZC 𝔽 D Sl → Prop)
     (σ₁ : Strategy (tabAfterZCP A Hs T cap₀ pts))
@@ -101,8 +81,6 @@ theorem slotAtD_lockAfterZ_pads (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl)
     exact Lock.SlotAtD.lead_snd disjoint_getZ (fun _ _ _ _ => .send _ fun _ => .ret _) hS _ _
       (Lock.noSlot_of_get_none (fun i => by simp [getZ]) _) (dist_lockRepZ_pads A Hs T 1 _ C₀ _)
 
-/-- **The primed prover reaches rep `r`'s pads node after `t` coins** in the session after `Commit`: `Lock.SlotAt` at
-`advPadsSZ`'s chooser, slot, fork event and lockstep. -/
 def SlotPadsZ (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 mPts)
     (pre post : List ((Fin 2 → Fin mPts → 𝔽) → Game (OutZC 𝔽 D Sl))) (cap₀ : Model.Cap D) (r t : ℕ)
     (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) : Prop :=
@@ -111,8 +89,6 @@ def SlotPadsZ (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 m
       (fun outs : List (OutZC 𝔽 D Sl) => opPadsAtZ Hs T.N T.q r d (outs.getD pre.length dfltOutZC)) x p) (b, b'))
     t (lockSessZ A Hs T pre post default cap₀) (pushStrat A Hs T cap₀ pre post σ)
 
-/-- **`Adv^pads_r` in the session is at most the fork after `t` coins of `PadsForkEvZ`** where the primed prover
-reaches rep `r`'s pads node after `t` coins: the node's conflict at its cap is `PadsForkEvZ`'s at that cap. -/
 theorem advPadsSZ_le_forkC (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 mPts)
     (pre post : List ((Fin 2 → Fin mPts → 𝔽) → Game (OutZC 𝔽 D Sl))) (cap₀ : Model.Cap D) (r t : ℕ)
     (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) (h : SlotPadsZ A Hs T pre post cap₀ r t σ) :
@@ -123,8 +99,6 @@ theorem advPadsSZ_le_forkC (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T :
     (fun _ d _ _ _ _ _ _ _ _ _ _ => ind_le_indZ fun ⟨p, hc⟩ => ⟨d, p, hc⟩) h).trans
     (le_of_eq (forkC_pushStrat A Hs T cap₀ pre post _ t σ))
 
-/-- **The pads conflict is `0` at a run whose table `n` opens nothing**: its pads paths are empty
-(`opPadsAtZ_nul`). -/
 theorem ind_conflictPads_nul (Hs : Hashes 𝔽 D Sl) {N : ℕ} (hN : 2 ≤ N) (q n r : ℕ) (d : Model.Cap D)
     {b b' : List (OutZC 𝔽 D Sl)} (h : DeadZ n b) :
     ind (fun x : List (OutZC 𝔽 D Sl) × List (OutZC 𝔽 D Sl) => ∃ p, Rewinding.ConflictAt
@@ -137,10 +111,6 @@ theorem ind_conflictPads_nul (Hs : Hashes 𝔽 D Sl) {N : ℕ} (hN : 2 ≤ N) (q
     exact absurd h₁ (by simp)
   · rfl
 
-/-- **The pads slot from a schedule whose tables pause**: `SlotPadsZ` after `n + r · n₀ + 1` coins, where the primed
-prover follows `SchedZ` with `r · n₀` coins of the session's table before the tables after it flip any, short of runs
-`Dead` at which the pads conflict is `0` (`Lock.SlotAtD.batchLock_sched`, `Lock.SlotAtD.batchLock_nil_followL`,
-`slotAtD_lockAfterZ_pads`). -/
 theorem slotPadsZ_of_batch (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 mPts)
     (pre post : List ((Fin 2 → Fin mPts → 𝔽) → Game (OutZC 𝔽 D Sl))) (cap₀ : Model.Cap D) (r : ℕ) (hr : r < 2)
     (n n₀ : ℕ) (Dead : List (OutZC 𝔽 D Sl) → Prop)
@@ -158,16 +128,10 @@ theorem slotPadsZ_of_batch (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T :
 
 end Session
 
-/-! ## At the masked simulator -/
-
 namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **`ZkPadsAlign` holds at every message**: the pads fork round is the tables in front's coins, rep 0's if `r = 1`,
-and the link coin (`zkB2`); the simulated strategy follows `SchedC` at `r · repRounds` (`schedC_simAtJZ` on
-`zkStreams`, as `zkBatchAlign`), so it reaches the pads node there (`slotPadsZ_of_batch`), and `advPadsSZ_le_forkC`
-gives the alignment, table `j`'s position in the session being `j` (`take_gamesZC_length`). -/
 theorem zkPadsAlign (x : Claims.Msg) : ZkPadsAlign x := by
   intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C r u
   have hjS : j < sts.size := by rw [← zk_tables_length hset]; exact hj
@@ -212,10 +176,6 @@ theorem zkPadsAlign (x : Claims.Msg) : ZkPadsAlign x := by
 
 end Gen
 
-/-- **`ZkPadsAlign` holds at every message**: the pads fork round is the tables in front's coins, rep 0's if `r = 1`,
-and the link coin (`zkB2`); the simulated strategy follows `SchedC` at `r · repRounds` (`schedC_simAtJZ` on
-`zkStreams`, as `zkBatchAlign`), so it reaches the pads node there (`slotPadsZ_of_batch`), and `advPadsSZ_le_forkC`
-gives the alignment, table `j`'s position in the session being `j` (`take_gamesZC_length`). -/
 theorem zkPadsAlign (x : Claims.Msg) : ZkPadsAlign x :=
   Gen.zkPadsAlign (S := S₀) (x := x)
 
@@ -223,13 +183,11 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The masked simulator's fork bound at the pads holds at every message.** -/
 theorem zkSimForkLePads (x : Claims.Msg) : ZkSimForkLeOn x fun _ i => IsPadsEvZ i :=
   zkSimForkLePads_of (zkPadsAlign x)
 
 end Gen
 
-/-- **The masked simulator's fork bound at the pads holds at every message.** -/
 theorem zkSimForkLePads (x : Claims.Msg) : ZkSimForkLeOn x fun _ i => IsPadsEvZ i :=
   Gen.zkSimForkLePads (S := S₀) (x := x)
 
