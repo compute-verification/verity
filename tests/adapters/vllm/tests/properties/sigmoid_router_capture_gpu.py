@@ -34,8 +34,6 @@ It lives under tests/ because it seeds random generators and clears vLLM's switc
 """
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import argparse
 import hashlib
 import json

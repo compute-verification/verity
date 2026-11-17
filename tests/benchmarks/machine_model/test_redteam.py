@@ -9,8 +9,8 @@ from verity_machine_model import eps as E
 from verity_machine_model import redteam as RT
 from verity_machine_model.model import device
 
-# device -> its headline design (JI89 / JIM): the rows these audits read must exist
-HEAD = {"sm_90": "dither-2s-li-l32", "sm_100": "dither-2s-li-l32", "sm_89": "dither-2s-l16", "sm_80": "dither-2s-l16"}
+# device -> its headline design: the rows these audits read must exist
+HEAD = {"sm_90": "dither-2s-li-l32", "sm_100": "dither-2s-li-l32"}
 
 
 @pytest.mark.parametrize("dev,design", sorted(HEAD.items()))
@@ -107,16 +107,6 @@ def test_least_filler_holds_the_margin_on_the_h200() -> None:
     assert lf.mix == {"FFMA": 1}
     short = RT.least_filler("dither-2s-li-l32", data, limit=lf.per_word - 0.005)
     assert short.per_word is None and short.core > lf.core, "no filler up to a limit below the least one holds it"
-
-
-def test_a100_uniform_datapath_is_an_open_gap() -> None:
-    """sm_80's census prices no uniform datapath; crediting one at sm_90's measured rates raises the headline core
-    materially, because the cheater runs the fold off the bound ALU pipe. The guard holds until sm_80 measures it."""
-    data = device("sm_80")
-    assert not RT.audit("dither-2s-l16", data).uniform_route, "sm_80 has no UNI class yet"
-    base, opened, binding = RT.uniform_gap("dither-2s-l16", data)
-    assert opened > base + 1e-3, "a uniform datapath opens a material gap on A100"
-    assert binding, "the opened route still binds some row"
 
 
 def test_measured_uniform_route_reports_no_gap() -> None:

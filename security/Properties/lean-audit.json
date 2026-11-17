@@ -1160,9 +1160,7 @@
   "Definitions.Pouw.PouwWitness",
   "Definitions.Pouw.PouwWork",
   "Definitions.Pouw.TS",
-  "Definitions.Slowdown.CoverageToy",
   "Definitions.Slowdown.ServingBlocks",
-  "Definitions.Slowdown.Tasks",
   "Properties.Certifier.JointBridge",
   "Definitions.Pouw.Assumptions.CreditedWords",
   "Definitions.Pouw.Assumptions.PouwFloor",
@@ -1179,9 +1177,7 @@
   "Definitions.Pouw.Guarantees.Pouw",
   "Definitions.Pouw.Guarantees.PouwWork",
   "Definitions.Pouw.Guarantees.TS",
-  "Definitions.Slowdown.Assumptions.Coverage",
   "Definitions.Slowdown.Guarantees.Actual",
-  "Definitions.Slowdown.Guarantees.Coverage",
   "Definitions.Slowdown.Guarantees.ServingBlocks",
   "Definitions.Assumptions",
   "Definitions.Claims",
@@ -2363,17 +2359,6 @@
    ],
    "why": "a property is stated over the definitions and the code it is about, never over a proof"
   },
-  "Properties.Pous.InProofs": {
-   "imports": [
-    "MemoryChallenger.Verdict",
-    "Properties.Pous",
-    "PousCheck.SetupInProofs",
-    "Definitions.Core.Interaction",
-    "Definitions.Core.Boolean"
-   ],
-   "except": [],
-   "why": "PoUS's setup and session checked inside proofs are stated against the memory challenger's verdict (MemoryChallenger.Verdict), the setup's check inside proofs (PousCheck.SetupInProofs) and PoUS's properties (Properties.Pous), with the circuits and live-coin interactions every proof system's claims read (Definitions.Core.Boolean, Definitions.Core.Interaction); never a proof"
-  },
   "Properties.Pous.Period": {
    "imports": [
     "Mathlib",
@@ -2840,17 +2825,6 @@
    "why": "the properties are stated against the verifier's own functions, on Lean core: nothing of Mathlib or of `security`",
    "sealed": true
   },
-  "Properties.Poub.Remote.InProofs": {
-   "imports": [
-    "Poub.Span",
-    "Definitions.Core.Boolean",
-    "Definitions.Core.Interaction",
-    "Properties.Poub.Remote",
-    "Properties.Verity.Sha512"
-   ],
-   "except": [],
-   "why": "the read session proved in zero knowledge is stated against the verifier's span check (Poub.Span) and the read session's own statements (Properties.Poub.Remote), the circuits and live-coin interactions every proof system's claims read (Definitions.Core.Boolean, Definitions.Core.Interaction), and SHA-512 as the code computes it (Properties.Verity.Sha512) for the rows' collision event; never a proof"
-  },
   "Properties.Poub.Remote.Line": {
    "imports": [
     "Definitions.Pouw.Basic",
@@ -2899,6 +2873,28 @@
    ],
    "except": [],
    "why": "an accepted wipe's count over its span is stated against the wipe protocol's check (`MemoryChallenger.WipeProtocol`), the network certifier's device premise (`Definitions.Certifier.Premises`), the device model's lines for a span (`Definitions.Certifier.Guarantees.Marks`) and a finite sum for the bits the device sent in the span's phases (`Mathlib.Algebra.BigOperators.Group.Finset.Basic`), never a proof"
+  },
+  "Properties.Pous.InProofs": {
+   "imports": [
+    "MemoryChallenger.Verdict",
+    "Properties.Pous",
+    "PousCheck.SetupInProofs",
+    "Definitions.Core.Interaction",
+    "Definitions.Core.Boolean"
+   ],
+   "except": [],
+   "why": "PoUS's setup and session checked inside proofs are stated against the memory challenger's verdict (MemoryChallenger.Verdict), the setup's check inside proofs (PousCheck.SetupInProofs) and PoUS's properties (Properties.Pous), with the circuits and live-coin interactions every proof system's claims read (Definitions.Core.Boolean, Definitions.Core.Interaction); never a proof"
+  },
+  "Properties.Poub.Remote.InProofs": {
+   "imports": [
+    "Poub.Span",
+    "Definitions.Core.Boolean",
+    "Definitions.Core.Interaction",
+    "Properties.Poub.Remote",
+    "Properties.Verity.Sha512"
+   ],
+   "except": [],
+   "why": "the read session proved in zero knowledge is stated against the verifier's span check (Poub.Span) and the read session's own statements (Properties.Poub.Remote), the circuits and live-coin interactions every proof system's claims read (Definitions.Core.Boolean, Definitions.Core.Interaction), and SHA-512 as the code computes it (Properties.Verity.Sha512) for the rows' collision event; never a proof"
   }
  },
  "reads_exempt": {
@@ -28690,7 +28686,7 @@
    }
   },
   "Spot.LinkPoints": {
-   "digest": "8eb146e59962bafa269dc8cf0007f88aadc68ff7fb0e5a5b1ccc055ca00871cf",
+   "digest": "395cfbb6e63dcd7791f42678685a6124ba052b8ea9c359df94f00a9457ec21a7",
    "definitions": {
     "Spot.LinkPoints.NEVER_ENDS": "dbadf67581df496783ff4b5c517c168d5a3c38bdccc07706fff7b539050d3d99",
     "Spot.LinkPoints.bounds": "61c7de30eefd176851a10c9fa84d26ef1106c2d3bef17735a7bb78f6739a68e0",
@@ -28698,7 +28694,7 @@
     "Spot.LinkPoints.ends": "c9e3d42a7b1bebe4d8aecbc9c04886acbc2832a8970fdc8c76524c10b7819c59",
     "Spot.LinkPoints.nbl": "c290004880b57a8b0dd92c3d62a73a83030fa259bce7db9e5150707b90a5f465",
     "Spot.LinkPoints.overlap": "11352d0a004e3899fa19933517a0bda0866774b88283b8e40edcc9b4174561b4",
-    "Spot.LinkPoints.refused": "db0bddf21e2b863e39a4aacbb7b9f91d8d88d4c5419e7badfac7d116c9592861",
+    "Spot.LinkPoints.refused": "ab2b9a865897523dc68a29369be83d81ef459858f2cf3b0327fae36265a292bf",
     "Spot.LinkPoints.samplingDesignOf": "6b6ce51f077e814797d54957f4637a8179d939eccd4d3d7e0ed04d7e376c04fd",
     "Spot.LinkPoints.size": "c5778b1bd9dafaec374b911cfca0350fa6ba75586b40a0db480cea482813e277",
     "Spot.LinkPoints.strataEnded": "e4d070b4afd27bc42ac6b7ad62fd78993f2f75a323b9ad37fa0d22a58c968c7d"

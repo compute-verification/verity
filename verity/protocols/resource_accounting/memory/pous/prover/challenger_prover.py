@@ -17,7 +17,7 @@ from typing import Any, BinaryIO
 from verity.protocol import ProtocolDef, Start
 from verity.party import Finish, Identity, Received, Send
 from verity.channel import Message
-from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.attester.challenger_session import (
     CHALLENGER,
     MANIFEST,

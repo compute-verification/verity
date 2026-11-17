@@ -33,7 +33,7 @@ synchronous or async scheduling, FCFS, one full-attention KV group, as `replay._
   frees its blocks. A request reaching O sets `fin` and keeps its slot. A `fin` victim frees its blocks at preemption
   and isn't requeued, but the step still preempted, so its waiting loop doesn't run. The certified O forces every lag
   row, so async costs no decision.
-- *Walk entries* (EW ≥ 1, `CacheStep_v1`'s entry width; network certification's PROTOCOL.md, "The rows"): each running slot's
+- *Walk entries* (EW ≥ 1, `CacheStep_v1`'s entry width; network attestation's PROTOCOL.md, "The rows"): each running slot's
   `pfx` moves with its request through the compaction and placement. A slot with a row takes that row's entry after
   its `CacheStep_v1` calls (a running row's one, an admitted row's second), a kept slot without one keeps its own, and
   a preempted or stopped request drops its own, since it resumes as an admitting row from the root. The step also
@@ -83,7 +83,7 @@ and KV connectors. `statics` refuses an engine whose keys show one (a policy oth
 does not read.
 
 **Composition** (the compile slice's proof block, all inside one ZK proof under the advice's hiding root; the
-certifier's PROTOCOL.md, "Advice v1"):
+network attester's PROTOCOL.md, "Advice v1"):
 1. the committed advice is the decision bits themselves, one per open-step ask in the scan's order, read directly;
 2. a scan of this step over the session's steps, from the empty engine, the arrivals' cursor moving by `taken` and
    the decisions' by `used`; the certified request records (P, O) are the arrivals, in the network attester's release

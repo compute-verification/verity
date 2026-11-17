@@ -14,7 +14,7 @@ module. From the package itself: `Context`, `Refused`, `WeightsView`, `adapter`,
 `Context`, `Option` and `Target`. From `linear.api`: `Arm`, `Control`, `LinearSite`, `PassSpec` and `Stack`; from
 `linear.vllm_site`: `attach` and `discover`. From `poub`, which attaches PoUB's node store
 (`verity.protocols.resource_accounting.memory.poub.prover.node_store`) to the engine: `Binder`, `Every`, `WeightRegion` and
-`model_weights` of `binder`, and `CommitSession` of `remote`, which `pipeline.remote_session` reaches through `driver`.
+`model_weights` of `binder`, and `CommitSession` of `remote`, which `pipeline.poub_session` reaches through `driver`.
 From
 `spot`: `NAME` and `DEFAULT_SCHEME`, by which serve-openai's Pearl+ Commit windows name its entry
 (`pipeline.serve_pearl`). No other name of `spot.py` and none of `pous.py` is imported from outside: each is reached as

@@ -176,7 +176,7 @@ def _time(fn, *a) -> float:
 
 def p2_decode(blocks: bytes, salt: bytes) -> None:
     """P2 v4's decode of whole blocks of segment 0 (`pous.schemes.p2.decode_segment`'s arithmetic and keys, without its
-    codeword check, which random blocks fail): what a certifier that commits the decoded weights pays first."""
+    codeword check, which random blocks fail): what a network attester that commits the decoded weights pays first."""
     from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2 as P2
     params = P2.P2Params(*P2.POINT)
     f, keys = P2._field(params), P2.segment_keys(params, salt, 0)

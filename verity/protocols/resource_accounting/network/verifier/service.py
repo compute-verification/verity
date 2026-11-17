@@ -108,7 +108,7 @@ zero-knowledge.
 
 **The link** (`TransferBlocks(network_attester=NetworkAttesterProfile(…))`) is the network attester's (`network_attester.NetworkAttester`) own two records of
 each execution phase: its responses on egress and its requests on ingress, on its one grid, certified under its
-schedule's parameters digest (`network_attester.NetworkAttesterParams.digest`, which its deployment publishes) rather than a certifier's
+schedule's parameters digest (`network_attester.NetworkAttesterParams.digest`, which its deployment publishes) rather than a network attester's
 (`certificate.parameters_digest`). The network attester is the auditor's device, and its code puts every bucket's
 cells, r for each live connection and the rest padding (`network_attester.audit` reads them in the clear, the scan's proof blocks
 in zero knowledge), so its counts are its schedule's: no occupancy profile holds them, the period's schedule terms
@@ -1043,8 +1043,8 @@ class TransferBlocks:
             if lean is None or lean != claimed or any(w not in lean for w in registered):
                 why[PERIOD_DRAWN] = {"lean": lean if lean is not None else {"refused": no}, "drawn": claimed,
                                      "registered": registered,
-                                     "why": no or "the windows registered and proved are not the Lean verifier of "
-                                                  "record's sample on the period's coins"}
+                                     "why": no or "the windows registered and proved are not the Lean "
+                                                  "verifier's sample on the period's coins"}
         outcomes = {r["registration"]: r for r in stream.records}
         records: list[str | None] = [None] * n
         refused: list[int] = []

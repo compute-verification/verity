@@ -795,7 +795,7 @@ def test_part1_state_step_is_select_update_new_old_and_preserves_old_bit_identic
     """Phase-1 item 4 'state preservation' as a tiny circuit: the state transition is `Select(update, new, old)` (LSelect, non-strict) --
     with `update = Active(0)` the state is the OLD word bit for bit even when the pending `new` value is bot (nothing happened, so the
     state is not bot); with `update = Active(1)` it is the new word; an inactive `update` (the request itself inactive) is bot, which
-    a step of ANOTHER request never sees (the cross-request fixture is test_lifted_mixed.py)."""
+    a step of ANOTHER request never sees."""
     for w in (1, 16, 32):
         st = L.l_select(w)
         for old in _rand(w, 8):

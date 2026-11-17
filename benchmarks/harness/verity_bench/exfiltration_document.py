@@ -37,7 +37,7 @@ from verity_bench.exfiltration_common import (
     WHOLE,
     _same,
 )
-from verity_bench.exfiltration_planner import _label, at_share, rows_of_record
+from verity_bench.exfiltration_planner import ON_A_CLONE, _label, at_share, rows_of_record
 from verity_bench.exfiltration_served import served_share
 from verity_bench.exfiltration_text import _n, _names, _on, _part, _pct, _plan
 from verity_bench.exfiltration_verdicts import (
@@ -256,7 +256,12 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
     if record is None:
         completion = jobs.StoreCompletion(store, root=root, local_only=local_only)
         if not local_only:
-            completion.pull_labels()
+            try:
+                completion.pull_labels()
+            except RuntimeError as e:
+                if completion.store.remote is not None:
+                    raise
+                raise RuntimeError(f"{e}; {ON_A_CLONE}") from e
         store = completion.store
     scopes, plans, runs, refused = rows_of_record(store, row=row, step=step, variant=variant, record=record)
     labelled = {} if record is not None else verdict_runs(store)

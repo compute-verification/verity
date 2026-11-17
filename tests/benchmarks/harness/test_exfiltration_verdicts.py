@@ -22,8 +22,8 @@ from verity_bench import exfiltration as E
 #: the sha256 of the print and of the `--json` document on the fixtures' runs with no verdicts of record: the command's
 #: output where no run carries the stop class's record, the calculator's rows as with no record read. A change
 #: elsewhere that moves the print on purpose pins the new digests here
-NO_VERDICTS = {"text": "8c0ac638eab787f4959a4316f351920b6d69b046025cfed4b4092496a313200c",
-               "json": "94412a9c27cf341d6c45c78575cb39ae23ffe4ff6eccfa4eece613a12104d2d6"}
+NO_VERDICTS = {"text": "a2d58807c8e11ec29e13276944fe783c2c64c5942aeaae9ff8545779b777e5ff",
+               "json": "816ab73b6f353d0b427dbdeb1b91856db53114bafb4f956351a16a8fa1686cae"}
 #: made-up verdicts: a verifier, what stands between its verdicts and proved, the run that holds the records, and each
 #: verdict's own run
 VERIFIER = {"module": "made_up.stop_verifier", "commit": "0123456789ab" * 3 + "0123"}
@@ -64,7 +64,7 @@ def digests(doc: dict) -> dict:
 def test_with_no_verdicts_of_record_the_print_is_as_it_was_byte_for_byte(tmp_path):
     """With nothing in the store carrying the stop class's record, the print and the document are byte for byte those
     pinned (`NO_VERDICTS`): the stop verdicts' reader is not asked and the calculator's rows are as with no record
-    read, the design as the design before its stop block and the network attester's figure in the headline the
+    read, the design as the design before its stop block and the network attester's part the
     `scan` row's. The output count is assumed as it was, and no sum takes it at 0, so the inputs list none."""
 
     doc = E.build(store=recorded(tmp_path).fresh(), root=REPO)
