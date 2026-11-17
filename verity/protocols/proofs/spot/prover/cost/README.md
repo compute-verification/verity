@@ -107,7 +107,7 @@ uv run python verity/protocols/proofs/spot/prover/cost/cpu_budget.py --plan PLAN
   (`recursion-periods.json`, `recursion-periods.md`).
 
 ```text
-uv run python verity/protocols/proofs/spot/prover/cost/recursion.py --result recursion_e2e.json --census benchmarks/census/deployments.json --fleet benchmarks/slowdown/data/reference.toml [--sessions-per-window 1] --out DIR
+uv run python verity/protocols/proofs/spot/prover/cost/recursion.py --result recursion_e2e.json --census calibration/census/deployments.json --fleet benchmarks/slowdown/data/reference.toml [--sessions-per-window 1] --out DIR
 ```
 
 ## The class circuit's size and its window's commit

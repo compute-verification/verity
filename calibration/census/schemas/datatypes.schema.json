@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "benchmarks/census/schemas/datatypes.schema.json",
+  "$id": "calibration/census/schemas/datatypes.schema.json",
   "title": "Census datatypes: operand formats, displayed as the common name first, then the precise format",
   "type": "array",
   "items": {

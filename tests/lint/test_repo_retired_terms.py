@@ -69,7 +69,7 @@ SKIP = {
     "tools/move/": "the word maps name the words they retire",
     "tests/tools/check/test_move_check.py": "its toy moves rename the words the maps retire",
     "fixtures/": "replicated fixtures and their notes are data, named by what they hold",
-    "benchmarks/census/": "data only (AGENTS.md: verity never reads it)",
+    "calibration/census/": "data only (AGENTS.md: verity never reads it)",
     f"tests/lint/test_{NAME}.py": "its examples are the terms it refuses",
     "tests/test_retired_terms.py": "the prose lint that holds a few of the terms at zero names them to find them",
 }
