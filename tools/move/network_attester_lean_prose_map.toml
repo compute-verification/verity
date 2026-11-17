@@ -1,0 +1,147 @@
+# The certifier map in Lean's prose: "the certifier" becomes the network attester (the device) and network
+# attestation (the protocol), in comments and docstrings of `.lean` files only. No declaration, string literal or
+# path moves (lean_names.tsv and lean_strings.tsv list those, with their non-Lean twins).
+
+scope = "prose"
+
+[words]
+
+[[words_in]]
+files = ["**/*.lean"]
+[words_in.words]
+"imports the certifier" = "imports network attestation"
+"the certifier program" = "network attestation's program"
+"the certifier's toy Definition" = "network attestation's toy Definition"
+"the certifier's Definition" = "network attestation's Definition"
+"the certifier's piece" = "network attestation's piece"
+"The certifier's piece" = "Network attestation's piece"
+"the certifier piece" = "the network attestation piece"
+"the certifier's case" = "network attestation's case"
+"the certifier's chain" = "network attestation's chain"
+"The certifier's chain" = "Network attestation's chain"
+"the certifier's scan" = "network attestation's scan"
+"the certifier's offline check" = "network attestation's offline check"
+"the certifier's serving program" = "network attestation's serving program"
+"the certifier's own assumptions" = "network attestation's own assumptions"
+"certifier's own assumptions" = "network attestation's own assumptions"
+"the certifier's period" = "the attestation period"
+"certifier's period" = "attestation period"
+"certifier period" = "attestation period"
+"Network certification" = "Network attestation"
+"network certification" = "network attestation"
+"the certifier's answer" = "network attestation's answer"
+"the split network certifier's step" = "network attestation's split step"
+"neither the certifier nor" = "neither network attestation nor"
+"the adapter nor the certifier" = "the adapter nor network attestation"
+"the adapter and the certifier" = "the adapter and network attestation"
+"the certifier-only" = "the attester-only"
+"Network certifiers" = "Network attesters"
+"network certifiers" = "network attesters"
+"Network certifier" = "Network attester"
+"network certifier" = "network attester"
+"NETWORK CERTIFIER" = "NETWORK ATTESTER"
+"The certifiers" = "The network attesters"
+"the certifiers" = "the network attesters"
+"The certifier" = "The network attester"
+"the certifier" = "the network attester"
+"A certifier" = "A network attester"
+"a certifier" = "a network attester"
+"certifier's" = "network attester's"
+"certifiers'" = "network attesters'"
+
+[keep]
+patterns = [
+    '''[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b''',
+]
+
+[rewrite]
+exclude = [
+    "security/Definitions/Assumptions/Pous.lean",
+    "security/Definitions/Core/Game.lean",
+    "security/Definitions/Pous.lean",
+    "security/Definitions/Pous/Accounting/Capacity.lean",
+    "security/Definitions/Pous/Accounting/GradedMeets.lean",
+    "security/Definitions/Pous/Accounting/Guarantees/Capacity.lean",
+    "security/Definitions/Pous/Accounting/Guarantees/Memory.lean",
+    "security/Definitions/Pous/Accounting/Guarantees/Responder.lean",
+    "security/Definitions/Pous/Accounting/LemmaA.lean",
+    "security/Definitions/Pous/Accounting/Memory.lean",
+    "security/Definitions/Pous/Accounting/Params.lean",
+    "security/Definitions/Pous/Accounting/PubMeets.lean",
+    "security/Definitions/Pous/Accounting/Rebuild.lean",
+    "security/Definitions/Pous/Accounting/Responder.lean",
+    "security/Definitions/Pous/Accounting/Window.lean",
+    "security/Definitions/Pous/Accounting/Wipe.lean",
+    "security/Definitions/Pous/Assumptions.lean",
+    "security/Definitions/Pous/Assumptions/P2.lean",
+    "security/Definitions/Pous/Claims/StreamedWipeDisk.lean",
+    "security/Definitions/Pous/Claims/StreamedWipeServer.lean",
+    "security/Definitions/Pous/Game/Oracle.lean",
+    "security/Definitions/Pous/Game/Prob.lean",
+    "security/Definitions/Pous/Guarantees.lean",
+    "security/Definitions/Pous/Guarantees/Obligation.lean",
+    "security/Definitions/Pous/Guarantees/P2.lean",
+    "security/Definitions/Pous/Guarantees/StreamedWipe.lean",
+    "security/Definitions/Pous/Guarantees/StreamedWipeDisk.lean",
+    "security/Definitions/Pous/Guarantees/StreamedWipeFamily.lean",
+    "security/Definitions/Pous/Guarantees/StreamedWipeReads.lean",
+    "security/Definitions/Pous/Guarantees/StreamedWipeServer.lean",
+    "security/Definitions/Pous/Model/Audit.lean",
+    "security/Definitions/Pous/Model/BandChain.lean",
+    "security/Definitions/Pous/Model/BandGraph.lean",
+    "security/Definitions/Pous/Model/ColumnGame.lean",
+    "security/Definitions/Pous/Model/Continuous.lean",
+    "security/Definitions/Pous/Model/Dense.lean",
+    "security/Definitions/Pous/Model/FreeBlocks.lean",
+    "security/Definitions/Pous/Model/Graded.lean",
+    "security/Definitions/Pous/Model/HashChain.lean",
+    "security/Definitions/Pous/Model/Inc.lean",
+    "security/Definitions/Pous/Model/Invertible.lean",
+    "security/Definitions/Pous/Model/Labelling.lean",
+    "security/Definitions/Pous/Model/M1.lean",
+    "security/Definitions/Pous/Model/M1p.lean",
+    "security/Definitions/Pous/Model/P3Chain.lean",
+    "security/Definitions/Pous/Model/Pebbling.lean",
+    "security/Definitions/Pous/Model/PubEncoder.lean",
+    "security/Definitions/Pous/Model/SampledAudit.lean",
+    "security/Definitions/Pous/Model/Scheme.lean",
+    "security/Definitions/Pous/Model/SegLift.lean",
+    "security/Definitions/Pous/Model/StreamedWipe.lean",
+    "security/Definitions/Pous/Model/StreamedWipeDisk.lean",
+    "security/Definitions/Pous/Model/StreamedWipeServer.lean",
+    "security/Definitions/Pous/P2/Clip.lean",
+    "security/Definitions/Pous/P2/Cost.lean",
+    "security/Definitions/Pous/P2/Mutable.lean",
+    "security/Definitions/Pous/P2/Rounds.lean",
+    "security/Proofs/Core/Game/Basic.lean",
+    "security/Proofs/Pous/Accounting/Numbers.lean",
+    "security/Proofs/Pous/Prob.lean",
+    "security/Proofs/Pous/Sanity.lean",
+    "security/Proofs/Pous/Statements.lean",
+    "tools/pous_grader/Grader/Main.lean",
+    "tools/pous_grader/Grader/Registry.lean",
+    "security/Definitions/Slowdown/Assumptions/Remote.lean",
+    "security/Definitions/Slowdown/Assumptions/Slowdown.lean",
+    "security/Definitions/Slowdown/Capability/Consumers.lean",
+    "security/Definitions/Slowdown/Cover.lean",
+    "security/Definitions/Slowdown/Guarantees/Capability/Dependency.lean",
+    "security/Definitions/Slowdown/Guarantees/CoverTraining.lean",
+    "security/Definitions/Slowdown/Guarantees/Remote.lean",
+    "security/Definitions/Slowdown/Guarantees/RemoteMonitoringPeriod.lean",
+    "security/Definitions/Slowdown/Guarantees/ServingBlocks.lean",
+    "security/Definitions/Slowdown/Guarantees/ServingBlocks/Witnesses.lean",
+    "security/Definitions/Slowdown/Guarantees/Slowdown.lean",
+    "security/Definitions/Slowdown/Guarantees/Witnesses.lean",
+    "security/Definitions/Slowdown/Remote.lean",
+    "security/Definitions/Slowdown/ServingBlocks/Instances.lean",
+    "security/Definitions/Slowdown/ServingBlocks.lean",
+    "security/Definitions/Slowdown/Slowdown.lean",
+    "security/Definitions/Slowdown/Witness.lean",
+    "security/Proofs/Slowdown/Cover/Area.lean",
+    "security/Proofs/Slowdown/Cover/Charge.lean",
+    "security/Proofs/Slowdown/Remote.lean",
+    "security/Proofs/Slowdown/RemoteMonitoringPeriod.lean",
+    "security/Proofs/Slowdown/ServingBlocks.lean",
+    "security/Proofs/Slowdown/ServingBlocks/Witnesses.lean",
+    "security/Properties/InferenceOnly/Desc/Cover.lean",
+]
