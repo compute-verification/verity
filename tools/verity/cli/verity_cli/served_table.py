@@ -626,9 +626,15 @@ VERDICTS = {"accept": "accept", "reject": "reject", "pending": "undecided"}
 def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
     """The verifier's onsite check: `served_verdicts.py record` over the served window's public record in ``state``
     (``out/``, all a verifier on another machine needs of it, the prover node named by its ``machine.txt``); the
-    period's line in `verity_cli.run`'s verdict form, undecided while the record has no row for a listed subprotocol."""
+    period's line in `verity_cli.run`'s verdict form, undecided while the record has no row for a listed subprotocol.
+    Where the configuration's product is onsite's and the composite's public output is there (``out/composite``,
+    `served_composite.sh`'s), the record reads it (``--composite``), so its verdict is the compiled Lean onsite
+    check's answer as the record takes it; an undecided or rejecting line's reason, short of a row's, is the record's
+    ``lean``: where that answer was read or why none was taken."""
     py, out = sys.executable, state / "out"
     serve, machine = out / "serve", out / "machine.txt"
+    product = K.composite(cfg["protocols"], MANIFESTS)
+    lean = ["--composite", str(out / "composite")] if product == ONSITE and (out / "composite").is_dir() else []
     slots = str(cfg["workload"]["params"]["slots"])
     pick = subprocess.run([py, str(ROOT / VERDICTS_SCRIPT), "window", str(serve), "--slots", slots], cwd=ROOT,
                           capture_output=True, text=True, check=False)
@@ -639,8 +645,8 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
     node = ["--node", lines[1]] if len(lines) > 1 and lines[1].strip() else []
     p = subprocess.run([py, str(ROOT / VERDICTS_SCRIPT), "record", "--serve-run", str(serve), "--window", str(k),
                         "--sampled-proofs", str(out / "sampled-proofs" / "served"), "--pieces", str(out / "pieces"),
-                        *node, "--out", str(state / "record" / "onsite")], cwd=ROOT, capture_output=True, text=True,
-                       check=False)
+                        *node, *lean, "--out", str(state / "record" / "onsite")], cwd=ROOT, capture_output=True,
+                       text=True, check=False)
     line = next((json.loads(x.split(" ", 1)[1]) for x in p.stdout.splitlines() if x.startswith("RECORD ")), None)
     if line is None:
         raise Refused("record", (p.stderr or p.stdout).strip()[-800:] or "served_verdicts.py record wrote no RECORD")
@@ -649,9 +655,9 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
     components = {c: rows.get(names[c], {}).get("verdict", "absent") for c in cfg["protocols"]}
     absent = sorted(c for c, v in components.items() if v == "absent")
     verdict = VERDICTS.get(line["composed"], "undecided")
-    return {"block": k, "components": components, "product": K.composite(cfg["protocols"], MANIFESTS),
+    return {"block": k, "components": components, "product": product,
             "reason": line.get("why") or (f"missing {sorted(line['missing'])}" if line.get("missing") else None)
-            or (f"no row for {absent}" if absent else None),
+            or (f"no row for {absent}" if absent else None) or (line.get("lean") if verdict != "accept" else None),
             "registration": None, "coins": coins_of(cfg),
             "verdict": "undecided" if verdict == "accept" and absent else verdict}
 
