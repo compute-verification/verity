@@ -15,10 +15,10 @@ Llama-3.1-70B tensor-parallel decode step, one process a rank, with the filler i
 On any machine, run an arm's contract and record checks without a GPU:
 
 ~~~sh
-uv run python3 benchmarks/pouw/filler/score.py check fill-v1
+uv run python3 benchmarks/pouw/filler/score.py check idle
 ~~~
 
-It prints `fill-v1: the contract and the record's limits hold`.
+It prints `idle: the contract and the record's limits hold`.
 
 ## Jobs
 
