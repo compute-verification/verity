@@ -28,7 +28,7 @@ straight into the unit that reduces it (a combine's grain is its producer unit's
   Definition at one row (`route_binding` at rows = 1). Multimem with more than one tree and the custom 2-stage kernel reduce an
   element by its offset in the call, so their row units take the call's ROWS and the row's position ROW. A row of a call may be
   a chunk of one token's elements: a fused MNNVL call is one token, and its chunk AT of C elements is
-  `AllReduceResidualMnnvlAt_v1`, which reads the residual row whole, as `rmsnorm_fused_split.RMSNormFusedCudaAdd_v1` does, so a
+  `AllReduceResidualMnnvlAt_v1`, which reads the residual row whole, as `rmsnorm_fused_split.RMSNormFusedCudaAdd_v2` does, so a
   residual written as one row (the MoE's) is read without being cut.
 * A producer's whole row. A wire reads its writer's output row whole, so a rank's partial written as a row of N elements, N
   more than a chunk (the MoE's residual add: a token's 6,144 elements as one row, `ResidualAdd_v2{N=6144}`, or as its column

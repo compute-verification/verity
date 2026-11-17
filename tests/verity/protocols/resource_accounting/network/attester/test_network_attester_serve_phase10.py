@@ -221,7 +221,7 @@ def _cells_without_cost(out: Path) -> list[dict]:
 @pytest.mark.parametrize("late", [None, {20: 0.1}], ids=["clean", "window-0-faulted"])
 def test_the_process_writes_byte_for_byte_what_the_thread_publisher_wrote(tmp_path, late):
     """On one run and one key, the process's records, row salts and signed registrations are the thread
-    publisher's byte for byte (the cost lines aside, which are timings), and its certificates are too but for what the
+    publisher's byte for byte (the cost lines aside, which are timings), and its attestations are too but for what the
     attester's fresh `salt_c` decides, each on the same LMS leaf and verifying on the head of the record the network attester
     closed (no two runs share a `salt_c`, thread or process). With tick 20 late, window 0 of every link is
     `monitor-unavailable` on both sides: the status crosses the process boundary in the close marker, and the issuer
@@ -252,7 +252,7 @@ def test_the_process_writes_byte_for_byte_what_the_thread_publisher_wrote(tmp_pa
 def test_a_process_killed_mid_window_fails_the_run_and_the_check_refuses_the_window(tmp_path):
     """The process killed (SIGKILL, by its pid) ten ticks into window 1: no tick runs late, the network attester's run
     raises at window 1's close, before publishing it, and `close` raises too, without waiting on the dead process.
-    Nothing of window 1 is on disk, the check refuses it on every link, and every head it does find certified is that of
+    Nothing of window 1 is on disk, the check refuses it on every link, and every head it does find attested is that of
     the record the relay closed. Both raise the process's exit code (rather than a bare `EOFError`, the dead
     process's end of the pipe reading as a message to `_receive`'s `poll` and `recv` hitting its EOF)."""
     (key,) = _key(tmp_path, "process-key")
@@ -272,7 +272,7 @@ def test_a_process_killed_mid_window_fails_the_run_and_the_check_refuses_the_win
 
 def test_a_process_a_window_behind_moves_no_tick_and_keeps_every_record_whole(tmp_path, monkeypatch):
     """The process held at window 0's ingress commit until every tick of both windows has run: no tick is late, at
-    most window 0's ingress record is certified by then, and once released the process keeps every record, whole:
+    most window 0's ingress record is attested by then, and once released the process keeps every record, whole:
     the check accepts all six execution phases and four registrations."""
     fifo = tmp_path / "fifo"
     os.mkfifo(fifo)
@@ -374,7 +374,7 @@ def test_a_row_lost_doubled_or_changed_between_the_processes_is_refused(tmp_path
     """The process once trusted that the rows since the last marker were the execution phase's. With the marker's
     digest it refuses execution phase 0's egress record when a row was lost and another doubled on the way (the count
     unchanged) or a frame's byte changed: the run fails with the process's refusal, nothing of that record is signed,
-    and the check refuses it. Execution phase 0's ingress record, kept before it, stays certified."""
+    and the check refuses it. Execution phase 0's ingress record, kept before it, stays attested."""
     (key,) = _key(tmp_path, "process-key")
     run = _drive(tmp_path / "run", key, process=True, transport=_egress_rows(edit()))
     first = run["failed"] or run["close_error"]

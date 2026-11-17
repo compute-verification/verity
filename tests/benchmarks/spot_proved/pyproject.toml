@@ -8,7 +8,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # verity_vllm's `pipeline.serving_rows` resolves a rate sampling design by SPOT's service, so its imports reach that and what it imports too.
 # stage.py binds each block through verity_vllm's serving templates to its registered Definition, which the tests evaluate and
 # hold to the numpy model of FlashInfer's kernel (`tp_allreduce_check`); verity_vllm's imports reach the one-stage protocol,
-# the certifier's advice (through `pipeline.edge`) and verity.ml's commitments, crypto, windows and the tc kernel; capture.py's
+# the network attester's advice (through `pipeline.edge`) and verity.ml's commitments, crypto, windows and the tc kernel; capture.py's
 # site copies the SHA-512 header its device kernel includes
 # `adapters/torch/verity_torch`: the PyTorch adapter, which verity_vllm's modules the tests import load
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/circuits",

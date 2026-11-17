@@ -36,7 +36,7 @@ import leak_bounds as LB  # noqa: E402
 from verity.protocols.resource_accounting.network.verifier import scan_answer as SA  # noqa: E402
 from verity.protocols.resource_accounting.network.prover import ingress_scan as IS  # noqa: E402
 
-CENSUS = HERE.parents[1] / "benchmarks" / "census"
+CENSUS = HERE.parents[1] / "calibration" / "census"
 SLOWDOWN = HERE.parents[1] / "benchmarks" / "slowdown" / "data"
 #: the scan class of a window class of KO 1 at 4 lanes, a timestep every 16 buckets (`scan_state.scan_class(4, 1, 16)`)
 KO1 = IS.Class(B=512, r=4, lanes=4, C=47, IDB=17, EVERY=16, WITHIN=12, D=27, KO=1, KI=1024)

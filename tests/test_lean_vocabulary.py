@@ -653,7 +653,7 @@ KNOWN: dict[str, str] = {
     "security/Properties/Poub/Remote/Line/Record.lean::Properties.Poub.Line.Record":
         "duplicate of the auditor's record chain (`Spot.Challenger.LedgerEntry`): becomes what Poub becomes (lean)",
     # benchmarks/
-    "benchmarks/circuit_properties/circuit_properties/ops.py::Site":
+    "calibration/circuit_properties/circuit_properties/ops.py::Site":
         "homonym, an op's site in a Definition: rename (training)",
     "benchmarks/datacenter/datacenter/logical.py::Registration":
         "duplicate of the registration log (`Verity.Registration`): becomes a reading of it (network-accounting)",
@@ -678,7 +678,7 @@ KNOWN: dict[str, str] = {
         "homonym, what a clear audit's prover publishes: rename (compute-accounting)",
     "verity/protocols/resource_accounting/compute/pouw/prover/clear/clear_audit.py::Verdict":
         "duplicate of `Core.Verdict`: becomes a client of it (compute-accounting)",
-    "benchmarks/pouw/dc/census.py::Device": "homonym, a census family's merged runs: rename (compute-accounting)",
+    "calibration/pouw/dc/census.py::Device": "homonym, a census family's merged runs: rename (compute-accounting)",
     "benchmarks/pouw/filler/arms.py::Placement": "homonym, a filler arm's placement: rename (compute-accounting)",
     "benchmarks/pouw/grind_price.py::Site": "homonym, one seed group: rename (compute-accounting)",
     "benchmarks/pouw/harness/arm.py::Gate": "homonym, a kernel gate's verdict at one shape: rename (compute-accounting)",
@@ -686,11 +686,11 @@ KNOWN: dict[str, str] = {
         "homonym, one operand set's call in a kernel chain: rename (compute-accounting)",
     "benchmarks/pouw/harness/native.py::Device": "homonym, one CUDA device handle: rename (compute-accounting)",
     "verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py::Gate": "homonym, a run's SASS gate: rename (compute-accounting)",
-    "benchmarks/machine_model/verity_machine_model/capacity.py::Window":
+    "calibration/machine_model/verity_machine_model/capacity.py::Window":
         "homonym, a capacity model's window and node cell: rename (compute-accounting)",
-    "benchmarks/machine_model/verity_machine_model/eps.py::Machine":
+    "calibration/machine_model/verity_machine_model/eps.py::Machine":
         "homonym, a machine model's Π: rename (compute-accounting)",
-    "benchmarks/machine_model/verity_machine_model/sheet.py::Sheet":
+    "calibration/machine_model/verity_machine_model/sheet.py::Sheet":
         "duplicate of the data sheet (`ResourceAccounting.TS.Sheet`'s Python mirror; `Verity.Accel.Card`): becomes a reading of the one data-sheet type in Core (compute-accounting)",
     "benchmarks/pouw/pearl_c_vllm/e2e.py::Coins":
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a client of it (compute-accounting)",
@@ -711,9 +711,9 @@ KNOWN: dict[str, str] = {
         "duplicate of `parties.Challenger`: becomes a client of it (compute-accounting)",
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/statement.py::Statement":
         "homonym, a benchmark's statement bench: rename (compute-accounting)",
-    "benchmarks/pouw/theory/checked_strip.py::Block":
+    "calibration/pouw/theory/checked_strip.py::Block":
         "homonym, a block of rows and columns of one design: rename (compute-accounting)",
-    "benchmarks/pouw/theory/checked_strip.py::Ledger":
+    "calibration/pouw/theory/checked_strip.py::Ledger":
         "homonym, a strategy's priced products: rename (compute-accounting)",
     "benchmarks/property_redteam/demo.py::Circuit":
         "homonym, a red-team demo's multi-precision arithmetic builder: rename (memory-accounting)",
@@ -732,7 +732,7 @@ KNOWN: dict[str, str] = {
         "homonym, a benchmark's serving blocks and dark leaves: rename (training)",
     "verity/protocols/proofs/spot/prover/cost/h200.py::Window": "homonym, one subcircuit's sampling block: rename (proofs)",
     "verity/protocols/proofs/spot/prover/cost/transformer.py::Dag": "homonym, a block's Definition DAG for the plan: rename (proofs)",
-    "benchmarks/tc_probe_fp4/f1_rates.py::Op": "homonym, one CUDA-core multiplier a probe times: rename (circuits)",
+    "calibration/tc_probe_fp4/f1_rates.py::Op": "homonym, one CUDA-core multiplier a probe times: rename (circuits)",
     # applications/
     "benchmarks/one_stage/interfaces/verity_e2e_demo/replay_bundle.py::Commitment":
         "duplicate of `merkle.Commitment`: becomes a client of it (the run's step commitments) (compute-accounting)",
@@ -806,7 +806,7 @@ KNOWN: dict[str, str] = {
     "verity/protocols/resource_accounting/network/verifier/lean/NetworkVerifier/TransferBlocks.lean::NetworkVerifier.TransferBlocks.Verdict":
         "duplicate of `Core.Verdict`: becomes a reading of it (proofs)",
     "verity/protocols/resource_accounting/network/verifier/lean/NetworkVerifier/Period.lean::NetworkVerifier.Period.Layout":
-        "homonym, the certifier's bucket and slot schedule: rename (proofs)",
+        "homonym, the network attester's bucket and slot schedule: rename (proofs)",
     "verity/protocols/resource_accounting/network/verifier/lean/NetworkVerifier/Period.lean::NetworkVerifier.Period.Registration":
         "duplicate of the registration log (`Verity.Registration`): becomes the log's projection (deleted) (proofs)",
     "verity/protocols/resource_accounting/network/verifier/lean/NetworkVerifier/Period.lean::NetworkVerifier.Period.Window":

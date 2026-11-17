@@ -1,5 +1,5 @@
 """PoUW's lead on the int8 plain arm (``tag-blc4a-t64-rot/served/s8/k32/w/l1w/l1a/min``): the serving side of each
-noised linear call. `feed` is a call's coin feed and the in-process certifier that stands in for the network attester's
+noised linear call. `feed` is a call's coin feed and the in-process attester that stands in for the network attester's
 coin link; `record` is the pass's record.
 
 `LeadRun` is one install's lead (`pouw.install` under `SCHEME`). Each engine step's forward is one pass and one window,
