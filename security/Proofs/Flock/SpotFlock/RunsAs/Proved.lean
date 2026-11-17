@@ -10,10 +10,10 @@ import all Lean.Data.Json.Basic
 import Std.Data.TreeMap.Raw.Lemmas
 
 /-!
-# The units a first-stage sample proves are the ones its select drew (part 1)
+# The units a first-stage sample proves are the ones its select sampled (part 1)
 
 `Select.select` under a sampling design, with no closure map, builds its sample object from the sampling design's entries, the population and the
-units it drew (`select_shape`), and checks it (`Draw.checkDraw`). The sampling design `Draw.flockSamplingDesign` accepts has no `closure` key
+units it sampled (`select_shape`), and checks it (`Draw.checkDraw`). The sampling design `Draw.flockSamplingDesign` accepts has no `closure` key
 (`flockSamplingDesign_keys`, `closure_not_key`), so the sample carries none, and the checked sample's units ascend; so the units the
 sample proves (`Draw.proved`, read back as naturals) are the select's (`proved_select`). This is the step from the
 run's sample, `(Draw.proved draw).map Int.toNat`, to the model's, `RegTwo.sample`, which is the select's units.
@@ -67,7 +67,7 @@ theorem closure_not_key {samplingDesign : Json} {names : Array String} (hk : Spo
   | _ => simp [Spot.keys?] at hk
 
 /-- **A select under a sampling design, with no closure map, accepted**: its sampling design `flockSamplingDesign` accepts, its sample object is the sampling design's
-entries with the population and the units it drew, and `checkDraw` passes it. -/
+entries with the population and the units it sampled, and `checkDraw` passes it. -/
 private theorem select_shape {rule : Spot.Select.Rule} {p : Spot.Program} {query : Json} {table : Option Json}
     {src : ByteArray} {draw : Json} {units : Array ℕ} {read : ℕ} (hr : rule ≠ .all)
     (h : Spot.Select.select rule p query table none src = .ok (draw, units, read)) :
@@ -98,7 +98,7 @@ private theorem select_shape {rule : Spot.Select.Rule} {p : Spot.Program} {query
          obtain ⟨rfl, rfl, -⟩ := h
          exact ⟨_, _, _, by assumption, rfl, by assumption⟩)
 
-/-- **Part 1: the units a first-stage sample proves are the ones its select drew**: under a sampling design, with no closure map,
+/-- **Part 1: the units a first-stage sample proves are the ones its select sampled**: under a sampling design, with no closure map,
 `(Draw.proved draw).map Int.toNat` is the select's units. -/
 theorem proved_select {rule : Spot.Select.Rule} {p : Spot.Program} {query : Json} {table : Option Json}
     {src : ByteArray} {draw : Json} {units : Array ℕ} {read : ℕ} (hr : rule ≠ .all)

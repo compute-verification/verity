@@ -20,7 +20,7 @@ names: at `q0At`'s positions. Each of those is opened (`FinRep.q0At_opened`), an
   (`FlockComplete.commit0Cut_rows`). The switched views' level-0 rows and salts are the honest views'
   (`Coined.swExe_l0`, `Loop.finSrc_l0`): the switched prover moves the pads alone. At an opened position those are
   `encodeRowsZk`'s row and the tape's fitted level-0 salt (`FinRep.srcV_open0`);
-* the session's commitment is the loop's table's (`tb.cm0`), `commitOf` of the `Level0` the loop drew, whose rows are
+* the session's commitment is the loop's table's (`tb.cm0`), `commitOf` of the `Level0` the loop sampled, whose rows are
   `Link.rows` of `Masked.linkIn` and salts its fitted salts (`Loop.Level0Src.realOf_rows0`), the same row
   (`Link.rows_eq`) and salt.
 
