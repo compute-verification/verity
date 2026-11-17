@@ -48,7 +48,8 @@ line of its ``verdicts.txt`` and of what it prints after its ``COMPOSITE`` line.
 ``composite.json`` says SPOT's ``coins``: ``live`` only when their case's challenger key is the one this
 machine pins (``--key-sha512``), else ``simulated``, and ``coins_on`` the machine (``--coins-on``). On simulated coins an
 accept's cite is kept and qualified: ``ran.not_covered`` names the coins and the machine, as does a ``NOT_COVERED``
-line.
+line. So is one composed on the workload's node (``--composed-on-workload-node NODE``): ``ran.not_covered`` names the
+node, beside any other reason, as does a ``NOT_COVERED`` line.
 """
 from __future__ import annotations
 
@@ -352,6 +353,10 @@ def run(a: argparse.Namespace) -> int:
         if ran["cites"] is not None and coins == "simulated":
             ran.setdefault("not_covered", {"id": SAMPLED}).update(coins=coins, coins_on=a.coins_on)
             lines.append(f"NOT_COVERED {SAMPLED} coins: simulated on {a.coins_on}: {ran['cites']} does not cover it")
+        if ran["cites"] is not None and a.composed_on_workload_node:
+            ran.setdefault("not_covered", {"id": SAMPLED}).update(composed_on_workload_node=a.composed_on_workload_node)
+            lines.append(f"NOT_COVERED {SAMPLED} composed on the workload's node {a.composed_on_workload_node}: "
+                         f"{ran['cites']} does not cover it")
     lines += [f"EXCEPTION {x}" for x in exceptions(a.product)]
     record = canonical(public_record(a.product, commitment, cases, gone, verdict, a.development, ran)
                        | ({"coins": coins, "coins_on": {SAMPLED: a.coins_on}} if coins else {}))
@@ -385,6 +390,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--key-sha512", help="the challenger key this machine pins: SPOT's coins are simulated unless "
                                          "their case's challenger key is it")
     ap.add_argument("--coins-on", default="unnamed", help="the machine SPOT's challenger flipped its coins on")
+    ap.add_argument("--composed-on-workload-node", metavar="NODE",
+                    help="the workload's node, which this composite is composed on: an accept's cite does not cover it")
     ap.add_argument("--tree", type=Path, default=Path(__file__).resolve().parents[2],
                     help="the checkout the executable was built from (default: this file's)")
     return run(ap.parse_args(argv))

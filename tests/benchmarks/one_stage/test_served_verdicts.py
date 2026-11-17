@@ -6685,6 +6685,8 @@ if __name__ == "__main__":
     Path(a[a.index("--private-out") + 1], "argv.json").write_text(json.dumps(cases))
     Path(a[a.index("--private-out") + 1], "development.json").write_text(
         json.dumps(a[a.index("--development") + 1] if "--development" in a else None))
+    Path(a[a.index("--private-out") + 1], "here.json").write_text(
+        json.dumps(a[a.index("--composed-on-workload-node") + 1] if "--composed-on-workload-node" in a else None))
     print("PIECE verity/pous/p2/v4/run accept 0123456789abcdef0123")
     print("NOT_ESTABLISHED missing verity/wipe/v0")
     print(f"VERDICT verity/{a[0]}/v0 reject components")
@@ -6769,7 +6771,8 @@ def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_
     case, but not under H1's tie (a ``SERVE_DIR/h1/log.jsonl``), whose cases are on the record H1 named; and no product
     is handed a case under ``SERVE_DIR/private/pouw``, tied or not, whose period case reaches a product only as
     served_cases.py writes it, tied to that record. On the served node (SERVED_NODE unset) it says it composed there,
-    and no product's composite.py is told it is a development check. Where SERVED_NODE names
+    no product's composite.py is told it is a development check, and each is told the workload's node it composes on
+    (--composed-on-workload-node), which no composite off it is. Where SERVED_NODE names
     another host it says it composed there, from the compose hand-off (COMPOSE_HANDOFF) or a deferral's prover-side copy
     of the serve dir's audit inputs."""
     tree, bin_, d, out = tmp_path / "tree", tmp_path / "bin", tmp_path / "serve", tmp_path / "out"
@@ -6834,6 +6837,7 @@ sys.exit(1)
     assert json.loads((p / "remote" / "private" / "argv.json").read_text()) == [str(v2)]
     assert json.loads((p / "onsite" / "private" / "argv.json").read_text()) == [str(d / "private" / "pous" / "w0")]
     assert all(json.loads((p / x / "private" / "development.json").read_text()) is None for x in ("remote", "onsite"))
+    assert all(json.loads((p / x / "private" / "here.json").read_text()) == env["PP_PEER"] for x in ("remote", "onsite"))
     assert (tmp_path / "built").read_text().split() == ["remote", "onsite"] and not (tmp_path / "card").exists()
     assert sorted(f.name for f in (d / "private" / "pous" / "w0").iterdir()) == ["answer.json", "case.json"]
     assert not (d / "private" / "wipe").exists()
@@ -6903,6 +6907,7 @@ sys.exit(1)
         "audit inputs and the cases written here from it, not from the parties that produced them")
     assert not any("DEVELOPMENT" in x for x in said)
     assert json.loads((p / "remote" / "private" / "development.json").read_text()) is None
+    assert json.loads((p / "remote" / "private" / "here.json").read_text()) is None
     (out / "verdicts.txt").unlink()
     for x in (out / "composite", p, v2):
         shutil.rmtree(x)

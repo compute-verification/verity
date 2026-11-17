@@ -123,10 +123,12 @@ PUBLIC = "ab" * 80
 PIN = hashlib.sha512(bytes.fromhex(PUBLIC)).hexdigest()
 
 
+@pytest.mark.parametrize("here", [None, "vy-dc-h200"], ids=["off the workload's node", "on the workload's node"])
 @pytest.mark.parametrize("pin", [PIN, None], ids=["live coins", "simulated coins"])
 @pytest.mark.parametrize("sample", [[1], [0, 1]], ids=["a missed member", "every member"])
-def test_a_per_member_accept_that_missed_a_member_says_the_cite_does_not_cover_it(tmp_path, sample, pin):
-    """A missed member and simulated coins each qualify the cite, and both stand together in one ``not_covered``."""
+def test_a_per_member_accept_that_missed_a_member_says_the_cite_does_not_cover_it(tmp_path, sample, pin, here):
+    """A missed member, simulated coins and a composite composed on the workload's node each qualify the cite, and all
+    three stand together in one ``not_covered``."""
     product = next(iter(C.CITES))
     tree = git_tree(tmp_path / "tree", [C.CITES[product]])
     members = {"m0": {"units": [[0, 1]]}, "m1": {"units": [[1, 2]]}}
@@ -140,15 +142,18 @@ def test_a_per_member_accept_that_missed_a_member_says_the_cite_does_not_cover_i
             (p / "answer.json").write_text(json.dumps(a | {"public": {"bound": 1, "drawn": sample}}))
         cases += ["--cases", str(p)]
     assert C.main([product, *cases, *outs(tmp_path, tree=tree), "--exe", lean(tmp_path, {"verdict": "accept"}, 0),
-                   *(["--key-sha512", pin] if pin else []), "--coins-on", "cpu-6"]) == 0
+                   *(["--key-sha512", pin] if pin else []), "--coins-on", "cpu-6",
+                   *(["--composed-on-workload-node", here] if here else [])]) == 0
     ran = json.loads((tmp_path / "public" / "composite.json").read_bytes())["ran"]
     lines = (tmp_path / "public" / "verdicts.txt").read_text().splitlines()
     assert ran["cites"] == C.CITES[product]
     missed = {"members": {"sampled": 1, "registered": 2}} if len(sample) == 1 else {}
     simulated = {} if pin else {"coins": "simulated", "coins_on": "cpu-6"}
+    on = {"composed_on_workload_node": here} if here else {}
     said = ([f"NOT_COVERED {SAMPLED} 1 of 2 members sampled: {C.CITES[product]} does not cover it"] if missed else []) + (
-        [f"NOT_COVERED {SAMPLED} coins: simulated on cpu-6: {C.CITES[product]} does not cover it"] if simulated else [])
-    assert ran.get("not_covered") == ({"id": SAMPLED, **missed, **simulated} if missed or simulated else None)
+        [f"NOT_COVERED {SAMPLED} coins: simulated on cpu-6: {C.CITES[product]} does not cover it"] if simulated else []) + (
+        [f"NOT_COVERED {SAMPLED} composed on the workload's node {here}: {C.CITES[product]} does not cover it"] if here else [])
+    assert ran.get("not_covered") == ({"id": SAMPLED, **missed, **simulated, **on} if missed or simulated or here else None)
     assert [ln for ln in lines if ln.startswith("NOT_COVERED")] == said
 
 
