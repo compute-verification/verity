@@ -1,6 +1,6 @@
 module
 
-public import InferenceOnlyCheck.Theta
+public import InferenceOnlyVerifier.Theta
 
 /-!
 # What θ's provenance check's acceptance means
@@ -30,11 +30,11 @@ Proved as `InferenceOnlyCheck.Properties.SecurityProofs.ThetaProvenance : Infere
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties
+namespace InferenceOnlyVerifier.Properties
 
 open Lean (Json)
 open Flock.Program (Prog Ty)
-open InferenceOnlyCheck.Theta (getD strAt digest lastWith ownersOf)
+open InferenceOnlyVerifier.Theta (getD strAt digest lastWith ownersOf)
 
 /-- `log` is a registration log in R6's chain, oldest first: every record has a digest, the first record's `previous` is
 `null` (it opens the deployment), and each later record's `previous` is the digest of the record before it. -/
@@ -84,4 +84,4 @@ def ProvenanceHeld (j tr : Json) : Prop :=
 def ThetaProvenance : Prop :=
   ∀ (j tr out : Json), Theta.evaluate j tr = .ok out → ProvenanceHeld j tr
 
-end InferenceOnlyCheck.Properties
+end InferenceOnlyVerifier.Properties

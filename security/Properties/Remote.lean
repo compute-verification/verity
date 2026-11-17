@@ -63,8 +63,8 @@ namespace Properties.Remote
 open Core Core.Composition Verity
 open Lean (Json)
 open Flock.Program (Prog)
-open InferenceOnlyCheck.Properties (Parses Expands LaysOut Names Divides Meets ProvenanceHeld)
-open InferenceOnlyCheck.Protocol (instanceOf trustedOf)
+open InferenceOnlyVerifier.Properties (Parses Expands LaysOut Names Divides Meets ProvenanceHeld)
+open InferenceOnlyVerifier.Protocol (instanceOf trustedOf)
 
 /-- The policy, met by the declaration `d` and its division `U` at `Γ` and `α`: every inference block of `U` has at most
 `Γ` gates and reads at most `α` fresh input bits per gate (`Meets`), so `d` complies (`InferenceOnly.CompliesRate`); and `d`
@@ -82,9 +82,9 @@ def PolicyMet (d : RegisteredCircuit) {n : ℕ} (U : Partition d.D n) (Γ : ℕ)
 
 /-- The parse `i` of the policy's instance carries the policy's own parameters `p`: its program, and `Γ` and
 `α = num / den` as the parameters write them. -/
-def VerifierOwn (p : InferenceOnlyCheck.Protocol.Params) (i : InferenceOnlyCheck.Instance) : Prop :=
-  i.program = p.program ∧ InferenceOnlyCheck.natOf? p.gamma = some i.gamma ∧
-    ∃ a b, p.alpha = .arr #[a, b] ∧ InferenceOnlyCheck.natOf? a = some i.num ∧ InferenceOnlyCheck.natOf? b = some i.den
+def VerifierOwn (p : InferenceOnlyVerifier.Protocol.Params) (i : InferenceOnlyVerifier.Instance) : Prop :=
+  i.program = p.program ∧ InferenceOnlyVerifier.natOf? p.gamma = some i.gamma ∧
+    ∃ a b, p.alpha = .arr #[a, b] ∧ InferenceOnlyVerifier.natOf? a = some i.num ∧ InferenceOnlyVerifier.natOf? b = some i.den
 
 /-- What the policy's case establishes, decoded as its parameters `p`, the run's record `c` and the evidence `e`: the
 registered circuit decodes to `P`; the record registers `P` by its SHA-512; θ holds what the log's first record
@@ -92,22 +92,22 @@ registers; the instance the policy checked has an expansion gate by gate with a 
 lays out with the θ it names, whose inference blocks `d.𝓘` its owners are, which meet the policy; and on every such
 expansion and parse, the parse carries the policy's parameters and every such registered circuit's inference blocks
 meet the policy at its `Γ` and `α`. -/
-def PolicyHeld (p : InferenceOnlyCheck.Protocol.Params) (c : InferenceOnlyCheck.Protocol.Commitment) (e : InferenceOnlyCheck.Protocol.Evidence) :
+def PolicyHeld (p : InferenceOnlyVerifier.Protocol.Params) (c : InferenceOnlyVerifier.Protocol.Commitment) (e : InferenceOnlyVerifier.Protocol.Evidence) :
     Prop :=
   ∃ P : Prog, Flock.Program.decode p.program.toUTF8 = .ok P ∧
-    InferenceOnlyCheck.Theta.strAt c.record "program" = some (Flock.hexOf P.sha512) ∧
+    InferenceOnlyVerifier.Theta.strAt c.record "program" = some (Flock.hexOf P.sha512) ∧
     ProvenanceHeld (instanceOf p e) (trustedOf p c) ∧
-    (∃ (j' : Json) (i : InferenceOnlyCheck.Instance) (d : RegisteredCircuit),
+    (∃ (j' : Json) (i : InferenceOnlyVerifier.Instance) (d : RegisteredCircuit),
       Expands (instanceOf p e) j' ∧ Parses j' i ∧ LaysOut P d.D ∧ Names i.theta d.θ ∧ Divides i.owner d.𝓘 ∧
         VerifierOwn p i ∧ PolicyMet d d.𝓘 i.gamma ((i.num : ℝ) / i.den)) ∧
-    ∀ (j' : Json) (i : InferenceOnlyCheck.Instance) (d : RegisteredCircuit),
+    ∀ (j' : Json) (i : InferenceOnlyVerifier.Instance) (d : RegisteredCircuit),
       Expands (instanceOf p e) j' → Parses j' i → LaysOut P d.D → Names i.theta d.θ → Divides i.owner d.𝓘 →
         VerifierOwn p i ∧ PolicyMet d d.𝓘 i.gamma ((i.num : ℝ) / i.den)
 
 /-- The policy's case `k` decodes under the policy's own decoders, and what it decodes to is `PolicyHeld`. -/
 def CaseHeld (k : Case) : Prop :=
-  ∃ p c e, (canonicalJson k.params.toUTF8 >>= InferenceOnlyCheck.Protocol.paramsOf) = .ok p ∧
-    InferenceOnlyCheck.Protocol.commitmentOf k.commitment = .ok c ∧ InferenceOnlyCheck.Protocol.evidenceOf k.evidence = .ok e ∧
+  ∃ p c e, (canonicalJson k.params.toUTF8 >>= InferenceOnlyVerifier.Protocol.paramsOf) = .ok p ∧
+    InferenceOnlyVerifier.Protocol.commitmentOf k.commitment = .ok c ∧ InferenceOnlyVerifier.Protocol.evidenceOf k.evidence = .ok e ∧
     PolicyHeld p c e
 
 /-- **The caller's check finds nothing exactly where the record keeps the caller's facts.** On every record and every
@@ -156,7 +156,7 @@ and every declaration the registered circuit lays out, with the declared divisio
 v2's verifier, and keeps the caller's facts against that verifier. -/
 def InferenceOnlyHeld (ev : List Case) : Prop :=
   ∃ (kI kW kS : Case) (r : ByteArray), ev = [kI, kW, kS] ∧
-    Properties.Composition.digestOf InferenceOnlyCheck.Protocol.protocol kI.commitment = some r ∧
+    Properties.Composition.digestOf InferenceOnlyVerifier.Protocol.protocol kI.commitment = some r ∧
     (∀ ds, Core.Remote.executionPhaseRecords kW = some ds → ∀ d ∈ ds, d = r) ∧
     Properties.Composition.digestOf Spot.OneStage.protocol kS.commitment = some r ∧
     CaseHeld kI ∧ StageHeld kS
@@ -174,16 +174,16 @@ gate by gate, has a parse carrying the policy's parameters and a declaration `P`
 the policy's `Γ` and `α`, and on every such expansion and parse, the parse carries the policy's parameters and every
 such declaration complies. -/
 def CompliesHeld (ev : List Case) : Prop :=
-  ∃ (kI kW kS : Case) (p : InferenceOnlyCheck.Protocol.Params) (cr : InferenceOnlyCheck.Protocol.Commitment)
-    (e : InferenceOnlyCheck.Protocol.Evidence) (P : Prog), ev = [kI, kW, kS] ∧
-    (canonicalJson kI.params.toUTF8 >>= InferenceOnlyCheck.Protocol.paramsOf) = .ok p ∧
-    InferenceOnlyCheck.Protocol.commitmentOf kI.commitment = .ok cr ∧ InferenceOnlyCheck.Protocol.evidenceOf kI.evidence = .ok e ∧
+  ∃ (kI kW kS : Case) (p : InferenceOnlyVerifier.Protocol.Params) (cr : InferenceOnlyVerifier.Protocol.Commitment)
+    (e : InferenceOnlyVerifier.Protocol.Evidence) (P : Prog), ev = [kI, kW, kS] ∧
+    (canonicalJson kI.params.toUTF8 >>= InferenceOnlyVerifier.Protocol.paramsOf) = .ok p ∧
+    InferenceOnlyVerifier.Protocol.commitmentOf kI.commitment = .ok cr ∧ InferenceOnlyVerifier.Protocol.evidenceOf kI.evidence = .ok e ∧
     Flock.Program.decode p.program.toUTF8 = .ok P ∧
-    InferenceOnlyCheck.Theta.strAt cr.record "program" = some (Flock.hexOf P.sha512) ∧
-    (∃ (j' : Json) (i : InferenceOnlyCheck.Instance) (d : RegisteredCircuit),
+    InferenceOnlyVerifier.Theta.strAt cr.record "program" = some (Flock.hexOf P.sha512) ∧
+    (∃ (j' : Json) (i : InferenceOnlyVerifier.Instance) (d : RegisteredCircuit),
       Expands (instanceOf p e) j' ∧ Parses j' i ∧ LaysOut P d.D ∧ Names i.theta d.θ ∧ VerifierOwn p i ∧
         InferenceOnly.CompliesRate i.gamma ((i.num : ℝ) / i.den) d) ∧
-    ∀ (j' : Json) (i : InferenceOnlyCheck.Instance) (d : RegisteredCircuit),
+    ∀ (j' : Json) (i : InferenceOnlyVerifier.Instance) (d : RegisteredCircuit),
       Expands (instanceOf p e) j' → Parses j' i → LaysOut P d.D → Names i.theta d.θ →
         VerifierOwn p i ∧ InferenceOnly.CompliesRate i.gamma ((i.num : ℝ) / i.den) d
 

@@ -31,7 +31,7 @@ def _load(name: str):
 
 fuzz = _load("desc_fuzz_programs")
 reference = _load("inference_only_reference")
-RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["InferenceOnlyCheck.DescFuzzMain"]
+RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["InferenceOnlyVerifier.DescFuzzMain"]
 
 
 def test_the_data_is_what_the_audit_pins(tmp_path):

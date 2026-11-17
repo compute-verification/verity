@@ -25,11 +25,11 @@ node by node (`Steps`).
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Lean (Json)
 open Claims.Json (Wf)
-open InferenceOnlyCheck.DefinitionDigest (isComposite flatParts written canonicalEntry definitionDigest closureDigest)
+open InferenceOnlyVerifier.DefinitionDigest (isComposite flatParts written canonicalEntry definitionDigest closureDigest)
 
 /-- `canonicalEntry`'s field write: an object's field set, anything else as it is. -/
 def setJ (j : Json) (k : String) (v : Json) : Json := match j with
@@ -488,4 +488,4 @@ theorem entries_agree {j j' : Json} {key h : String} (hj : Wf j) (hj' : Wf j')
     (sorted_of_wf (wf_canonicalEntry (wf_tab hj _) (wf_tab hj _) (wf_entry hj k) hce))
     (sorted_of_wf (wf_canonicalEntry (wf_tab hj' _) (wf_tab hj' _) (wf_entry hj' k) hce')) ht ht'⟩
 
-end InferenceOnlyCheck.Properties.Record.SecurityProofs
+end InferenceOnlyVerifier.Properties.Record.SecurityProofs

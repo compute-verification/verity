@@ -21,10 +21,10 @@ of their parts (`Seq.ofParts`). `ret_passed_on` takes them as hypotheses, and `r
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.Resolve
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.Resolve
 
 open Flock.Program
-open InferenceOnlyCheck.Record.SecurityProofs (Passing passOf passing_start passing_down passing_up passing_back passing_exit
+open InferenceOnlyVerifier.Record.SecurityProofs (Passing passOf passing_start passing_down passing_up passing_back passing_exit
   arg_lt)
 
 /-- A reference of a sequence is a reference of one of its parts. -/
@@ -314,4 +314,4 @@ theorem param_returned_of (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.d
   · omega
   · exact ⟨i', j', hi', hx⟩
 
-end InferenceOnlyCheck.Properties.SecurityProofs.Resolve
+end InferenceOnlyVerifier.Properties.SecurityProofs.Resolve

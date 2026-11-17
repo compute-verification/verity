@@ -17,7 +17,7 @@
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
-   "name": "inference_only_check",
+   "name": "inference_only_verifier",
    "manifestFile": "lake-manifest.json",
    "inherited": false,
    "dir": "../../../workload_classification/training_detection/inference_only/verifier/lean",

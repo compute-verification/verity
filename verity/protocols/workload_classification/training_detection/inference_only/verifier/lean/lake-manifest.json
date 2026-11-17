@@ -59,6 +59,6 @@
    "dir":
    "../../../../../../circuits/base",
    "configFile": "lakefile.toml"}],
- "name": "inference_only_check",
+ "name": "inference_only_verifier",
  "lakeDir": ".lake",
  "fixedToolchain": false}

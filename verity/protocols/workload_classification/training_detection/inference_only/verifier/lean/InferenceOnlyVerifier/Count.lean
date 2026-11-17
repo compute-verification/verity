@@ -1,6 +1,6 @@
 module
 
-public import InferenceOnlyCheck.Desc
+public import InferenceOnlyVerifier.Desc
 
 /-!
 # The count of `(c, k)`-inference blocks
@@ -63,7 +63,7 @@ reaches, `block-root`, `block-input`: an input primitive, `block-duplicate`), th
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Count
+namespace InferenceOnlyVerifier.Count
 
 open Lean (Json toJson)
 open Flock.Program
@@ -294,7 +294,7 @@ def refusal (j : Json) (code : String) : Json :=
     Json.mkObj [("error", Json.str "unwalked"), ("message", Json.str ((code.drop Desc.UNWALKED.length).toString))]
   else match (if code == "program" then reinterpretationOf j else none) with
     | some m => refusalWith code (some m)
-    | none => InferenceOnlyCheck.refusal code
+    | none => InferenceOnlyVerifier.refusal code
 
 /-- `evaluate`, with a refusal as `refusal` writes it: the whole verdict, for the private record only. It is never
 published: its rows and total count the declaration's blocks, and its failure names the block that failed. -/
@@ -310,4 +310,4 @@ def check (j : Json) : Json :=
   | .ok r => Json.mkObj [("complies", r.getObjValD "complies")]
   | .error code => refusal j code
 
-end InferenceOnlyCheck.Count
+end InferenceOnlyVerifier.Count

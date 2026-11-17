@@ -1,6 +1,6 @@
 module
 
-public import InferenceOnlyCheck.Record
+public import InferenceOnlyVerifier.Record
 public import Mathlib.Tactic
 public import Proofs.Properties.InferenceOnly.RecordGrid
 
@@ -20,7 +20,7 @@ enough:
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Record.SecurityProofs
+namespace InferenceOnlyVerifier.Record.SecurityProofs
 
 open Spot.RecordText
 
@@ -144,4 +144,4 @@ theorem fresh_ge (c : Case) (s : ℕ) (hs : s < c.S) :
   rw [← he]
   exact (le_foldl_max _ 0).2 _ (List.mem_map.2 ⟨_, List.mem_map.2 ⟨s', hs', rfl⟩, rfl⟩)
 
-end InferenceOnlyCheck.Record.SecurityProofs
+end InferenceOnlyVerifier.Record.SecurityProofs

@@ -1,6 +1,6 @@
 module
 
-public import InferenceOnlyCheck.Record
+public import InferenceOnlyVerifier.Record
 
 /-!
 # A block's rows on an execution phase's circuit record
@@ -55,7 +55,7 @@ record's templates times the table's entries at most, whatever the units number.
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.RecordRows
+namespace InferenceOnlyVerifier.RecordRows
 
 open Lean (Json toJson)
 
@@ -129,4 +129,4 @@ def checkDetail (j tr limits : Json) : Json :=
   | .ok r => r
   | .error code => refusal code
 
-end InferenceOnlyCheck.RecordRows
+end InferenceOnlyVerifier.RecordRows

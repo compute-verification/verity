@@ -1,6 +1,6 @@
 module
 
-public import InferenceOnlyCheck.Desc
+public import InferenceOnlyVerifier.Desc
 
 /-!
 # θ's provenance: the baseline is registered
@@ -71,7 +71,7 @@ records. Nothing here walks a gate.
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Theta
+namespace InferenceOnlyVerifier.Theta
 
 open Lean (Json toJson)
 open Flock.Program
@@ -304,7 +304,7 @@ def evaluate (j tr : Json) : Except String Json := do
 /-- The reference: `InferenceOnlyCheck.evaluate` (θ and the owners per gate), then θ's provenance, gate `g` of θ lying in the root
 node that holds it (`Desc.nodeOf`). -/
 def evaluateUnrolled (j tr : Json) : Except String Json := do
-  let out ← InferenceOnlyCheck.evaluate j
+  let out ← InferenceOnlyVerifier.evaluate j
   provenance j tr Desc.nodeOf
   return out
 
@@ -340,4 +340,4 @@ def checkUnrolled (j tr : Json) : Json :=
   | .ok r => r
   | .error code => refusal j code
 
-end InferenceOnlyCheck.Theta
+end InferenceOnlyVerifier.Theta
