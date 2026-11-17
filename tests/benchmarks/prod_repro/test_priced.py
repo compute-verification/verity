@@ -76,14 +76,21 @@ def test_units_are_each_pass_range_over_the_distributions_and_a_failed_call_less
     assert u["cut"]["failed"][(24, 131072)] == (81.5, 82.0)
 
 
-def test_units_keep_the_passes_timed_and_refuse_a_file_of_none(tmp_path):
+def test_units_keep_the_passes_timed_and_refuse_one_without_present_or_with_a_pass_half_timed(tmp_path):
     f = units_file(tmp_path)
     rows = [json.loads(x) for x in f.read_text().splitlines()]
     f.write_text("".join(json.dumps({k: v for k, v in r.items() if k != "cut"}) + "\n" for r in rows))
     assert set(Q.units(f)) == {"present"} and Q.units(f)["present"]["base"][(6, 20000)] == (7.0, 7.5)
+    f.write_text("".join(json.dumps({k: v for k, v in r.items() if k != "cut" or "forced" not in r}) + "\n" for r in rows))
+    with pytest.raises(SystemExit, match="topk_cut.jsonl: cut times of one kind only, with no failed row or with every "
+                                         "row failed"):
+        Q.units(f)
+    f.write_text("".join(json.dumps(r) + "\n" for r in rows if "forced" not in r))
+    with pytest.raises(SystemExit, match="topk_cut.jsonl: no present times with and without a failed row"):
+        Q.units(f)
     f.write_text(json.dumps({"K": 2048}) + "\n")
     assert Q.timed(f) == {}
-    with pytest.raises(SystemExit, match="no pass's times"):
+    with pytest.raises(SystemExit, match="no present times with and without a failed row"):
         Q.units(f)
 
 
