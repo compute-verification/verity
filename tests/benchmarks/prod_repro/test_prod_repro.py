@@ -999,6 +999,9 @@ def test_arms_served_beside_are_in_what_ran_and_every_pass_has_its_engines_count
     assert block + counted + off in txt
     assert json.loads((out / P.TOPK_KEPT).read_text()) == {
         "dirs": {"prod-record": {"processes": 1, "calls": 9000, "rows_long": 60, "rows_tied": 3, "rows_at": 9000}}}
+    # and each process's own file whole, its rows by device
+    assert (out / P.TOPK_FILES / "prod-record" / "dsa_topk.21.json").read_bytes() == (
+        private / "prod-record/topk-log/dsa_topk.21.json").read_bytes()
     assert r["ran"]["passes"]["topk"]["on"] == {"prod": False, "prod-record": True, "prod-seeded": False, "prod-trace": False}
     # a later reading has no private directory, and one whose private directory holds none for it has the kept ones
     shutil.rmtree(private)
@@ -1425,15 +1428,15 @@ def test_the_arms_are_the_published_settings_arms_for_a_model_whose_recipe_the_b
 def test_llama32_1bs_arms_keep_each_requests_ids_and_its_cost_is_a_point_of_glm53s_metric(
         tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Llama 3.2 1B has no recipe: its default arms are `KEPT`, whose ours keeps each request's ids, which a replay under
-    vLLM's client reads. Its cost of `record-ids` over `compiled` and its replay match are points of GLM-5.3's ids, and
-    the cost of no other arms is; each point's member names the model, the card and the arm, the cost's over its
-    reference, so that the two models' points are two lines of one metric."""
+    vLLM's client reads. Its cost of `record-ids` over `compiled`, its replay match and its advice are points of
+    GLM-5.3's ids, and the cost of no other arms is; each point's member names the model, the card and the arm, the
+    cost's over its reference, so that the two models' points are two lines of one metric."""
     assert P.default_arms("llama32-1b") == P.KEPT and not S.MODELS["llama32-1b"].published
     assert all(a in S.ARMS for a in P.KEPT) and "ids" in S.ARMS[P.KEPT[2]].plugin
     (tmp_path / "out" / "record-ids.1").mkdir(parents=True)
     assert P.default_arms("llama32-1b", tmp_path / "out") == P.KEPT
-    assert (P.METRICS["llama32-1b"], P.MATCH["llama32-1b"]) == (P.METRICS["glm53"], P.MATCH["glm53"])
-    assert "llama32-1b" not in P.ADVICE
+    assert (P.METRICS["llama32-1b"], P.MATCH["llama32-1b"], P.ADVICE["llama32-1b"]) == (
+        P.METRICS["glm53"], P.MATCH["glm53"], P.ADVICE["glm53"])
 
     def cost(stock: str, ours: str) -> dict:
         arms = S.lifetimes([a | {"model_id": "llama32-1b"} for a in
@@ -1644,6 +1647,8 @@ def test_the_runner_replays_a_named_pass_of_vllms_client_at_the_recipes_arms(tmp
             "rows of more than its keys rewritten, 0 of them with a tie across the k-th key\n") in p.stdout
     assert json.loads((run_dir / "out" / P.TOPK_KEPT).read_text())["replay"] == {
         "processes": 1, "calls": 7, "rows_long": 5, "rows_tied": 2, "rows_at": 7}
+    assert sorted(p.parent.name for p in (run_dir / "out" / P.TOPK_FILES).glob("*/dsa_topk.*.json")) == [
+        "prod-record", "replay-compiled"]
     assert "stock prod, stock again not served, ours prod-record" in p.stdout and "tokens: reproduced: 2 requests replayed" in p.stdout
     assert "advice: not measured: the scheduler replay refuses the pass: " in p.stdout
     # read again without a GPU and without the node's directory, the earlier job says the same

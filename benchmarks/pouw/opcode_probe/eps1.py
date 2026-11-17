@@ -26,7 +26,7 @@ import sys
 from fnmatch import fnmatchcase
 from pathlib import Path
 
-#: what the censuses beside this directory read (sm89/census.py, ../dc/census.py, ../facet_break/loads.py)
+#: what the censuses beside this directory read (../dc/census.py, ../facet_break/loads.py)
 __all__ = ["FAMILY", "IMMA", "OPS", "SMSPS", "facets", "frontier_points", "load", "main"]
 
 IMMA = "IMMA.16832.S8.S8"
@@ -119,8 +119,7 @@ def prior_points(rows_csv: Path, prefix: str, kind: str, margin: float) -> tuple
 
 OPS = {"imad": "IMAD", "hfma2": "HFMA2*", "lop3": "LOP3.LUT", "shfl": "SHFL.BFLY", "iadd3": "IADD3", "ffma": "FFMA",
        "idp4a": "IDP.4A*", "popc": "POPC"}
-#: each family's census kind, its published rows (VF3f) and the rows its facets become; iadd3,
-#: ffma, idp4a and popc are sm89/scalar.cu's
+#: each family's census kind, its published rows (VF3f) and the rows its facets become
 FAMILY = {"imad": ("IMAD", "KIMAD", "EIMAD"), "hfma2": ("HFMA2", "KHFMA2", "EHFMA2"), "lop3": ("ALU", "KALU", "EALU"),
           "shfl": ("SHFL", "KSHFL", "ESHFL"), "iadd3": ("ALU", "KIADD3", "EIADD3"), "ffma": ("FFMA", "KFFMA", "EFFMA"),
           "idp4a": ("IDP4A", "KIDP4A", "EIDP4A"), "popc": ("XU", "KXU", "EXU")}

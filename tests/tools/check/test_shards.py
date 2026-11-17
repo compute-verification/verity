@@ -39,7 +39,7 @@ CERTIFIER = tuple(f"lean-suites:verity/protocols/resource_accounting/network/ver
 VLLM = tuple(f"lean-suites:verity-vllm:{k}/3" for k in (1, 2, 3))
 FLOCK = tuple(f"lean-suites:verity-flock:{k}/6" for k in range(1, 7))
 ONE_STAGE = tuple(f"lean-suites:benchmarks/one_stage:{k}/7" for k in range(1, 8))
-#: the one-process suites in three parts, part K in group K; the certifier's, in three parts too, puts 3 beside the audit,
+#: the one-process suites in three parts, part K in group K; the network attester's, in three parts too, puts 3 beside the audit,
 #: 1 beside lean-build and 2 with the Rust build
 ONE_PROCESS = ("verity-pouw-check-difftest", "verity-lean-audit")
 THIRDS = tuple(tuple(f"lean-suites:{s}:{k}/3" for s in ONE_PROCESS) for k in (1, 2, 3))

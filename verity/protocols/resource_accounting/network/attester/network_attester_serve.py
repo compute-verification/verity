@@ -260,7 +260,7 @@ FD_MARGIN = 256
 #: in the environment of a `serve` that re-executed itself on the C allocator, so that it does so once
 C_ALLOCATOR = "WARDEN_SERVE_C_ALLOCATOR"
 #: what a finite RLIMIT_MEMLOCK must leave beyond the process's mapping for `_memlock` to lock it: the network
-#: certifier's heap grows tens of MB in a run
+#: network attester's heap grows tens of MB in a run
 LOCK_HEADROOM = 4 << 30
 M_TRIM_THRESHOLD, M_MMAP_THRESHOLD, MCL_CURRENT, MCL_FUTURE, CAP_IPC_LOCK = -1, -3, 1, 2, 14
 #: the schedule's defaults here, where they differ from `NetworkAttesterParams`'s: r·P = 494 bytes a bucket each way stays

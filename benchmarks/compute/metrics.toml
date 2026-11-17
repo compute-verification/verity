@@ -2,14 +2,13 @@
 # enforces it.
 
 # run.py's three numbers are measured by a served run, serve.sh, whose last step (run.py --from its own run directory)
-# writes them under that run, at the commit it ran: so their command is the served run itself. It takes a card and 2 h,
-# past the default job, so the weekly rerun loop (infra/control/metrics_rerun.py) never launches it and its owner does;
-# `run.py --from RUN` on a stored run is a reprint of that run's record, which adds no reading.
+# writes them under that run, at the commit it ran: so their command is the served run itself, README.md's line. It takes
+# a card and hours, past the default job, so the weekly rerun loop (infra/control/metrics_rerun.py) never launches it and
+# its owner does; `run.py --from RUN` on a stored run is a reprint of that run's record, which writes no reading.
 #
 # RUN OF RECORD: r20261106-165116-614b, commit 4f816e9 (clean), the served run the h200 row reads: its command takes it
 # as RUN_OF_RECORD, which its owner fills in from this line. The placeholder keeps the row off the weekly rerun loop,
-# which launches no command that takes one, since it multiplies two stored runs' figures and a rerun would record the
-# same product as a new reading. To move the row to another run, replace it in this line;
+# which launches no command that takes one, since it multiplies two stored runs' figures and so writes no reading. To move the row to another run, replace it in this line;
 # tests/benchmarks/compute/test_compute.py holds the rows to these commands.
 
 # the served run, on an idle H100 or H200 (serve.sh exits 3 on any other card)
@@ -20,7 +19,7 @@ owner = "compute-accounting"
 unit = "share of multiply-adds"
 axis = "Share of Llama 3.2 1B's multiply-adds that the verifier credits."
 better = "higher"
-command = "research run --on NODE --project verity --source . --cwd clone --timeout 2h -- bash benchmarks/compute/serve.sh"
+command = "research run --on NODE --project verity --source . --cwd clone --timeout 4h -- env WORK=/workspace bash benchmarks/compute/serve.sh"
 every = "7d"
 goal = "compute-accounting/benchmark-on-one-machine"
 
@@ -33,7 +32,7 @@ owner = "compute-accounting"
 unit = "share of multiply-adds"
 axis = "Share of Llama 3.2 1B's multiply-adds at the benchmark's load that Pearl+ can credit, its linears and its LM head where the run's passes hold the head's calls."
 better = "higher"
-command = "research run --on NODE --project verity --source . --cwd clone --timeout 2h -- bash benchmarks/compute/serve.sh"
+command = "research run --on NODE --project verity --source . --cwd clone --timeout 4h -- env WORK=/workspace bash benchmarks/compute/serve.sh"
 every = "7d"
 
 [[metric]]
@@ -43,7 +42,7 @@ owner = "compute-accounting"
 unit = "share of multiply-adds"
 axis = "Share of the multiply-adds Pearl+ can credit in a served run that its verifier credits."
 better = "higher"
-command = "research run --on NODE --project verity --source . --cwd clone --timeout 2h -- bash benchmarks/compute/serve.sh"
+command = "research run --on NODE --project verity --source . --cwd clone --timeout 4h -- env WORK=/workspace bash benchmarks/compute/serve.sh"
 every = "7d"
 
 # modeled from two recorded runs and the H200's card file, read from the evidence store, so any CPU node with a

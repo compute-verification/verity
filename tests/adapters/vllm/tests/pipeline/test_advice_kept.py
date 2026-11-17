@@ -503,7 +503,7 @@ def test_a_second_segment_is_charged_to_its_window_and_none_leaves_the_string_as
 
 
 def test_a_windows_charge_of_2_to_the_20_with_its_kept_segment_is_refused_by_name(monkeypatch):
-    """Network certification counts a window's charge in `arith_encode.CW` = 20 bits, so a charge is under 2^20, its second
+    """Network attestation counts a window's charge in `arith_encode.CW` = 20 bits, so a charge is under 2^20, its second
     segment counted. One window's kept counts take 24 bits. Where its first segment and length terms come to
     2^20 − 25 the window is charged 2^20 − 1 and its string decodes; where they come to 2^20 − 24, which alone is taken,
     `window_code.encode` refuses the window by name, and so does the decoder, on the string a coder with a wider count

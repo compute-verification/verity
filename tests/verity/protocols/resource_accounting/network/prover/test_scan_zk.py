@@ -1199,6 +1199,20 @@ def test_the_scan_leaves_out_each_members_refs_which_the_statement_fixes_and_sti
             sz.refs_of(member([bad(i) for i in range(n)]))
 
 
+def test_the_scan_leaves_out_an_empty_starts_public_salt_and_scans_a_carried_starts():
+    """The empty start's ``sin`` salt is the supplied one the record's `window` hands the verifier (`carry_of`'s
+    ``empty``); a start carried from an earlier record has the prover's own salt, which stays a witness piece."""
+    a8 = SimpleNamespace(PIECE=16, needles=lambda ps: {nd: k for k, x in ps.items() for nd in (x, x.hex().encode())},
+                         find=lambda data, table: {k: 1 for nd, k in table.items() if nd in data})
+    at = SimpleNamespace(setup=sz.TEST, ordinals=[1])
+    salt = sz.REG.supplied_salts("ab" * 64, sz.CARRY, 1)[0]
+    salts = {"start salt sin 0": salt}
+    for carry, out in ((SimpleNamespace(empty={"salt": salt.hex()}), True), (SimpleNamespace(empty=None), False),
+                       (None, False)):
+        kept = sz.LS.public_pieces(a8, salts, set(salts), sz.known([], at, carry), fields=True)[0]
+        assert ("start salt sin 0 @0" not in kept) is out
+
+
 def _a8():
     """`a8`'s piece scan as `scan_zk.received` calls it: 16-byte pieces found raw or as hex in each file the verifier
     received, and the control holding the held ones."""

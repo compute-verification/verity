@@ -75,7 +75,7 @@ class LinkEntry:
 
 @dataclass(frozen=True)
 class Port:
-    """One direction of a certifier: what leaves its block (`egress`) or enters it (`ingress`). The attester keeps one
+    """One direction of a network attester: what leaves its block (`egress`) or enters it (`ingress`). The attester keeps one
     grid per port (`NetTiming.Grid`) and signs one record per port and window."""
 
     certifier: str
@@ -90,7 +90,7 @@ class Cadence:
     """The attesters' fixed parameters (W1) and the trusted clock. Frames are `frame_bits` long (Lean's B), a bucket is
     `bucket_ticks` ticks (`Hardware.bucket` maps a tick to its bucket), and a record covers a window of `buckets`
     buckets (T: a window's `NetTiming.Grid` is T buckets of slots). Each window picks one of `jitter_classes` public
-    clock-sync values (the real certifier's sync set, Lean's jitter classes), and `tick` is one tick's real duration."""
+    clock-sync values (the real network attester's sync set, Lean's jitter classes), and `tick` is one tick's real duration."""
 
     frame_bits: int = 32
     bucket_ticks: int = 1
@@ -163,7 +163,7 @@ class Datacenter:
                 and not any(devices[e].trusted for e in (l.a, l.b) if e in devices)]
 
     def port(self, a: str, b: str) -> Port | None:
-        """The attester port a hop from device `a` to device `b` passes, if the hop crosses a boundary at a certifier."""
+        """The attester port a hop from device `a` to device `b` passes, if the hop crosses a boundary at a network attester."""
         devices = self.devices
         if self.zone_of(a) is self.zone_of(b):
             return None
@@ -186,7 +186,7 @@ class Datacenter:
         return next(l for l in self.links if {l.a, l.b} == {a, b})
 
     def uplink(self, certifier: str) -> LinkEntry:
-        """The link between a certifier and the block it watches."""
+        """The link between a network attester and the block it watches."""
         return next(l for l in self.links if certifier in (l.a, l.b)
                     and self.zone_of(l.b if l.a == certifier else l.a) is not None)
 
@@ -233,7 +233,7 @@ class Datacenter:
 @dataclass
 class Fleet:
     """Several datacenters under one developer, and the links between them. Blocks are the only units the account
-    credits, and coverage is per block: every link off a block passes a certifier of its own, wherever the link's other
+    credits, and coverage is per block: every link off a block passes a network attester of its own, wherever the link's other
     end is. A link between datacenters is fabric, as a switch is, so it needs no certifier, and the outside world is
     everything off every block."""
 
@@ -255,7 +255,7 @@ class Fleet:
 
     def validate(self) -> list[str]:
         """Each datacenter's own problems, a device name in two of them (but the outside world's), and a link between
-        them that names an unknown device or leaves a block without passing a certifier."""
+        them that names an unknown device or leaves a block without passing a network attester."""
         problems = [f"{dc.name}: {p}" for dc in self.datacenters for p in dc.validate()]
         seen: dict[str, str] = {}
         for dc in self.datacenters:

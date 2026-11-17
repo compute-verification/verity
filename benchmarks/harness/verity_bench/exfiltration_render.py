@@ -65,9 +65,9 @@ def _amount(x: Any, error: float | None) -> str:
 
 
 def _readers(share: float) -> str:
-    """Which of the three readers of the planner's rows is the headline figure, and why the other two differ."""
+    """Which of the three readers of the planner's rows is the compute audit's part, and why the other two differ."""
 
-    return (f"this is the headline figure: λ times the bound where the row's total is {_pct(share)} of compute, on a "
+    return (f"the part is λ times the bound where the row's total is {_pct(share)} of compute, on a "
             "least-squares line of the total through every pinned budget. The planner's driver reads the same rows two "
             "other ways: `headline plan` prints the bound at one pinned budget, the plan's, whose total is that row's and "
             f"not set to {_pct(share)}, at λ = 1; `headline rows` prints λ times the bound at {_pct(share)}, with the total read "

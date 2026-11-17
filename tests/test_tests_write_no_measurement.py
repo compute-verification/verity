@@ -1,11 +1,12 @@
 """No test writes a measurement into a research run's result. Under `research run` a process inherits `RESEARCH_RUN_DIR`
 and `OUT`, and the harness's kit (`verity_bench.kit.writer`, `kit.report`) writes into `$RESEARCH_RUN_DIR/result.json`
 whatever directory its caller names, so a test run there by plain pytest wrote its fixture's figures as the run's
-measurements, and the Metrics tab drew them as a benchmark's points. `suites.py` drops `RESEARCH_*` for its suites; a
-plain pytest doesn't, so each suite that can reach the kit unsets both in an autouse fixture of its own conftest, which
-every pytest of its tests loads. A suite reaches the kit where its inputs, as `suites.py` keys and guards them
-(`inputs_of`: its directory, its dependencies' and what it declares), hold the kit: the read guard fails one whose tests
-import the kit outside them."""
+measurements, and the Metrics tab drew them as a benchmark's points. Inside pytest the kit refuses the run the
+process started under (`kit.refuse_the_started_run`), and a command a test starts, which doesn't run pytest, writes it.
+`suites.py` drops `RESEARCH_*` for its suites; a plain pytest doesn't, so each suite that can reach the kit unsets both
+in an autouse fixture of its own conftest, which every pytest of its tests loads. A suite reaches the kit where its
+inputs, as `suites.py` keys and guards them (`inputs_of`: its directory, its dependencies' and what it declares), hold
+the kit: the read guard fails one whose tests import the kit outside them."""
 
 from __future__ import annotations
 

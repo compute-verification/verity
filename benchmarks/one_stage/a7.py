@@ -302,7 +302,7 @@ def check3_inputs(canons: dict, sp, sm, samples: int = SAMPLES) -> SimpleNamespa
                            samples=samples)
 
 
-def remote_session(req, layout, store, plans: dict[int, list[int]], salts: dict[int, bytes],
+def poub_session(req, layout, store, plans: dict[int, list[int]], salts: dict[int, bytes],
                    extra: dict[int, list[int]] | None = None, late: dict[int, int] | None = None, alter=None,
                    early: int | None = None, dummy: int | None = None, rekey: tuple[int, int] | None = None,
                    drop: int | None = None, *, c3: SimpleNamespace, defer: bool = False):
@@ -1042,7 +1042,7 @@ def main() -> int:
 
     # the link: the v0 session, its check 3 proved, the bridge, the ledger
     c3 = check3_inputs(canons, sp, sm, a.samples)
-    rs = remote_session(req, layout, store, plans, salts, c3=c3, defer=True)
+    rs = poub_session(req, layout, store, plans, salts, c3=c3, defer=True)
     (out / "memory-map.jsonl").write_text(rs.map_text)
     if rs.refused is not None:
         raise SystemExit(f"the honest remote session was refused before check 3: {rs.refused}")
@@ -1287,7 +1287,7 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
             assert RQ.plan_matches(req, layout, bad, RQ.BLOCK_BITS, s)
             args = dict(plan_m["args"][s], count=len(bad), plan=bad + [0] * (sp.P - len(bad)))
             f = _forged(plan_m, s, args)
-            rs = remote_session(req, layout, store, plans, salts, extra={s: [extra]}, c3=c3)
+            rs = poub_session(req, layout, store, plans, salts, extra={s: [extra]}, c3=c3)
             br = bridge(rs, plan_m, map_m, req_steps, canons["passes"], sm)
             neg[name] = {"refused": f["ok_output"] == 0 and f["satisfied"] and not f["opens_to_1"], "step": s, "block": extra,
                          "unit": f, "plan_matches": True, "honest_canon_bridge_refuses": not br["ok"]}
@@ -1375,7 +1375,7 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
 
     # the appends: sessions PoUB accepts whose appends aren't the map units' writes
     def unmapped(name: str, **kw) -> None:
-        rs = remote_session(req, layout, store, plans, salts, c3=c3, **kw)
+        rs = poub_session(req, layout, store, plans, salts, c3=c3, **kw)
         if not rs.accepted:
             neg[name] = {"refused": rs.by_check3 is not None, "by": "check 3" if rs.by_check3 else None,
                          "why": f"the session refused it: {rs.refused}"}
@@ -1403,7 +1403,7 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
     t_early = next(s for s in steps_w if s >= 1)
     unmapped("append-before-its-production-step (mapped)", early=t_early)
     neg["append-before-its-production-step (mapped)"]["step"] = t_early
-    rs = remote_session(req, layout, store, plans, salts, early=t_early, c3=c3)
+    rs = poub_session(req, layout, store, plans, salts, early=t_early, c3=c3)
     br = bridge(rs, plan_m, map_m, req_steps, canons["passes"], sm)
     neg["append-before-its-production-step (bridge: heads)"] = {
         "refused": rs.accepted and not br["ok"], "step": t_early, "detail": br["detail"],
@@ -1451,11 +1451,11 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
     neg["value-row-of-another-value (binding)"] = _rebound(map_m, canons, t2, "val0", RU._words(a_2["val"][1], VW // 16))
 
     # the bridge and the link: a session plan larger than the certified one, a registered block released at another step
-    rs = remote_session(req, layout, store, plans, salts, extra={s0: [unselected_table_block(s0)]}, c3=c3)
+    rs = poub_session(req, layout, store, plans, salts, extra={s0: [unselected_table_block(s0)]}, c3=c3)
     br = bridge(rs, plan_m, map_m, req_steps, canons["passes"], sm)
     neg["session-plan-not-the-certified-one (bridge: count)"] = {"refused": not br["ok"], "detail": br["detail"]}
     jx, lx = layout.block[EXPERT], req.last[EXPERT]
-    rs = remote_session(req, layout, store, plans, salts, late={jx: lx + 1}, c3=c3)
+    rs = poub_session(req, layout, store, plans, salts, late={jx: lx + 1}, c3=c3)
     br = bridge(rs, plan_m, map_m, req_steps, canons["passes"], sm)
     neg["session-registered-release-not-the-map's (bridge: rfree)"] = {"refused": not br["ok"], "block": jx, "detail": br["detail"]}
     try:

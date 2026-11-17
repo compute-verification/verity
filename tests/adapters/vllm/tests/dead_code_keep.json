@@ -3,7 +3,6 @@
  "dynamic_record": "art:a265fc569719ee1a410f0863416416af91c66d02b1ed8703a9f60fd19e614f2f",
  "modules": {
   "verity_vllm.definitions.numerics.ref_prims_twins": "numpy twins of registry.ref_prims, checked against the registered bodies by tests/program/test_ref_prims.py (LIVE registry.ref_prims)",
-  "verity_vllm.program.lifting.lifted_compose": "the lifted fixed workload Program (GP-01's compose over lifted components) of tests/program/test_lifted_mixed.py / test_lifted_r17.py (LIVE registry.lifted)",
   "verity_vllm.program.frontend.derive_examples": "source modules of the derivation tests (LIVE frontend.derive)",
   "verity_vllm.program.lifting.dump": "complete-assignment dump used by tests/program/test_lifted_tiny.py (LIVE registry.lifted / pad_prims)",
   "verity_vllm.definitions.numerics.fa3_split_twins": "numpy twins of registry.fa3_split's Definitions, checked word for word against them by tests/program/test_fa3_split.py (LIVE registry.fa3_split) and run by the H200 capture tests/properties/glm53_fa3_prefill_capture_gpu.py; live once a replay row binds AttentionSplit_v1",
@@ -17,7 +16,6 @@
   "verity_vllm.protocols.linear.vllm_site": "see verity_vllm.protocols.linear; benchmarks/pouw/pearl_c_vllm/e2e.py and bench_arm.py attach through it",
   "verity_vllm.program.quarantine.collective": "provisional TP AllReduce definitions; test_tp_collective.py",
   "verity_vllm.program.quarantine.collective.allreduce": "see quarantine.collective",
-  "verity_vllm.program.predict.template_counts": "n_t(c), each template's instances in a request unit's Program read off its key, held to the built Programs' template partitions by tests/program/predict/test_template_counts.py ahead of the compile that reads it (LIVE predict.step_needs)",
   "verity_vllm.program.quarantine": "the admission home of provisional Definitions: collective",
   "verity_vllm.compiler.advice_check": "AdviceCheck_v1, the advice format's check Definition, read by its circuit-check sidecar and tests/compiler/test_network_attester_advice_check.py",
   "verity_vllm.compiler.cache_step_v3": "the prefix cache's step v3 (LIVE through compile_slice_v4 to v6), held by tests/compiler/test_network_attester_cache_step_v3.py; its other callers are benchmarks/mempool and benchmarks/network_e2e/encodings",

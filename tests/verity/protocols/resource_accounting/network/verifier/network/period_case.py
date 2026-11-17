@@ -264,7 +264,7 @@ class Audit:
 
 @dataclasses.dataclass(frozen=True)
 class Entry:
-    """One entry of the parameters' `"keys"`, a certifier session's: its LMS key, its session, and the start of its
+    """One entry of the parameters' `"keys"`, a network attester session's: its LMS key, its session, and the start of its
     stretch of execution phases, in the numbers `first` is in."""
     key: LmsKey
     session: bytes
@@ -1693,7 +1693,7 @@ SECOND = ("second-key", "two-signers", "cert-other-session", "reg-other-session"
 
 @dataclasses.dataclass(frozen=True)
 class Stretch:
-    """An entry the generator lists: a certifier session's private key, its session, and its stretch's start."""
+    """An entry the generator lists: a network attester session's private key, its session, and its stretch's start."""
     key: lms.PrivateKey
     session: bytes
     start: int

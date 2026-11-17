@@ -10,11 +10,16 @@ warp-squaring a sub-partition: 4 sub-partitions × the GPU card's `sm.count` × 
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from verity.device import load_card, load_node, number
 
-NODE = load_node("rtx-pro-6000-server-x8")
-GPU_CARD = load_card(NODE["device"]["sku"])
-HOST_CARD = load_card(NODE["host"]["sku"])
+CARD_FILES = Path(__file__).resolve().parents[2] / "hardware/cards"
+NODE_FILES = Path(__file__).resolve().parents[2] / "hardware/nodes"
+
+NODE = load_node("rtx-pro-6000-server-x8", directory=NODE_FILES, cards_directory=CARD_FILES)
+GPU_CARD = load_card(NODE["device"]["sku"], directory=CARD_FILES)
+HOST_CARD = load_card(NODE["host"]["sku"], directory=CARD_FILES)
 
 MU = 0.28 + 0.10  # μ_chip + μ_sample, the tracker's
 K = 2
