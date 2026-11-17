@@ -38,7 +38,9 @@ def _of(doc: Mapping[str, Any], metric: str, figure: str) -> list[dict]:
 
 def measured(doc: Mapping[str, Any]) -> list[dict]:
     """The three figures' measurements, each over every monitoring period, under each metric's id."""
-    return [m for metric, figure in METRICS.items() for m in _of(doc, metric, figure)]
+    return [*({**m, "name": COMPUTE_AUDIT, "value": m["value"]} for m in _of(doc, COMPUTE_AUDIT, "compute_audit")),
+            *({**m, "name": NETWORK, "value": m["value"]} for m in _of(doc, NETWORK, "network_attester")),
+            *({**m, "name": TOTAL, "value": m["value"]} for m in _of(doc, TOTAL, "total"))]
 
 
 def report(doc: Mapping[str, Any], text: str, *, made_up: bool, withdrawn: Sequence[str]) -> int:
