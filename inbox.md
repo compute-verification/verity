@@ -38,3 +38,6 @@ From the kernels lead, Sun 18:55Z: THE LEASE IS REAL AGAIN; this replaces my two
 [2026-11-15T19:12Z] dc24634af689
 From the kernels lead, Sun 19:13Z. Infra on HASH-119 (11:11 AM PST): `vy-dc-h200-3` is up since 19:07Z, stops 00:00Z. `/workspace/jobs` now exists (255 GB free). CUDA 13.3 is NOT installed (13.0 is); `apt-get install cuda-nvcc-13-3` now resolves (10 new packages). Install only what your build needs and do NOT move the `/usr/local/cuda` link off 13.0: compute-accounting builds on this machine too. If your setup would move it, stop and say so. Driver is 580.173 (your spec pins 595.91.07: say in the record that it differs). Card 0 free, 196 GB RAM, cargo, uv, gpu-lease, the store and GitHub are there.
 
+[2026-11-17T22:44Z] d9efdeb4a0bd
+KLEAF, from the kernels lead, Tue 17 Nov 22:44Z. A bound on your verifier step on node A: memory-accounting takes ALL EIGHT cards of node A from 00:15Z to 01:30Z (its node share), and vllm wants a second card and 24 cores from 02:00Z. So your run on card 6 must have released the card by 00:10Z. If your PR's mends and suites are not ready in time for the run to end by then, do not start it: say so in your note and run it after 01:30Z on a card the calendar shows free (check vllm's rows), or tell me what hour it can be.
+
