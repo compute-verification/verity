@@ -10,7 +10,6 @@ import json
 
 import numpy as np
 import pytest
-from verity_vllm.definitions.numerics.rows import SAMPLED_MEMBER
 
 from tests.program.predict import test_steps as ST
 from verity_vllm.check.match.instance_sequence import RootView
@@ -19,6 +18,7 @@ from verity_vllm.check.replay import checks as CK
 from verity_vllm.check.replay import index as IX
 from verity_vllm.check.replay.index import SAMPLER_OP
 from verity_vllm.correspondence.reader_for_query import Correspondence
+from verity_vllm.definitions.numerics.rows import SAMPLED_MEMBER
 from verity_vllm.program.instances_file import read_instances
 from verity_vllm.program.predict.naming import write_build
 from verity_vllm.program.predict.steps import compile_steps

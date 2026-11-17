@@ -41,6 +41,7 @@ from pathlib import Path
 from typing import Any
 
 from verity.protocols.resource_accounting.compute.pouw.prover import serving as PS
+
 from verity_vllm import messages as M
 
 #: pearl_c_sm90's scheme, one of `pearl_c.SCHEMES`: v1 forming on the device record of an H100 or H200, -h3 hashing

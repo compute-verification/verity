@@ -52,6 +52,7 @@ inputs = [
     "benchmarks/harness/specs",
     "infra/cluster/kinds/benchmarks.toml",
     "adapters/vllm/verity_vllm/engine/hooks.py",
+    "adapters/vllm/verity_vllm/engine/profiles/hf_configs/LLAMA32_1B.config.json",
     "adapters/vllm/verity_vllm/protocols/__init__.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/credit_gate.py",
     "adapters/vllm/verity_vllm/protocols/interface.py",

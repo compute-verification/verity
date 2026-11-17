@@ -858,13 +858,6 @@ class Linear:
             raise LinearError(f"Linear didn't link {url}: attachmentLinkGitHubPR returned success false")
         return True
 
-    def issues(self, team: str, state: str | None = None) -> list[dict]:
-        """The team's open issues, or those in the state named `state`, oldest first: {identifier, title, state: {name}}."""
-        f = {"team": {"id": {"eq": self.team(team)["id"]}},
-             "state": {"name": {"eqIgnoreCase": state}} if state else {"type": {"nin": ["completed", "canceled"]}}}
-        q = "query($f: IssueFilter!) { issues(filter: $f, first: 250) { nodes { identifier title createdAt state { name } } } }"
-        return sorted(self.gql(q, {"f": f})["issues"]["nodes"], key=lambda i: i["createdAt"])
-
     def subscribers(self, issue_id: str) -> list[str]:
         q = "query($id: String!) { issue(id: $id) { subscribers { nodes { name } } } }"
         return [n["name"] for n in self.gql(q, {"id": issue_id})["issue"]["subscribers"]["nodes"]]
