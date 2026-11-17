@@ -17,7 +17,7 @@ CLASSES names it; its endpoint gets one token budget, T, with or without H1. Its
 front doesn't take, a front whose endpoint isn't on the network attester's id form, and a front load with no front; its composite
 step publishes each case's and each product's verdict lines and nothing else. Its V3c step runs the split network
 attester's chain after the window commit and its period check on V3c's period.json, and fails where no period.json is
-written; its preflight refuses the split beside the certifier's whole piece, or without V3c. Under H1_TIE its serve gives
+written; its preflight refuses the split beside the network attester's whole piece, or without V3c. Under H1_TIE its serve gives
 serve-openai the tie's command, which, run as `serve_tie` runs it at an H1 window's close, writes the window's advice and
 commits it chained after H1's W, its docket the window's record R, and writes no R when the advice is pending or the
 commit refused; its V3c then audits the commit H1 bound and makes none, and has none for a window H1 bound no R for or bound
@@ -437,7 +437,8 @@ def test_a_published_line_holds_a_loads_tokens_and_span_and_leaves_the_inference
                    f"{i['work']['theta_macs']} θ-MACs⌉ = {i['raw']}, on the grid); session {POLICY['session']['definition'][:16]}…, "
                    f"policy {IO.digest(POLICY)[:16]}…")
     pub = {"verdict": "accept", "reason": None, "classes": [["cd" * 32, 1_000, 4_000]], "registered_session": True,
-           "c": POLICY["c"], "k": POLICY["k"], "n": POLICY["n"], "policy": {"sha512": IO.digest(POLICY)}}
+           "c": POLICY["c"], "k": POLICY["k"], "n": POLICY["n"], "policy": {"sha512": IO.digest(POLICY)},
+           "record_count": {"held": 0, "wired": 0, "openings": 0, "fresh": 4_000, "by": IO.RECORD_COUNT}}
     for line in (policy_line, f"INFERENCE-ONLY {IO.line(pub)}", f"INFERENCE-ONLY {json.dumps(pub)}"):
         assert S.public_line(line) == line and S.public_line(line + "\n") == line + "\n"
 
@@ -663,7 +664,7 @@ def test_the_certifiers_chain_files_that_count_requests_move_to_the_serve_dirs_p
 
 
 def test_one_piece_runs_alone_or_all_but_it(tmp_path, capsys):
-    """``only`` runs the named pieces alone and ``skip`` all but them, so the certifier's can run beside the others."""
+    """``only`` runs the named pieces alone and ``skip`` all but them, so the network attester's can run beside the others."""
     assert list(S.pieces(tmp_path, 1, tmp_path / "pieces", env={}, only=["certifier"])) == ["certifier"]
     assert "the network certifier" in capsys.readouterr().out
     assert list(S.pieces(tmp_path, 1, tmp_path / "pieces", env={}, skip=["certifier"])) == ["pouw", "pous", "bandwidth"]
@@ -1327,6 +1328,46 @@ def test_the_records_verdict_is_the_compiled_lean_composites_and_its_exit_0_only
         assert composed == "pending"
 
 
+@pytest.mark.parametrize(("said", "why", "verdict"), [
+    ("accept", None, "accept"), ("refuse", "the Lean verifier counts a block of 9 fresh bits, more than k = 2", "reject"),
+    ("refuse", S.UNDECIDED + "the Lean verifier gave no verdict: inference-only-check not started", "error"),
+    (None, "why", "error")], ids=["accept", "lean-refuses", "undecided", "no-verdict"])
+def test_the_record_carries_the_inference_only_verifiers_verdict_as_a_row_the_combined_verdict_does_not_read(
+        tmp_path, said, why, verdict):
+    io = {"format": "verity-bench/inference-only-verdict/v5", "verdict": said, "reason": why,
+          "c": 1, "k": 2, "n": 3, "sealed": 4, "theta": {"inputs": ["0.w"], "by": "chosen"}}
+    bare, bare_rec, bare_line = S.record(_rows(_accepted(), tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1")
+    report, rec, line = S.record(_rows(_accepted(), tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1",
+                                 inference_only=io)
+    assert report["protocols"].pop("inference-only") == {
+        "verdict": verdict, "protocol": io["format"], "reason": io["reason"], "answer": {"c": 1, "k": 2, "n": 3, "theta": io["theta"]},
+        "answer_from": f"{S.AS_WRITTEN} ({S.INFERENCE_ONLY})", "combined": S.INFERENCE_ONLY_UNREAD}
+    assert line.pop("not_combined") == {"the inference-only verifier": verdict}
+    assert (report, rec["composed"], line) == (bare, bare_rec["composed"], bare_line)
+
+
+def test_record_reads_the_inference_only_verdict_beside_it_into_its_row(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
+    monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
+    (tmp_path / "pieces").mkdir()
+    (tmp_path / "serve").mkdir()
+    (tmp_path / "record").mkdir()
+    (tmp_path / "record" / S.INFERENCE_ONLY).write_text(json.dumps({"verdict": "refuse", "reason": "why"}))
+    argv = ["record", "--serve-run", str(_serve_dir(tmp_path / "serve")), "--window", "1", "--sampled-proofs",
+            str(_window_case(tmp_path / "audit")), "--pieces", str(tmp_path / "pieces"), "--out", str(tmp_path / "record"),
+            "--node", "vy-dc-h200", "--product", "remote"]
+    rc, line, rows = _recorded(tmp_path, argv, capsys)
+    assert rows["inference-only"]["verdict"] == "reject" and line["not_combined"] == {"the inference-only verifier": "reject"}
+    assert rc == S.RECORD_EXIT[line["composed"]] == 2
+    (tmp_path / "record" / S.INFERENCE_ONLY).write_text(json.dumps({"verdict": "refuse", "reason": S.UNDECIDED + "why"}))
+    _, line, rows = _recorded(tmp_path, argv, capsys)
+    assert rows["inference-only"]["verdict"] == "error" and line["not_combined"] == {"the inference-only verifier": "error"}
+    (tmp_path / "record" / S.INFERENCE_ONLY).write_text("[")
+    _, _, rows = _recorded(tmp_path, argv, capsys)
+    assert rows["inference-only"]["verdict"] == "error" and rows["inference-only"]["reason"].startswith(
+        f"{S.INFERENCE_ONLY} doesn't parse: ")
+
+
 def test_the_served_nodes_run_exits_nonzero_since_its_record_reads_no_composite():
     """On the served node no composite is of record (under COMPOSE_OFF_NODE=0 a development one), so the main run's record
     reads none and is pending, and the run's exit is that record's (2), or 1 where a step failed: never 0. The main run
@@ -1504,6 +1545,7 @@ def test_a_spot_check_that_was_not_started_leaves_the_audits_own_row_naming_the_
     if why == "no-scope":
         monkeypatch.delenv("CHECK_SCOPE")
         monkeypatch.setattr(SC, "scope_here", lambda: False)
+        monkeypatch.setattr(SC, "address_space_here", lambda: False)
         said = SC.NO_SCOPE_HERE
     if why == "per-member":
         case = json.loads((w / "case-v2.json").read_text())
@@ -3374,9 +3416,9 @@ PERIOD = 'echo period-check >> "$ORDER"; cp "$4/period.json" "$3/"; echo \'{"ver
 def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = FAKE_V3C_PROVE_PATH,
          records_audit: str = FAKE_RECORDS_AUDIT, lease: bool = True,
          **extra: str | None) -> tuple[int, list[str], list[str], list[str]]:
-    """`served_verdicts.sh v3c` (or ``args``) on window 7 of a toy serve dir at the certifier's class, in a toy tree whose
+    """`served_verdicts.sh v3c` (or ``args``) on window 7 of a toy serve dir at the network attester's class, in a toy tree whose
     prove_path.py (``prove_path``) and records_audit.py (``records_audit``) note each step they run, its builds stubbed,
-    main's first-parent line a toy MAIN_FILE, the split certifier's two commands set, a development run's local coins,
+    main's first-parent line a toy MAIN_FILE, the split network attester's two commands set, a development run's local coins,
     no floor on the serve dir's free inodes and no composite, so the default COMPOSE_OFF_NODE=1 composes the final record
     alone off the node (``extra`` adds to the environment, None unsetting; ``lease`` False, no gpu-lease on the PATH): the
     exit status, the verdict lines, the steps in order and the limits."""
@@ -3424,9 +3466,9 @@ V3C_ENTRY = f"COINS V3c's audit: {V3C_DEV}"
 
 
 def test_v3c_runs_the_certifiers_chain_beside_its_audit_and_its_period_check_on_the_period_json_after(tmp_path):
-    """After its COINS line, the window commit, then the split certifier's chain (it reads the commit's scan state)
-    beside V3c's audit and its period.json, and the certifier's period check on it once both are done, each within its
-    own limit; the check gets the serve dir, the window, the certifier's piece dir and V3c's dir, and writes the answer
+    """After its COINS line, the window commit, then the split network attester's chain (it reads the commit's scan state)
+    beside V3c's audit and its period.json, and the attestation period check on it once both are done, each within its
+    own limit; the check gets the serve dir, the window, network attestation's piece dir and V3c's dir, and writes the answer
     `pieces` reads there. The two steps' logs, which count the window's requests, end in the serve dir's
     private/pieces/certifier, not in $OUT, which leaves the node. $OUT then names no window and counts none of its own (the
     window commit's population, the audit's, the chain's window): each line is whole in the serve dir's
@@ -3476,7 +3518,7 @@ def test_v3c_with_no_period_json_runs_no_period_check_and_fails(tmp_path):
      "PREFLIGHT: the split certifier's period check reads V3c's period.json, and V3C_CLASS is empty"),
 ])
 def test_the_split_certifier_needs_v3c_and_no_whole_piece_beside_it(tmp_path, args, extra, line):
-    """The split's period check writes the certifier's answer from V3c's period.json, so the preflight refuses it beside
+    """The split's period check writes network attestation's answer from V3c's period.json, so the preflight refuses it beside
     CERTIFIER_CMD, the whole piece's command, and in a run that leaves V3c out, before anything runs."""
     rc, lines, order, _limits = _v3c(tmp_path, args, **extra)
     assert (rc, lines, order) == (3, [line], [])
@@ -4409,7 +4451,7 @@ def test_under_pearlplus_tie_v3c_audits_no_commit_not_chained_right_after_w(tmp_
 def test_the_preflight_refuses_pearlplus_tie_without_pearls_piece_beside_h1s_tie_or_the_split_or_off_one_fixed_window(
         tmp_path, extra, line):
     """PEARLPLUS_TIE ties the window to the W Pearl+'s piece writes, so it needs that piece (POUW=pearlplus) and not H1's
-    tie, V3c after step 4 (not the split certifier's, before it), and one fixed window whose s-th step is the class's s-th
+    tie, V3c after step 4 (not the split network attester's, before it), and one fixed window whose s-th step is the class's s-th
     output at the class's load: each refused before anything runs."""
     rc, lines, order, _limits = _v3c(tmp_path, (), **{**PEARL_TIES, **extra})
     assert (rc, lines, order) == (3, [line], [])
@@ -4418,7 +4460,7 @@ def test_the_preflight_refuses_pearlplus_tie_without_pearls_piece_beside_h1s_tie
 #: the toy tree's compiler of record for the BF16 1B, as prove_path.py lists it: its RoPE heads hold transfer gates
 TOY_GATES = 'GATES_OF_RECORD: dict = {"unsloth/Llama-3.2-1B": ("RoPEHead_v1{D=64}",)}\n'
 TG_PARTITION = json.loads((HERE.parents[2] / "benchmarks" / "prove_path" / "llama32_1b_tg_l0_step1.json").read_text())
-#: PEARLPLUS_TIE with V3c after step 4, the certifier unsplit, on the BF16 row
+#: PEARLPLUS_TIE with V3c after step 4, the network attester unsplit, on the BF16 row
 PEARL_TIED = {**PEARL_TIES, "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None,
               "ROW_ID": "llama32-1b__bf16__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager"}
 NO_PEARL_RULE = ("PREFLIGHT: under PEARLPLUS_TIE V3C_LAW has no default: the window is cut at Pearl+'s linears, and how many "
@@ -4587,7 +4629,7 @@ def test_the_preflight_refuses_pearlplus_tie_off_the_bf16_row_its_class_uncounte
     """PEARLPLUS_TIE serves the BF16 checkpoint, whose linears Pearl+'s FP8 product reads, and V3c's commit is held to
     V3C_CLASS's window circuit; the cut circuit reads Pearl+'s tables at every row of the class's fixed load. So another
     PRECISION or row, a V3C_CLASS CLASSES doesn't count, vLLM's prefix cache (a hit leaves a prompt's rows uncomputed) and
-    a certifier front's window of its own are each refused before anything runs."""
+    a network attester front's window of its own are each refused before anything runs."""
     rc, lines, order, _limits = _v3c(tmp_path, (), **{**PEARL_TIED, **extra})
     assert (rc, lines, order) == (3, [line], [])
 
@@ -6207,6 +6249,9 @@ def test_copy_never_sends_a_deferrals_witness_to_compose_node_nor_a_hand_off_to_
 ONSITE_PIECES = HERE.parents[2] / "benchmarks" / "pous" / "onsite_pieces.sh"
 
 
+PRLIMIT = 'echo "$1" >> {seen}; shift 2; exec "$@"'
+
+
 def _script(path: Path, body: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(f"#!/bin/sh\n{body}\n")
@@ -6412,7 +6457,7 @@ def test_a_missing_onsite_pieces_file_is_refused(tmp_path):
 ])
 def test_onsite_pieces_defaults_are_set_where_the_tree_has_each_piece_and_the_node_its_key(tmp_path, files, keys, want):
     """`onsite_piece_commands` (benchmarks/pous/onsite_pieces.sh) sets WIPE_CMD where the tree has the wipe's piece,
-    POUS_CMD where it has PoUS's and the node the memory challenger's key, and BANDWIDTH_CMD to collect PoUS's session
+    POUS_CMD where it has PoUS's and the node the memory attester's key, and BANDWIDTH_CMD to collect PoUS's session
     then, else to the bandwidth session where the tree has it and the node the verifier's key and its registered store."""
     tree, home = tmp_path / "tree", tmp_path / "home"
     for f in files:
@@ -6576,6 +6621,7 @@ def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_
     out.mkdir()
     _script(bin_ / "lake", f'mkdir -p .lake/build/bin && touch ".lake/build/bin/$2" && echo "$2" >> {tmp_path}/built')
     _script(bin_ / "systemd-run", "exit 1")
+    _script(bin_ / "prlimit", PRLIMIT.format(seen=tmp_path / "prlimit.seen"))
     _script(bin_ / "gpu-lease", f'echo "$@" >> {tmp_path}/card')
     for w, protocol in (("pous/w0", "verity/pous/p2/v4/run"), ("other", "verity/certifier/v9")):
         (d / "private" / w).mkdir(parents=True)
@@ -6662,6 +6708,14 @@ sys.exit(1)
         "COMPOSITE remote: NOT_ESTABLISHED missing verity/wipe/v0", "COMPOSITE remote: VERDICT verity/remote/v0 reject components",
         on]
     assert sorted(x.name for x in (out / "composite").iterdir()) == ["remote"] and not (p / "onsite").exists()
+    assert (tmp_path / "prlimit.seen").read_text().splitlines()[-2:] == [f"--as={1 << 30}", f"--as={170 << 30}"]
+    _script(bin_ / "prlimit", "exit 1")
+    (out / "verdicts.txt").unlink()
+    assert run().returncode == 1
+    assert (out / "verdicts.txt").read_text().splitlines() == [dev, (
+        "COMPOSITE: not run, this host makes no systemd user scope and runs no prlimit: composite.py runs only under a "
+        "memory limit of its own")]
+    _script(bin_ / "prlimit", PRLIMIT.format(seen=tmp_path / "prlimit.seen"))
     assert json.loads((tmp_path / "served_cases.argv").read_text()) == ["--serve-dir", str(d)]
     (d / "sampled-proofs-served" / "window").mkdir(parents=True)
     (d / "sampled-proofs-served" / "window" / "case.json").write_text("{}")
@@ -6766,6 +6820,7 @@ def test_the_composite_leaves_out_a_pous_or_wipe_case_that_is_not_its_pieces_and
     (tmp_path / "lean").chmod(0o755)
     _script(bin_ / "lake", f'mkdir -p .lake/build/bin && cp {tmp_path}/lean ".lake/build/bin/$2"')
     _script(bin_ / "systemd-run", "exit 1")
+    _script(bin_ / "prlimit", PRLIMIT.format(seen=tmp_path / "prlimit.seen"))
     for pkg in ("verity/protocols/compose/verifier/remote", "verity/protocols/compose/verifier/onsite"):
         (tree / pkg).mkdir(parents=True)
     (tree / "benchmarks" / "one_stage").mkdir(parents=True)
@@ -6816,12 +6871,12 @@ def test_the_composite_leaves_out_a_pous_or_wipe_case_that_is_not_its_pieces_and
 
 
 def test_the_composite_takes_no_case_from_the_certifier_pieces_private_directory_which_holds_no_answer(tmp_path):
-    """The certifier's piece keeps its case in the serve dir's private/pieces/certifier, beside the chain files
+    """Network attestation's piece keeps its case in the serve dir's private/pieces/certifier, beside the chain files
     `private-pieces` moves there and no answer: its answer is the run's, under OUT/pieces. served_composite.sh, with
     onsite_pieces.sh's `onsite_cases` and composite.py as they are and a stand-in for each product's Lean (`NO_LEAN`),
     takes a directory for a case beside an answer, so it composes every other subprotocol's case and nothing of that
-    directory: no product's case has a component of it, onsite names the certifier missing (NOT_ESTABLISHED), and
-    remote, which doesn't compose it, misses nothing. What reads the certifier's private case into a composite is not
+    directory: no product's case has a component of it, onsite names the network attester missing (NOT_ESTABLISHED), and
+    remote, which doesn't compose it, misses nothing. What reads the network attester's private case into a composite is not
     shown here."""
     import composite as C
     certifier = "verity/certifier/v0"
@@ -6830,6 +6885,7 @@ def test_the_composite_takes_no_case_from_the_certifier_pieces_private_directory
     (tmp_path / "lean").chmod(0o755)
     _script(bin_ / "lake", f'mkdir -p .lake/build/bin && cp {tmp_path}/lean ".lake/build/bin/$2"')
     _script(bin_ / "systemd-run", "exit 1")
+    _script(bin_ / "prlimit", PRLIMIT.format(seen=tmp_path / "prlimit.seen"))
     for pkg in ("protocols/compose/verifier/remote", "protocols/compose/verifier/onsite"):
         (tree / "verity" / pkg).mkdir(parents=True)
     (tree / "benchmarks" / "one_stage").mkdir(parents=True)
@@ -7211,7 +7267,7 @@ def test_serve_openai_declares_the_day_only_under_day(tmp_path, env, flags):
 def _serve_calls(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str], list[str]]:
     """`served_verdicts.sh serve` in a toy tree whose venv python stands in for every command the runner issues through
     it: serve-openai listens with one window closed and sealed and holds until the runner stops it, the load answers
-    each of its 4 requests, the weights' docket refuses, the certifier's front under ``--session`` leaves an open
+    each of its 4 requests, the weights' docket refuses, the network attester's front under ``--session`` leaves an open
     relay session in the serve dir (or, with FRONT_REFUSES set, exits 2 and leaves none), its close keeps a fetch
     beside it (exit 2 with none open) and every other command exits 0. The exit status, each
     command issued through that python in order and the lines the runner published, ``TMP`` for ``tmp_path`` in both.
@@ -7325,7 +7381,7 @@ def _notes(tmp_path: Path, what: str, rc: int = 0) -> str:
 @LOADS
 def test_under_every_other_load_the_serve_step_starts_nothing_of_a_session(tmp_path, env, issued, said):
     """A run that isn't LOAD=session starts no relay session's command: with a session's load and close named in its
-    environment (which the preflight refuses), the serve step runs neither, calls the certifier's piece only where the
+    environment (which the preflight refuses), the serve step runs neither, calls network attestation's piece only where the
     caller's own rehearsal front does, and issues and says what it does without them."""
     rc, calls, lines = _serve_calls(tmp_path, {**env, "LOAD_CMD": _notes(tmp_path, "a session's load"),
                                                "CERTIFIER_CLOSE": _notes(tmp_path, "a session's close")})
