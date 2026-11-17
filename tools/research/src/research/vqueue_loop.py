@@ -2594,6 +2594,7 @@ class Tick:
     #: no member merged, which a later build naming the candidate as its base goes on
     rebuilds: dict[str, str] = field(default_factory=dict)
     restaged: frozenset[str] = frozenset()
+    began: float = 0.0
     #: `main` fetched again, the first time this tick a notice needed it (`Loop._landed`)
     fetched: str | None = None
     #: whether a detached job of the steps after an advance runs (`Loop._moved`)
@@ -3056,11 +3057,12 @@ class Loop:
             self.timing(self.steps.line(self.last, {**g2, "cached": self.reads.hits if self.reads is not None else 0}))
 
     def _tick(self) -> list[dict]:
-        steps = self.steps
-        past = Past.read(self.log_path, self.now() - WINDOW_S)
+        steps, began = self.steps, self.now()
+        past = Past.read(self.log_path, began - WINDOW_S)
         self.last = max(past.tick, self.last) + 1
         steps.lap("log")
         t = self.snapshot(past, self.last)
+        t.began = began
         if self.dry_run:
             self.out(self.summary(t))
         actions = list(self.decide(t.snap))
@@ -3482,11 +3484,11 @@ class Loop:
         of = t.past.lineage(replaces) if replaces else []
         return [self._started(t.n, t.main, t.origin, {**line, "sha": sha, "base": base}, why, below,
                               _lent(t.judged, t.below, t.main, t.advanced), avoid, of,
-                              [r for r in t.past.lines if r.get("sha") in of], carry)]
+                              [r for r in t.past.lines if r.get("sha") in of], carry, t.began)]
 
     def _started(self, n: int, main: str, origin: str, line: dict, why: str = "started", below: dict | None = None,
                  lent: Lent | None = None, avoid: Iterable[str] = (), of: Iterable[str] = (), older: Iterable[dict] = (),
-                 carry: Iterable[str] = ()) -> dict:
+                 carry: Iterable[str] = (), since: float | None = None) -> dict:
         d = self.world.slim_driver()                       # drive.toml naming no machines stops the tick: no run is infra
         if self._quick(line):
             try:
@@ -3500,9 +3502,11 @@ class Loop:
         try:
             audit = self._audit_from(d, main, line, below, lent)
             suites = self._suites_from(d, main, line, below, lent)
-            after = {**self.slim.replaced([*older, *Past.read(self.log_path, self.now() - self.slim.CARRY_WAIT_S).lines],
-                                          line.get("members") or (), self.now(), of),
-                     **dict.fromkeys(carry, self.now())} if self.gate in CHECKS else {}
+            after = {}
+            if self.gate in CHECKS:
+                window = self.now() - self.slim.CARRY_WAIT_S
+                after = {**self.slim.replaced([*older, *Past.read(self.log_path, min(window, since or window)).lines],
+                                              line.get("members") or (), self.now(), of), **dict.fromkeys(carry, self.now())}
             with self.steps("launch"):
                 rec, error = self.slim.start(d, line["sha"], line["base"],
                                              **({"shards": self.shards} if self.gate in CHECKS else {}),
