@@ -386,7 +386,7 @@ def test_each_window_samples_its_coins_from_a_gate_session_of_its_own(tmp_path, 
             "port": 7811, "listen_polls": 0, "end": {"opened": True, "rc": 0, "closed": True, "complete": True}}
         assert auditor.gate._opens[sample["session"]]["withheld"] is True
         record = json.loads((tmp_path / "h1" / f"w{w}" / PH.CALLS_FILE).read_text())
-        given, sampled = record["commitment"]["session"], record["commitment"]["sample_session"]
+        given, sampled = record["commitment"]["session"], record["commitment"]["draw_session"]
         assert given["session"] == sid and sampled["session"] == sample["session"] and "secret" not in given | sampled
         assert record["commitment"]["coins"] == record["commitment"]["round_coins"]
         ledger = PHC.Ledger.load(auditor.heads(), KEY, pins=pins, main=main)

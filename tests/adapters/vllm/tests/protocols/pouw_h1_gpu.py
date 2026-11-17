@@ -448,7 +448,7 @@ def h1_settings(eng: Any, rows: int, steps: int, challenger: str | None = None, 
     opens withheld on the window's sample root; else held in this process, which no verifier trusts and which credits
     nothing (a measurement)."""
     if challenger:
-        return {"pouw": {"challenger": challenger, "session": session, "sample_session": sample_session, "gate": gate,
+        return {"pouw": {"challenger": challenger, "session": session, "draw_session": sample_session, "gate": gate,
                          "runner": eng.runner, "rows": rows, "steps": steps, **kw}}
     rounds = LiveRecord(Wd.live_challenger(0, steps, verifier.coins), Wd.ROUND)
     return {"pouw": {"coins": Challenger(0, verifier.coins), "runner": eng.runner, "rounds": rounds, "rows": rows,
@@ -885,8 +885,8 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         out = released(name, h1, out, served, tdir, bool(a.challenger), register=not (a.commit or a.skip_register))
         if sessions is not None:
             out["session"] = session_end(a.gate, reserved)
-            out["sample_session"] = session_end(a.gate, sampled)
-            out["ok"] = bool(out["ok"] and out["session"]["ok"] and out["sample_session"]["ok"])
+            out["draw_session"] = session_end(a.gate, sampled)
+            out["ok"] = bool(out["ok"] and out["session"]["ok"] and out["draw_session"]["ok"])
             print(f"[fill] {name} session {json.dumps(out['session'])}", flush=True)
         if tap is not None:
             out["core"] = core_tie({"commitment": dict(h1.commits), "calls": h1.manifest()}, h1.served.program, tdir)
@@ -1300,11 +1300,11 @@ def coins_summary(doc: dict[str, Any], challenger: bool) -> dict[str, Any]:
     for name, w in wins.items():
         if not w:
             continue
-        g, s, ds = w.get("gate") or {}, w.get("session") or {}, w.get("sample_session") or {}
+        g, s, ds = w.get("gate") or {}, w.get("session") or {}, w.get("draw_session") or {}
         passed, refused = g.get("gate_passed") or {}, g.get("refused") or {}
         served = (passed.get("macs") or 0) + (refused.get("macs") or 0)
         rows[name] = {"coin_source": w.get("coin_source"), "session": s.get("session"), "session_ok": s.get("ok"),
-                      "sample_session": ds.get("session"), "sample_session_ok": ds.get("ok"),
+                      "draw_session": ds.get("session"), "draw_session_ok": ds.get("ok"),
                       "gate_passed_rows": passed.get("rows"), "refused_calls": refused.get("calls"),
                       "credited_share": round((passed.get("macs") or 0) / served, 6) if served else None,
                       "reasons": refused.get("reasons")}
@@ -1312,7 +1312,7 @@ def coins_summary(doc: dict[str, Any], challenger: bool) -> dict[str, Any]:
     c = rows.get("commit") or {}
     ok = not challenger or bool(rows and all(r["coin_source"] == "challenger" and r["session_ok"] for r in rows.values())
                                 and None not in sessions and len(set(sessions)) == len(sessions)
-                                and c.get("refused_calls") == 0 and c.get("gate_passed_rows") and c.get("sample_session_ok"))
+                                and c.get("refused_calls") == 0 and c.get("gate_passed_rows") and c.get("draw_session_ok"))
     return {"windows": rows, "ok": ok}
 
 
@@ -1518,7 +1518,7 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     sample_tree = None if sample_directory is None else Path(sample_directory)
     sample_out = None if sample_tree is None else sample_tree if window_file is not None else sample_tree / "out"
     sid = (rec["commitment"].get("session") or {}).get("session")
-    dsid = (rec["commitment"].get("sample_session") or {}).get("session")
+    dsid = (rec["commitment"].get("draw_session") or {}).get("session")
     sample_root = (rec["commitment"].get("draw") or {}).get("root")
     doc: dict[str, Any] = {"schema": SCHEMA + "/challenger", "argv": sys.argv, "calls_file": calls_file, "directory": directory,
                            "pinned_public_sha512": public_sha512, "ledger": ledger, "pins": pins,

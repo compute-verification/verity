@@ -1026,7 +1026,7 @@ SAMPLE_RESERVED = {"session": CH.session_id(0xd)}
 
 def _remote(**kw):
     return {"pouw": {"rows": 64, "steps": 3, "runner": Runner(), "challenger": AUDITOR, "session": RESERVED,
-                     "sample_session": SAMPLE_RESERVED, "gate": _gate, "admission": "per-round", **kw}}
+                     "draw_session": SAMPLE_RESERVED, "gate": _gate, "admission": "per-round", **kw}}
 
 
 def test_h1_takes_its_salt_and_round_coins_from_the_auditor_hosts_challenger(tmp_path, monkeypatch):
@@ -1039,7 +1039,7 @@ def test_h1_takes_its_salt_and_round_coins_from_the_auditor_hosts_challenger(tmp
     entry and slot still opens under its round's root. Without ``sample_session`` the install is refused."""
     host = _host(tmp_path, monkeypatch)
     assert PO.refusals(PO.Context(stage="serve", enabled=(_entry(),), settings=_remote())) == ()
-    no_sample = {k: v for k, v in _remote()["pouw"].items() if k != "sample_session"}
+    no_sample = {k: v for k, v in _remote()["pouw"].items() if k != "draw_session"}
     refused = PO.refusals(PO.Context(stage="serve", enabled=(_entry(),), settings={"pouw": no_sample}))
     assert len(refused) == 1 and refused[0].endswith(PHW.NO_SAMPLE_SESSION)
     commitment, run = _serve_window(_remote())
@@ -1065,7 +1065,7 @@ def test_h1_takes_its_salt_and_round_coins_from_the_auditor_hosts_challenger(tmp
     assert commitment["session"] == {"session": CH.session_id(1), "seq": 1, "root": root.hex(),
                                      "commitment": coins.root.hex()}
     sample_root = commitment["draw"]["root"]
-    assert commitment["sample_session"]["session"] == SAMPLE_RESERVED["session"] == host.sample.session_id
+    assert commitment["draw_session"]["session"] == SAMPLE_RESERVED["session"] == host.sample.session_id
     assert host.sample.window == {"root": sample_root} and LC.withheld_on(host.ledger.lines, sample_root)
     assert R.released_roots(sampled / R.RELEASES, host.sample.challenger.commitment) == {Wd.SAMPLE: (bytes.fromhex(sample_root),)}
     assert received[Wd.ROUND] == tuple(bytes.fromhex(r["root"]) for r in commitment["rounds"]) and len(received[Wd.ROUND]) == 3

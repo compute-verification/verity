@@ -761,7 +761,7 @@ def test_a_windows_own_session_holds_no_sampling_coin_and_its_sampling_session_i
     sample = host.sample
     assert sample is not None
     assert host.ended() is None and sample.ended() is None and host.trusted(honest) is None
-    assert sample.window == {"root": honest["draw"]["root"]} and honest["sample_session"]["session"] == SAMPLE_NAME
+    assert sample.window == {"root": honest["draw"]["root"]} and honest["draw_session"]["session"] == SAMPLE_NAME
     assert (host.trusted(honest, sample_root=probe.hex()) or "").startswith("the window's sample session is not trusted: ")
     assert host.trusted(honest, withheld=False) == f"the window's sample session: {LC.WITHHELD}"
 

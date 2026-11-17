@@ -254,7 +254,7 @@ def period_inputs(serve_dir: Path, k: int, pouw: Path, key_sha512: str, main: Pa
         raise Missing(f"window {k} has no H1 record (h1/w{k}/pouw-h1-calls.json) in {serve_dir}")
     rec = json.loads(calls.read_text())
     sid = rec["commitment"]["session"]["session"]
-    dsid = (rec["commitment"].get("sample_session") or {}).get("session")
+    dsid = (rec["commitment"].get("draw_session") or {}).get("session")
     if not dsid:
         raise Missing(f"window {k}'s record names no sample session (sample_session), whose coin credit reads its sample from")
     tree, draw = pouw / "session" / sid / "out", pouw / "session" / dsid / "out"

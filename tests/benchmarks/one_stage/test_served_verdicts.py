@@ -2503,7 +2503,7 @@ def test_pearlpluss_accepted_piece_under_every_condition_of_record_is_pouws_verd
     assert row["quantity"]["work"] == PEARL_LEAN_WORK and row["quantity"]["tie"]["record"] == PEARL_W
     profile = row["answer"]["profile"]
     assert (profile["lane"], profile["key_sha512"], profile["period"], profile["session"]) == ("vllm", pin, "p-pc", SID)
-    assert profile["sample_session"] == DSID and profile["source"] == SAMPLE_COIN
+    assert profile["draw_session"] == DSID and profile["source"] == SAMPLE_COIN
     assert profile["lean"]["work"] == PEARL_LEAN_WORK and row["piece"]["piece"] == "pearlplus" and "development" not in row
     assert row["answer_from"] == S.PEARLPLUS_FROM and "the prover side's" in S.PEARLPLUS_FROM
     (tmp_path / "serve").mkdir()
@@ -2917,7 +2917,7 @@ def test_the_pouw_piece_fetches_the_windows_sample_session_and_gives_the_check_i
     monkeypatch.setattr(S, "_gate_out", _gate(calls))
     d, dsid = _h1_serve_dir(tmp_path), "s20261026T221503Z-cd34"
     (d / S.H1_CALLS.format(k=1)).write_text(json.dumps({"commitment": {"session": {"session": SID},
-                                                                       "sample_session": {"session": dsid}}}))
+                                                                       "draw_session": {"session": dsid}}}))
 
     def check(calls_file, tree, ledger, pins, main, key, out, inputs):
         got.append(inputs)

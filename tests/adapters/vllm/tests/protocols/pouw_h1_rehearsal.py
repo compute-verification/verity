@@ -433,11 +433,11 @@ def forge(gate: Gate, honest: dict[str, Any], opened_on: bytes, peer: str, at: s
     client.close()
     coins = client.commitment.to_json()
     fields = ("session", *PHW.RESERVE_FIELDS)
-    ds = PHW.SampleSession("forge", at, PHW.reserved_of({k: v for k, v in sampled.items() if k in fields}, "sample_session"),
+    ds = PHW.SampleSession("forge", at, PHW.reserved_of({k: v for k, v in sampled.items() if k in fields}, "draw_session"),
                          PHW.gate_of(gate))
     sample = ds.record(root)
     return ({**honest, "coins": coins, "round_coins": coins, "salt_opening": salt.to_json(), "rounds": log,
-             "session": PHC.carried(answer), "sample_session": ds.session,
+             "session": PHC.carried(answer), "draw_session": ds.session,
              "draw": {**honest["draw"], "root": root.hex(), "coin": sample.to_json()}},
             reserved["session"], sampled["session"])
 
@@ -458,7 +458,7 @@ def red_team(out: Path, pin: str, period: str, gate: Gate | None, peer: str, at:
     other = PS.window_open_root(bytes.fromhex(weights), bytes.fromhex(table), "s20261021T000000Z-0000").hex()
     g = out / "gate"
     tree, ledger, pins = g / "fetch" / sid, [g / "windows.jsonl"], [g / "pins.jsonl"]
-    sample = g / "fetch" / c["sample_session"]["session"]
+    sample = g / "fetch" / c["draw_session"]["session"]
     rt = out / "red_team"
     cases: dict[str, Any] = {}
 
@@ -513,7 +513,7 @@ def red_team(out: Path, pin: str, period: str, gate: Gate | None, peer: str, at:
             gate("wait", s)
             gate("wait", ds)
         cases["forged_period_close"] = gate("period-close", "--name", forged_period)
-        fe = evidence(gate, sid, rt / "forged_gate", c["sample_session"]["session"])
+        fe = evidence(gate, sid, rt / "forged_gate", c["draw_session"]["session"])
         cases["forged_gate"] = fe
         for name, (commits, s, ds) in forged.items():
             for fetched in (s, ds):
@@ -524,7 +524,7 @@ def red_team(out: Path, pin: str, period: str, gate: Gate | None, peer: str, at:
             case(name, rec, led=[rt / "forged_gate" / "windows.jsonl"], tr=rt / "forged_gate" / "fetch" / s,
                  pn=[rt / "forged_gate" / "pins.jsonl"], dr=rt / "forged_gate" / "fetch" / ds)
         case("honest_under_later_head", record_path, led=[rt / "forged_gate" / "windows.jsonl"],
-             pn=[rt / "forged_gate" / "pins.jsonl"], dr=rt / "forged_gate" / "fetch" / c["sample_session"]["session"])
+             pn=[rt / "forged_gate" / "pins.jsonl"], dr=rt / "forged_gate" / "fetch" / c["draw_session"]["session"])
         cases["honest_under_later_head"]["refused"] = not cases["honest_under_later_head"]["ok"]
     must = [k for k in cases if k.startswith(("r_", "ledger_", "pins_", "main_", "table_", "other_pin", "forged_b",
                                               "forged_o"))]

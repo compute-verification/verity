@@ -94,7 +94,7 @@ def of(raw: Mapping[str, Any]) -> tuple[Any, ...]:
                          "the record reusing its tables that it names as its Commit record (pouw_h1_commit.CommitRecord)")
     return (rows, steps, runner, rounds, challenger, session, admission, gate, served, tuple(graphs),
             period_setting(raw.get("period")), unit, None if ks is None else tuple(sorted(set(ks))),
-            reserved_of(raw.get("sample_session"), "sample_session"), commit_record)
+            reserved_of(raw.get("draw_session"), "draw_session"), commit_record)
 
 
 def fills(scheme: str, settings: Mapping[str, Any]) -> tuple[str, ...]:
@@ -162,7 +162,7 @@ def refusals(scheme: str, settings: Any, stage: str, filled: tuple[str, ...] = (
     if scheme in CHALLENGED and settings.challenger is not None:
         out += window_refusals(scheme, settings, stage, opens=OPENS.get(scheme))
     if settings.sample_session is not None and (scheme != H1_SCHEME or settings.challenger is None):
-        out.append(f"the pouw setting 'sample_session' is the sample session of H1's window ({H1_SCHEME}) on the "
+        out.append(f"the pouw setting 'draw_session' is the sample session of H1's window ({H1_SCHEME}) on the "
                    "challenger at 'challenger'")
     elif scheme == H1_SCHEME and settings.challenger is not None and stage != "capture" and settings.sample_session is None:
         out.append(NO_SAMPLE_SESSION)

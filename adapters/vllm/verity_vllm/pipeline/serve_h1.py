@@ -442,7 +442,7 @@ class H1Windows:
         t0, coins, held = self.clock(), {}, None
         if self.sessions is not None:
             reserved = self.sessions.take(window)
-            coins, held = {"challenger": AT, "session": reserved, "sample_session": self.sessions.sample_session(reserved["session"]),
+            coins, held = {"challenger": AT, "session": reserved, "draw_session": self.sessions.sample_session(reserved["session"]),
                            "gate": self.sessions.open}, self.sessions.held_of(reserved["session"])
         t1 = self.clock()
         self.tap = HC.tap(self.com, self.model, self.layers, range(self.steps))

@@ -332,7 +332,7 @@ def _serve(arm, retain=1, m=3, prompt=True, remote=False, n=32, exact=True, serv
         served.tap = CT.CommitTap(port=PORT)
     runner = SimpleNamespace(execute_model=lambda scheduler_output, *a, **kw: None, decode_query_len=1)
     if remote:
-        coins = {"challenger": AUDITOR, "session": RESERVED, "sample_session": SAMPLE_RESERVED, "gate": _gate}
+        coins = {"challenger": AUDITOR, "session": RESERVED, "draw_session": SAMPLE_RESERVED, "gate": _gate}
     else:
         coins = {"coins": Challenger(0, random.Random(0).randbytes),
                  "rounds": LiveRecord(Wd.live_challenger(0, 1, random.Random(1).randbytes), Wd.ROUND, clock=lambda: 0.0)}
@@ -1193,7 +1193,7 @@ def test_the_red_team_hands_the_check_fourteen_cases_of_one_change_each_and_need
     weights, table = "22" * 64, "33" * 64
     session = {"session": "s1", "root": "11" * 64}
     record = {"commitment": {"session": session, "weights_root": weights,
-                             "requests_root": table, "sample_session": {"session": "s2"},
+                             "requests_root": table, "draw_session": {"session": "s2"},
                              "rounds": [{"root": "44" * 64}, {"root": "55" * 64}]},
               "calls": [{"k": 0}, {"k": 1, "tables": {"a": "66" * 64, "b": "77" * 64}}]}
     ledger = [{"kind": "open", "session": "s1"}, {"kind": "end", "session": "s0"}, {"kind": "end", "session": "s1"},

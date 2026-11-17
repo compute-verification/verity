@@ -550,7 +550,7 @@ def test_off_node_coins_are_checked_from_the_published_session_and_its_ledger_an
     assert cs.record()["session"] == SID
     m = _serve_window(cs, SV, _calls(ROUNDS), ROOT)
     assert host.sample.ended() is None and host.ended() is None
-    assert m["coins"]["sample_session"] == SAMPLE_SID and cs.sample_commitment.families == CO.Wd.SAMPLE_FAMILIES
+    assert m["coins"]["draw_session"] == SAMPLE_SID and cs.sample_commitment.families == CO.Wd.SAMPLE_FAMILIES
     (tmp_path / "manifest.json").write_text(json.dumps(m))
     session, heads, key = host.directory.parent, [host.ledger], host.key
     early = tmp_path / "early.jsonl"

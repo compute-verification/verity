@@ -66,7 +66,7 @@ if [ -n "${GATE:-}" ]; then
       s=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["h1_commit"]["session"]["session"])' \
             "$OUT/$leg/pouw_h1_gpu.json") && $GATE fetch "$s" > "$OUT/$leg/commit-session.tgz"
       echo "[legs] leg $leg commit session ${s:-?} fetched rc $?" | tee -a "$OUT/legs.txt"
-      d=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["h1_commit"]["sample_session"]["session"])' \
+      d=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["h1_commit"]["draw_session"]["session"])' \
             "$OUT/$leg/pouw_h1_gpu.json") && $GATE fetch "$d" > "$OUT/$leg/commit-sample-session.tgz"
       echo "[legs] leg $leg commit sample session ${d:-?} fetched rc $?" | tee -a "$OUT/legs.txt" ;;
     esac
