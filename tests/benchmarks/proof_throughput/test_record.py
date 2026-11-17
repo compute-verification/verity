@@ -18,6 +18,7 @@ def test_a_member_names_the_model_the_card_and_the_prover_count():
     assert REC.member("bf16-k6144", "NVIDIA H200", 1) == "glm-5.3-h200-1-prover"
     assert REC.member("bf16-k6144", "NVIDIA H200", 2) == "glm-5.3-h200-2-provers"
     assert REC.member("bf16-k6144", "none", 1) == "glm-5.3-cpu-1-prover"
+    assert REC.member("bf16-k2048", "NVIDIA H200", 1) == "llama-3.2-1b-h200-1-prover"
 
 
 def test_provers_at_once_sum_their_verified_rates():
@@ -70,6 +71,7 @@ def test_record_runs_one_prover_then_two_at_once_each_verified_and_writes_a_read
     doc = json.loads((tmp_path / "result.json").read_text())
     got = {m["member"].rsplit("-", 2)[-2]: m["value"] for m in doc["measurements"] if m["name"] == REC.METRIC}
     assert got == {"1": 4.0, "2": 8.0} and doc["validation"]["status"] == "passed"
+    assert all(m["model"] == "glm-5.3" and m["values"].startswith("stand-in") for m in doc["measurements"])
     assert all(f"out/{p['dir']}/verifier/result.json" in doc["validation"]["evidence"] for g in points.values() for p in g)
 
 
