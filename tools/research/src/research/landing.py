@@ -78,7 +78,7 @@ AFTER_LANDING_OPTIONAL = ("lean-agreement",)
 #: the steps whose tasks run test suites, so a `suite NAME` failure may be either's (`vqueue_slim.failing`)
 SUITE_STEPS = ("lean-suites", "pytest")
 #: the steps train.sh still checks beside the executor's check of a candidate: a run of them alone (`vqueue_slim.start`), whose
-#: steps on the merge gate count as the executor's tasks on it do: lean-agreement unless that run skips it by name, not
+#: steps on the merge gate count as the executor's tasks on it do: lean-agreement wherever it ran, skipped by name or not, not
 #: ratchet-gate (policy.toml's `off_gate`); the executor's tasks of them count for nothing
 SLIM_STEPS = ("lean-agreement", RATCHET_STEP)
 #: what the run of `SLIM_STEPS` judges of its records (`vqueue_slim.judge`): those steps, and the preflights no graph/v2 task
@@ -1383,13 +1383,13 @@ class Landing:
     def beside_args(self, tip: str, base: str) -> tuple[dict, list[str], str]:
         """A check of candidate ``tip`` above ``base``, the commit of `main` below it (`vqueue_slim.start`): (`launch_after_landing`'s
         keywords, the steps it skips by name, its flags as a message gives them).  It sends the upstream build (`--agreement`)
-        when the merges above ``base`` change what lean-agreement checks (as check.py finds against that base), and skips
-        lean-agreement else; lean-audit fails on a record difference (`--no-regenerate`), since the records it checks are the
-        candidate's own (`vqueue_records`); ratchet-gate judges the merges above `--base`: ``base``, or ``tip``'s first parent
-        when they are one.  Every pass a step may reuse, it reuses."""
+        when the merges above ``base`` change what lean-agreement checks (as ``base``'s own declaration names it, not the
+        loop's checkout's, which can be days behind), and skips lean-agreement else; lean-audit fails on a record difference
+        (`--no-regenerate`), since the records it checks are the candidate's own (`vqueue_records`); ratchet-gate judges the
+        merges above `--base`: ``base``, or ``tip``'s first parent when they are one.  Every pass a step may reuse, it reuses."""
         from .merge import required_steps
 
-        extra = {"agreement": "lean-agreement" in required_steps(self.repo, base, tip, "check"), "no_regenerate": True}
+        extra = {"agreement": "lean-agreement" in required_steps(self.repo, base, tip, "check", at=base), "no_regenerate": True}
         skip = [] if extra["agreement"] else ["lean-agreement"]
         below = (base if base != tip else
                  _git(self.repo, "rev-parse", "--verify", "-q", f"{tip}^1", check=False).stdout.strip()) or None

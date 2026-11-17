@@ -596,7 +596,7 @@ block's port is follows from the Program's description alone: the SPOT verifier 
 over the root's nodes in order, each call or batch of a template marking it taking one row per member, and refuses a mark
 that is not one whole parameter or one whole field of the return (the output port `o<j>` of field `j`, or `o0` of a
 return that is no tuple or record), a label on two ports of one template, and a mark on a Definition any node but a root
-call or batch calls (`Spot.CertifiedRows`, `one_stage/certified_rows.py`).
+call or batch calls (`Spot.CertifiedRows`, `verity/protocols/proofs/spot/verifier/one_stage/certified_rows.py`).
 
 An interval `[a, b]` has integers `a ≤ b`. It types leaves of one width `w`, and reads them as signed when `a < 0` and as
 unsigned otherwise, so it lies within `[-2^(w-1), 2^(w-1) - 1]` or within `[0, 2^w - 1]`. A *full* interval is one of those

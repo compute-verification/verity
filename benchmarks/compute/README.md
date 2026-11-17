@@ -82,7 +82,7 @@ properties are stated in `security/Properties/Pouw/PearlPlus.lean` (`AcceptMeans
 
 **What the credit rests on.** That a credited MAC was computed rests on SHA-512's collision resistance and on Pearl's
 conjecture TT_OUT rev1 (`TTOutPearlCDevRev1`, per tile `TTOutTilePearlCH100Rev1`), which proofs' red-team rating
-refutes (`verity/protocols/resource_accounting/compute/pouw/verifier/README.md`), and no proved guarantee covers a Pearl+ run's credit:
+refutes (`security/Definitions/Pouw/Guarantees/PearlCS8.lean`), and no proved guarantee covers a Pearl+ run's credit:
 the number counts what the verifier credits, and that this is work done is an open assumption. A bridge from acceptance
 to the audit game is proved (`acceptGivesTheAudit` in `security/Proofs/Pouw/PearlPlus/Sample.lean`).
 
@@ -157,10 +157,10 @@ uv run verity bench compute --from DIR --per-call --top 5
 
 `--from DIR` reads a run's record from the directory DIR, through no network and with no key. `verity bench` starts
 the command at the clone's root, so a relative DIR is taken from the root. Run it from the root too: `uv run` in a
-directory with a `pyproject.toml` of its own, as this one has for its tests, makes that directory's environment instead
-of the workspace's.
-`tests/fixtures/record/` is a record directory written by hand: its shapes are the served model's and its totals add
-up, but no verifier wrote it and no card served it, and the output's fourth line says so, with what the record says
+directory with a `pyproject.toml` of its own, as `tests/benchmarks/compute/` has, makes that directory's environment
+instead of the workspace's.
+`tests/benchmarks/compute/fixtures/record/` is a record directory written by hand: its shapes are the served model's
+and its totals add up, but no verifier wrote it and no card served it, and the output's fourth line says so, with what the record says
 of itself under it; `result.json` marks its numbers modeled and made up, below. `--per-call` also prints where the MACs the credit leaves out went, by cause and by matrix
 multiplication call (the top N, 10 by default).
 
@@ -195,23 +195,37 @@ which prints the number:
 
 ~~~text
 bash benchmarks/compute/serve.sh
-research run --on NODE --project verity --source . --cwd clone --timeout 2h -- bash benchmarks/compute/serve.sh
+research run --on NODE --project verity --source . --cwd clone --timeout 4h -- env WORK=/workspace bash benchmarks/compute/serve.sh
 ~~~
 
-The first line is the one for your own machine. The second is how we run it on Verity's machines: `research run` is
-our job runner, which runs the command on one of our machines (a node; `NODE` is its name) and records the run under
-a run id. You need neither.
+The first line, from the clone's root, is the one command a fresh clone needs on your own machine. The second is how we
+run it on Verity's machines, whose environments are under `/workspace`: `research run` is our job runner, which runs
+the command on one of our machines (a node; `NODE` is its name) and records the run under a run id. You need neither.
+
+Its first step, `bootstrap`, installs what the serve needs where it isn't there yet: it runs
+`adapters/vllm/verity_vllm/ops/pod_bootstrap.sh --cases LLAMA32_1B --gpu`, which puts under the directory `WORK` names
+(`~/verity-work` unless set) a Python 3.12 environment with vLLM at commit d9105ea80 and torch 2.13.0+cu129
+(`venv312`, from the vLLM wheel it keeps in `wheels/`), the checkpoint `unsloth/Llama-3.2-1B` at the revision
+`load.toml` pins (about 2.5 GB from Hugging Face, in `hf/`) and flash-attention's taps (`cp/`, which serve.sh's serve
+doesn't load); its install caches, under `WORK/.cache`, it removes where it made them. Its log is
+`out/logs/bootstrap.log`, its own logs and its readiness record are under `out/logs/bootstrap/`, and its seconds are
+a line of `out/steps.txt` like every step's. Where `benchmarks/harness/env.sh` finds the environment already (under
+`WORK`, or at `VERITY_BENCH_VENV`), serve.sh says so in one line and skips the step, so keep `WORK` the same from one
+run to the next.
 
 The record directory is `RUN_DIR`, else the run directory under `research run`, else `./compute-run`. The command
 exits 0 only where both verdicts accept and the number prints. Each step's log is `out/logs/STEP.log`, its status a
 line of `out/steps.txt`, and its seconds are in `out/compute-run.json`'s `steps`. A share it prints is always this
-run's: it refuses a record directory that already holds a record, a refused earlier try's `out/logs` included (remove
-`./compute-run`, or give `RUN_DIR` a new directory, before you run it again), and a failed step ends it with exit 1,
-a sentence naming the step, `out/compute-run.json` written and no number. `COINS=local`, the default, runs a local challenger:
+run's: it refuses a record directory that already holds a record (remove it, or give `RUN_DIR` a new directory), a try
+its checks of the machine refuse (exit 3) writes nothing, and a failed step ends it with exit 1, a sentence naming the
+step and no number. `COINS=local`, the default, runs a local challenger:
 infra's gate code on a scratch auditor host with a test key, each session's challenger its own process on 127.0.0.1,
 so the Lean verdict is taken of record. Of record here means only that the Lean verifier took its of-record path
 (`--of-record`) against the local challenger's key, the test key this run made, not the auditor's: the `ran with`
-line says `Lean verdict of record against the local challenger's key`. `COINS=in-process` holds the challenger in the
+line says `Lean verdict of record against the local challenger's key`. Under it the serve runs inside a Pearl-C period
+of the local gate's lane, opened before the serve on the run's circuit record (built first, on the CPU) and closed once
+the serve's salt session has ended, so the verifier's sample is the lane's first reserve after the close, as PoUW's verdict
+of record requires (`out/pieces/pouw/period.json` holds the period). `COINS=in-process` holds the challenger in the
 serving process. `out/compute-run.json` says which (`challenger`), and the salt coin as the piece states it
 (`salt_coin`). The serving machine's passes stay outside the record and are removed on exit, so the run leaves nothing
 in `/tmp`.
@@ -225,46 +239,22 @@ It needs:
   own;
 - nvcc from CUDA 13.0 (12.8 or newer) at /usr/local/cuda-13.0, or wherever `CUDA_HOME` names: the kernel is built by
   `benchmarks/harness/setup/pearl_c_sm90.sh`, which hands `build.sh` that toolkit;
-- vLLM at commit d9105ea80 with torch 2.13.0+cu129 and the checkpoint `unsloth/Llama-3.2-1B` at the revision
-  `load.toml` pins (about 2.5 GB from Hugging Face), both installed by `adapters/vllm/verity_vllm/ops/pod_bootstrap.sh`
-  It puts everything under the directory `WORK` names, `/workspace` unless set: the venv, the checkpoint,
-  flash-attention's taps (which serve.sh's serve doesn't load) and its install caches, of which it removes only those it
-  made. So set `WORK` to a directory of yours for it and for serve.sh, which finds the venv there too. From the
-  clone's root: `cd adapters/vllm && WORK=$HOME/verity-work bash verity_vllm/ops/pod_bootstrap.sh --cases LLAMA32_1B
-  --gpu`, then back at the root, `WORK=$HOME/verity-work bash benchmarks/compute/serve.sh`. In our measured run from a
-  fresh clone, the clone took 191 s and 2.1 GB, and the bootstrap took 1,069 s and filled `WORK` with 15 GB;
+- network access, and `curl`, for what the `bootstrap` step downloads;
 - this tree's `adapters/torch` importable (`verity_torch`, which the served model's PoUW hooks import):
   `benchmarks/harness/env.sh`, which serve.sh sources, puts every workspace member's packages on `PYTHONPATH`, this
-  one's among them, and serve.sh checks it before any step;
+  one's among them, and serve.sh checks it after the bootstrap, before the cubin;
 - Lean v4.34.0, through [elan](https://github.com/leanprover/elan), to build the Lean verifier: `lake` on `PATH` or
   in `~/.elan/bin`, which serve.sh also checks first;
-- about 2 GB of disk for the run's passes, besides the checkpoint and the vLLM environment; the record itself is about
-  200 MB;
-- memory for the Python verdict's workers, one a core unless `JOBS` says otherwise: on a 96-core H200 machine the
-  run's processes peaked at 400 GB resident, summed over the workers. It grows with `JOBS`: a smaller `JOBS` holds
-  less and makes `python-verify` slower.
+- disk under `WORK` for what the bootstrap installs, and under `SCRATCH` or `TMPDIR` (the run's scratch under
+  `research run`) for the run's passes, which are removed on exit;
+- memory for the Python verdict's workers, one a core unless `JOBS` says otherwise. It grows with `JOBS`: a smaller
+  `JOBS` holds less and makes `python-verify` slower.
 
-A run takes one to one and a half hours: our measured runs took 59 minutes on one H200 of a 96-core machine with
-`COINS=local`, and 92 minutes on a 36-core machine. On the 96-core run the steps took:
-
-| step | seconds |
-|---|---|
-| the kernel's cubin (`cubin`) | 136 |
-| the local challenger's gate, its Lean spot-verifier built (`gate`) | 293 |
-| serving the load (`serve`) | 60 |
-| the Python verdict (`python-verify`) | 868 |
-| the Lean verdict, `pouw-pearlplus` built (`lean`) | 1,917 |
-| the policy (`policy`) | 126 |
-| the class's circuit (`circuit`) | 118 |
-| the rest (`retain`, `publish`, `piece`, `verdicts`, `registered`, `share`) | 5 |
-
-The `gate` and `lean` times include building their Lean programs from a fresh clone. The run was alone on its card,
-but for the first few minutes of `python-verify` another run's Lean verdict was also running on the same machine.
-
-On fewer cores the two verdicts take longer. On 36 cores `python-verify` took 1,355 s and `lean` 3,451 s, and the
-whole run 92 minutes; on 20 cores `python-verify` took 2,368 s, and `lean` took more than 3,600 s. The Lean verdict has
-`LEAN_TIMEOUT` seconds: 3,600 on 96 or more cores, and 3,600 × 96 over the cores serve.sh may run on (`nproc`) on
-fewer, 17,280 on 20. Give `research run` a `--timeout` to match: the `2h` above is for 96 cores.
+The two verdicts run on every core serve.sh may run on (`nproc`), so a run takes longer on fewer cores. The Lean
+verdict has `LEAN_TIMEOUT` seconds: 3,600 on 96 or more cores, and 3,600 × 96 over `nproc` on fewer, 17,280 on 20.
+Give `research run` a `--timeout` past the bootstrap, `LEAN_TIMEOUT` and the other steps together. For each step's
+seconds on one H200, read the published run that `metrics.toml`'s rows read: its record's `out/compute-run.json`
+holds them under `steps`.
 
 ## A record directory
 
@@ -277,8 +267,9 @@ The paths below are relative to the record directory.
 - `out/pieces/pouw/pearlplus-lean.json` and `out/pieces/pouw/pearlplus-lean-check.json`: the Lean verifier's verdict,
   and the record's comparison of it with the answer. Without either there is no number (exit 1, naming the file).
 - `out/record/verdicts.json` (optional): the run's composed record, every protocol's verdict on the run, of which PoUW's
-  verdict is printed beside the number. A served run on your own card reads `missing` there: the credit is then the
-  Pearl+ verifier's alone.
+  verdict is printed beside the number. serve.sh writes PoUW's row as the window's compose reads it
+  (`benchmarks/one_stage/served_verdicts.py`'s `piece`): `missing` with the first condition of record the run fails,
+  as no window registration of SPOT's is made on your own card. The credit is then the Pearl+ verifier's alone.
 - `out/pieces/pouw/verify.json` (optional): the Pearl+ verifier's document. Its per-call split says whether the
   passes hold the LM head's calls, and `--per-call` prints it.
 - `out/pieces/pouw/development.json` (optional): the Pearl+ verifier's development document. Only its `coin_source`,
@@ -309,7 +300,8 @@ the number.
 - `run.py`: the command. Its docstring states the number's formula, each file of a record it reads, what it prints
   beside the number, what it writes and when it refuses.
 - `load.toml`: the benchmark's load.
-- `tests/`: the printer, the model's MAC count and the written output, held to the record under `tests/fixtures/`.
+- `tests/benchmarks/compute/`: the printer, the model's MAC count and the written output, held to the record under its
+  `fixtures/`.
 - `h200_share.py`: a modeled share of an H200's capacity (below).
 
 **What it prints:** the number as text and as one line of JSON (`value`, `unit`, `commit`, `run`), beside its target.
@@ -343,9 +335,10 @@ that reads the store; a withdrawal of part of a stored record is honored (a with
 a withdrawn optional one is read as absent). `verity bench compute --from RUN` reads a run id that names no directory.
 
 `metrics.toml` holds the metrics the console's Metrics tab reads: `compute-accounting/verified-compute-share`
-(the number) and the others `run.py` writes, each with the run it reads; `h200_share.py` writes
-`compute-accounting/h200-capacity-credited-share` for the goal `accounting/h200-97-percent`: an honest H200's e4m3 rate
-(a `benchmarks/tensor_duty --arms fp32-beside` run's arm A on uniform operands) over the card's ceiling at each reading
-of its tensor clock, times `run.py`'s share of a served run. Both need the store:
+(the number) and the others `run.py` writes, each written by the served run that measured them, at `serve.sh`'s last
+step, as a `--from` of another run writes none; `h200_share.py` prints `compute-accounting/h200-capacity-credited-share`
+for the goal `accounting/h200-97-percent`: an honest H200's e4m3 rate (a `benchmarks/tensor_duty --arms fp32-beside`
+run's arm A on uniform operands) over the card's ceiling at each reading of its tensor clock, times `run.py`'s share of
+a served run. Both need the store:
 `uv run python benchmarks/compute/h200_share.py --from RUN --duty RUN`. Its docstring states the model and what it leaves
 out, which makes its number an upper bound on the served share.

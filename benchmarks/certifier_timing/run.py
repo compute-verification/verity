@@ -14,40 +14,40 @@
     verity bench certifier_timing target  [--interval-ms 100]
 
 `run` first runs the guard, then each attack against the network attester (`parties.py`: a server that picks a bit an
-interval and times its writes by it, the certifier, and an observer on the client side, three processes on this host's
-loopback and monotonic clock), `--repeat` times each with each observer, and prints one JSON line, which it also writes
+interval and times its writes by it, the attester, and an observer on the client side, three processes on this host's
+loopback and raw monotonic clock), `--repeat` times each with each observer, and prints one JSON line, which it also writes
 to `--out`/result.json (`$OUT` under `research run`): `value`, the most bits an interval any attack showed
 (`channel.measure`'s `bits`, of that attack's pooled runs), with its `unit`, its 95% `lower` and `upper`, the scored
 intervals `n`, the `commit`, the `run`, the host, the target and every case; `ceiling` is the largest of the attacks'
 upper bounds, what the run shows every attack built here under. Every case is scored on each of the observer's two
 stamps (`STAMPS`): its own clock's once a read returned, and the kernel's on the bytes as they came off the network.
 A row holds the first and, under `kernel`, the second; `value` and `ceiling` are over both, and the guard holds on
-both. `--paced-ms 0` is the certifier writing each interval
-on its loop, and `--tree` another checkout's certifier (its `verity` first on the certifier's import path), measured by
+both. `--paced-ms 0` is the attester writing each interval
+on its loop, and `--tree` another checkout's certifier (its `verity` first on the attester's import path), measured by
 this checkout's server and observer. It exits 1 when the guard fails, 2 when a case's parties disagree on the schedule
-or the certifier failed a connection: the number is then of nothing.
+or the attester failed a connection: the number is then of nothing.
 
-The candidates a run can turn on beside the certifier, none of them a change to it: `--pin` gives the certifier's loop,
-its pacer, the server and the observer a core each of the run's; `--gate-ms` keeps the certifier from reading the
+The candidates a run can turn on beside the attester, none of them a change to it: `--pin` gives the attester's loop,
+its pacer, the server and the observer a core each of the run's; `--gate-ms` keeps the attester from reading the
 server around each release (`parties.network`); `--waker-ms` keeps the host's network path in use (`parties.waker`);
 `--awake` keeps every one of the run's cores from halting (`parties.awake`).
 
-`guard` is the check that the measurement sees a channel: against a certifier that paces nothing (`relay`), a server
+`guard` is the check that the measurement sees a channel: against a network attester that paces nothing (`relay`), a server
 that delays an interval's bytes by half an interval on bit 1 must show at least `PLANTED_MIN` bits an interval, and
 the same server writing as for bit 0 whatever its bits at most `IGNORED_MAX`.
 
-`serve` and `observe` are one case with the observer on another host. `serve` runs the server and the certifier, which
+`serve` and `observe` are one case with the observer on another host. `serve` runs the server and the attester, which
 listens on ADDR:PORT for `--wait-s` and takes one connection, and leaves the case's directory without its
 observer.json; `observe`, on the other host, tries it until it answers, timestamps the intervals on its own clock and
 leaves observer.json; `score DIR --observer FILE` joins them, and `score DIR... --observer SEEN` many, each DIR's
 observer.json at SEEN/<DIR's name>/. Nothing joins the two clocks: which interval a chunk is comes from its bytes and
-the certifier's record of the connection, and `channel`'s `step` reads through the clocks' drift. `serve --certifier
+the attester's record of the connection, and `channel`'s `step` reads through the clocks' drift. `serve --certifier
 relay --attack delay`, with and without `--ignore`, is the guard across the two hosts, and `serve --ignore` an
 attack's control through the network attester: `score` reads its guard from the first two and keeps the control out
 of its number.
 
 `--launch` puts the release in the kernel's hands, or the NIC's. For the case it sets a `taprio` schedule on DEV, the
-device the certifier's bytes leave by, of two classes: the certifier's connections, which send at
+device the attester's bytes leave by, of two classes: the attester's connections, which send at
 `parties.LAUNCH_PRIORITY`, pass for OPEN ms from AFTER ms past each release time and wait for the rest of the
 interval; everything else of the host's passes always. The server then aims at the gate's opening. MODE says who
 holds the gate (`LAUNCH_MODES`): `gate`, the kernel's timer on the host's monotonic clock; `gate-nic`, the NIC, the
@@ -89,16 +89,18 @@ import channel  # noqa: E402
 import parties  # noqa: E402
 from verity_config.settings import SHARED  # noqa: E402
 from parties import (  # noqa: E402
-    ATTACKS, CERTIFIERS, HEADER_BYTES, LAUNCH_PRIORITY, OBSERVERS, distinct_cores, plan_of, span_s,
+    ATTACKS, CERTIFIERS, HEADER_BYTES, LAUNCH_PRIORITY, OBSERVERS, distinct_cores, now, plan_of, span_s,
 )
 
 SCHEMA = "certifier-timing/result/v1"
+#: the metric's id (metrics.toml), the name `run` writes its number under
+METRIC = "network-accounting/release-timing-bits"
 #: the guard's two bounds, in bits an interval
 PLANTED_MIN, IGNORED_MAX = 0.9, 0.05
 #: a server write that ended this long after its time is counted late (`late_writes`), and a pacer's release that
 #: started this long after its (`late_releases`), in µs
 LATE_US = 250.0
-#: the certifier's schedule besides τ and the pacer's offset: one cell an interval, released D intervals after admission
+#: the attester's schedule besides τ and the pacer's offset: one cell an interval, released D intervals after admission
 SCHEDULE = {"cell_bytes": 256, "slots": 1, "delay": 3, "window": 600, "admit_lag": 1}
 #: the observer's two stamps of an interval's first byte, and the key a case's score and a row hold each under: its
 #: own clock's once its read returned, and the kernel's on the bytes as it took them in (`parties.kernel_stamp`)
@@ -177,10 +179,8 @@ def base_time(opening_s: float, now_s: float, interval_ms: int) -> float:
 def _launch(cfg: dict) -> list[str]:
     """Set the case's launch gate, which opens `after_ms` past each release time from the origin's on; the command
     that removes it."""
-    base = base_time(cfg["origin"] + (cfg["paced_ms"] + cfg["launch"]["after_ms"]) / 1000, time.monotonic(),
-                     cfg["interval_ms"])
-    if cfg["launch"]["mode"] != "gate":
-        base += time.clock_gettime(CLOCK_TAI) - time.monotonic()
+    base = base_time(cfg["origin"] + (cfg["paced_ms"] + cfg["launch"]["after_ms"]) / 1000, now(), cfg["interval_ms"])
+    base += time.clock_gettime(time.CLOCK_MONOTONIC if cfg["launch"]["mode"] == "gate" else CLOCK_TAI) - now()
     setup, remove = launch_commands(cfg["launch"], base, cfg["interval_ms"])
     for command in setup:
         done = subprocess.run(command, capture_output=True, text=True)
@@ -201,10 +201,10 @@ def _line(process: subprocess.Popen, what: str) -> dict:
 
 def live(cfg: dict, out: Path, tree: Path = ROOT) -> None:
     """Run one case's parties and leave config.json, server.json, certifier.json and observer.json in `out`; the
-    certifier imports `verity` from `tree`. With `listen` the observer is another host's (`observe`): the certifier
+    attester imports `verity` from `tree`. With `listen` the observer is another host's (`observe`): the attester
     listens there for `wait_s`, the line that says so is printed, and no observer.json is left."""
     out.mkdir(parents=True, exist_ok=True)
-    cfg = cfg | {"out": str(out), "origin": time.monotonic() + cfg["start_s"]}
+    cfg = cfg | {"out": str(out), "origin": now() + cfg["start_s"]}
     cfg["stop"] = cfg["origin"] + cfg.get("wait_s", 0.0) + span_s(cfg)
     (out / "config.json").write_text(json.dumps(cfg, indent=1))
     party = [sys.executable, str(HERE / "parties.py")]
@@ -233,7 +233,7 @@ def live(cfg: dict, out: Path, tree: Path = ROOT) -> None:
             waited = [server]
         else:
             waited = [start("observer", *(f"{k}={ready[k]}" for k in ("port", "hello", "chunk"))), server]
-        limit = cfg["stop"] - time.monotonic() + 30.0
+        limit = cfg["stop"] - now() + 30.0
         codes = [p.wait(limit) for p in waited]
         for p in started:
             if p not in waited:
@@ -319,8 +319,8 @@ def stamped(cfg: dict, server: dict, observer: dict) -> tuple[dict | None, list[
 def score(case: Path, observed: Path | None = None) -> dict:
     """One recorded case (a directory `live` left; `observed`: its observer.json, where another host wrote it): its
     configuration, `channel.measure` of the observer's arrivals on its own clock (`client`), by the kernel's stamps
-    (`kernel`, `stamped`; `unstamped`: why its host's kernel gave none) and of the certifier's own times (`sender`:
-    a paced one's write ends, else its ticks' lateness), how many times the certifier's host's cores entered an idle
+    (`kernel`, `stamped`; `unstamped`: why its host's kernel gave none) and of the attester's own times (`sender`:
+    a paced one's write ends, else its ticks' lateness), how many times the attester's host's cores entered an idle
     state that stops them while it ran (`halted`; None where the host gave no count, `parties.halts`), and what
     makes it no measurement (`problems`). A record whose certifier is none of `CERTIFIERS` is another benchmark's,
     and is refused."""
@@ -417,15 +417,16 @@ def verdict(cases: list[dict]) -> dict | None:
 
 
 def host() -> dict:
-    """Where a `run`'s parties are: all three on this host, on its loopback and its monotonic clock."""
+    """Where a `run`'s parties are: all three on this host, on its loopback and its raw monotonic clock."""
     model = next((line.split(":", 1)[1].strip() for line in Path("/proc/cpuinfo").read_text().splitlines()
                   if line.startswith("model name")), None) if Path("/proc/cpuinfo").exists() else None
     idle = Path("/sys/devices/system/cpu/cpuidle/current_driver")
     return {"name": platform.node(), "kernel": platform.release(), "cpu": model,
             "cpus": sorted(os.sched_getaffinity(0)), "cpuidle": idle.read_text().strip() if idle.exists() else None,
             "parties": "the server, the certifier and the observer are processes on this one host, over loopback",
-            "clock": "CLOCK_MONOTONIC of this host (time.monotonic), read by all three; the kernel's stamps are its "
-                     "wall clock's, moved to it by the two clocks' difference as the observer started"}
+            "clock": "CLOCK_MONOTONIC_RAW of this host, the network attester's, read by all three; the kernel's "
+                     "stamps are its wall clock's, moved to it by the two clocks' difference as the observer started "
+                     "and as it ended"}
 
 
 def summarize(cases: list[dict]) -> dict:
@@ -496,7 +497,7 @@ def _table(docs: list[dict]) -> str:
 
 
 def _hello(certifier: str, tree: Path) -> tuple[str, int]:
-    """What an observer sends a certifier of `tree` and the bytes of one interval: the relay takes the request as it
+    """What an observer sends a network attester of `tree` and the bytes of one interval: the relay takes the request as it
     is, the network attester in its cells."""
     if certifier == "relay":
         return parties.HELLO.hex(), SCHEDULE["slots"] * (SCHEDULE["cell_bytes"] - HEADER_BYTES)
@@ -524,7 +525,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = ap.add_subparsers(dest="command", required=True)
     for name in ("run", "guard", "serve"):
         p = sub.add_parser(name)
-        p.add_argument("--interval-ms", type=int, default=100, help="τ, the certifier's bucket")
+        p.add_argument("--interval-ms", type=int, default=100, help="τ, the attester's bucket")
         p.add_argument("--start-s", type=float, default=6.0, help="from a case's start to its origin")
         p.add_argument("--out", type=Path, help="default $OUT, else a temporary directory")
     sub.choices["run"].add_argument("--guard-intervals", type=int, default=600,
@@ -550,9 +551,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--observers", default="plain,spin")
     p.add_argument("--repeat", type=int, default=1, help="runs of each attack with each observer, in turn")
     p = sub.choices["serve"]
-    p.add_argument("--listen", required=True, help="the address the certifier listens on, the other host's way in")
+    p.add_argument("--listen", required=True, help="the address the attester listens on, the other host's way in")
     p.add_argument("--port", type=int, required=True)
-    p.add_argument("--wait-s", type=float, default=600.0, help="how long the certifier waits for the observer")
+    p.add_argument("--wait-s", type=float, default=600.0, help="how long the attester waits for the observer")
     p.add_argument("--attack", default="write", choices=ATTACKS)
     p.add_argument("--certifier", default="network", choices=CERTIFIERS)
     p.add_argument("--ignore", action="store_true", help="the server writes as for bit 0 whatever its bits")
@@ -563,7 +564,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--observer", default="spin", choices=OBSERVERS)
     p.add_argument("--intervals", type=int, default=3000)
     p.add_argument("--interval-ms", type=int, default=100)
-    p.add_argument("--wait-s", type=float, default=600.0, help="how long it tries the certifier")
+    p.add_argument("--wait-s", type=float, default=600.0, help="how long it tries the attester")
     p.add_argument("--tree", type=Path, help="the checkout whose certifier it is (default: this one)")
     p.add_argument("--out", type=Path, required=True)
     p = sub.add_parser("score")
@@ -600,11 +601,11 @@ def main(argv: list[str] | None = None) -> int:
     out = args.out or Path(SHARED.OUT or tempfile.mkdtemp(prefix="certifier-timing-"))
     out.mkdir(parents=True, exist_ok=True)
     if args.pin and len(distinct_cores(sorted(os.sched_getaffinity(0)))) < 4:
-        ap.error("--pin takes four cores: the certifier's loop, its pacer, the server and the observer")
+        ap.error("--pin takes four cores: the attester's loop, its pacer, the server and the observer")
     if args.command == "serve":
         cfg = config(args, attack=args.attack, observer="another host's", certifier=args.certifier, ignore=args.ignore)
         if args.attack == "delay" and args.certifier == "network":
-            ap.error("the network certifier fails a delayed interval closed: --attack delay goes with --certifier relay")
+            ap.error("the network attester fails a delayed interval closed: --attack delay goes with --certifier relay")
         if cfg["launch"] and not args.paced_ms + cfg["launch"]["after_ms"] + cfg["launch"]["open_ms"] < args.interval_ms:
             ap.error("--launch: the gate opens and shuts inside the interval its release time is in")
         if cfg["launch"] and not args.paced_ms:
@@ -619,7 +620,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if verdict(cases)["ok"] else 1
     attacks, observers = args.attacks.split(","), args.observers.split(",")
     if (bad := [a for a in attacks if a not in ATTACKS or a == "delay"] + [o for o in observers if o not in OBSERVERS]):
-        ap.error(f"--attacks are of write, burst (the network certifier fails a delayed interval closed) and "
+        ap.error(f"--attacks are of write, burst (the network attester fails a delayed interval closed) and "
                  f"--observers of {', '.join(OBSERVERS)}: not {', '.join(bad)}")
     for k in range(args.repeat):
         for attack in attacks:
@@ -632,7 +633,30 @@ def main(argv: list[str] | None = None) -> int:
         "pin": args.pin, "gate_ms": args.gate_ms, "waker_ms": args.waker_ms, "awake": args.awake} | SCHEDULE)
     (out / "result.json").write_text(json.dumps(doc, indent=1))
     print(json.dumps({k: v for k, v in doc.items() if k != "cases"}))
-    return 1 if not doc["guard"]["ok"] else 2 if doc["problems"] or doc["value"] is None else 0
+    code = 1 if not doc["guard"]["ok"] else 2 if doc["problems"] or doc["value"] is None else 0
+    if SHARED.RESEARCH_RUN_DIR:
+        record(doc, out, code)
+    return code
+
+
+def record(doc: dict, out: Path, code: int) -> None:
+    """The research run's own result, through the harness kit's writer: its validation, whether `run` exited 0, and
+    where it did, `value` under `METRIC`."""
+    from verity_bench import kit
+
+    writer = kit.writer(out)
+    kept, base = (out / "result.json").resolve(), writer.out.resolve()
+    detail = ("the guard holds and every case is a measurement" if code == 0 else "the guard does not hold" if code == 1
+              else "; ".join(doc["problems"]) or "no attack was scored")
+    writer.validation("passed" if code == 0 else "failed", "benchmarks/certifier_timing/run.py", detail,
+                      [kept.relative_to(base).as_posix()] if kept.is_relative_to(base) else [])
+    if code == 0:
+        one_host = all(c.get("observer_host") in (None, c.get("host")) for c in doc["cases"])
+        writer.measurement(METRIC, doc["value"], "bits a release interval", (doc["lower"], doc["upper"]),
+                           mark="measured", extra={"cpu": doc["host"]["cpu"], "interval_ms": doc["interval_ms"],
+                                                   "n": doc["n"], "best": doc["best"], "one_host": one_host,
+                                                   "awake": doc["certifier"]["awake"],
+                                                   "paced_ms": doc["certifier"]["paced_ms"]})
 
 
 if __name__ == "__main__":

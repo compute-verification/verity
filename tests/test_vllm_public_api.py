@@ -1,7 +1,7 @@
 """Outside `adapters/vllm/`, code imports the vLLM integration (`verity_vllm`) only through its public interfaces.
 
-``PUBLIC`` names each public module and the interface it is. Outside code may import it, and from it only the names its
-``__all__`` lists. Each public module states ``__all__`` as a literal, binds every name in it (at top level, or under
+``PUBLIC`` names each public module and the interface it is. Outside code may import it, and takes from it only the names
+its ``__all__`` lists. Each public module states ``__all__`` as a literal, binds every name in it (at top level, or under
 ``TYPE_CHECKING`` with a module ``__getattr__`` that loads it), and annotates every parameter and return of each function
 it exports and of each public method of each class it exports.
 
@@ -14,6 +14,16 @@ An import is what `tests/test_integration_boundaries.py` counts: an import state
 ``importlib.import_module``, ``__import__`` or ``pytest.importorskip``, or a ``"module:attr"`` string. ``from P import n``
 imports the module ``P.n`` when that is a module of the package, else the name ``n`` of ``P``. A stand-in module a test
 builds under a package name (``ModuleType("verity_vllm.x")``) is not an import.
+
+A name is taken from a module by ``from M import n``, by a ``"M:n"`` string, or through the module: ``m.n``, read, set or
+deleted, and ``getattr``, ``setattr``, ``delattr`` or ``patch.object`` of ``m`` and a literal ``"n"`` (so pytest's
+``monkeypatch.setattr(m, "n", v)``). ``m`` is a name that the nearest scope binding it binds to the module by an import
+(``import M as m``, ``from P import m``, ``m = importlib.import_module("M")``), or ``verity_vllm.a.b`` under an
+``import verity_vllm...``; a local variable of an alias's name is not the module. Through a module, ``m.s`` reaches the
+module ``M.s`` when that is one, as ``from M import s`` does. A module's own dunder attributes (``__name__``,
+``__file__``) are no part of an interface, and ``hasattr`` takes nothing. Not seen: a name taken through a module that
+was handed to a function, returned from one or kept in a container or an attribute, a name computed at run time, and a
+dotted string handed to a patcher (``monkeypatch.setattr("verity_vllm.a.b.n", v)``).
 """
 from __future__ import annotations
 
@@ -21,6 +31,8 @@ import ast
 import functools
 import re
 import subprocess
+import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -30,6 +42,11 @@ PACKAGE = "verity_vllm"
 PACKAGE_DIR = ROOT / INTEGRATION / PACKAGE
 MODULE_ATTR = re.compile(r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*:[A-Za-z_]\w*")
 IMPORT_CALLS = {"import_module", "__import__", "importorskip"}
+#: the calls that take a module and a name of it (`object`: mock's `patch.object`)
+NAME_CALLS = {"getattr", "setattr", "delattr", "object"}
+DUNDER = re.compile(r"__\w+__")
+#: what a name is local to; a class body's names are read by nothing below it, so they shadow nothing
+SCOPES = (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
 #: files outside the integration whose `verity_vllm` strings are data, not imports, each with why
 NOT_SCANNED = {
     "tests/test_vllm_public_api.py": "this file",
@@ -49,7 +66,7 @@ PUBLIC = {
     "verity_vllm.engine.served_seed": "I1: the seed a served request is sampled under (its own, the public default for a greedy "
                                       "one, or derived from its window's seed coin and its id) and the windows' seed coins",
     "verity_vllm.engine.moe_align": "I1: the served Marlin MoE path's moe_align_block_size, each expert's pairs in pair-index "
-                                    "order: its reference, kernels and install, which benchmarks/kernels/moe_align checks and times",
+                                    "order: its reference, kernels and install",
     "verity_vllm.engine.step_trace": "I2: the scheduler's step trace of an in-process engine core (StepTrace) and its "
                                      "reader, which serve-openai records and benchmarks/serve_tax times and replays",
     "verity_vllm.engine.sampler_capture": "I2: chosen requests' logits rows and ids at a replaying engine's sampler, held "
@@ -64,7 +81,7 @@ PUBLIC = {
     "verity_vllm.engine.env": "I1: the engine's environment, written before torch and vLLM are imported: vLLM's pinned and served "
                               "variables (ENGINE, pin, served_defaults, apply_engine), a target's (apply_target), a fresh "
                               "compile and its directories (apply_compile_fresh, compile_dirs, own_compile_dirs, own_inductor_dir, "
-                              "INDUCTOR_DIR_MARK), which the harness's engine and benchmarks/replay_determinism write",
+                              "INDUCTOR_DIR_MARK), which the harness's engine writes",
     "verity_vllm.engine.arrivals": "I1: an engine driven over a step-indexed arrival schedule (run_requests_arrivals), its "
                                    "forwards counted (ForwardCounter) and the steps each request arrived at "
                                    "(realized_arrive_steps), which the harness's engine serves under",
@@ -83,6 +100,12 @@ PUBLIC = {
                                                  "benchmarks/inference_only reads",
     "verity_vllm.observe.kernel_trace": "I2: a served engine's device kernels, read from a Kineto trace of its steps, which "
                                          "benchmarks/route_capture reads",
+    "verity_vllm.observe.events": "I2: the observation log's event vocabulary (schema verity-capture/log/v1), the facts a "
+                                  "capture writes about one eager execution, which benchmarks/one_stage's a11 reads",
+    "verity_vllm.observe.log": "I2: the observation log's reader (read_log, split_steps, header_of), with no GPU and no "
+                               "vLLM, which benchmarks/one_stage's a11 reads",
+    "verity_vllm.observe.fold.fold": "I2: the fold of an observation log and a profile into an unexpanded Program (fold, "
+                                     "FoldResult, summarize), which benchmarks/one_stage's a11 runs",
     "verity_vllm.program.predict.step_needs": "I7: what the DSA decoder calls for one served engine step at its launch, each "
                                               "refusal counted in its place, which benchmarks/route_capture's gap reads",
     "verity_vllm.program.predict.naming": "I7: a request Program's Build with the names I2's compile gives it, the verifier's "
@@ -202,6 +225,16 @@ PUBLIC = {
     "verity_vllm.check.weights_of_record": "I7: the weights of record: a Commit's weights checked against the pinned "
                                            "checkpoint (build_record, check, compose), and the Program parameter the record "
                                            "is of (PARAM), which benchmarks/inference_only reads",
+    "verity_vllm.check.checkpoint_index": "I7: a checkpoint of record's safetensors shards, each tensor's byte range read "
+                                          "by positioned reads, and the shard pin (CheckpointIndex), which "
+                                          "benchmarks/one_stage and benchmarks/spot_proved stage from",
+    "verity_vllm.check.fp8_ue8m0": "I7: the block-FP8 weights vLLM rewrites at load, as the weights of record hold them "
+                                   "(Rewrites, build_roles, requant, absorbed), which benchmarks/one_stage and "
+                                   "benchmarks/spot_proved stage from",
+    "verity_vllm.check.replay.index": "I7: the Program rows sampled replay reads, indexed per request (ProgramIndex, "
+                                      "row_args, const_word), which benchmarks/one_stage and benchmarks/prove_path read",
+    "verity_vllm.check.replay.opening": "I7: committed words by identity, the store sampled replay reads "
+                                        "(CommittedStore), which benchmarks/one_stage and benchmarks/prove_path read",
     "verity_vllm.definitions": "I7: the adapter's catalog of Definitions, public for its import alone, which registers the "
                                "catalog with the Boolean-versions lookup (verity.circuits.ops.boolean.versions); it exports "
                                "no name",
@@ -264,10 +297,10 @@ PUBLIC = {
                                               "attach), which benchmarks/pouw's Pearl-C arms attach",
     "verity_vllm.protocols.poub.binder": "I1: the store's hooks into one in-process vLLM engine (Binder) and the "
                                                      "weights it binds (model_weights, WeightRegion, Every), which "
-                                                     "benchmarks/remote_session and benchmarks/vllm_encoded serve under",
+                                                     "benchmarks/poub_session and benchmarks/vllm_encoded serve under",
     "verity_vllm.protocols.poub.remote": "I1: the Commit's PoUB session on its engine (CommitSession), which "
-                                                     "pipeline.remote_session reaches through protocols.driver and "
-                                                     "benchmarks/remote_session serves under",
+                                                     "pipeline.poub_session reaches through protocols.driver and "
+                                                     "benchmarks/poub_session serves under",
     "verity_vllm.query.manifest.format": "I7: the required-value manifest's format, the vocabulary every manifest producer and "
                                          "consumer shares (load_program), which benchmarks/prove_path reads",
 }
@@ -276,16 +309,11 @@ PUBLIC = {
 KNOWN = frozenset({
     "verity_vllm.acquire.sources.attention_source",
     "verity_vllm.acquire.sources.taps",
-    "verity_vllm.check.checkpoint_index",
     "verity_vllm.check.fold_compare",
-    "verity_vllm.check.fp8_ue8m0",
     "verity_vllm.check.replay.evaluate",
-    "verity_vllm.check.replay.index",
-    "verity_vllm.check.replay.opening",
     "verity_vllm.commit.committer.host_retention",
     "verity_vllm.commit.opened",
-    # the compile slice and its pieces (`verity_vllm.compiler`), which the network attester's drivers under `benchmarks/`
-    # imported from `verity` before the compiler's move into the adapter
+    # the compile slice and its pieces (`verity_vllm.compiler`), which the network attester's drivers under `benchmarks/` import
     "verity_vllm.compiler.cache_step",
     "verity_vllm.compiler.cache_step_v3",
     "verity_vllm.compiler.compile_slice",
@@ -295,8 +323,7 @@ KNOWN = frozenset({
     "verity_vllm.compiler.served_rows",
     "verity_vllm.compiler.served_statics",
     "verity_vllm.compiler.served_tie",
-    # the served circuits (`verity_vllm.definitions`), which outside code imported from `verity` before the served circuits'
-    # move into the adapter; vllm takes these down under its goal vllm/benchmarks-import-public-only (due Wed 25 Nov)
+    # the served circuits (`verity_vllm.definitions`), which code outside the adapter imports
     "verity_vllm.definitions.encoding",
     "verity_vllm.definitions.numerics._jit",
     "verity_vllm.definitions.numerics.cublas_gemm_rows",
@@ -307,7 +334,6 @@ KNOWN = frozenset({
     "verity_vllm.definitions.numerics.glm53_rows",
     "verity_vllm.definitions.numerics.int8_rows",
     "verity_vllm.definitions.numerics.kernel_registry",
-    "verity_vllm.definitions.numerics.marlin_moe_rows",
     "verity_vllm.definitions.numerics.rms_relation",
     "verity_vllm.definitions.numerics.rows",
     "verity_vllm.definitions.numerics.serve3_reference",
@@ -377,10 +403,7 @@ KNOWN = frozenset({
     "verity_vllm.engine.profiles.engine_classes",
     "verity_vllm.engine.served",
     "verity_vllm.engine.vllm_adapter",
-    "verity_vllm.observe.events",
-    "verity_vllm.observe.fold.fold",
     "verity_vllm.observe.fold.patterns.pouw",
-    "verity_vllm.observe.log",
     "verity_vllm.pipeline.advice",
     "verity_vllm.pipeline.advice_windows",
     "verity_vllm.pipeline.build_instances",
@@ -413,11 +436,28 @@ KNOWN = frozenset({
     "verity_vllm.query.program_view",
 })
 
-#: Every private name outside code imports from a module of the package. Move its importers off it and delete it.
+#: Every private name outside code takes from a module of the package, by an import or through the module. Move its
+#: readers off it and delete it.
 KNOWN_PRIVATE = frozenset({
+    ('verity_vllm.check.fold_compare', '_NP'),
     ('verity_vllm.check.fold_compare', '_attach_specs'),
     ('verity_vllm.check.fold_compare', '_component_ranges'),
     ('verity_vllm.check.fold_compare', '_in_place'),
+    ('verity_vllm.check.replay.evaluate', '_Unresolved'),
+    ('verity_vllm.check.replay.evaluate', '_evaluate_row'),
+    ('verity_vllm.check.replay.evaluate', '_weight_runs'),
+    ('verity_vllm.compiler.served_rows', '_row'),
+    ('verity_vllm.compiler.served_tie', '_bits'),
+    ('verity_vllm.compiler.served_tie', '_int'),
+    ('verity_vllm.definitions.registry.hopper', '_BoundPrims'),
+    ('verity_vllm.definitions.registry.lifted', '_LIFTED_COMPOSITES'),
+    ('verity_vllm.definitions.registry.lifted', '_UNLIFTED_OF'),
+    ('verity_vllm.definitions.registry.prims', '_silu_f32_bits'),
+    ('verity_vllm.definitions.registry.sampling', '_f'),
+    ('verity_vllm.pipeline.serving_rows', '_bind'),
+    ('verity_vllm.pipeline.serving_rows', '_operand'),
+    ('verity_vllm.pipeline.serving_rows', '_read_s8'),
+    ('verity_vllm.pipeline.tp.commit_replay', '_of_record'),
     ('verity_vllm.program.frontend.rules.family', '_field_intervals'),
 })
 
@@ -462,23 +502,98 @@ def _module_file(module: str) -> Path | None:
     return None
 
 
+def _called(call: ast.Call) -> str | None:
+    return call.func.attr if isinstance(call.func, ast.Attribute) else getattr(call.func, "id", None)
+
+
+def _import_call(node: ast.AST | None) -> str | None:
+    """The module of the package a call such as `importlib.import_module("verity_vllm.llm")` names."""
+    if (isinstance(node, ast.Call) and node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str)
+            and _called(node) in IMPORT_CALLS and node.args[0].value.split(".")[0] == PACKAGE):
+        return node.args[0].value
+    return None
+
+
+def _reach(tree: ast.Module) -> tuple[dict[ast.AST, ast.AST], Callable[[ast.AST, list[str]], tuple[str | None, list[str]]]]:
+    """Each node's parent, and `reach(expression, names)`: the module of the package that `expression.names...` reaches,
+    with the names it takes past that module, or None when the expression's first name is no module of the package there.
+    A name is a module where the nearest scope binding it binds it by an import of the package (an import in a scope
+    wins over the scope's other bindings of the name)."""
+    parent = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+    bound: dict[ast.AST, dict[str, str | None]] = {}       # scope -> name -> the module it is there, None for any other binding
+
+    def scope(node: ast.AST) -> ast.AST:
+        node = parent[node]
+        while not isinstance(node, SCOPES):
+            node = parent[node]
+        return node
+
+    def bind(node: ast.AST, name: str, module: str | None = None) -> None:
+        names = bound.setdefault(scope(node), {})
+        names[name] = module or names.get(name)
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for a in node.names:
+                top = a.name.split(".")[0]
+                bind(node, a.asname or top, (a.name if a.asname else top) if top == PACKAGE else None)
+        elif isinstance(node, ast.ImportFrom):
+            for a in node.names:
+                sub = f"{node.module}.{a.name}"
+                bind(node, a.asname or a.name, sub if node.level == 0 and sub.split(".")[0] == PACKAGE and _module_file(sub) else None)
+        elif isinstance(node, ast.Name) and not isinstance(node.ctx, ast.Load):
+            holder = parent[node]
+            bind(node, node.id, _import_call(holder.value) if isinstance(holder, (ast.Assign, ast.AnnAssign, ast.NamedExpr)) else None)
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            bind(node, node.name)
+        elif isinstance(node, ast.arg):
+            bind(node, node.arg)
+        elif isinstance(node, (ast.ExceptHandler, ast.MatchAs, ast.MatchStar)) and node.name:
+            bind(node, node.name)
+
+    def reach(node: ast.AST, names: list[str]) -> tuple[str | None, list[str]]:
+        while isinstance(node, ast.Attribute):
+            names = [node.attr, *names]
+            node = node.value
+        if not isinstance(node, ast.Name):
+            return None, names
+        at = scope(node)
+        while node.id not in bound.get(at, {}) and not isinstance(at, ast.Module):
+            at = scope(at)
+        module = bound.get(at, {}).get(node.id)
+        while module and names and _module_file(f"{module}.{names[0]}"):
+            module, names = f"{module}.{names[0]}", names[1:]
+        return module, names
+
+    return parent, reach
+
+
 def _sites_in(path: str, text: str) -> list[Site]:
     out = []
     ours = lambda m: m.split(".")[0] == PACKAGE   # noqa: E731
-    for node in ast.walk(ast.parse(text, filename=path)):
+    tree = ast.parse(text, filename=path)
+    parent, reach = _reach(tree)
+    for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             out += [Site(path, node.lineno, a.name, None) for a in node.names if ours(a.name)]
         elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module and ours(node.module):
             for a in node.names:
                 sub = f"{node.module}.{a.name}"
                 out.append(Site(path, node.lineno, sub, None) if _module_file(sub) else Site(path, node.lineno, node.module, a.name))
-        elif (isinstance(node, ast.Call) and node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str)
-              and (node.func.attr if isinstance(node.func, ast.Attribute) else getattr(node.func, "id", None)) in IMPORT_CALLS
-              and ours(node.args[0].value)):
-            out.append(Site(path, node.lineno, node.args[0].value, None))
+        elif _import_call(node):
+            out.append(Site(path, node.lineno, _import_call(node), None))
         elif isinstance(node, ast.Constant) and isinstance(node.value, str) and MODULE_ATTR.fullmatch(node.value) and ours(node.value):
             module, _, name = node.value.partition(":")
             out.append(Site(path, node.lineno, module, name))
+        elif isinstance(node, ast.Attribute) and not isinstance(parent[node], ast.Attribute):
+            module, names = reach(node, [])
+            if module and not (names and DUNDER.fullmatch(names[0])):
+                out.append(Site(path, node.lineno, module, names[0] if names else None))
+        elif (isinstance(node, ast.Call) and _called(node) in NAME_CALLS and len(node.args) > 1 and isinstance(node.args[1], ast.Constant)
+              and isinstance(node.args[1].value, str)):
+            module, names = reach(node.args[0], [node.args[1].value])
+            if module and len(names) < 2 and not (names and DUNDER.fullmatch(names[0])):
+                out.append(Site(path, node.lineno, module, names[0] if names else None))
     return out
 
 
@@ -544,7 +659,9 @@ def _resolve(module: str, name: str) -> tuple[str, ast.AST | None]:
     where, what = _definitions(module).get(name, (None, None))
     if isinstance(what, str):
         parent, _, leaf = what.rpartition(".")
-        return (what, None) if _module_file(what) else _resolve(parent, leaf)
+        if _module_file(what) or not _module_file(parent):
+            return what, None                                # a module, or a name from outside the package: not ours to annotate
+        return _resolve(parent, leaf)
     return module, what
 
 
@@ -587,7 +704,7 @@ def test_outside_code_imports_only_public_names_and_known_modules():
                        f"{public} (or grow the interface the import needs, with __all__ and annotations, and add it to PUBLIC in "
                        "tests/test_vllm_public_api.py); KNOWN only shrinks")
         if s.name is not None and s.name.startswith("_") and (s.module, s.name) not in KNOWN_PRIVATE:
-            bad.append(f"{s.file}:{s.line}: imports {s.module}.{s.name}, a private name: use a public one")
+            bad.append(f"{s.file}:{s.line}: takes {s.module}.{s.name}, a private name: use a public one")
     assert not bad, "\n".join(bad)
 
 
@@ -615,3 +732,29 @@ def test_the_scan_sees_each_form_and_the_tree():
     assert ("tests/benchmarks/harness/specs/test_engine_spec_presets.py", "verity_vllm", "EnginePin") in {(s.file, s.module, s.name) for s in sites()}
     assert not any(s.file.removeprefix("tests/").startswith(INTEGRATION) for s in sites())
     assert all((ROOT / f).is_file() for f in NOT_SCANNED)
+
+
+def test_the_scan_sees_a_name_taken_through_a_module():
+    text = ("import verity_vllm.engine.handle\nimport verity_vllm.config as c\nfrom verity_vllm import engine as e\n"
+            "m = importlib.import_module('verity_vllm.llm')\n"
+            "c.a.b()\nc._b = 1\ndel c.c\ngetattr(c, 'd')\nmonkeypatch.setattr(c, '_e', 2)\nmock.patch.object(c, 'f')\n"
+            "hasattr(c, 'g')\nc.__name__\nprint(c)\ngetattr(c.a, 'h')\n"
+            "e.handle.i\ngetattr(e, 'spec')\nverity_vllm.protocols\nverity_vllm.engine.handle.j\nverity_vllm.LLM\nm.k\n"
+            "def f(c, m=1):\n    c.l\n    return [e.n for e in c] + [m.o for _ in c]\n"
+            "def g():\n    c.p = 1\n    import verity_vllm.check as m\n    return m.q\n")
+    names = {("verity_vllm.config", n) for n in ("a", "_b", "c", "d", "_e", "f", "p")}
+    assert {(s.module, s.name) for s in _sites_in("x.py", text)} == names | {
+        ("verity_vllm.engine.handle", None), ("verity_vllm.config", None), ("verity_vllm.engine", None), ("verity_vllm.llm", None),
+        ("verity_vllm.engine.handle", "i"), ("verity_vllm.engine.spec", None), ("verity_vllm.protocols", None),
+        ("verity_vllm.engine.handle", "j"), ("verity_vllm", "LLM"), ("verity_vllm.llm", "k"), ("verity_vllm.check", None),
+        ("verity_vllm.check", "q")}
+
+
+def test_a_name_from_outside_the_package_is_not_ours_to_annotate(tmp_path, monkeypatch):
+    package = tmp_path / PACKAGE
+    package.mkdir()
+    (package / "a.py").write_text("from typing import Any\nfrom verity_vllm.b import f, g\nfrom verity_vllm import b\n", encoding="utf-8")
+    (package / "b.py").write_text("from os import getcwd as g\ndef f(x): ...\n", encoding="utf-8")
+    monkeypatch.setattr(sys.modules[__name__], "PACKAGE_DIR", package)
+    assert [_resolve("verity_vllm.a", n)[0] for n in ("Any", "g", "b", "f")] == ["typing.Any", "os.getcwd", "verity_vllm.b", "verity_vllm.b"]
+    assert _untyped(_resolve("verity_vllm.a", "f")[1], method=False) == ["x", "return"]

@@ -43,13 +43,14 @@ from verity_bench.exfiltration_text import (
 )
 from verity_bench.served_table import RUN_OF_RECORD
 
-#: a word `exfiltration/v3` keeps in the document's inputs (their `part` and `source`) until a format version, and the
-#: Glossary's word the print says for it (GLOSSARY.md, Older names)
+#: a word the network attester's calculator still writes in the sources the document copies from its inputs, until
+#: that document's next format version (`TERM_SCHEMA`), and the Glossary's word the print says for it (GLOSSARY.md,
+#: Older names)
 HELD_WORDS = {"network certifier": "network attester"}
 
 
 def _said(text: str) -> str:
-    """A document's input field as the print says it: each held word (`HELD_WORDS`) in the Glossary's."""
+    """A document's input source as the print says it: each held word (`HELD_WORDS`) in the Glossary's."""
 
     for held, word in HELD_WORDS.items():
         text = text.replace(held, word)
@@ -64,9 +65,9 @@ def _amount(x: Any, error: float | None) -> str:
 
 
 def _readers(share: float) -> str:
-    """Which of the three readers of the planner's rows is the headline figure, and why the other two differ."""
+    """Which of the three readers of the planner's rows is the compute audit's part, and why the other two differ."""
 
-    return (f"this is the headline figure: λ times the bound where the row's total is {_pct(share)} of compute, on a "
+    return (f"the part is λ times the bound where the row's total is {_pct(share)} of compute, on a "
             "least-squares line of the total through every pinned budget. The planner's driver reads the same rows two "
             "other ways: `headline plan` prints the bound at one pinned budget, the plan's, whose total is that row's and "
             f"not set to {_pct(share)}, at λ = 1; `headline rows` prints λ times the bound at {_pct(share)}, with the total read "
@@ -104,7 +105,7 @@ def _by_source(sources: Mapping | None) -> str:
 
 def _called(name: str, stop: Mapping) -> str:
     """What the sum under the row ``name`` is printed as: `TOGETHER`'s, but for a row the calculator reads from
-    verdict records whose stop class the reader's answer (``stop``, `build`'s `certifier`'s `stop`) charges its whole
+    verdict records whose stop class the reader's answer (``stop``, `build`'s `attester`'s `stop`) charges its whole
     schedule on some execution phase, which is `WHOLE`'s, with the execution phases a link is held on where it holds
     any."""
 
@@ -219,16 +220,16 @@ def render(doc: Mapping[str, Any]) -> str:
     it. Every line of the network attester's and of the two together carries its errors and the δ of the scans they
     sum, and a figure whose error is 1 or more is printed as `NO_BOUND`, with no amount."""
 
-    share, net, w, cert = doc["share"], doc["network_check"], doc["weights"], doc["certifier"]
+    share, net, w, att = doc["share"], doc["network_check"], doc["weights"], doc["attester"]
     head = next(p for p in doc["compute_audit"] if p["scope"] == "world year")
     planned = [p for p in doc["compute_audit"] if p["priced"]]
     year = next(p for p in doc["periods"] if (p["compute"], p["period"]) == ("world", "year"))
-    of, set_time, card, default = cert["of_record"], cert["set_time"], cert["with_set_time_card"]["label"], cert["default_class"]
-    count, sums, delta, eps, error = year["output_count"], year["together"], cert["scan_delta"], year["eps"], year["error"]
+    of, set_time, card, default = att["of_record"], att["set_time"], att["with_set_time_card"]["label"], att["default_class"]
+    count, sums, delta, eps, error = year["output_count"], year["together"], att["scan_delta"], year["eps"], year["error"]
     record = [name for name in TOGETHER if not sums[name]["label"]]
     labels = {name: sums[name]["label"] for name in TOGETHER if sums[name]["label"]}
     marks = {m: sum(i["mark"] == m for i in doc["inputs"]) for m in MARKS}
-    stop, charged = doc.get("stop_class"), cert["stop"]
+    stop, charged = doc.get("stop_class"), att["stop"]
     # the rows that take the output count at 0, and where; the rows of the sums that would, were an execution phase held
     at_zero, held = count["at_zero_in"], _on(charged)
     would = [name for name in TOGETHER if name in charged["rows"]]
@@ -246,22 +247,22 @@ def render(doc: Mapping[str, Any]) -> str:
            f"{_n(a['GB'])} GB, at β = {_part(a['beta'])}{'' if a['inside'] else ', extrapolated'} ({a['run']}), failing "
            f"with at most δ = {_n(a['delta'])} over the monitoring period. It is not the figure. What prices its "
            f"proving time: {_by_source(a['sources'])}.")]
-    on = f"modeled, on an assumed class of at most {_n(cert['response_ids'])} ids a response"
+    on = f"modeled, on an assumed class of at most {_n(att['response_ids'])} ids a response"
     if eps < 1:
-        scan = next(r for r in cert["rows"] if r["row"] == "scan")
+        scan = next(r for r in att["rows"] if r["row"] == "scan")
         attester = [
-            f"- **the network attester's part: {_n(sums['scan']['certifier_GB'])} GB** ({on}) {TOGETHER['scan']}, "
+            f"- **the network attester's part: {_n(sums['scan']['attester_GB'])} GB** ({on}) {TOGETHER['scan']}, "
             f"{_n(scan['term'][of]['bits_a_request'])} bits a request, and "
-            + ", ".join(f"{_n(sums[name]['certifier_GB'])} GB {_called(name, charged)}" for name in record if name != "scan")
+            + ", ".join(f"{_n(sums[name]['attester_GB'])} GB {_called(name, charged)}" for name in record if name != "scan")
             + f", each at D_j = {of}, its term of record, and each failing with at most ε = {_p(eps)} over the world's "
             f"year, at a scan's δ of {_p(delta['value'])}."
-            + ("" if default["response_ids"] == cert["response_ids"] else
+            + ("" if default["response_ids"] == att["response_ids"] else
                f" On the class of at most {_n(default['response_ids'])} ids a response that `verity bench certifier_term` "
                "assumes by default, the scan's is "
                + (f"{_n(default['value'])} {default['unit']}." if default["eps"] < 1 else
                   f"{NO_BOUND}, at an ε of {_n(default['eps'])}.")),
             *(f"- the network attester's part {clause}; ε = {_p(eps)}."
-              for clause in _labelled(year, "certifier_GB", set_time, charged))]
+              for clause in _labelled(year, "attester_GB", set_time, charged))]
     else:
         attester = [(f"- **the network attester's part: {NO_BOUND}** ({on}). Its ε over the world's year is {_n(eps)}, "
                      "and at 1 or more it bounds nothing, so no amount is printed under any of its rows.")]
@@ -341,8 +342,7 @@ def render(doc: Mapping[str, Any]) -> str:
         "is, in the table below"), "",
         "## Inputs", "",
         *_table(("part", "input", "value", "unit", "mark", "source"),
-                [(_said(i["part"]), i["input"], _n(i["value"]), i["unit"], PRINTED.get(i["mark"], i["mark"]),
-                  _said(i["source"]))
+                [(i["part"], i["input"], _n(i["value"]), i["unit"], PRINTED.get(i["mark"], i["mark"]), _said(i["source"]))
                  for i in doc["inputs"]]), "",
         *parts,
         f"## The compute audit's part at {_pct(share)} of total compute", "",
@@ -361,14 +361,14 @@ def render(doc: Mapping[str, Any]) -> str:
                       ", ".join(f"{family} {_part(s)}" for family, s in list(x["families"].items())[:3]))
                      for p in planned for way, x in p["priced"]["ways"].items()]), "")),
         "## The network attester's part over the world's year", "",
-        (f"`verity bench certifier_term`'s rows (`{cert['schema']}`) at its request count `{cert['request_count']}`, for a "
-        f"class of at most {_n(cert['response_ids'])} ids a response. The term is the schedules, the fail cells and the "
+        (f"`verity bench certifier_term`'s rows (`{att['schema']}`) at its request count `{att['request_count']}`, for a "
+        f"class of at most {_n(att['response_ids'])} ids a response. The term is the schedules, the fail cells and the "
         f"jitter, and the term of record is the one at D_j = {of}. The term at D_j = {set_time}, and every figure of a "
         f"row whose name carries it, is printed only under the network attester's label, \"{card}\". The entries are "
         "the compute side's. Each row carries the δ of its scans and its ε over the world's year, their sum over every "
         "link's execution phases; a row whose ε is 1 or more has no amount."), "",
         *(f"- {name} ({'; '.join(filter(None, (k['standing'], k.get('mark'))))}): {k['counts']}"
-          for name, k in cert["legend"].items()), "",
+          for name, k in att["legend"].items()), "",
         *_table(("row", "schedules, GB", "cells, GB", f"term at D_j = {of}, GB", "x weights",
                  f"term at D_j = {set_time} {card}, GB", "entries, GB", "scan's δ", "ε"),
                 [(r["row"] + (f", {r['with_set_time_card']}" if r["with_set_time_card"] else ""),
@@ -376,8 +376,8 @@ def render(doc: Mapping[str, Any]) -> str:
                     (_n(r["schedules"]["GB"]), _n(r["cells"]["GB"]), _n(r["term"][of]["GB"]),
                      _n(r["term"][of]["of_weights"]), _n(r["term"][set_time]["GB"]),
                      _n(r["entries"] and r["entries"]["GB"], "the compute side's"))),
-                  _n(delta["value"]), _n(r["eps"])) for r in cert["rows"]]), "",
-        f"The entries as the scan's check charges them: {cert['entries_rule']}.", "",
+                  _n(delta["value"]), _n(r["eps"])) for r in att["rows"]]), "",
+        f"The entries as the scan's check charges them: {att['entries_rule']}.", "",
         "## Each monitoring period over all compute: the two parts side by side, in GB", "",
         f"The network attester's term is the one of record, at D_j = {of}, and `together` adds the compute audit's part "
         "to it, or the entries where the row charges them and they are fewer. The output count is the schedules of "
@@ -396,7 +396,7 @@ def render(doc: Mapping[str, Any]) -> str:
                   _n(p["compute_audit"] and p["compute_audit"]["GB"], "no rows of record"),
                   _n(p["compute_audit"] and p["compute_audit"]["bits_a_request"]),
                   _n(p["compute_audit"] and p["compute_audit"]["delta"]),
-                  *(_amount(p["together"][name]["certifier_GB"], p["eps"]) for name in record),
+                  *(_amount(p["together"][name]["attester_GB"], p["eps"]) for name in record),
                   _n(delta["value"]), _n(p["eps"]),
                   *(_amount(p["together"][name]["GB"], p["error"]) for name in record), _n(p["error"]),
                   _amount(p["output_count"]["GB"], p["eps"]))

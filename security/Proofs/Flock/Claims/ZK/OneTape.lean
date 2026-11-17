@@ -1,7 +1,6 @@
 module
 
 public import Proofs.Flock.Claims.DeployTables
-public import Proofs.Flock.Claims.ZK.MaskFamily
 public import Proofs.Flock.Claims.ZK.MaskTape
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic

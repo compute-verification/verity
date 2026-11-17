@@ -1,5 +1,5 @@
 """The compute audit's part of `verity bench exfiltration` (`verity_bench.exfiltration`): the planner's rows of record,
-read from the store, and each scope read at the share of compute."""
+read from the store or from one run's record directory (`--from`), and each scope read at the share of compute."""
 
 from __future__ import annotations
 
@@ -31,6 +31,10 @@ from verity_bench.exfiltration_common import (
 from verity_bench.served_table import RUN_OF_RECORD, SUPERSEDED_BY, record_runs, records
 
 
+ON_A_CLONE = ("with only a clone, run `uv run verity bench exfiltration --from benchmarks/exfiltration/made_up`, a "
+              "made-up record, printed as made up")
+
+
 def _label(key: str = RUN_OF_RECORD, value: str = RECORD) -> str:
     return f"`research data label RUN {key} {value} --by LANE`"
 
@@ -56,8 +60,37 @@ def read_run(store: Any, run: str) -> tuple[list[dict], dict | None, str | None]
     later file that holds other rows of that case and scope leaves the run unread."""
 
     at, held, why = _run_files(store, run, (*ROWS_FILES, PLAN_FILE))
-    if why:
-        return [], None, why
+    return ([], None, why) if why else _rows_in(at, held)
+
+
+#: a run's record file that names it and the commit it ran (`run.id`, `computation.tree_sha`), and, for a record
+#: written by hand, what it says of itself (`made_up`), which a run's never holds
+JOB = "job.json"
+
+
+def record_job(record: Path) -> dict:
+    """A record directory's `JOB`, or nothing where it holds none."""
+
+    job = json.loads((record / JOB).read_text()) if (record / JOB).is_file() else {}
+    if not isinstance(job, dict):
+        raise ValueError(f"{record / JOB} is not a JSON object: a run's record names itself there")
+    return job
+
+
+def record_run(record: Path) -> str:
+    """The run a record directory is of: its `JOB`'s `run.id`, else the directory's name."""
+
+    return str((record_job(record).get("run") or {}).get("id") or record.resolve().name)
+
+
+def read_record(record: Path) -> tuple[list[dict], dict | None, str | None]:
+    """The planner's rows and the plan in a run's record directory, read as `read_run` reads a run's fetched files."""
+
+    held = [name for name in (*ROWS_FILES, PLAN_FILE) if (record / name).is_file()]
+    return _rows_in(record if held else None, held)
+
+
+def _rows_in(at: Path | None, held: Sequence[str]) -> tuple[list[dict], dict | None, str | None]:
     if at is None:
         return [], None, f"holds no planner rows ({', '.join(f'`{n}`' for n in ROWS_FILES)}) and no plan (`{PLAN_FILE}`)"
     rows: list[dict] = []
@@ -84,26 +117,32 @@ def _case(x: Mapping, row: str, step: str, world: str) -> bool:
 
 
 def rows_of_record(store: Any, *, row: str = ROW, step: str = STEP, world: str = WORLD,
-                   variant: str | None = None) -> tuple[dict, dict, list[str], list[dict]]:
+                   variant: str | None = None, record: Path | None = None) -> tuple[dict, dict, list[str], list[dict]]:
     """The case's rows of record by scope, each scope's from the one run that holds it, and its plans of record the
     same way, with the runs read and the runs left out with why. A run that holds a scope's plan may hold the plan's
     own row, at the plan's budget: it is the plan's, and is not read off. With ``variant``, only the rows the
-    planner's driver names so (`VARIANT`) are read."""
+    planner's driver names so (`VARIANT`) are read. With ``record`` (a run's record directory), its run is the one run
+    of record, read from the directory with no store (`read_record`), and ``store`` is not read."""
 
-    labelled = record_runs(store, records(store).get(RECORD, []))
-    if not labelled:
-        raise ValueError(f"no planner rows of record: nothing in the store carries `{RUN_OF_RECORD}={RECORD}` "
-                         f"(label each run that holds them: {_label()})")
+    if record is None:
+        labelled = record_runs(store, records(store).get(RECORD, []))
+        if not labelled:
+            raise ValueError(f"no planner rows of record: nothing in the store carries `{RUN_OF_RECORD}={RECORD}` "
+                             f"(label each run that holds them: {_label()}); {ON_A_CLONE}")
+        targets = sorted({run for run, _ in labelled}, reverse=True)
+    else:
+        targets = [record_run(record)]
     scopes: dict[str, tuple[str, list[dict]]] = {}
     plans: dict[str, tuple[str, dict]] = {}
     runs, refused = [], []
-    for run in sorted({run for run, _ in labelled}, reverse=True):
+    for run in targets:
         found: list[dict] = []
         plan: dict | None = None
-        if superseded := [str(lab.value) for lab in store.labels(run, key=SUPERSEDED_BY)]:
+        superseded = [] if record is not None else [str(lab.value) for lab in store.labels(run, key=SUPERSEDED_BY)]
+        if superseded:
             why: str | None = f"superseded by {', '.join(superseded)}"
         else:
-            found, plan, why = read_run(store, run)
+            found, plan, why = read_run(store, run) if record is None else read_record(record)
             found = [r for r in found if not r.get("error") and _case(r, row, step, world)
                      and variant in (None, r.get(VARIANT))]
             if plan is not None and _case(plan, row, step, world):
@@ -133,7 +172,8 @@ def rows_of_record(store: Any, *, row: str = ROW, step: str = STEP, world: str =
             scopes[scope] = (run, its)
     if not scopes:
         left = "; ".join(f"{x['target']} {x['why']}" for x in refused) or f"{', '.join(runs)} hold a plan alone"
-        raise ValueError(f"no run of record holds the planner's rows: {left} (label one that does: {_label()})")
+        fix = "give --from a run's record that does" if record is not None else f"label one that does: {_label()}"
+        raise ValueError(f"no run of record holds the planner's rows: {left} ({fix})")
     for scope in sorted(set(plans) - set(scopes)):
         refused.append({"target": plans.pop(scope)[0], "record": RECORD,
                         "why": f"holds the {scope}'s plan, and no run of record holds that scope's rows"})

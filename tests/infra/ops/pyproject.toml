@@ -23,6 +23,7 @@ untraced = [
     "test_deploy.py",
     "test_deploy_register.py",
     "test_drive_sh.py",
+    "test_fixtures_export_sh.py",
     "test_gh_read_token.py",
     "test_keeper.py",
     "test_loop_metrics.py",
@@ -58,6 +59,8 @@ inputs = ["tools/research/src/research/pods", ".agents/skills/using-slack/regist
           "tools/research/src/research/velocity.py", "tools/research/src/research/goals_audit.py",
           # drive's loop, whose checkout per verb is tested here
           "infra/control/drive.sh",
+          # the fixture export's loop, whose candidate pass is tested here
+          "infra/control/fixtures_export.sh",
           # the silent-excepts lint, whose own definition holds deploy's slot reader (BUSY), a string the lint can't see
           "tests/lint/test_repo_silent_excepts.py",
           # infra's checkout on the nodes, which needs no sudo there
@@ -68,9 +71,11 @@ inputs = ["tools/research/src/research/pods", ".agents/skills/using-slack/regist
           # the read-only token every watcher reads GitHub with, held apart from the write tokens' caches, and the watchers' gh
           "infra/control/gh_read_token.sh", "infra/control/gh_notes_token.sh", "infra/control/bin/gh",
           # the nightly check's loop, tested here: it reads a run as the dispatcher reads a check's, writes the state the
-          # monitors' nightly-check reads, and pushes its label as the queue pushes a ready mark
+          # monitors' nightly-check reads, and pushes its label as the queue pushes a ready mark; it judges a failure's
+          # allowances with the queue's own rule (research.landing, and what it imports outside research's exports)
           "infra/control/nightly_check.py", "tools/research/src/research/jobs", "tools/research/src/research/monitors.py",
-          "tools/research/src/research/store/labels_sync.py",
+          "tools/research/src/research/store/labels_sync.py", "tools/research/src/research/landing.py",
+          "tools/research/src/research/carry.py", "tools/research/src/research/notes.py", "tools/research/src/research/reds.py",
           # the declared numbers' reruns, tested here: the loop reads the door through research.metrics
           "infra/control/metrics_rerun.py", "tools/research/src/research/metrics.py",
           # the pod's door: its gate and its setup, with research's side of it (pods/door.py, and budgets.py's notes_sync above)

@@ -25,8 +25,7 @@ src/research/
 ├── jobuser.py      --job-user: the workload as an unprivileged user in a sandboxed system unit; it makes no namespace but those
 │                   --job-namespaces lists (of user, mnt, net), where the workload holds capabilities
 ├── env.py          conditions(): the one baseline of an attempt's conditions (source, runtime, hardware, execution); ONE SKU->family map
-├── merge.py, queue.py, vqueue.py   landing: the merge gate, the merge queue and the verified queue, which
-│                   tools/verity/landq replays
+├── merge.py, queue.py, vqueue.py   landing: the merge gate, the merge queue and the verified queue
 ├── policy.py       the landing's policy over tools/check/policy.toml: what is off the merge gate and what may stay red
 ├── checkview.py    `research status RUN` on a check run; tools/check's live view reads its targets
 ├── goals.py        `research goals`: the Goals page (the writing-goals skill)
@@ -544,7 +543,7 @@ Slack app must be in both too: Cursor delivers the wakes, this bot posts.
 
 Routing: each handle holder subscribes to its own inbox thread, not to the top level. The sender rings the doorbells of
 the names a post addresses right after posting, by the rule in `route_targets` (`slack.py`), which
-`tests/slack_routing_vectors.json` pins. Only posts by Verity's bot (the registry's `bot_id`) and by the named humans route:
+`tests/tools/research/slack_routing_vectors.json` pins. Only posts by Verity's bot (the registry's `bot_id`) and by the named humans route:
 another app's bot posting under a handle's name rings no one.
 
 ### Notes and evidence over MCP

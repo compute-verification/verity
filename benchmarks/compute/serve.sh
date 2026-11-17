@@ -3,29 +3,40 @@
 # then Pearl+'s verdict on the passes in Python and in Lean, written as the record `run.py` reads:
 #
 #   bash benchmarks/compute/serve.sh                      on a machine with the card, from any directory
-#   research run --on NODE --project verity --cwd clone --timeout 2h -- bash benchmarks/compute/serve.sh
+#   research run --on NODE --project verity --cwd clone --timeout 4h -- env WORK=/workspace bash benchmarks/compute/serve.sh
 #
 # Steps, each one's log in $OUT/logs/STEP.log and its exit status a line of $OUT/steps.txt:
+#   0. bootstrap, only where benchmarks/harness/env.sh finds no pinned-vLLM venv: adapters/vllm/verity_vllm/ops/pod_bootstrap.sh
+#      --cases LLAMA32_1B --gpu, which installs the venv, the checkpoint and the taps under WORK, its own logs under
+#      $OUT/logs/bootstrap/; where the venv is there, one line says so and the step is skipped;
 #   1. cubin: Pearl-C's sm_90a cubin built from this tree (benchmarks/harness/setup/pearl_c_sm90.sh: nvcc, its SASS gates);
-#   2. serve: `served_passes.py serve` of the spec's Pearl-C arm (SPEC) on one card: the caller's gpu-lease's where serve.sh
+#   2. serve-phi and circuit, on the CPU before the serve: the class's circuit record cut at Pearl+'s linears
+#      (`prove_path.py class-circuit`) into out/record/, the circuit the period commits;
+#   3. period-open, under COINS=local: the lane's Pearl-C period on the local gate (`served_verdicts.py pearlplus-period
+#      open --circuit-record`: one session, its circuit the SHA-512 of that record), which the serve's salt session joins;
+#   4. serve: `served_passes.py serve` of the spec's Pearl-C arm (SPEC) on one card: the caller's gpu-lease's where serve.sh
 #      runs under one, else under `gpu-lease 1` where the machine has it (GPU picks the card, default 0), else directly: with no warm-up, CLASS's fixed load, SLOTS requests of
 #      PROMPT seeded random tokens and OUTPUTS outputs each, every engine step one pass retained under PASSES;
-#   3. retain: Pearl+'s window record W over the timed call's passes (`served_passes.py retain --window-record`), which
+#   5. retain: Pearl+'s window record W over the timed call's passes (`served_passes.py retain --window-record`), which
 #      are the class's rounds alone (a warm-up's would be rounds before them, which the class's fixed load refuses);
-#   4. python-verify: Pearl+'s verdict in Python (`served_passes.py verify --tie W --class CLASS`), the passes held to the class's
+#   6. period-close, under COINS=local: that period closed once the gate's ledger ends the serve's salt session
+#      (`pearlplus-period close --lane --windows --wait`, the serve its one window), so the verifier's sample is the
+#      lane's first reserve after the close;
+#   7. python-verify: Pearl+'s verdict in Python (`served_passes.py verify --tie W --class CLASS`), the passes held to the class's
 #      fixed load, a sample of DRAWS work-weighted tiles at DELTA, on fast_tile's batch forms (FAST, default on);
-#   5. lean: the Lean verdict (`served_passes.py lean`, pouw-pearlplus built here unless PEARLPLUS_LEAN_EXE names one),
+#   8. lean: the Lean verdict (`served_passes.py lean`, pouw-pearlplus built here unless PEARLPLUS_LEAN_EXE names one),
 #      written only where it is the Python's;
-#   6. policy: the inference-only policy at CLASS, from this card's serve-phi cut at Pearl+'s linears
+#   9. publish and piece: the verifier's coin into pieces/pouw/ (coin.json, coin-put.json: put in no store) and PoUW's
+#      development piece (`served_verdicts.py pearlplus`: development.json, its coin_source);
+#  10. policy: the inference-only policy at CLASS, from this card's serve-phi cut at Pearl+'s linears
 #      (`benchmarks/one_stage/inference_only.py policy`), which names the class and the model `run.py` counts MACs at;
-#   7. circuit: the class's circuit record cut at Pearl+'s linears (`prove_path.py class-circuit`), into out/record/.
-#   8. verdicts: record/verdicts.json, PoUW's verdict: `missing`, as the window's compose (which composes it of record)
-#      isn't run here, so the credit is the Pearl+ piece's alone;
-#   9. publish and piece, after the verdicts: the verifier's coin into pieces/pouw/ (coin.json, coin-put.json: put in
-#      no store) and PoUW's development piece (`served_verdicts.py pearlplus`: development.json, its coin_source);
-#  10. registered: out/registered/circuit.json and log.jsonl (W alone), what training reads; no program.json, as the
+#  11. verdicts: record/verdicts.json, PoUW's row as the window's compose reads it (`served_verdicts.piece` on pieces/,
+#      under auditor-gate.json's key pin and lane): of record only where `served_verdicts.pearlplus_of_record` holds the
+#      piece, else `missing` naming the first condition it fails; no SPOT window registration is made here, so at best
+#      it fails at that (R chained after W);
+#  12. registered: out/registered/circuit.json and log.jsonl (W alone), what training reads; no program.json, as the
 #      tied path writes no Program;
-#  11. share: `benchmarks/compute/run.py --from RUN_DIR`, which prints the share from the record this wrote.
+#  13. share: `benchmarks/compute/run.py --from RUN_DIR`, which prints the share from the record this wrote.
 # Coins (COINS): `local` (default), a local challenger: infra's gate code (AUDITOR) on a scratch auditor host under
 # PASSES with an LMS test key (W 4, H 6), each session's challenger its own serve.py on 127.0.0.1, whose coins are the
 # Lean spot-verifier's (`benchmarks/one_stage/pearlplus_local_e2e.py init|gate|stop`): the salt coin a salt-only session's
@@ -36,17 +47,19 @@
 # pearlplus-lean.json, pearlplus-lean-check.json, verify.json, served.json and coin.json; inference-only-policy.json;
 # record/circuit-record.json, record/window-record.json and record/verdicts.json; registered/; auditor/ (the local gate's ledger,
 # pins, public key and sessions' public files); compute-run.json and coins.txt. The record writes no Program: the tied
-# path's window record W stands in its place. The passes (about 2 GB) stay outside OUT, as they hold the run's activations
+# path's window record W stands in its place. The passes stay outside OUT, as they hold the run's activations
 # and salt key: in a directory under the run's own scratch under research run, else under SCRATCH or $TMPDIR, removed
 # on exit with the local gate's key; PASSES names a directory to keep them in instead.
-# Env: VERITY_BENCH_VENV (the pinned-vLLM Python's venv, else benchmarks/harness/env.sh's search), HF_HOME, CUDA_HOME,
+# Env: WORK (where the bootstrap installs and env.sh searches, default ~/verity-work), VERITY_BENCH_VENV (the
+# pinned-vLLM Python's venv, else benchmarks/harness/env.sh's search under WORK), HF_HOME, CUDA_HOME,
 # RUN_DIR (the run directory, default $RESEARCH_RUN_DIR, else ./compute-run), COINS (local), GPU (0), DRAWS (459),
 # DELTA (1/100), FAST (1; empty: the scalar reference alone), JOBS (nproc), LEASE_MIN (30), LEAN_TIMEOUT (the seconds
 # the Lean verdict has: 3,600 on 96 or more cores, 3,600 x 96 / nproc on fewer). The load is
-# benchmarks/compute/load.toml's, which run.py holds the record to. Before any step it exits 3 on a RUN_DIR already
-# holding a record, a missing verity_torch or lake, or a GPU that isn't an idle H100 or H200. A failed step exits 1 with
-# a sentence naming it and compute-run.json written, and run.py isn't run on what it left. Exit 0 only where Python and
-# Lean both accept and run.py prints the share.
+# benchmarks/compute/load.toml's, which run.py holds the record to. Before it writes anything it exits 3 on a RUN_DIR
+# already holding a record, a missing lake, or a GPU that isn't an idle H100 or H200, and after the bootstrap, before
+# the cubin, on a missing verity_torch. A failed step exits 1 with a sentence naming it (compute-run.json written from
+# the cubin on), and run.py isn't run on what it left. Exit 0 only where Python and Lean both accept and run.py prints
+# the share.
 set -euo pipefail
 # the one path under verity/ this names, which a layout move may change
 AUDITOR=verity/protocols/compose/verifier/live_challenger/auditor.py
@@ -55,8 +68,7 @@ TREE=$PWD
 RUN=${RUN_DIR:-${RESEARCH_RUN_DIR:-$TREE/compute-run}}
 OUT=$RUN/out
 COINS=${COINS:-local} GPU=${GPU-0} DRAWS=${DRAWS:-459} DELTA=${DELTA:-1/100} FAST=${FAST-1} JOBS=${JOBS:-$(nproc)}
-# the Lean verdict runs on every core it may: 1,917 s on 96, 3,451 s on 36, and more than 3,600 s on 20, so its limit grows
-# as the cores fall
+# the Lean verdict runs on every core it may, so its limit grows as the cores fall
 CORES=$(nproc) && LEAN_TIMEOUT=${LEAN_TIMEOUT:-$(( CORES >= 96 ? 3600 : 3600 * 96 / CORES ))}
 # under a caller's gpu-lease (which exports GPU_LEASE_UUID, the cards it holds) the card is the lease's, and serve.sh takes
 # no lease of its own: gpu-lease isn't re-entrant, so a second lease of the held card would wait forever
@@ -70,23 +82,8 @@ for f in steps.txt compute-run.json logs pieces record registered; do
   [ ! -e "$OUT/$f" ] || { echo "$OUT already holds a run's record ($OUT/$f): give RUN_DIR a new directory, or remove" \
     "$RUN, so this run's share can't be read from an earlier run's files" >&2; exit 3; }
 done
-mkdir -p "$OUT/logs" "$PIECE" "$REC" || exit 3
-# shellcheck source=/dev/null
-. benchmarks/harness/env.sh
-PY=$VENV/bin/python
-# the benchmark's load (benchmarks/compute/load.toml): the model, its revision, and the class, SLOTS requests of PROMPT
-# prompt tokens and OUTPUTS output tokens each
-read -r REPO REV SLOTS PROMPT OUTPUTS < <("$PY" -c 'import sys, tomllib
-d = tomllib.load(open(sys.argv[1], "rb"))
-print(d["model"], d["revision"], d["slots"], d["prompt"], d["outputs"])' benchmarks/compute/load.toml) && [ -n "$OUTPUTS" ] \
-  || { echo "benchmarks/compute/load.toml doesn't read as the benchmark's load" >&2; exit 3; }
-CLASS=$SLOTS,$PROMPT,$OUTPUTS
-export PATH=$HOME/.elan/bin:$PATH HF_HUB_OFFLINE=${HF_HUB_OFFLINE:-0}
-# what the serve and the Lean steps need from the machine, checked before any step
-"$PY" -c 'import importlib.util, sys; sys.exit(importlib.util.find_spec("verity_torch") is None)' || {
-  echo "verity_torch isn't importable by $PY, and the served model's PoUW hooks import it: put this tree's adapters/torch" \
-       "on PYTHONPATH (export PYTHONPATH=$TREE/adapters/torch:\$PYTHONPATH), or run under research run, which does" >&2
-  exit 3; }
+export PATH=$HOME/.elan/bin:$PATH HF_HUB_OFFLINE=${HF_HUB_OFFLINE:-0} WORK=${WORK:-$HOME/verity-work}
+# what the serve and the Lean steps need from the machine, checked before any step and before any file is written
 command -v lake > /dev/null || {
   echo "lake isn't on PATH (nor in $HOME/.elan/bin), and the Lean verifiers build with it: install elan" \
        "(https://github.com/leanprover/elan), which fetches the toolchain each Lean package's lean-toolchain file names," \
@@ -102,6 +99,43 @@ card=$(nvidia-smi ${GPU:+-i "$GPU"} --query-gpu=index,name,compute_cap --format=
 busy=$(nvidia-smi -i "${card%%,*}" --query-compute-apps=pid --format=csv,noheader 2> /dev/null | grep -c .) || busy=0
 [ "$busy" = 0 ] || { echo "card ${card%%,*} ($card) runs $busy compute process(es) (nvidia-smi -i ${card%%,*}): serve.sh" \
   "serves alone on its card; wait for them to end or set GPU to an idle H100 or H200" >&2; exit 3; }
+step() {  # NAME CMD...: CMD's output to its log, its status a line of steps.txt
+  local name=$1 t rc
+  shift
+  [ -z "${LONG[$name]:-}" ] || echo "$name: started $(date -u +%H:%MZ); its log is $OUT/logs/$name.log"
+  t=$(date +%s)
+  "$@" > "$OUT/logs/$name.log" 2>&1
+  rc=$?
+  printf '%s rc=%s %ss: %s\n' "$name" "$rc" "$(( $(date +%s) - t ))" "$(tail -1 "$OUT/logs/$name.log" | cut -c1-400)" \
+    | tee -a "$OUT/steps.txt"
+  return "$rc"
+}
+#: the steps whose start is printed, as each takes minutes
+declare -A LONG=([bootstrap]=1 [cubin]=1 [circuit]=1 [gate]=1 [serve]=1 [period-close]=1 [python-verify]=1 [lean]=1 [policy]=1)
+# the pinned-vLLM venv env.sh finds, else pod_bootstrap.sh installs it under WORK, where env.sh then finds it
+if venv=$(. benchmarks/harness/env.sh > /dev/null 2>&1 && echo "$VENV"); then
+  echo "bootstrap: skipped, as $venv is there"
+elif [ -z "${VERITY_BENCH_VENV:-}" ]; then
+  mkdir -p "$OUT/logs" || exit 3
+  step bootstrap env VENV="$WORK/venv312" bash adapters/vllm/verity_vllm/ops/pod_bootstrap.sh --cases LLAMA32_1B --gpu \
+    --out "$OUT/logs/bootstrap" || { echo "serve.sh: bootstrap failed, so this run has no share (its log is" \
+    "$OUT/logs/bootstrap.log, its own logs $OUT/logs/bootstrap/)" >&2; exit 1; }
+fi
+# shellcheck source=/dev/null
+. benchmarks/harness/env.sh
+PY=$VENV/bin/python
+# the benchmark's load (benchmarks/compute/load.toml): the model, its revision, and the class, SLOTS requests of PROMPT
+# prompt tokens and OUTPUTS output tokens each
+read -r REPO REV SLOTS PROMPT OUTPUTS < <("$PY" -c 'import sys, tomllib
+d = tomllib.load(open(sys.argv[1], "rb"))
+print(d["model"], d["revision"], d["slots"], d["prompt"], d["outputs"])' benchmarks/compute/load.toml) && [ -n "$OUTPUTS" ] \
+  || { echo "benchmarks/compute/load.toml doesn't read as the benchmark's load" >&2; exit 3; }
+CLASS=$SLOTS,$PROMPT,$OUTPUTS
+"$PY" -c 'import importlib.util, sys; sys.exit(importlib.util.find_spec("verity_torch") is None)' || {
+  echo "verity_torch isn't importable by $PY, and the served model's PoUW hooks import it: put this tree's adapters/torch" \
+       "on PYTHONPATH (export PYTHONPATH=$TREE/adapters/torch:\$PYTHONPATH), or run under research run, which does" >&2
+  exit 3; }
+mkdir -p "$OUT/logs" "$PIECE" "$REC" || exit 3
 # the passes' directory: under research run the run's own scratch (`--cwd clone`'s, the tree's parent), else SCRATCH or
 # TMPDIR; removed on exit with the challengers stopped, unless PASSES names it
 here=$(dirname "$TREE")
@@ -113,20 +147,6 @@ mkdir -p "$W/tmp" && chmod 700 "$W" || exit 3
 export TMPDIR=$W/tmp
 umask 077
 failed=0
-#: each long step's minutes in the measured run (one H200, 96 cores), printed as it starts
-declare -A ABOUT=([cubin]=2 [gate]=5 [serve]=1 [python-verify]=15 [lean]=32 [policy]=2 [circuit]=2)
-step() {  # NAME CMD...: CMD's output to its log, its status a line of steps.txt
-  local name=$1 t rc
-  shift
-  [ -z "${ABOUT[$name]:-}" ] || echo "$name: started $(date -u +%H:%MZ), about ${ABOUT[$name]} min in the measured run on" \
-    "96 cores (longer on fewer); its log is $OUT/logs/$name.log"
-  t=$(date +%s)
-  "$@" > "$OUT/logs/$name.log" 2>&1
-  rc=$?
-  printf '%s rc=%s %ss: %s\n' "$name" "$rc" "$(( $(date +%s) - t ))" "$(tail -1 "$OUT/logs/$name.log" | cut -c1-400)" \
-    | tee -a "$OUT/steps.txt"
-  return "$rc"
-}
 lease() {  # CMD...: on one card: the caller's lease's, else under gpu-lease where the machine has it, else GPU
   if [ -n "${GPU_LEASE_UUID:-}" ]; then
     "$@"
@@ -192,19 +212,31 @@ gate_down() {
   [ -s "$P/coin.json" ] && cp "$P/coin.json" "$PIECE/coin.json"
   return 0
 }
-verdicts() {  # PoUW's verdict as run.py reads it: missing, the window's compose not run here
-  "$PY" - "$REC/verdicts.json" "$PIECE/pearlplus-answer.json" "$OUT/compute-run.json" <<'EOF'
+verdicts() {  # PoUW's verdict as run.py reads it: the work row the window's compose reads (served_verdicts.piece)
+  "$PY" - "$REC/verdicts.json" "$OUT/pieces" "$OUT/compute-run.json" "$OUT/auditor-gate.json" "${RESEARCH_RUN_ID:-}" \
+    <<'EOF'
 import json, os, sys
-out, answer, run = sys.argv[1:4]
-a = json.load(open(answer)) if os.path.exists(answer) else {}
-row = {"verdict": "missing", "owner": "compute-accounting",
-       "why": "PoUW's row of record is the window's compose (V3c), not run here: the credit is the Pearl+ piece's alone "
-              f"(its verdict {a.get('verdict')}, development coins and parameters)"}
+from pathlib import Path
+sys.path.insert(0, "benchmarks/one_stage")
+import served_verdicts as S
+out, pieces, run, gate, run_id = sys.argv[1:6]
+g = json.load(open(gate)) if os.path.exists(gate) else {}
+row, _server = S.piece("work", Path(pieces), run_id or None, spot=None, key_sha512=g.get("key_sha512"), lane=g.get("lane"))
 doc = {"format": "verity-bench/compute-verdicts/v1", "development": True, "run": json.load(open(run)),
        "protocols": {"work": row}}
 open(out, "w").write(json.dumps(doc, indent=1, sort_keys=True) + "\n")
-print(f"work: {row['verdict']}: {row['why']}")
+print(f"work: {row['verdict']}: {row.get('why') or row.get('reason') or ''}"[:2000])
 EOF
+}
+period() {  # open|close: the lane's Pearl-C period on the local gate, from before the serve to before the sample
+  if [ "$1" = open ]; then
+    "$PY" benchmarks/one_stage/served_verdicts.py pearlplus-period open "$PIECE" --gate "$PEARLC_CHALLENGER_GATE" \
+      --name "pearlplus-${RESEARCH_RUN_ID:-local}" --scheme "$SCHEME" --circuit-record "$REC/circuit-record.json"
+  else
+    mkdir -p "$W/pearl/w0" && ln -sf "$PIECE/served.json" "$W/pearl/w0/served.json" \
+      && "$PY" benchmarks/one_stage/served_verdicts.py pearlplus-period close "$PIECE" --gate "$PEARLC_CHALLENGER_GATE" \
+        --lane "$PEARLC_CHALLENGER_LANE" --windows "$W/pearl" --wait "${PERIOD_WAIT:-300}"
+  fi
 }
 publish() {  # the verifier's coin published in OUT alone, put in no store: coin.json and coin-put.json
   cp "$P/coin.json" "$PIECE/coin.json" && "$PY" - "$PIECE/coin.json" "$PIECE/coin-put.json" "${RESEARCH_RUN_ID:-}" <<'EOF'
@@ -243,7 +275,25 @@ cleanup() {
 trap cleanup EXIT
 echo "passes: $P" | tee -a "$OUT/steps.txt"
 
+phi() {
+  CUDA_VISIBLE_DEVICES='' "$PY" -c '
+import json, sys
+from pathlib import Path
+from verity.device import load_card, number
+from verity_vllm import TargetProfile
+from verity_vllm.engine.served_seed import DEFAULT_SEED
+sms = int(number(load_card("h200-sxm-141gb", directory=Path(sys.argv[4]))["sm"]["count"]))
+doc = {"model": sys.argv[1], "revision": sys.argv[2], "default_seed": DEFAULT_SEED,
+       "target": TargetProfile.default().with_overrides(compute_capability=(9, 0), num_sms=sms).to_json(),
+       "execution": "bi-eager"}
+open(sys.argv[3], "w").write(json.dumps(doc, indent=1) + "\n")
+print(json.dumps(doc, sort_keys=True))
+' "$REPO" "$REV" "$REC/serve-phi.json" "$TREE/hardware/cards"
+}
 step cubin cubin || fail cubin
+step serve-phi phi || fail serve-phi
+step circuit env CUDA_VISIBLE_DEVICES='' "$PY" benchmarks/prove_path/prove_path.py class-circuit --serve "$REC/serve-phi.json" \
+  --class "$CLASS" --pearl-tables "$SCHEME" --out "$REC/circuit-record.json" || fail circuit
 { read -r PEARLC_KERNEL; read -r PEARLC_CUBIN; } < "$W/setup.paths"
 export PEARLC_KERNEL PEARLC_CUBIN PEARLC_BF16_ROWS=${PEARLC_BF16_ROWS:-0}
 unset PEARLC_CHALLENGER_GATE PEARLC_CHALLENGER_PEER PEARLC_CHALLENGER_LANE VLLM_BATCH_INVARIANT
@@ -260,6 +310,7 @@ print(g["gate"], g["peer"], g["lane"], sep="\n")' "$OUT/auditor-gate.json") || f
   *) echo "COINS is local or in-process, not $COINS" >&2; exit 3 ;;
 esac
 coins | tee "$OUT/coins.txt"
+[ "$COINS" != local ] || step period-open period open || fail period-open
 step serve lease "$PY" "$SP" serve --spec "$SPEC" --requests "$SLOTS" --prompt-tokens "$PROMPT" \
   --output-tokens "$OUTPUTS" --max-num-batched-tokens "${T:-8192}" --no-warm-up --passes "$P" --out "$PIECE/served.json" || failed=1
 if [ "$failed" = 0 ]; then
@@ -268,6 +319,7 @@ if [ "$failed" = 0 ]; then
     echo "serve.sh: the verdict needs a give-up before its coin, and this runs none" >&2; fail volunteer-needed; }
   step retain "$PY" "$SP" retain --passes "$P" --window-record "$WR" || fail retain
   cp "$WR" "$REC/window-record.json"
+  [ "$COINS" != local ] || step period-close period close || fail period-close
   step python-verify "$PY" "$SP" verify --passes "$P" --tie "$WR" --class "$CLASS" --out "$PIECE/verify.json" \
     --answer "$PIECE/pearlplus-answer.json" --draws "$DRAWS" --delta "$DELTA" --jobs "$JOBS" ${FAST:+--fast} || failed=1
   [ -s "$PIECE/verify.json" ] && step lean "$PY" "$SP" lean --passes "$P" --verify "$PIECE/verify.json" \
@@ -275,24 +327,9 @@ if [ "$failed" = 0 ]; then
   if [ -s "$P/coin.json" ]; then step publish publish && step piece piece || failed=1
   else echo "serve.sh: the python-verify step left no verifier's coin ($P/coin.json), so no piece" >&2; failed=1; fi
 fi
-phi() {
-  CUDA_VISIBLE_DEVICES='' "$PY" -c '
-import json, sys
-from verity_vllm import TargetProfile
-from verity_vllm.engine.served_seed import DEFAULT_SEED
-doc = {"model": sys.argv[1], "revision": sys.argv[2], "default_seed": DEFAULT_SEED,
-       "target": TargetProfile.default().with_overrides(compute_capability=(9, 0), num_sms=132).to_json(),
-       "execution": "bi-eager"}
-open(sys.argv[3], "w").write(json.dumps(doc, indent=1) + "\n")
-print(json.dumps(doc, sort_keys=True))
-' "$REPO" "$REV" "$REC/serve-phi.json"
-}
-step serve-phi phi \
-  && step policy env CUDA_VISIBLE_DEVICES='' "$PY" benchmarks/one_stage/inference_only.py policy --class "$CLASS" \
-    --model "$REPO" --revision "$REV" --lease-min "${LEASE_MIN:-30}" --tree "$(git rev-parse HEAD 2> /dev/null)" \
-    --serve "$REC/serve-phi.json" --pearl-tables "$SCHEME" --out "$OUT/inference-only-policy.json" || failed=1
-step circuit env CUDA_VISIBLE_DEVICES='' "$PY" benchmarks/prove_path/prove_path.py class-circuit --serve "$REC/serve-phi.json" \
-  --class "$CLASS" --pearl-tables "$SCHEME" --out "$REC/circuit-record.json" || failed=1
+step policy env CUDA_VISIBLE_DEVICES='' "$PY" benchmarks/one_stage/inference_only.py policy --class "$CLASS" \
+  --model "$REPO" --revision "$REV" --lease-min "${LEASE_MIN:-30}" --tree "$(git rev-parse HEAD 2> /dev/null)" \
+  --serve "$REC/serve-phi.json" --pearl-tables "$SCHEME" --out "$OUT/inference-only-policy.json" || failed=1
 step verdicts verdicts || failed=1
 step registered registered || failed=1
 coins

@@ -20,7 +20,8 @@ yet only when named with --on; `install` takes it as any other), and gives each 
   missing   not there
   absent    the manifest lists it and REF lacks its source (a checkout's manifest ahead of REF)
   held      the entry's `hold` says why it isn't deployed yet (its owner's yes is pending), or its node's in its step's `held`;
-            install skips it. A step's file is `held` too while no file of that step is on the node
+            install skips it. A step's file is `held` too while no file of that step is on the node. One rule,
+            research.monitors' `held`, which the watchdog's units-expected reads too: it expects no unit of a held entry
 and `restart` when a process running the file started before it was installed: it still runs the old code. An entry's
 `no_restart` says why such a process is left to end instead (a run's own process, which nothing restarts): drift and install
 then say nothing of it. A file that a `managed` pattern matches and no entry lists is a `stray`: a backup (`*.bak-*`,
@@ -137,6 +138,7 @@ from pathlib import Path
 from typing import Callable
 
 import research
+from research import monitors
 from research.flags import renamed
 
 clock = time.time              # what a register mark's age is read against (`register`)
@@ -810,10 +812,10 @@ def load(manifest: Path = MANIFEST, text: str | None = None) -> dict[str, Node]:
                     raise ValueError(f"deploy.toml: {e['path']!r} names node {n!r}, which has no [nodes.{n}]")
                 mode = int(e["mode"], 8) if e.get("mode") else None
                 made = "template" in e
-                hold = e.get("hold") or (steps[e["step"]].held.get(n) if e.get("step") else None)
                 nodes[n].entries.append(Entry(e["path"], e["template"] if made else e.get("src"), None if made else e.get("by"),
                                               list(e.get("run", [])), kind == "tree", mode,
-                                              e.get("owner"), hold, e.get("required", False), e.get("no_restart"),
+                                              e.get("owner"), monitors.hold(e, n, m.get("step", {})), e.get("required", False),
+                                              e.get("no_restart"),
                                               e.get("whole", False), e.get("register", False), e.get("accept"), e.get("step")))
     for s in steps.values():
         if s.shows and not any(e.path == s.shows and e.step == s.name for nd in nodes.values() for e in nd.entries):
@@ -1198,11 +1200,10 @@ def drift(node: Node, ref: str, run: Runner, repo: Path = REPO) -> dict:
                 state, detail = "unknown", "no commit holds it: edited in place or never committed"
         restart = None
         started = seen["procs"].get(path)
-        if e.step and got is None and e.step not in on:
-            state, detail = "held", (f"step {e.step}, not installed: `research deploy install {node.name} --only {e.step}` says "
-                                     "what it would write, and `--apply` writes it")
-        if e.hold:
-            state, detail = "held", f"{e.hold} ({'not installed' if got is None else 'installed: ' + state})"
+        if why := monitors.held(e.hold, e.step, got is not None, on):
+            state, detail = "held", (f"{why} ({'not installed' if got is None else 'installed: ' + state})" if e.hold else
+                                     f"{why}: `research deploy install {node.name} --only {e.step}` says what it would write, "
+                                     "and `--apply` writes it")
         elif not e.no_restart and got and "mtime" in got and started is not None and started < got["mtime"] - 1:
             restart = (f"a process started {time.strftime('%m-%d %H:%MZ', time.gmtime(started))}, before the file "
                        f"({time.strftime('%m-%d %H:%MZ', time.gmtime(got['mtime']))})" + (f"; restart {', '.join(e.run)}" if e.run else ""))

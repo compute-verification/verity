@@ -68,16 +68,16 @@ def test_verity_bench_exfiltration_is_the_commands_runner(tmp_path, monkeypatch,
     code, out, _ = run("--row", "(i) honest")
     assert code == 0 and "- **the compute audit's part, at the planner's assumed prices: 17,800 GB** (modeled)" in out
     code, out, _ = run("--json", "--response-ids", "4096")
-    assert code == 0 and json.loads(out)["periods"][-1]["together"]["scan"]["certifier_GB"] == pytest.approx(59_645_644, abs=0.5)
+    assert code == 0 and json.loads(out)["periods"][-1]["together"]["scan"]["attester_GB"] == pytest.approx(59_645_644, abs=0.5)
     # at the δ the calculator assumes by default, a scan's 2^-20, every row printed sums to 1 or more: no amount of the
     # network attester's, and its ε over the world's year
     code, out, _ = run("--json", "--scan-delta", "1/1048576")
     doc = json.loads(out)
-    assert code == 0 and doc["value"] == pytest.approx(YEAR_GB) and doc["certifier"]["scan_delta"]["value"] == 2 ** -20
-    assert doc["certifier"]["scan_delta"]["source"] == "each execution phase's scan's δ, given (--scan-delta)"
+    assert code == 0 and doc["value"] == pytest.approx(YEAR_GB) and doc["attester"]["scan_delta"]["value"] == 2 ** -20
+    assert doc["attester"]["scan_delta"]["source"] == "each execution phase's scan's δ, given (--scan-delta)"
     assert min(p["eps"] for p in doc["periods"]) == pytest.approx(56.3, abs=0.05)
     assert doc["periods"][-1]["eps"] == pytest.approx(11_012_646, abs=0.5)
-    assert {t[k] for p in doc["periods"] for t in p["together"].values() for k in ("certifier_GB", "GB")} == {None}
+    assert {t[k] for p in doc["periods"] for t in p["together"].values() for k in ("attester_GB", "GB")} == {None}
     code, out, _ = run("--scan-delta", "1/1048576")
     assert code == 0 and "- **the compute audit's part: 14,240 GB** (modeled)" in out
     assert ("- **the network attester's part: no bound at this period** (modeled, on an assumed class of at most 1,024 ids a "
@@ -97,18 +97,27 @@ def test_verity_bench_exfiltration_is_the_commands_runner(tmp_path, monkeypatch,
     assert code == 2 and out == "" and "verity bench exfiltration: " in err and "none.json" in err
     # this machine's catalog alone holds no label
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "alone"))
+    clone = ("with only a clone, run `uv run verity bench exfiltration --from benchmarks/exfiltration/made_up`, a made-up "
+             "record, printed as made up\n")
     code, _, err = run("--local-only")
-    assert code == 2 and "no planner rows of record: nothing in the store carries" in err
+    assert code == 2 and "no planner rows of record: nothing in the store carries" in err and err.endswith(f"); {clone}")
+    # and no store remote is configured at all
+    for name in ("R2_ENDPOINT", "R2_BUCKET"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(tmp_path / "no-store.toml"))
+    code, out, err = run()
+    assert code == 2 and out == "" and "the evidence store has no remote here" in err
+    assert err.endswith(f"pass --local-only to read this machine's catalog alone; {clone}")
 
 
 def test_under_a_research_run_the_runner_records_its_three_figures_and_prints_the_same(tmp_path, monkeypatch, capsys):
     """Under a research run, `verity bench exfiltration` writes run.py's metrics into the run's result through the kit:
-    the headline figure, the compute audit's part and the network attester's, each over every monitoring period of the
-    document it has a value over at the share in GB, with its `period` and `over`, the world's year last and as it was
+    the compute audit's part, the network attester's and the two together, each over every
+    monitoring period of the document it has a value over at the share in GB, with its `period` and `over`, the world's year last and as it was
     (so a reader keyed by name alone reads it), its mark heading its first input and its error over its period in the
     next, then the runs of record it read; the document as its evidence and what ran in the fingerprint. What it prints
     is the same in a run as outside one, where it writes nothing. A period with no value is left out, but the world's
-    year, where the network attester's part at an ε of 1 or more has no value and says why."""
+    year, where a figure whose error is 1 or more has no value and says why."""
 
     s = recorded(tmp_path)
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "reader"))
@@ -144,40 +153,44 @@ def test_under_a_research_run_the_runner_records_its_three_figures_and_prints_th
     assert got["workload_fingerprint"] == {
         "source_sha": None, "benchmark": "exfiltration", "row": E.ROW, "step": doc["compute_audit"][0]["step"],
         "variant": None, "share": E.SHARE, "network_check_share": E.NETWORK_CHECK_SHARE, "response_ids": E.RESPONSE_IDS,
-        "scan_delta": doc["certifier"]["scan_delta"]["value"], "served_run": None, "runs": doc["runs"]}
+        "scan_delta": doc["attester"]["scan_delta"]["value"], "served_run": None, "runs": doc["runs"]}
     assert got["validation"]["status"] == "passed" and got["validation"]["evidence"] == [E.DOCUMENT]
     # only what the document has a value over, the world's year last: the fixtures' rows of record hold the compute
     # audit's part over the datacenter's year and the world's alone
-    headline, audit_gb, net_gb = metrics
+    audit_gb, net_gb, total_gb = metrics
     assert [(m["name"], m["period"], m["over"]) for m in got["measurements"]] == [
         (net_gb, "week", "datacenter"), (net_gb, "month", "datacenter"),
-        (headline, "year", "datacenter"), (audit_gb, "year", "datacenter"), (net_gb, "year", "datacenter"),
+        (audit_gb, "year", "datacenter"), (net_gb, "year", "datacenter"), (total_gb, "year", "datacenter"),
         (net_gb, "week", "world"), (net_gb, "month", "world"),
-        (headline, "year", "world"), (audit_gb, "year", "world"), (net_gb, "year", "world")]
+        (audit_gb, "year", "world"), (net_gb, "year", "world"), (total_gb, "year", "world")]
     assert all(m["value"] is not None and "why" not in m for m in got["measurements"])
     # a reader that keys them by name alone, the last of a name winning, reads the world's year
     by = {m["name"]: m for m in got["measurements"]}
-    assert list(metrics) == ["benchmarks/exfiltration-gb-world-year", "benchmarks/exfiltration-compute-audit-gb",
-                             "benchmarks/exfiltration-network-certifier-gb"]
+    assert list(metrics) == ["benchmarks/exfiltration-compute-audit-gb", "benchmarks/exfiltration-network-attester-gb",
+                             "benchmarks/exfiltration-total-gb"]
     assert [by[name] for name in metrics] == got["measurements"][-3:]
-    head, audit, net = (by[name] for name in metrics)
+    audit, net, total = (by[name] for name in metrics)
     year = doc["periods"][-1]
     assert {(m["period"], m["over"]) for m in by.values()} == {("year", "world")}
     assert {m["unit"] for m in by.values()} == {"GB a world year at 10% of compute"}
     assert [list(m)[:6] for m in by.values()] == [["name", "value", "unit", "mark", "period", "over"]] * 3
     assert [m["mark"] for m in by.values()] == ["modeled"] * 3
-    assert head["value"] == audit["value"] == doc["value"] == pytest.approx(YEAR_GB)
-    assert net["value"] == year["together"]["scan"]["certifier_GB"] == pytest.approx(50_753_639, abs=0.5)
-    assert head["inputs"][0].startswith("modeled: the headline figure, the planner's row `(ii) honest`, read where its "
-                                        "total is 10% of compute, β = ")
+    assert audit["value"] == doc["value"] == pytest.approx(YEAR_GB)
+    assert net["value"] == year["together"]["scan"]["attester_GB"] == pytest.approx(50_753_639, abs=0.5)
+    assert total["value"] == year["together"]["scan"]["GB"] == pytest.approx(50_753_639 + YEAR_GB, abs=0.5)
+    assert total["inputs"][0] == (
+        "modeled: the two parts together as the scan's check charges it today, a link's execution phase carrying K = "
+        "schedules + cells + jitter + min(entries, advice + the compute audit's part), at D_j = 2, with no advice priced")
     assert audit["inputs"][0].startswith("modeled: the compute audit's part, the planner's row `(ii) honest`, ")
-    assert head["inputs"][1:] == audit["inputs"][1:] == ["its error: δ = 0.01 over the world's year, the compute audit's",
-                                                         *doc["runs"]]
+    assert audit["inputs"][1:] == ["its error: δ = 0.01 over the world's year, the compute audit's", *doc["runs"]]
+    assert total["inputs"][1:] == ["its error: at most 0.01 over the world's year, the two parts' errors summed",
+                                   audit["inputs"][0].removeprefix("modeled: "),
+                                   net["inputs"][0].removeprefix("modeled (run, not proved): "), *doc["runs"]]
     assert net["inputs"] == [
-        ("modeled (run, not proved): the network certifier's term of record, its `scan` row as the scan's check charges "
+        ("modeled (run, not proved): the network attester's term of record, its `scan` row as the scan's check charges "
         "it today at D_j = 2, on an assumed class of at most 1,024 ids a response"),
         (f"its error: ε = {E._p(year['eps'])} over the world's year, at a scan's δ of "
-        f"{E._p(doc['certifier']['scan_delta']['value'])} (assumed)")]
+        f"{E._p(doc['attester']['scan_delta']['value'])} (assumed)")]
     assert all("why" not in m and m["ci95"] is None and m["host"]["node"] == "cpu-node-0" for m in by.values())
     # every period of the document, each figure the document's own over it
     at = {(m["name"], m["period"], m["over"]): m for m in got["measurements"]}
@@ -185,30 +198,33 @@ def test_under_a_research_run_the_runner_records_its_three_figures_and_prints_th
         scope, span = f"{p['compute']} {p['period']}", f"{p['compute']}'s {p['period']}"
         net = at[net_gb, p["period"], p["compute"]]
         assert (net["unit"], net["mark"]) == (f"GB a {scope} at 10% of compute", "modeled")
-        assert net["value"] == p["together"]["scan"]["certifier_GB"]
+        assert net["value"] == p["together"]["scan"]["attester_GB"]
         assert net["inputs"][1] == (f"its error: ε = {E._p(p['eps'])} over the {span}, at a scan's δ of "
-                                    f"{E._p(doc['certifier']['scan_delta']['value'])} (assumed)")
+                                    f"{E._p(doc['attester']['scan_delta']['value'])} (assumed)")
         if p["compute_audit"] is None:
-            assert (headline, p["period"], p["compute"]) not in at and (audit_gb, p["period"], p["compute"]) not in at
+            assert (total_gb, p["period"], p["compute"]) not in at and (audit_gb, p["period"], p["compute"]) not in at
             continue
-        head, audit = at[headline, p["period"], p["compute"]], at[audit_gb, p["period"], p["compute"]]
-        assert {(m["unit"], m["mark"]) for m in (head, audit)} == {(f"GB a {scope} at 10% of compute", "modeled")}
-        assert head["value"] == audit["value"] == p["compute_audit"]["GB"]
-        assert head["inputs"][1:] == audit["inputs"][1:] == [
+        total, audit = at[total_gb, p["period"], p["compute"]], at[audit_gb, p["period"], p["compute"]]
+        assert {(m["unit"], m["mark"]) for m in (total, audit)} == {(f"GB a {scope} at 10% of compute", "modeled")}
+        assert (total["value"], audit["value"]) == (p["together"]["scan"]["GB"], p["compute_audit"]["GB"])
+        assert audit["inputs"][1:] == [
             f"its error: δ = {E._n(p['compute_audit']['delta'])} over the {span}, the compute audit's", *doc["runs"]]
+        assert total["inputs"][1] == f"its error: at most {E._n(p['error'])} over the {span}, the two parts' errors summed"
 
     # where every ε is 1 or more, the network attester's part is written over the world's year alone, with no value
     second = tmp_path / "run-2"
     run("--scan-delta", "1/1048576", within=second)
     written = json.loads((second / "result.json").read_text())["measurements"]
     nets = [m for m in written if m["name"] == net_gb]
-    assert [(m["period"], m["over"]) for m in nets] == [("year", "world")] and written[-1] == nets[0]
+    assert [(m["period"], m["over"]) for m in nets] == [("year", "world")] and written[-2] == nets[0]
     assert nets[0]["value"] is None and nets[0]["why"] == f"{E.NO_BOUND}: ε = 11,012,646 over the world's year"
     assert [(m["name"], m["period"], m["over"]) for m in written if m["value"] is not None] == [
-        (headline, "year", "datacenter"), (audit_gb, "year", "datacenter"), (headline, "year", "world"),
-        (audit_gb, "year", "world")]
-    with pytest.raises(ValueError, match="^no figure of the document is named total: a metric records one of headline, "):
-        E.measurements(doc, {"benchmarks/x": "total"})
+        (audit_gb, "year", "datacenter"), (audit_gb, "year", "world")]
+    totals = [m for m in written if m["name"] == total_gb]
+    assert [(m["period"], m["over"], m["value"]) for m in totals] == [("year", "world", None)] and written[-1] == totals[0]
+    assert totals[0]["why"] == f"{E.NO_BOUND}: the two parts' errors summed are 11,012,646 over the world's year"
+    with pytest.raises(ValueError, match="^no figure of the document is named sum: a metric records one of compute_audit, "):
+        E.measurements(doc, {"benchmarks/x": "sum"})
 
 
 def test_the_legend_line_shows_a_rows_mark_as_its_calculator_gives_it(tmp_path, monkeypatch):
@@ -230,11 +246,11 @@ def test_the_legend_line_shows_a_rows_mark_as_its_calculator_gives_it(tmp_path, 
     base = E.render(E.build(store=recorded(tmp_path / "base").fresh(), root=REPO)).splitlines()
     monkeypatch.setattr(lb, "document", marked(E.RUN_NOT_PROVED))
     doc = E.build(store=recorded(tmp_path / "marked").fresh(), root=REPO)
-    scan = doc["certifier"]["legend"]["scan"]
+    scan = doc["attester"]["legend"]["scan"]
     assert [line for line in E.render(doc).splitlines() if line not in base] == [
         f"- scan ({scan['standing']}; run, not proved): {scan['counts']}"]
-    net = {(m["period"], m["over"]): m for m in E.measurements(doc, {"benchmarks/x": "network_certifier"})}["year", "world"]
-    assert net["mark"] == "modeled" and net["inputs"][0].startswith("modeled (run, not proved): the network certifier's ")
+    net = {(m["period"], m["over"]): m for m in E.measurements(doc, {"benchmarks/x": "network_attester"})}["year", "world"]
+    assert net["mark"] == "modeled" and net["inputs"][0].startswith("modeled (run, not proved): the network attester's ")
     monkeypatch.setattr(lb, "document", marked("proved"))
     with pytest.raises(ValueError, match="^the network attester's rows scan carry a mark this command doesn't print"):
         E.build(store=recorded(tmp_path / "refused").fresh(), root=REPO)
@@ -251,7 +267,8 @@ PHASE = {
         "assumed": [
             {"input": "classes of gates a sampled proof block", "value": 4130, "unit": "class", "source": "no count gives it"},
             {"input": "symbols of a table's level-0 codewords", "value": 8388608, "unit": "symbol", "source": "the most"},
-            {"input": "one commitment, one sample; every committed window is presented", "value": None, "unit": "",
+            {"input": "both of SPOT's resampling holes closed, one commitment and one sample; every committed window "
+                      "is presented", "value": None, "unit": "",
              "source": "what a sum over verification phases takes of the prover"}],
         "design": {"sessions": 406360, "classes": 857865366050, "k": 49375943, "reruns": 10368948031,
                    "calls_a_run": "2^80.00", "rounds": 1788796724, "phases": 197078976,
@@ -288,7 +305,8 @@ def test_the_security_level_is_the_rows_binding_bound_named_by_what_it_is_over(t
     assert [(i["input"], i["value"], i["mark"]) for i in assumed] == [
         ("classes of gates a sampled proof block", 4130, "assumed"),
         ("symbols of a table's level-0 codewords", 8388608, "assumed"),
-        ("one commitment, one sample; every committed window is presented", None, "assumed")]
+        ("both of SPOT's resampling holes closed, one commitment and one sample; every committed window is presented",
+         None, "assumed")]
     assert all(i["source"].startswith(f"`{E.RECORD}` ({PLANNED}) `verification_phase.binding`: ") for i in assumed)
 
     lines = [line for line in E.render(doc).splitlines() if E.SECURITY in line and line.startswith("- ")]
@@ -303,7 +321,8 @@ def test_the_security_level_is_the_rows_binding_bound_named_by_what_it_is_over(t
         "207,715,585 of their proof blocks in 406,360 sessions, the largest of 4 tables.")
     assert lines[1] == (
         "- the security level assumes: 4,130 classes of gates a sampled proof block; 8,388,608 symbols of a table's "
-        "level-0 codewords; one commitment, one sample; every committed window is presented. It counts each session's "
+        "level-0 codewords; both of SPOT's resampling holes closed, one commitment and one sample; every committed "
+        "window is presented. It counts each session's "
         "knowledge error and the run's own opening checks as 0.")
     assert lines[2] == (
         "- what Lean proves of the security level: over one verification phase counted in calls, not proved at these "

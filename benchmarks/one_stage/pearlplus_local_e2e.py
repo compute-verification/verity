@@ -337,7 +337,8 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
     audit = out / "sampled-proofs"
     (audit / S.WINDOW_REGISTRATION).parent.mkdir(parents=True, exist_ok=True)
     (audit / S.WINDOW_REGISTRATION).write_text(json.dumps({"previous": tie, "registered": [], "stand_in": True}))
-    (audit / S.AUDIT_SUMMARY).write_text(json.dumps({"tie": {"record": tie}, "stand_in": True}))
+    (audit / S.AUDIT_SUMMARY).write_text(json.dumps({"tie": {"record": tie}, "audit": {"accepted": True},
+                                                     "stand_in": True}))
     (audit / S.CIRCUIT_RECORD).write_bytes(circuit_record.read_bytes())
 
     def row() -> dict:
