@@ -539,8 +539,10 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
             accepted, side = None, {"refused": refusal(e)}
         py = reason(coins, window, held)
         at = ((side or {}).get("step"), (side or {}).get("codes"))
-        return {name: {"refused": py is not None and accepted is False and at == SELECT_COINS, "accepted": accepted,
-                       "python": py, "lean": side}}
+        # a value registered afresh binds the window's open root, so under another root R7 refuses the docket first
+        bound = window != root and "R7-domain" in (((side or {}).get("refused") or {}).get("codes") or ())
+        return {name: {"refused": py is not None and (accepted is False and at == SELECT_COINS or bound),
+                       "accepted": accepted, "python": py, "lean": side}}
 
     bad = {**AC.negatives(ev, a.coins.pre(), **ours), "coins-for-another-window": (ev, ours)} if ev is not None else {}
     neg = [workers.submit(name, functools.partial(negative, name, coins, held)) for name, (coins, held) in bad.items()]
