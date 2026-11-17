@@ -1,5 +1,5 @@
 """`inference_only.py`: a served run's inference-only verdict, its registered circuit's blocks against the (c, k, n) it
-registered before it served, by `InferenceOnlyCheck.Count`'s rule. `BitAtx32_v1`'s price is an explicit circuit that computes the
+registered before it served, by the record reader's count. `BitAtx32_v1`'s price is an explicit circuit that computes the
 primitive, input by input; the verdict's rule is the count rule's reference (`inference_only_reference.check_count_detail`) on its
 rows, and the Lean instance it makes is one on which that reference counts the verdict's gates; n is the H200's sessions
 at the declared utilization over the lease, rounded up to the grid, from the class's fixed load alone; the policy is its
@@ -11,11 +11,13 @@ accepts within (c, k, n), refuses past each, and refuses as undecided what the r
 after the serve began unless said retroactive, a primitive with no price, a closed window with no seal, a window the
 class doesn't take), its public form naming no window and publishing no count: it judges n on the exact count, which
 only the private form holds, so runs whose counts differ publish one verdict, unless n falls between them, and then
-differ in their judgment alone. The verdict on c and k is `inference-only-check --count`'s, the Lean verifier's: it
-takes its whole verdict, with ``--detail`` where the binary's usage names it, into the private form alone, and publishes
-its gates and fresh bits a block, ``complies`` and the rule that failed, and none of its counts or total; a Lean
-verifier that gives no verdict, or none at all, leaves the run undecided; the record's count stands beside the verdict.
-The tests stand the reference in for the Lean verifier; the slow test runs `inference-only-check --count`."""
+differ in their judgment alone. The verdict on c and k is the record reader's count (`inference-only-record-check`) on the
+population Program the record names, its record and the registration log, with the policy's pins: a run record of
+another Program or record is undecided; it takes the reader's whole verdict into the private form alone, and publishes
+its Boolean gates, gates at their widths, fresh bits and blocks, ``complies`` and the rule that failed, never its fresh
+bits by kind; a reader whose blocks or Boolean gates are not the record's, that refuses, gives no verdict, or isn't
+started leaves the run undecided; the record's count stands beside the verdict. The tests stand the reference in for
+the reader; the slow test runs the built `inference-only-record-check`."""
 from __future__ import annotations
 
 import json
@@ -275,12 +277,33 @@ def development_host(monkeypatch):
     monkeypatch.setenv("CHECK_SCOPE", SC.NO_SCOPE)
 
 
+def _vectors():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("record_difftest_vectors",
+                                                  IO.INFERENCE_ONLY_PACKAGE / "scripts" / "record_difftest_vectors.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _chain(doc: dict | None, **over) -> dict:
+    """The verdict's ``run`` and ``log`` for ``doc``: a deployment's first record, then the run's own, which names
+    ``doc``'s Program and commits its text (``over`` replaces its keys)."""
+    if doc is None:
+        return {}
+    tr = _vectors().trusted(random.Random(0), doc["program"], IF.circuit_bytes(doc).decode(), {}, {}, before=1)
+    return {"run": {**tr["log"][-1], **over}, "log": tr["log"][:-1]}
+
+
 @pytest.fixture
 def lean(monkeypatch) -> Path:
-    ref = IO._reference()
-    monkeypatch.setattr(IO, "lean_count", lambda exe, inst, scratch, timeout_s=1800: {
-        "flags": ["--count", "--detail"], "out": ref.check_count_detail(inst)})
-    return Path("inference-only-verifier")
+    """The reference stands in for `inference-only-record-check`: its two verdicts on the case, as the exe prints them."""
+    ref = IO._record_case().ref
+    monkeypatch.setattr(IO, "reader_call", lambda exe, case, scratch, timeout_s=3600: {
+        "check": ref.check_detail(case["instance"], case["trusted"]),
+        "count": ref.count(case["instance"], case["trusted"], case["count"]), "memory": SC.UNLIMITED, "seconds": {}})
+    return Path("inference-only-record-check")
 
 
 def test_a_run_within_its_policy_is_accepted_and_its_public_form_holds_no_count(small, tmp_path, lean):
@@ -290,14 +313,14 @@ def test_a_run_within_its_policy_is_accepted_and_its_public_form_holds_no_count(
     judged on the exact count, and no count of blocks or of windows and no window's number; the private one holds the
     exact counts."""
     row = IO.session_row(small, None, None)
-    pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=lean)
+    pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=lean, **_chain(small))
     assert (pub["verdict"], pub["reason"], pub["complies"], pub["failure"]) == ("accept", None, True, None)
     assert pub["classes"] == [[row["definition"], row["gates"], row["fresh"]]] and not {"blocks", "total"} & set(pub)
     assert (pub["slots"], pub["positions"], pub["c"], pub["k"], pub["n"]) == (2, row["positions"], row["gates"],
                                                                               row["fresh"], 6)
     assert (pub["format"], pub["counts"]) == ("verity-bench/inference-only-verdict/v5", IO.COUNTS)
     assert pub["record_count"] == {"held": 0, "wired": 0, "openings": 0, "fresh": row["fresh"], "by": IO.RECORD_COUNT}
-    assert pub["theta"] == {"inputs": [], "by": IO.THETA}
+    assert pub["theta"] == {"by": IO.THETA} and pub["units"] == IO.UNITS
     assert IO.COUNTS.startswith("none published") and "exact count" in IO.COUNTS
     assert pub["registered_session"] is True and pub["serve_began_utc"] == "2025-11-01T12:26:40+00:00"
     assert SV.public_json(pub) == pub and not {"sealed", "outside_class", "retroactive"} & set(pub)
@@ -321,7 +344,7 @@ def test_a_policys_k_by_kind_is_the_run_circuits_and_sums_to_its_k(kinded, tmp_p
     row = IO.session_row(kinded, None, None)
     assert row["k_by_kind"] == KINDED and row["fresh"] == 18_432
     pol = _policy(row) if split is None else _policy(row, k_by_kind=split)
-    pub, _ = IO.verdict(pol, kinded, _serve(tmp_path / "s", FULL), None, None, lean=lean)
+    pub, _ = IO.verdict(pol, kinded, _serve(tmp_path / "s", FULL), None, None, lean=lean, **_chain(kinded))
     if why is None:
         assert (pub["verdict"], pub["complies"]) == ("accept", True)
     else:
@@ -340,7 +363,7 @@ def test_a_policys_k_by_kind_holds_only_its_kinds_each_an_int(kinded, tmp_path, 
     """A split whose keys are not of `KINDS`, or a value that is not an integer (a string of digits, a float, a bool, a
     list), or that is no object, is refused as undecided, saying so, before any sum."""
     row = IO.session_row(kinded, None, None)
-    pub, _ = IO.verdict(_policy(row, k_by_kind=split), kinded, _serve(tmp_path / "s", FULL), None, None, lean=lean)
+    pub, _ = IO.verdict(_policy(row, k_by_kind=split), kinded, _serve(tmp_path / "s", FULL), None, None, lean=lean, **_chain(kinded))
     assert pub["verdict"] == "refuse" and pub["reason"].startswith("undecided: the policy's k_by_kind ")
     assert "is not an object of linears, scan_state, each an integer of bits" in pub["reason"]
 
@@ -354,7 +377,7 @@ def test_a_run_past_its_policy_is_refused(small, tmp_path, over, why, lean):
     """Past n, c or k the run is refused, its failure the count rule's; past n its reason names n and not the count."""
     row = IO.session_row(small, None, None)
     at = {k: (row["gates"] - 1 if v == "gates-1" else row["fresh"] - 1 if v == "fresh-1" else v) for k, v in over.items()}
-    pub, _ = IO.verdict(_policy(row, **at), small, _serve(tmp_path / "s", FULL), None, None, lean=lean)
+    pub, _ = IO.verdict(_policy(row, **at), small, _serve(tmp_path / "s", FULL), None, None, lean=lean, **_chain(small))
     assert pub["verdict"] == "refuse" and why in pub["reason"] and pub["complies"] is False
     assert pub["failure"] == ([None, "count"] if "n" in over else [0, "gates" if "c" in over else "fresh"])
     assert not {"blocks", "total"} & set(pub) and ("n" not in over or pub["reason"] == why)
@@ -367,7 +390,7 @@ def test_no_public_field_carries_a_count_and_n_is_judged_on_the_exact_one(small,
     refused, and the two public verdicts differ in their judgment alone."""
     row = IO.session_row(small, None, None)
     runs = {w: _serve(tmp_path / f"w{w}", {7 + j: [{}, {}] for j in range(w)}) for w in (1, 2, 3, 8, 17)}
-    seen = {w: IO.verdict(_policy(row, n=64), small, d, None, None, lean=lean) for w, d in runs.items()}
+    seen = {w: IO.verdict(_policy(row, n=64), small, d, None, None, lean=lean, **_chain(small)) for w, d in runs.items()}
     pubs = [pub for pub, _ in seen.values()]
     assert all(p == pubs[0] for p in pubs) and pubs[0]["verdict"] == "accept" and len({IO.line(p) for p in pubs}) == 1
     assert [full["blocks"] for _, full in seen.values()] == [[[row["definition"], row["gates"], row["fresh"], 2 * w]]
@@ -376,11 +399,11 @@ def test_no_public_field_carries_a_count_and_n_is_judged_on_the_exact_one(small,
     for pub, full in seen.values():
         got = IO.judge(full["blocks"], pub["c"], pub["k"], pub["n"])
         assert (pub["complies"], pub["failure"]) == (got["complies"], got["failure"])
-    one, _ = IO.verdict(_policy(row, n=1), small, runs[1], None, None, lean=lean)
+    one, _ = IO.verdict(_policy(row, n=1), small, runs[1], None, None, lean=lean, **_chain(small))
     assert (one["verdict"], one["reason"], one["failure"]) == (
         "refuse", "the blocks' exact count is more than n = 1", [None, "count"])
-    one, _ = IO.verdict(_policy(row, n=3), small, runs[1], None, None, lean=lean)
-    two, full = IO.verdict(_policy(row, n=3), small, runs[2], None, None, lean=lean)
+    one, _ = IO.verdict(_policy(row, n=3), small, runs[1], None, None, lean=lean, **_chain(small))
+    two, full = IO.verdict(_policy(row, n=3), small, runs[2], None, None, lean=lean, **_chain(small))
     assert (one["verdict"], two["verdict"], two["reason"], full["total"]) == (
         "accept", "refuse", "the blocks' exact count is more than n = 3", 4)
     judgment = ("verdict", "reason", "complies", "failure")
@@ -401,7 +424,7 @@ def test_what_the_count_cant_decide_is_refused(small, tmp_path, windows, unseale
     requests than slots, a closed window with no seal, or a serve that sealed nothing: the run's blocks are undecided, and
     it is refused, the private verdict naming each window and why and the public one none."""
     row = IO.session_row(small, None, None)
-    pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", windows, unsealed), None, None, lean=lean)
+    pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", windows, unsealed), None, None, lean=lean, **_chain(small))
     assert pub["verdict"] == "refuse" and pub["reason"].startswith("undecided: ") and why in pub["reason"]
     assert pub["complies"] is False and not {"classes", "blocks", "total"} & set(pub)
     assert not any(ch.isdigit() for ch in pub["reason"])
@@ -415,69 +438,165 @@ def test_a_policy_written_after_the_serve_began_is_read_only_when_said_retroacti
     row = IO.session_row(small, None, None)
     d = _serve(tmp_path / "s", FULL)
     for written in (AFTER, "2025-11-01T12:26:40+00:00", None, "yesterday", "2025-11-01T12:26:39"):
-        pub, _ = IO.verdict(_policy(row, written_utc=written), small, d, None, None, lean=lean)
+        pub, _ = IO.verdict(_policy(row, written_utc=written), small, d, None, None, lean=lean, **_chain(small))
         assert pub["verdict"] == "refuse" and "not before the serve began" in pub["reason"], written
-    pub, _ = IO.verdict(_policy(row, written_utc=AFTER), small, d, None, None, lean=lean, retroactive="served before the step existed")
+    pub, _ = IO.verdict(_policy(row, written_utc=AFTER), small, d, None, None, lean=lean, **_chain(small), retroactive="served before the step existed")
     assert (pub["verdict"], pub["retroactive"]) == ("accept", "served before the step existed")
     (unstarted := _serve(tmp_path / "t", FULL)).joinpath("serve.json").unlink()
-    pub, _ = IO.verdict(_policy(row), small, unstarted, None, None, lean=lean, retroactive="served before the step existed")
+    pub, _ = IO.verdict(_policy(row), small, unstarted, None, None, lean=lean, **_chain(small), retroactive="served before the step existed")
     assert pub["verdict"] == "refuse" and "records no start" in pub["reason"] and "classes" not in pub
     for pol, doc, why in ((None, small, "no policy"), ({**_policy(row), "format": "x"}, small, "no policy"),
                           (_policy(row), None, "no circuit record"),
                           (_policy(row), {k: v for k, v in small.items() if k != "blocks"}, "states no inference blocks")):
-        pub, _ = IO.verdict(pol, doc, d, None, None, lean=lean)
+        pub, _ = IO.verdict(pol, doc, d, None, None, lean=lean, **_chain(doc))
         assert pub["verdict"] == "refuse" and why in pub["reason"]
 
 
 def test_the_command_line_writes_the_public_verdict_and_the_private_one_0600(small, tmp_path, capsys, lean):
-    """`verdict` writes the public verdict to --out and the full one, 0600, to --private, `inference-only-check --count --detail`'s
-    whole verdict in the private one alone, and prints the public line."""
+    """`verdict` reads the run's registration record and the log before it, writes the public verdict to --out and the
+    full one, 0600, to --private, the record reader's whole verdict in the private one alone, and prints the public line."""
     row = IO.session_row(small, None, None)
     d = _serve(tmp_path / "s", FULL)
+    chain = _chain(small)
     (tmp_path / "policy.json").write_text(json.dumps(_policy(row)))
     (tmp_path / "circuit.json").write_text(json.dumps(small))
-    (tmp_path / "registration.json").write_text(json.dumps({}))
+    (tmp_path / "registration.json").write_text(json.dumps(chain["run"]))
+    (tmp_path / "first.json").write_text(json.dumps(chain["log"][0]))
     (d / "private").mkdir(mode=0o700)
     assert IO.main(["verdict", "--policy", str(tmp_path / "policy.json"), "--serve-run", str(d), "--circuit",
                     str(tmp_path / "circuit.json"), "--registration", str(tmp_path / "registration.json"), "--pins",
-                    str(tmp_path / "no-weights.json"), "--lean", str(lean), "--out", str(tmp_path / "out" / "inference-only.json"),
+                    str(tmp_path / "no-weights.json"), "--run-record", str(tmp_path / "registration.json"), "--log",
+                    str(tmp_path / "first.json"), "--lean", str(lean), "--out", str(tmp_path / "out" / "inference-only.json"),
                     "--private", str(d / "private" / "inference-only.json")]) == 0
     pub = json.loads((tmp_path / "out" / "inference-only.json").read_text())
     full = json.loads((d / "private" / "inference-only.json").read_text())
     assert pub["verdict"] == "accept" and full["sealed"] == 3 and not {"sealed", "blocks", "total"} & set(pub)
     assert (full["blocks"][0][3], full["total"], pub["format"]) == (6, 6, "verity-bench/inference-only-verdict/v5")
     assert stat.S_IMODE((d / "private" / "inference-only.json").stat().st_mode) == 0o600
-    assert full["lean_detail"]["flags"] == ["--count", "--detail"] and full["lean_detail"]["out"]["complies"] is True
-    assert "lean_detail" not in pub
+    assert full["lean_detail"]["count"]["complies"] is True and "free" in full["lean_detail"]["check"]
+    assert "lean_detail" not in pub and not set(IO.FRESH_KINDS) & set(pub["lean"])
     said = capsys.readouterr().out
     assert said.startswith("INFERENCE-ONLY accept: session ") and "(no count published: n is judged on the blocks' exact " \
         "count, held on the node)" in said and said.rstrip().endswith("(0 held, 0 wired, 0 openings)")
-    assert str(COUNT) not in (tmp_path / "out" / "inference-only.json").read_text() and str(COUNT) not in said
 
 
-def test_a_lean_verifier_that_gives_no_verdict_leaves_the_run_undecided(small, tmp_path):
-    """An `inference-only-check` that exits non-zero or prints no JSON object gives no verdict, so the run is refused as
-    undecided, saying why; what it printed stays in the private verdict."""
+@pytest.mark.parametrize(("over", "why"), [
+    ({"program": "0" * 128}, "the run's registration record names another Program than its circuit record"),
+    ({"window": {"circuit": "0" * 128}}, "commits another circuit record than this one"),
+])
+def test_a_run_record_of_another_program_or_record_is_undecided(small, tmp_path, lean, over, why):
+    """The run's own registration record must name the Program its circuit record names and commit that record's
+    text: else the record reader is not called and the run is undecided, saying which."""
+    row = IO.session_row(small, None, None)
+    pub, _ = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=lean, **_chain(small, **over))
+    assert pub["verdict"] == "refuse" and pub["reason"].startswith(SV.UNDECIDED) and why in pub["reason"]
+    assert "lean" not in pub
+
+
+def test_no_run_record_or_no_reader_is_undecided(small, tmp_path, lean):
     row = IO.session_row(small, None, None)
     d = _serve(tmp_path / "s", FULL)
-    for body, why, said in (("echo no >&2; exit 2", "exit 2", "no"), ("echo hello", "printed no JSON object", "hello"),
-                            ("echo '[7, 9]'", "printed no JSON object", "[7, 9]")):
-        exe = tmp_path / "inference-only-verifier"
-        exe.write_text(f"#!/bin/sh\n{body}\n")
-        exe.chmod(0o755)
-        pub, full = IO.verdict(_policy(row), small, d, None, None, lean=exe, scratch=tmp_path)
-        assert pub["verdict"] == "refuse" and pub["lean"] == {"error": f"inference-only-verifier --count {why}"}
-        assert pub["reason"] == f"undecided: the Lean verifier gave no verdict: inference-only-verifier --count {why}"
-        assert full["lean_detail"] == {"flags": ["--count"], "error": f"inference-only-verifier --count {why}", "said": said,
-                                       "memory": SC.UNLIMITED}
+    pub, _ = IO.verdict(_policy(row), small, d, None, None, lean=lean)
+    assert pub["verdict"] == "refuse" and "no registration record of the run" in pub["reason"]
+    pub, _ = IO.verdict(_policy(row), small, d, None, None, **_chain(small))
+    assert pub["verdict"] == "refuse" and "no record reader was given" in pub["reason"]
+
+
+def test_the_cases_pins_are_the_policys_and_never_the_records_readers(small):
+    """The case reads the population Program the record names and the policy's pins, whatever readers its openings
+    name; the Program rebuilt is the one the record names."""
+    from verity.circuits import codec
+
+    row = IO.session_row(small, None, None)
+    chain = _chain(small)
+    case = IO.reader_case(small, chain["run"], chain["log"], row["table"], row["gates"], row["fresh"], 6, ["ab" * 64])
+    assert case["instance"]["pins"] == ["ab" * 64] and case["count"]["c"] == row["gates"]
+    assert codec.program_digest(json.loads(case["instance"]["program"])) == small["program"]
+    assert case["trusted"]["log"][-1] == chain["run"] and IO.reader_pins(small) == []
+
+
+def _reader(where: Path, check: dict, count: dict | None, body: str = "") -> Path:
+    """A stand-in `inference-only-record-check` that prints the two lines the built one does, ``check`` and ``count``,
+    and logs its arguments to ``args.log`` beside it."""
+    where.mkdir(parents=True)
+    exe = where / "inference-only-record-check"
+    lines = [f"[3 s] check: {json.dumps(check)}"] + ([f"[4 s] count: {json.dumps(count)}"] if count is not None else [])
+    printed = "".join(f"echo '{ln}'\n" for ln in lines)
+    exe.write_text(f"#!/bin/sh\necho \"$*\" >> '{where}/args.log'\n{body}{printed}")
+    exe.chmod(0o755)
+    return exe
+
+
+def _check(row: dict, **over) -> dict:
+    return {"blocks": 2, "gates": 144, "inputs": row["fresh"], "fresh": row["fresh"], "cross_wires": 0, "free": row["fresh"],
+            "ingress": 0, "unregistered": 0, "openings": 0, "wired_rows": 0, "wired_bits": 0, "complies": True,
+            "failure": None, **over}
+
+
+def test_the_verdict_takes_the_readers_boolean_gates_fresh_bits_and_failure_and_none_of_its_kinds(small, tmp_path):
+    """Where the record reader counts more fresh bits than k, the run is refused on k by its count, and the public
+    verdict takes only its Boolean gates, gates at their widths, fresh bits, blocks, ``complies`` and the rule that
+    failed; its fresh bits by kind stay in the private verdict, and it states the three units."""
+    row = IO.session_row(small, None, None)
+    fresh = row["fresh"] + 5
+    exe = _reader(tmp_path / "lean", _check(row, fresh=fresh, free=fresh),
+                  {"bool_gates": row["gates"], "complies": False, "failure": "fresh"})
+    pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path,
+                           **_chain(small))
+    assert pub["lean"] == {"c": row["gates"], "gates": 144, "fresh": fresh, "blocks": 2, "complies": False, "failed": "fresh"}
+    assert (pub["verdict"], pub["complies"], pub["failure"]) == ("refuse", False, [0, "fresh"])
+    assert pub["reason"] == f"the record reader counts a block of {fresh} fresh bits, more than k = {row['fresh']}"
+    assert pub["classes"] == [[row["definition"], row["gates"], fresh]] and pub["units"] == IO.UNITS
+    assert full["lean_detail"]["check"]["free"] == fresh and full["lean_detail"]["seconds"] == {"check": 3, "count": 4}
+    assert IO.line(pub).startswith(f"refuse: {pub['reason']}: session ")
+    assert list(tmp_path.glob("tmp*.json")) == []
+
+
+@pytest.mark.parametrize(("check", "count", "why"), [
+    ({"blocks": 3}, None, "the record reader counts 3 blocks a window, and the record 2 slots"),
+    ({}, {"bool_gates": 7}, "the record reader counts 7 Boolean gates a block, and the gate table"),
+])
+def test_a_reader_whose_blocks_or_gates_are_not_the_records_is_undecided(small, tmp_path, check, count, why):
+    row = IO.session_row(small, None, None)
+    exe = _reader(tmp_path / "lean", _check(row, **check), {"bool_gates": row["gates"], "complies": True, "failure": None,
+                                                           **(count or {})})
+    pub, _ = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path,
+                        **_chain(small))
+    assert pub["verdict"] == "refuse" and pub["reason"].startswith(f"{SV.UNDECIDED}{why}")
+
+
+def test_a_reader_refusal_lands_in_lean_with_its_code_and_message_alone(small, tmp_path):
+    """The reader's refusal lands in ``lean`` as its ``error`` and ``message``, and the run is undecided, saying both."""
+    row = IO.session_row(small, None, None)
+    refusal = {"error": "formats", "message": "pearl-a/0 has a format the run record does not register"}
+    exe = _reader(tmp_path / "lean", {**refusal, "blocks": 2}, refusal)
+    pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path,
+                           **_chain(small))
+    assert pub["verdict"] == "refuse" and pub["lean"] == refusal
+    assert IO.line(pub) == f"refuse: undecided: the record reader gave no verdict: formats: {refusal['message']}"
+    assert full["lean_detail"]["check"] == {**refusal, "blocks": 2}
+
+
+def test_a_reader_that_gives_no_verdict_leaves_the_run_undecided(small, tmp_path):
+    """A reader that exits non-zero or prints no check and count lines gives no verdict: the run is undecided, saying
+    why, and what it printed stays in the private verdict."""
+    row = IO.session_row(small, None, None)
+    d = _serve(tmp_path / "s", FULL)
+    for k, (body, why, said) in enumerate((("echo no >&2; exit 2\n", "exit 2", "no"),
+                                          ("echo hello; exit 0\n", "printed no check and count verdicts", "hello"))):
+        exe = _reader(tmp_path / f"lean{k}", _check(row), None, body)
+        pub, full = IO.verdict(_policy(row), small, d, None, None, lean=exe, scratch=tmp_path, **_chain(small))
+        assert pub["verdict"] == "refuse" and pub["lean"] == {"error": f"inference-only-record-check {why}"}
+        assert pub["reason"] == f"undecided: the record reader gave no verdict: inference-only-record-check {why}"
+        assert full["lean_detail"] == {"error": f"inference-only-record-check {why}", "said": said, "memory": SC.UNLIMITED}
         assert list(tmp_path.glob("tmp*.json")) == []
 
 
-def test_the_lean_verifier_runs_behind_the_hosts_memory_limit(small, tmp_path, monkeypatch):
-    """Both of `inference-only-check`'s calls, its usage and its count, run behind the scope `served_cases.limits` gives
-    a check on this host, and the private verdict says under which limit."""
+def test_the_reader_runs_behind_the_hosts_memory_limit(small, tmp_path, monkeypatch):
+    """The reader runs once, behind the scope `served_cases.limits` gives a check on this host, and the private verdict
+    says under which limit."""
     row = IO.session_row(small, None, None)
-    exe = _inference_only_check(tmp_path / "lean", NEW_USAGE, {"complies": False}, _whole(row))
+    exe = _reader(tmp_path / "lean", _check(row), {"bool_gates": row["gates"], "complies": True, "failure": None})
     scope = tmp_path / "scope"
     scope.write_text(f"""#!/bin/sh
 echo "$*" >> '{tmp_path}/scope.log'
@@ -488,129 +607,40 @@ exec "$@"
     scope.chmod(0o755)
     within = SC.Limits(1, 3, (str(scope), "-p", "MemoryMax=3G", "--"))
     monkeypatch.setattr(SC, "limits", lambda env=None: within)
-    pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path)
-    assert (pub["verdict"], pub["failure"]) == ("refuse", [0, "fresh"]) and full["lean_detail"]["memory"] == within.memory
-    calls = (tmp_path / "scope.log").read_text().splitlines()
-    assert len(calls) == 2 and calls[0] == f"-p MemoryMax=3G -- {exe}"
-    assert calls[1].startswith(f"-p MemoryMax=3G -- {exe} --count --detail ")
+    pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path,
+                           **_chain(small))
+    assert pub["verdict"] == "accept" and full["lean_detail"]["memory"] == within.memory
+    (call,) = (tmp_path / "scope.log").read_text().splitlines()
+    assert call.startswith(f"-p MemoryMax=3G -- {exe} {tmp_path}")
 
 
-def test_a_host_with_no_memory_limit_starts_no_lean_verifier_and_the_row_is_an_error(small, tmp_path, monkeypatch):
-    """On a host that makes no memory scope (and runs no address-space limit) `inference-only-check` is not started: the
-    run is undecided, saying why, and the record's row says the verifier gave no verdict (``error``), not ``reject``."""
+def test_a_host_with_no_memory_limit_starts_no_reader_and_the_row_is_an_error(small, tmp_path, monkeypatch):
+    """On a host that makes no memory scope the reader is not started: the run is undecided, saying why, and the
+    record's row says the reader gave no verdict (``error``), not ``reject``."""
     monkeypatch.delenv("CHECK_SCOPE")
     monkeypatch.setattr(SC, "scope_here", lambda: False)
     monkeypatch.setattr(SC, "address_space_here", lambda: False, raising=False)
     row = IO.session_row(small, None, None)
-    exe = _inference_only_check(tmp_path / "lean", NEW_USAGE, {"complies": True}, _whole(row))
-    pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path)
-    why = f"inference-only-verifier not started: {SC.limits().refusal}"
+    exe = _reader(tmp_path / "lean", _check(row), {"bool_gates": row["gates"], "complies": True, "failure": None})
+    pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path,
+                           **_chain(small))
+    why = f"inference-only-record-check not started: {SC.limits().refusal}"
     assert (pub["verdict"], pub["lean"]) == ("refuse", {"error": why})
-    assert pub["reason"] == f"{SV.UNDECIDED}the Lean verifier gave no verdict: {why}"
-    assert full["lean_detail"] == {"flags": ["--count"], "error": why}
+    assert pub["reason"] == f"{SV.UNDECIDED}the record reader gave no verdict: {why}"
     assert not (tmp_path / "lean" / "args.log").exists() and list(tmp_path.glob("tmp*.json")) == []
     assert SV.inference_only_row(pub)["verdict"] == "error"
 
 
-#: `inference-only-check`'s usage while ``--count`` printed its whole verdict, and once it prints that only with ``--detail``
-OLD_USAGE = "usage: inference-only-verifier [--unrolled] INSTANCE TRUSTED | inference-only-verifier --policy [--unrolled] INSTANCE | inference-only-verifier --count INSTANCE"
-NEW_USAGE = OLD_USAGE.replace("--count INSTANCE", "--count [--detail] INSTANCE")
-#: a count of blocks no other number in the verdict holds
-COUNT = 987654321
-
-
-def _inference_only_check(where: Path, usage: str, count: dict, detail: dict | None) -> Path:
-    """A stand-in `inference-only-check` that answers as the built one does: ``--count INSTANCE`` prints ``count``, ``--count --detail
-    INSTANCE`` prints ``detail`` where it has one, and anything else gets ``usage``, exit 2. It logs each call's
-    arguments to ``args.log`` beside it."""
-    where.mkdir(parents=True)
-    (where / "count.json").write_text(json.dumps(count))
-    if detail is not None:
-        (where / "detail.json").write_text(json.dumps(detail))
-    exe = where / "inference-only-verifier"
-    exe.write_text(f"""#!/bin/sh
-echo "$*" >> '{where}/args.log'
-if [ "$1" = --count ] && [ $# -eq 2 ]; then cat '{where}/count.json'; exit 0; fi
-if [ "$1 $2" = "--count --detail" ] && [ $# -eq 3 ] && [ -f '{where}/detail.json' ]; then cat '{where}/detail.json'; exit 0; fi
-echo '{usage}' >&2
-exit 2
-""")
-    exe.chmod(0o755)
-    return exe
-
-
-def _whole(row: dict) -> dict:
-    """`InferenceOnlyCheck.Count`'s whole verdict on the session Program: its row's fresh bits past k, and a count."""
-    return {"blocks": [[row["key"], row["gates"], row["fresh"] + 5, COUNT]], "total": COUNT, "complies": False,
-            "failure": [0, "fresh"]}
-
-
-@pytest.mark.parametrize(("usage", "public", "flags"), [
-    (OLD_USAGE, None, ["--count"]),
-    (NEW_USAGE, {"complies": False}, ["--count", "--detail"]),
-], ids=["count-prints-all", "detail-prints-all"])
-def test_the_verdict_is_the_lean_verifiers_and_takes_its_gates_fresh_bits_and_failure_and_none_of_its_counts(small, tmp_path, usage,
-                                                                                                         public, flags):
-    """An `inference-only-check` whose ``--count`` prints its whole verdict, and one that prints only ``{complies}`` unless given
-    ``--detail``, which its usage names: each is called for its whole verdict, rows, total and failure, which the private
-    verdict keeps whole. Where it counts more fresh bits than the record's count and than k, the run is refused on k by
-    its count, the record's count beside it, and the public verdict and its line take only its gates and fresh bits a
-    block, whether the gates agree, ``complies`` and the rule that failed, and none of its counts."""
-    row = IO.session_row(small, None, None)
-    exe = _inference_only_check(tmp_path / "lean", usage, public or _whole(row), _whole(row) if public else None)
-    pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path)
-    assert pub["lean"] == {"gates": row["gates"], "agrees_on_gates": True, "fresh": row["fresh"] + 5, "complies": False,
-                           "failed": "fresh"}
-    assert (pub["verdict"], pub["complies"], pub["failure"]) == ("refuse", False, [0, "fresh"])
-    assert pub["reason"] == (f"the Lean verifier counts a block of {row['fresh'] + 5} fresh bits, more than k = {row['fresh']} "
-                             f"(the record's count is {row['fresh']}: {IO.WIRED})")
-    assert pub["classes"] == [[row["definition"], row["gates"], row["fresh"] + 5]]
-    assert pub["record_count"]["fresh"] == row["fresh"]
-    assert str(COUNT) not in json.dumps(pub) and str(COUNT) not in IO.line(pub) and "lean_detail" not in pub
-    assert IO.line(pub).startswith(f"refuse: {pub['reason']}: session ")
-    assert full["lean_detail"] == {"flags": flags, "out": _whole(row), "memory": SC.UNLIMITED}
-    calls = (tmp_path / "lean" / "args.log").read_text().splitlines()
-    assert calls[0] == "" and len(calls) == 2 and calls[1].startswith(" ".join(flags) + " " + str(tmp_path))
-
-
-def test_a_binary_whose_usage_hides_detail_gives_no_rows_which_is_said(small, tmp_path):
-    """An `inference-only-check` that prints only ``{complies}`` for ``--count`` and whose usage names no ``--detail`` gives no row
-    of the block: the run is undecided, saying so, and takes nothing from it."""
-    row = IO.session_row(small, None, None)
-    exe = _inference_only_check(tmp_path / "lean", OLD_USAGE, {"complies": False}, _whole(row))
-    pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path)
-    assert pub["verdict"] == "refuse" and pub["lean"] == {"error": "inference-only-verifier --count printed no row of the block"}
-    assert pub["reason"] == "undecided: the Lean verifier gave no verdict: inference-only-verifier --count printed no row of the block"
-    assert full["lean_detail"] == {"flags": ["--count"], "out": {"complies": False}, "memory": SC.UNLIMITED}
-
-
-@pytest.mark.parametrize(("usage", "flags"), [(OLD_USAGE, ["--count"]), (NEW_USAGE, ["--count", "--detail"])],
-                         ids=["count-prints-all", "detail-prints-all"])
-def test_an_inference_only_check_refusal_lands_in_lean_with_its_code_and_message_alone(small, tmp_path, usage, flags):
-    """`inference-only-check`'s refusal, with or without ``--detail``, lands in ``lean`` as its ``error`` and ``message``, and
-    the run is undecided, saying both; anything else it carries, a count here, stays in the private verdict."""
-    row = IO.session_row(small, None, None)
-    refusal = {"error": "program", "message": "E_REINTERPRET: a reference reads a leaf at another width"}
-    said = {**refusal, "blocks": [[row["key"], row["gates"], row["fresh"], COUNT]], "total": COUNT}
-    exe = _inference_only_check(tmp_path / "lean", usage, said, said)
-    pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path)
-    assert pub["verdict"] == "refuse" and pub["lean"] == refusal
-    assert IO.line(pub) == f"refuse: undecided: the Lean verifier gave no verdict: program: {refusal['message']}"
-    assert str(COUNT) not in json.dumps(pub) and str(COUNT) not in IO.line(pub)
-    assert full["lean_detail"] == {"flags": flags, "out": said, "memory": SC.UNLIMITED}
-
-
 @pytest.mark.slow
-def test_inference_only_check_counts_the_verdicts_gates_on_the_session_program(small, tmp_path):
-    """The compiled `inference-only-check --count` on `small`'s session Program counts the record's gates and fresh bits a
-    block and accepts: the Lean verifier whose verdict it is reads the instance it is given, as only the built executable can show (the
-    reference test holds the instance to the Python count, and `inference-only-count-difftest` the Lean to the reference)."""
-    import served_cases as SC
-
-    exe = SC.build(SC.INFERENCE_ONLY_LEAN[0], "inference-only-verifier")
+def test_the_record_reader_counts_the_verdicts_gates_on_the_registered_program(small, tmp_path):
+    """The compiled `inference-only-record-check` on `small`'s registered Program, its record and a log counts the
+    gate table's Boolean gates and the record's fresh bits a block and accepts, as only the built executable can show
+    (`inference-only-record-difftest` holds the Lean to the reference the other tests stand in)."""
+    exe = SC.build(SC.INFERENCE_ONLY_LEAN[0], "inference-only-record-check")
     row = IO.session_row(small, None, None)
-    pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path)
-    assert pub["verdict"] == "accept" and pub["lean"]["agrees_on_gates"] is True and pub["lean"]["gates"] == row["gates"]
-    assert pub["lean"] == {"gates": row["gates"], "agrees_on_gates": True, "fresh": row["fresh"], "complies": True,
+    pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path,
+                           **_chain(small))
+    assert pub["verdict"] == "accept", pub["reason"]
+    assert pub["lean"] == {"c": row["gates"], "gates": 144, "fresh": row["fresh"], "blocks": 2, "complies": True,
                            "failed": None}
-    assert {"blocks", "total", "failure"} <= set(full["lean_detail"]["out"])
+    assert full["lean_detail"]["check"]["free"] == row["fresh"]

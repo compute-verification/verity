@@ -1245,7 +1245,7 @@ block_counts() {  # in TREE: the picked window's (c, k)-inference blocks at each
   done
 }
 IO_POLICY=${IO_POLICY:-$OUT/inference-only-policy.json}
-IO_LEAN=$TREE/verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/.lake/build/bin/inference-only-verifier
+IO_LEAN=$TREE/verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/.lake/build/bin/inference-only-record-check
 io_class() {  # the inference-only verdict's class: IO_CLASS, else the first of CLASSES but `record`
   local c
   [ -z "${IO_CLASS:-}" ] || { echo "$IO_CLASS"; return 0; }
@@ -1338,13 +1338,17 @@ print("%d/%d %d" % (d["alpha"][0], d["alpha"][1], d["gamma"]))' "$IO_LIMITS") ||
   export ALPHA=${got% *} GAMMA=${got#* }
 }
 inference_only() {  # in TREE, once step 3 counted window K's circuit at the class: its verdict against the policy
-  local c out rc lean=()
+  # the record reader reads the log from the serve's first registration record, Pearl+'s W after it under PEARLPLUS_TIE,
+  # and the window's own record last
+  local c out rc lean=() log=()
   c=$(io_class)
   [ -n "$c" ] || return 0
-  [ -x "$IO_LEAN" ] && lean=(--lean "$IO_LEAN" --lean-timeout "${IO_LEAN_TIMEOUT:-1800}")
+  [ -x "$IO_LEAN" ] && lean=(--lean "$IO_LEAN" --lean-timeout "${IO_LEAN_TIMEOUT:-3600}")
+  [ -s "$DREG" ] && log=("$DREG")
+  [ -n "$PEARLPLUS_TIE" ] && [ -s "$(pearl_dir)/registration.json" ] && log+=("$(pearl_dir)/registration.json")
   out=$(CUDA_VISIBLE_DEVICES='' "$PY" benchmarks/one_stage/inference_only.py verdict --policy "$IO_POLICY" --serve-run "$D" \
     --circuit "$D/window-circuit-w$K-${c//,/-}.json" --registration "$D/advice/w$K/registration.json" --pins "$WREG" \
-    "${lean[@]}" --out "$OUT/record/inference-only.json" --private "$D/private/inference-only.json" 2> "$D/inference-only.err")
+    --run-record "$D/advice/w$K/registration.json" --log "${log[@]}" "${lean[@]}" --out "$OUT/record/inference-only.json" --private "$D/private/inference-only.json" 2> "$D/inference-only.err")
   rc=$?
   say "${out:-INFERENCE-ONLY failed (exit $rc): its log in the serve dir, on the node}"
   return "$rc"
@@ -2201,9 +2205,9 @@ build() {  # what prove_path.sh builds, here while the endpoint serves; prove_pa
     RESEARCH_RUN_DIR=$OUT/m0-build-gpu FLOCK_WORK=$FW/gpu CUDA_TK=$tk MODE=build GPU=1 flock "$FW/.build.lock" \
       bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh || return 6
   fi
-  # after verity-verify-proof's build, whose package it requires by path: the inference-only verdict's `inference-only-verifier --count`,
-  # without which the verdict is the Python count's alone
-  (cd verity/protocols/workload_classification/training_detection/inference_only/verifier/lean && lake build inference-only-verifier) || echo "inference-only-verifier didn't build"
+  # after verity-verify-proof's build, whose package it requires by path: the inference-only verdict's record reader,
+  # without which the verdict refuses
+  (cd verity/protocols/workload_classification/training_detection/inference_only/verifier/lean && lake build inference-only-record-check) || echo "inference-only-record-check didn't build"
 }
 if [ -n "$COMPOSE" ]; then ( unset PYTHONPATH; compose_build ) > "$OUT/build.log" 2>&1 &
 else ( unset PYTHONPATH; build ) > "$OUT/build.log" 2>&1 &
