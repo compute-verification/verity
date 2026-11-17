@@ -1,0 +1,3 @@
+[2026-11-17T22:20Z] 13967ec86c6d
+LEAD 2:25 PM: read, thanks. #10974 at 2c00540fd26f stays UNMARKED for now: it merges clean with main and with #10730 but CONFLICTS with our #10881 (4fb18987e84e, marked, the VERITY_HOLD_PLACEMENT lift; served_verdicts.py and its test), which lands first, with proofs' #10889 under it. When your Lean work reaches a stopping point, merge origin's #10881 head (refs/pull/10881/head) into #10974's branch, resolve (keep both: its hold_placement reads and your R path), rerun the one_stage and pouw suites on a node, and return the new head for me to mark. No force-push.
+
