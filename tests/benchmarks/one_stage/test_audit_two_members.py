@@ -57,7 +57,8 @@ from verity.commitments import coin_tree as CT
 from verity.protocols.proofs.spot.verifier.challenger import challenger as C
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, members as M, proofs as PF, docket as R
-from verity.circuits.codec import descriptor_id
+from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
+from verity.circuits.codec import descriptor_id, program_digest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.ops import gemm as G
@@ -97,14 +98,24 @@ def _kept_prover(out: Path) -> list[str]:
     return [Path(json.loads(x[5:])["label"]).name for x in log.read_text().splitlines() if x.startswith("LIVE\t")]
 
 
-def _window(d: Path, flipped: bool = False) -> Path:
+def _window(d: Path, flipped: bool = False, own: str | None = None) -> Path:
     """The window (module docstring) written to ``d``. ``flipped``: the K = 256 proof block's committed output has bit 0
-    of its first word flipped, and is committed as consistently as an honest one."""
-    win = IF.Window(IF.Circuit("two-members", tuple((t, 1) for t in TEMPLATES)), RUN, D.parse_design(DESIGN), 4)
+    of its first word flipped, and is committed as consistently as an honest one. ``own``: the K = 128 proof block reads
+    its ``wrow`` from a value of that name the Program takes, registered afresh under the run root."""
     rng = np.random.default_rng(0)
-    for t, k in zip(TEMPLATES, KS):
+    data = []
+    for k in KS:
         x, w = (rng.integers(-128, 128, (1, k)).astype(np.int8) for _ in range(2))
         sx, sw = ((np.abs(rng.standard_normal(1)) / 127).astype(np.float32) for _ in range(2))
+        data.append((x, w, sx, sw))
+    reg = None if own is None else IF.Registered({own: KS[0] // 2}, reads=(
+        IF.Read(descriptor_id(TEMPLATES[0]), "wrow", own, 0, (1, 1), 0, (0, KS[0] // 2)),), values=(own,))
+    circuit = IF.Circuit("two-members", tuple((t, 1) for t in TEMPLATES), registered=reg)
+    values = {} if own is None else {own: REG.Registered.commit(program_digest(circuit.program()[0]), own,
+                                                                data[0][1].view(np.uint16).tolist(), schema=REG.SCHEMA_V2,
+                                                                window=RUN)}
+    win = IF.Window(circuit, RUN, D.parse_design(DESIGN), 4, registered=values)
+    for t, k, (x, w, sx, sw) in zip(TEMPLATES, KS, data):
         ins = [x.view(np.uint8), sx.view(np.uint32), w.view(np.uint8), sw.view(np.uint32)]
         out = np.asarray(evaluate_batch(t, *ins, kernel="reference"), dtype=np.uint16)
         if flipped and k == KS[-1]:
@@ -323,6 +334,19 @@ def test_a_member_with_one_bit_changed_is_refused(tmp_path, binaries):
         assert (record["verdict"]["accepted"], bool(record["proof_sha512"])) == (proofs, proofs), session
     # the one kept verifier answered both members, and went on to refuse the changed one after accepting the other
     assert _kept_verifier(out) == [(0, True), (1, False)]
+
+
+def test_a_value_the_program_takes_registered_afresh_with_no_earlier_record_passes_the_audit(tmp_path, binaries):
+    """No other test runs a value the Program takes, registered afresh under the run root with no earlier record (no
+    ``--tie``), through the stream's registration, the prover and the Lean verifier's registered reads."""
+    window = _window(tmp_path / "window", own="own/w")
+    rec = json.loads((window / "registration.json").read_text())
+    (entry,) = rec["registered"]
+    rc, row, _out, said = _audit(tmp_path, window, binaries, more={"FLOCK_CHALLENGER": "0"})
+    assert rc == 0 and row.get("ok") is True, said
+    assert row["audit"]["accepted"] is True and row["draw"] == [0, 1], row["audit"]
+    assert row["registered"]["own"] == {"own/w": entry} and row["registered"]["members"] == 1, row["registered"]
+    assert row["leak"]["untied"] == ["own/w"] and "tie" not in row, row["leak"]
 
 
 def _answer(out: Path) -> dict:

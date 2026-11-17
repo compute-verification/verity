@@ -60,7 +60,9 @@ the free inputs. Those it reads as ties (a wired loop's activations: an output p
 takes, `tied_values`) are pinned from the docket beside ``--registered``'s (`window_pins`), so Lean's registered
 reads tie each reader's row to its writer's. One it reads only through input ports is opened against its committed root
 too, but the prover chose its rows: its reads count free, and the count names it (``leak.untied``). PoUW's H1 tiles
-have theirs pinned through ``--registered``, from the window's entries.
+have theirs pinned through ``--registered``, from the window's entries. A value the registration registers for its
+execution phase (the scan's state: an entry under the domain its Program binds to the run root, `phase_values`) is one
+of the window's own values too, and the summary's ``registered.own`` names them all.
 
 A circuit whose program takes values ahead of its templates' parameters (`interface.Registered.values`: a served window's
 H1 tables, or each Pearl+ call's A rows and y, which its proof blocks make where the model makes them) has them registered
@@ -537,11 +539,12 @@ def tied_values(circuit: Mapping[str, Any], values: Iterable[str], resolve: Call
     return {v for v in values if v in taken and taken[v] <= written.get(v, set())}
 
 
-def window_pins(w: Mapping[str, Any], circuit: Mapping[str, Any],
-                resolve: Callable[[str], Any] = IF.resolve) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
-    """The per-window values the circuit reads (its registered parameters among the docket's ``activations``), by
-    parameter, each refused (ValueError) unless it names its value and a root and its domain binds the window's run root,
-    as ``(ties, untied)``. The ties (`tied_values`: a wired loop's activations, each written by an output port and read by
+def window_pins(w: Mapping[str, Any], circuit: Mapping[str, Any], resolve: Callable[[str], Any] = IF.resolve,
+                registration: Mapping[str, Any] | None = None) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+    """The per-window values the circuit reads (its registered parameters among the docket's ``activations``, each refused
+    (ValueError) unless it names its value and a root and its domain binds the window's run root, and among
+    ``registration``'s registered entries those under a domain the registration's Program binds to the run root,
+    `phase_values`), by parameter, as ``(ties, untied)``. The ties (`tied_values`: a wired loop's activations, each written by an output port and read by
     an input port) are pinned: the docket fixes them before the sample, and the Lean verifier's registered reads open
     each writer's and each reader's rows against the same root, so a reader's rows are its writer's. An untied value (read
     only by input ports) is opened against its committed root too, since the Lean verifier opens every registered read, but
@@ -554,12 +557,16 @@ def window_pins(w: Mapping[str, Any], circuit: Mapping[str, Any],
                           window=w.get("run")).domain_id.hex()
         if e.get("value") != v or e.get("domain") != want or not isinstance(e.get("root"), str):
             raise ValueError(f"the window's value {v!r} names another value or a domain not bound to its run root, or no root")
+    own = {} if registration is None else phase_values(registration, params)
+    if twice := sorted(set(own) & set(values)):
+        raise ValueError(f"the window commits {twice} both in its activations and in its registration")
+    values |= own
     ties = tied_values(circuit, values, resolve)
     return {v: e for v, e in values.items() if v in ties}, {v: e for v, e in values.items() if v not in ties}
 
 
-def tie_of(circuit: Mapping[str, Any], w: Mapping[str, Any] | None,
-           prefix: str | None) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
+def tie_of(circuit: Mapping[str, Any], w: Mapping[str, Any] | None, prefix: str | None,
+           own: Mapping[str, Mapping[str, Any]] | None = None) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
     """The window's tie to ``w`` (``--tie``: W, the earlier docket that registered first the values the circuit's
     program takes, `interface.Registered.values`): a5's ``tie``, one-stage's ``log`` (W), ``registered`` (each value's
     words), ``outputs`` (each value W's entry of it) and ``schemas`` (each value's rows, `interface.value_format`), and the
@@ -568,12 +575,17 @@ def tie_of(circuit: Mapping[str, Any], w: Mapping[str, Any] | None,
     `credit.window_table` (PoUW H1's docket of the window, each value a Commit table in ``row/v2`` rows), or, with
     no prefix, by the value's own name (Pearl+'s window record, `pearl_c.window`: each call's A rows and y, FP32 words in
     ``row-seg/v1`` rows, beside each weight's B rows, which the circuit doesn't take). ``({}, {})`` for a circuit that
-    takes no values with no W. Refused (ValueError) for values without W, W without values, and W registering a value
-    other than once."""
+    takes no values with no W. A value among ``own`` (the execution phase's own, `phase_values`) is registered afresh,
+    under the execution phase's open root: it is in ``registered`` and ``schemas`` and never W's. Refused (ValueError)
+    for values without W, W without values, and W registering a value other than once."""
     reg = IF.declarations(circuit)[2]
     values = tuple(reg.values) if reg is not None else ()
+    mine = {v: own[v] for v in values if v in (own or {})}
+    values = tuple(v for v in values if v not in mine)
+    fresh = {"registered": {v: int(e["words"]) for v, e in mine.items()},
+             "schemas": {v: IF.value_format(reg, v)[0] for v in mine}}
     if not values and w is None:
-        return {}, {}
+        return (fresh if mine else {}), {}
     if w is None:
         raise ValueError(f"the circuit takes values {list(values)}, an earlier registration's: tie the audit to it (--tie W, "
                          "and --tie-prefix P for a W that names its tables under a PREFIX)")
@@ -590,8 +602,8 @@ def tie_of(circuit: Mapping[str, Any], w: Mapping[str, Any] | None,
                              "not once" + ("" if prefix is not None else " (a W naming its tables under its descriptor's "
                                                                           "PREFIX, H1's: give --tie-prefix)"))
         pins[v], outputs[v] = {**got[0], "value": v}, {"record": d, "value": name}
-    return ({"log": [dict(w)], "registered": {v: int(pins[v]["words"]) for v in values}, "outputs": outputs,
-             "schemas": {v: IF.value_format(reg, v)[0] for v in values}}, pins)
+    return ({"log": [dict(w)], "registered": {**fresh["registered"], **{v: int(pins[v]["words"]) for v in values}},
+             "outputs": outputs, "schemas": {**fresh["schemas"], **{v: IF.value_format(reg, v)[0] for v in values}}}, pins)
 
 
 #: what holds the roots of Pearl+'s window record to the ones its passes credited, which an audit tied to it rests on
@@ -671,6 +683,19 @@ def tie_row(tied: Mapping[str, Any]) -> dict[str, Any]:
     scheme = (w.get("window") or {}).get("scheme")
     pearl = isinstance(scheme, str) and scheme.startswith("pearl-c-")
     return {"record": R.digest(w), "values": sorted(tied["outputs"]), **({"credited_by": PEARL_CREDIT} if pearl else {})}
+
+
+def phase_values(rec: Mapping[str, Any], params: Iterable[str]) -> dict[str, dict[str, Any]]:
+    params, run, out = set(params), (rec.get("window") or {}).get("run"), {}
+    for e in rec.get("registered") or ():
+        v = e.get("value") if isinstance(e, Mapping) else None
+        if v not in params or not isinstance(e.get("root"), str) or not isinstance(run, str):
+            continue
+        want = REG.domain(rec.get("program", ""), v, e["words"], e["leaves"], e.get(REG.WIDTH_KEY, REG.WORD_BITS),
+                          window=run).domain_id.hex()
+        if e.get("domain") == want:
+            out[v] = dict(e)
+    return out
 
 
 def committed_activations(w: Mapping[str, Any]) -> dict[str, Any] | None:
@@ -795,7 +820,7 @@ def period(window: Path, audit: Path, pins: Mapping[str, str], tied: str) -> dic
     if hashlib.sha512(body).hexdigest() != own.get("circuit"):
         raise ValueError(f"{window / 'circuit.json'} is not the circuit record the registration binds")
     doc = json.loads(body)
-    ties, untied = window_pins(own, doc, catalog_resolve)
+    ties, untied = window_pins(own, doc, catalog_resolve, rec)
     if tied not in ties | untied:
         raise ValueError(f"the window commits no {tied} its circuit reads: the period has no state to tie to its scan's")
     count = declared_count(doc, 0, catalog_resolve, pins={**pins, **pin_roots({**ties, **untied})},
@@ -1023,12 +1048,13 @@ def audit(a: argparse.Namespace) -> int:
             return sets[t][1] if t in sets else catalog_resolve(t)
         docket = json.loads((wdir / "registration.json").read_text())
         own = docket.get("window") or {}
-        ties, untied = window_pins(own, doc, resolve)
+        ties, untied = window_pins(own, doc, resolve, docket)
         if twice := sorted((set(ties) | set(untied)) & set(pins)):
             raise ValueError(f"values {twice} are both pinned and the window's own")
         pins |= ties | untied
         w_tie = json.loads(Path(a.tie_file).read_text()) if a.tie_file else None
-        tied, tie_pins = tie_of(doc, w_tie, a.tie_prefix)
+        decl = IF.declarations(doc)[2]
+        tied, tie_pins = tie_of(doc, w_tie, a.tie_prefix, phase_values(docket, decl.values if decl else ()))
         if twice := sorted(set(tie_pins) & set(pins)):
             raise ValueError(f"values {twice} are both pinned and the earlier registration's")
         pins |= tie_pins
@@ -1074,7 +1100,7 @@ def audit(a: argparse.Namespace) -> int:
     a.outputs = output_class(doc, json.loads(Path(a.outputs).read_text()) if a.outputs else (),
                              own=set(ties) | set(untied) | set(tie_pins))
     a.tie, a.declared = tied, day
-    if tied:
+    if tied.get("log"):
         named = {**tie_row(tied), "previous": rec.get("previous"), "chained": rec.get("previous") == R.digest(tied["log"][0])}
         (out / "tie.json").write_text(json.dumps(named, indent=1, sort_keys=True))
         print("TIE " + json.dumps(named, sort_keys=True), flush=True)
@@ -1104,8 +1130,8 @@ def audit(a: argparse.Namespace) -> int:
     row["leak"] = (declared_count(doc, bits, resolve, counted, roots, untied)
                    if {*IF.DECLARED, IF.WINDOW_INGRESS} & set(doc) else leak_count(mine.members, doc.get("external") or (), bits))
     if reads:
-        row["registered"] = {"pins": counted, "roots": roots, "members": len(reads)}
-    if tied:
+        row["registered"] = {"pins": counted, "roots": roots, "members": len(reads), "own": {**ties, **untied}}
+    if tied.get("log"):
         row["tie"] = tie_row(tied)
     if day:
         row["day"] = {"day": day["day"], "declared": [d["program"] for d in day["declarations"] if d["day"] == day["day"]],

@@ -537,15 +537,18 @@ def test_the_window_circuit_command_under_h1s_w_reads_its_tables_with_no_key(tmp
 def _registered(d: Path, n: int = 8, cap: int = 4, name: str = "w", own: bool = False,
                 listed: bool = False) -> SimpleNamespace:
     """A window of ``n`` coordinates each reading its ``wrow`` from a registered value ``name`` of 4 rows (coordinate u row u % 4),
-    committed by core's registered rows, and the verifier's pin of it; ``own``: the window's own value instead, committed
-    under its run root and registered in its ``activations``, as `prove_path.py window-commit` commits the scan's state;
+    committed by core's registered rows, and the verifier's pin of it; ``own``: the window's own value instead,
+    registered as a value of the window's Program under a domain bound to its run root, as `prove_path.py
+    window-commit` registers the scan's state;
     ``listed``: its record lists its members and declares the read beside them, a served window's form."""
     rng = np.random.default_rng(1)
     rows = rng.integers(0, 1 << 16, (4, K // 2), dtype=np.uint16)
-    value = REG.Registered.commit("test/model", name, rows.tolist(), schema=REG.SCHEMA_V2, window=RUN if own else None)
     read = IF.Read(TID, "wrow", name, 0, (n // 4, 4), 0, (0, K // 2))
-    win = IF.Window(IF.Circuit("test", ((COORD, n),), registered=IF.Registered({name: 4 * K // 2}, reads=(read,))), RUN,
-                    D.parse_design(SAMPLING_DESIGN), cap, registered={name: value})
+    circuit = IF.Circuit("test", ((COORD, n),), registered=IF.Registered({name: 4 * K // 2}, reads=(read,),
+                                                                         values=(name,) if own else ()))
+    program = program_digest(circuit.program()[0]) if own else "test/model"
+    value = REG.Registered.commit(program, name, rows.tolist(), schema=REG.SCHEMA_V2, window=RUN if own else None)
+    win = IF.Window(circuit, RUN, D.parse_design(SAMPLING_DESIGN), cap, registered={name: value})
     if listed:
         stated = win.circuit_record()
         win.circuit_record = lambda: IF.circuit_record(win.window, stated["name"], stated["templates"], stated["statements"],
@@ -554,8 +557,8 @@ def _registered(d: Path, n: int = 8, cap: int = 4, name: str = "w", own: bool = 
     sx, sw = ((np.abs(rng.standard_normal(n)) / 127).astype(np.float32) for _ in range(2))
     ins = [x.view(np.uint8), sx.view(np.uint32), rows[np.arange(n) % 4].view(np.uint8), sw.view(np.uint32)]
     win.record(COORD, ins, [np.asarray(evaluate_batch(COORD, *ins, kernel="reference"), dtype=np.uint16)])
-    entry = {"program": "test/model", "values": {name: value.entry()}}
-    win.write(win.close(), d, {"label": "test", **({"activations": entry} if own else {})}, registrar=R)
+    entry = {"program": program, "values": {name: value.entry()}}
+    win.write(win.close(), d, {"label": "test"}, registrar=R)
     return SimpleNamespace(dir=d, value=value, pin=entry)
 
 
@@ -722,9 +725,10 @@ import json
 import test_pearltie as TP, test_remotetie as TR, window_tie as WT
 pearl, h1 = TP.make_toy(), TR.make_toy()
 doc = json.loads(json.dumps(pearl.low.circuit.declared()))
+own = {{TP.SS.SCAN_STATE: pearl.values[TP.SS.SCAN_STATE].entry()}}
 for w in (pearl.W, TP._flipped(pearl).W):
-    tied = WT.tie_of(doc, w)
-    assert tied == RA.tie_of(doc, w, None) and tied[0]["registered"], tied
+    tied = WT.tie_of(doc, w, own)
+    assert tied == RA.tie_of(doc, w, None, own) and tied[0]["registered"], tied
 ids = [t for c in (pearl.low.circuit, h1.low.circuit) for t in c.ids]
 assert ids and all(descriptor_id(WT.catalog_resolve(t)) == descriptor_id(RA.catalog_resolve(t)) == t for t in ids)
 """
@@ -1229,8 +1233,9 @@ def test_a_windows_audit_is_a_period_audit_whose_scan_state_reads_count_register
     assert p["free"] == 8 * per_unit - 8 * 8 * K and p["steps"] == 0
     assert p["registration"] == rec and p["answer"] == SI.answer(audit, rec) and p["answer"]["verdict"] == "accept"
     assert program_digest(p["program"]) == rec["program"] and p["answer"]["commitment"] == R.digest(rec)
-    ties, untied = RA.window_pins(rec["window"], doc)
-    assert ties == {} and list(untied) == [TIED]
+    ties, untied = RA.window_pins(rec["window"], doc, registration=rec)
+    assert ties == {} and untied == {TIED: got.value.entry()} == RA.phase_values(rec, [TIED])
+    assert RA.window_pins(rec["window"], doc) == ({}, {})
     audited = RA.declared_count(doc, 0, pins=RA.pin_roots(untied), roots=RA.window_roots(rec["window"]), untied=set(untied))
     assert audited["free"] == 8 * per_unit and audited["untied"] == [TIED]
     capsys.readouterr()
@@ -1280,19 +1285,18 @@ def _io_shell_window(d: Path, n: int = 8, cap: int = 4, shell: int = 3) -> Simpl
     outs = np.split(got, np.cumsum([count // 2 for _o, count in IF.layout(fn).outs])[:-1], axis=1)
     rng = np.random.default_rng(1)
     rows = rng.integers(0, 1 << 16, (4, K // 2), dtype=np.uint16)
-    value = REG.Registered.commit("test/model", TIED, rows.tolist(), schema=REG.SCHEMA_V2, window=RUN)
     read = IF.Read(TID, "wrow", TIED, 0, (n // 4, 4), 0, (0, K // 2))
-    registered = IF.Registered({TIED: 4 * K // 2}, reads=(read,))
-    win = IF.Window(IF.Circuit("test", ((COORD, n), (fn, shell)), registered=registered), RUN, D.parse_design(SAMPLING_DESIGN), cap,
-                    registered={TIED: value})
+    circuit = IF.Circuit("test", ((COORD, n), (fn, shell)), registered=IF.Registered({TIED: 4 * K // 2}, reads=(read,),
+                                                                                              values=(TIED,)))
+    value = REG.Registered.commit(program_digest(circuit.program()[0]), TIED, rows.tolist(), schema=REG.SCHEMA_V2, window=RUN)
+    win = IF.Window(circuit, RUN, D.parse_design(SAMPLING_DESIGN), cap, registered={TIED: value})
     x = rng.integers(-128, 128, (n, K)).astype(np.int8)
     sx, sw = ((np.abs(rng.standard_normal(n)) / 127).astype(np.float32) for _ in range(2))
     ins = [x.view(np.uint8), sx.view(np.uint32), rows[np.arange(n) % 4].view(np.uint8), sw.view(np.uint32)]
     win.record(COORD, ins, [np.asarray(evaluate_batch(COORD, *ins, kernel="reference"), dtype=np.uint16)])
     win.record(fn, [state], [np.ascontiguousarray(o) for o in outs])
     assert win.mismatches() == {}
-    entry = {"program": "test/model", "values": {TIED: value.entry()}}
-    win.write(win.close(), d, {"label": "test", "activations": entry}, registrar=R)
+    win.write(win.close(), d, {"label": "test"}, registrar=R)
     return SimpleNamespace(dir=d, shell=fn)
 
 
@@ -1375,6 +1379,12 @@ def test_the_windows_own_values_the_circuit_reads_are_pinned_only_when_they_are_
     assert RA.window_pins(w, circuit) == ({"y": mine["y"]}, {"e": mine["e"]})
     assert RA.window_pins(w, {}) == ({}, {}) and RA.window_pins({"run": RUN}, circuit) == ({}, {})
     elsewhere = REG.Registered.commit("test/model", "y", rows, schema=REG.SCHEMA_V2, window="cd" * 64).entry()
+    held = REG.Registered.commit("test/model", "x", rows, schema=REG.SCHEMA_V2).entry()
+    rec = {"program": "test/model", "window": {"run": RUN}, "registered": [mine["e"], held, elsewhere]}
+    assert RA.window_pins({"run": RUN}, circuit, registration=rec) == ({}, {"e": mine["e"]})
+    assert RA.window_pins({"run": RUN}, circuit, registration={**rec, "program": "test/other"}) == ({}, {})
+    with pytest.raises(ValueError, match="both in its activations and in its registration"):
+        RA.window_pins(w, circuit, registration=rec)
     for bad in ({**w, "run": "cd" * 64}, {**w, "activations": {"program": "test/model", "values": {"y": elsewhere}}},
                 {**w, "activations": {"program": "test/model", "values": {"y": mine["x"]}}}):
         with pytest.raises(ValueError, match="another value or a domain"):

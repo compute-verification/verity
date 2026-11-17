@@ -26,8 +26,8 @@ holds that key for a network attester its log places. Where a circuit file the p
 published period names, or the scan's files are listed, an accepted network verdict is not established and there is
 no bound; so it is, and the composite of record's verdict too, where a file remote's SPOT case registers
 isn't, by SHA-512, the one its params name, or its public file the one V3c's audit pinned at staging, before the draw,
-and where those params name no public file, SPOT's verdict is not established. Where V3c's audit's window
-commits the scan's state in its activations, the network verdict and the composite of record's stand only where its
+and where those params name no public file, SPOT's verdict is not established. Where V3c's audit's registration
+registers the scan's state, the network verdict and the composite of record's stand only where its
 registered reads opened that state at the entry's value, root and domain (its published summary's registered.own), the
 audit accepted and its record reported each member's reads; otherwise, its evidence missing included, neither is
 established and there is no bound. The figure of record says which charge K applied each tied audit: stateFree only
@@ -1932,11 +1932,10 @@ def test_a_period_listing_no_circuit_files_holds_auditor_listing_and_one_with_no
     assert "missing" in rec["bound"] and rec["periods"] == {"missing": "no bound"}
 
 
-#: the scan's state as V3c's audit's window commits it in its activations, the entry the period holds to the scan's
-#: state (`NetworkCheck.Period.auditStateEntries`), and V3c's audit's docket whose window commits it
+#: the scan's state as V3c's audit's registration registers it, the entry the period holds to the scan's state
+#: (`NetworkCheck.Period.auditStateEntries`), and V3c's audit's docket that registers it
 STATE_ENTRY = {"value": OR.SCAN_STATE, "root": "5a" * 64, "domain": "d5" * 64, "leaves": 64, "words": 8}
-STATED = {**NO_ADVICE, "window": {**NO_ADVICE["window"],
-                                  "activations": {"program": "ab" * 64, "values": {OR.SCAN_STATE: STATE_ENTRY}}}}
+STATED = {**NO_ADVICE, "registered": [STATE_ENTRY]}
 
 
 def scan_state_run(tmp_path: Path, registered: dict | None = None, registration: dict = STATED,
@@ -1955,25 +1954,25 @@ def scan_state_run(tmp_path: Path, registered: dict | None = None, registration:
     return out
 
 
-NO_OWN = (f"audit 0's window commits {OR.SCAN_STATE} in its activations, and the run's {OR.AUDIT_SUMMARY} states no "
+NO_OWN = (f"audit 0's registration registers {OR.SCAN_STATE}, and the run's {OR.AUDIT_SUMMARY} states no "
           "entry its registered reads opened it at (registered.own)")
 
 
 @pytest.mark.parametrize("how, why", [
     ("opened at the entry", None),
-    ("another root", f"the entry audit 0's registered reads opened {OR.SCAN_STATE} at isn't, by its root, its window's "
-                     "activations entry"),
+    ("another root", f"the entry audit 0's registered reads opened {OR.SCAN_STATE} at isn't, by its root, its "
+                     "registration's registered entry"),
     ("another domain", f"the entry audit 0's registered reads opened {OR.SCAN_STATE} at isn't, by its domain, its "
-                       "window's activations entry"),
+                       "registration's registered entry"),
     ("another value, root and domain", f"the entry audit 0's registered reads opened {OR.SCAN_STATE} at isn't, by its "
-                                       "value and root and domain, its window's activations entry"),
+                                       "value and root and domain, its registration's registered entry"),
     ("no reads of it", NO_OWN),
     ("no registered reads", NO_OWN),
-    ("no summary", f"audit 0's window commits {OR.SCAN_STATE} in its activations, and the run's {OR.AUDIT_SUMMARY} "
+    ("no summary", f"audit 0's registration registers {OR.SCAN_STATE}, and the run's {OR.AUDIT_SUMMARY} "
                    "can't be read: FileNotFoundError"),
-    ("no period", f"audit 0's window commits {OR.SCAN_STATE} in its activations, and the run's {OR.PERIOD} can't be "
+    ("no period", f"audit 0's registration registers {OR.SCAN_STATE}, and the run's {OR.PERIOD} can't be "
                   "read: FileNotFoundError"),
-    ("another audit's period", f"audit 0's window commits {OR.SCAN_STATE} in its activations, and the run's "
+    ("another audit's period", f"audit 0's registration registers {OR.SCAN_STATE}, and the run's "
                                f"{OR.PERIOD} is another audit's"),
     ("not accepted", f"V3c's audit didn't accept ({OR.AUDIT_SUMMARY}'s audit.accepted)"),
     ("reads not reported", "V3c's audit record doesn't report exactly each sampled member's registered reads "
@@ -1981,10 +1980,9 @@ NO_OWN = (f"audit 0's window commits {OR.SCAN_STATE} in its activations, and the
 ])
 def test_the_network_and_composite_verdicts_are_established_only_where_v3cs_reads_of_the_scans_state_opened_at_its_entry(
         tmp_path, capsys, how, why):
-    """scan-state-pinned on the run: V3c's audit's window commits the scan's state in its activations, the entry the
-    period holds to the scan's state, and one-stage's docket checks read nothing of the window, so the audit's
-    driver pins its registered reads there. Where the entry its registered reads opened the state at (its published
-    summary's registered.own) is that activations entry by value, root and domain, the audit accepted and its record
+    """scan-state-pinned on the run: V3c's audit's registration registers the scan's state, the entry the period holds
+    to the scan's state, and the audit's driver pins its registered reads there. Where the entry its registered reads
+    opened the state at (its published summary's registered.own) is that registered entry by value, root and domain, the audit accepted and its record
     reported each sampled member's registered reads, the network attester's verdict and the composite of record's stand
     and the run is of record. Where any differs or its evidence is missing (no entry stated, no summary, no published
     period or another audit's, the audit not accepting, the reads unreported), both are not established, each its Lean
@@ -2025,27 +2023,27 @@ def test_the_network_and_composite_verdicts_are_established_only_where_v3cs_read
         {"the network certifier": OR.NOT_ESTABLISHED, "onsite": OR.NOT_ESTABLISHED}, None)
 
 
-@pytest.mark.parametrize("values", [{}, {"weights/w@8": dict(STATE_ENTRY, value="weights/w@8")},
-                                    {OR.SCAN_STATE: dict(STATE_ENTRY, value="weights/w@8")}])
-def test_scan_state_pinned_holds_where_no_audits_window_commits_the_scans_state_in_its_activations(tmp_path, values):
-    """No audit's window commits the scan's state in its activations as the period reads it (an entry at that value
-    naming it, `auditStateEntries`): none at all, another value's, or an entry at that value naming another, which the
-    period doesn't read as the audit's state (and refuses where the audit then has none, `stateTied`). Then the check
-    holds, naming no audit, with no summary or period read, and the verdicts stand."""
-    audit = {**NO_ADVICE, "window": {**NO_ADVICE["window"], "activations": {"program": "ab" * 64, "values": values}}}
+@pytest.mark.parametrize("audit", [NO_ADVICE, {**NO_ADVICE, "registered": [dict(STATE_ENTRY, value="weights/w@8")]},
+                                   {**NO_ADVICE, "window": {**NO_ADVICE["window"], "activations": {
+                                       "program": "ab" * 64, "values": {OR.SCAN_STATE: STATE_ENTRY}}}}])
+def test_scan_state_pinned_holds_where_no_audits_registration_registers_the_scans_state(tmp_path, audit):
+    """No audit's registration registers the scan's state as the period reads it (a registered entry at that value,
+    `auditStateEntries`): none at all, another value's, or the state committed in the window's activations alone,
+    which the period refuses (`stateTied`). Then the record's scan-state-pinned holds, naming no audit, with no summary
+    or period read, and the verdicts stand."""
     rec = record(accepted(tmp_path, dict(PUBLIC, held=["free", "circuit"]), audits=(audit,)))
     assert rec["checked"][OR.SCAN_STATE_PINNED] == {"is": OR.CHECKED[OR.SCAN_STATE_PINNED], "holds": True, "audits": []}
     assert rec["verdicts"]["the network certifier"]["verdict"] == rec["verdicts"]["onsite"]["verdict"] == "accept"
 
 
 def test_two_audits_committing_the_scans_state_need_two_published_periods_and_the_run_publishes_one(tmp_path):
-    """The run publishes one V3c audit: where a second audit of the commitment commits the scan's state in its
-    activations, its period isn't the one published, and the check doesn't hold, naming both."""
+    """The run publishes one V3c audit: where a second audit of the commitment registers the scan's state, its period
+    isn't the one published, and scan-state-pinned doesn't hold, naming both."""
     other = {**STATED, "window": {**STATED["window"], "circuit": "ef" * 64}}
     rec = record(scan_state_run(tmp_path, {OR.SCAN_STATE: STATE_ENTRY}, audits=(STATED, other)))
     got = rec["checked"][OR.SCAN_STATE_PINNED]
     assert (got["holds"], got["audits"], got["why"]) == (
-        False, [0, 1], f"audit 1's window commits {OR.SCAN_STATE} in its activations, and the run's {OR.PERIOD} is "
+        False, [0, 1], f"audit 1's registration registers {OR.SCAN_STATE}, and the run's {OR.PERIOD} is "
                        "another audit's")
 
 
