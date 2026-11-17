@@ -14,14 +14,14 @@ Clause (i) of `MovesOf`: the record v2 reads in an accepted play decodes (`Exec.
 (`Live.dj`) at the proof blocks the play's sample selects.
 
 * **v2's hold** (`SampleHeld`): wherever composite `k` accepted what the prover sent as a `same` composition
-  (`Verity.SameAccepts`) and v2 sampled `units` over `n` units there (`Drew`), the units are ascending below `n`
+  (`Verity.SameAccepts`) and v2 drew `units` over `n` units there (`Drew`), the units are ascending below `n`
   (`unitsAscending`) and the record's `unit_draw` is the subset sample of those units,
   `UnitSample.toJson ⟨.subset units.size, n, units, #[]⟩` (`recordSampled`): v2 accepts only a subset record sample
-  (`recordSample_subset`), whatever sampling design it sampled by. `Sampled/Held.lean` proves it for every composite (`sampleHeld`), from
+  (`recordSample_subset`), whatever sampling design it drew by. `Sampled/Held.lean` proves it for every composite (`sampleHeld`), from
   the record sample's population and units (`sampleHeld_of`).
-* **The record half** (`recordSample_of_drew`): where `SampleHeld` holds, `k` accepted, v2 sampled `units`, and the session's
+* **The record half** (`recordSample_of_drew`): where `SampleHeld` holds, `k` accepted, v2 drew `units`, and the session's
   sampling design and population are v2's, the record decodes to the session's sample file, the subset print of `kd` units
-  (`Live.dj`), at the proof blocks `units` names: v2 sampled `kd` units (`Flock.Bridge.sampleUnits_size`), and the sample file
+  (`Live.dj`), at the proof blocks `units` names: v2 drew `kd` units (`Flock.Bridge.sampleUnits_size`), and the sample file
   at the units' proof blocks is `UnitSample.toJson ⟨.subset kd, n, units, #[]⟩` (`sampleOf_filter`).
 * **`norm` fixes a subset sample's file** (`norm_toJson_subset`), as `SampleHeld`'s proof reads it.
 * **v2's coins fit `MAX_COINS` frames** (`coins_size_le`): v2's evidence holds its segment's openings within `LIMITS`
@@ -703,14 +703,14 @@ theorem freshCoins_of_stopTail {label : String} {after : ByteArray} {L log' : Li
 def unitsAscending (n : ℕ) (units : Array ℕ) : Bool :=
   (List.range units.size).all fun i => units[i]! < n && (i == 0 || units[i - 1]! < units[i]!)
 
-/-- **The record's sample is the one v2 sampled**: the units are ascending below `n`, and the record's `unit_draw`
+/-- **The record's sample is the one v2 drew**: the units are ascending below `n`, and the record's `unit_draw`
 (`Flock.Witness.recordDraw`) is the sample of `units` under the sampling design `L` over `n` units. -/
 def recordSampled (L : Flock.Draw.SamplingDesign) (n : ℕ) (units : Array ℕ) (record : String) : Prop :=
   unitsAscending n units = true ∧
     Flock.Witness.recordDraw record = some (Flock.Draw.UnitSample.toJson ⟨L, n, units, #[]⟩)
 
 /-- **v2 holds the record's sample to its own** in what composite `k` accepts: wherever `k` accepted what the prover sent
-as a `same` composition on parameters that name no members (`OneStatement`) and v2 sampled `units` over `n` units there
+as a `same` composition on parameters that name no members (`OneStatement`) and v2 drew `units` over `n` units there
 (`Drew`, under the verifier's sampling design), the record v2 reads there is the `.subset` print of those units
 (`recordSampled` at `.subset units.size`), the member's share of the window's sample; the bound is the verifier's
 sampling design's, from v1's window check. Without the acceptance, the record
@@ -791,9 +791,9 @@ theorem norm_toJson_subset (k pop : ℕ) (units cl : Array ℕ) :
   rfl
 
 /-- **The record's sample is the session's sample file at v2's units**: where v2 holds the record's sample to its own
-(`SampleHeld`), composite `k` accepted what the prover sent, v2 sampled `units` under the sampling design `L` over `n` units there, and
+(`SampleHeld`), composite `k` accepted what the prover sent, v2 drew `units` under the sampling design `L` over `n` units there, and
 the session's sampling design and population are `L` and `n`, the record v2 reads decodes to the session's sample file at the proof
-blocks `units` names. v2 sampled the session's `kd` units (`Flock.Bridge.sampleUnits_size`), so the record's subset sample
+blocks `units` names. v2 drew the session's `kd` units (`Flock.Bridge.sampleUnits_size`), so the record's subset sample
 is the session's. -/
 theorem recordSample_of_drew {k : Verity.Registration.Composite} (hH : SampleHeld k) {s : Verity.Sent} {dr : Draws}
     {L : Flock.Draw.SamplingDesign} {n : ℕ} {ξ : ByteArray} {units : Array ℕ} (hS : Verity.SameAccepts k s)

@@ -11,7 +11,7 @@ At a two-stage run `Run.run` accepts, the answer's `draw` is the sample object t
 (`answer_sample`), the units it proves are the select's units, and the second stage's `selectSecond` is handed exactly
 those units, at the replay block's cells and the rule's counts (`firstSample`). `selectSecond` samples under the sampling design
 `Select.secondSamplingDesign` computes from them (`selectSecond_samplingDesign`). So a second-stage sampling design computed from the answer's `draw` is
-the sampling design the run's second stage sampled under.
+the sampling design the run's second stage drew under.
 -/
 
 @[expose] public section
