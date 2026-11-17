@@ -497,8 +497,9 @@ def own_changes(bases: dict[str, tuple[str, list[str]]], repo: Path = CHECKOUT, 
 
     kept = kept or OWN
     try:
-        known = json.loads(kept.read_text())
-    except (OSError, ValueError):
+        known = json.loads(kept.read_text()) if kept.is_file() else {}
+    except (OSError, ValueError) as e:
+        print(f"research queue stats: {kept} not read ({e}); every own change is worked out afresh", file=sys.stderr)
         known = {}
 
     shas = sorted({s for base, heads in bases.values() for s in (base, *heads)})
