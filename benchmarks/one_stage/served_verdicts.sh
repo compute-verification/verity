@@ -662,7 +662,7 @@ kept_windows() {  # the tied windows the serve root's other serve dirs keep, the
 # on the gate with its peer V3C_PEER (default PP_PEER: the node the audit runs on, as the gate's /etc/vy/peers names it,
 # in a follow-on not the served node) under PP_CHALLENGER_KEY and PP_GATE_KEY. A local or loopback session's coins are a
 # development session's, which only a development run (DEVELOPMENT=1) takes. A gate that is a command on this machine
-# (command:WORDS, with V3C_PEER) needs no development run: its coins are simulated, which the record says.
+# (command:WORDS, its peer V3C_PEER) needs no development run: its coins are simulated, which the record says.
 V3C_CHALLENGER=${V3C_CHALLENGER:-${PP_CHALLENGER:-local}} V3C_PEER=${V3C_PEER:-${PP_PEER:-}} DEVELOPMENT=${DEVELOPMENT:-}
 v3c_live() { [[ $V3C_CHALLENGER == gate:* ]]; }
 v3c_gated() { [[ $V3C_CHALLENGER == gate:* || $V3C_CHALLENGER == command:* ]]; }
@@ -673,13 +673,13 @@ SP_CHALLENGER=${PP_CHALLENGER:-local}
 coins_on() {  # the machine the sampled proofs' challenger flips its coins on, which the record names
   local c=$SP_CHALLENGER
   [ -z "$V3C" ] || c=$V3C_CHALLENGER
-  case $c in gate:*) echo "${c#*@}" ;; *) echo "${V3C_AUDITED:-${SERVED_NODE:-$(hostname -s)}}" ;; esac
+  case $c in gate:*) echo "${c#*@}" ;; *) echo "${V3C_AUDITED:-${SERVED_NODE:-$PP_PEER}}" ;; esac
 }
 v3c_coins() {  # where V3c's audit's coins come from, as its COINS line says
   if v3c_live; then
     echo "the challenger ${V3C_CHALLENGER%%@*} (peer $([ -n "${DEFER:-}" ] && echo "the follow-on's node's" || echo "$V3C_PEER")), the window's run root's one session, the sampled-proofs audit of record"
   elif v3c_gated; then
-    echo "simulated: a gate command on $(hostname -s), not the auditor's challenger (V3C_CHALLENGER command:)"
+    echo "simulated: a gate command on $PP_PEER, not the auditor's challenger (V3C_CHALLENGER command:)"
   else
     echo "a development challenger session where it runs (V3C_CHALLENGER $V3C_CHALLENGER), in a development run (DEVELOPMENT=1)"
   fi
@@ -910,7 +910,7 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
   elif v3c_gated; then
     ch+=(--peer "$V3C_PEER")
   fi
-  V3C_AUDITED=$(hostname -s)
+  V3C_AUDITED=$PP_PEER
   local link=() gpus=() ld=() bin=$FW/flock-gpu-link/flock/target/release/flock-circuit
   [ "${V3C_ARCHIVE_LINK:-}" != 1 ] || link=(--archive-link)
   if [ -n "${V3C_GPUS:-}" ]; then
@@ -1432,9 +1432,15 @@ for x in open(sys.argv[1]):
 HANDED_WHAT="the final record$([ -z "${COMPOSITE-1}" ] || echo " and the composite")"
 if [ "$COMPOSE_OFF_NODE" = 1 ]; then DEFERRED_WHAT="V3c's audit"
 else DEFERRED_WHAT="V3c's audit$([ -z "${COMPOSITE-1}" ] || echo " and the composite")"; fi
+node_name() {  # PP_PEER, this machine's name in the cluster, or $1's refusal naming it
+  [ -n "${PP_PEER:-}" ] && return 0
+  say "$1: PP_PEER is unset: this machine's name in the cluster, the one the gate's peers list it by, which the record's host, SERVED_NODE and the off-node refusal read"
+  return 1
+}
 defer() {  # step 6 on a node short of V3c's audit's memory ($1, why), left to a follow-on: the pieces the record read
   # copied to the serve dir's private/deferred, the settings it runs at (deferred.env), and the follow-on's every input
   # listed (inputs.txt, what a prover-side copy takes) and hashed (inputs.sha256, what the follow-on holds the copy to)
+  node_name DEFER || return 1
   (umask 077; rm -rf "$DEFER_DIR" && mkdir -p "$DEFER_DIR/pieces") || return 1
   [ ! -d "$OUT/pieces" ] || cp -a "$OUT/pieces/." "$DEFER_DIR/pieces/" || return 1
   [ ! -f "$OUT/record/inference-only.json" ] || cp "$OUT/record/inference-only.json" "$DEFER_DIR/inference-only.json" || return 1
@@ -1445,7 +1451,7 @@ defer() {  # step 6 on a node short of V3c's audit's memory ($1, why), left to a
   fixed_limits || return 1
   printf '%s=%q\n' K "$K" PRODUCT "$PRODUCT" V3C_CLASS "$V3C" V3C_LAW "$V3C_LAW" V3C_CHALLENGER "$V3C_CHALLENGER" \
     DEVELOPMENT "$DEVELOPMENT" H1_TIE "${H1_TIE:-}" PEARLPLUS_TIE "$PEARLPLUS_TIE" COMPOSITE "${COMPOSITE-1}" ALPHA "${ALPHA:-}" GAMMA "${GAMMA:-}" \
-    SERVED_NODE "$(hostname)" SERVED_PEER "$V3C_PEER" DEFERRED_TREE "$(tree_sha)" COMPOSE_OFF_NODE "$COMPOSE_OFF_NODE" \
+    SERVED_NODE "$PP_PEER" SERVED_PEER "$V3C_PEER" DEFERRED_TREE "$(tree_sha)" COMPOSE_OFF_NODE "$COMPOSE_OFF_NODE" \
     COMPOSE_NODE "$COMPOSE_NODE" DAY "${DAY:-}" > "$DEFER_DIR/deferred.env" || return 1
   deferred_inputs > "$DEFER_DIR/inputs.txt"
   (cd "$D" && tr '\n' '\0' < "$DEFER_DIR/inputs.txt" | xargs -0 -r sha256sum) > "$DEFER_DIR/inputs.sha256" || return 1
@@ -1592,6 +1598,7 @@ for x in open(sys.argv[1]):
 }
 handoff() {  # the compose hand-off in private/compose, from the pieces in $1 and the inference-only verdict $2
   local d f steps why rc sampled
+  [ -n "${SERVED_NODE:-}" ] || node_name HANDOFF || return 1
   sampled=$(sampled_of_record)
   (umask 077; rm -rf "$COMPOSE_DIR" && mkdir -p "$COMPOSE_DIR/pieces") || return 1
   for d in "$1"/*/; do
@@ -1607,7 +1614,7 @@ handoff() {  # the compose hand-off in private/compose, from the pieces in $1 an
     || { say "HANDOFF refused: the window has no engine steps to hand the record (the serve dir's private/compose/window.err)"; return 1; }
   fixed_limits || return 1
   printf '%s=%q\n' K "$K" PRODUCT "$PRODUCT" POUW "$POUW" PEARLPLUS_TIE "$PEARLPLUS_TIE" COMPOSITE "${COMPOSITE-1}" ALPHA "${ALPHA:-}" GAMMA "${GAMMA:-}" \
-    SERVED_NODE "${SERVED_NODE:-$(hostname)}" SERVED_DIR "$D" COMPOSE_NODE "$COMPOSE_NODE" COMPOSE_TREE "$(tree_sha)" \
+    SERVED_NODE "${SERVED_NODE:-$PP_PEER}" SERVED_DIR "$D" COMPOSE_NODE "$COMPOSE_NODE" COMPOSE_TREE "$(tree_sha)" \
     AUDITED_ON "${V3C_AUDITED:-}" SAMPLED_AUDIT "$sampled" STEPS "$steps" > "$COMPOSE_DIR/compose.env" || return 1
   [ -z "${DEVELOPMENT:-}" ] || echo DEVELOPMENT=1 >> "$COMPOSE_DIR/compose.env" || return 1
   why=$(read_env "$COMPOSE_DIR/compose.env" "$COMPOSES" || echo "$ENV_REFUSED")
@@ -1776,6 +1783,7 @@ trap 'exit 130' INT
 stop() { say "STOP at $1 (exit $2)"; exit "$2"; }
 { id -un; hostname; git -C "$TREE" rev-parse HEAD 2>/dev/null; nproc; free -g | head -2; nvidia-smi -L; echo "serve dir $D"; } \
   | tee "$OUT/machine.txt"
+node_name PREFLIGHT || exit 3
 if [ -n "$FOLLOW" ]; then  # a deferral's follow-on: no serve, its venv the tree's, on a node with the audit's memory
   [ -z "$CLASH" ] || { say "PREFLIGHT: the follow-on runs at the deferral's settings (the serve dir's private/deferred/deferred.env), and the environment sets another$CLASH: unset it"; exit 3; }
   why=$(short_of_memory) && { say "PREFLIGHT: the follow-on runs the V3c audit the served node deferred, and $why"; exit 3; }
@@ -1802,7 +1810,7 @@ elif [ -n "$COMPOSE" ]; then  # a compose follow-on: no serve, row dir, card or 
   [ -z "$link" ] \
     || { say "PREFLIGHT: the compose follow-on reads the copy's own files, and its serve dir holds a link ($(printf %q "$link" | cut -c1-200)): copy the hand-off's files, never a link"; exit 3; }
   [ -z "$CLASH" ] || { say "PREFLIGHT: the compose follow-on runs at the hand-off's settings (the serve dir's private/compose/compose.env), and the environment sets another$CLASH: unset it"; exit 3; }
-  { [ "$(hostname)" != "$SERVED_NODE" ] && [ "$(hostname -s)" != "${SERVED_NODE%%.*}" ]; } \
+  [ "$PP_PEER" != "$SERVED_NODE" ] \
     || { say "PREFLIGHT: this is the served node $SERVED_NODE, which the prover controls, so nothing composed here claims a record: compose on COMPOSE_NODE ($COMPOSE_NODE)"; exit 3; }
   sha=$(tree_sha)
   [ -n "$COMPOSE_TREE" ] && { [ "$sha" = "$COMPOSE_TREE" ] || [ -n "${FOLLOW_ANY_TREE:-}" ]; } \
@@ -1876,9 +1884,7 @@ if [ -n "$V3C" ] && [ -z "$COMPOSE" ]; then  # V3c's audit's coins: the live cha
       elif [ -z "$FOLLOW" ] && [ -n "$here" ] && [ "$V3C_PEER" != "$here" ]; then
         say "PREFLIGHT: V3C_PEER (default PP_PEER) is $V3C_PEER, and $what is $here: each names the node the run serves on, where V3c's audit's session listens as the other one does"; exit 3
       fi ;;
-    command:?*)
-      [ -n "$V3C_PEER" ] \
-        || { say "PREFLIGHT: V3c's audit's session on the gate command V3C_CHALLENGER listens on its peer's 127.0.0.1, and V3C_PEER (default PP_PEER), this node's name in that gate's peers file, is unset"; exit 3; } ;;
+    command:?*) ;;  # its peer is V3C_PEER, by default PP_PEER, which the preflight requires
     *) say "PREFLIGHT: V3C_CHALLENGER (default PP_CHALLENGER) is local, loopback:HOST:PORT, gate:USER@HOST or command:WORDS, not ${V3C_CHALLENGER%%@*}"; exit 3 ;;
   esac
 fi
@@ -2063,7 +2069,7 @@ if [ -n "$H1_GATE" ]; then
   export POUW_CMD=${POUW_CMD:-"$TREE/.venv/bin/python benchmarks/one_stage/served_verdicts.py pouw \$1 \$2 \$3${H1_STATEMENTS:+ --statements $H1_STATEMENTS}${H1_LIVE_EVIDENCE:+ --live-evidence $H1_LIVE_EVIDENCE}"}
 fi
 if [[ $SP_CHALLENGER == command:* ]]; then
-  COINS="simulated: a gate command on $(hostname -s), not the auditor's challenger (peer ${PP_PEER:-?})"
+  COINS="simulated: a gate command on $PP_PEER, not the auditor's challenger"
 elif [ "$SP_CHALLENGER" != local ]; then
   COINS="the challenger ${SP_CHALLENGER%%@*} (peer ${PP_PEER:-?})"
 elif [[ ${PP_CHALLENGER:-local} == command:* ]]; then

@@ -519,7 +519,7 @@ def _sampled_coins(tmp_path: Path, summary: dict | str | None, *args: str, audit
     (venv / "python").chmod(0o755)
     if summary is not None:
         (serve / audit / "summary.json").write_text(summary if isinstance(summary, str) else json.dumps(summary))
-    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(serve),
+    env = {"PP_PEER": socket.gethostname(), "PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(serve),
            "OUT": str(tmp_path / "out"), **extra}
     rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"),
                          *(args or ("sampled-coins",))], cwd=tmp_path, env=env, check=False).returncode
@@ -642,7 +642,7 @@ def test_the_certifiers_chain_files_that_count_requests_move_to_the_serve_dirs_p
     for f in moved + kept:
         (piece / f).parent.mkdir(parents=True, exist_ok=True)
         (piece / f).write_text(f)
-    env = {"PATH": os.defpath, "HOME": str(tmp_path), "D": str(d), "OUT": str(tmp_path / "out")}
+    env = {"PP_PEER": socket.gethostname(), "PATH": os.defpath, "HOME": str(tmp_path), "D": str(d), "OUT": str(tmp_path / "out")}
     run = lambda: subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "private-pieces"],  # noqa: E731
                                  cwd=tmp_path, env=env, check=False).returncode
     assert run() == 0
@@ -727,7 +727,7 @@ def test_a_piece_runs_within_its_limit_and_one_out_of_time_or_refused_says_so(tm
     bin_.mkdir()
     (bin_ / "timeout").write_text(f'#!/bin/sh\necho "$3" >> {tmp_path}/limits\n[ "$3" = 0 ] && exit 124\nshift 3\nexec "$@"\n')
     (bin_ / "timeout").chmod(0o755)
-    env = {"PATH": f"{bin_}:{os.defpath}", "PIECE_TIMEOUT": "7m", "BANDWIDTH_TIMEOUT": "0", "BANDWIDTH_CMD": "true",
+    env = {"PP_PEER": socket.gethostname(), "PATH": f"{bin_}:{os.defpath}", "PIECE_TIMEOUT": "7m", "BANDWIDTH_TIMEOUT": "0", "BANDWIDTH_CMD": "true",
            "POUS_CMD": 'echo "PoUS REFUSED: the card has a compute process" > "$3/refused.txt"; exit 3'}
     got = S.pieces(tmp_path, 1, tmp_path / "pieces", env=env, node="n")
     assert (tmp_path / "limits").read_text().split() == ["7m", "0"]
@@ -1135,7 +1135,7 @@ def test_remote_runs_no_onsite_piece_and_composes_spot_and_pouw_alone(tmp_path, 
     ``--steps``, with no requests file there, says it was composed from the hand-off, and is refused on the served node
     itself."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
-    monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
+    monkeypatch.setenv("PP_PEER", "vy-dc-h200")
     monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
     pieces, ran = tmp_path / "pieces", tmp_path / "ran"
     pouw = {"verdict": "accept", "reason": None, "commitment": "ef" * 64, **ACCEPTS["pouw"]}
@@ -1194,7 +1194,7 @@ def test_remote_runs_no_onsite_piece_and_composes_spot_and_pouw_alone(tmp_path, 
     assert S.main([*argv, "--served-compare", str(compare)]) == 2
     line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
     assert line["served_compare"].startswith("SERVED-COMPARE: none (served_compare.json can't be read: JSONDecodeError: ")
-    monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-auditor-2")
+    monkeypatch.setenv("PP_PEER", "vy-auditor-2")
     assert S.main(argv) == 2
     line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
     assert line["composed_on"] == {"host": "vy-auditor-2", "served_node": False, "from": S.COPIED_FROM}
@@ -1211,14 +1211,14 @@ def test_remote_runs_no_onsite_piece_and_composes_spot_and_pouw_alone(tmp_path, 
     with pytest.raises(SystemExit):
         S.main([*argv, "--steps", "5", "--off-node"])
     capsys.readouterr()
-    monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
+    monkeypatch.setenv("PP_PEER", "vy-dc-h200")
     assert S.main([*argv, "--steps", "5,11", "--off-node"]) == 1
     assert capsys.readouterr().out.strip() == ("RECORD refused: a record composed off the served node is not composed on "
                                                "it: this host is vy-dc-h200")
     with pytest.raises(ValueError, match="this host is vy-dc-h200"):
         S.record(_rows(_accepted(), pieces), window=1, steps=(5, 11), node="vy-dc-h200", run="r1", off_node=True)
     _serve_dir(tmp_path / "serve")
-    monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-auditor-2")
+    monkeypatch.setenv("PP_PEER", "vy-auditor-2")
     assert S.main([*argv, "--product", "onsite"]) == 1
     line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
     assert (line["product"], line["composed"], line["by"]) == ("onsite", "reject", ["the wipe"])
@@ -1425,8 +1425,9 @@ LEAN_RECORD = {"format": "toy-registration", "window": 7}
 @pytest.fixture(autouse=True)
 def no_scope(monkeypatch) -> None:
     """A check `served_cases.lean_answer` starts here runs under no memory limit of its own, as on a development host:
-    a test's host may make no scope."""
+    a test's host may make no scope; and the test's machine is named by `PP_PEER`, as `served_verdicts.this_node` reads."""
     monkeypatch.setenv("CHECK_SCOPE", "none")
+    monkeypatch.setenv("PP_PEER", socket.gethostname())
     for k in ("CHECK_MEM_GB", "CHECK_BLOBS_GB"):
         monkeypatch.delenv(k, raising=False)
 
@@ -1481,7 +1482,7 @@ def test_an_edit_to_the_served_nodes_spot_answer_leaves_the_row_recomputed_here_
     source, and PoUW's, still read from its piece's answer file, as the served node wrote it, which its edit changes."""
     from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
-    monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-auditor-2")
+    monkeypatch.setenv("PP_PEER", "vy-auditor-2")
     argv, _exe = _lean_handed(tmp_path)
     answer = {**_accepted()["answer"], "protocol": "verity/sampled-proofs/v1", "commitment": R.digest(LEAN_RECORD)}
     monkeypatch.setenv("SEEN", str(tmp_path / "seen.json"))
@@ -1528,7 +1529,7 @@ def test_a_spot_row_the_lean_here_cant_recompute_says_so_and_never_takes_the_nod
     """With no v2 case the hand-off holds no proofs to recompute from, so the row is the served node's, its answer_from
     saying so; a v2 case naming a missing blob, a Lean answer about another record, or one that answers no line is the
     row's error, recomputed here, never the node's verdict."""
-    monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-auditor-2")
+    monkeypatch.setenv("PP_PEER", "vy-auditor-2")
     argv, _exe = _lean_handed(tmp_path)
     w = tmp_path / "serve" / "sampled-proofs-served" / "window"
     monkeypatch.setenv("SEEN", str(tmp_path / "seen.json"))
@@ -1557,7 +1558,7 @@ def test_a_spot_check_that_was_not_started_leaves_the_audits_own_row_naming_the_
     import served_cases as SC
     from verity.circuits import codec
 
-    monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-auditor-2")
+    monkeypatch.setenv("PP_PEER", "vy-auditor-2")
     argv, _exe = _lean_handed(tmp_path)
     w = tmp_path / "serve" / "sampled-proofs-served" / "window"
     monkeypatch.setenv("SEEN", str(tmp_path / "seen.json"))
@@ -2468,7 +2469,7 @@ def test_pearlpluss_accepted_piece_under_every_condition_of_record_is_pouws_verd
     Pearl+'s answer with the Lean's work, and remote's record composes it with W_cert that work, nothing missing, pending
     the remote check's answer."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
-    monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
+    monkeypatch.setenv("PP_PEER", "vy-dc-h200")
     monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
     pieces, audit, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live)
     row = S.piece_row("work", pieces, spot=audit, key_sha512=pin, lane=lane)
@@ -2500,7 +2501,7 @@ def test_pearlpluss_verdict_of_record_keeps_a_class_held_runs_give_up_and_not_it
     """A run held to its class's fixed load publishes its work in the grid form, and the answer of record's work is the
     Lean's with that form's ``give_up``; the exact credit the form replaces (``exact_work``) is not in the row."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
-    monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
+    monkeypatch.setenv("PP_PEER", "vy-dc-h200")
     monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
     pieces, audit, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live, "class held")
     row = S.piece_row("work", pieces, spot=audit, key_sha512=pin, lane=lane)
@@ -2514,7 +2515,7 @@ def test_the_record_reads_pearlpluss_tie_from_the_window_tied_to_w_under_window_
     to W, its docket chained right after W and its audit tied to W, is another (``--window-tie``), which the record
     reads Pearl+'s tie from. Without ``--window-tie`` it reads the step units' and composes pending, naming the chain."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
-    monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
+    monkeypatch.setenv("PP_PEER", "vy-dc-h200")
     monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
     pieces, tied, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live)
     (steps := tmp_path / "steps" / S.WINDOW_REGISTRATION).parent.mkdir(parents=True)
@@ -3018,7 +3019,7 @@ def _circuits(tmp_path: Path, classes: str, answers: dict, **extra: str) -> tupl
                        (bin_ / "timeout", f'echo "$1" >> {tmp_path}/limits; shift; exec "$@"')):
         path.write_text(f"#!/bin/sh\n{body}\n")
         path.chmod(0o755)
-    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent),
+    env = {"PP_PEER": socket.gethostname(), "PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent),
            "D": str(tmp_path / "serve"), "OUT": str(tmp_path / "out"), "CLASSES": classes, **extra}
     rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "circuits", "0"], cwd=tree, env=env,
                         check=False).returncode
@@ -3052,7 +3053,7 @@ def _weights(tmp_path: Path, **extra: str) -> tuple[int, list[str]]:
     (tree / "benchmarks" / "prove_path" / "prove_path.py").write_text(FAKE_WEIGHTS)
     (venv / "python").write_text(f'#!/bin/sh\nexec {sys.executable} "$@"\n')
     (venv / "python").chmod(0o755)
-    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(tmp_path / "serve"),
+    env = {"PP_PEER": socket.gethostname(), "PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(tmp_path / "serve"),
            "OUT": str(tmp_path / "out"), **extra}
     rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "weights"], cwd=tree, env=env,
                         check=False).returncode
@@ -3152,7 +3153,7 @@ def _inference_only(tmp_path: Path, *args: str, lean: bool = False, **extra: str
     (tree / "benchmarks" / "one_stage" / "inference_only.py").write_text(FAKE_INFERENCE_ONLY)
     if lean:
         _script(tree / INFERENCE_ONLY_CHECK, "exit 0")
-    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(d), "OUT": str(tmp_path / "out"),
+    env = {"PP_PEER": socket.gethostname(), "PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(d), "OUT": str(tmp_path / "out"),
            "ORDER": str(tmp_path / "order"), "RESEARCH_SOURCE_SHA": SHA, "GIT_CEILING_DIRECTORIES": str(tmp_path), **extra}
     rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), *args], cwd=tree, env=env, check=False).returncode
     said, order = tmp_path / "out" / "verdicts.txt", tmp_path / "order"
@@ -3308,7 +3309,7 @@ def test_block_counts_publishes_the_judgment_against_the_policy_and_keeps_the_co
     (d / "serve.json").write_text(json.dumps({"clocks": {"time": 1_762_000_000}}))
     if n is not None:
         (out / "inference-only-policy.json").write_text(json.dumps({"c": 10 ** 12, "k": 10 ** 12, "n": n}))
-    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(d), "OUT": str(out),
+    env = {"PP_PEER": socket.gethostname(), "PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(d), "OUT": str(out),
            "CLASSES": "4,32,4", "RESEARCH_SOURCE_SHA": SHA, "GIT_CEILING_DIRECTORIES": str(tmp_path)}
     rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "block-counts", "0"], cwd=tree, env=env,
                         check=False).returncode
@@ -3454,7 +3455,7 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
                        (bin_ / "timeout", f'[ "$1" = -k ] && shift 2\necho "$1" >> {tmp_path}/limits; shift; exec "$@"'),
                        *([(bin_ / "gpu-lease", "exit 99")] if lease else []), (bin_ / "uv", "exit 0"), (bin_ / "lake", "exit 0")):
         _script(path, body)
-    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(d), "K": "7",
+    env = {"PP_PEER": socket.gethostname(), "PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(d), "K": "7",
            "OUT": str(tmp_path / "out"), "SERVE_ROOT": str(tmp_path / "root"), "FLOCK_WORK": str(tmp_path / "fw"),
            "ROW": str(tmp_path / "row"), "HIDDEN_SO": str(tmp_path / "h.so"), "NORM_TAP_SO": str(tmp_path / "n.so"),
            "ORDER": str(tmp_path / "order"), "H1_GATE": "", "V3C_CLASS": W63K4, "CLASSES": W63K4,
@@ -3568,7 +3569,7 @@ def _tie(tmp_path: Path, **extra: str) -> tuple[subprocess.CompletedProcess, lis
         p.mkdir(parents=True, exist_ok=True)
     (d / "weights_registration.json").write_text("{}")
     (d / "h1" / "w7" / "registration.json").write_text(json.dumps(W_OF_7))
-    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(d), "OUT": str(tmp_path / "tie-out"),
+    env = {"PP_PEER": socket.gethostname(), "PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(d), "OUT": str(tmp_path / "tie-out"),
            "ORDER": str(tmp_path / "order"), "H1_TIE": "1", "V3C_CLASS": W63K4, **extra}
     run = subprocess.run(["bash", "-c", cmd, "_", str(d), "7", str(d / "h1" / "w7" / "registration.json"),
                           str(d / "h1" / "w7" / "record.json"), str(d / "private" / "h1" / "w7")],
@@ -3920,7 +3921,7 @@ def test_the_coins_line_says_whose_coins_each_sample_is_on(tmp_path, extra, coin
                              f'unset PYTHONPATH\nexport PYTHONSAFEPATH=1\nexec {sys.executable} "$@"')
     extra = {k: str(_key(tmp_path)) if v == KEYED else v for k, v in extra.items()}
     rc, lines, _order, _limits = _v3c(tmp_path, (), VENV=str(venv.parent), HOST="vy-dc-h200",
-                                      PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}", **extra)
+                                      PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}", **{"PP_PEER": "vy-dc-h200", **extra})
     assert rc == 17 and lines[-1] == "STOP at predict (exit 17)", lines
     assert f"COINS sampled proofs: {coins}; PoUW H1: not served (H1_GATE empty);{v3c} the bandwidth audit's: " \
            "vy-auditor-2's bw_party, inside PoUS's piece" in lines, lines
@@ -3996,11 +3997,9 @@ def _not_development(challenger: str) -> str:
     ({"DEVELOPMENT": "yes"}, "PREFLIGHT: DEVELOPMENT is 1, a development run, or unset, not yes"),
     ({"V3C_CHALLENGER": "gate:auditor"}, "PREFLIGHT: V3C_CHALLENGER (default PP_CHALLENGER) is local, loopback:HOST:PORT, "
                                          "gate:USER@HOST or command:WORDS, not gate:auditor"),
-    ({"DEVELOPMENT": None, "V3C_CHALLENGER": "command:python3 -I local_gate.py /gate"},
-     "PREFLIGHT: V3c's audit's session on the gate command V3C_CHALLENGER listens on its peer's 127.0.0.1, and V3C_PEER "
-     "(default PP_PEER), this node's name in that gate's peers file, is unset"),
-    ({"PP_CHALLENGER": LIVE}, f"PREFLIGHT: V3c's audit's session on {LIVE_SAID} listens on its peer's 127.0.0.1, and V3C_PEER "
-                              "(default PP_PEER), this node's name in the gate's /etc/vy/peers, is unset"),
+    ({"PP_CHALLENGER": LIVE, "PP_PEER": None}, "PREFLIGHT: PP_PEER is unset: this machine's name in the cluster, the "
+                                               "one the gate's peers list it by, which the record's host, SERVED_NODE "
+                                               "and the off-node refusal read"),
     ({"PP_CHALLENGER": LIVE, "PP_PEER": "vy-dc-h200"}, f"PREFLIGHT: V3c's audit's session on {LIVE_SAID} is held to the "
                                                        "challenger key record PP_CHALLENGER_KEY, which is unset and not a "
                                                        "readable file"),
@@ -4032,7 +4031,7 @@ def test_without_v3c_the_preflight_refuses_step_3s_development_session_outside_a
     """With V3c off step 3's audit is the SPOT audit of record, whose SPOT the compose gate's Lean
     holds to a challenger, so its local or loopback session is refused unless the run is a development run, before
     anything runs."""
-    rc, lines, order, _limits = _v3c(tmp_path, (), HOST="vy-dc-h200", DEVELOPMENT=None, PP_CHALLENGER=challenger,
+    rc, lines, order, _limits = _v3c(tmp_path, (), HOST="vy-dc-h200", PP_PEER="vy-dc-h200", DEVELOPMENT=None, PP_CHALLENGER=challenger,
                                      PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}", **NO_V3C)
     assert (rc, lines, order) == (3, [
         "PREFLIGHT: with V3c off (V3C_CLASS empty) step 3's audit is the sampled-proofs audit of record, and PP_CHALLENGER "
@@ -4076,7 +4075,7 @@ def test_under_pouw_pearlplus_the_coins_line_says_whether_pearlpluss_epoch_coins
     (one := tmp_path / "tree" / "benchmarks" / "one_stage").mkdir(parents=True)
     (one / "served_verdicts.py").symlink_to(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.py")
     env = {**(PEARL_TIED if tie else {}), "POUW": "pearlplus", "PEARLC_CHALLENGER_GATE": str(gate) if live else ""}
-    rc, lines, _order, _limits = _v3c(tmp_path, (), VENV=str(venv.parent), HOST="vy-dc-h200",
+    rc, lines, _order, _limits = _v3c(tmp_path, (), VENV=str(venv.parent), HOST="vy-dc-h200", PP_PEER="vy-dc-h200",
                                       PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}", **env)
     assert rc == 17 and lines[-1] == "STOP at predict (exit 17)", lines
     tail = f";{V3C_COINS} the bandwidth audit's: vy-auditor-2's bw_party, inside PoUS's piece"
@@ -4120,7 +4119,7 @@ def test_under_pouw_pearlplus_the_challenger_peer_takes_its_default_only_where_t
     _script(gate := tmp_path / "gate", FAKE_GATE)
     (one := tmp_path / "tree" / "benchmarks" / "one_stage").mkdir(parents=True)
     (one / "served_verdicts.py").symlink_to(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.py")
-    rc, lines, _order, _limits = _v3c(tmp_path, (), VENV=str(venv.parent), HOST="vy-dc-h200", POUW="pearlplus",
+    rc, lines, _order, _limits = _v3c(tmp_path, (), VENV=str(venv.parent), HOST="vy-dc-h200", PP_PEER="vy-dc-h200", POUW="pearlplus",
                                       PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
                                       PEARLC_CHALLENGER_GATE=str(gate) if live else "", PEARLC_CHALLENGER_PEER=peer)
     assert rc == 17 and lines[-1] == "STOP at predict (exit 17)", lines
@@ -4145,7 +4144,7 @@ def test_the_run_keeps_the_builds_checkpoint_config_beside_its_predicted_json(tm
     if there:
         named.parent.mkdir()
         named.write_text('{"hidden_size": 2048}')
-    rc, lines, _order, _limits = _v3c(tmp_path, (), VENV=str(venv.parent), HOST="vy-dc-h200", CONFIG_NAMED=str(named),
+    rc, lines, _order, _limits = _v3c(tmp_path, (), VENV=str(venv.parent), HOST="vy-dc-h200", PP_PEER="vy-dc-h200", CONFIG_NAMED=str(named),
                                       PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}")
     kept = tmp_path / "serve" / "predicted" / "checkpoint_config.json"
     if there:
@@ -4173,7 +4172,7 @@ def test_the_preflight_refuses_a_pearlplus_challenger_peer_with_no_gate(tmp_path
     tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
     tree.mkdir()
     _script(venv / "python", f'exec {sys.executable} "$@"')
-    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
+    env = {"PP_PEER": socket.gethostname(), "PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
            "POUW": "pearlplus", **extra}
     rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
                         check=False).returncode
@@ -4233,7 +4232,7 @@ def _pearl_tie(tmp_path: Path, **extra: str) -> tuple[subprocess.CompletedProces
     d.mkdir()
     (d / "weights_registration.json").write_text("{}")
     (tmp_path / "piece" / "window-record.json").write_text(json.dumps(PEARL_WREC))
-    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(d), "OUT": str(tmp_path / "tie-out"),
+    env = {"PP_PEER": socket.gethostname(), "PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(d), "OUT": str(tmp_path / "tie-out"),
            "ORDER": str(tmp_path / "order"), "V3C_CLASS": W63K4, **PEARL_TIES, **extra}
     run = subprocess.run(["bash", "benchmarks/one_stage/served_verdicts.sh", "pearl-tie", str(d), "7",
                           str(tmp_path / "piece" / "window-record.json"), str(tmp_path / "piece" / "passes")],
@@ -4319,7 +4318,7 @@ def test_the_served_compare_runs_on_the_cpu_against_the_rows_build_of_record_and
     stale = d / "served-compare" / "served_compare.json"
     stale.write_text(json.dumps({"ok": True, "line": "SERVED-COMPARE: EQUAL (an earlier compare's)"}))
     rc = {"unequal": 1, "died": 2}.get(case, 0)
-    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(d), "OUT": str(tmp_path / "out"),
+    env = {"PP_PEER": socket.gethostname(), "PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(d), "OUT": str(tmp_path / "out"),
            "ORDER": str(tmp_path / "order"), "V3C_CLASS": W63K4, **PEARL_TIES, "FAKE_COMPARE_RC": str(rc),
            "REV": "ccf98f3652864935e2973dd22fe15fffd514f865", **({"PEARLPLUS_TIE": ""} if case == "untied" else {})}
     run = subprocess.run(["bash", "benchmarks/one_stage/served_verdicts.sh", "served-compare", "7"], cwd=tree, env=env,
@@ -4600,7 +4599,7 @@ def _rehearsal_settings(tmp_path: Path, **changed: str | None) -> tuple[int, lis
     settings = {k: v for k, v in {**settings, **changed}.items() if v is not None}
     (tmp_path / "record.env").write_text("".join(f"{k}={shlex.quote(str(v))}\n" for k, v in settings.items()))
     run = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "rehearsal.sh"), "settings", str(tmp_path / "record.env")],
-                         env={"PATH": os.defpath}, capture_output=True, text=True, check=False)
+                         env={"PP_PEER": socket.gethostname(), "PATH": os.defpath}, capture_output=True, text=True, check=False)
     return run.returncode, run.stdout.splitlines(), run.stderr
 
 
@@ -4615,7 +4614,7 @@ def _partition_preflight(tmp_path: Path, tie: bool, **extra: str) -> tuple[int, 
     """`served_verdicts.sh` under PREFLIGHT_ONLY on vy-dc-h200-2, in `_v3c`'s toy tree whose prove_path.py lists the BF16
     1B's RoPE heads as its transfer gates, under PEARLPLUS_TIE if ``tie``."""
     return _v3c(tmp_path, (), prove_path=FAKE_V3C_PROVE_PATH + TOY_GATES,
-                PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}", HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1",
+                PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}", HOST="vy-dc-h200-2", PP_PEER="vy-dc-h200-2", PREFLIGHT_ONLY="1",
                 **(PEARL_TIED if tie else {}), **extra)
 
 
@@ -4720,7 +4719,7 @@ def test_the_preflight_refuses_a_pearlplus_tie_where_the_serve_dirs_filesystem_h
     filesystem with no inode table makes its inodes as it needs them, and an untied serve commits no tied window."""
     _script(tmp_path / "bin" / "df", FAKE_DF)
     rc, lines, order, _limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
-                                     HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", D=str(tmp_path / "root" / "r1"),
+                                     HOST="vy-dc-h200-2", PP_PEER="vy-dc-h200-2", PREFLIGHT_ONLY="1", D=str(tmp_path / "root" / "r1"),
                                      DF_LINE=df, PEARLPLUS_INODES=None, **env)
     asked = (tmp_path / "order.df").read_text().split() if (tmp_path / "order.df").exists() else None
     assert asked == (["--output=itotal,iavail,target", str(tmp_path)] if "PEARLPLUS_TIE" in env else None)
@@ -4751,7 +4750,7 @@ def test_a_preflight_short_of_inodes_names_the_kept_tied_windows_that_hold_them_
     (root / "r3" / "pearlplus").mkdir(parents=True)
     _script(tmp_path / "bin" / "df", FAKE_DF)
     rc, lines, order, _limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
-                                     HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", D=str(root / "r1"),
+                                     HOST="vy-dc-h200-2", PP_PEER="vy-dc-h200-2", PREFLIGHT_ONLY="1", D=str(root / "r1"),
                                      DF_LINE="2000000 100 /workspace", PEARLPLUS_INODES=inodes, **PEARL_TIED)
     said = SHORT_OF_INODES.format(short=int(inodes) - 100, inodes=inodes, held=(
         f"Other serve dirs' tied windows under {root} hold them, the largest first: " + held.format(root=root)))
@@ -4900,7 +4899,7 @@ def _deferred(tmp_path: Path, **extra: str | None) -> subprocess.CompletedProces
     (tmp_path / "served-tree").mkdir()
     env = {"PATH": f"{_hosts(tmp_path)}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(tmp_path / "served-venv"),
            "D": str(d), "K": "7", "OUT": str(out), "SERVE_ROOT": str(tmp_path / "root"), "V3C_CLASS": W63K4,
-           "PRODUCT": "remote", "H1_TIE": "1", "HOST": "vy-dc-h200", "RESEARCH_SOURCE_SHA": SHA,
+           "PRODUCT": "remote", "H1_TIE": "1", "HOST": "vy-dc-h200", "PP_PEER": "vy-dc-h200", "RESEARCH_SOURCE_SHA": SHA,
            "GIT_CEILING_DIRECTORIES": str(tmp_path), "DEVELOPMENT": "1", "COMPOSE_OFF_NODE": "1"}
     env = {k: v for k, v in {**env, **extra}.items() if v is not None}
     return subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "defer", SHORT], cwd=tmp_path / "served-tree",
@@ -4942,7 +4941,7 @@ def test_a_node_short_of_v3cs_audits_memory_defers_it_and_the_composite_listing_
     assert _deferral_settings(tmp_path) == {
         "K": "7", "PRODUCT": "remote", "V3C_CLASS": W63K4, "V3C_LAW": TIED_RULE, "V3C_CHALLENGER": "local",
         "DEVELOPMENT": "1", "H1_TIE": "1", "COMPOSITE": "1", "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200",
-        "SERVED_PEER": "", "DEFERRED_TREE": SHA, "COMPOSE_OFF_NODE": off, "COMPOSE_NODE": "vy-auditor-2", "DAY": ""}
+        "SERVED_PEER": "vy-dc-h200", "DEFERRED_TREE": SHA, "COMPOSE_OFF_NODE": off, "COMPOSE_NODE": "vy-auditor-2", "DAY": ""}
     listed = (dd / "inputs.txt").read_text().splitlines()
     window = [f"v3c-w7-{VTAG}/window/{f}" for f in ("circuit.json", "registration.json", "values/a.bin")]
     own = ["private/deferred/deferred.env", "private/deferred/pieces/pouw/answer.json"]
@@ -4963,7 +4962,7 @@ def _follow(tmp_path: Path, **extra: str | None) -> tuple[int, list[str], list[s
     _script(tmp_path / "tree" / "benchmarks" / "one_stage" / "served_composite.sh", FAKE_SERVED_COMPOSITE)
     (tmp_path / "tree" / "benchmarks" / "one_stage" / "served_verdicts.py").write_text(FAKE_RECORD)
     env = {"K": None, "V3C_CLASS": None, "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None, "COMPOSITE": None,
-           "PATH": f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}", "HOST": "cpu-6", "NODE_MEM_GB": "755",
+           "PATH": f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}", "HOST": "cpu-6", "PP_PEER": "cpu-6", "NODE_MEM_GB": "755",
            "RESEARCH_SOURCE_SHA": SHA, "GIT_CEILING_DIRECTORIES": str(tmp_path)}
     return _v3c(tmp_path, **{**env, **extra})
 
@@ -5187,7 +5186,7 @@ def _live_follow(tmp_path: Path, **extra: str | None) -> tuple[int, list[str], l
     served node's peer vy-dc-h200, then its follow-on on cpu-6 under `_live`'s gate with V3C_PEER cpu-6 (``extra`` adds
     to the environment, None unsetting): `_v3c`'s outcome."""
     assert _deferred(tmp_path, DEVELOPMENT=None, PP_CHALLENGER=LIVE, PP_PEER="vy-dc-h200").returncode == 0
-    env = {**_live(tmp_path, [LEDGER_LINE], hosts=True), "PP_CHALLENGER": None, "PP_PEER": None, "V3C_PEER": "cpu-6"}
+    env = {**_live(tmp_path, [LEDGER_LINE], hosts=True), "PP_CHALLENGER": None, "PP_PEER": "cpu-6", "V3C_PEER": "cpu-6"}
     return _follow(tmp_path, **{**env, **extra})
 
 
@@ -5213,8 +5212,8 @@ def test_a_follow_on_of_a_deferral_of_record_samples_on_the_challenger_it_record
     ({"V3C_PEER": "vy-dc-h200"}, "PREFLIGHT: V3C_PEER (default PP_PEER) is vy-dc-h200, the served node's (SERVED_PEER), "
      "which deferred the audit: its session would listen on that node's 127.0.0.1, not this one's; name this node as the "
      "gate's /etc/vy/peers does"),
-    ({"V3C_PEER": None}, f"PREFLIGHT: V3c's audit's session on {LIVE_SAID} listens on its peer's 127.0.0.1, and V3C_PEER "
-     "(default PP_PEER), this node's name in the gate's /etc/vy/peers, is unset"),
+    ({"V3C_PEER": None, "PP_PEER": None}, "PREFLIGHT: PP_PEER is unset: this machine's name in the cluster, the one the "
+     "gate's peers list it by, which the record's host, SERVED_NODE and the off-node refusal read"),
     ({"DEVELOPMENT": "1"}, f"{CLASH} DEVELOPMENT: unset it"),
     ({"V3C_CHALLENGER": "local"}, f"{CLASH} V3C_CHALLENGER: unset it"),
 ])
@@ -5253,7 +5252,7 @@ def test_preflight_only_says_what_the_run_would_do_and_stops_before_anything_is_
     audit's memory its deferral, and under COMPOSE_OFF_NODE=1 what is composed off the node. Nothing runs,
     and neither the serve root nor Flock's work dir is made."""
     rc, lines, order, limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
-                                    HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", **extra)
+                                    HOST="vy-dc-h200-2", PP_PEER="vy-dc-h200-2", PREFLIGHT_ONLY="1", **extra)
     assert (rc, lines, order, limits) == (0, [f"PREFLIGHT passed on vy-dc-h200-2, {said}. {ONLY}"], [], [])
     assert not (tmp_path / "root").exists() and not (tmp_path / "fw").exists()
 
@@ -5358,7 +5357,7 @@ def _handed(tmp_path: Path, blobs: tuple[str, ...] = BLOBS, verdict: bool = True
     (tmp_path / "served-tree").mkdir(exist_ok=True)
     env = {"PATH": f"{_hosts(tmp_path)}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(tmp_path / "served-venv"),
            "D": str(d), "K": "7", "OUT": str(out), "SERVE_ROOT": str(tmp_path / "root"), "V3C_CLASS": W63K4,
-           "PRODUCT": "remote", "H1_TIE": "1", "HOST": "vy-dc-h200", "RESEARCH_SOURCE_SHA": SHA,
+           "PRODUCT": "remote", "H1_TIE": "1", "HOST": "vy-dc-h200", "PP_PEER": "vy-dc-h200", "RESEARCH_SOURCE_SHA": SHA,
            "GIT_CEILING_DIRECTORIES": str(tmp_path)}
     env = {k: v for k, v in {**env, **extra}.items() if v is not None}
     return subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), *cmd], cwd=tmp_path / "served-tree",
@@ -5515,7 +5514,7 @@ def test_the_preflight_takes_an_onsite_composite_on_or_off_the_node_and_no_other
     """The preflight passes onsite with a composite or none, on the node (COMPOSE_OFF_NODE=0, the default) or off it
     (1), and refuses any other COMPOSE_OFF_NODE before anything runs."""
     rc, lines, order, _limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
-                                     HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", **extra)
+                                     HOST="vy-dc-h200-2", PP_PEER="vy-dc-h200-2", PREFLIGHT_ONLY="1", **extra)
     assert (rc, order) == ((3, []) if line else (0, [])) and (lines == [line] if line else len(lines) == 1), lines
     assert line or lines[0].startswith("PREFLIGHT passed")
 
@@ -5548,7 +5547,7 @@ def _compose(tmp_path: Path, keep: tuple[str, ...] = (), link: tuple[str, Path] 
     (tree / "benchmarks" / "one_stage" / "served_verdicts.py").write_text(FAKE_RECORD)
     env = {"PATH": f"{_hosts(tmp_path)}:{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent),
            "D": str(d), "OUT": str(tmp_path / "compose-out"), "SERVE_ROOT": str(tmp_path / "root"),
-           "FLOCK_WORK": str(tmp_path / "fw"), "ORDER": str(tmp_path / "order"), "HOST": "vy-auditor-2",
+           "FLOCK_WORK": str(tmp_path / "fw"), "ORDER": str(tmp_path / "order"), "HOST": "vy-auditor-2", "PP_PEER": "vy-auditor-2",
            "RESEARCH_SOURCE_SHA": SHA, "GIT_CEILING_DIRECTORIES": str(tmp_path)}
     env = {k: v for k, v in {**env, **extra}.items() if v is not None}
     rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "compose"], cwd=tree, env=env, check=False,
@@ -5604,7 +5603,7 @@ COMPOSE_CLASH = ("PREFLIGHT: the compose follow-on runs at the hand-off's settin
 @pytest.mark.parametrize("keep, change, extra, line", [
     ((), "sampled-proofs-served/window/m0/pub-0.bin", {}, COMPOSED.format(
         audit="no V3c audit", sampled=STEP3, verdict="FAIL (the serve dir's private/compose/check.log)")),
-    ((), None, {"HOST": "vy-dc-h200"}, "PREFLIGHT: this is the served node vy-dc-h200, which the prover controls, so "
+    ((), None, {"HOST": "vy-dc-h200", "PP_PEER": "vy-dc-h200"}, "PREFLIGHT: this is the served node vy-dc-h200, which the prover controls, so "
      "nothing composed here claims a record: compose on COMPOSE_NODE (vy-auditor-2)"),
     (("advice/w7/private/advice.bin",), None, {}, "PREFLIGHT: the compose follow-on holds no witness of the served run, "
      "and this node's serve dir does (WITNESS advice/wK/private/advice.bin: the advice and its opening): compose on a "
@@ -5831,7 +5830,7 @@ def test_a_follow_on_under_compose_off_node_audits_then_hands_off_and_composes_n
         "private/compose/inputs.sha256"]
     assert S.witness(listed) == [] and json.loads((dc / "inference-only.json").read_text()) == verdict
     (tmp_path / "order").unlink()
-    rc, lines, order = _compose(tmp_path, HOST="vy-auditor-2", LEAN="accept")
+    rc, lines, order = _compose(tmp_path, HOST="vy-auditor-2", PP_PEER="vy-auditor-2", LEAN="accept")
     assert rc == 0 and order == ["composite", "record"], (lines, order)
     assert lines[0] == COMPOSED.format(audit="V3c's audit from cpu-6", sampled=f"v3c-wK-{VTAG}/audit", verdict="PASS")
     argv = json.loads((tmp_path / "order.record").read_text())
@@ -5840,7 +5839,7 @@ def test_a_follow_on_under_compose_off_node_audits_then_hands_off_and_composes_n
         shutil.rmtree(tmp_path / x)
     (tmp_path / "served-node").rename(tmp_path / "serve")
     (tmp_path / "order").unlink()
-    rc, lines, order = _compose(tmp_path, keep=(f"v3c-w7-{VTAG}/window/values/a.bin",), HOST="cpu-6")
+    rc, lines, order = _compose(tmp_path, keep=(f"v3c-w7-{VTAG}/window/values/a.bin",), HOST="cpu-6", PP_PEER="cpu-6")
     assert rc == 3 and order == [] and lines[0].startswith("PREFLIGHT: the compose follow-on holds no witness")
 
 
@@ -5858,7 +5857,7 @@ def test_the_hand_off_carries_pearlpluss_piece_of_record_which_the_compose_follo
     argv the follow-on's, composes accept with PoUW's W_cert the Lean's work; from a piece's files alone (no session key)
     it composes pending, naming the challenger key it can't read."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
-    monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-auditor-2")
+    monkeypatch.setenv("PP_PEER", "vy-auditor-2")
     monkeypatch.setattr(S, "lean_sampled_row", lambda *_a, **_k: _accepted())
     pieces, tie, pin, lane = _pearlplus_piece(tmp_path / "pp", monkeypatch, live)
     for f in ("piece.log", "verify.json", "session.tgz", f"session/{SID}/request.json", f"session/{SID}/out/record.json"):
@@ -5913,7 +5912,7 @@ def test_handoff_host_writes_a_deferrals_hand_off_again_at_its_settings_naming_w
 
     def handoff(out: str, *host: str, **extra: str) -> tuple[int, list[str]]:
         env = {"PATH": f"{_hosts(tmp_path)}:{os.defpath}", "HOME": str(tmp_path), "D": str(d), "OUT": str(tmp_path / out),
-               "SERVE_ROOT": str(tmp_path / "root"), "HOST": "cpu-6", "RESEARCH_SOURCE_SHA": SHA,
+               "SERVE_ROOT": str(tmp_path / "root"), "HOST": "cpu-6", "PP_PEER": "cpu-6", "RESEARCH_SOURCE_SHA": SHA,
                "GIT_CEILING_DIRECTORIES": str(tmp_path), **extra}
         rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "handoff", *host],
                             cwd=tmp_path / "served-tree", env=env, check=False, capture_output=True).returncode
@@ -5965,7 +5964,7 @@ def test_gate_compose_sends_a_deferrals_hand_off_at_its_settings_naming_where_v3
 
     def gate_compose(out: str, *host: str, **extra: str) -> tuple[int, list[str]]:
         env = {"PATH": f"{_hosts(tmp_path)}:{os.defpath}", "HOME": str(tmp_path), "D": str(d), "OUT": str(tmp_path / out),
-               "SERVE_ROOT": str(tmp_path / "root"), "HOST": "cpu-6", "RESEARCH_SOURCE_SHA": SHA,
+               "SERVE_ROOT": str(tmp_path / "root"), "HOST": "cpu-6", "PP_PEER": "cpu-6", "RESEARCH_SOURCE_SHA": SHA,
                "GIT_CEILING_DIRECTORIES": str(tmp_path), "COMPOSE_GATE": f"{sys.executable} {gate}",
                "GATE_SEEN": str(seen), **extra}
         rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "gate-compose", str(dd / "pieces"),
@@ -6058,6 +6057,7 @@ def _gate_composed(tmp_path: Path, edit: Mapping[str, str | None] | None = None,
              f"{sp}/window/case-v2.json": {**v1, "params": {"verifier": "toy", "proofs": {}},
                                            "blobs": [str(d / b) for b in BLOBS]}}
     gate.mkdir()
+    (gate / "compose.json").write_text('{"name": "vy-compose-1"}')
     H = _live_host()
     H.record_pin(gate / "pins.jsonl", GATE_PIN, datetime(2026, 11, 4, 11, tzinfo=UTC), on="remote", seal=lambda p: None)
     driver = tmp_path / "gate-driver.py"
@@ -6066,7 +6066,7 @@ def _gate_composed(tmp_path: Path, edit: Mapping[str, str | None] | None = None,
     exe.write_text(FAKE_SAMPLED_LEAN)
     exe.chmod(0o755)
     answer = {**_accepted()["answer"], "protocol": "verity/sampled-proofs/v1", "commitment": REG.digest(LEAN_RECORD)}
-    gate_env = {"PATH": f"{_hosts(tmp_path)}:{Path(sys.executable).parent}:/usr/bin:/bin", "HOST": "vy-auditor-2",
+    gate_env = {"PATH": f"{_hosts(tmp_path)}:{Path(sys.executable).parent}:/usr/bin:/bin", "HOST": "vy-auditor-2", "PP_PEER": "vy-auditor-2",
                 "SAMPLED_EXE": str(exe), "SEEN": str(tmp_path / "seen.json"), "ANSWER": json.dumps(answer),
                 "GIT_DIR": str(tmp_path / "no-git"), "CHECK_SCOPE": "none"}
     cases.update({f"{sp}/{name}": None if body is None else json.loads(body) for name, body in (edit or {}).items()})
@@ -6112,7 +6112,7 @@ def test_gate_compose_sends_the_hand_off_to_the_compose_gate_which_composes_the_
     composed = json.loads((out / "compose" / "record" / "verdicts.json").read_text())
     assert composed["composed"]["verdict"] == "pending" and all(
         composed["protocols"][k]["verdict"] == "accept" for k in ("integrity", "work"))
-    assert composed["composed_on"] == {"host": socket.gethostname(), "served_node": False, "from": S.HANDED_FROM,
+    assert composed["composed_on"] == {"host": "vy-compose-1", "served_node": False, "from": S.HANDED_FROM,
                                        "tree": GATE_PIN, "tree_on": "remote"}
     row = composed["protocols"]["integrity"]
     assert row["answer_from"] == S.LEAN_HERE and row["answer"]["commitment"] == REG.digest(LEAN_RECORD), row
@@ -6206,7 +6206,7 @@ def _copy(tmp_path: Path, kind: str, to: str, **extra: str) -> tuple[int, list[s
     _script(tmp_path / "copy-bin" / "rsync", FAKE_RSYNC)
     (tmp_path / "served-tree").mkdir(exist_ok=True)
     env = {"PATH": f"{_hosts(tmp_path)}:{tmp_path / 'copy-bin'}:{os.defpath}", "HOME": str(tmp_path), "D": str(d),
-           "OUT": str(tmp_path / "copy-out"), "SERVE_ROOT": str(tmp_path / "root"), "HOST": "vy-dc-h200",
+           "OUT": str(tmp_path / "copy-out"), "SERVE_ROOT": str(tmp_path / "root"), "HOST": "vy-dc-h200", "PP_PEER": "vy-dc-h200",
            "COPIED": str(copied), "RESEARCH_SOURCE_SHA": SHA, "GIT_CEILING_DIRECTORIES": str(tmp_path), **extra}
     rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "copy", kind, to], cwd=tmp_path / "served-tree",
                         env=env, check=False, capture_output=True).returncode
@@ -6269,7 +6269,7 @@ def test_copy_to_a_write_only_rsync_sends_the_list_under_the_serve_dirs_name_mak
      "witness goes: copy it to a prover node"),
     ("deferred", "deferred", "research@vy-auditor-2:incoming", {}, 3, "COPY refused: the deferral's list holds the "
      "window's witness, and vy-auditor-2 is COMPOSE_NODE, an auditor device where no witness goes: copy it to a prover node"),
-    ("handed", "compose", "vy-dc-h200.example", {"HOST": "cpu-6"}, 3, "COPY refused: vy-dc-h200.example is the served "
+    ("handed", "compose", "vy-dc-h200.example", {"HOST": "cpu-6", "PP_PEER": "cpu-6"}, 3, "COPY refused: vy-dc-h200.example is the served "
      "node, which the prover controls: copy the hand-off to COMPOSE_NODE (vy-auditor-2)"),
     ("handed+witness", "compose", "vy-auditor-2", {}, 3, "COPY refused: the hand-off's list names the served run's "
      "witness (WITNESS requests.jsonl: the requests' prompt and served ids, rows and seeds)"),
@@ -6336,7 +6336,7 @@ def test_the_preflight_refuses_a_front_flag_the_trees_front_does_not_take_and_a_
     (tree / "benchmarks" / "network_traces" / "certifier_piece.py").write_text(
         f"import sys\nassert sys.argv[1:] == ['front', '--help']\nprint('usage: certifier_piece.py front PORT [{takes}]')\n")
     _script(venv / "python", f'exec {sys.executable} "$@"')
-    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
+    env = {"PP_PEER": socket.gethostname(), "PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
            "LOAD": load, "CERTIFIER_FRONT": front, "SERVE_ARGS": serve_args}
     rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
                         check=False).returncode
@@ -6382,7 +6382,7 @@ def test_the_preflight_takes_a_session_only_whole_and_none_of_it_under_another_l
         f"import sys\nassert sys.argv[1:] == ['front', '--help']\nprint('usage: certifier_piece.py front PORT [{takes}]')\n")
     _script(venv / "python", f'exec {sys.executable} "$@"')
     rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "front-flags"], cwd=tree, check=False,
-                        env={"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent),
+                        env={"PP_PEER": socket.gethostname(), "PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent),
                              "OUT": str(tmp_path / "out"), **env}).returncode
     said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines() if (tmp_path / "out" / "verdicts.txt").exists() else []
     assert (rc, said) == ((3, [line]) if line else (0, []))
@@ -6405,7 +6405,7 @@ def test_remote_sets_no_onsite_default_and_its_preflight_refuses_an_onsite_comma
     tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
     _script(tree / "benchmarks" / "pous" / "streamed_wipe" / "served_wipe.sh", "exit 0")
     _script(venv / "python", f'exec {sys.executable} "$@"')
-    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
+    env = {"PP_PEER": socket.gethostname(), "PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
            "PRODUCT": product, "ONSITE_PIECES": str(ONSITE_PIECES), **extra}
     rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
                         check=False).returncode
@@ -6425,7 +6425,7 @@ def test_onsite_defaults_come_from_the_file_onsite_pieces_names(tmp_path, produc
     tree.mkdir()
     (tree / "pieces.sh").write_text(f'onsite_piece_commands() {{ echo "$PRODUCT" >> {tmp_path}/called; }}\n')
     _script(venv / "python", f'exec {sys.executable} "$@"')
-    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
+    env = {"PP_PEER": socket.gethostname(), "PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
            "PRODUCT": product, **({"ONSITE_PIECES": pieces} if pieces else {})}
     rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
                         check=False).returncode
@@ -6461,7 +6461,7 @@ def test_the_preflight_refuses_a_checkpoint_the_trees_pous_piece_does_not_pin(tm
     (tree / "pieces.sh").write_text("onsite_piece_commands() { :; }\n"
                                     + (f'onsite_pous_pins() {{ echo "$PWD" > {tmp_path}/asked; {asked}; }}\n' if asked else ""))
     _script(venv / "python", f'exec {sys.executable} "$@"')
-    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
+    env = {"PP_PEER": socket.gethostname(), "PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
            "ONSITE_PIECES": "pieces.sh", "POUS_CMD": pous_cmd, "REPO": "some/model", "REV": "abc"}
     rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "pous-pins"], cwd=tree, env=env,
                         check=False).returncode
@@ -6479,7 +6479,7 @@ def test_the_serves_preflight_asks_pous_piece_about_the_checkpoint_before_anythi
         "onsite_piece_commands() { :; }\n"
         f'onsite_pous_pins() {{ echo "$1@$2" > {tmp_path}/asked; {"return 0" if pinned else "echo no pin; return 3"}; }}\n')
     rc, lines, order, _limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
-                                     HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", ONSITE_PIECES=str(pieces),
+                                     HOST="vy-dc-h200-2", PP_PEER="vy-dc-h200-2", PREFLIGHT_ONLY="1", ONSITE_PIECES=str(pieces),
                                      POUS_CMD=POUS_PIECE, REPO="some/model", REV="abc")
     assert (tmp_path / "asked").read_text().split() == ["some/model@abc"] and order == []
     if pinned:
@@ -6493,7 +6493,7 @@ def test_a_missing_onsite_pieces_file_is_refused(tmp_path):
     tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
     tree.mkdir()
     _script(venv / "python", f'exec {sys.executable} "$@"')
-    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
+    env = {"PP_PEER": socket.gethostname(), "PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
            "ONSITE_PIECES": "nowhere/pieces.sh"}
     got = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
                          check=False, capture_output=True, text=True)
@@ -6520,7 +6520,7 @@ def test_onsite_pieces_defaults_are_set_where_the_tree_has_each_piece_and_the_no
         (home / ".ssh" / k).write_text("")
     got = subprocess.run(["bash", "-c", f'. {ONSITE_PIECES}; onsite_piece_commands; '
                           'printf "%s\\n" "${WIPE_CMD-}" "${POUS_CMD-}" "${BANDWIDTH_CMD-}"'],
-                         env={"PATH": os.defpath, "HOME": str(home), "TREE": str(tree), "BW_STORE": str(tree / "store")},
+                         env={"PP_PEER": socket.gethostname(), "PATH": os.defpath, "HOME": str(home), "TREE": str(tree), "BW_STORE": str(tree / "store")},
                          check=True, capture_output=True, text=True).stdout.split("\n")[:3]
     marks = {"wipe": "streamed_wipe/served_wipe.sh", "pous": "served_piece.sh", "collect": "served_bandwidth.py collect",
              "session": "served_bandwidth.sh"}
@@ -6535,7 +6535,7 @@ def test_settings_are_read_before_the_defaults_and_an_unreadable_file_is_refused
     settings = tmp_path / "private" / "settings.env"
     settings.parent.mkdir()
     settings.write_text("LOAD=front\nCERTIFIER_FRONT=\n")
-    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
+    env = {"PP_PEER": socket.gethostname(), "PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
            "SETTINGS": str(settings)}
     rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
                         check=False).returncode
@@ -6562,7 +6562,7 @@ def test_remote_sets_no_onsite_default_and_its_preflight_refuses_an_onsite_comma
     tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
     _script(tree / "benchmarks" / "pous" / "streamed_wipe" / "served_wipe.sh", "exit 0")
     _script(venv / "python", f'exec {sys.executable} "$@"')
-    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
+    env = {"PP_PEER": socket.gethostname(), "PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
            "PRODUCT": product, **extra}
     rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
                         check=False).returncode
@@ -6635,7 +6635,7 @@ def test_a_remote_composite_is_v1_under_pearl_plus_and_none_where_the_tree_lacks
         (remote / "RemoteV1Main.lean").write_text("")
     (tree / "benchmarks" / "one_stage").mkdir(parents=True)
     (tree / "benchmarks" / "one_stage" / "composite.py").write_text(PRODUCT_COMPOSITE)
-    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable,
+    env = {"PP_PEER": socket.gethostname(), "PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable,
            "PRODUCT": "remote", "SERVED_NODE": "vy-elsewhere", "COMPOSE_HANDOFF": "1", **({"POUW": pouw} if pouw else {})}
     r = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_composite.sh"), str(d), str(out)],
                        cwd=tree, env=env, check=False, capture_output=True, text=True)
@@ -6705,7 +6705,7 @@ sys.exit(1)
 ''')
     unstarted = ("COMPOSITE NOT_STARTED verity/sampled-proofs/v1: its check was not started; the case names 3 blob files "
                  "that sum to 9000 bytes, and the limit a check is started on is 8000 bytes; too large to read")
-    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable}
+    env = {"PP_PEER": socket.gethostname(), "PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable}
     run = lambda: subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_composite.sh"), str(d), str(out)], cwd=tree, env=env,  # noqa: E731
                                  check=False, capture_output=True, text=True)
     host = subprocess.run(["hostname", "-s"], check=True, capture_output=True, text=True).stdout.strip()
@@ -6882,7 +6882,7 @@ def test_the_composite_leaves_out_a_pous_or_wipe_case_that_is_not_its_pieces_and
         (out / "pieces" / ONSITE_OWN[protocol][1]).unlink()
     else:
         case(ONSITE_OWN[protocol][3], protocol)
-    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable,
+    env = {"PP_PEER": socket.gethostname(), "PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable,
            "ONSITE_PIECES": str(ONSITE_PIECES), "SERVED_NODE": "the-served-node"}
     r = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_composite.sh"), str(d), str(out)], cwd=tree, env=env,
                        check=False, capture_output=True, text=True)
@@ -6947,7 +6947,7 @@ def test_the_composite_takes_no_case_from_the_certifier_pieces_private_directory
         (kept / f).write_text(text)
     (out / "pieces" / "certifier").mkdir(parents=True)
     (out / "pieces" / "certifier" / "answer.json").write_text(json.dumps({"protocol": certifier, "verdict": "accept"}))
-    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable,
+    env = {"PP_PEER": socket.gethostname(), "PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable,
            "ONSITE_PIECES": str(ONSITE_PIECES), "SERVED_NODE": "the-served-node"}
     r = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_composite.sh"), str(d), str(out)], cwd=tree, env=env,
                        check=False, capture_output=True, text=True)
@@ -7226,7 +7226,7 @@ def _serve_argv(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str]]:
     for path, body in ((venv / "python", python), (bin_ / "sleep", "exit 0")):
         path.write_text(f"#!/bin/sh\n{body}\n")
         path.chmod(0o755)
-    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(tmp_path / "serve"),
+    env = {"PP_PEER": socket.gethostname(), "PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(tmp_path / "serve"),
            "OUT": str(tmp_path / "out"), "VY_CHALLENGER_1_HOST": CHALLENGER_HOST, **env}
     rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "serve"], cwd=tree, env=env, check=False,
                         capture_output=True).returncode
@@ -7337,7 +7337,7 @@ def _serve_calls(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str], l
     for path, body in ((venv / "python", python), (bin_ / "sleep", f"[ -e {tmp_path}/up ] || read _ < {tmp_path}/ready")):
         path.write_text(f"#!/bin/sh\n{body}\n")
         path.chmod(0o755)
-    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(tmp_path / "serve"),
+    env = {"PP_PEER": socket.gethostname(), "PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(tmp_path / "serve"),
            "OUT": str(tmp_path / "out"), "H1_GATE": "", **env}
     try:
         rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "serve"], cwd=tree, env=env, check=False,

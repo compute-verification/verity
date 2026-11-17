@@ -163,7 +163,7 @@ EOF
     *) say "COMPOSITE $x: composite.py exit $r, its log on the node"; bad=1 ;;
   esac
 done
-if [ "${SERVED_NODE:-$(hostname)}" = "$(hostname)" ]; then
+if [ "${SERVED_NODE:-${PP_PEER:-}}" = "${PP_PEER:-}" ]; then
   say "COMPOSITE: composed on $(hostname -s), which holds the serve dir, from the cases the served node wrote there, not from the parties that produced them"
 elif [ -n "${COMPOSE_HANDOFF:-}" ]; then
   say "COMPOSITE: composed on $(hostname -s), not the served node $SERVED_NODE: from its compose hand-off (verifier-side files, no witness) and the cases written and checked here from it, not from the parties that produced them"
