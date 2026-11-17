@@ -19,7 +19,7 @@ the run of record returned. That `draw` is the first stage's sample of record:
   registration (`Draw.checkDraw`, under the sampling design the rule gives the population), and its `draw` is that
   sample. A refused run names no symbol, and the entry a second stage adds to the answer is named `interior`.
 * `accepted_secondSamplingDesign`: where the two-stage check accepts, the sampling design its last step holds the interior audit's sample to is
-  `Select.secondSamplingDesign` of the proved units of the first stage's sample, the one `Select.select` sampled on the first
+  `Select.secondSamplingDesign` of the proved units of the first stage's sample, the one `Select.select` drew on the first
   stage's bytes `ξ` under the boundary's parameters and the run of record held to the boundary registration.
 
 Nothing imports this module.
@@ -110,7 +110,7 @@ private theorem run_path {i : Spot.Run.Input} {form : Bool} {j : Json} (h : Spot
         by assumption, (Except.ok.inj h).symm⟩
 
 /-- **An accepted run of record's `draw` is its first stage's sample**: a run of `Spot.Run.run`, at either switch,
-whose symbol is `accept` sampled the sample of record (`Select.select` under `Select.resolve`'s rule and the work table
+whose symbol is `accept` drew the sample of record (`Select.select` under `Select.resolve`'s rule and the work table
 `Rule.tableOver` expands) on the bytes it was handed, held it to the registration (`Draw.checkDraw` under the
 sampling design `Rule.over` gives the population), and lists it as its `draw`. -/
 theorem run_sample {i : Spot.Run.Input} {form : Bool} {run : Json} (h : Spot.Run.run i form = .ok run)
@@ -150,7 +150,7 @@ theorem run_sample {i : Spot.Run.Input} {form : Bool} {run : Json} (h : Spot.Run
           (by simp)
 
 /-- **The second stage's sampling design is computed from the first stage's accepted sample.** Where the two-stage check accepts,
-the run of record's first stage sampled `draw` on the first stage's bytes `ξ` (`Select.select`, under the rule
+the run of record's first stage drew `draw` on the first stage's bytes `ξ` (`Select.select`, under the rule
 `Select.resolve` gives the parameters' rule at the boundary's program and query, with no closure), held it to the
 boundary registration's record `j₁` as the check read it (`readBack`; `Draw.checkDraw`, under the sampling design the
 rule gives its population), and listed it as

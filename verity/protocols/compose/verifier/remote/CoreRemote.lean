@@ -276,7 +276,7 @@ private def sampledParams (log : Array Json) (outputs : Option Json) : Json := J
   ("scheme", "frame-v3-sha512/hm96-sha512"), ("window_root", rep "0e"), ("work_table", Json.null)] ++
     (outputs.map fun o => [("outputs", o)]).getD [])
 
-/-- One-stage v2's evidence of an audit that sampled the one unit and proved it in one session: the session's record's
+/-- One-stage v2's evidence of an audit that drew the one unit and proved it in one session: the session's record's
 SHA-512 (`proofs`) in place of verdicts, and coins no challenger signed. -/
 private def sampledEvidence (rec : Json) : Json :=
   Json.mkObj [("coins", Json.mkObj []), ("draw", jsonOf r#"{"k":1,"law":"subset","population":1,"units":[0]}"#),

@@ -196,7 +196,7 @@ theorem undecided_of_somePending (p : Params) (c : Commitment) (e : Evidence) (h
     ∃ why, protocol.check p c e = .undecided why :=
   (undecided_iff p c e).mpr h
 
-/-- The record an honest certifier issues for execution phase `(d, l, w)`: head `h`, the salt `s` it sampled for it, and a
+/-- The record an honest certifier issues for execution phase `(d, l, w)`: head `h`, the salt `s` it drew for it, and a
 certificate of the key's identifier over `(d, l, w)` and `h`'s digest `dg` under `s` with signature `σ`. -/
 def honestRecord (p : Params) (d : Direction) (l : String) (w : Nat) (h : RecordHead) (s dg σ : ByteArray) :
     Certified :=
