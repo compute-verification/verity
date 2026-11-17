@@ -12,7 +12,8 @@ def _population_roots() -> list[Any]:
     """`TemplateInstances_v1` of the sharded plan unit (S = 32, two gaps) at N = 2, and `TemplatePopulations_v1` of it and the
     plan unit (P = 4, 16 registered blocks) at counts 1 and 2, without values and with two (a round's A table and input-ids
     table, in 16-bit words, as a window registers them), and `WiredPopulations_v1` of them wiring the shard's output into
-    both plan units' ``count``: populations of templates with no coin, whose programs declare no ports."""
+    both plan units' ``count``, and `WiredSlots_v1` of the same with each plan unit in a slot of its own, the shard in
+    slot 0, so slot 1 reads it across slots: populations of templates with no coin, whose programs declare no ports."""
     from verity.circuits.codec import descriptor_id
     from verity.circuits.defs import bind
     from verity.circuits.population import mixed_population_program, population_program, wired_population_program
@@ -27,7 +28,10 @@ def _population_roots() -> list[Any]:
                           if (t, p) != (m, "count")]}
     return [population_program(shard, 2).fn, mixed_population_program([(shard, 1), (match, 2)]).fn,
             mixed_population_program([(shard, 1), (match, 2)], values=values).fn,
-            wired_population_program([(shard, 1), (match, 2)], wired)[0].fn]
+            wired_population_program([(shard, 1), (match, 2)], wired)[0].fn,
+            wired_population_program([(shard, 1), (match, 2)], {**wired, "blocks": {"inference": {"slots": 2, "steps": 1, "entries": [
+                {"template": s, "at": 0, "radix": [1], "axes": ["step"], "step": 0},
+                {"template": m, "at": 0, "radix": [2], "axes": ["slot"], "step": 0}]}}}, slots=True)[0].fn]
 
 
 def _wiring_roots() -> list[Any]:

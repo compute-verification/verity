@@ -1178,3 +1178,35 @@ def test_the_tiny_class_wired_program_is_its_members_fed_by_hand(tiny_wired):
     minute): only the whole class holds every wire kind."""
     circuit, prog, _ = tiny_wired
     wired_matches_by_hand(circuit, prog)
+
+
+def _outputs(fn: Any, params: list[np.ndarray]) -> np.ndarray:
+    vals: list[np.ndarray] = []
+
+    def take(refs):
+        return np.concatenate([(params if s == "p" else vals)[i][lo:hi] for s, i, lo, hi in runs(refs)])
+
+    for node in fn.body.nodes:
+        args = [take(a.refs) for a in node.args]
+        if node.fn.id.startswith("WiredSlot_v1{"):
+            assert node.n == 1
+            vals.append(_outputs(node.fn, args))
+        else:
+            vals.append(np.asarray(evaluate_batch(node.fn, *(x.reshape(node.n, -1) for x in args)), dtype=np.uint64).reshape(-1))
+    return take(fn.body.ret)
+
+
+@pytest.mark.slow
+def test_the_tiny_class_grouped_by_slot_is_the_wired_program_one_call_a_slot(tiny_wired):
+    """Grouped by slot, the tiny class's wired Program is a root of one `WiredSlot_v1` call a slot, each slot's own
+    Definition (the slots read different fields of their scan lane), with the same parameters, gates and, on made-up
+    parameters, outputs. Slow (about a minute to evaluate): only the whole class holds every kind of row a slot reads."""
+    circuit, prog, _ = tiny_wired
+    rec = {**circuit.description(), "external": list(circuit.external),
+           "blocks": circuit.blocks.doc(sum(n for _, n in circuit.templates), "")}
+    grouped = wired_population_program(list(circuit.templates), rec, slots=True)[0]
+    assert grouped.fn.signature() == prog.fn.signature() and grouped.fn.gates == prog.fn.gates
+    calls = [n.fn for n in grouped.fn.body.nodes]
+    assert [f.id.split("{")[0] for f in calls] == ["WiredSlot_v1"] * CLASS.slots and len({f.id for f in calls}) == CLASS.slots
+    inputs = list(made_up(prog).values())
+    assert np.array_equal(_outputs(grouped.fn, inputs), _outputs(prog.fn, inputs))
