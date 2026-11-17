@@ -12,8 +12,8 @@ under a test key, for a rehearsal of a served window (`pouw_h1_rehearsal.py`); r
 `auditor.pinned_commit` names SHA, makes the host's state in ``DIR/host`` (`auditor.Host`, its pins log recording SHA as
 its own main, since nothing here fetches main) and its LMS key at ``--params``
 (default 4,5: 32 leaves), and builds the Lean verifier whose `one_stage.verifier.coins` serve.py flips its coins from
-(``--coins lean``; ``stub`` serves `stub_serve.py`'s seeded bytes instead, and ``init`` falls back to it, saying why, when
-the build fails). Every verb then runs infra's own code from that tree, which goes first on ``sys.path`` before any
+(``--coins lean``; ``stub`` serves `stub_serve.py`'s seeded bytes instead, only when asked: ``init`` refuses when the
+build fails). Every verb then runs infra's own code from that tree, which goes first on ``sys.path`` before any
 ``verity`` import: `auditor.gate` with its hooks as root and `auditor` would run them on the auditor device (`reserve`,
 `admit`, `period`, `await_commitment`, `model_register`), each in this process, and a session's unit (`auditor.run`,
 serve.py with ``--root`` and the session's secret) a detached ``DIR run SESSION`` that holds ``DIR/units/SESSION.lock``
@@ -136,7 +136,9 @@ def init(d: Path, argv: list[str]) -> int:
         b = subprocess.run(["lake", "build", "spot-verifier"], cwd=pkg, capture_output=True, text=True)
         cfg["lean_build"] = {"rc": b.returncode, "tail": (b.stdout + b.stderr)[-3000:]}
         if b.returncode:
-            cfg["coins"], cfg["coins_why"] = "stub", f"lake build spot-verifier exited {b.returncode}"
+            print(f"local_gate: lake build spot-verifier exited {b.returncode}, so the gate has no Lean coins; it takes "
+                  f"seeded ones only when asked (--coins stub): {cfg['lean_build']['tail'][-800:]}", file=sys.stderr)
+            return 2
     (d / CONFIG).write_text(json.dumps(cfg, indent=1) + "\n")
     A = _auditor(d, cfg)
     from verity.commitments.crypto import lms
