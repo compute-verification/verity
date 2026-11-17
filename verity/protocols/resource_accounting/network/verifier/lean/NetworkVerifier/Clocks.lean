@@ -5,8 +5,8 @@ public import NetworkVerifier.Check
 /-!
 # The period's decoders
 
-The decoders the period's check (`NetworkVerifier.Period`) reads, in its namespace: `keysOf`, `exactly`, `hexAt` and
-`certificateOf`. Code: it imports only the certificate check (`NetworkVerifier.Check`) and what that imports, and nothing
+The decoders the period's check (`NetworkCheck.Period`) reads, in its namespace: `keysOf`, `exactly`, `hexAt` and
+`certificateOf`. Code: it imports only the certificate check (`NetworkCheck.Check`) and what that imports, and nothing
 of the inference-only policy's.
 -/
 

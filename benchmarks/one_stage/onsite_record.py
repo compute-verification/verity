@@ -32,7 +32,7 @@ run wrote no answer, ``missing`` and ``why``:
   case's private policy.json (``--inference-only-case-policy``, of which only ``read`` is read) says so, the run's
   ALPHA and GAMMA where the case has none, and ``missing`` where the record wasn't handed it;
 * remote: remote's Lean verdict, ``composite/remote/composite.json`` (`composite.py`), with what it couldn't establish;
-* the network attester: the ``communication`` row, `NetworkVerifier.Period`'s answer (`NETWORK`), or, where the run's
+* the network attester: the ``communication`` row, `NetworkCheck.Period`'s answer (`NETWORK`), or, where the run's
   product drops it (remote's, with the split certifier behind its front) and its period check answered, the row that
   answer gives (``pieces/certifier/answer.json``, `served_verdicts.piece_row`), as onsite's report composes it;
 * onsite: the composite of record's Lean verdict, its id the verdict's ``protocol``: the network attester's composite
@@ -74,7 +74,7 @@ each statement's circuit file is, by SHA-512, the one remote's SPOT case's (``--
 case states, the files hashed here, and each statement's public file one a5 pinned (``--public-pin``,
 `pinned`): as staged before the draw, the pin's staged bodies held to the docket the challenger's coins committed
 to by their leaf layer, or as a5 completed it from the staged file once the tie held. `scan-state-pinned` (`scan_state_pinned`): where an audit's window commits the scan's state in
-its activations (`SCAN_STATE`, the entry `NetworkVerifier.Period` holds to the scan's), V3c's audit opened its registered
+its activations (`SCAN_STATE`, the entry `NetworkCheck.Period` holds to the scan's), V3c's audit opened its registered
 reads of it at that entry's root and domain (`AUDIT_SUMMARY`'s registered.own), accepted, and reported exactly each
 sampled member's registered reads (`AUDIT`): one-stage's docket checks read nothing of the window, so the audit's
 driver pins it, and the record checks that it did.
@@ -366,7 +366,7 @@ PERIOD = Path("v3c-audit") / "period.json"
 #: registered reads opened the window's own values at (``registered.own``)
 AUDIT_SUMMARY = Path("v3c-audit") / "summary.json"
 #: the value a compute audit's window registers the scan's state rows as, which the period ties to its scan's state
-#: (`NetworkVerifier.Period.stateValue`, `records_audit.TIED`)
+#: (`NetworkCheck.Period.stateValue`, `records_audit.TIED`)
 SCAN_STATE = "verity/certifier/scan-state/v1"
 CREDIT = ("sampled proofs credits only the drawn members whose --registered file named every port of their circuit at "
           "the window's committed roots: the audit completed every member's at the registration's roots before the "
@@ -1509,7 +1509,7 @@ def auditor_record(params: Any, composed: str | None, key: Path | None, site: Pa
     """`CHECKED`'s auditor-record on the run: the period's ``params``, its case's, held to those its check read by their
     SHA-512, ``composed``, the composite of record's for its network attester's case (`composite.canonical`, None
     where it has none), their LMS parameters and the key and session of the listed entry whose stretch holds their
-    execution phase ``first`` (the last listed whose ``start`` is at most it, as `NetworkVerifier.Period.entryAt` picks;
+    execution phase ``first`` (the last listed whose ``start`` is at most it, as `NetworkCheck.Period.entryAt` picks;
     `NO_KEYS` where they list none readable, `NO_ENTRY` where none holds it), against the auditor's record of its
     network attester at ``key`` (certifier-key/v1,
     `network_attester_chain.RECORD`) and its registration at ``site``, ``{"params", "log"}``: the registration log's params,
@@ -1609,7 +1609,7 @@ def auditor_listing(out: Path, case: Any) -> dict[str, Any]:
 
 def scan_state_pinned(out: Path, case: Any) -> dict[str, Any]:
     """`CHECKED`'s scan-state-pinned on the run: each audit of ``case``'s commitment whose window commits `SCAN_STATE`
-    in its activations as `NetworkVerifier.Period.auditStateEntries` reads it (the entry at that value, naming it), held to
+    in its activations as `NetworkCheck.Period.auditStateEntries` reads it (the entry at that value, naming it), held to
     the run's published V3c audit (`PERIOD`'s docket): the entry its registered reads opened the value at
     (`AUDIT_SUMMARY`'s registered.own) is that activations entry by value, root and domain, the audit accepted, and its
     record reported exactly each sampled member's registered reads (`AUDIT`). ``holds``, ``audits``, those audits'
