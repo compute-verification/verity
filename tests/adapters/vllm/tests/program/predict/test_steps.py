@@ -1186,14 +1186,13 @@ def test_class_g_refuses_a_request_whose_program_misses_a_launch_it_ran_in(sessi
         plan_steps(_class_g(tmp_path, engine=engine), *session)
 
 
-@pytest.mark.parametrize("threshold,refused", [(0, {}), (256, {0: "request 0: step 0 runs 300 of its rows, over the registered "
-                                                             "long_prefill_token_threshold 256"})])
-def test_class_g_reads_a_long_prefill_threshold_of_0_as_no_clamp(threshold, refused, tmp_path):
+def test_class_g_reads_a_long_prefill_threshold_of_0_as_no_clamp(tmp_path):
     """vLLM clamps a request's rows a step to its long_prefill_token_threshold only when that is above 0: at 0 a 300-row prefill
     chunk is in its registration, at 256 it is refused."""
     session = _session([(300, 1, {**GREEDY, "max_tokens": 1})], [[(0, 0, 300)]])
-    plan = plan_steps(_class_g(tmp_path, engine={"long_prefill_token_threshold": threshold}), *session, partial=True)
-    assert {i: why.split(" (the engine")[0] for i, why in plan.refused.items()} == refused
+    assert plan_steps(_class_g(tmp_path, engine={"long_prefill_token_threshold": 0}), *session, partial=True).refused == {}
+    refused = plan_steps(_class_g(tmp_path, engine={"long_prefill_token_threshold": 256}), *session, partial=True).refused
+    assert list(refused) == [0] and "step 0 runs 300 of its rows, over the registered long_prefill_token_threshold 256" in refused[0]
 
 
 def _hit_chunked() -> tuple[I1.Advice, dict]:
