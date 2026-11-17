@@ -28,12 +28,10 @@ what it holds.
   `profiles.admission_calibration`), with the names of vLLM's layer classes (`profiles.layer_classes`). Each of
   these but the last lists in `__all__` the names that other packages, the benchmarks and the command line read
   from it. `profiles.layer_classes` states none: the list would hold `GEMMA_RMS_NORM` as a string, which the
-  by-name lint reads as a model's name. Two files read past a list: `observe.fold.profiles.generic` reads the
-  private `profiles.dense_generic._sha256`, and the adapter's `tools/wgbench/wgbench.py`, which times the int8
-  kernels by name, reads `int8_wgmma`, which states no `__all__`, and names of `int8_fused` that its `__all__`
-  does not list.
+  by-name lint reads as a model's name. One file reads past a list: `observe.fold.profiles.generic` reads the
+  private `profiles.dense_generic._sha256`.
 - **Loaded by:** the integration's `pipeline`, `acquire`, `program`, `protocols`, `observe`, `check`
-  and `commit` packages, its `llm` and `glue`; three of the adapter's `tools`; and the benchmarks that build,
+  and `commit` packages, its `llm`; two of the adapter's `tools`; and the benchmarks that build,
   serve or time the engine (`benchmarks/hash`, `benchmarks/pouw`, `benchmarks/serve_tax`, `benchmarks/torch_gpu`,
   `benchmarks/vllm_encoded` and a dozen more directories).
 - **Loads:** vLLM, torch, triton, numpy and, in `meta_inventory`, `huggingface_hub`; the integration's `config`,

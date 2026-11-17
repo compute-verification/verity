@@ -1,7 +1,7 @@
 """a5's case for the audit on the proofs themselves, `Spot.OneStageZk`'s: v1's case with the evidence's verdicts
 replaced by the proofs' files named by SHA-512, the params naming the auditor's circuit and public files' digests, and
 blobs the paths of those files and the pinned tables; and the audits v2 can't verify say why. A window of several
-members has its case in v2's per-member form beside those, in a file of its own."""
+members has its case in v2's per-member form in their place."""
 
 from __future__ import annotations
 
@@ -268,16 +268,14 @@ def test_an_audit_on_the_challengers_coins_with_no_window_root_has_no_v2_case(tm
 @pytest.mark.parametrize("trees", [False, True])
 def test_the_per_member_case_names_the_challenger_only_where_its_sessions_ran_on_the_windows_session(tmp_path, monkeypatch,
                                                                                                      zk, trees):
-    """The one statement's case names the challenger its sample's coins are from wherever the audit has their evidence.
-    The per-member case reads its sessions' trees from that challenger's session too, so it names the challenger only
-    where they ran there."""
+    """The per-member case reads its sessions' trees from the challenger's session its sample's coins are from, so it
+    names the challenger only where they ran there."""
     pm = {**zk, "params": {"proofs": {"members": []}}}
     monkeypatch.setattr(a5, "case_members", lambda case, **k: pm)
-    write(tmp_path, {}, per_member={}, coins=COINS, window_root=WINDOW_ROOT, family=a5.AC.FAMILY, member_trees=trees,
+    write(tmp_path, None, per_member={}, coins=COINS, window_root=WINDOW_ROOT, family=a5.AC.FAMILY, member_trees=trees,
           challenger_key=KEY)
     named = {"challenger": {"key": KEY, "label": a5.AC.FAMILY}, "window_root": WINDOW_ROOT}
-    assert json.loads((tmp_path / "case-v2.json").read_text())["params"] == {**zk["params"], **named}
-    assert json.loads((tmp_path / "case-v2-members.json").read_text())["params"] == {**pm["params"], **(named if trees else {})}
+    assert json.loads((tmp_path / "case-v2.json").read_text())["params"] == {**pm["params"], **(named if trees else {})}
 
 
 @pytest.mark.parametrize("params,evidence", [({"challenger": {}}, {}), ({}, {"coins": {}})])
@@ -309,11 +307,11 @@ def test_the_case_carries_the_verifiers_partition_which_v2_verifies_the_sessions
 def test_a5_records_the_members_whose_link_points_the_registration_refuses():
     """`a5.link_points` over the staged members, each its units at its circuit's units a proof block: under `subset:20`
     over 40 units a sample that ends holds 8 to 20 of a member of 28, whose link points differ at one unit a proof block,
-    so it is recorded refused, and not at four. One of 8, or of 4 at two a proof block, is recorded refused too: a
-    sample that ends can miss it, its fewest none. Under `subset:2` a sample that ends holds at most 2 of a member, one
-    count of link points, and can miss each of the three, so each is recorded refused (one that runs out of coins fails
-    the window: `a5.draw_ran_out`). Under `subset:39` a sample that ends misses none and gives each one count, so none
-    is. A sampling design that doesn't apply refuses every member, recorded with why. The docket's check is
+    so it is recorded refused, and not at four. One of 8, or of 4 at two a proof block, is not: a sample that ends can
+    miss it, but holds at most 8 or 4 of its units there, one count of link points. Under `subset:2` a sample that ends
+    holds at most 2 of a member, one count of link points, so none is recorded refused (one that runs out of coins
+    fails the window: `a5.draw_ran_out`). Under `subset:39` a sample that ends misses none and gives each one count, so
+    none is. A sampling design that doesn't apply refuses every member, recorded with why. The docket's check is
     handed those members (`a5.link_members`), and refuses the recorded ones, where the audit's case is of the
     per-member form (`a5.per_member`): several members under `--zk` sessions, where `a5.members_proof` writes one."""
     def member(k: int, template: str, base: int, n: int, g: int) -> dict:
@@ -326,18 +324,16 @@ def test_a5_records_the_members_whose_link_points_the_registration_refuses():
         return {"member": f"m{k}", "template": m.template, "n": m.n, "vus_per_block": ms[k]["st"]["meta"]["vus_per_block"],
                 "fewest": fewest, "most": most}
 
-    assert a5.link_points({"k": 20, "law": "subset"}, 40, ms) == {"members": 3, "refused": [
-        row(0, 8, 20), row(1, 0, 8), row(2, 0, 4)]}
+    assert a5.link_points({"k": 20, "law": "subset"}, 40, ms) == {"members": 3, "refused": [row(0, 8, 20)]}
     assert a5.link_points({"k": 20, "law": "subset"}, 40, [member(0, "t", 0, 28, 4)]) == {"members": 1, "refused": []}
-    assert a5.link_points({"k": 2, "law": "subset"}, 40, ms) == {"members": 3, "refused": [
-        row(0, 0, 2), row(1, 0, 2), row(2, 0, 2)]}
+    assert a5.link_points({"k": 2, "law": "subset"}, 40, ms) == {"members": 3, "refused": []}
     assert a5.link_points({"k": 39, "law": "subset"}, 40, ms) == {"members": 3, "refused": []}
     got = a5.link_points({"k": 41, "law": "subset"}, 40, ms)
     assert got == {"members": 3, "error": "a subset draw of 41 exceeds the population of 40"}
     from verity.protocols.proofs.spot.verifier.one_stage import link_points as LP
 
     assert a5.link_members(ms) == [([[0, 28]], 1), ([[28, 36]], 1), ([[36, 40]], 2)]
-    assert LP.refused({"k": 20, "law": "subset"}, 40, a5.link_members(ms)) == [0, 1, 2]
+    assert LP.refused({"k": 20, "law": "subset"}, 40, a5.link_members(ms)) == [0]
     assert [a5.per_member(ms[:n], zk) for n in (1, 2, 3) for zk in (True, False)] == [False, False, True, False, True, False]
     assert a5.members_proof(ms[:1], [], True) is None and isinstance(a5.members_proof(ms, [], False), str)
 
@@ -489,22 +485,21 @@ def test_case_members_refuses_sessions_out_of_the_members_order(tmp_path, RP):
         a5.case_members(case, **proof)
 
 
-def test_the_per_member_case_is_written_beside_the_others_and_changes_none(tmp_path, monkeypatch, stub_case):
-    """A window of several members that sampled two still has no case in the one statement's form, v2's or the one
-    onsite and remote read; its per-member case is a file of its own, or its error is."""
-    monkeypatch.setattr(a5, "case_members", lambda case, **k: {"params": {"proofs": {"members": k["members"]}}})
+def test_the_per_member_case_is_the_v2_case_and_its_one_stage_form(tmp_path, monkeypatch, stub_case):
+    pm = {"blobs": [], "commitment": "ab", "evidence": stub_case.DT.canonical({"proofs": {}}).encode().hex(),
+          "params": {"proofs": {"members": {}}}}
+    monkeypatch.setattr(a5, "case_members", lambda case, **k: pm)
     a5.write_case(tmp_path, None, {}, {}, {}, None, 0.01, None, {"format": "f"}, {}, instances=0, sessions=[],
-                  session_roots={}, served=[], v2=a5.v2_proof([{}, {}], zk=True), per_member={"members": {}, "tables": []})
-    assert json.loads((tmp_path / "case-v2-members.json").read_text()) == {"params": {"proofs": {"members": {}}}}
-    assert (tmp_path / "case-v2-error.txt").read_text().startswith("ValueError: v2 verifies one table's session")
-    assert not (tmp_path / "case-v2.json").exists() and not (tmp_path / "case-sampled.json").exists()
-    assert not (tmp_path / "case-v2-members-error.txt").exists()
+                  session_roots={}, served=[], v2="not read", per_member={"members": {}, "tables": []})
+    assert json.loads((tmp_path / "case-v2.json").read_text()) == pm
+    assert json.loads((tmp_path / "case-sampled.json").read_text()) == a5.case_with_form(pm)
+    assert not (tmp_path / "case-v2-error.txt").exists()
     other = tmp_path / "plain"
     other.mkdir()
     a5.write_case(other, None, {}, {}, {}, None, 0.01, None, {"format": "f"}, {}, instances=0, sessions=[],
                   session_roots={}, served=[], per_member="v2 verifies --zk sessions; this audit's are plain")
-    assert (other / "case-v2-members-error.txt").read_text().startswith("ValueError: v2 verifies --zk")
-    assert sorted(f.name for f in other.iterdir()) == ["case-python.json", "case-v2-members-error.txt", "case.json"]
+    assert (other / "case-v2-error.txt").read_text().startswith("ValueError: v2 verifies --zk")
+    assert sorted(f.name for f in other.iterdir()) == ["case-python.json", "case-v2-error.txt", "case.json"]
 
 
 def test_the_audit_record_says_whether_the_case_for_the_compiled_check_was_written(tmp_path, monkeypatch, stub_case):

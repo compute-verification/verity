@@ -7,8 +7,6 @@ reach the quantisers' guards, at N one whole 128-wide weight block and a whole a
 twins are `test_deepgemm.test_linears_match_their_twins`."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import numpy as np
 import pytest
 from verity.circuits.defs import bind
