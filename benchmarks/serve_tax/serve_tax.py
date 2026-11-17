@@ -312,6 +312,10 @@ ARMS = {
                     plugin=("record", "tokens"), edges=True, edge_dump=False, edge_busy=False),
     "boundary-rows": Arm("record", "+ the two-stage boundary commitment at serve: each window's finished requests committed "
                          "by size class (boundary_rows)", plugin=("record", "boundary_rows"), rows=ROWS),
+    "boundary-rows-off": Arm("boundary-rows", "+ prefix caching off, which the history tables need",
+                             ("--no-enable-prefix-caching",), plugin=("record", "boundary_rows"), rows=ROWS),
+    "tables": Arm("boundary-rows-off", "+ one attention layer's history tables in the boundary commitment",
+                  ("--no-enable-prefix-caching",), plugin=("record", "boundary_rows"), rows={**ROWS, "tables": TABLES}),
     "canonical-topk": Arm("compiled", "+ the canonical DSA top-k (dsa_topk's plugin, VERITY_DSA_TOPK=canonical)",
                           env=TOPK_ENV, general=TOPK),
     "two-stage": Arm("boundary-rows", "the two-stage serve's launch line: + the canonical DSA top-k and one attention "
@@ -2331,6 +2335,42 @@ def window_trace(trace: Path, t0: float, t1: float) -> list[dict]:
     return in_window(trace_records(trace), t0, t1)
 
 
+def decode_steps(traces: Sequence[Path], tags: Sequence[str]) -> dict[str, dict[int, list]]:
+    """Each pass's decode steps (``tags``, its requests' id prefix) from an arm's step traces, by the rows a step ran:
+    how many such steps and the median time from each to the engine's next step, in seconds. A decode step runs one
+    token a row, every row a request of the pass; its time is the engine's whole cycle, the host's work between steps
+    included."""
+    by: dict[str, dict[int, list[float]]] = {t: {} for t in tags}
+    for trace in traces:
+        steps = [r for r in trace_records(trace) if r.get("kind") == "step" and "t" in r]
+        for a, b in zip(steps, steps[1:]):
+            ids = [f"-{r[0]}" for r in a.get("rows") or []]
+            tag = next((t for t in tags if ids and f"-{t}-" in ids[0]), None)
+            if tag and all(r[2] == 1 for r in a["rows"]) and all(f"-{tag}-" in x for x in ids):
+                by[tag].setdefault(len(ids), []).append(float(b["t"]) - float(a["t"]))
+    return {t: {n: [len(xs), statistics.median(xs)] for n, xs in cells.items()} for t, cells in by.items() if cells}
+
+
+def step_cost(ref: dict, arm: dict, load: str, rung: int) -> dict | None:
+    """What ``arm`` costs over ``ref`` at ``load`` and ``rung`` by their decode steps (`decode_steps`), a fraction: in
+    each rep both have, each side's median step time at each count of rows both ran, weighted by how many such steps the
+    reference ran, then `paired_cost` of the two over the reps. It needs both arms to keep the step record, and it
+    reads the engine's cycle at like batches, so a change that moves which batches run is not in it. None where a
+    side has no decode steps there."""
+    a, b = ({r["rep"]: r.get("decode_steps") for r in x["loads"].get(pass_name(load, rung), [])} for x in (ref, arm))
+    times: list[tuple[float, float]] = []
+    steps = 0
+    for k in sorted(set(a) & set(b)):
+        cells = [n for n in (a[k] or {}) if n in (b[k] or {})]
+        w = sum(a[k][n][0] for n in cells)
+        if w:
+            times.append((sum(a[k][n][0] * a[k][n][1] for n in cells) / w, sum(a[k][n][0] * b[k][n][1] for n in cells) / w))
+            steps += w
+    if not times:
+        return None
+    return {"reps": len(times), "steps": steps, **paired_cost([1 / x for x, _ in times], [1 / y for _, y in times])}
+
+
 def in_window(recs: list[dict], t0: float, t1: float) -> list[dict]:
     return recs[:1] + [r for r in recs[1:] if "t" in r and t0 <= float(r["t"]) <= t1]
 
@@ -2512,6 +2552,7 @@ def arm_metrics(d: Path, slo: tuple[float, float] | None = None) -> dict:
     edges = edge_records(d)
     tags = {json.loads(f.read_text()).get("tag"): f.parent for f in d.glob("*/rep-*/meta.json")}
     ended = {tags[t]: n for t, n in past_end(d, [t for t in tags if t], meta.get("end_of_text_ids") or ()).items()}
+    decoded = decode_steps(step_traces(d), [t for t in tags if t])
     loads: dict[str, list[dict]] = {}
     for name in meta.get("passes") or meta["rates"]:
         for rep in sorted((d / name).glob("rep-*"), key=lambda p: int(p.name.split("-")[1])):
@@ -2535,7 +2576,8 @@ def arm_metrics(d: Path, slo: tuple[float, float] | None = None) -> dict:
                                                "unfinished": m.get("unfinished"), **lm,
                                                **schedule_metrics(m.get("schedule")),
                                                **gpu_metrics(m, lm.get("output_tokens")), **load_edges(edges, m),
-                                               **ended.get(rep, {})})
+                                               **ended.get(rep, {}),
+                                               **({"decode_steps": decoded[m["tag"]]} if m.get("tag") in decoded else {})})
     return {"schema": SCHEMA + "/metrics", "arm": meta["arm"], "parent": meta.get("parent"), "what": meta.get("what"),
             "run_id": meta.get("run_id"), "commit": meta.get("commit"), "vllm": (meta.get("versions") or {}).get("vllm"),
             "model_id": meta["model_id"], "slo": {"ttft_s": slo[0], "tpot_s": slo[1]},
@@ -2822,12 +2864,13 @@ def same_engine(a: str, b: str) -> bool:
     return x is not None and y is not None and replace(x, parent=None, what="") == replace(y, parent=None, what="")
 
 
-def _pct(x: float | None) -> float | None:
-    return None if x is None else round(100 * x, 2)
+def _pct(x: float | None, digits: int = 2) -> float | None:
+    return None if x is None else round(100 * x, digits)
 
 
-def _cost(c: dict | None) -> dict:
-    return {"value": _pct(c["value"]) if c else None, "ci95": [_pct(x) for x in c["ci95"]] if c and "ci95" in c else None}
+def _cost(c: dict | None, digits: int = 2) -> dict:
+    return {"value": _pct(c["value"], digits) if c else None,
+            "ci95": [_pct(x, digits) for x in c["ci95"]] if c and "ci95" in c else None}
 
 
 def commitment(arm: dict) -> dict | None:
@@ -3325,7 +3368,8 @@ def cost_report(arms: list[dict], arm: str = OURS, reference: str = REFERENCE, t
     has a change on that none of them counts (``not_in_target``, `not_in_target`), every verdict is `NOT_COMPARABLE`
     instead: the cost is not of what the target is of. A target that is given has no parts. Each part's ``measured`` is
     its measurement beside its points: the step, at the number's load and rung, of the first arm that turns on that
-    part's changes and nothing else over the arm above it, with both arms; None where no arm of the run does. Each load's ``within`` is
+    part's changes and nothing else over the arm above it, with both arms, and the same step by their decode steps
+    (``decode_steps``, `step_cost`); None where no arm of the run does. Each load's ``within`` is
     its cost within the SLO (`within_slo`), which no target or verdict is of, and its ``saturated`` whether the reference's rungs show it saturated at the load's rung (`peak`), which no verdict
     reads. Beside them: the GPUs an engine serves on, what the arm's boundary commitment did (`commitment`), and every other
     arm's cost at the number's load and rung, over the reference and over the nearest arm above it that ran (its
@@ -3383,12 +3427,15 @@ def cost_report(arms: list[dict], arm: str = OURS, reference: str = REFERENCE, t
         whole = worst["value"]
         share = (round(step["value"] / whole, 4)
                  if name in chain and step and step["value"] is not None and whole is not None and whole > 0 else None)
+        steps = step_cost(by[over], by[name], load, rung)
         rows.append({"arm": name, **_cost(serving_cost(ref, by[name], load, rung)), "over": over, "step": _cost(step),
-                     "share": share, "in_target": in_target(model, name, over) if parts else None})
+                     "share": share, "in_target": in_target(model, name, over) if parts else None,
+                     "decode_steps": steps and {**_cost(steps, 4), "reps": steps["reps"], "steps": steps["steps"]}})
     for p in parts:
         alone = next((x for x in rows if x["in_target"] and len(x["in_target"]) == 1
                       and x["in_target"][0]["part"] == p["name"] and x["in_target"][0]["whole"]), None)
-        p["measured"] = alone and {"arm": alone["arm"], "over": alone["over"], **alone["step"]}
+        p["measured"] = alone and {"arm": alone["arm"], "over": alone["over"], **alone["step"],
+                                   "decode_steps": alone["decode_steps"]}
     slo = {"ttft": ours["slo"]["ttft_s"], "tpot": ours["slo"]["tpot_s"]}
 
     def within(c: dict) -> dict | None:
@@ -3420,10 +3467,10 @@ def cost_report(arms: list[dict], arm: str = OURS, reference: str = REFERENCE, t
             "prefix_row": model.prefix_row, "checkpoint": f"{model.repo}@{model.revision}"}
 
 
-def _c(c: dict | None) -> str:
+def _c(c: dict | None, digits: int = 2) -> str:
     if not c or c.get("value") is None:
         return "—"
-    return f"{c['value']:.2f}%" + (f" [{c['ci95'][0]:.2f}%, {c['ci95'][1]:.2f}%]" if c.get("ci95") else "")
+    return f"{c['value']:.{digits}f}%" + (f" [{c['ci95'][0]:.{digits}f}%, {c['ci95'][1]:.{digits}f}%]" if c.get("ci95") else "")
 
 
 def _reps(n: int) -> str:
@@ -3602,7 +3649,10 @@ def cost_text(r: dict) -> str:
                      "it: " + "; ".join(
                          f"{p['name']} {_points(p['points'])}%: " + (
                              "not measured, no arm here turns on its changes alone" if not p.get("measured") else
-                             f"{_c(p['measured'])} ({p['measured']['arm']} over {p['measured']['over']})")
+                             f"{_c(p['measured'])} ({p['measured']['arm']} over {p['measured']['over']}"
+                             + (f"; by decode steps {_c(p['measured']['decode_steps'], 3)} over "
+                                f"{p['measured']['decode_steps']['steps']:,} steps"
+                                if p["measured"].get("decode_steps") else "") + ")")
                          for p in parts))
     off, outside = [p for p in parts if p["off"]], r["not_in_target"]
     if off or outside:
@@ -3688,7 +3738,10 @@ def result_of(r: dict) -> tuple[bool, str, dict, list[dict]]:
     cost and ``why`` says why (`prefix_row`); the
     number's entry carries it (``prefix``) with the number's label; where that load has not run there is no entry
     under the metric's id either. A sessions load's report (`session_cost`) is one measurement under its load's
-    name, which stands where it has a value and both sides did the same work."""
+    name, which stands where it has a value and both sides did the same work. Each of the target's parts, where
+    ``part_members`` names its members, is one more measurement under the metric's id: its points, marked
+    ``modeled``, and where an arm measured it, its step by tokens a second and by decode steps, each marked
+    ``measured`` with the points as its target."""
     if r["metric"] == SESSION_COST:
         entry = {"name": r["load"], **{key: r[key] for key in ("value", "unit", "target", "target_basis", "better", "commit",
                                                               "run", "ci95", "verdict", "what", "reps", "users",
@@ -3721,6 +3774,21 @@ def result_of(r: dict) -> tuple[bool, str, dict, list[dict]]:
                          inputs=[c["load"] for c in r["loads"]], target_parts=r["target_parts"],
                          not_in_target=r["not_in_target"], model=r.get("checkpoint"), hardware=r.get("hardware"),
                          **({"member": r["member"]} if r.get("member") else {})))
+    for p in r["target_parts"] if r["id"] else ():
+        m = (r.get("part_members") or {}).get(p["name"])
+        if not m:
+            continue
+        part = {"name": r["id"], "unit": r["unit"], "better": r["better"], "commit": r["commit"], "run": r["run"],
+                "part": p["name"], "model": r.get("checkpoint"), "hardware": r.get("hardware")}
+        out.append({**part, "value": p["points"], "mark": "modeled", "ci95": None, "target": None, "target_basis": None,
+                    "verdict": None, "basis": p["basis"], "what": p["what"], "member": m["modeled"]})
+        got = p.get("measured")
+        for c, at in ((got, m.get("measured")), (got and got.get("decode_steps"), m.get("decode_steps"))):
+            if c and at:
+                out.append({**part, "value": c["value"], "mark": "measured", "ci95": c["ci95"], "target": p["points"],
+                            "target_basis": p["basis"], "arm": got["arm"], "over": got["over"], "member": at,
+                            "verdict": verdict({k: v for k, v in c.items() if v is not None}, p["points"]),
+                            **({"steps": c["steps"]} if "steps" in c else {})})
     what = {"benchmark": "serve_tax", "model": r["model"], "arm": r["arm"], "reference": r["reference"],
             "loads": [*(c["load"] for c in r["loads"]), *([row["load"]] if row else [])], "vllm": r["vllm"]}
     return ok, cost_text(r).splitlines()[0], what, out
@@ -3747,6 +3815,19 @@ def member(model: Model, arm: str, reference: str | None = None) -> str:
     return "-".join((model.served, kind, arm, *(("over", reference) if reference else ())))
 
 
+def part_members(model: Model, parts: list[dict]) -> dict[str, dict[str, str]]:
+    """Each of the target's parts' members (`member`), by how its figure was had: its points (``modeled``), and where
+    an arm measured it (``measured``, `cost_report`), its step by tokens a second (``measured``) and by decode steps
+    (``decode_steps``)."""
+    out = {}
+    for p in parts:
+        m = p.get("measured")
+        step = m and member(model, m["arm"], m["over"])
+        out[p["name"]] = {"modeled": member(model, p["name"].removeprefix("the ").replace(" ", "-") + "-priced"),
+                          **({"measured": f"{step}-tokens-a-second", "decode_steps": f"{step}-decode-steps"} if step else {})}
+    return out
+
+
 def write_result(r: dict, out: Path) -> None:
     """The run's result.json (`result_of`), written by the kit's writer beside the report in ``out``."""
     run_dir, run_id = SHARED.RESEARCH_RUN_DIR, SHARED.RESEARCH_RUN_ID
@@ -3754,6 +3835,7 @@ def write_result(r: dict, out: Path) -> None:
         raise SystemExit("cost --result writes the run's result.json: run it under research run")
     model = next(m for m in MODELS.values() if m.served == r["model"])
     ok, detail, what, measurements = result_of(r | {"hardware": hardware(model),
+                                                    "part_members": part_members(model, r["target_parts"]),
                                                     "member": member(model, r["arm"], r["reference"])})
     kit()[1].write_result(Path(run_dir), run_id, out, "serving_cost.json", ok, detail, what, measurements)
 

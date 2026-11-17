@@ -1586,13 +1586,16 @@ def test_each_arms_row_says_what_its_step_turns_on_and_the_targets_part_for_it()
     measured = {p["name"]: p["measured"] for p in r["target_parts"]}
     assert measured == {
         "the certified tick": None, "the tie order": {"arm": "canonical-topk", "over": "compiled",
-                                                      "value": 2.56, "ci95": [2.04, 3.09]},
+                                                      "value": 2.56, "ci95": [2.04, 3.09], "decode_steps": None},
         "the snapshot bundle": None,
-        "the step record": {"arm": "record", "over": "compiled", "value": 1.52, "ci95": [1.01, 2.04]},
-        "the boundary commitment": {"arm": "boundary-rows", "over": "record", "value": 3.14, "ci95": [3.12, 3.16]},
+        "the step record": {"arm": "record", "over": "compiled", "value": 1.52, "ci95": [1.01, 2.04],
+                            "decode_steps": None},
+        "the boundary commitment": {"arm": "boundary-rows", "over": "record", "value": 3.14, "ci95": [3.12, 3.16],
+                                    "decode_steps": None},
         "the history tables": None}
     steps = {x["arm"]: x["step"] for x in r["arms"]}
-    assert all(m == {"arm": m["arm"], "over": m["over"], **steps[m["arm"]]} for m in measured.values() if m)
+    assert all(m == {"arm": m["arm"], "over": m["over"], **steps[m["arm"]], "decode_steps": None} for m in measured.values()
+               if m)
     assert ("  each part measured, as the step of the arm that turns on its changes alone over the arm above it: the "
             "certified tick 1.63%: not measured, no arm here turns on its changes alone; the tie order 0.25%: 2.56% "
             "[2.04%, 3.09%] (canonical-topk over compiled); the snapshot bundle 0.17%: not measured, no arm here turns "
@@ -1601,6 +1604,102 @@ def test_each_arms_row_says_what_its_step_turns_on_and_the_targets_part_for_it()
             "measured, no arm here turns on its changes alone\n") in text
     # a step that turns on none of our changes has nothing to say
     assert S.in_target(S.MODELS["glm53"], "eager", "compiled") == [] and S._in_target([]) == "—"
+
+
+def test_the_history_tables_have_an_arm_that_turns_them_on_alone(tmp_path: Path):
+    """`tables` is `boundary-rows-off` with one attention layer's history tables, and `boundary-rows-off` is
+    `boundary-rows` with the prefix cache off, which the tables need: the step of `tables` is the history tables' part
+    whole."""
+    glm, rows, off, tables = S.MODELS["glm53"], S.ARMS["boundary-rows"], S.ARMS["boundary-rows-off"], S.ARMS["tables"]
+    assert (off.parent, tables.parent) == ("boundary-rows", "boundary-rows-off")
+    assert S.server_argv(off, glm, Path("/ck"), 8000) == S.server_argv(tables, glm, Path("/ck"), 8000) == [
+        *S.server_argv(rows, glm, Path("/ck"), 8000), "--no-enable-prefix-caching"]
+    private = tmp_path / "private"
+    cfg = {a: json.loads(S.server_env(S.ARMS[a], tmp_path, tmp_path, None, 3600.0, 600.0, check=glm.check,
+                                      private=private)[S.PLUGIN_ENV])["boundary_rows"]
+           for a in ("boundary-rows", "boundary-rows-off", "tables")}
+    assert cfg["boundary-rows-off"] == cfg["boundary-rows"]
+    assert cfg["tables"] == {**cfg["boundary-rows"], "tables": {"layers": 1, "private": str(private)}}
+    assert S.keeps_private(off) and S.keeps_private(tables)
+    assert S.in_target(glm, "boundary-rows-off", "boundary-rows") == [
+        {"changes": ["prefix caching off"], "part": None, "points": None, "whole": False}]
+    assert S.in_target(glm, "tables", "boundary-rows-off") == [
+        {"changes": ["the history tables"], "part": "the history tables", "points": 0.004, "whole": True}]
+
+
+def test_a_passes_decode_steps_are_read_from_the_step_trace_by_the_rows_each_ran(tmp_path: Path):
+    """A decode step runs one token a row, every row of one pass; its time runs to the engine's next step."""
+    def step(t: float, rows: list[tuple[str, int]]) -> dict:
+        return {"kind": "step", "t": t, "rows": [[rid, 9, n] for rid, n in rows]}
+
+    one, ten = "cmpl-chat@8-r1-", "cmpl-chat@8-r10-"
+    recs = [{"kind": "header"}, step(0.0, [(one + "0", 256)]),
+            step(0.10, [(one + "0", 1), (one + "1", 1)]), step(0.12, [(one + "0", 1), (one + "1", 1)]),
+            {"kind": "arrive", "t": 0.13}, step(0.16, [(one + "0", 1)]),
+            step(0.17, [(one + "0", 1), (ten + "0", 1)]), step(0.20, [(ten + "0", 1), (ten + "1", 1)])]
+    (tmp_path / "server").mkdir()
+    (tmp_path / "server" / "step_trace.0.jsonl").write_text("".join(json.dumps(r) + "\n" for r in recs))
+    got = S.decode_steps(S.step_traces(tmp_path), ["chat@8-r1", "chat@8-r10", "chat@8-r2"])
+    # the prefill step, a step of two passes and the trace's last step, which has no next, are none of them
+    assert list(got) == ["chat@8-r1"] and sorted(got["chat@8-r1"]) == [1, 2]
+    assert got["chat@8-r1"][2] == [2, pytest.approx(0.03)] and got["chat@8-r1"][1] == [1, pytest.approx(0.01)]
+
+
+def decoding(a: dict, cells: dict[int, list[float]]) -> dict:
+    """``a`` with ``cells`` (`decode_steps`: by rows a step ran, how many steps and their median time) in every rep."""
+    for reps in a["loads"].values():
+        for x in reps:
+            x["decode_steps"] = cells
+    return a
+
+
+def test_a_step_by_decode_steps_weighs_each_count_of_rows_by_the_references_steps():
+    ref = decoding(cost_arm("compiled", {8: [2.0] * 6}), {1: [10, 0.010], 8: [30, 0.020]})
+    ours = decoding(cost_arm("record", {8: [2.0] * 6}), {1: [99, 0.0102], 8: [5, 0.0202], 16: [4, 0.05]})
+    c = S.step_cost(ref, ours, "chat", 8)
+    # rows both ran (1 and 8), each weighted by the reference's steps: 16 rows, which only the arm ran, is in neither
+    assert (c["reps"], c["steps"]) == (6, 240) and c["value"] == pytest.approx((10 * 0.0102 + 30 * 0.0202) / 0.7 - 1)
+    assert c["ci95"] == [pytest.approx(c["value"])] * 2
+    assert S.step_cost(ref, cost_arm("record", {8: [2.0] * 6}), "chat", 8) is None
+    assert S.step_cost(ref, decoding(cost_arm("record", {8: [2.0] * 6}), {16: [4, 0.05]}), "chat", 8) is None
+
+
+def test_each_part_an_arm_measures_is_written_beside_its_points_under_the_metrics_id(monkeypatch: pytest.MonkeyPatch):
+    """Each part's points are marked modeled; its step by tokens a second and by decode steps, measured, with the
+    points as its target, each its own member under the model's metric id."""
+    monkeypatch.setattr(S, "card", lambda: "NVIDIA H200")
+    glm = S.MODELS["glm53"]
+    base = {1: [100, 0.0100], 64: [400, 0.0300]}
+    arms = [decoding(a, base) if a["arm"] in ("record", "boundary-rows") else a for a in cost_arms()]
+    arms += [decoding(both("boundary-rows-off", [1.96, 1.97, 1.98], [0.96, 0.955, 0.95]), base),
+             decoding(both("tables", [1.96, 1.97, 1.98], [0.96, 0.955, 0.95]), {1: [100, 0.01], 64: [400, 0.03003]})]
+    r = S.cost_report(arms)
+    measured = {p["name"]: p["measured"] for p in r["target_parts"]}
+    tables = measured["the history tables"]
+    assert (tables["arm"], tables["over"], tables["value"]) == ("tables", "boundary-rows-off", 0.0)
+    # 0.1% more cycle at 64 rows, twelve thirteenths of the decode time: a part of hundredths
+    assert tables["decode_steps"] == {"value": 0.0923, "ci95": [0.0923, 0.0923], "reps": 6, "steps": 3000}
+    assert measured["the boundary commitment"]["decode_steps"]["value"] == 0.0
+    assert ("the history tables 0.004%: 0.00% [0.00%, 0.00%] (tables over boundary-rows-off; by decode steps 0.092% "
+            "[0.092%, 0.092%] over 3,000 steps)") in S.cost_text(r)
+    members = S.part_members(glm, r["target_parts"])
+    assert members["the history tables"] == {
+        "modeled": "glm-5.3-h200-history-tables-priced",
+        "measured": "glm-5.3-h200-tables-over-boundary-rows-off-tokens-a-second",
+        "decode_steps": "glm-5.3-h200-tables-over-boundary-rows-off-decode-steps"}
+    assert members["the certified tick"] == {"modeled": "glm-5.3-h200-certified-tick-priced"}
+    ms = [m for m in S.result_of(r | {"part_members": members})[3] if m.get("part") == "the history tables"]
+    assert [(m["name"], m["member"], m["mark"], m["value"], m["target"], m["verdict"]) for m in ms] == [
+        (glm.metric, "glm-5.3-h200-history-tables-priced", "modeled", 0.004, None, None),
+        (glm.metric, "glm-5.3-h200-tables-over-boundary-rows-off-tokens-a-second", "measured", 0.0, 0.004, "meets"),
+        (glm.metric, "glm-5.3-h200-tables-over-boundary-rows-off-decode-steps", "measured", 0.0923, 0.004, "misses")]
+    # six parts' points and three parts measured two ways, each its own member of the metric's id
+    entries = S.result_of(r | {"part_members": members})[3]
+    keys = [(m["name"], m.get("member")) for m in entries]
+    assert len(keys) == len(set(keys)) and sum(m.get("mark") == "modeled" for m in entries) == 6
+    assert sum(m.get("mark") == "measured" for m in entries) == 6
+    # without members, the parts are not written: the metric's id holds the number alone
+    assert not any("part" in m for m in S.result_of(r)[3])
 
 
 def test_the_cost_report_is_the_largest_loads_cost_with_the_consoles_keys_first(whole: list[dict]):
@@ -2069,9 +2168,14 @@ def test_a_runs_result_holds_the_number_under_its_metric_id_only_once_every_load
     assert (saved["schema"], saved["run_id"], saved["validation"]["status"]) == ("research/result/v0.1", "r-9", "passed")
     assert saved["validation"]["evidence"] == saved["measurement_files"] == ["out/serving_cost.json"]
     assert saved["validation"]["detail"] == capsys.readouterr().out.splitlines()[0]
-    assert [(m["name"], m["value"], m["unit"]) for m in saved["measurements"]] == [
+    assert [(m["name"], m["value"], m["unit"]) for m in saved["measurements"] if "part" not in m] == [
         (name, cost, "percent of stock's serving compute")
         for name, cost in (("chat", 2.03), ("long", 2.03), ("prefix", 100.0), ("vllm/serving-cost-glm53", 2.03))]
+    # beside it, each of the target's parts' points under the same id, no arm here measuring one alone
+    parts = [m for m in saved["measurements"] if "part" in m]
+    assert [(m["name"], m["value"], m["mark"]) for m in parts] == [
+        ("vllm/serving-cost-glm53", p.points, "modeled") for p in S.MODELS["glm53"].target_parts]
+    assert parts[-1]["member"] == f"glm-5.3-{S.card().removeprefix('NVIDIA ').lower().replace(' ', '-')}-history-tables-priced"
     assert saved["workload_fingerprint"] == {"source_sha": None, "benchmark": "serve_tax", "model": "glm-5.3",
                                              "arm": "two-stage", "reference": "compiled",
                                              "loads": ["chat", "long", "prefix"], "vllm": "0.1+gd9105ea8"}

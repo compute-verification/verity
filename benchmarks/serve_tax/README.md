@@ -23,6 +23,8 @@ its change to the arm it names as its parent (`serve_tax.ARMS`):
 | `tokens-only` | each Commit period's tokens committed as `tokens` commits them, without the tick | `record` |
 | `boundary` | the boundary commitment at each replay block's edge, as a server would take it: drained, the KV pool hashed by the row-table kernels under a fresh key and copied to host memory, the scheduler's state and each rank's runner rows and generators taken and kept | `tokens-only` |
 | `boundary-rows` | the two-stage audit's boundary commitment at serve, vLLM's prefix cache left on: each window's finished requests committed by size class off the engine loop (`verity_vllm.pipeline.boundary_rows`), under the arm's object (`serve_tax.ROWS`) and the model's check template (`Model.check`) | `record` |
+| `boundary-rows-off` | `boundary-rows` with prefix caching off, which the history tables need | `boundary-rows` |
+| `tables` | `boundary-rows-off` with one attention layer's history tables in the boundary commitment (`serve_tax.TABLES`), so its step is the history tables' alone | `boundary-rows-off` |
 | `canonical-topk` | the canonical DSA top-k: `benchmarks/dsa_topk`'s plugin loaded and `VERITY_DSA_TOPK=canonical`, its counters kept on the node | `compiled` |
 | `two-stage` | the two-stage serve's launch line: `boundary-rows` with the canonical top-k and one attention layer's history tables in the boundary commitment (`serve_tax.TABLES`), built on rank 0 and kept in a private directory on the node (`servetax_plugin`), and prefix caching off, which the tables need | `boundary-rows` |
 | `two-stage-tick` | the two-stage serve's launch line admitting on the certified tick: `two-stage`'s data with the tick on, served by the corpus's client | `two-stage` |
@@ -248,8 +250,14 @@ an engine of another limit than the two loads', so its number waits for no row (
   history tables, priced at one engine across eight H200s under the chat load at 384 requests at once. The output
   puts each part's measurement beside its points: the step, at the number's load and rung, of an arm of the run that
   turns on that part's changes and nothing else over the arm above it (`record` over `compiled` for the step record,
-  `boundary-rows` over `record` for the boundary commitment), or `not measured` where no arm does (no arm turns on
-  the history tables alone). A cost is compared with the target only where its
+  `boundary-rows` over `record` for the boundary commitment, `tables` over `boundary-rows-off` for the history
+  tables), or `not measured` where no arm does. A step's tokens a second over six reps do not resolve a part of
+  hundredths of a point; beside them is the same step by decode steps (`serve_tax.step_cost`), where both arms keep the step record:
+  each rep's median time from a decode step (one token a row, every row of the pass) to the next, at each count of
+  rows both ran, weighted by the steps the arm above ran, and the kit's paired ratio over reps, which resolves parts
+  of hundredths of a point and reads the engine's cycle at like batches, not which batches it runs. A run's
+  result holds each part under the model's metric id beside the number, each its own member: its points marked
+  `modeled`, and each step that measured it marked `measured`, with the points as its target. A cost is compared with the target only where its
   arm has every part's changes on and no change on that no part counts (`serve_tax.not_in_target`). Otherwise every
   verdict is `not comparable`, a fourth value, and the output names the changes that are off with their parts and
   the changes the target has no part for: the cost is not of what the target is of, so it neither meets nor misses
