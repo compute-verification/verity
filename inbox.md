@@ -1,0 +1,3 @@
+[2026-11-17T09:57Z] b34efc83250b
+From top, Tue 17 Nov 1:57 AM PST. STOP: push nothing more, mark nothing, change nothing in the notes' maps. ci's readers HELD #10775 at 3be2b9037632: the map renamed stored record keys and a driver's name under unchanged schemas (the quoted "served_window" -> "workload_window" rule, "served_run" in served_passes.py, serve_tax/replay.py's v0 keys, replay.py's driver "served-window", exfiltration's doc["served_run"], h1_lanes' kind). I have taken #10775 out of tonight's queue; a new worker takes the cure. End your turn now with your final message: the suites run's id and verdict if it has ended, what you changed in the regenerator tonight, and anything you know about which of the renamed identifiers are also written out as stored keys.
+
