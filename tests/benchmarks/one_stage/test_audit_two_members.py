@@ -80,9 +80,10 @@ TEMPLATES = tuple(bind(G.ScaledMmS8Coordinate, K=k, **G.GEMM_SM120_S8) for k in 
 DESIGN = "stratified:1"
 RULE = "stratified-rate:1/2"
 RUN = "ab" * 64
-#: the wired window's (`_wired_window`): the K = 128 block's output, one word, read as a one-word residual add's ``a``
-WRITER, READER = TEMPLATES[0], bind(RW.Bf16AddRow, N=1)
-WIRE = IF.Wire(descriptor_id(READER), "a", descriptor_id(WRITER), "o0", 0, [1], 0, [0])
+#: the wired window's (`_wired_window`): a residual add of 64 bf16 words, its output read as an argmax's logits, rows
+#: as long as the K = 128 block's ``x``
+WRITER, READER = bind(RW.Bf16AddRow, N=64), bind(RW.Argmax, V=64)
+WIRE = IF.Wire(descriptor_id(READER), "logits", descriptor_id(WRITER), "o0", 0, [1], 0, [0])
 #: `OneStageZk.WIRES_SAMPLED`
 WIRES_SAMPLED = ("wiring: a wired row of a unit of the sample is not its writer's output row: its b || c in its "
                  "member's public file is not the writer's row's in the writer's member's")
@@ -121,22 +122,20 @@ def _window(d: Path, flipped: bool = False) -> Path:
 
 
 def _wired_window(d: Path, wired: bool = True) -> Path:
-    """`WRITER`'s one proof block's output read by `READER`'s one proof block as its ``a``, written to ``d`` as `_window`
-    writes its window. ``wired``: through the circuit's wire `WIRE`, the reader's row its writer's, committed under the
-    writer's salt; else the circuit names no wire and the reader's ``a`` is its own row, the writer's output with bit 0
-    of its word flipped."""
+    """`WRITER`'s one proof block's output read by `READER`'s one proof block as its ``logits``, written to ``d`` as
+    `_window` writes its window. ``wired``: through the circuit's wire `WIRE`, the reader's row its writer's, committed
+    under the writer's salt; else the circuit names no wire and the reader's ``logits`` is its own row, the writer's
+    output with bit 0 of its first word flipped."""
     win = IF.Window(IF.Circuit("wired-members", ((WRITER, 1), (READER, 1)), wires=(WIRE,) if wired else ()), RUN,
                     D.parse_design(DESIGN), 4)
     rng = np.random.default_rng(0)
-    x, w = (rng.integers(-128, 128, (1, KS[0])).astype(np.int8) for _ in range(2))
-    sx, sw = ((np.abs(rng.standard_normal(1)) / 127).astype(np.float32) for _ in range(2))
-    ins = [x.view(np.uint8), sx.view(np.uint32), w.view(np.uint8), sw.view(np.uint32)]
-    out = np.asarray(evaluate_batch(WRITER, *ins, kernel="reference"), dtype=np.uint16)
+    ins = [(rng.standard_normal((1, 64)).astype(np.float32).view(np.uint32) >> 16).astype(np.uint16) for _ in range(2)]
+    out = np.asarray(evaluate_batch(WRITER, *ins, kernel="reference"), dtype=np.uint16).reshape(1, 64)
     win.record(WRITER, ins, [out])
-    a, b = out.reshape(1, 1).copy(), np.array([[0x3F80]], dtype=np.uint16)
+    logits = out.copy()
     if not wired:
-        a ^= 1
-    win.record(READER, [a, b], [np.asarray(evaluate_batch(READER, a, b, kernel="reference"), dtype=np.uint16)])
+        logits[0, 0] ^= 1
+    win.record(READER, [logits], [np.asarray(evaluate_batch(READER, logits, kernel="reference"), dtype=np.uint16)])
     win.write(win.close(salt_key=bytes(32)), d, {"label": "test"}, registrar=R)
     return d
 
@@ -374,9 +373,8 @@ def test_a_wire_between_two_sampled_members_is_held_by_one_accept(tmp_path, bina
     case = json.loads((out / "window" / "case-v2.json").read_text())
     wiring = case["params"]["proofs"]["wiring"]
     assert wiring["wires"] == [WIRE.doc()] and wiring["cuts"] == {} and "order" not in wiring
-    assert wiring["templates"] == {descriptor_id(WRITER): {"units": 1, "rows": {"x": [64, 128], "sx": [2, 1], "wrow": [64, 128],
-                                                                                  "sw": [2, 1]}, "outs": {"o0": 1}},
-                                   descriptor_id(READER): {"units": 1, "rows": {"a": [1, 1], "b": [1, 1]}, "outs": {"o0": 1}}}
+    assert wiring["templates"] == {descriptor_id(WRITER): {"units": 1, "rows": {"a": [64, 64], "b": [64, 64]}, "outs": {"o0": 64}},
+                                   descriptor_id(READER): {"units": 1, "rows": {"logits": [64, 64]}, "outs": {"o0": 1}}}
     assert M.case_check(case) == ("accept", None)
 
     bad = _wired_window(tmp_path / "unwired" / "window", wired=False)
