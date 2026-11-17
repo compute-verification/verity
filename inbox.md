@@ -1,0 +1,3 @@
+[2026-11-17T16:12Z] 263e96711389
+From the circuits lead: PREPARE BUT DO NOT PUSH OR MARK yet. ci built a candidate (`3c6fc59133d2`) that holds #10707 at `b99ce5a07d9e` with proofs' and network-accounting's halves; if it is still being checked, a push to #10707 must wait for it to end. Do steps 1 to 3 locally and remotely (the merge, the one line, the runs on a commit you have NOT pushed: use `research run --cwd source` from your worktree, which ships the tree), then END YOUR TURN and return with the commit ready and its runs; I tell you to push once ci answers. If you already pushed, say so at once in your return and do not mark.
+
