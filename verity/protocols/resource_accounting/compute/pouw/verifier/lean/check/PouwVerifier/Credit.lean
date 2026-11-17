@@ -7,11 +7,11 @@ public import Flock.Hash
 public import Flock.Program
 public import Flock.RegKnown
 public import PouwCommit.Frame
-public import PouwCheck.Chunks
-public import PouwCheck.Json
-public import PouwCheck.Opening
-public import PouwCheck.Pass
-public import PouwCheck.Rounds
+public import PouwVerifier.Chunks
+public import PouwVerifier.Json
+public import PouwVerifier.Opening
+public import PouwVerifier.Pass
+public import PouwVerifier.Rounds
 public import PouwWindow.Sample
 public import PouwWindow.Rounds
 public import Spot.ChallengerCoins
@@ -122,7 +122,7 @@ Every refusal is (code, why), the first rule the input breaks, with Python's wor
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-namespace PouwCheck.Credit
+namespace PouwVerifier.Credit
 
 open Lean (Json)
 open PouwCommit (Part tagged Domain)
@@ -140,7 +140,7 @@ def LEVELS : Nat := 64
 table's rows are the layout's own (`tableRows`), every weights' value's too (`Internal.weights`), and no entry's leaves
 are bounded otherwise. -/
 def MAX_ROWS : Nat := 2 ^ 24
-/-- `weights.chunks` (`PouwCheck.Chunks.chunks`): the leaves an A or B row of K = `k` codes is cut into; none for a K it
+/-- `weights.chunks` (`PouwVerifier.Chunks.chunks`): the leaves an A or B row of K = `k` codes is cut into; none for a K it
 refuses (Python's `ValueError`). -/
 def chunks? (k : Nat) : Option Nat := (Chunks.chunks k).toOption
 
@@ -719,7 +719,7 @@ def drawnOf (coin : ByteArray) (stream registration receipt : Json) (ss : Array 
     R (Array Nat) := do
   let some (st, reg, kvs) := (match stream, registration, digest? registration, receipt with
       | .str st, .str reg, some _, .obj kv => (st, reg, ·) <$> kv.toArray.toList.mapM fun (x, v) => match v with
-        | .str s => if _root_.PouwCheck.plain x && _root_.PouwCheck.plain s then some (x, s) else none
+        | .str s => if _root_.PouwVerifier.plain x && _root_.PouwVerifier.plain s then some (x, s) else none
         | _ => none
       | _, _, _, _ => none) | throw ("draw", DRAW_ARGS)
   let some units ← port (workUnits coin st reg kvs (← samplingDesign ss k)) | throw ("sampler", "the draw's stream ran out")
@@ -731,7 +731,7 @@ def finding? (x : Json) : Option (List (String × String × String)) :=
   if isObj x then (fields x).mapM fun (port, e) =>
     match keys e, get e "value", get e "root" with
     | some ["root", "value"], .str v, .str r =>
-      if _root_.PouwCheck.plain port && _root_.PouwCheck.plain v && (digest? (.str r)).isSome then some (port, v, r)
+      if _root_.PouwVerifier.plain port && _root_.PouwVerifier.plain v && (digest? (.str r)).isSome then some (port, v, r)
       else none
     | _, _, _ => none
   else none
@@ -1005,7 +1005,7 @@ def entryOk (e : Json) : Bool :=
     | some ["domain", "leaves", "root", "value", "words"] => true
     | some ["domain", "leaves", "root", "value", "word_bits", "words"] => nat? (get e "word_bits") == some 32
     | _ => false
-  shape && ((str? (get e "value")).any _root_.PouwCheck.plain) && (digest? (get e "root")).isSome
+  shape && ((str? (get e "value")).any _root_.PouwVerifier.plain) && (digest? (get e "root")).isSome
     && (str? (get e "domain")).isSome && (nat? (get e "leaves")).any (1 ≤ ·)
     && (nat? (get e "words")).any fun n => 1 ≤ n && n ≤ MAX_ROWS
 
@@ -1061,18 +1061,18 @@ def OK_ROW : Array Nat := #[1]
 /-- `core_check.OK_SALT_TAG`: the ok row's hm96 salt tag (h1_prove's). -/
 def OK_SALT_TAG : ByteArray := Domains.POUW_H1_OK_ROW_SALT.toUTF8.push 0
 
-/-- `core_check.ok_salt`: `PouwCheck.saltBytes` bytes of SHA-512 in counter mode, `SHA-512(msg ‖ u32be c)` for
-`c < PouwCheck.saltBytes / 64`, each output whole, over msg = `OK_SALT_TAG` ‖ context ‖ 0 ‖ u64be(position). -/
+/-- `core_check.ok_salt`: `PouwVerifier.saltBytes` bytes of SHA-512 in counter mode, `SHA-512(msg ‖ u32be c)` for
+`c < PouwVerifier.saltBytes / 64`, each output whole, over msg = `OK_SALT_TAG` ‖ context ‖ 0 ‖ u64be(position). -/
 def okSalt (context : String) (position : Nat) : ByteArray :=
   let msg := (OK_SALT_TAG ++ context.toUTF8).push 0 ++ PouwCommit.be8 position
-  (List.range (PouwCheck.saltBytes / 64)).foldl (fun acc c => acc ++ Flock.Sha512.hash (msg ++ Flock.be32 c.toUInt32))
+  (List.range (PouwVerifier.saltBytes / 64)).foldl (fun acc c => acc ++ Flock.Sha512.hash (msg ++ Flock.be32 c.toUInt32))
     ByteArray.empty
 
-/-- `core_check.public_words`: `PouwCheck.publicRow` as a `row/v2` row of 16-bit leaves, word w its bytes 2w (low) and
+/-- `core_check.public_words`: `PouwVerifier.publicRow` as a `row/v2` row of 16-bit leaves, word w its bytes 2w (low) and
 2w + 1. -/
 def publicWords (salt : ByteArray) (position : Nat) (roots : ByteArray × ByteArray)
     (j10r : Option (Nat × Nat × Nat) := none) : Array Nat :=
-  let x := PouwCheck.publicRow salt position roots j10r
+  let x := PouwVerifier.publicRow salt position roots j10r
   (Array.range (x.size / 2)).map fun i => (x.get! (2 * i)).toNat + 256 * (x.get! (2 * i + 1)).toNat
 
 /-- `core_check.n_digits`: H1's digit count m at contraction `k`, the least m with 128 KS ≤ 128^m and
@@ -1313,12 +1313,12 @@ def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Na
   out := out.map fun (p, j) => (p, match params.lookup p, j with
     | some n, .obj kvs => .obj (kvs.insert Flock.Registered.PARAM_KEY (.str n))
     | _, _ => j)
-  let words := (if tile.j10r then PouwCheck.PUBLIC_ROW_J10R_BITS else PouwCheck.PUBLIC_ROW_BITS) / 16
+  let words := (if tile.j10r then PouwVerifier.PUBLIC_ROW_J10R_BITS else PouwVerifier.PUBLIC_ROW_BITS) / 16
   let sb := (hex? (.str salt)).getD ByteArray.empty
   let j10r := fun (t : Nat) =>
     if tile.j10r then some (u0, j10rBlocks m k (r, c) (t / per) (t % per)) else none
   let ks : Array (Array Nat × ByteArray) := (Array.range size).map fun t =>
-    (publicWords sb (u0 + t) (ra, rb) (j10r t), PouwCheck.publicRowSalt executionPhase (u0 + t))
+    (publicWords sb (u0 + t) (ra, rb) (j10r t), PouwVerifier.publicRowSalt executionPhase (u0 + t))
   let d ← (Spot.Registered.domainAt program pv words size 16 (some executionPhase)).mapError fun why =>
     ("registration", why)
   let reg : Flock.Registered.Port :=
@@ -1576,7 +1576,7 @@ def Internal.weights (executionPhase layout entries requests session program pre
   let .str s := session | weightsRefuse SESSION_FORM
   unless sessionId? s do weightsRefuse SESSION_FORM
   let (some _, .str pre) := (digest? program, prefix_) | weightsRefuse CIRCUIT_FORM
-  unless _root_.PouwCheck.plain pre do weightsRefuse CIRCUIT_FORM
+  unless _root_.PouwVerifier.plain pre do weightsRefuse CIRCUIT_FORM
   let prog := (str? program).getD ""
   discard <| strata layout
   let lins : List (Nat × Nat) := match get layout "linears" with
@@ -1921,15 +1921,15 @@ def knownRoot (program executionPhase v : String) (rows : Array (Array Nat × By
 /-- `credit._live_finding`: round s's live@<s> finding as its statement reads it (`live_reads.reads_file`),
 `(port, value, root)`: each slot port at round s's slot table, each header port at round 0's request table (their
 roots `roots`), `m` at the known `<pre>m@<s>` of `m` and `s` at the known `<pre>round@<s>` of s (`live_reads.m_table`,
-`round_table`: each one row of its two 16-bit words under `PouwCheck.publicRowSalt` of the execution phase's open root and s),
+`round_table`: each one row of its two 16-bit words under `PouwVerifier.publicRowSalt` of the execution phase's open root and s),
 each `cap_<i>` at the known `<pre>caps`, whose root is `caps` (`capsRoot`), and `o0` at the known `<pre>live-ok` rows,
 whose root is `ok`. -/
 def liveFinding (program pre executionPhase : String) (t s m : Nat) (roots : List (String × String)) (caps ok : String) :
     R (List (String × String × String)) := do
   let (sv, rv, mv) := (s!"{pre}{SLOTS}@{s}", s!"{pre}{REQUESTS}@0", s!"{pre}{M_ROWS}@{s}")
-  let mr ← knownRoot program executionPhase mv #[(#[m % 65536, m / 65536], PouwCheck.publicRowSalt executionPhase s)] SLOT_WORDS
+  let mr ← knownRoot program executionPhase mv #[(#[m % 65536, m / 65536], PouwVerifier.publicRowSalt executionPhase s)] SLOT_WORDS
   let roundV := s!"{pre}{ROUND_ROWS}@{s}"
-  let sr ← knownRoot program executionPhase roundV #[(#[s % 65536, s / 65536], PouwCheck.publicRowSalt executionPhase s)] SLOT_WORDS
+  let sr ← knownRoot program executionPhase roundV #[(#[s % 65536, s / 65536], PouwVerifier.publicRowSalt executionPhase s)] SLOT_WORDS
   pure ((List.range t).map (fun i => (s!"slot_{i}", sv, (roots.lookup sv).getD "")) ++
     (List.range t).map (fun i => (s!"req_{i}", rv, (roots.lookup rv).getD "")) ++
     [(M_ROWS, mv, mr), (ROUND_PORT, roundV, sr)] ++
@@ -1937,13 +1937,13 @@ def liveFinding (program pre executionPhase : String) (t s m : Nat) (roots : Lis
     [(LIVE_OK_PORT, s!"{pre}{LIVE_OK_VALUE}", ok)])
 
 /-- `live_reads.caps_table`'s root: the v2 unit's public caps `<pre>caps`, T = `t` rows, row q the public max_tokens of
-request q (`maxTokens`, `committedLength`), 0 past them, as two 16-bit words under `PouwCheck.publicRowSalt` of the
+request q (`maxTokens`, `committedLength`), 0 past them, as two 16-bit words under `PouwVerifier.publicRowSalt` of the
 execution phase's open root and q. -/
 def capsRoot (program pre executionPhase : String) (t : Nat) (maxTokens : List Nat) : R String :=
   knownRoot program executionPhase s!"{pre}{CAPS}"
     ((Array.range t).map fun q =>
       let c := maxTokens.getD q 0
-      (#[c % 65536, c / 65536], PouwCheck.publicRowSalt executionPhase q)) SLOT_WORDS
+      (#[c % 65536, c / 65536], PouwVerifier.publicRowSalt executionPhase q)) SLOT_WORDS
 
 /-- `credit._live`: none when the execution phase's live Program proves each round's served rows, else the refusal (`LIVE`).
 Its live evidence `live` (`LIVE_KEYS`) carries the live Program's descriptor (`liveOf`), at the period's T table rows
@@ -2279,4 +2279,4 @@ example : SCHEMA = Domains.IR_DESCRIPTOR := rfl
 example : REQUESTS_IDS_TAG = Domains.POUW_H1_REQUEST_IDS := rfl
 example : WEIGHTS_TAG = Domains.POUW_H1_WEIGHTS := rfl
 
-end PouwCheck.Credit
+end PouwVerifier.Credit
